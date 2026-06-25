@@ -1,0 +1,295 @@
+Keep the current design, layout, routing, architecture, and existing behavior exactly the same. Do NOT redesign or refactor unrelated logic. Only synchronize and align the Admin/Supplier behaviors with the new entity relationships already implemented.
+
+IMPORTANT:
+
+* Preserve all existing working functionality.
+* Only apply the requested synchronization updates.
+* Keep the same UI/UX.
+* Keep all existing APIs and database structure unless small extensions are required.
+* Ensure all filters, modals, and relations stay fully synchronized between Admin and Supplier flows.
+
+==================================================
+I. ADMIN PART
+=============
+
+##################################################
+
+1. CATEGORY MANAGEMENT TAB
+   ##################################################
+
+---
+
+## A. CATEGORY TABLE
+
+Everything is already correct.
+DO NOT MODIFY unless required for synchronization.
+
+---
+
+## B. SUBCATEGORY TABLE
+
+CURRENT STATUS:
+
+* Category filter picklist works correctly
+* Parent Category column works correctly
+
+MISSING FEATURES TO ADD:
+
+1. Add ICON column in table
+2. Add Icon field in Add/Edit SubCategory modal
+
+Requirements:
+
+* Support icon upload or icon URL according to existing architecture
+* Preserve existing validation
+* Show icon preview if project already supports previews
+
+---
+
+## C. FLAVOR TABLE
+
+CURRENT STATUS:
+Needs synchronization improvements.
+
+ADD:
+
+1. SubCategory filter picklist
+2. Icon column
+3. Parent SubCategory column
+
+ADD/EDIT FLAVOR MODAL:
+Must include:
+
+1. Category picklist
+2. SubCategory multiselect
+3. Icon field
+
+Behavior:
+
+* SubCategory options must dynamically depend on selected Category
+* Multi-select must support multiple SubCategories
+* Existing relationships must stay synchronized
+
+Validation:
+
+* Prevent invalid SubCategory selections
+* Remove orphan selections automatically
+
+---
+
+## D. SIZE TABLE
+
+ADD:
+
+1. SubCategory filter picklist
+2. Icon column
+3. Parent SubCategory column
+
+ADD/EDIT SIZE MODAL:
+Must include:
+
+1. Category picklist
+2. SubCategory multiselect
+3. Icon field
+
+Behavior:
+
+* Dynamic SubCategory filtering based on Category
+* Maintain many-to-many relationships properly
+
+---
+
+## E. BRAND TABLE
+
+ADD:
+
+1. SubCategory filter picklist
+2. Icon column
+3. Parent SubCategory column
+
+ADD/EDIT BRAND MODAL:
+Must include:
+
+1. Category picklist
+2. SubCategory multiselect
+3. Icon field
+
+Behavior:
+
+* Dynamic SubCategory filtering based on selected Category
+* Synchronize relations correctly
+
+==================================================
+2. PRODUCT TAB (ADMIN)
+======================
+
+---
+
+## A. PRODUCT FILTERS
+
+Current filters are correct.
+
+UPDATE:
+
+* Flavor filter
+* Size filter
+* Brand filter
+
+These filters must become dynamic based on selected SubCategory.
+
+Behavior:
+
+1. Select Category
+   → show only related SubCategories
+
+2. Select SubCategory
+   → show only related:
+
+   * Flavors
+   * Sizes
+   * Brands
+
+3. Reset invalid filters automatically when parent filter changes
+
+4. Keep filtering reactive without page reload
+
+---
+
+## B. ADD/EDIT PRODUCT MODAL
+
+CURRENT STATUS:
+Almost correct.
+
+UPDATE REQUIRED:
+
+When Category + SubCategory are selected:
+
+* Flavor must become MULTISELECT
+* Size must become MULTISELECT
+
+Purpose:
+Admin must be able to assign:
+
+* multiple flavors
+* multiple sizes
+  to the same product.
+
+Requirements:
+
+* Preserve current modal layout
+* Preserve existing validations
+* Preserve existing APIs if possible
+* Synchronize all many-to-many relationships
+
+Dynamic behavior:
+
+* Only show related Flavor/Size options based on selected SubCategory
+* Remove invalid selected values automatically
+
+==================================================
+II. SUPPLIER PART
+=================
+
+##################################################
+
+1. CATEGORY TAB
+   ##################################################
+
+Everything is correct.
+DO NOT MODIFY.
+
+##################################################
+2. PRODUCT TAB
+##################################################
+
+---
+
+## A. ADMIN PRODUCT FILTERS INSIDE SUPPLIER VIEW
+
+REMOVE:
+
+* Size filter
+* Flavor filter
+
+KEEP:
+
+* remaining filters
+
+LAYOUT UPDATE:
+
+* Make remaining filters aligned on the same line
+* Keep current responsive design
+
+---
+
+## B. ADD PRODUCT TO "MY PRODUCTS" MODAL
+
+CURRENT STATUS:
+Almost correct.
+
+REMOVE:
+
+* Available Brands multiselect
+
+SUPPLIER SHOULD ONLY SET:
+
+1. Available Sizes
+2. Available Flavors
+3. Stock Quantity *
+4. Your Price (USD) *
+
+IMPORTANT:
+
+* Supplier must NOT manage Brands
+* Brands remain controlled by Admin product configuration
+
+==================================================
+III. SYNCHRONIZATION REQUIREMENTS
+=================================
+
+VERY IMPORTANT:
+Ensure all Admin and Supplier logic remains synchronized.
+
+Examples:
+
+* Product flavor options shown to supplier must come from Admin Product configuration
+* Product size options shown to supplier must come from Admin Product configuration
+* Supplier cannot access options not linked by Admin
+* Dynamic filters must always reflect latest relationships
+
+==================================================
+IV. VALIDATION + CONSISTENCY
+============================
+
+Add defensive validation everywhere:
+
+* Prevent invalid parent/child relations
+* Prevent stale multiselect values
+* Prevent broken references
+* Prevent duplicate selections
+* Auto-reset dependent fields when parent changes
+* Keep forms reactive and synchronized
+
+==================================================
+V. FINAL VERIFICATION
+=====================
+
+Before finishing:
+
+1. Verify all tables render correctly
+2. Verify all filters work dynamically
+3. Verify multiselect behavior
+4. Verify icons display correctly
+5. Verify modal validations
+6. Verify Admin/Supplier synchronization
+7. Verify responsive behavior
+8. Verify no existing functionality broke
+9. Verify TypeScript typing
+10. Verify all API payloads still work correctly
+
+At the end provide:
+
+* modified files list
+* updated relationships summary
+* updated dynamic filtering logic summary
+* any migration or seed updates if required

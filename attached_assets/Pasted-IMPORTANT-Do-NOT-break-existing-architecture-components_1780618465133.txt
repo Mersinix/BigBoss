@@ -1,0 +1,389 @@
+IMPORTANT:
+Do NOT break existing architecture, components, APIs, routing, or business logic.
+Do NOT redesign the system.
+Only apply the requested UI/UX + behavior synchronizations safely using conditional rendering and refactors only where necessary.
+
+==================================================
+GLOBAL UI THEME CHANGE
+======================
+
+1. Replace ALL coffee owner UI accent colors:
+
+* REMOVE orange usage everywhere in Cafe Owner part
+* REPLACE with existing BLUE primary color used in Messages UI (same tone as chat interface in screenshot)
+
+IMPORTANT:
+
+* Do not change design system
+* Only replace primary accent variables / Tailwind tokens / CSS variables
+* Keep consistency across buttons, highlights, active states, icons
+
+==================================================
+2. ORDER HISTORY PAGE FIX (CRITICAL ROUTING ISSUE)
+==================================================
+
+CURRENT ISSUE:
+After "Place Order", Order History still opens inside old sidebar system.
+
+FIX:
+
+* Remove OLD sidebar system completely (100%)
+* Migrate Order History to proper route-based page system
+
+NEW BEHAVIOR:
+
+When user clicks:
+Cart → Place Order
+
+Redirect to:
+→ /orders/history (or existing equivalent route structure)
+
+Ensure:
+
+* Order History is NOT rendered inside sidebar anymore
+* Fully integrated into main routing system
+* No orphan navigation references remain
+
+DO NOT BREAK:
+
+* Cart logic
+* Checkout logic
+* Order creation logic
+
+Only fix navigation + page placement.
+
+==================================================
+3. REMOVE DUPLICATE SEARCH INPUT
+================================
+
+BUG:
+Browse Products page has 2 search bars.
+
+FIX:
+
+* Keep ONLY navbar search input
+* Remove secondary search input in page body
+
+Ensure:
+
+* Navbar search still controls product filtering
+* No broken search bindings
+* No duplicated state logic
+
+==================================================
+4. LOGOUT REDIRECTION FIX
+=========================
+
+CURRENT BUG:
+Logout redirects to Login page.
+
+NEW BEHAVIOR:
+After logout → redirect to:
+
+→ Landing Page (/)
+
+Ensure:
+
+* session cleared properly
+* no protected route auto-redirect to login after logout
+* landing page becomes default entry point
+
+==================================================
+5. CATEGORY / SUBCATEGORY FILTER CLEANUP
+========================================
+
+CURRENT ISSUE:
+Categories shown even when they have NO related products.
+
+FIX:
+
+In Category FlatList:
+
+ONLY DISPLAY:
+
+* Categories that have at least 1 product available
+* SubCategories that have at least 1 product available under selected category
+
+RULE:
+
+Category visibility = existsProducts(category) === true
+SubCategory visibility = existsProducts(subCategory) === true
+
+IMPORTANT:
+
+* This must be dynamic
+* Must respect supplier stock logic
+* Must not break existing category relationships
+* Must not break filters
+
+==================================================
+6. NEW SERVICE MODULE ARCHITECTURE (LANDING PAGE EXPANSION)
+===========================================================
+
+We are expanding landing page services into MULTI-SERVICE PLATFORM.
+
+Navbar becomes GLOBAL SERVICE SWITCHER:
+
+==================================================
+NAVBAR UPDATE (GLOBAL)
+======================
+
+Add service switch buttons:
+
+* SHOP (default)
+* PRINT
+* BARISTA
+* MARKETING
+
+Rules:
+
+* Navbar is shared across all services
+* Switching service changes the entire page context
+* Keep existing navbar structure intact
+* Only extend it
+
+==================================================
+A. PRINT SERVICE (NEW FULL MODULE)
+==================================
+
+Create FULL SEPARATE MODULE:
+
+Route example:
+→ /print
+
+STRUCTURE SAME AS SHOP BUT INDEPENDENT DATA SET
+
+---
+
+## PRINT CATEGORIES
+
+* T-shirt
+* Cap
+* Logo
+* Flyers
+* Glass
+* Stickers
+* Packaging
+* Menu Design
+
+Each category has:
+
+* SubCategories
+* Printing Companies (as Brands)
+
+---
+
+## FILTERS
+
+* Category
+* SubCategory
+* Brand (printing companies)
+* Price range
+* Delivery time
+* Material type
+
+---
+
+## PRINT PRODUCT CARDS
+
+Each card includes:
+
+* Preview image
+* Print type name
+* Category badge
+* Rating
+* Starting price
+
+---
+
+## PRINT DETAIL PAGE
+
+User can:
+
+* Upload logo/image
+* Select quantity
+* Select colors
+* Select sizes (if applicable)
+* Select material type
+* Add notes for printing
+* Choose printing brand/company
+
+Advanced requirement:
+
+* Size-based quantity matrix (if T-shirt/cap)
+* Example:
+  S / M / L / XL → quantity per size
+
+Add to cart enabled:
+→ Same cart system as SHOP but separate service context
+
+==================================================
+B. BARISTA SERVICE (NEW MODULE)
+===============================
+
+Route:
+→ /barista
+
+Two main sections:
+
+---
+
+1. TRAINING SECTION
+
+---
+
+Features:
+
+* List of training programs
+* Barista schools / trainers
+* Course duration
+* Price
+* Level (Beginner / Advanced / Expert)
+* Certification availability
+* Reviews
+
+Each training card:
+
+* title
+* provider
+* rating
+* duration
+* price
+* enroll button
+
+---
+
+2. HIRING SECTION
+
+---
+
+Coffee owners can:
+
+* search baristas
+* view profiles
+* availability calendar
+* daily rate
+* experience level
+* skills (espresso, latte art, etc.)
+* ratings
+* location
+
+Features:
+
+* "Hire" button
+* Chat button (reuse existing messaging system)
+* availability filter
+
+==================================================
+C. MARKETING SERVICE (NEW MODULE)
+=================================
+
+Route:
+→ /marketing
+
+Includes:
+
+---
+
+## SERVICE TYPES
+
+* Website creation
+* SEO services
+* Ads management
+* Social media marketing
+* Video production
+* Photography
+* Branding
+
+---
+
+## MARKETING PROVIDERS
+
+Each provider card:
+
+* company name
+* rating
+* portfolio samples
+* pricing packages
+* service categories
+* location
+
+---
+
+## FILTERS
+
+* Service type
+* Price range
+* Rating
+* Location
+* Provider type
+
+---
+
+## DETAIL PAGE
+
+Each service has:
+
+* description
+* examples (portfolio)
+* packages
+* contact provider
+* request quote button
+
+==================================================
+SHARED SYSTEM RULES (VERY IMPORTANT)
+====================================
+
+All services (SHOP / PRINT / BARISTA / MARKETING) MUST SHARE:
+
+* same navbar
+* same footer (landing page footer)
+* same auth system
+* same cart system (only SHOP + PRINT)
+* same messaging system
+* same UI design system
+
+DO NOT DUPLICATE COMPONENTS
+
+ONLY EXTEND EXISTING ARCHITECTURE
+
+==================================================
+PERFORMANCE RULES
+=================
+
+* lazy load service modules
+* avoid loading all services at once
+* keep state isolated per service
+* reuse components where possible
+
+==================================================
+FINAL VALIDATION CHECK
+======================
+
+Ensure:
+
+✓ Blue theme applied everywhere (Cafe Owner)
+✓ No orange remains in Cafe Owner UI
+✓ Order History moved to routing system
+✓ Sidebar fully removed
+✓ No duplicate search bars
+✓ Logout redirects to landing page
+✓ Empty categories/subcategories filtered out
+✓ Print service fully separated module
+✓ Barista service fully functional module
+✓ Marketing service fully functional module
+✓ Navbar service switching works
+✓ Existing SHOP system untouched
+✓ Cart/order system still works
+✓ Messaging system still works
+
+==================================================
+OUTPUT REQUIRED AFTER IMPLEMENTATION:
+=====================================
+
+1. Modified files list
+2. New routes added
+3. Removed sidebar architecture explanation
+4. Service module architecture explanation
+5. Print/Barista/Marketing data structure
+6. Any migration or state changes

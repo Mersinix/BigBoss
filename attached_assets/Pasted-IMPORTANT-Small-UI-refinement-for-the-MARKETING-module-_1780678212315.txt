@@ -1,0 +1,126 @@
+IMPORTANT: Small UI refinement for the MARKETING module.
+
+Do NOT change architecture, routing, filters, functionality, state management, or component behavior.
+
+Only apply the following visual changes.
+
+---
+
+1. MARKETING SERVICE SELECTOR
+
+---
+
+Current state:
+
+The service selector uses real images for:
+
+* Website Creation
+* SEO
+* Ads
+* Social Media
+* Video
+* Photography
+* Branding
+
+Change request:
+
+Remove all service images.
+
+Replace every service image with icons, following the same visual style as the current "All" item.
+
+Requirements:
+
+* Keep the horizontal flatlist exactly as it is
+* Keep spacing exactly as it is
+* Keep selected state exactly as it is
+* Keep hover effects exactly as they are
+* Keep labels underneath exactly as they are
+* Keep filtering functionality exactly as it is
+
+Only replace the images with icons.
+
+Suggested icons:
+
+All → existing icon
+
+Website Creation → Globe / Monitor icon
+
+SEO → Search icon
+
+Ads Management → Megaphone icon
+
+Social Media → Share / Network icon
+
+Video Production → Video icon
+
+Photography → Camera icon
+
+Branding → Palette / Brush icon
+
+Use the existing icon library already used in the project.
+
+The selector should look cleaner, lighter, and more professional.
+
+---
+
+2. MARKETING HERO BANNER IMAGE
+
+---
+
+Current banner image feels generic.
+
+Replace it with a more premium and creative marketing-oriented image.
+
+The image should communicate:
+
+* Digital marketing
+* Branding
+* Content creation
+* Social media strategy
+* Creative agency work
+* Business growth
+
+Avoid:
+
+* Generic stock office photos
+* Random people sitting at laptops
+* Low-quality imagery
+
+Prefer:
+
+* Marketing dashboard visuals
+* Creative workspace
+* Content creation environment
+* Branding and design concepts
+* Modern agency atmosphere
+* Coffee business marketing context if possible
+
+Keep:
+
+* Existing hero layout
+* Existing text
+* Existing overlay
+* Existing height
+* Existing responsiveness
+
+Only replace the background image.
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ Flatlist still works
+✓ Filters still work
+✓ Selected state still works
+✓ No images remain in service selector
+✓ Icons replace all images
+✓ Banner image updated
+✓ Overlay still readable
+✓ No layout shifts
+✓ No architecture changes
+✓ No routing changes
+✓ No functionality changes
+
+Provide the modified files list after implementation.

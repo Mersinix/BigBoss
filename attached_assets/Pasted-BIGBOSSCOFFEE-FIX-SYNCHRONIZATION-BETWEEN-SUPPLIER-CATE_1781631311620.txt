@@ -1,0 +1,242 @@
+BIGBOSSCOFFEE – FIX SYNCHRONIZATION BETWEEN SUPPLIER CATEGORIES AND SUPPLIER PRODUCTS (ADMIN PRODUCTS SWITCHER)
+
+IMPORTANT
+
+This is a targeted bug fix only.
+
+DO NOT refactor the architecture.
+
+DO NOT modify category approval workflows.
+
+DO NOT modify product approval workflows.
+
+DO NOT modify realtime synchronization.
+
+DO NOT change database schema.
+
+DO NOT touch authentication, permissions, existing APIs, or routing.
+
+Only fix the synchronization between:
+
+Supplier Part → Categories Tab → My Categories
+
+AND
+
+Supplier Part → Products Tab → Switcher → "Admin Products"
+
+====================================================
+CURRENT ISSUE
+=============
+
+Current behavior:
+
+The supplier selects:
+
+Supplier Part
+→ Categories Tab
+→ My Categories
+
+1. Select Category
+2. Select SubCategory
+
+The selected values are correctly stored and visible in My Categories.
+
+However, when the supplier navigates to:
+
+Supplier Part
+→ Products Tab
+→ Switcher
+→ Admin Products
+
+the page behaves as if no Category/SubCategory was selected.
+
+The supplier sees the empty state:
+
+"Select a category to get started"
+
+even though Category and SubCategory are already selected in My Categories.
+
+This is incorrect.
+
+====================================================
+EXPECTED BEHAVIOR
+=================
+
+The Category and SubCategory selected inside:
+
+Supplier Part
+→ Categories Tab
+→ My Categories
+
+must be the SINGLE SOURCE OF TRUTH.
+
+When the supplier opens:
+
+Supplier Part
+→ Products Tab
+→ Switcher
+→ Admin Products
+
+the system must automatically read the current:
+
+* selectedCategoryId
+* selectedSubCategoryId
+
+without requiring:
+
+* Page refresh
+* Re-selecting the category
+* Re-selecting the subcategory
+* Any manual synchronization
+
+====================================================
+STATE MANAGEMENT FIX
+====================
+
+Investigate the current implementation.
+
+Possible causes:
+
+* The selected Category/SubCategory state is stored locally inside My Categories instead of the shared global state.
+* The Products page is not subscribing to the shared store.
+* The selected values are reset when changing tabs.
+* The "Admin Products" switcher component inside Supplier Products is using a different state source.
+* The Product query is not reacting when the selected Category/SubCategory changes.
+
+Do not assume the cause; identify the actual root cause.
+
+====================================================
+REQUIRED IMPLEMENTATION
+=======================
+
+1. Shared Selection State
+
+Ensure that:
+
+Supplier Part
+→ Categories Tab
+→ My Categories
+
+and:
+
+Supplier Part
+→ Products Tab
+→ Switcher
+→ Admin Products
+
+use exactly the same existing global state (Zustand/context/store).
+
+Do NOT create a second selection state.
+
+Do NOT duplicate selectedCategoryId or selectedSubCategoryId.
+
+====================================================
+
+2. Preserve Selection Between Navigation
+
+When the supplier:
+
+* Selects a Category
+* Selects a SubCategory
+* Navigates to Products Tab
+* Clicks the Admin Products switcher
+
+The selection must still exist.
+
+Changing pages or switchers must not reset the selected values.
+
+====================================================
+
+3. Product Loading
+
+Inside:
+
+Supplier Part
+→ Products Tab
+→ Switcher
+→ Admin Products
+
+the product query must react to the selected Category/SubCategory.
+
+Rules:
+
+IF selectedCategoryId is null:
+
+* Show the empty state.
+
+IF selectedCategoryId exists but selectedSubCategoryId is null:
+
+* Show the "Select a sub-category" state.
+
+IF both selectedCategoryId and selectedSubCategoryId exist:
+
+* Load and display only products linked to the selected SubCategory.
+
+No manual refresh should be required.
+
+====================================================
+
+4. Verify Navigation Flow
+
+The final flow must work exactly like this:
+
+Supplier opens:
+
+Categories Tab
+→ My Categories
+
+Selects:
+
+* Category
+* SubCategory
+
+Then goes to:
+
+Products Tab
+→ Switcher → Admin Products
+
+Result:
+
+The products related to that selected SubCategory appear immediately.
+
+====================================================
+REGRESSION TESTING
+==================
+
+Before finishing verify:
+
+✓ Category selection in My Categories still works.
+
+✓ SubCategory selection still works.
+
+✓ Add Category Modal behavior is unchanged.
+
+✓ Supplier Part → Products Tab → Switcher → Admin Products correctly reads the selection.
+
+✓ Products are filtered correctly.
+
+✓ Switching between "Admin Products" and "My Products" does not reset the Category selection.
+
+✓ Existing Category approval workflow is not broken.
+
+✓ Existing Product workflow is not broken.
+
+✓ Real-time synchronization remains working.
+
+====================================================
+FINAL REPORT REQUIRED
+=====================
+
+Provide:
+
+* The real root cause.
+* Files modified.
+* Store/state changes.
+* Query changes.
+* Components modified.
+* Validation results.
+* Confirmation that no existing functionality was broken.
+
+Do NOT stop for confirmation.
+
+Analyze the codebase, apply the fix, test it, and complete the implementation.

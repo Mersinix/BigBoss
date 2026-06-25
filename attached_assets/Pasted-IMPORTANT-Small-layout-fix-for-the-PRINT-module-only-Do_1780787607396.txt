@@ -1,0 +1,85 @@
+IMPORTANT: Small layout fix for the PRINT module only.
+
+Do NOT modify architecture, routing, APIs, authentication, cart, ordering logic, filters behavior, or any business functionality.
+
+Only apply a UI positioning fix related to scrolling behavior.
+
+---
+
+## ISSUE
+
+When scrolling in the /print page:
+
+* The hero banner scrolls under / behind the navbar
+* As a result, the category flatlist + filters section becomes visually too far from the navbar
+* This creates an empty visual gap at the top of the page after the banner scrolls away
+
+---
+
+## GOAL
+
+Ensure that once the hero banner scrolls out of view:
+
+* The flatlist (category/service selector)
+* The filters section
+
+stay visually “attached” / close to the navbar area.
+
+---
+
+## SOLUTION (UI ONLY)
+
+Apply one of the following existing-layout-safe approaches:
+
+1. Adjust top spacing of the first content section (flatlist container) so that:
+
+   * It reduces unnecessary top margin/padding after banner scroll
+
+2. OR make the filters + flatlist container behave as a “sticky-aligned block” under the navbar after hero scroll
+
+3. OR add conditional spacing:
+
+   * When hero is visible → normal spacing
+   * When hero is out of viewport → reduced top spacing
+
+Use existing layout system only.
+
+---
+
+## STRICT CONSTRAINTS
+
+Do NOT:
+
+* change navbar behavior
+* modify hero banner behavior
+* change routing
+* change scroll system globally
+* introduce new layout framework
+* break responsiveness
+* duplicate components
+
+Only adjust spacing / positioning of the PRINT page content container.
+
+---
+
+## EXPECTED RESULT
+
+* When page loads: normal layout with banner on top
+* When scrolling past banner:
+  → filters + flatlist appear directly under navbar area
+  → no large empty gap
+  → clean continuous UX
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ No visual gap after banner scroll
+✓ Flatlist stays close to navbar
+✓ Filters remain correctly positioned
+✓ Hero behavior unchanged
+✓ No layout shift on other pages
+✓ No architecture changes
+✓ No functional changes

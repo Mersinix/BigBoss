@@ -1,0 +1,120 @@
+IMPORTANT: Small UI consistency update for the PRINT module.
+
+Do NOT modify architecture, routing, APIs, filters, search, favorites, ordering, cart, or any business logic.
+
+Apply ONLY the icon/logo consistency changes described below.
+
+---
+
+## OBJECTIVE
+
+The PRINT page flatlist should use the exact same visual icons/logos already used on the Landing Page.
+
+This will create visual consistency across the platform.
+
+---
+
+## CURRENT ISSUE
+
+The PRINT flatlist currently uses a different set of icons/logos than the ones displayed on the Landing Page.
+
+Result:
+
+Users see one visual identity on the Landing Page and a different one inside PRINT.
+
+---
+
+## REQUIRED CHANGE
+
+Locate the PRINT category flatlist.
+
+For every PRINT category:
+
+Replace the current icon/logo with the exact corresponding icon/logo already used on the Landing Page PRINT categories section.
+
+Reuse the same:
+
+* icon asset
+* image asset
+* SVG
+
+
+whichever is already used on the Landing Page.
+
+Do NOT duplicate assets if they already exist.
+
+---
+
+## EXAMPLES
+
+If Landing Page PRINT section contains:
+
+📋 Menus
+🎨 Flyers
+🖼 Affiches
+🏷 Stickers
+📇 Cartes de visite
+📦 Packaging
+🎪 Roll-up & Banners
+🪟 Vitrophanie
+
+then the PRINT flatlist must use the exact same visuals.
+
+Same icon.
+
+
+---
+
+## VISUAL REQUIREMENTS
+
+Keep:
+
+* same flatlist layout
+* same spacing
+* same horizontal scrolling
+* same selected state
+* same hover state
+* same active styling
+* same labels
+
+Only replace the icon/logo source.
+
+---
+
+## DO NOT MODIFY
+
+Do NOT modify:
+
+* filtering logic
+* category selection
+* routing
+* favorites
+* sticky behavior
+* search
+* providers
+* products
+* card layouts
+
+Only update the icons.
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ PRINT flatlist still works
+
+✓ Category selection still works
+
+✓ Active state still works
+
+✓ Filters still work
+
+✓ Icons now match Landing Page icons exactly
+
+✓ No layout changes
+
+✓ No functionality changes
+
+✓ No architecture changes

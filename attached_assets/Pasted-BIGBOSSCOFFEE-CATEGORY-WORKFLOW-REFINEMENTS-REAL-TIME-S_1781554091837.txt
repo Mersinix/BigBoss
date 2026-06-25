@@ -1,0 +1,326 @@
+BIGBOSSCOFFEE – CATEGORY WORKFLOW REFINEMENTS & REAL-TIME SYNCHRONIZATION
+
+IMPORTANT:
+
+This is an enhancement of the already implemented Category Approval Workflow.
+
+DO NOT rebuild existing functionality.
+
+DO NOT modify working logic unless explicitly mentioned below.
+
+DO NOT break:
+
+* Authentication
+* Permissions
+* Existing Category workflow
+* Existing Product workflow
+* Existing APIs
+* Existing database structure
+* Existing routing
+
+Perform only the requested adjustments and keep full backward compatibility.
+
+====================================================
+
+1. SUPPLIER CATEGORY REQUESTS IMPROVEMENT
+   ====================================================
+
+Current behavior:
+
+A supplier can create Category, SubCategory, Brand, Flavor and Size suggestions.
+
+Required change:
+
+When a supplier creates a Category suggestion with:
+
+status = PENDING
+
+that Category must immediately become available in the supplier's own Category Requests section when creating:
+
+* SubCategory
+* Brand
+* Flavor
+* Size
+
+The supplier should NOT be forced to wait for admin approval before creating related hierarchy elements.
+
+Example:
+
+Supplier creates:
+
+Coffee Beans
+(status = PENDING)
+
+Immediately afterwards he must be able to create:
+
+Premium Coffee Beans
+(parent = Coffee Beans)
+
+even though Coffee Beans is still Pending.
+
+Result:
+
+The supplier can prepare the entire hierarchy:
+
+Category
+→ SubCategory
+→ Brand
+→ Flavor
+→ Size
+
+before any admin approval.
+
+All newly created records remain:
+
+status = PENDING
+
+until approved by admin.
+
+====================================================
+2. SUPPLIER MY CATEGORIES FILTERING
+===================================
+
+Current behavior should be adjusted.
+
+Inside:
+
+Supplier
+→ Categories
+→ My Categories
+
+Only display:
+
+* Categories linked to products owned/used by supplier
+* SubCategories linked to products owned/used by supplier
+
+Hide empty categories.
+
+Hide empty subcategories.
+
+====================================================
+NO DEFAULT CATEGORY SELECTION
+=============================
+
+When opening:
+
+Supplier
+→ Categories
+→ My Categories
+
+No category should be selected automatically.
+
+Initial state:
+
+Selected Category = null
+Selected SubCategory = null
+
+The existing behavior where a category appears after the supplier selects it from the "Add Category" modal should remain unchanged because it is already working correctly.
+
+When the supplier selects a category from the Add Category modal:
+
+* The selected category should appear in My Categories.
+* Its related subcategories should appear.
+* Existing behavior must remain unchanged.
+
+====================================================
+3. PRODUCTS DEPEND ON CATEGORY TAB SELECTION
+============================================
+
+The selected Category and SubCategory from:
+
+Supplier
+→ Categories
+→ My Categories
+
+must become the single source of truth for product visibility.
+
+The Products page must use the Category/SubCategory selected in My Categories.
+
+This dependency applies to:
+
+Supplier
+→ Products
+→ Admin Products
+
+and
+
+Supplier
+→ Products
+→ My Products
+
+---
+
+## INITIAL STATE
+
+If no Category has been selected in:
+
+Categories
+→ My Categories
+
+then:
+
+* No Category should appear in Product filters.
+* No SubCategory should appear in Product filters.
+* No products should be displayed.
+
+This applies to both:
+
+* Admin Products
+* My Products
+
+---
+
+## CATEGORY / SUBCATEGORY DEPENDENCY
+
+When a Category is selected from:
+
+Categories
+→ My Categories
+
+the Products page should automatically use that selection.
+
+When a SubCategory is selected from:
+
+Categories
+→ My Categories
+
+the Products page should automatically use that selection.
+
+Products displayed inside:
+
+* Admin Products
+* My Products
+
+must be filtered using the currently selected Category and SubCategory from My Categories.
+
+Rules:
+
+IF no Category selected:
+
+* No Category filter displayed.
+* No SubCategory filter displayed.
+* No products displayed.
+
+IF Category selected but no SubCategory selected:
+
+* No products displayed.
+
+IF Category selected and SubCategory selected:
+
+* Display only products belonging to that selected SubCategory.
+
+This creates a centralized navigation flow:
+
+Categories > My Categories
+→ Select Category
+→ Select SubCategory
+→ Products > Admin Products
+→ Products > My Products
+
+The Products page should not maintain a separate Category/SubCategory selection state.
+
+It must reuse the active selection coming from My Categories.
+
+====================================================
+4. REAL-TIME SYNCHRONIZATION
+============================
+
+Current behavior requires refresh in some places.
+
+Required:
+
+Implement real-time updates using the project's existing realtime mechanism.
+
+Use:
+
+* WebSockets
+* Socket.io
+* React Query invalidation
+* Event system
+* Existing realtime infrastructure
+
+Use whichever already exists in the project.
+
+DO NOT introduce unnecessary new technologies.
+
+---
+
+## SUPPLIER TO ADMIN
+
+When supplier creates:
+
+* Category
+* SubCategory
+* Brand
+* Flavor
+* Size
+
+Admin must see new records immediately.
+
+NO page refresh required.
+
+NO manual reload required.
+
+---
+
+## ADMIN TO SUPPLIER
+
+When admin:
+
+* Approves
+* Updates
+* Deletes
+
+a supplier suggestion,
+
+Supplier UI must update automatically.
+
+NO refresh required.
+
+NO manual reload required.
+
+Examples:
+
+Pending → Active
+
+should update instantly.
+
+Edited values should update instantly.
+
+Deleted records should disappear instantly.
+
+====================================================
+5. QUALITY ASSURANCE
+====================
+
+Before finishing:
+
+1. Verify supplier can create Category → SubCategory hierarchy while everything is still Pending.
+
+2. Verify Pending parent categories appear immediately in child creation forms.
+
+3. Verify My Categories only shows categories/subcategories that have related products.
+
+4. Verify no category is selected by default.
+
+5. Verify Products > Admin Products and Products > My Products stay empty until a Category and SubCategory are selected from Categories > My Categories.
+
+6. Verify Product filters are automatically synchronized with the selected Category/SubCategory from My Categories.
+
+7. Verify realtime synchronization works in both directions.
+
+8. Run regression testing on all category workflows.
+
+====================================================
+FINAL REPORT
+============
+
+After implementation provide:
+
+* Files modified
+* APIs modified
+* Components modified
+* Realtime events added
+* Bug fixes applied
+* Validation results
+* Confirmation that no existing functionality was broken

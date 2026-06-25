@@ -1,0 +1,140 @@
+You are working on the BigBossCoffee platform (B2B marketplace connecting coffee suppliers and coffee shop owners in Tunisia).
+
+🎯 OBJECTIVE
+
+Fix and upgrade the location system (maps strategy) across the entire application (registration, login, profile, checkout logic, and supplier onboarding).
+
+We need a Google Maps-based address system that works like modern delivery apps (Uber Eats / Glovo style), fully integrated into user onboarding and profile management.
+
+🧠 GOOGLE MAPS CONFIG
+
+Use this API key ONLY:
+
+{
+  "config": {
+    "googleMaps": {
+      "apiKey": "AIzaSyDX4SG2_rPzd4a5ddiGzR7oeCCANJDeYD4"
+    }
+  }
+}
+
+Use Google Places API + Maps JavaScript API + Geocoding API.
+
+🧭 CORE FEATURE REQUIREMENTS
+1. Supplier Registration (STRICT RULE)
+Supplier MUST select a location from Google Maps before completing signup.
+No manual free-text address allowed as final value.
+Must use:
+Autocomplete search
+Pin drop on map
+Confirm location button
+Save:
+latitude
+longitude
+formatted address
+place_id
+
+👉 This location is mandatory and cannot be skipped.
+
+2. Coffee Owner Registration / Profile
+Coffee owner can:
+Select location during signup (optional but recommended)
+UPDATE location anytime from profile settings
+Must allow:
+Drag & drop pin
+“Use my current location”
+Search address via autocomplete
+
+👉 Unlike supplier, this is editable at any time.
+
+3. LOCATION DATA STRUCTURE (DB UPDATE)
+
+Update user schema to store:
+
+location: {
+  address: string,
+  lat: number,
+  lng: number,
+  placeId: string,
+  updatedAt: Date
+}
+4. BUSINESS LOGIC (VERY IMPORTANT)
+
+We will use location for marketplace matching:
+
+When coffee owner searches products:
+→ show suppliers CLOSEST first
+When supplier publishes products:
+→ attach supplier location
+Add a function:
+calculateDistance(lat1, lng1, lat2, lng2) // Haversine formula
+Sort suppliers by distance automatically.
+5. UI/UX (MATCH EXISTING DESIGN)
+
+You must reuse the existing modal style shown in the app screenshots:
+
+White modal cards
+Rounded corners
+Soft shadows
+Green accent color (BigBossCoffee brand)
+Clean map preview inside modal
+LOCATION MODAL FLOW (LIKE IMAGE PROVIDED)
+
+Step 1:
+
+Search input (Google Places Autocomplete)
+Button: "Use my position"
+
+Step 2:
+
+Map preview with pin
+Drag pin allowed
+
+Step 3:
+
+Address details form:
+Floor / Apartment (optional)
+Notes for courier
+
+Step 4:
+
+Save button: “Confirm Location”
+🧩 COMPONENTS TO CREATE / FIX
+
+Create or update:
+
+LocationPickerModal
+GoogleMapSelector
+useGooglePlacesAutocomplete
+useCurrentLocation
+calculateDistance.ts
+location.service.ts
+🔥 IMPORTANT LOGIC RULES
+Supplier:
+MUST have location before account activation
+Cannot skip step
+Coffee Owner:
+Can skip during signup
+Must be editable later
+🌍 PERFORMANCE REQUIREMENTS
+Lazy load Google Maps script
+Avoid reloading map multiple times
+Cache selected location in state + DB
+Optimize autocomplete API calls
+🎨 DESIGN ALIGNMENT
+
+Match BigBossCoffee branding:
+
+Primary color: green (#0f766e or similar)
+Soft shadows
+Rounded UI (12–16px radius)
+Mobile-first design
+Smooth modal transitions
+📦 FINAL RESULT
+
+After implementation:
+
+Every supplier has exact GPS location
+Every coffee shop owner has optional + editable location
+Marketplace can rank suppliers by proximity
+UX feels like modern delivery apps (Uber Eats style)

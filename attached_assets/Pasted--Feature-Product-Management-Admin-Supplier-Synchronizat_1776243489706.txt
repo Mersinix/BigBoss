@@ -1,0 +1,121 @@
+🎯 Feature: Product Management (Admin + Supplier Synchronization)
+🧩 Objective
+
+Create a synchronized product system between:
+
+Admin
+Supplier
+(Future-ready for Coffee Owner)
+
+All products must follow a structured taxonomy:
+
+Category
+SubCategory
+Flavor
+Size
+Brand
+
+These fields are fully synchronized with the Category module (single source of truth).
+
+🛠️ Admin Side (Product Management)
+UI Structure
+Go to Product Tab
+Keep existing:
+Category filter
+SubCategory filter
+Add new picklist filters:
+Flavor
+Size
+Brand
+
+(All filters must be populated from the Category module)
+
+Product List (Admin View)
+Display all products created by Admin
+Product card/list should show:
+Name
+Image
+Category / SubCategory
+Flavor / Size / Brand
+
+🚫 Do NOT show:
+
+Price
+Stock
+Add to cart
+Rating
+Add Product
+Button: "Add Product"
+Opens a Modal
+Fields:
+Name
+Description
+Picture (link or upload)
+Category (select)
+SubCategory (select, dependent on Category)
+Flavor (select)
+Size (select)
+Brand (select)
+
+✅ All select fields must be:
+
+Synced from Category module
+Consistent with filters
+🧑‍💼 Supplier Side
+UI Structure
+
+Product tab contains 2 horizontal tabs:
+
+Admin Products
+My Products
+🧾 Tab 1: Admin Products
+Behavior
+Show products created by Admin
+Filter products based on:
+Categories/SubCategories already selected by supplier (from Category tab)
+Actions
+Supplier can:
+Click on a product
+Add it to My Products
+On Click (Add Product)
+Open modal or inline form:
+Input:
+Price
+Stock
+After confirmation:
+→ Product moves to My Products
+📦 Tab 2: My Products
+Behavior
+Show products selected by the supplier
+Actions
+
+Supplier can:
+
+Edit:
+Price
+Stock
+Remove product from their list
+🔍 Filters (Both Tabs)
+
+In both Admin Products and My Products, add picklist filters:
+
+Category
+SubCategory
+Flavor
+Size
+Brand
+
+✅ Filters must:
+
+Be synchronized with Category module
+Work in combination (multi-filter)
+🔄 Synchronization Rules
+Admin is the only source of truth for:
+Products
+Categories / SubCategories
+Flavor / Size / Brand
+Supplier:
+Cannot create products
+Can only select and enrich (price + stock)
+Any Admin update:
+→ Automatically reflected in Supplier view

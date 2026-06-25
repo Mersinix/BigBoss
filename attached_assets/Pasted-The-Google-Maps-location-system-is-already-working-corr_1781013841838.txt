@@ -1,0 +1,91 @@
+The Google Maps location system is already working correctly inside the SHOP marketplace navbar. Do NOT rebuild it, do NOT create a second implementation, and do NOT modify the existing workflow.
+
+OBJECTIVE
+
+Extend the exact same location experience to the LANDING PAGE navbar so both LANDING PAGE and SHOP share a single source of truth for location selection.
+
+IMPORTANT RULES
+
+* Reuse the existing LocationPickerModal component already used in the marketplace.
+* Reuse the existing Google Places autocomplete.
+* Reuse the existing map pin selection step.
+* Reuse the existing confirmation step.
+* Reuse the existing address formatting logic.
+* Reuse the existing storage mechanism.
+* Do not duplicate code.
+* Do not create a second modal component.
+* Do not break any existing marketplace functionality.
+* Do not modify the current working SHOP behaviour.
+
+IMPLEMENTATION REQUIREMENTS
+
+1. LANDING PAGE NAVBAR
+
+Locate the location button in the landing page navbar.
+
+Replace its current behaviour with the same logic used in marketplace-layout.tsx for café owners.
+
+When the user clicks the location button on the landing page:
+
+* Open the existing LocationPickerModal.
+* Pre-fill it with the currently saved address if one exists.
+* Allow search, autocomplete, pin dragging and confirmation exactly like the SHOP navbar.
+
+2. SHARED LOCATION STATE
+
+The landing page and shop must always use the same saved location.
+
+When a user selects a location from the landing page:
+
+* Save it using the same endpoint currently used by the marketplace:
+  PATCH /api/auth/me/location
+
+* Use the same payload structure already implemented.
+
+* Invalidate the same React Query caches currently invalidated in the marketplace implementation.
+
+* Immediately refresh the authenticated user data.
+
+3. SYNCHRONIZATION
+
+After saving a location from the landing page:
+
+* Navigating to /shop must automatically show the same location.
+* Opening the LocationPickerModal from the SHOP navbar must display the previously selected address.
+* The navbar location label must update instantly without requiring a page refresh.
+* Reloading the application must keep the selected location.
+
+4. GUEST USERS
+
+For non-authenticated users:
+
+* Keep the same UX as much as possible.
+* Persist the selected location locally (localStorage/session mechanism already used in the project if available).
+* When the user later signs in, automatically synchronize that location with the account if the application already has a synchronization mechanism.
+* Do not break existing authentication flows.
+
+5. UI CONSISTENCY
+
+The landing page location button must display the same formatted label logic used in the marketplace:
+
+Example:
+"Le Bardo, Tunis" → "Le Bardo"
+
+Use the exact same helper/formatter already used by the SHOP navbar.
+
+6. ACCEPTANCE CHECKLIST
+
+The task is complete only when all of the following are true:
+
+✅ Landing page navbar opens the existing Google Maps location modal
+✅ No duplicated location modal component exists
+✅ Same LocationPickerModal is reused everywhere
+✅ Selecting a location from landing page saves successfully
+✅ SHOP navbar instantly reflects the same location
+✅ Opening the modal from SHOP shows the previously selected address
+✅ Reloading preserves the location
+✅ React Query cache invalidation works correctly
+✅ No regression in existing marketplace functionality
+✅ Single source of truth for location across LANDING PAGE and SHOP
+
+Execute the implementation directly. Do not generate an audit report, migration report, or implementation plan. Apply the changes and verify all acceptance criteria.

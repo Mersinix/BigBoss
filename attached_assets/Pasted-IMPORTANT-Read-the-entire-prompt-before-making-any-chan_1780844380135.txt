@@ -1,0 +1,254 @@
+IMPORTANT: Read the entire prompt before making any changes.
+
+The goal is to improve the Messaging experience and make it behave more like Facebook Messenger on mobile and desktop while preserving the existing messaging architecture, APIs, database schema, and message logic.
+
+DO NOT modify backend message logic.
+
+DO NOT change conversations, notifications, or message storage.
+
+Only improve the UI and UX behavior.
+
+---
+
+## CURRENT UI
+
+Current modal shows:
+
+LEFT:
+
+* Conversation list
+
+RIGHT:
+
+* Discussion/messages
+
+Both are always visible side by side.
+
+---
+
+## NEW UX OBJECTIVE
+
+Add a service switcher at the top of the Messages modal.
+
+Services:
+
+SHOP
+PRINT
+BARISTA
+MARKETING
+
+SHOP must be selected by default.
+
+The visual style should be inspired by the existing account navigation:
+
+My Account
+Orders
+Dashboard
+Settings
+
+Reuse the same design language:
+
+* same pills/tabs style
+* same active state
+* same spacing
+* same transitions
+* same color system
+
+Do NOT invent a new component if a reusable tab/navigation component already exists.
+
+---
+
+## SERVICE SWITCHER BEHAVIOR
+
+At the top of Messages modal:
+
+[ SHOP ] [ PRINT ] [ BARISTA ] [ MARKETING ]
+
+Each service displays only conversations related to that service.
+
+Examples:
+
+SHOP
+→ suppliers, product orders, quotations
+
+PRINT
+→ printing providers
+
+BARISTA
+→ trainers, schools, baristas
+
+MARKETING
+→ agencies, freelancers, providers
+
+Reuse existing messaging architecture.
+
+Filter conversations by service.
+
+Do NOT duplicate messaging systems.
+
+---
+
+## FACEBOOK MESSENGER BEHAVIOR
+
+Current layout:
+
+LEFT + RIGHT visible simultaneously
+
+Replace with:
+
+STEP 1
+
+Show ONLY conversation list.
+
+Example:
+
++-------------------+
+| SHOP PRINT ...    |
++-------------------+
+| Conversation 1    |
+| Conversation 2    |
+| Conversation 3    |
++-------------------+
+
+---
+
+STEP 2
+
+When user clicks a conversation:
+
+Hide conversation list.
+
+Show ONLY discussion view.
+
+Example:
+
+← Back
+
+Premium Beans Co
+
+---
+
+Messages...
+Messages...
+Messages...
+-----------
+
+Message input
+
+---
+
+## BACK BUTTON
+
+Add a back button at top left of discussion view.
+
+Example:
+
+← Conversations
+
+Clicking it:
+
+returns to conversation list
+
+without losing current service selection.
+
+---
+
+## MOBILE EXPERIENCE
+
+The new behavior must work exactly like Messenger:
+
+List View
+↓ click conversation
+Discussion View
+↓ back
+List View
+
+This should be the default behavior on mobile.
+
+---
+
+## DESKTOP EXPERIENCE
+
+Apply the same Messenger-style navigation on desktop as requested.
+
+When a conversation is selected:
+
+Show only discussion view.
+
+Hide conversation list.
+
+When user clicks back:
+
+Show conversation list again.
+
+Do NOT keep split screen.
+
+---
+
+## HEADER IMPROVEMENTS
+
+Discussion header should show:
+
+* avatar
+* name
+* service badge (SHOP / PRINT / BARISTA / MARKETING)
+
+Example:
+
+Premium Beans Co
+SHOP
+
+or
+
+Creative Studio
+MARKETING
+
+---
+
+## KEEP EVERYTHING ELSE
+
+Do NOT modify:
+
+* message sending
+* message receiving
+* notification logic
+* unread counters
+* database
+* APIs
+* websocket/polling logic
+* permissions
+
+Only change the UI flow.
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ SHOP tab selected by default
+
+✓ SHOP conversations filtered correctly
+✓ PRINT conversations filtered correctly
+✓ BARISTA conversations filtered correctly
+✓ MARKETING conversations filtered correctly
+
+✓ Conversation list shown first
+
+✓ Clicking conversation opens discussion
+
+✓ Conversation list hidden
+
+✓ Back button returns to list
+
+✓ Service selection preserved
+
+✓ Messages still send correctly
+
+✓ Notifications still work
+
+✓ No backend changes
+
+✓ No database changes
+
+✓ No messaging logic changes

@@ -1,0 +1,157 @@
+the /marketing route in the existing BigBossCoffee marketplace.
+
+IMPORTANT:
+
+Do NOT redesign UI or create new design system
+Reuse existing components (cards, buttons, layouts, filters)
+Maintain current navbar, footer, auth system
+Follow existing blue “Cafe Owner” theme
+Do NOT duplicate architecture
+Extend current service-module system only
+ROUTE
+
+Create or complete:
+→ /marketing
+
+This page must become a fully functional service module (NOT “coming soon”).
+
+Remove from current banner:
+
+“Bientôt disponible”
+“Lancement prévu T4 2026”
+
+Replace with:
+
+Clean BigBoss MARKETING hero banner using existing design system
+Description:
+“Boostez la visibilité de votre café avec des experts marketing dédiés à la restauration”
+PAGE STRUCTURE
+
+The page is divided into TWO MAIN PARTS:
+
+1. SERVICE TYPES SECTION
+
+Display marketing service categories using existing card components:
+
+Service Types:
+Website creation
+SEO services
+Ads management
+Social media marketing
+Video production
+Photography
+Branding
+
+Each service type card:
+
+title
+short description
+icon (reuse existing icon system)
+“Explore” button
+
+Filters must work with these service types.
+
+2. MARKETING PROVIDERS SECTION
+
+List of marketing service providers.
+
+Provider Card must include:
+company name
+rating
+portfolio preview (images or links)
+pricing packages (visible only for APPROVED users)
+service categories
+location
+Actions:
+“View Profile”
+“Request Quote”
+“Contact Provider” (reuse existing messaging system)
+FILTERS
+
+Add filtering system (reuse existing filter components):
+
+Service type
+Price range
+Rating
+Location
+Provider type (agency / freelancer / studio)
+DETAIL PAGE (Provider / Service Detail)
+
+Each provider/service must support a detail view:
+
+Must include:
+full description
+portfolio gallery (images or samples)
+pricing packages (HIDDEN for non-approved users)
+service categories
+contact provider button
+request quote button
+VISIBILITY RULES (IMPORTANT - reuse global system)
+LEVEL 1 – VISITOR
+Can browse marketing services
+Can view providers
+Can view portfolios
+Cannot see pricing
+Cannot request quotes
+
+Replace pricing with:
+→ "Price available for approved coffee shop owners"
+
+CTA:
+→ “Connexion to view pricing”
+
+LEVEL 2 – REGISTERED (PENDING)
+Same as visitor
+Show notice:
+“Your account is awaiting approval.”
+No quote requests or pricing access
+LEVEL 3 – APPROVED COFFEE OWNER
+Full access:
+pricing packages
+request quotes
+contact providers
+full marketing details
+ARCHITECTURE REQUIREMENTS (CRITICAL)
+
+This module must integrate into existing system:
+
+All services (SHOP / PRINT / BARISTA / MARKETING) must:
+
+share same navbar
+share same landing footer
+use same authentication system
+reuse messaging system
+reuse cart system ONLY for SHOP + PRINT
+follow same UI design system (no new design style)
+PERFORMANCE REQUIREMENTS
+Lazy load marketing module
+Do NOT load all service data globally
+Keep state isolated per service module
+Reuse existing API structure (no duplication)
+Avoid duplicate search systems
+GLOBAL PLATFORM RULES (MUST BE RESPECTED)
+
+Ensure:
+
+Blue Cafe Owner theme applied everywhere
+No orange UI remains in Cafe Owner mode
+Sidebar is fully removed (if still referenced)
+Navbar service switching works properly
+No duplicate search bars
+Logout redirects to landing page
+Empty categories/subcategories are filtered out
+Print / Barista / Marketing modules are fully independent but consistent
+Existing SHOP system remains untouched
+Cart and order system remains stable
+Messaging system remains unchanged
+OUTPUT EXPECTED AFTER IMPLEMENTATION
+
+Provide:
+
+Modified files list
+New routes added
+Service module architecture explanation
+Visibility logic implementation summary
+Any database changes (if required)
+Any migration steps
+State management / lazy loading strategy

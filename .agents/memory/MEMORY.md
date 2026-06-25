@@ -1,0 +1,3 @@
+- [Helium DB connection fix](helium-db-fix.md) — DATABASE_URL may point to localhost; use PGHOST env var when it differs to avoid ECONNREFUSED.
+- [Three-tier access pattern](three-tier-access.md) — Visitor/Pending/Approved; server hasCommercialAccess() and client computeAccess() mirror each other for marketplace commercial data.
+- [Supplier category-products coupling](supplier-category-products.md) — My Categories selection (Zustand store) drives product visibility in Products page; real-time sync via WebSocket on /ws path.

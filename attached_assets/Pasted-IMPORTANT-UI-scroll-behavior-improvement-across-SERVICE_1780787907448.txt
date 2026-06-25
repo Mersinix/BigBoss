@@ -1,0 +1,131 @@
+IMPORTANT: UI scroll behavior improvement across SERVICE PAGES.
+
+Apply ONLY layout behavior changes. Do NOT modify architecture, APIs, data logic, authentication, routing, or component structure.
+
+This affects ONLY:
+
+* /shop
+* /print
+* /marketing
+
+---
+
+## OBJECTIVE
+
+Improve UX so that category FLATLIST + FILTERS remain accessible while scrolling.
+
+---
+
+## CURRENT ISSUE
+
+When scrolling down:
+
+* Hero banner disappears behind navbar (OK)
+* BUT filters and category flatlist scroll away too quickly
+* User loses ability to quickly change filters
+
+---
+
+## DESIRED BEHAVIOR
+
+Make the following UI elements sticky (fixed in viewport flow):
+
+1. CATEGORY FLATLIST (service selector)
+2. FILTER BAR (search + filters under flatlist)
+
+These two sections must remain visible while scrolling the product/provider list.
+
+---
+
+FINAL LAYOUT BEHAVIOR
+
+From top to bottom:
+
+[ Navbar ]
+
+[ Hero Banner ]
+
+↓ scroll
+
+[ Sticky Area START ]
+
+* Flatlist (categories / services icons)
+* Filters row (search, rating, city, etc.)
+  [ Sticky Area END ]
+
+[ Scrollable Content ]
+
+* Products / providers list
+
+---
+
+STICKY RULES
+
+* The sticky area must stick UNDER the navbar
+* It must NOT overlap navbar
+* It must NOT cover content
+* It must maintain background blur or solid background for readability
+* It must preserve spacing and design system
+
+---
+
+IMPLEMENTATION REQUIREMENTS
+
+* Use existing CSS / Tailwind (sticky / top offset)
+
+* Do NOT create new components
+
+* Do NOT duplicate filter components
+
+* Apply reusable solution across all 3 pages:
+  /shop
+  /print
+  /marketing
+
+* Ensure consistent behavior everywhere
+
+---
+
+EDGE CASES
+
+Ensure:
+
+✓ On mobile, sticky behavior still works
+✓ No overlap with navbar
+✓ No jitter when scrolling
+✓ No layout shift
+✓ No broken flex/grid structure
+✓ Filters remain fully interactive
+✓ Flatlist remains horizontally scrollable
+
+---
+
+DO NOT
+
+* Do NOT change backend
+* Do NOT change API calls
+* Do NOT change routing
+* Do NOT change design system
+* Do NOT duplicate UI components
+
+---
+
+EXPECTED RESULT
+
+User should be able to:
+
+* Scroll product list freely
+* Keep categories always visible
+* Keep filters always accessible
+* Change filters without scrolling back up
+
+---
+
+OUTPUT
+
+After implementation provide:
+
+1. Files modified
+2. CSS / layout strategy used (sticky, fixed, etc.)
+3. Pages impacted
+4. Confirmation no architecture changes were made

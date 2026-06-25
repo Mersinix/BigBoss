@@ -1,0 +1,145 @@
+Implement the /barista route in the existing BigBossCoffee marketplace without redesigning the system or breaking any existing components.
+
+IMPORTANT RULES:
+
+Do NOT change existing architecture or design system
+Do NOT create new UI styles
+Reuse existing components (cards, buttons, layouts, typography)
+Maintain current authentication + authorization logic
+Apply the same visibility rules (Visitor / Pending / Approved owner)
+No redesign of marketplace UI
+ROUTE
+
+Create or complete:
+→ /barista
+
+This page must become fully functional (NOT "coming soon").
+
+Keep the existing banner section but REMOVE:
+
+“Bientôt disponible”
+“Lancement prévu T4 2026”
+
+Replace banner with:
+
+Clean “BigBoss BARISTA” hero banner (same style system)
+Short description:
+"Trouvez, réservez et formez des baristas professionnels pour votre établissement"
+PAGE STRUCTURE
+
+The page must contain TWO MAIN SECTIONS:
+
+1. TRAINING SECTION (Barista Academy)
+
+Purpose: allow users to discover and enroll in barista training programs.
+
+Features:
+List of training programs
+Barista schools / trainers
+Course duration
+Price (only visible for APPROVED users)
+Level:
+Beginner
+Advanced
+Expert
+Certification availability
+Reviews / ratings
+Training Card UI (reuse existing card component):
+
+Each card must include:
+
+title
+provider name
+rating
+duration
+price (VISIBILITY RULES)
+level badge
+certification badge (if available)
+“Enroll” button
+Visibility rules:
+VISITOR:
+sees training info BUT NOT price
+price replaced with:
+"Price available for approved coffee shop owners"
+CTA → “Connexion to view prices”
+PENDING USER:
+same as visitor
+plus notice:
+"Your account is awaiting approval"
+APPROVED USER:
+full access including price + enrollment
+2. HIRING SECTION (Barista Marketplace)
+
+Purpose: coffee shop owners can search and hire baristas.
+
+Coffee owners can:
+search baristas
+filter by:
+availability
+experience level
+skills
+location
+Barista Profile Card must show:
+name
+profile image (if available)
+experience level
+skills (espresso, latte art, brewing, etc.)
+rating
+location
+daily rate (VISIBILITY RULES)
+availability calendar preview
+Actions:
+“Hire” button
+“Chat” button (reuse existing messaging system)
+VISIBILITY RULES (CRITICAL)
+LEVEL 1 – VISITOR
+Can browse baristas and trainings
+Can view profiles
+Cannot see prices or rates
+Cannot hire or enroll
+
+Replace all commercial data with:
+→ "Available for approved coffee shop owners"
+
+LEVEL 2 – REGISTERED (PENDING)
+Same as visitor
+Show banner:
+"Your account is awaiting approval."
+No hiring / no enrollment / no pricing access
+LEVEL 3 – APPROVED COFFEE OWNER
+Full access:
+prices
+hiring
+enrollment
+chat
+filtering by availability
+all commercial data
+BACKEND REQUIREMENTS
+
+Reuse existing:
+
+authentication system
+user status field (pending / approved / rejected)
+messaging system
+card components
+filters system
+
+Do NOT duplicate APIs.
+
+Fetch once → render conditionally.
+
+UX REQUIREMENTS
+Keep marketplace design consistent
+No new design system
+Use existing spacing, typography, buttons
+Ensure seamless navigation with rest of platform
+OUTPUT EXPECTED
+
+After implementation:
+
+Functional /barista page
+Training section working
+Hiring section working
+Visibility rules enforced
+Chat button connected to existing system
+No breaking changes to marketplace

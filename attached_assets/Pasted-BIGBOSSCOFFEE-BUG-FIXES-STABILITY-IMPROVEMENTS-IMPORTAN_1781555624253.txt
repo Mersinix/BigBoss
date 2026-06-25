@@ -1,0 +1,196 @@
+BIGBOSSCOFFEE – BUG FIXES & STABILITY IMPROVEMENTS
+
+IMPORTANT
+
+This task is ONLY a bug-fix and stabilization task.
+
+DO NOT refactor working functionality.
+
+DO NOT redesign existing flows.
+
+DO NOT modify permissions, approval workflows, database relationships, routing, authentication, realtime synchronization, or existing product/category logic unless required to fix the issues below.
+
+Before making changes, identify the root cause of each issue.
+
+After fixing, run regression testing to ensure nothing else is broken.
+
+====================================================
+ISSUE 1 – MY CATEGORIES DOES NOT SHOW SELECTED CATEGORIES
+=========================================================
+
+Current behavior:
+
+Supplier
+→ Categories
+→ My Categories
+
+When a supplier selects categories using:
+
+Add Category Modal
+
+the selected Category and its related SubCategories do NOT appear inside My Categories.
+
+This is incorrect.
+
+---
+
+## EXPECTED BEHAVIOR
+
+When the supplier selects a Category from:
+
+Add Category Modal
+
+the selected Category must immediately appear inside:
+
+Supplier
+→ Categories
+→ My Categories
+
+without requiring:
+
+* Refresh
+* Navigation away and back
+
+
+The update should be immediate.
+
+---
+
+## SUBCATEGORY VISIBILITY
+
+When the selected Category appears:
+
+its related SubCategories must also appear correctly.
+
+The supplier should be able to:
+
+* View Category
+* View SubCategories
+* Select SubCategory
+
+using the existing workflow.
+
+---
+
+## IMPORTANT
+
+The recent filtering logic that only shows categories/subcategories related to supplier products appears to be preventing newly selected categories from appearing.
+
+Investigate the implementation carefully.
+
+Maintain BOTH requirements:
+
+1. Categories selected through Add Category Modal must appear in My Categories immediately.
+
+2. Categories/SubCategories that truly have no supplier association should still remain hidden when appropriate.
+
+Do not remove the existing filtering logic entirely.
+
+Fix the logic so both requirements work together correctly.
+
+====================================================
+ISSUE 2 – REGISTRATION LOCATION MODAL IS BROKEN
+===============================================
+
+Current behavior:
+
+During creation of a new account,
+
+the Location Modal does not work correctly.
+
+Users cannot properly select or save their location.
+
+---
+
+## REQUIRED INVESTIGATION
+
+Audit the entire registration location flow.
+
+Check:
+
+* Location Modal UI
+* Google Maps integration
+* Location Picker
+* Place Autocomplete
+* Coordinates storage
+* Address storage
+* API calls
+* Form validation
+* Registration submission process
+
+Identify the root cause.
+
+---
+
+## EXPECTED BEHAVIOR
+
+When a new user creates an account:
+
+1. Open Location Modal
+
+2. Search location
+
+3. Select location from map/search
+
+4. Save location
+
+5. Address, coordinates and related location data are stored correctly
+
+6. Registration completes successfully
+
+---
+
+## VALIDATE ALL SCENARIOS
+
+Verify:
+
+* Manual location search
+* Google place selection
+* Map selection
+* Save location
+* Registration submission
+* New account creation
+
+====================================================
+REAL-TIME REQUIREMENT
+=====================
+
+For Issue 1:
+
+When a category is added through Add Category Modal,
+
+My Categories must update immediately without refresh.
+
+Use the existing realtime/update mechanism already present in the project.
+
+Do NOT introduce a new realtime technology.
+
+====================================================
+QUALITY ASSURANCE
+=================
+
+Before finishing:
+
+1. Verify Add Category Modal updates My Categories immediately.
+
+2. Verify related SubCategories appear correctly.
+
+3. Verify Category selection still controls Products > Admin Products and Products > My Products.
+
+4. Verify existing category approval workflow still works.
+
+5. Verify realtime synchronization still works.
+
+6. Verify supplier category requests still work.
+
+7. Verify registration flow works end-to-end.
+
+8. Verify location modal works correctly.
+
+9. Verify location data is stored correctly.
+
+10. Verify account creation works successfully.
+
+11. Run full regression testing.
+
+

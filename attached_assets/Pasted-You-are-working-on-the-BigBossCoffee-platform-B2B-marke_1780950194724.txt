@@ -1,0 +1,149 @@
+You are working on the BigBossCoffee platform (B2B marketplace).
+
+🎯 PROBLEM TO FIX
+
+The location modal opened from the NAVBAR location button is NOT updated with the new Google Maps system.
+
+Even though backend + main modal exist, the navbar still uses an old or incomplete version.
+
+We need to FIX and REPLACE it so it uses the SAME upgraded LocationPickerModal logic.
+
+🧠 GOAL (IMPORTANT)
+
+Update the navbar location button modal so that:
+
+Coffee owners can OPEN location modal from navbar
+They can UPDATE their location anytime
+The modal must use Google Maps (NOT text-only input)
+Must match existing BigBossCoffee UI style
+Must reuse the existing LocationPickerModal component (DO NOT duplicate logic)
+🔑 GOOGLE MAPS CONFIG (USE EXISTING ONLY)
+{
+  "googleMaps": {
+    "apiKey": "AIzaSyDX4SG2_rPzd4a5ddiGzR7oeCCANJDeYD4"
+  }
+}
+
+Use:
+
+Places Autocomplete
+Maps JavaScript API
+Geocoding API
+👤 SCOPE: COFFEE OWNER FIRST
+
+For now:
+
+Only apply FULL behavior for coffee owners
+Suppliers are NOT part of this navbar fix yet
+🧩 REQUIRED BEHAVIOR
+
+When coffee owner clicks navbar location button:
+
+1. Open MODAL
+
+Must open:
+👉 existing LocationPickerModal
+
+NOT a new modal
+
+2. PRE-FILL LOCATION
+
+If user already has location:
+
+Show current address
+Show pin on map at saved coordinates
+Allow editing immediately
+
+If no location:
+
+Start at step 1 (search + autocomplete)
+3. UPDATE FLOW MUST WORK
+
+User must be able to:
+
+Search address
+Move pin on map
+Use “current position”
+Confirm location
+
+Then:
+
+👉 Call backend:
+PATCH /api/auth/me/location
+
+Payload:
+
+{
+  "locationAddress": "",
+  "locationLat": 0,
+  "locationLng": 0,
+  "locationPlaceId": ""
+}
+🧠 CRITICAL FIX REQUIRED
+
+Right now navbar is likely:
+
+Using old modal OR
+Not connected to LocationPickerModal OR
+Not passing user location state
+
+👉 YOU MUST FIX THIS:
+
+Replace navbar location modal logic with:
+open(LocationPickerModal, {
+  mode: "edit",
+  userType: "cafe_owner"
+})
+
+OR directly render:
+
+<LocationPickerModal
+  isOpen={isOpen}
+  onClose={close}
+  userType="cafe_owner"
+  initialLocation={user.location}
+/>
+🎨 UI REQUIREMENTS
+
+Must match BigBossCoffee style:
+
+Same modal design as landing page location button
+Green accent theme
+Rounded corners (12–16px)
+Smooth open/close animation
+Mobile responsive
+🧠 IMPORTANT RULES
+DO NOT create a second location modal
+DO NOT bypass existing backend
+DO NOT store fake state locally only
+MUST persist to DB
+MUST reflect immediately in navbar after save
+🔄 AFTER SAVE BEHAVIOR
+
+After updating location:
+
+Navbar text must update instantly
+Example:
+"📍 Ariana, Tunisia"
+Refresh page → location must still be correct
+🧪 ACCEPTANCE TEST
+
+This is considered SUCCESS only if:
+
+✔ Navbar location button opens Google Maps modal
+✔ Coffee owner can update location anytime
+✔ Saved location persists in DB
+✔ Navbar updates instantly after save
+✔ Reload keeps correct location
+
+🚨 IF SOMETHING IS MISSING
+
+If navbar is not connected properly:
+
+👉 Trace:
+
+Header component
+User context / auth store
+Location state provider
+
+Fix at root level, not just UI.

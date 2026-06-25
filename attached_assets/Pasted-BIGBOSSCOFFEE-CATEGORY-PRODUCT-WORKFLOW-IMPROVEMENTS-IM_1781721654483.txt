@@ -1,0 +1,374 @@
+BIGBOSSCOFFEE – CATEGORY & PRODUCT WORKFLOW IMPROVEMENTS
+
+IMPORTANT
+
+This task is an enhancement of the existing Category and Product systems.
+
+DO NOT redesign the existing UI.
+
+DO NOT break:
+
+* Authentication
+* User roles and permissions
+* Existing Category approval workflow
+* Existing Product approval workflow
+* Existing realtime synchronization
+* Existing database relationships
+* Existing APIs
+* Existing routes
+* Existing product/category creation flows
+
+Keep the current architecture and components whenever possible.
+
+Apply only the requested behavior changes.
+
+====================================================
+
+1. ADMIN PART → CATEGORY TAB → CATEGORY MANAGEMENT
+   ====================================================
+
+Current behavior:
+
+When the admin edits:
+
+* Brand
+* Flavor
+* Size
+
+A modal opens.
+
+Inside the modal:
+
+* The admin selects a Category.
+* The SubCategory list is filtered based on the selected Category.
+
+Problem:
+
+When the admin changes the selected Category to choose additional SubCategories, the previously selected SubCategories are lost.
+
+Required behavior:
+
+The admin must be able to select SubCategories from multiple Categories.
+
+Example:
+
+Select Category A:
+
+* Select SubCategory A1
+* Select SubCategory A2
+
+Then change Category to Category B:
+
+* The previously selected SubCategories from Category A must remain selected.
+* The admin can add SubCategory B1 and B2.
+
+The Category selector is only used to filter the visible SubCategory options.
+
+Changing the Category must NEVER reset or remove already selected SubCategories.
+
+IMPORTANT:
+
+Do not change:
+
+* Modal design
+* Inputs
+* Selection components
+* User experience
+
+Only fix the selection persistence behavior.
+
+====================================================
+2. ADMIN PART → CATEGORY TAB → CATEGORY REQUESTS
+================================================
+
+This page should represent the Category selections made by suppliers.
+
+The data displayed here must be synchronized with:
+
+Supplier Part → Category Tab → My Categories
+
+Required behavior:
+
+When a supplier selects or updates Categories/SubCategories in My Categories:
+
+* Changes must immediately appear in Admin Part → Category Tab → Category Requests.
+
+When an admin creates a new Category:
+
+* It must appear in Category Requests.
+* It must NOT be selected by default.
+
+The admin can later select it manually.
+
+The supplier can also select it later from their side.
+
+Remove the Category selection step from the Supplier signup/registration flow.
+
+Category selection must only happen after account creation inside:
+
+Supplier Part → Category Tab → My Categories.
+
+====================================================
+3. ADMIN PART → PRODUCTS TAB → PRODUCT MANAGEMENT DISPLAY
+=========================================================
+
+Current behavior:
+
+Products are displayed as a List.
+
+Keep the current List view exactly as it is.
+
+Required enhancement:
+
+Add a second display mode:
+
+* List View
+* Grid View
+
+The admin must be able to switch between both views.
+
+Requirements:
+
+* Keep current List mode unchanged.
+* Add a Grid mode for the same products.
+* Product information and actions must remain available in Grid mode.
+
+====================================================
+4. ADMIN PART → PRODUCTS TAB → ADD PRODUCT SWITCHER
+===================================================
+
+Split the Product page using a switcher exactly like the Category page.
+
+The switcher must contain:
+
+1. Product Management
+
+This contains the current Product page content.
+
+Keep all existing behavior.
+
+2. Supplier Products
+
+This contains the products created by suppliers as suggestions.
+
+Display all supplier-created products waiting for admin management.
+
+The admin must be able to:
+
+* View supplier products.
+* Review their details.
+* Manage them using the existing approval workflow.
+
+====================================================
+5. SUPPLIER PART → CATEGORY TAB → SYNCHRONIZATION
+=================================================
+
+Verify and ensure that the selected Categories and SubCategories inside:
+
+Supplier Part → Category Tab → My Categories
+
+are always correctly synchronized with the products displayed inside:
+
+Supplier Part → Products Tab.
+
+The selected supplier Categories/SubCategories must always be the source of truth for product filtering.
+
+====================================================
+6. SUPPLIER PART → PRODUCTS TAB
+===============================
+
+The switcher currently contains:
+
+* Admin Products
+* My Products
+* New Product
+
+Keep this structure.
+
+---
+
+## 6.1 SUPPLIER → PRODUCTS → ADMIN PRODUCTS
+
+This section displays products created by the admin.
+
+Only display products matching the Categories selected by the connected supplier.
+
+Remove the current component:
+
+"Showing products for"
+
+Replace it with two flat lists.
+
+FIRST FLAT LIST:
+
+Display all selected Categories from the supplier that contain related products created by the admin.
+
+The supplier can click a Category.
+
+SECOND FLAT LIST:
+
+Based on the selected Category, display its related SubCategories.
+
+The supplier can click a SubCategory.
+
+Below the SubCategory list:
+
+Keep the Search input.
+
+Below the Search input:
+
+Display the filtered products exactly as they currently appear.
+
+Product Interaction:
+
+When the supplier clicks a product:
+
+Open a Product Details modal showing:
+
+* Product information
+* Product details
+* Existing data
+
+Inside the modal:
+
+The supplier can add the product.
+
+After adding:
+
+* The product must disappear from Admin Products.
+* The product must automatically appear in My Products.
+
+---
+
+## 6.2 SUPPLIER → PRODUCTS → MY PRODUCTS
+
+This section displays products previously added by the supplier from:
+
+Supplier → Products → Admin Products.
+
+Remove the current component:
+
+"Showing products for"
+
+Replace it with the same two flat lists:
+
+* Categories list
+* SubCategories list
+
+The filtering behavior must be identical to Admin Products.
+
+Below the flat lists:
+
+Keep:
+
+* Search input.
+* Existing product display.
+* Existing product management actions.
+
+---
+
+## 6.3 SUPPLIER → PRODUCTS → NEW PRODUCT
+
+This section allows the supplier to create product suggestions.
+
+Current issue:
+
+After creating a product, it does not appear correctly.
+
+Required behavior:
+
+Clicking "Add Product" opens a modal.
+
+Inside this modal:
+
+The Category and SubCategory selections must NOT display all available categories.
+
+They must only display:
+
+* Approved Categories selected by the supplier.
+* Related approved SubCategories.
+
+The supplier cannot create a product using categories they have not selected.
+
+After creating a new product:
+
+The product must immediately appear inside:
+
+Supplier Part → Products Tab → New Product.
+
+The same product must also immediately appear inside:
+
+Admin Part → Products Tab → Supplier Products.
+
+The existing approval workflow must remain unchanged.
+
+====================================================
+FINAL VALIDATION
+================
+
+Before completing the implementation verify:
+
+CATEGORY
+
+✓ Admin can select SubCategories from multiple Categories when editing Brand/Flavor/Size.
+
+✓ Category changes from suppliers synchronize correctly with Admin Category Requests.
+
+✓ New admin-created Categories appear as unselected options.
+
+✓ Signup no longer contains Category selection.
+
+PRODUCTS
+
+✓ Admin can switch between List and Grid views.
+
+✓ Admin Product switcher works:
+
+* Product Management
+* Supplier Products
+
+✓ Supplier Products correctly receive supplier-created product suggestions.
+
+SUPPLIER PRODUCTS PAGE
+
+✓ Admin Products only show products matching supplier-selected Categories.
+
+✓ Category and SubCategory flat lists work correctly.
+
+✓ Product Details modal opens correctly.
+
+✓ Adding a product moves it from Admin Products to My Products.
+
+✓ My Products uses the same Category/SubCategory navigation.
+
+✓ New Product modal only shows allowed Categories/SubCategories.
+
+✓ New supplier products appear immediately in both Supplier and Admin sections.
+
+GENERAL
+
+✓ Existing workflows continue to work.
+
+✓ No permissions are broken.
+
+✓ No existing APIs or routes are broken.
+
+✓ Existing realtime synchronization remains functional.
+
+====================================================
+FINAL REPORT
+============
+
+After implementation provide:
+
+* Root cause of any discovered issues.
+* Files modified.
+* Components modified.
+* APIs affected.
+* Database changes if any.
+* Validation results.
+* Confirmation that no existing functionality was broken.
+
+Do not ask for additional confirmation.
+
+Analyze the existing codebase, implement all requested changes, test all affected workflows, and complete the implementation.

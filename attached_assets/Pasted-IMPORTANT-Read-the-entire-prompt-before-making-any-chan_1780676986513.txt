@@ -1,0 +1,249 @@
+IMPORTANT: Read the entire prompt before making any changes.
+
+The goal is to refine the MARKETING module UI and fix a runtime error without changing the existing architecture, design system, routing structure, authentication flow, or shared service architecture.
+
+CRITICAL RULES
+
+* Do NOT redesign the application
+* Do NOT replace existing reusable components
+* Do NOT change the current blue Cafe Owner theme
+* Do NOT create a new design system
+* Do NOT break SHOP, PRINT, BARISTA, or MARKETING modules
+* Do NOT modify shared auth logic unless required for the bug fix
+* Reuse existing cards, filters, layouts, and components
+* Preserve responsive behavior
+
+---
+
+## PART 1 — MARKETING HERO BANNER IMPROVEMENTS
+
+Current banner:
+
+BigBoss MARKETING
+Boostez la visibilité de votre café avec des experts marketing dédiés à la restauration
+
+Update the hero section to feel more professional and premium.
+
+Requirements:
+
+1. Add a high-quality marketing-related background image.
+
+Examples:
+
+* coffee shop marketing
+* social media management
+* digital marketing workspace
+* branding and content creation
+* agency team working
+
+2. Add a dark overlay / blur layer above the image.
+
+Goal:
+
+* keep text perfectly readable
+* maintain existing blue branding
+* avoid visual noise
+
+3. Keep existing hero text.
+
+4. Keep existing spacing and layout structure.
+
+5. Do NOT redesign the hero section.
+
+Only:
+
+* background image
+* overlay layer
+* improved visual hierarchy
+
+---
+
+## PART 2 — SERVICE TYPES SECTION SIMPLIFICATION
+
+Current section contains:
+
+Types de services
+Sélectionnez un service pour filtrer les prestataires
+
+Remove BOTH texts completely.
+
+Remove:
+
+"Types de services"
+
+"Sélectionnez un service pour filtrer les prestataires"
+
+Replace the current service cards grid with a horizontal selectable service logo list.
+
+Requirements:
+
+* flat list / horizontal scroll
+* logo/icon only
+* no descriptions
+* no provider count
+* no titles under icons
+* no cards
+* no extra text
+
+Keep existing filtering functionality.
+
+When clicking a logo:
+
+* service becomes selected
+* providers list filters exactly as today
+* active state remains visible
+
+Example behavior:
+
+[Website]
+[SEO]
+[Ads]
+[Social]
+[Video]
+[Photo]
+[Branding]
+
+Icons only.
+
+No text blocks.
+
+No service descriptions.
+
+No "Explorer" buttons.
+
+The functionality must remain unchanged.
+
+Only the visual presentation changes.
+
+---
+
+## PART 3 — PROVIDERS SECTION CLEANUP
+
+Current section contains:
+
+Prestataires marketing
+
+Trouvez l'expert idéal pour développer la visibilité de votre café
+
+Remove BOTH texts completely.
+
+Keep:
+
+* search bar
+* service filters
+* rating filter
+* city filter
+* provider list
+
+Do not modify existing filtering behavior.
+
+Result should start directly with:
+
+Search bar
+Filters
+Provider cards
+
+No section title.
+
+No section subtitle.
+
+---
+
+## PART 4 — SETTINGS RUNTIME ERROR FIX
+
+Current error:
+
+[plugin:runtime-error-plugin]
+User is not defined
+
+File:
+
+client/src/components/cafe/marketplace-layout.tsx
+
+Error location:
+
+SettingsPanel
+
+Line around:
+
+<User className="w-4 h-4" />
+
+Requirements:
+
+1. Analyze why User is undefined.
+
+Most likely causes:
+
+* missing import
+* incorrect lucide-react import
+* component renamed
+* variable collision
+
+2. Fix the root cause.
+
+3. Ensure all settings page tabs render correctly.
+
+4. Verify:
+
+Profile tab
+Account tab
+Notifications tab
+Preferences tab
+
+all open without runtime errors.
+
+5. Search for similar icon usage throughout marketplace-layout.tsx and fix any related missing imports.
+
+---
+
+## VALIDATION CHECKLIST
+
+After implementation verify:
+
+✓ Marketing hero uses image background
+✓ Overlay layer added
+✓ Text remains readable
+
+✓ Service title removed
+✓ Service subtitle removed
+
+✓ Service cards replaced by icon/logo selector
+✓ Filtering still works
+
+✓ Provider title removed
+✓ Provider subtitle removed
+
+✓ Search bar still works
+✓ Filters still work
+
+✓ Provider cards still work
+
+✓ No runtime error in Settings
+
+✓ User icon properly imported
+✓ Settings page renders correctly
+
+✓ No architecture changes
+✓ No auth changes
+✓ No routing changes
+✓ No shared component regressions
+
+---
+
+## OUTPUT REQUIRED
+
+Before applying changes provide:
+
+1. Files to be modified
+2. Reason for each modification
+3. Root cause of the User undefined error
+4. Components impacted
+5. Confirmation that no architecture changes are required
+
+After implementation provide:
+
+1. Modified files list
+2. Summary of UI changes
+3. Runtime error fix explanation
+4. Validation results
+5. Any remaining warnings or technical debt

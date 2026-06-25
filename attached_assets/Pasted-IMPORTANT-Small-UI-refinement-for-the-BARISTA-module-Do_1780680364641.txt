@@ -1,0 +1,116 @@
+IMPORTANT: Small UI refinement for the BARISTA module.
+
+Do NOT modify architecture, routing, APIs, authentication, visibility rules, filters, search functionality, messaging system, or existing business logic.
+
+Apply only the following changes.
+
+---
+
+1. HERO BANNER IMAGE UPDATE
+
+---
+
+Use the attached image as the hero banner background.
+
+Requirements:
+
+* Replace the current BARISTA hero image with the attached image
+* Keep the existing dark overlay / blur layer
+* Keep the existing hero text
+* Keep the existing banner height
+* Keep responsiveness unchanged
+* Keep the current layout structure
+
+Do NOT modify any hero content.
+
+Only replace the background image.
+
+---
+
+2. REMOVE SECTION HEADER - BARISTA ACADEMY
+
+---
+
+Remove completely:
+
+"Barista Academy"
+
+"Formations professionnelles pour développer les compétences de votre équipe"
+
+The training cards and all associated functionality must remain visible and unchanged.
+
+Only remove the section title and subtitle.
+
+---
+
+3. REMOVE SECTION HEADER - MARKETPLACE BARISTAS
+
+---
+
+Remove completely:
+
+"Marketplace Baristas"
+
+"Recrutez des baristas certifiés pour votre établissement"
+
+The marketplace content must remain visible and unchanged:
+
+* search
+* filters
+* barista cards
+* availability
+* ratings
+* skills
+* hire button
+* chat button
+
+Only remove the section title and subtitle.
+
+---
+
+4. KEEP EVERYTHING ELSE AS IS
+
+---
+
+Do NOT modify:
+
+* tab switcher
+* filters
+* search
+* cards
+* visibility rules
+* approval workflow
+* messaging integration
+* responsive layout
+* spacing between components
+
+Only perform the three changes above.
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ New banner image applied
+✓ Overlay still works
+✓ Hero text remains readable
+
+✓ "Barista Academy" title removed
+✓ Academy subtitle removed
+
+✓ "Marketplace Baristas" title removed
+✓ Marketplace subtitle removed
+
+✓ Training cards still work
+✓ Search still works
+✓ Filters still work
+✓ Chat still works
+✓ Hire button still works
+
+✓ No architecture changes
+✓ No API changes
+✓ No routing changes
+✓ No regressions
+
+Provide modified files list after implementation.

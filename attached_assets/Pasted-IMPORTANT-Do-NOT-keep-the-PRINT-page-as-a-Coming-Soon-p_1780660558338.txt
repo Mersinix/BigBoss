@@ -1,0 +1,481 @@
+IMPORTANT: Do NOT keep the PRINT page as a "Coming Soon" page anymore.
+
+The goal is to transform PRINT into a fully functional marketplace module, using the same architecture principles as SHOP while keeping its own independent data model, categories, filters, products, and ordering workflow.
+
+DO NOT break existing SHOP functionality.
+
+DO NOT modify Admin, Supplier, or Cafe Owner modules unrelated to PRINT.
+
+Reuse existing components whenever possible.
+
+==================================================
+PRINT MODULE ACTIVATION
+=======================
+
+Current State:
+
+* Static "Coming Soon" page
+
+Required State:
+
+* Fully functional PRINT marketplace
+
+Route:
+→ /print
+
+Remove:
+
+* "Coming Soon"
+* Waitlist
+* Launch messages
+
+Replace with a real marketplace experience.
+
+==================================================
+PRINT PAGE STRUCTURE
+====================
+
+Keep the same global navbar.
+
+Keep the same global footer.
+
+Use the same design system as SHOP.
+
+Structure:
+
+1. Navbar
+2. Print Categories
+3. Filters
+4. Print Products Grid
+5. Footer
+
+==================================================
+PRINT CATEGORIES
+================
+
+Create categories:
+
+* T-Shirt Printing
+* Cap Printing
+* Logo Design
+* Flyers
+* Glass Printing
+* Stickers
+* Packaging
+* Menu Design
+
+Each category contains:
+
+* SubCategories
+* Printing Companies (Brands)
+* Printing Products
+
+==================================================
+EXAMPLE SUBCATEGORIES
+=====================
+
+T-Shirt Printing:
+
+* Polo
+* Standard T-Shirt
+* Premium T-Shirt
+* Hoodie
+
+Cap Printing:
+
+* Baseball Cap
+* Snapback
+* Trucker Cap
+
+Logo Design:
+
+* Basic Logo
+* Premium Logo
+* Brand Identity Kit
+
+Flyers:
+
+* A5
+* A4
+* Folded Flyer
+
+Glass Printing:
+
+* Coffee Cup
+* Glass Cup
+* Mug
+
+Packaging:
+
+* Coffee Bags
+* Boxes
+* Labels
+
+Menu Design:
+
+* Printed Menu
+* Laminated Menu
+* Luxury Menu
+
+==================================================
+PRINT FILTERS
+=============
+
+Dynamic filters:
+
+* Category
+* SubCategory
+* Printing Company (Brand)
+* Price Range
+* Delivery Time
+* Material Type
+
+Material examples:
+
+* Cotton
+* Polyester
+* Cardboard
+* Plastic
+* Glass
+* Ceramic
+* Mixed Material
+
+Delivery examples:
+
+* 24h
+* 48h
+* 3-5 days
+* 1 week
+
+Filter behavior must match SHOP:
+
+Category
+→ filters SubCategory
+
+SubCategory
+→ filters Brands
+
+Only available values should appear.
+
+==================================================
+PRINT PRODUCT CARDS
+===================
+
+Each card must display:
+
+* Preview image
+* Service/Product Name
+* Category badge
+* Brand (printing company)
+* Rating
+* Starting Price
+* Delivery Time
+
+Example:
+
+Premium Coffee T-Shirt Printing
+
+★★★★☆
+PrintMaster Tunisia
+
+Starting from 8 DT
+
+Delivery: 48h
+
+==================================================
+PRINT DETAIL PAGE
+=================
+
+When user clicks a print product:
+
+Open dedicated detail page.
+
+Structure:
+
+---
+
+## SECTION 1
+
+* Product Image Gallery
+* Product Name
+* Category
+* SubCategory
+* Brand
+* Rating
+
+---
+
+## SECTION 2
+
+Customization Area
+
+Allow user to:
+
+✓ Upload Logo
+✓ Upload Design
+✓ Upload Image
+
+Accepted:
+
+* PNG
+* JPG
+* SVG
+* PDF
+
+Show preview after upload.
+
+==================================================
+COLORS
+======
+
+User can choose:
+
+* Primary Color
+* Secondary Color
+
+Support:
+
+* Color picker
+  or
+* predefined color badges
+
+==================================================
+MATERIAL
+========
+
+Allow material selection if applicable.
+
+Examples:
+
+T-Shirt:
+
+* Cotton
+* Premium Cotton
+* Polyester
+
+Flyers:
+
+* Matte
+* Glossy
+
+Packaging:
+
+* Kraft
+* Premium Kraft
+* White Cardboard
+
+==================================================
+SIZE SELECTION
+==============
+
+For products supporting sizes:
+
+Show:
+
+S
+M
+L
+XL
+XXL
+
+==================================================
+ADVANCED SIZE MATRIX
+====================
+
+Required for:
+
+* T-Shirts
+* Caps
+* Uniforms
+
+Allow quantity per size.
+
+Example:
+
+Size     Quantity
+
+S        10
+M        25
+L        30
+XL       15
+
+Automatically calculate:
+
+Total Quantity
+
+==================================================
+GENERAL QUANTITY
+================
+
+For products without sizes:
+
+Show:
+
+Total Quantity
+
+==================================================
+PRINTING NOTES
+==============
+
+Text area:
+
+Special Instructions
+
+Examples:
+
+* Place logo on chest
+* Double-sided printing
+* Use gold color
+* Waterproof finish
+
+==================================================
+PRICE CALCULATION
+=================
+
+Show:
+
+Unit Price
+
+Quantity
+
+Subtotal
+
+Estimated Delivery
+
+Dynamic recalculation required.
+
+==================================================
+ADD TO CART
+===========
+
+Use existing cart architecture.
+
+BUT:
+
+Add serviceType:
+
+SHOP
+PRINT
+
+Example:
+
+Cart Item
+
+serviceType = PRINT
+
+This keeps PRINT and SHOP compatible inside the same cart system.
+
+==================================================
+CART DISPLAY
+============
+
+Print items must display:
+
+* Preview image
+* Uploaded logo thumbnail
+* Selected colors
+* Selected material
+* Selected sizes
+* Quantity
+
+==================================================
+ORDER CREATION
+==============
+
+Reuse existing order architecture.
+
+Extend order item structure if needed.
+
+Store:
+
+* uploaded files
+* color selections
+* material
+* notes
+* size matrix
+
+==================================================
+PRINT COMPANIES (BRANDS)
+========================
+
+Printing companies behave similarly to suppliers.
+
+Display:
+
+* Company Name
+* Logo
+* Rating
+* Location
+* Delivery Time
+
+Example:
+
+PrintMaster Tunisia
+Creative Print
+Coffee Branding Pro
+Tunisia Print Solutions
+
+==================================================
+FAVORITES
+=========
+
+Allow print products to be added to Favorites.
+
+Reuse existing favorites system.
+
+==================================================
+SEARCH
+======
+
+Use the global navbar search.
+
+Search should work for:
+
+* Product name
+* Category
+* SubCategory
+* Printing company
+
+==================================================
+RESPONSIVE DESIGN
+=================
+
+Must work on:
+
+* Desktop
+* Tablet
+* Mobile
+
+Reuse existing responsive patterns from SHOP.
+
+==================================================
+FINAL VALIDATION
+================
+
+Before completion verify:
+
+✓ PRINT page no longer shows "Coming Soon"
+✓ Categories work
+✓ SubCategories work
+✓ Filters work dynamically
+✓ Product cards display correctly
+✓ Detail page exists
+✓ File upload works
+✓ Color selection works
+✓ Material selection works
+✓ Size matrix works
+✓ Price calculation works
+✓ Add to cart works
+✓ Favorites work
+✓ Orders work
+✓ Existing SHOP module not affected
+
+After implementation provide:
+
+1. Modified files list
+2. New PRINT data structure
+3. Cart changes
+4. Order changes
+5. Upload storage strategy
+6. Any database additions required
+7. Any new routes added

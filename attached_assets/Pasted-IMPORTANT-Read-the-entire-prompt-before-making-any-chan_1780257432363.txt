@@ -1,0 +1,478 @@
+IMPORTANT: Read the entire prompt before making any changes.
+
+The goal is to reorganize and modernize the CAFE OWNER experience while preserving all existing business logic, APIs, database structure, product synchronization, cart logic, order logic, supplier logic, and Admin/Supplier functionality.
+
+DO NOT break any existing feature.
+
+DO NOT redesign the Admin or Supplier parts.
+
+DO NOT copy Glovo screens pixel-by-pixel. Only use the provided screenshots as inspiration for layout hierarchy, spacing, and user experience.
+
+The final result must remain branded as BigBossCoffee.
+
+==================================================
+PHASE 1 - NEW LANDING PAGE
+==========================
+
+Create a public landing page that becomes the first page displayed before entering the Cafe Owner marketplace.
+
+Suggested route:
+
+/
+
+==================================================
+SECTION 1 - NAVBAR
+==================
+
+Navbar contains:
+
+LEFT:
+
+* BigBossCoffee logo
+
+CENTER:
+
+* Location button
+
+Default value:
+
+* Tunis
+
+When clicked:
+Open selector modal containing:
+
+* Tunis
+* Sfax
+* Sousse
+* Béja
+
+IMPORTANT:
+Keep these values static for now.
+
+Do not implement geolocation yet.
+
+RIGHT:
+
+* Login / Connexion button
+
+If user already authenticated:
+
+* Replace with profile access
+
+==================================================
+SECTION 2 - HERO AREA
+=====================
+
+Create a modern marketplace hero section.
+
+Display service cards:
+
+1. SHOP
+2. PRINT
+3. BARISTA
+4. MARKETING
+
+Behavior:
+
+SHOP
+→ Redirect to Browse Products page
+
+PRINT
+→ No action for now
+
+BARISTA
+→ No action for now
+
+MARKETING
+→ No action for now
+
+Use icons/illustrations.
+
+Do not hardcode future service logic.
+
+==================================================
+SEARCH BAR
+==========
+
+Place search bar prominently in hero section.
+
+Behavior:
+
+When user searches:
+→ Navigate to Browse Products page
+→ Pre-populate search filter
+
+==================================================
+BEST CATEGORIES SECTION
+=======================
+
+Title:
+
+"Meilleures catégories à Tunis"
+
+Display active categories as badges/cards.
+
+Source:
+Admin Categories
+
+Only show:
+
+* active categories
+* categories with available supplier products
+
+Behavior:
+
+Click category
+→ Open Browse Products page
+→ Apply category filter automatically
+
+==================================================
+SECTION 3 - FOOTER
+==================
+
+I will provide screenshots from Glovo.
+
+Use them only as inspiration.
+
+DO NOT COPY.
+
+Create a BigBossCoffee branded footer.
+
+Suggested content:
+
+* About Us
+* Contact
+* Services
+* Become a Supplier
+* Social Links
+* Copyright
+
+==================================================
+PHASE 2 - REORGANIZE CAFE OWNER EXPERIENCE
+==========================================
+
+Remove the current sidebar navigation completely.
+
+Convert the experience into a modern marketplace layout.
+
+==================================================
+NEW BROWSE PRODUCTS PAGE
+========================
+
+This becomes the main marketplace page.
+
+==================================================
+TOP NAVBAR
+==========
+
+LEFT
+
+* BigBossCoffee logo
+* Location selector
+
+CENTER
+
+* Search input
+
+RIGHT
+
+PROFILE BUTTON
+
+Display:
+Connected Cafe Owner Name
+
+When clicked:
+
+Open Profile Modal
+
+Move here:
+
+* Settings Tab content
+* Orders Tab content
+* Analytics Tab content
+
+These tabs should no longer exist as standalone sidebar pages.
+
+==================================================
+CART BUTTON
+===========
+
+Keep existing cart behavior.
+
+Do not modify business logic.
+
+==================================================
+FAVORITES BUTTON
+================
+
+Remove Favorites page/tab.
+
+Replace with:
+
+Favorites Modal
+
+Open from navbar heart icon.
+
+Move all current favorites functionality into this modal.
+
+==================================================
+DASHBOARD BUTTON
+================
+
+Remove Dashboard page/tab.
+
+Open Dashboard content inside a modal.
+
+Keep all existing functionality.
+
+==================================================
+SUPPLIERS BUTTON
+================
+
+Remove Suppliers page/tab.
+
+Open Suppliers content inside a modal.
+
+Keep all existing functionality.
+
+==================================================
+CATEGORY STRIP
+==============
+
+Under navbar:
+
+Display categories horizontally.
+
+Scrollable flat list.
+
+Only active categories with available products.
+
+When selected:
+
+Update all filters dynamically.
+
+==================================================
+FILTER BAR
+==========
+
+Under category strip:
+
+Display filters:
+
+* SubCategory
+* Brand
+* Size
+* Flavor
+* Promotions
+* Sort By
+
+Sort values:
+
+* Recommended
+* Near Me
+* Best Rated
+
+==================================================
+FILTER RULES
+============
+
+All filters must be dynamic.
+
+Only display values that currently have available products.
+
+Examples:
+
+Select Category
+→ Only related SubCategories appear
+
+Select SubCategory
+→ Only related Brands/Flavors/Sizes appear
+
+Never display empty filter options.
+
+==================================================
+PRODUCT GRID
+============
+
+Keep current product card architecture.
+
+Enhance displayed information.
+
+Each card should display:
+
+TOP IMAGE AREA
+
+* Product image
+* Category badge
+* Favorite heart icon (top-right)
+
+UNDER IMAGE
+
+* Product name
+* Rating
+
+Keep card clean and marketplace-oriented.
+
+==================================================
+CHAT SYSTEM
+===========
+
+Remove standalone Messages tab/page.
+
+Replace with floating chat button.
+
+Position:
+Bottom-right
+
+Behavior:
+
+Click button
+→ Open messaging modal
+
+Inside messaging modal:
+
+Display all conversations with:
+
+* Admins
+* Suppliers
+
+Allow switching between conversations.
+
+Keep existing messaging backend logic.
+
+Only change UI entry point.
+
+==================================================
+PRODUCT DETAIL PAGE
+===================
+
+Keep existing full-page product detail implementation.
+
+Do not rebuild it.
+
+Only enhance it.
+
+==================================================
+ADD LOCATION BADGES
+===================
+
+Show available locations as badges.
+
+Example:
+
+[Tunis]
+[Sfax]
+[Sousse]
+[Béja]
+
+Selecting location updates offers dynamically.
+
+==================================================
+ADD FLAVOR BADGES
+=================
+
+Show available flavors as selectable badges.
+
+Only display available variants.
+
+==================================================
+ADD SIZE BADGES
+===============
+
+Show available sizes as selectable badges.
+
+Only display available variants.
+
+==================================================
+ADD FAVORITE BUTTON
+===================
+
+Add favorite heart.
+
+Integrate with Favorites modal.
+
+==================================================
+ADD RATING SECTION
+==================
+
+Display:
+
+* Average rating
+* Number of ratings
+* Rating breakdown if available
+
+==================================================
+DESIGN REQUIREMENTS
+===================
+
+I will provide Glovo screenshots.
+
+Use them only as inspiration for:
+
+* spacing
+* hierarchy
+* usability
+* marketplace experience
+
+DO NOT:
+
+* clone Glovo
+* copy layouts exactly
+* copy branding
+* copy colors
+
+Keep BigBossCoffee identity.
+
+==================================================
+PERFORMANCE REQUIREMENTS
+========================
+
+* Preserve existing APIs
+* Preserve existing database
+* Preserve existing product synchronization
+* Preserve multi-supplier cart
+* Preserve supplier variant pricing
+* Preserve order/suborder architecture
+
+Use:
+
+* memoization
+* lazy loading
+* pagination if already implemented
+
+Avoid unnecessary requests.
+
+==================================================
+FINAL VALIDATION
+================
+
+Before completion verify:
+
+✓ Landing page works
+✓ SHOP redirects correctly
+✓ Search redirects correctly
+✓ Category redirects correctly
+✓ Sidebar completely removed
+✓ Profile modal works
+✓ Favorites modal works
+✓ Dashboard modal works
+✓ Suppliers modal works
+✓ Chat modal works
+✓ Dynamic filters work
+✓ Product detail enhancements work
+✓ Cart still works
+✓ Orders still work
+✓ Multi-supplier orders still work
+✓ No Admin functionality broke
+✓ No Supplier functionality broke
+✓ No Cafe Owner business logic broke
+
+At the end provide:
+
+1. Modified files
+2. New routes added
+3. Removed pages/tabs
+4. New modals created
+5. Updated navigation architecture
+6. Any API changes
+7. Any migration requirements

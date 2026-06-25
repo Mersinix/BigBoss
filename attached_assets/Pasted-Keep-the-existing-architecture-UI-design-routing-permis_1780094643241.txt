@@ -1,0 +1,431 @@
+Keep the existing architecture, UI design, routing, permissions, and business logic intact. Do NOT redesign pages. Only implement the synchronization improvements below and fix the identified issues while maintaining backward compatibility.
+
+IMPORTANT:
+
+* Preserve all existing working functionality.
+* Do not break current Admin, Supplier, or Cafe Owner flows.
+* Keep current styling and components.
+* Update database relationships only if required.
+* Ensure all calculations are correct and persisted.
+
+==================================================
+I. SUPPLIER PART
+================
+
+##################################################
+PRODUCT TAB
+##################################################
+
+CURRENT ISSUE:
+When a supplier adds a product, there is currently a single price and stock quantity for the entire product.
+
+This is not sufficient because each Flavor + Size combination can have a different price and stock.
+
+==================================================
+NEW REQUIRED MODEL
+==================
+
+A supplier product must support variant-level inventory and pricing.
+
+Instead of:
+
+Product
+
+* Price
+* Quantity
+
+Use:
+
+Product Variant
+
+* Flavor
+* Size
+* Price
+* Quantity
+
+Example:
+
+Coffee Product
+
+Small + Vanilla
+
+* Price = 5.00
+* Quantity = 100
+
+Large + Vanilla
+
+* Price = 7.00
+* Quantity = 50
+
+Small + Hazelnut
+
+* Price = 6.00
+* Quantity = 30
+
+Large + Hazelnut
+
+* Price = 8.00
+* Quantity = 20
+
+==================================================
+SUPPLIER ADD PRODUCT MODAL
+==========================
+
+After supplier selects:
+
+* Product
+* Available Flavors
+* Available Sizes
+
+Automatically generate a variant matrix/table.
+
+Example:
+
+| Flavor   | Size  | Price | Quantity |
+| -------- | ----- | ----- | -------- |
+| Vanilla  | Small | [ ]   | [ ]      |
+| Vanilla  | Large | [ ]   | [ ]      |
+| Hazelnut | Small | [ ]   | [ ]      |
+| Hazelnut | Large | [ ]   | [ ]      |
+
+Requirements:
+
+* Supplier must enter price per variant
+* Supplier must enter stock per variant
+* Validation required
+* Price > 0
+* Quantity >= 0
+
+==================================================
+AVAILABILITY LOGIC
+==================
+
+Variant visible only if:
+Quantity > 0
+
+Product visible only if:
+At least one variant has quantity > 0
+
+==================================================
+DATABASE UPDATES
+================
+
+Introduce supplier product variants.
+
+Suggested structure:
+
+SupplierProduct
+
+* supplierId
+* productId
+
+SupplierProductVariant
+
+* supplierProductId
+* flavorId
+* sizeId
+* price
+* quantity
+
+Use existing architecture naming conventions if different.
+
+==================================================
+II. CAFE OWNER PART
+===================
+
+##################################################
+A. MULTI SUPPLIER CART ISSUE
+##################################################
+
+CURRENT BUG:
+
+Cart accepts products from only one supplier.
+
+This blocks normal marketplace behavior.
+
+==================================================
+REQUIRED SOLUTION
+=================
+
+Support multi-supplier orders.
+
+Architecture:
+
+Master Order
+|
+|-- SubOrder Supplier A
+|-- SubOrder Supplier B
+|-- SubOrder Supplier C
+
+==================================================
+ORDER STRUCTURE
+===============
+
+Order
+
+* id
+* customerId
+* totalAmount
+* status
+
+SubOrder
+
+* orderId
+* supplierId
+* supplierName
+* subtotal
+* status
+
+OrderItem
+
+* subOrderId
+* productId
+* flavorId
+* sizeId
+* quantity
+* unitPrice
+* totalPrice
+
+==================================================
+CHECKOUT LOGIC
+==============
+
+When Cafe Owner places order:
+
+1. Group cart items by supplier
+
+2. Create one Order
+
+3. Create one SubOrder per supplier
+
+4. Create corresponding OrderItems
+
+Example:
+
+Cart
+
+Supplier A:
+
+* Coffee A
+
+Supplier B:
+
+* Coffee B
+* Coffee C
+
+Result:
+
+Order #1001
+
+SubOrder A
+
+SubOrder B
+
+==================================================
+UI REQUIREMENTS
+===============
+
+Cart page:
+Group products by supplier.
+
+Checkout page:
+Display supplier sections.
+
+My Orders page:
+Display:
+
+Order
+|
+|-- Supplier A
+|-- Supplier B
+
+Order Details:
+Show supplier breakdown.
+
+==================================================
+B. PRICE BUG
+============
+
+CURRENT BUG:
+
+Prices in:
+
+* Cart
+* Orders
+* My Orders
+* Checkout
+* Order Details
+
+are showing 0.
+
+==================================================
+REQUIRED FIX
+============
+
+Use variant-level pricing.
+
+When adding to cart:
+
+Store:
+
+* supplierId
+* supplierProductId
+* flavorId
+* sizeId
+* unitPrice
+
+Cart item must contain:
+
+quantity
+unitPrice
+lineTotal
+
+Formula:
+
+lineTotal = quantity × unitPrice
+
+==================================================
+CART TOTAL
+==========
+
+cartTotal =
+sum(all lineTotals)
+
+==================================================
+SUBORDER TOTAL
+==============
+
+subOrderTotal =
+sum(lineTotals for supplier)
+
+==================================================
+ORDER TOTAL
+===========
+
+orderTotal =
+sum(all subOrders)
+
+==================================================
+VERIFY
+======
+
+Verify every screen:
+
+* Browse Products
+* Product Details
+* Cart
+* Checkout
+* Orders
+* Order Details
+* Supplier Orders
+
+Uses the same source of truth.
+
+No hardcoded price values.
+
+No default zero values.
+
+==================================================
+C. PRODUCT DETAIL PAGE
+======================
+
+CURRENT ISSUE:
+
+Product detail page opens in a right-side panel.
+
+==================================================
+REQUIRED CHANGE
+===============
+
+Convert Product Detail into a dedicated full-screen page.
+
+Recommended route:
+
+/products/:productId
+
+or existing routing convention.
+
+==================================================
+FULL PAGE CONTENT
+=================
+
+Keep all existing content:
+
+* Product image
+* Product information
+* Category
+* SubCategory
+* Brand
+* Rating
+* Favorite
+* Available locations
+* Available flavors
+* Available sizes
+* Best offer
+* Supplier comparison
+* Add to cart
+
+Only change the presentation:
+
+FROM:
+Right drawer / side panel
+
+TO:
+Full page experience
+
+==================================================
+NAVIGATION
+==========
+
+Product Card Click
+→ Navigate to Product Detail Page
+
+Back Button
+→ Return to Browse Products
+
+Preserve filters if possible.
+
+==================================================
+III. FINAL VERIFICATION
+=======================
+
+Before completion verify:
+
+SUPPLIER
+✓ Variant matrix generation
+✓ Variant price storage
+✓ Variant quantity storage
+✓ Product visibility logic
+
+CAFE OWNER
+✓ Multi-supplier cart
+✓ Multi-supplier checkout
+✓ Master order + suborders
+✓ Correct totals
+✓ Correct line totals
+✓ Correct order totals
+✓ Correct supplier totals
+
+PRODUCT DETAILS
+✓ Full page routing
+✓ Existing information preserved
+✓ Add to cart works correctly
+
+GENERAL
+✓ No regression
+✓ Existing Admin flow still works
+✓ Existing Supplier flow still works
+✓ Existing Cafe Owner flow still works
+✓ TypeScript types updated
+✓ API contracts updated
+✓ Database migrations created if needed
+
+At the end provide:
+
+1. Modified files
+2. Database schema changes
+3. Variant pricing architecture
+4. Order/SubOrder architecture
+5. Cart calculation flow
+6. Product detail routing updates
+7. Any migration commands required

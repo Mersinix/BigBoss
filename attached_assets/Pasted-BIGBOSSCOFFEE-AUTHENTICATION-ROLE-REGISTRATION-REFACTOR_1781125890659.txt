@@ -1,0 +1,469 @@
+BIGBOSSCOFFEE - AUTHENTICATION & ROLE REGISTRATION REFACTOR
+
+IMPORTANT RULES
+
+* Before making any modification, analyze the current project structure completely.
+* Reuse existing authentication, approval, user, supplier, coffee, admin, settings, location and modal components whenever possible.
+* Do NOT break existing functionality.
+* Do NOT change any existing business logic that is not explicitly mentioned below.
+* Follow the same architecture, folder structure, coding conventions, UI patterns, routing system, database patterns and state management already used in the project.
+* Create only the modifications described in this specification.
+* If an existing component already satisfies part of the requirement, extend it instead of creating a duplicate.
+
+====================================================
+
+1. LANDING PAGE LOGIN FLOW
+   ====================================================
+
+Current behavior:
+
+* Landing page contains a "Connexion" button.
+
+New behavior:
+
+* Clicking "Connexion" must open a modal.
+
+The modal must display role cards with:
+
+* Icon
+* Color
+* Title
+* Short description
+
+Roles:
+
+1. Café
+2. Supplier
+3. Delivery
+4. Printer
+5. Marketing
+6. Barista Academy
+7. Barista Marketplace
+
+Each role card must have its own visual identity while remaining consistent with the landing page design.
+
+When a role is clicked:
+
+* Redirect user to Authentication page
+* Selected role must be passed in route/state/query parameter
+* Authentication page must automatically display the correct registration form for that role
+
+====================================================
+2. LOGIN SYSTEM
+===============
+
+Keep existing authentication.
+
+Allow login with:
+
+* Email + Password
+  OR
+* Phone Number + Password
+
+Authentication page must contain:
+
+Tab 1:
+
+* Login
+
+Tab 2:
+
+* Registration
+
+Login UI must remain common for all roles.
+
+====================================================
+3. CAFE REGISTRATION
+====================
+
+Role: Cafe
+
+Registration fields:
+
+* Coffee Name
+* First Name
+* Email
+* Phone Number
+* Password
+* Confirm Password
+* Location
+
+Location must reuse the existing location modal already available in the landing page navbar.
+
+Store:
+
+locationAddress
+locationLat
+locationLng
+locationPlaceId
+
+The selected location becomes:
+
+coffeeAddress
+
+This address will later be used for deliveries.
+
+After registration:
+
+* Status = Pending Approval
+* Existing admin approval workflow remains active
+
+After approval:
+User can login.
+
+====================================================
+4. CAFE SETTINGS PAGE
+=====================
+
+Inside:
+
+My Account
+→ Settings
+
+Display:
+
+Compte
+Prénom
+E-mail
+Numéro de téléphone
+Changer le mot de passe
+Moyens de paiement
+Informations de facturation
+Confidentialité
+
+Each item opens a modal.
+
+Create update forms.
+
+====================================================
+5. BILLING INFORMATION MODAL
+============================
+
+Add billing information section.
+
+Fields:
+
+* Country
+* Company Name
+* Tax Identification Number
+* Street and Number
+* Floor / Door Number
+* Province
+* Postal Code
+* City
+
+Button:
+
+* Save
+
+Persist data in database.
+
+====================================================
+6. SUPPLIER REGISTRATION
+========================
+
+Role: Supplier
+
+Registration fields:
+
+* Company Name
+* Contact Name
+* Email
+* Phone
+* Password
+* Confirm Password
+* Location
+* Categories (Multi Select)
+
+Location:
+Reuse existing location modal.
+
+Store:
+
+supplierAddress
+supplierLat
+supplierLng
+supplierPlaceId
+
+This address will be used later for:
+
+* Product origin
+* Distance calculations between supplier and coffee shops
+
+Categories:
+
+* Multi-select
+* Save selected categories
+
+After registration:
+
+* Supplier = Pending Approval
+* Categories automatically approved at creation
+
+After approval:
+Supplier accesses Supplier Panel.
+
+====================================================
+7. SUPPLIER SETTINGS
+====================
+
+Keep existing Supplier Panel structure.
+
+Add Settings sections:
+
+* Company Details
+* Legal & Tax Details
+* Banking Details
+
+Create forms and persistence.
+
+When supplier modifies categories later:
+
+* Categories become Pending Approval
+* Admin must approve category changes
+
+Existing supplier approval system must remain functional.
+
+====================================================
+8. DELIVERY REGISTRATION
+========================
+
+Role: Delivery
+
+Registration fields:
+
+* First Name
+* Last Name
+* Email
+* Phone
+* Password
+* Confirm Password
+
+Instead of map location:
+
+Display Tunisian Governorates Multi Select:
+
+* Tunis
+* Ariana
+* Ben Arous
+* Manouba
+* Nabeul
+* Zaghouan
+* Bizerte
+* Béja
+* Jendouba
+* Kef
+* Siliana
+* Sousse
+* Monastir
+* Mahdia
+* Kairouan
+* Kasserine
+* Sidi Bouzid
+* Sfax
+* Gafsa
+* Tozeur
+* Kebili
+* Gabès
+* Médenine
+* Tataouine
+
+Store selected governorates.
+
+Keep existing admin approval workflow.
+
+====================================================
+9. PRINTER REGISTRATION
+=======================
+
+Role: Printer
+
+Registration fields:
+
+Same as Supplier
+
+Additional:
+
+Print Categories Multi Select
+
+After approval:
+Redirect to Printer Panel.
+
+====================================================
+10. MARKETING REGISTRATION
+==========================
+
+Role: Marketing
+
+Registration fields:
+
+Same as Supplier
+
+Additional:
+
+Marketing Categories Multi Select
+
+After approval:
+Redirect to Marketing Panel.
+
+====================================================
+11. BARISTA ACADEMY REGISTRATION
+================================
+
+Role: Barista Academy
+
+Registration fields:
+
+Same supplier registration structure.
+
+After approval:
+Redirect to Barista Academy Panel.
+
+====================================================
+12. BARISTA MARKETPLACE REGISTRATION
+====================================
+
+Role: Barista Marketplace
+
+Registration fields:
+
+Same supplier registration structure.
+
+After approval:
+Redirect to Barista Marketplace Panel.
+
+====================================================
+13. NEW PANELS
+==============
+
+Create new application sections following EXACTLY the same architecture used by:
+
+* admin
+* supplier
+* coffee
+
+Create folders/modules:
+
+/printer
+/marketing
+/barista-academy
+/barista-marketplace
+
+Do not invent a new architecture.
+
+Reuse:
+
+* Layout
+* Sidebar
+* Authentication Guards
+* Route Protection
+* Dashboard Structure
+
+Printer Panel:
+
+* Adapt content from existing /print page
+
+Marketing Panel:
+
+* Adapt content from existing /marketing page
+
+Barista Academy Panel:
+
+* Adapt content from existing academy page
+
+Barista Marketplace Panel:
+
+* Adapt content from existing marketplace page
+
+====================================================
+14. DATABASE
+============
+
+Extend existing schema safely.
+
+Do NOT remove existing columns.
+
+Add only required fields.
+
+Use migrations.
+
+Preserve all current data.
+
+====================================================
+15. ADMIN
+=========
+
+Keep current admin approval system.
+
+Extend it to support:
+
+* Cafe
+* Supplier
+* Delivery
+* Printer
+* Marketing
+* Barista Academy
+* Barista Marketplace
+
+Admin must be able to:
+
+* View registrations
+* Approve
+* Reject
+
+For supplier category updates:
+
+* Approve category changes
+
+====================================================
+16. DESIGN
+==========
+
+Authentication pages must match the existing landing page design.
+
+Requirements:
+
+* Premium modern UI
+* Responsive
+* Mobile friendly
+* Consistent typography
+* Consistent spacing
+* Consistent colors
+* Smooth transitions
+
+Role cards must look professional and visually distinct.
+
+====================================================
+17. DO NOT DO
+=============
+
+DO NOT:
+
+* Modify unrelated pages
+* Change existing workflows not mentioned
+* Remove existing functionality
+* Rename existing folders unnecessarily
+* Create duplicate authentication systems
+* Create duplicate location systems
+* Create new admin architectures
+
+====================================================
+18. FINAL VALIDATION
+====================
+
+After implementation:
+
+1. Verify all existing features still work.
+2. Verify login with email works.
+3. Verify login with phone works.
+4. Verify approval workflow works.
+5. Verify role routing works.
+6. Verify settings modals work.
+7. Verify billing information persistence works.
+8. Verify supplier category approval works.
+9. Verify all new panels load correctly.
+10. Verify TypeScript build passes.
+11. Verify production build passes.
+12. Verify no existing functionality is broken.
+
+Implement exactly what is described above and nothing more.

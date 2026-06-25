@@ -1,0 +1,150 @@
+IMPORTANT: Implement a premium hero banner for the PRINT module using the same visual concept already used in the MARKETING module.
+
+Do NOT modify architecture, routing, APIs, authentication, cart logic, ordering logic, visibility rules, or existing PRINT functionality.
+
+This is a UI enhancement only.
+
+---
+
+## OBJECTIVE
+
+The PRINT module should have a professional hero banner consistent with:
+
+* SHOP
+* BARISTA
+* MARKETING
+
+The experience should feel like part of the same BigBossCoffee ecosystem.
+
+---
+
+## BANNER DESIGN
+
+Create a full-width hero banner at the top of the PRINT page.
+
+Use the same structure and component pattern used by the MARKETING banner.
+
+Requirements:
+
+* Large background image
+* Dark overlay layer
+* Slight blur effect if already used in MARKETING
+* Existing blue theme preserved
+* Responsive on mobile and desktop
+* Text always readable
+
+Do NOT create a different hero style.
+
+Reuse the existing MARKETING hero implementation whenever possible.
+
+---
+
+## BACKGROUND IMAGE
+
+Use a premium print-industry image that communicates:
+
+* professional printing
+* restaurant/café menus
+* branded packaging
+* flyers
+* business cards
+* banners
+* printed marketing materials
+
+Preferred visuals:
+
+* print workshop
+* high-quality printed menus
+* café branding materials
+* printing machines in action
+* packaging production
+* promotional materials for restaurants
+
+Avoid:
+
+* generic office photos
+* low-quality stock images
+* unrelated printing visuals
+
+The image should feel premium and B2B oriented.
+
+---
+
+## TEXT CONTENT
+
+Title:
+
+BigBoss PRINT
+
+Subtitle:
+
+Commandez vos supports imprimés professionnels directement depuis la plateforme.
+
+Optional supporting line:
+
+Menus, packaging, flyers, affiches, cartes de visite et supports marketing pour votre établissement.
+
+Keep typography consistent with MARKETING.
+
+---
+
+## VISUAL REQUIREMENTS
+
+Maintain:
+
+* same spacing system
+* same typography hierarchy
+* same border radius approach
+* same responsiveness
+* same overlay treatment
+
+The PRINT banner should visually feel like the sibling of:
+
+* MARKETING
+* BARISTA
+
+---
+
+## DO NOT MODIFY
+
+Do NOT modify:
+
+* products
+* categories
+* search
+* filters
+* provider cards
+* ordering flow
+* cart
+* checkout
+* quotations
+* messaging
+
+Only add the hero banner.
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ Hero banner added
+✓ Professional print-related image used
+✓ Overlay applied
+✓ Text readable on all screen sizes
+
+✓ Existing PRINT functionality unchanged
+✓ Search still works
+✓ Filters still works
+✓ Orders still work
+✓ Cart still works
+
+✓ Same design language as MARKETING
+✓ Same design language as BARISTA
+
+Provide:
+
+1. Modified files list
+2. Reused components list
+3. Any new assets added
+4. Confirmation that no architecture changes were required

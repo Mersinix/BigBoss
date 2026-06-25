@@ -1,0 +1,408 @@
+Keep the current UI/UX, styling, routing, architecture, and existing behavior exactly the same. Do NOT redesign pages, rename folders, or refactor unrelated logic. Only apply the requested business logic and data model updates safely without breaking the existing Replit project.
+
+PROJECT GOAL:
+Update the Admin and Supplier management flow for:
+
+* Category Management
+* Product Management
+* Supplier Product Assignment
+
+IMPORTANT RULES:
+
+* Reuse all existing components, tabs, modals, forms, tables, hooks, APIs, stores, validations, and layouts.
+* Keep the same frontend design and interactions.
+* Preserve current permissions and authentication.
+* Preserve current translations/i18n structure.
+* Preserve existing API contracts unless extension is required.
+* Add defensive validation and null safety everywhere.
+* Add proper TypeScript typing.
+* Avoid breaking changes.
+* Use migrations if database schema changes are required.
+* Keep code modular and aligned with current architecture.
+* Verify all relationships before insert/update/delete.
+
+==================================================
+
+1. ADMIN CATEGORY MANAGEMENT UPDATES
+   ==================================================
+
+The tabs/components already exist:
+
+* Category
+* SubCategory
+* Flavor
+* Brand
+* Size
+
+Only extend them with the following fields and relationships.
+
+---
+
+1. CATEGORY ENTITY
+
+---
+
+Fields:
+
+* id
+* name
+* description
+* icon
+* isActive
+* relatedSubCategories (list)
+* relatedProducts (list)
+* createdAt
+* createdBy (Admin Name)
+* updatedAt
+
+Features:
+
+* Add Category
+* Edit Category
+* Delete Category
+* View Details
+* Search/Filter
+* Soft validation before delete
+
+Validation:
+
+* Prevent duplicate names
+* Validate related subcategories exist
+* Validate related products exist
+* If deleting category:
+
+  * verify relation handling
+  * prevent orphan references
+
+---
+
+2. SUBCATEGORY ENTITY
+
+---
+
+Fields:
+
+* id
+* name
+* description
+* icon
+* isActive
+* relatedCategory
+* relatedProducts
+* createdAt
+* createdBy
+* updatedAt
+
+Features:
+
+* Add/Edit/Delete/View
+* Dynamic relation to Category
+
+Validation:
+
+* Related category must exist
+* Prevent duplicate subcategory inside same category
+* Prevent invalid product references
+
+---
+
+3. FLAVOR ENTITY
+
+---
+
+Fields:
+
+* id
+* name
+* description
+* icon
+* isActive
+* relatedSubCategories (list)
+* relatedCategories (list)
+* relatedProducts (list)
+* createdAt
+* createdBy
+* updatedAt
+
+Features:
+
+* CRUD operations
+* Multi-category support
+* Multi-subcategory support
+
+Validation:
+
+* Ensure relationships are valid
+* Prevent duplicate flavor names
+* Keep many-to-many relations synchronized
+
+---
+
+4. BRAND ENTITY
+
+---
+
+Fields:
+
+* id
+* name
+* description
+* icon
+* isActive
+* relatedSubCategories (list)
+* relatedCategories (list)
+* relatedProducts (list)
+* createdAt
+* createdBy
+* updatedAt
+
+Features:
+
+* CRUD operations
+* Relation filtering
+
+Validation:
+
+* Prevent duplicates
+* Validate all linked entities
+
+---
+
+5. SIZE ENTITY
+
+---
+
+Fields:
+
+* id
+* name
+* description
+* icon
+* isActive
+* relatedSubCategories (list)
+* relatedCategories (list)
+* relatedProducts (list)
+* createdAt
+* createdBy
+* updatedAt
+
+Features:
+
+* CRUD operations
+* Dynamic relation support
+
+Validation:
+
+* Prevent duplicates
+* Ensure linked entities exist
+
+==================================================
+2. PRODUCT MANAGEMENT UPDATES (ADMIN)
+=====================================
+
+The Product tab already exists.
+
+When Admin creates or edits a product:
+Admin should be able to link:
+
+* Category
+* SubCategory
+* Flavor
+* Size
+* Brand
+
+Additional Product fields:
+
+* imageUrl
+* productName
+* productDescription
+
+==================================================
+3. DYNAMIC DEPENDENT SELECTIONS
+===============================
+
+The selection logic must be dynamic.
+
+Behavior:
+
+STEP 1:
+When Admin selects Category:
+ONLY related:
+
+* SubCategories
+* Flavors
+* Sizes
+* Brands
+  should appear.
+
+STEP 2:
+When Admin selects SubCategory:
+ONLY related:
+
+* Flavors
+* Sizes
+* Brands
+  for that SubCategory should appear.
+
+STEP 3:
+When Brand/Flavor/Size selections change:
+keep selections synchronized and valid.
+
+Requirements:
+
+* Real-time filtering
+* No page reload
+* Preserve current UI components
+* Reset invalid selections automatically
+* Use memoization/selectors where possible
+* Avoid unnecessary API calls
+
+==================================================
+4. SUPPLIER FLOW
+================
+
+Current supplier category/subcategory selection already exists and works correctly.
+
+DO NOT BREAK IT.
+
+Enhance it only.
+
+---
+
+## SUPPLIER PRODUCT TAB
+
+Based on supplier selected:
+
+* Categories
+* SubCategories
+
+ONLY related products should appear.
+
+When Supplier clicks:
+“Add Product”
+
+He should see:
+
+* related products only
+
+Supplier CAN ONLY configure:
+
+* Stock Quantity
+* Price
+* Available Sizes
+* Available Flavors
+* Available Brands
+
+Supplier CANNOT:
+
+* Create master products
+* Edit core product info
+* Edit categories/subcategories
+* Edit flavor/brand/size entities
+
+---
+
+## STOCK LOGIC
+
+Stock quantity is backend-controlled.
+
+Behavior:
+
+* quantity > 0 → product visible to customers
+* quantity <= 0 → automatically hidden/unavailable
+
+This visibility logic should happen automatically.
+
+==================================================
+5. DATABASE + BACKEND REQUIREMENTS
+==================================
+
+Update database schema safely.
+
+Create proper:
+
+* foreign keys
+* join tables
+* indexes
+* relation constraints
+
+Use scalable relationships:
+
+* many-to-many where required
+* normalized structure
+
+Need relationships between:
+
+* Products
+* Categories
+* SubCategories
+* Flavors
+* Brands
+* Sizes
+
+Backend requirements:
+
+* extend existing APIs safely
+* keep backward compatibility
+* validate payloads
+* sanitize inputs
+* avoid N+1 queries
+* optimize relation loading
+
+==================================================
+6. FRONTEND REQUIREMENTS
+========================
+
+Keep SAME design.
+
+Do NOT redesign:
+
+* tables
+* cards
+* modals
+* spacing
+* typography
+* colors
+* sidebar
+* routing
+
+Only:
+
+* align fields
+* improve relation handling
+* improve dynamic filtering
+* extend forms
+
+Requirements:
+
+* loading states
+* empty states
+* error handling
+* optimistic updates if already used
+* preserve current component architecture
+
+==================================================
+7. FINAL VERIFICATION
+=====================
+
+Before finishing:
+
+* verify all CRUD actions
+* verify all dynamic dropdowns
+* verify supplier restrictions
+* verify relation filtering
+* verify stock visibility logic
+* verify no existing feature broke
+* verify TypeScript types
+* verify database migrations
+* verify responsive behavior still works
+
+At the end:
+
+1. Show all modified files
+2. Explain schema updates
+3. Explain API updates
+4. Explain relation logic
+5. Explain dynamic filtering logic
+6. Mention any migration commands required
+7. Mention any environment variable changes if needed

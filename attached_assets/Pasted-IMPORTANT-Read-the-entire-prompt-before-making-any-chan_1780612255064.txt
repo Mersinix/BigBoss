@@ -1,0 +1,501 @@
+IMPORTANT: Read the entire prompt before making any changes.
+
+The goal is to evolve BigBossCoffee from a fully private marketplace into a hybrid B2B marketplace where products are publicly discoverable, while commercial information remains restricted to approved coffee shop owners.
+
+CRITICAL RULES
+
+* Do NOT redesign the application.
+* Do NOT replace existing components.
+* Do NOT break Admin, Supplier, or Cafe Owner functionality.
+* Do NOT change existing database relationships unless absolutely necessary.
+* Do NOT refactor large portions of the application.
+* Use conditional rendering, authorization guards, and visibility rules.
+* Preserve all existing APIs whenever possible.
+* Preserve all existing routing structure unless a new route is required.
+* Preserve all existing styles, colors, components, spacing, and design system.
+
+BEFORE IMPLEMENTING ANY CHANGE
+
+First analyze the codebase and provide:
+
+1. List of files that will be modified
+2. Reason for each modification
+3. Database changes (if any)
+4. Route changes (if any)
+5. Components impacted
+6. Authorization flow changes
+
+Wait for confirmation before applying database migrations.
+
+==================================================
+BUSINESS MODEL TRANSFORMATION
+=============================
+
+Current model:
+
+* Private marketplace
+
+New model:
+
+* Public catalog
+* Private commercial information
+
+Visitors should be able to discover products.
+
+Only approved coffee shop owners should access:
+
+* pricing
+* suppliers
+* ordering
+* commercial data
+
+==================================================
+LANDING PAGE NAVBAR
+===================
+
+Update navbar behavior:
+
+KEEP:
+
+* BigBossCoffee logo
+* Location selector
+
+KEEP:
+
+* Connexion button
+
+REMOVE:
+
+* S'inscrire button
+
+Registration must remain available from Login page only.
+
+Example:
+
+Connexion Page
+
+[Login Form]
+
+Don't have an account?
+Create Account
+
+This keeps the landing page cleaner and more professional.
+
+==================================================
+LANDING PAGE DESIGN IMPROVEMENTS
+================================
+
+The landing page should feel professional and premium while staying fully aligned with the existing design system.
+
+IMPORTANT:
+Do NOT redesign existing marketplace components.
+
+Only improve the landing page experience using the current:
+
+* color palette
+* typography
+* button styles
+* cards
+* spacing system
+
+Suggested improvements:
+
+Hero Section:
+
+* stronger visual hierarchy
+* clear value proposition
+* professional coffee marketplace messaging
+* improved spacing
+* responsive layout
+
+Category Section:
+
+* cleaner category cards
+* improved hover states
+* maintain current component library
+
+Service Section:
+
+* SHOP
+* PRINT
+* BARISTA
+* MARKETING
+
+Footer:
+
+* polished marketplace footer
+* consistent with overall branding
+
+Do NOT create a visual style that conflicts with the authenticated marketplace experience.
+
+The transition between landing page and marketplace should feel seamless.
+
+==================================================
+PUBLIC ACCESS MODEL
+===================
+
+No login required for browsing.
+
+Visitors can access:
+
+* Landing Page
+* Browse Products
+* Categories
+* Brands
+* Search
+* Product Listing
+* Product Details
+* Filters
+
+Visitors must NOT be redirected to login when:
+
+* Clicking categories
+* Searching products
+* Opening product details
+* Browsing catalog
+* Using filters
+
+==================================================
+PUBLIC PRODUCT LISTING
+======================
+
+Visitors can see:
+
+* Product image
+* Product name
+* Product description
+* Product category
+* Product specifications
+* Product details button
+
+HIDE:
+
+* Price
+* Supplier name
+* Supplier logo
+* Supplier profile
+* Supplier contacts
+* Promotions
+* Wholesale information
+* Stock information
+
+Instead of price display:
+
+"Price available for approved coffee shop owners"
+
+CTA button:
+
+"Connexion to view prices"
+
+Action:
+Navigate to Login page.
+
+==================================================
+PUBLIC PRODUCT DETAIL PAGE
+==========================
+
+Allow public access.
+
+SHOW:
+
+* Product gallery
+* Product images
+* Product description
+* Product specifications
+* Product characteristics
+* Packaging information
+* Category
+* SubCategory
+* Brand
+
+HIDE:
+
+* Prices
+* Promotions
+* Supplier information
+* Supplier contacts
+* Supplier logos
+* Stock quantities
+* Ordering controls
+
+Replace ordering section with:
+
+---
+
+## Commercial Access Required
+
+"Sign in as an approved coffee shop owner to view prices, suppliers and place orders."
+
+[Connexion Button]
+
+==================================================
+AUTHORIZATION MODEL
+===================
+
+Implement 3 visibility levels.
+
+---
+
+## LEVEL 1: VISITOR
+
+Not authenticated
+
+Can:
+
+* Browse products
+* Search
+* View details
+* Browse categories
+* Browse brands
+
+Cannot:
+
+* View prices
+* View suppliers
+* Add to cart
+* Place orders
+* Access favorites
+* Access quotations
+
+---
+
+## LEVEL 2: REGISTERED USER (PENDING)
+
+Authenticated
+
+Status = pending
+
+Can:
+
+* Access account
+* Access dashboard
+
+Cannot:
+
+* View prices
+* View suppliers
+* Place orders
+* Request quotations
+
+Display notice:
+
+"Your account is awaiting approval."
+
+Show consistently where commercial features are blocked.
+
+---
+
+## LEVEL 3: APPROVED COFFEE OWNER
+
+Authenticated
+
+Status = approved
+
+Full access:
+
+* Prices
+* Suppliers
+* Cart
+* Checkout
+* Orders
+* Quotations
+* Favorites
+* Commercial information
+
+==================================================
+DATABASE
+========
+
+Review existing user model.
+
+If status field already exists:
+
+* reuse it
+
+If missing:
+
+Add:
+
+status
+
+Allowed values:
+
+* pending
+* approved
+* rejected
+
+Default value:
+
+pending
+
+New coffee owner registrations:
+automatically receive pending status.
+
+==================================================
+ADMIN APPROVAL WORKFLOW
+=======================
+
+Create or extend Admin page.
+
+Admin can:
+
+* View coffee owner registrations
+* Approve account
+* Reject account
+* Change status
+* Filter by status
+
+Statuses:
+
+Pending
+Approved
+Rejected
+
+==================================================
+ROUTE ACCESS RULES
+==================
+
+PUBLIC ROUTES
+
+* Landing Page
+* Browse Products
+* Categories
+* Brands
+* Product Details
+* Search
+
+NO AUTHENTICATION REQUIRED
+
+---
+
+PROTECTED ROUTES
+
+Require approved account:
+
+* Cart
+* Checkout
+* Orders
+* Favorites
+* Supplier pages
+* Supplier profiles
+* Supplier contacts
+* Quotations
+* Commercial pricing
+
+==================================================
+VISIBILITY IMPLEMENTATION
+=========================
+
+Prefer:
+
+* conditional rendering
+* authorization hooks
+* route guards
+
+Avoid:
+
+* duplicate pages
+* duplicated APIs
+* duplicated components
+
+Example:
+
+ProductCard
+
+if approved:
+show price
+
+else:
+show:
+"Price available for approved coffee shop owners"
+
+==================================================
+PRODUCT DETAIL PAGE LOGIC
+=========================
+
+Single page.
+
+Do NOT create separate versions.
+
+Use visibility rules.
+
+Approved users:
+see everything.
+
+Visitors:
+see public information only.
+
+Pending users:
+see public information + approval notice.
+
+==================================================
+SEARCH + FILTERS
+================
+
+Search and filtering must work identically for:
+
+* visitors
+* pending users
+* approved users
+
+Only commercial information changes.
+
+==================================================
+PERFORMANCE REQUIREMENTS
+========================
+
+Avoid:
+
+* duplicate queries
+* duplicate pages
+* duplicate product APIs
+
+Prefer:
+
+* fetch once
+* render conditionally
+
+==================================================
+FINAL VALIDATION
+================
+
+Verify:
+
+✓ Public catalog accessible
+✓ Product details accessible
+✓ Search works publicly
+✓ Filters work publicly
+✓ Categories work publicly
+✓ Brands work publicly
+
+✓ Visitors cannot see prices
+✓ Visitors cannot see suppliers
+
+✓ Pending users cannot see prices
+✓ Pending users cannot order
+
+✓ Approved users have full access
+
+✓ Existing Admin features still work
+✓ Existing Supplier features still work
+✓ Existing Marketplace logic still works
+
+✓ Multi-supplier cart still works
+✓ Variant pricing still works
+✓ Orders still work
+
+✓ Landing page remains aligned with current design system
+
+DO NOT modify existing reusable components unless absolutely necessary.
+
+Reuse existing components and apply visibility logic around them whenever possible.
+
+AFTER IMPLEMENTATION PROVIDE:
+
+1. Modified files list
+2. Visibility architecture explanation
+3. Route protection explanation
+4. Approval workflow explanation
+5. Database changes
+6. Any migrations required
+7. Any new authorization utilities/hooks created

@@ -1,0 +1,161 @@
+Everything currently works correctly. The goal of this task is ONLY to unify the location experience and improve navigation consistency.
+
+CRITICAL RULE
+
+Do NOT refactor, redesign, migrate, replace, or rewrite existing working functionality.
+
+Do NOT touch authentication logic.
+Do NOT touch marketplace business logic.
+Do NOT modify API contracts.
+Do NOT change database schema.
+Do NOT change React Query structure.
+Do NOT change routing structure except where explicitly requested.
+
+Only implement the requirements below.
+
+==================================================
+
+1. UNIFY LOCATION MODAL FOR GUEST USERS
+   ==================================================
+
+Currently:
+
+* Connected users get the correct Google Maps LocationPickerModal.
+* Non-connected users still encounter a different location experience in some flows.
+
+Requirement:
+
+There must be ONE SINGLE location experience everywhere.
+
+For both:
+
+* Authenticated users
+* Non-authenticated users
+
+Use the exact same LocationPickerModal component already used by the SHOP marketplace.
+
+The guest experience must support:
+
+* Google Places autocomplete
+* Address search
+* Draggable map pin
+* Confirmation step
+* Address preview
+* Same styling
+* Same interactions
+
+No alternate modal.
+No fallback modal.
+No duplicate location components.
+
+Acceptance:
+
+✅ Same LocationPickerModal everywhere
+✅ Same UX for guests and authenticated users
+✅ No duplicated location logic
+✅ No regression to existing location saving behaviour
+
+==================================================
+2. UNIFY MODAL COLORS
+=====================
+
+Currently there is a visual inconsistency.
+
+Requirement:
+
+Use the exact same orange color palette already used by the active LocationPickerModal implementation in the SHOP experience.
+
+Replace any remaining green accents inside the location modal with the existing orange design tokens already used elsewhere in the same modal.
+
+IMPORTANT:
+
+* Reuse existing color variables/classes.
+* Do not introduce new colors.
+* Do not modify the application theme.
+* Do not modify unrelated components.
+
+Acceptance:
+
+✅ Guest modal matches authenticated modal
+✅ Orange accents are identical
+✅ No green action colors remain inside the location modal
+✅ No global theme regressions
+
+==================================================
+3. SHOP LOGO NAVIGATION
+=======================
+
+Currently when a connected user is on SHOP and clicks the BigBossCoffee logo in the top navigation, the behaviour is inconsistent.
+
+Requirement:
+
+When clicking the logo from any SHOP page:
+
+Redirect to the landing page.
+
+The user must remain authenticated.
+
+Do not log the user out.
+Do not clear session data.
+Do not clear React Query caches.
+Do not clear localStorage.
+
+Acceptance:
+
+✅ Logo redirects to landing page
+✅ User session remains active
+✅ Refresh still shows authenticated state
+
+==================================================
+4. LANDING PAGE AUTHENTICATED STATE
+===================================
+
+When a connected user reaches the landing page from SHOP:
+
+The landing page navbar must immediately reflect the authenticated state.
+
+Instead of displaying the generic "Connexion" button:
+
+Display the authenticated user information exactly as defined by the current authentication UX.
+
+Examples:
+
+* User name
+* User avatar
+* Existing account dropdown
+
+Use whichever authenticated navbar pattern already exists in the application.
+
+Do NOT create a second account menu.
+
+Reuse existing authentication components.
+
+Acceptance:
+
+✅ Connected user arrives on landing page still authenticated
+✅ Navbar instantly reflects authenticated state
+✅ Existing account menu/component reused
+✅ No duplicated authentication UI
+
+==================================================
+FINAL VALIDATION
+================
+
+The task is complete only if all checks pass:
+
+✅ One shared LocationPickerModal for guests and authenticated users
+✅ Same Google Maps experience everywhere
+✅ Same orange styling everywhere
+✅ No green modal accents remain
+✅ No duplicated modal implementations
+✅ SHOP logo redirects to landing page
+✅ User remains logged in after redirect
+✅ Landing page shows authenticated navbar state
+✅ Existing account components reused
+✅ No authentication regressions
+✅ No routing regressions
+✅ No database changes
+✅ No API changes
+✅ No broken functionality
+
+Apply the changes directly and verify every acceptance criterion before finishing.

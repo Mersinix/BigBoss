@@ -1,0 +1,189 @@
+BIGBOSSCOFFEE – PRODUCT FILTERING BUG FIX (CATEGORY → PRODUCTS SYNC)
+
+IMPORTANT
+
+This is a **precise bug fix only**.
+
+DO NOT refactor existing category/product architecture.
+
+DO NOT change approval workflows.
+
+DO NOT modify realtime system.
+
+DO NOT change database schema.
+
+DO NOT touch authentication or permissions.
+
+Only fix the broken linkage between:
+
+Supplier → Categories → My Categories
+AND
+Supplier → Products → Admin Products
+
+====================================================
+ISSUE – PRODUCTS DO NOT APPEAR AFTER CATEGORY/SUBCATEGORY SELECTION
+===================================================================
+
+Current behavior:
+
+When a supplier selects:
+
+Supplier
+→ Categories
+→ My Categories
+
+* Category is selected
+* SubCategory is selected
+
+BUT:
+
+Supplier
+→ Products
+→ Admin Products
+
+shows NO products.
+
+This is incorrect.
+
+====================================================
+ROOT CAUSE (TO INVESTIGATE)
+===========================
+
+The Product page is not properly consuming the selected state from:
+
+My Categories (global state / store / context)
+
+OR
+
+The Product query is not correctly invalidating / refetching when selection changes.
+
+Most likely issues:
+
+* Zustand store not subscribed correctly in AdminProducts view
+* Missing dependency in useEffect/useQuery keys
+* Cached query not updating on category/subcategory change
+* Filter logic using stale or local state instead of global selectedCategoryId / selectedSubCategoryId
+
+====================================================
+EXPECTED BEHAVIOR
+=================
+
+When supplier selects:
+
+Category + SubCategory in:
+Supplier → Categories → My Categories
+
+Then immediately:
+
+Supplier → Products → Admin Products must:
+
+1. Detect selectedCategoryId + selectedSubCategoryId
+2. Refetch or recompute product list
+3. Display ONLY products matching selected SubCategory
+4. Update automatically (no refresh, no navigation)
+
+====================================================
+REQUIRED FIX
+============
+
+## 1 — VERIFY STATE SOURCE OF TRUTH
+
+Ensure BOTH pages use the SAME store/source:
+
+selectedCategoryId
+selectedSubCategoryId
+
+These must come from the same global store (existing Zustand / context already used in project).
+
+DO NOT create a new store.
+
+====================================================
+
+## 2 — FIX PRODUCTS QUERY DEPENDENCY
+
+In Supplier Products → Admin Products:
+
+Ensure product fetching depends on:
+
+* selectedCategoryId
+* selectedSubCategoryId
+
+If using React Query:
+
+queryKey MUST include:
+
+[selectedCategoryId, selectedSubCategoryId]
+
+OR equivalent dependency.
+
+If using manual filtering:
+
+Ensure filter is applied AFTER state update, not on initial load only.
+
+====================================================
+
+## 3 — FORCE REACTIVE UPDATE
+
+When category/subcategory changes in My Categories:
+
+Trigger one of the existing mechanisms:
+
+* invalidateQueries("products")
+  OR
+* websocket event refreshProducts
+  OR
+* store subscription update
+
+DO NOT introduce new libraries.
+
+====================================================
+
+# 4 — STRICT FILTERING RULE
+
+Inside Admin Products:
+
+IF selectedCategoryId == null OR selectedSubCategoryId == null:
+→ return EMPTY STATE
+→ DO NOT fetch or show products
+
+IF both selected:
+→ show only:
+
+product.subCategoryId === selectedSubCategoryId
+
+====================================================
+5 — DEBUG CHECK
+===============
+
+Verify:
+
+* selectedCategoryId updates correctly in global store
+* selectedSubCategoryId updates correctly
+* Products page subscribes to store changes
+* Query re-runs when selection changes
+* No stale caching remains
+
+====================================================
+EXPECTED FINAL RESULT
+=====================
+
+After fix:
+
+1. Select Category in My Categories
+2. Select SubCategory
+3. Switch to Products → Admin Products
+4. Products appear instantly filtered correctly
+5. Changing subcategory updates list instantly
+6. No refresh required
+
+====================================================
+VALIDATION
+==========
+
+Before finishing:
+
+* Confirm store updates propagate to Products page
+* Confirm query invalidation works
+* Confirm correct filtering by subCategoryId
+* Confirm no regression in My Products tab
+* Confirm no regression in Admin Products catalog logic

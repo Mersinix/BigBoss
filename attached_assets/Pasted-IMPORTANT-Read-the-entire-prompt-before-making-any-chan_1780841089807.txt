@@ -1,0 +1,383 @@
+IMPORTANT: Read the entire prompt before making any changes.
+
+The goal is to enrich the Landing Page by exposing PRINT, MARKETING, and BARISTA entry points while preserving the current design system, architecture, routing structure, and existing functionality.
+
+CRITICAL RULES
+
+* Do NOT redesign the landing page
+* Do NOT modify existing SHOP behavior
+* Do NOT remove existing sections
+* Do NOT change existing color palette
+* Do NOT change existing typography
+* Do NOT change existing spacing system
+* Reuse existing category section component whenever possible
+* Preserve responsive behavior
+* Preserve existing routing
+* Preserve existing navbar and footer structure
+
+Only extend the landing page.
+
+---
+
+1. HERO SECTION CLEANUP
+
+---
+
+Current hero contains:
+
+SHOP
+
+PRINT
+Bientôt
+
+BARISTA
+Bientôt
+
+MARKETING
+Bientôt
+
+Remove ONLY:
+
+"Bientôt"
+
+from:
+
+* PRINT
+* BARISTA
+* MARKETING
+
+Result:
+
+SHOP
+
+PRINT
+
+BARISTA
+
+MARKETING
+
+Keep everything else exactly as it is.
+
+Do NOT modify:
+
+* search
+* layout
+* buttons
+* hero structure
+* styling
+
+---
+
+2. PRINT CATEGORIES SECTION
+
+---
+
+Immediately BELOW:
+
+"Meilleures catégories à Tunis"
+
+and BELOW the existing SHOP categories component,
+
+add a new section for PRINT.
+
+Reuse the same category component style already used for SHOP categories.
+
+Title:
+
+Catégories PRINT
+
+Display PRINT categories using the same visual card system:
+
+Examples:
+
+📋 Menus
+🎨 Flyers
+🖼 Affiches
+🏷 Stickers
+📇 Cartes de visite
+📦 Packaging
+🎪 Roll-up & Banners
+🪟 Vitrophanie
+
+Requirements:
+
+* Same card style as SHOP categories
+* Same hover effects
+* Same spacing
+* Same responsive behavior
+* Same grid system
+
+Interaction:
+
+When user clicks a PRINT category:
+
+Navigate to:
+
+/print
+
+and automatically pre-select the corresponding category in the PRINT flatlist/filter system.
+
+Example:
+
+Click "Menus"
+
+→ Redirect to:
+
+/print
+
+→ Menus category already selected.
+
+---
+
+3. MARKETING CATEGORIES SECTION
+
+---
+
+Below PRINT categories add:
+
+Title:
+
+Services MARKETING
+
+Reuse exactly the same category component style.
+
+Categories:
+
+🌐 Création de site web
+🔍 SEO
+📢 Publicités
+📱 Réseaux sociaux
+🎥 Production vidéo
+📸 Photographie
+🎨 Branding
+
+Requirements:
+
+* Same visual style as SHOP categories
+* Same hover states
+* Same spacing
+* Same responsive behavior
+
+Interaction:
+
+Clicking a category:
+
+Redirect to:
+
+/marketing
+
+with the corresponding marketing service already selected.
+
+Example:
+
+Click SEO
+
+→ /marketing
+
+→ SEO filter already active.
+
+---
+
+4. BARISTA SECTION
+
+---
+
+Below MARKETING categories add a dedicated BARISTA section.
+
+Title:
+
+Services BARISTA
+
+This section should feel slightly more premium while remaining fully aligned with the existing design system.
+
+Create TWO large cards side by side on desktop.
+
+Stack on mobile.
+
+---
+
+CARD 1
+
+Barista Academy
+
+Description:
+
+Découvrez des formations professionnelles pour développer les compétences de votre équipe.
+
+CTA:
+
+Explorer les formations
+
+Redirect:
+
+/barista
+
+Open directly on:
+
+Barista Academy tab
+
+---
+
+CARD 2
+
+Marketplace Baristas
+
+Description:
+
+Trouvez et recrutez des baristas qualifiés pour votre établissement.
+
+CTA:
+
+Trouver un barista
+
+Redirect:
+
+/barista
+
+Open directly on:
+
+Marketplace Baristas tab
+
+---
+
+Requirements:
+
+* Professional design
+* Same design language as existing landing page
+* Same buttons
+* Same border radius
+* Same shadows
+* Same spacing
+* No new design system
+
+---
+
+5. FOOTER IMPROVEMENTS
+
+---
+
+Current footer still shows:
+
+PRINT
+Bientôt
+
+BARISTA
+Bientôt
+
+MARKETING
+Bientôt
+
+Remove ALL occurrences of:
+
+"Bientôt"
+
+from footer.
+
+---
+
+Make footer links clickable:
+
+SHOP → /shop
+
+PRINT → /print
+
+BARISTA → /barista
+
+MARKETING → /marketing
+
+---
+
+6. ROUTING REQUIREMENTS
+
+---
+
+Implement category preselection support.
+
+Examples:
+
+Landing → Menus
+
+→ /print?category=menus
+
+Landing → SEO
+
+→ /marketing?service=seo
+
+Landing → Marketplace Baristas
+
+→ /barista?tab=marketplace
+
+Landing → Barista Academy
+
+→ /barista?tab=academy
+
+Reuse existing filtering logic whenever possible.
+
+Do NOT create duplicate pages.
+
+---
+
+## DO NOT MODIFY
+
+Do NOT change:
+
+* Existing SHOP categories section
+* Existing search behavior
+* Existing landing page structure
+* Existing marketplace functionality
+* Existing visibility rules
+* Existing authentication
+* Existing provider logic
+* Existing cart logic
+* Existing messaging logic
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ Existing SHOP categories still work
+
+✓ New PRINT categories displayed
+✓ PRINT categories redirect correctly
+✓ Category auto-selected in /print
+
+✓ New MARKETING categories displayed
+✓ Marketing categories redirect correctly
+✓ Service auto-selected in /marketing
+
+✓ New BARISTA section displayed
+✓ Academy redirect works
+✓ Marketplace redirect works
+
+✓ Hero "Bientôt" removed
+✓ Footer "Bientôt" removed
+
+✓ Footer links clickable
+
+✓ Mobile responsive
+✓ Desktop responsive
+
+✓ No architecture changes
+✓ No API changes
+✓ No regressions
+
+---
+
+## OUTPUT REQUIRED
+
+Before implementation provide:
+
+1. Files to be modified
+2. Components reused
+3. Routing changes required (if any)
+4. Query parameter strategy
+
+After implementation provide:
+
+1. Modified files list
+2. New landing page sections added
+3. Redirect logic explanation
+4. Any route/query parameter additions
+5. Confirmation that existing functionality remains unchanged

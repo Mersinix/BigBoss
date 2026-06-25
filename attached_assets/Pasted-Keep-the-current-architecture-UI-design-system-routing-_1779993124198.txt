@@ -1,0 +1,292 @@
+Keep the current architecture, UI design system, routing, and existing behaviors exactly as they are. Do NOT refactor unrelated modules. Do NOT redesign UI. Only extend and synchronize logic for the CAFE OWNER “Browse Products” flow.
+
+The goal is to integrate the new Admin/Supplier product structure into a fully dynamic and consistent customer-facing experience.
+
+==================================================
+CAFE OWNER – BROWSE PRODUCTS TAB
+================================
+
+IMPORTANT PRINCIPLE:
+This page must be fully dynamic, data-driven, and synchronized with:
+
+* Admin Categories/SubCategories/Flavors/Sizes/Brands
+* Supplier product availability + pricing
+* Existing product filtering system
+
+==================================================
+
+1. LOCATION SYSTEM (TOP LEVEL FILTER)
+   ==================================================
+
+Add a LOCATION BUTTON at the top of Browse Products.
+
+Default value:
+
+* "Tunis, Tunisia"
+
+On click:
+
+* open selector with these values only:
+
+  * Ariana
+  * Sousse
+  * Nabeul
+  * Bizerte
+
+Behavior:
+
+* Selected location becomes global filter for product browsing
+* Store location in state (persist if possible: localStorage/session)
+* All product queries must depend on selected location
+* Keep UI minimal (dropdown or modal, reuse existing components if possible)
+
+==================================================
+2. CATEGORY RENDERING (DYNAMIC)
+===============================
+
+Under location button:
+
+* Display ONLY active Categories that have at least one related product available from suppliers
+
+When Category is selected:
+Update filters dynamically:
+
+* SubCategory
+* Flavor
+* Size
+* Brand
+
+IMPORTANT:
+
+* All filters must be derived from selected Category context
+* No static filters allowed
+
+==================================================
+3. FILTER SYSTEM (ENHANCED)
+===========================
+
+Filters available:
+
+A. CATEGORY (already above)
+
+B. SUBCATEGORY (dynamic)
+
+C. FLAVOR (dynamic)
+
+D. SIZE (dynamic)
+
+E. BRAND (dynamic)
+
+F. PROMOTION FILTER
+
+* show only products with active promotions flag
+
+G. TOP RATED FILTER
+
+* show products with highest average rating
+
+H. SORT SYSTEM (dropdown)
+
+Replace duplicated values and standardize:
+
+Sort options:
+
+* Recommended (default logic based on rating + popularity)
+* Top Rated
+* Ratings (highest to lowest)
+* Delivery Fee (lowest to highest)
+* Near Me (based on selected location proximity logic if available)
+
+IMPORTANT FIX:
+Remove duplicated "Top Rated" entries and normalize options.
+
+I. RESET BUTTON
+
+* Reset all filters to default state
+* Keep location unchanged
+
+==================================================
+4. PRODUCT LISTING LOGIC
+========================
+
+Products displayed must come from:
+
+* Supplier product listings
+* Filtered by:
+
+  * category
+  * subcategory
+  * flavor
+  * size
+  * brand
+  * location
+  * availability (stock > 0 only)
+
+IMPORTANT BUSINESS RULE:
+If multiple suppliers sell the same product:
+
+* ONLY display the cheapest available offer as the main product card
+* Other supplier offers must be grouped inside product detail page
+
+==================================================
+5. PRODUCT CARD BEHAVIOR
+========================
+
+Each product card must show:
+
+* Image
+* Name
+* Price (cheapest supplier price)
+* Rating
+* Category/SubCategory
+
+Click on product → open Product Detail Page
+
+==================================================
+6. PRODUCT DETAIL PAGE
+======================
+
+This page must be fully enriched and dynamic.
+
+---
+
+## A. HEADER SECTION
+
+* Product image gallery
+* Product name
+* Description
+* Category
+* SubCategory
+* Brand
+* Favorite (heart toggle)
+* Rating overview
+
+---
+
+## B. LOCATION SECTION (INSIDE DETAIL PAGE)
+
+Add location selector again (same logic as global one)
+
+Under it:
+
+* Show available cities as badges
+* Highlight selected location availability
+
+---
+
+## C. PRODUCT VARIANTS
+
+Show dynamically:
+
+* Available Sizes (from supplier availability)
+* Available Flavors
+* Available Brands (read-only display if needed)
+
+Quantity:
+
+* Editable quantity selector
+* Must reflect stock availability
+
+---
+
+## D. BEST OFFER COMPONENT
+
+Show BEST SUPPLIER OFFER:
+
+Include:
+
+* Supplier name
+* Supplier rating
+* Supplier location
+* Supplier contact/number (if available)
+* Selected:
+
+  * size
+  * flavor
+  * brand
+  * category
+  * subcategory
+* Unit price
+* Total price calculation (quantity × unit price)
+
+Rule:
+Best offer = lowest price for selected configuration
+
+---
+
+## E. ALL SUPPLIERS SECTION
+
+Below Best Offer:
+List ALL suppliers selling this product:
+
+Each supplier card must show:
+
+* Supplier name
+* Price
+* Rating
+* Location
+* Available options (size/flavor/brand)
+* Stock availability
+
+---
+
+## F. ADD TO CART
+
+At bottom:
+
+* Add to Cart button
+
+Rules:
+
+* Must validate stock availability
+* Must validate selected variant exists for supplier
+* Must use selected supplier offer OR best offer
+
+==================================================
+7. DATA CONSISTENCY RULES
+=========================
+
+VERY IMPORTANT:
+
+* All filters must reflect real supplier availability
+* No orphan categories or subcategories should appear
+* No product should appear if stock = 0 across all suppliers
+* Prices must always resolve to cheapest supplier for listing
+* Detail page must show full supplier competition view
+
+==================================================
+8. PERFORMANCE + UX RULES
+=========================
+
+* Use memoized filtering
+* Avoid re-fetching unless category/location changes
+* Lazy load product details
+* Keep UI responsive
+* Keep existing design system untouched
+
+==================================================
+9. FINAL CHECKLIST
+==================
+
+Before finishing:
+
+* Location filter works globally
+* Category → SubCategory → Flavor/Size/Brand cascade works
+* Product list shows cheapest supplier only
+* Detail page shows all suppliers
+* Best offer logic works correctly
+* Filters reset correctly
+* No UI breaking changes
+* No duplicate filter values
+* No inconsistent product states
+* Stock logic enforced everywhere
+
+==================================================
+OUTPUT REQUIRED AFTER IMPLEMENTATION:
+=====================================
+
+* List of modified files
+* Explanation of product aggregation logic
+* Explanation of filter dependency tree
+* Explanation of best offer algorithm
+* Any performance optimizations applied

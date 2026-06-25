@@ -1,0 +1,222 @@
+BIGBOSSCOFFEE – FIX MULTIPLE CATEGORY/SUBCATEGORY SYNCHRONIZATION BETWEEN MY CATEGORIES AND ADMIN PRODUCTS
+
+IMPORTANT
+
+This is an enhancement and bug fix of the existing synchronization.
+
+DO NOT modify:
+
+* Category approval workflow
+* Product approval workflow
+* Supplier permissions
+* Admin permissions
+* Database schema
+* Existing APIs
+* Realtime synchronization
+* Add Category modal behavior
+
+The current synchronization works for a single Category/SubCategory selection. The problem is that it does not support multiple selections.
+
+====================================================
+CURRENT BEHAVIOR
+================
+
+Inside:
+
+Supplier Part → Categories Tab → My Categories
+
+The supplier can have multiple Category/SubCategory mappings.
+
+Example:
+
+Category 1:
+Coffee
+
+* Espresso
+* Capsules
+
+Category 2:
+Tea
+
+* Herbal Infusions
+* Green Tea
+
+But when the supplier opens:
+
+Supplier Part → Products Tab → Switcher → Admin Products
+
+only one Category/SubCategory is used for filtering, and only products from that single selection are displayed.
+
+This is incorrect.
+
+====================================================
+EXPECTED BUSINESS BEHAVIOR
+==========================
+
+Supplier Part → Categories Tab → My Categories must be the source of truth.
+
+The system must consider ALL selected Category/SubCategory mappings.
+
+Example:
+
+Selected mappings:
+
+Coffee → Espresso
+Coffee → Capsules
+Tea → Herbal Infusions
+
+Then:
+
+Supplier Part → Products Tab → Switcher → Admin Products
+
+must display:
+
+* Products from Coffee → Espresso
+* Products from Coffee → Capsules
+* Products from Tea → Herbal Infusions
+
+The result is a merged product list.
+
+====================================================
+STATE MANAGEMENT FIX
+====================
+
+Investigate the current synchronization implementation.
+
+The likely issue is that the system stores:
+
+selectedCategoryId
+selectedSubCategoryId
+
+as single values.
+
+This model does not match the business requirement.
+
+The state should represent multiple selected mappings.
+
+Examples of acceptable structures:
+
+selectedCategoryMappings = [
+{
+categoryId,
+subCategoryIds: []
+}
+]
+
+OR another structure that supports multiple Category/SubCategory selections.
+
+Use the solution that best fits the existing architecture.
+
+DO NOT create duplicated state.
+
+====================================================
+PRODUCTS FILTERING FIX
+======================
+
+Inside:
+
+Supplier Part → Products Tab → Switcher → Admin Products
+
+The product query/filter must use ALL selected Category/SubCategory combinations.
+
+It should not filter using only:
+
+* Last selected Category
+* Last selected SubCategory
+
+The filtering must support multiple selections.
+
+====================================================
+UI SYNCHRONIZATION
+==================
+
+The banner currently showing:
+
+"Showing products for:
+Category → SubCategory"
+
+must also support multiple selections.
+
+Examples:
+
+Option 1:
+
+Showing products for:
+Coffee (2 SubCategories)
+Tea (1 SubCategory)
+
+OR
+
+Option 2:
+
+Showing products for:
+Coffee → Espresso, Capsules
+Tea → Herbal Infusions
+
+Choose the UI that best matches the existing design.
+
+The important requirement is that the supplier understands that products are coming from multiple selected mappings.
+
+====================================================
+DATA LOADING
+============
+
+When the supplier:
+
+* Adds a new Category
+* Adds a new SubCategory mapping
+* Removes a mapping
+
+Supplier Part → Products Tab → Switcher → Admin Products
+
+must update automatically without requiring:
+
+* Page refresh
+* Logout/Login
+* Navigation reset
+
+Use the existing synchronization mechanism.
+
+====================================================
+VALIDATION CHECKLIST
+====================
+
+Verify:
+
+✓ One Category with one SubCategory works.
+
+✓ One Category with multiple SubCategories works.
+
+✓ Multiple Categories with multiple SubCategories work.
+
+✓ Products from all selected mappings are displayed.
+
+✓ No duplicate products appear.
+
+✓ Product search still works correctly.
+
+✓ Add to My Products still works correctly.
+
+✓ Existing Category workflow remains unchanged.
+
+✓ Existing Product workflow remains unchanged.
+
+✓ No regressions in My Products.
+
+====================================================
+FINAL REPORT REQUIRED
+=====================
+
+Provide:
+
+* Root cause of the single-selection limitation.
+* Files modified.
+* State/store changes.
+* Product filtering changes.
+* UI changes.
+* Validation results.
+* Confirmation that existing functionality was not broken.
+
+Do not ask for confirmation.
+
+Analyze the existing implementation, apply the fix, test all scenarios, and complete the implementation.

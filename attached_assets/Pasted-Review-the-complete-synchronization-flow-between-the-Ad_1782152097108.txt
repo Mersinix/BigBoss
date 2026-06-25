@@ -1,0 +1,53 @@
+Review the complete synchronization flow between the Admin panel and Supplier panel regarding Categories and Products. Verify the current implementation and make all necessary updates to ensure the workflow behaves exactly as described below, while preserving all existing functionalities that are not related to this flow.
+
+## Admin Flow
+
+1. The Admin is the main source of the catalog structure.
+2. The Admin creates and manages:
+
+   * Categories
+   * Subcategories
+   * Flavors
+   * Sizes
+   * Brands
+3. The Admin creates Products and associates them with the appropriate Category, Subcategory, Flavor, Size, and Brand.
+
+## Supplier Category Selection Flow
+
+1. When a Supplier accesses the platform for the first time, they must go to the Category section.
+2. The Supplier can only choose Categories and Subcategories that have already been created by the Admin.
+3. A Supplier selection of Categories/Subcategories must create a Category Request.
+4. These requests must appear in the Admin panel under Category Requests.
+5. The Admin must review and approve or reject each Supplier Category/Subcategory request.
+6. Only approved Supplier Categories/Subcategories should become active for that Supplier.
+
+## Supplier Product Access Rules
+
+1. If the Supplier opens the Products section before having at least one approved Category/Subcategory, no products should be displayed.
+2. The system should clearly inform the Supplier that they must first select at least one Category and Subcategory and wait for Admin approval before accessing products.
+
+## Supplier Admin Products Synchronization
+
+1. The Supplier Products section contains an "Admin Products" switcher.
+2. This section must display only products created by the Admin.
+3. The Supplier must only see Admin Products that match:
+
+   * The Supplier's selected Categories and Subcategories.
+   * Categories/Subcategories that have been approved by the Admin.
+4. Products from unrelated Categories/Subcategories must never be visible to the Supplier.
+
+## Supplier My Products Flow
+
+1. After the Supplier has access to matching Admin Products, they can choose products from "Admin Products" and add them to their own catalog under "My Products".
+2. The synchronization between Admin Products and Supplier My Products must work correctly and maintain all existing related data and functionality.
+
+## Important Requirements
+
+* Review the entire Category and Product synchronization flow from end to end.
+* Identify and fix any missing validations, synchronization issues, incorrect visibility rules, or inconsistent states.
+* Ensure the user experience follows the exact business rules described above.
+* Keep all existing features, components, data, screens, and logic that are outside this scope unchanged.
+* Do not remove, delete, simplify, or modify existing functionalities unless it is strictly required to make this workflow work correctly.
+* If you discover related scenarios or edge cases that are not explicitly mentioned here, handle them in a way that remains consistent with the current architecture and the intended business flow.
+
+Perform a complete audit of the existing implementation and apply all required corrections so the Category → Approval → Product Visibility → Supplier Product Adoption lifecycle works reliably from start to finish.

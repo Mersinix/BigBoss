@@ -1,0 +1,230 @@
+BIGBOSSCOFFEE – CATEGORY MANAGEMENT & APPROVAL WORKFLOW
+
+IMPORTANT:
+
+* Preserve all existing functionality.
+* Do NOT break authentication, permissions, routing, APIs, database relations, existing category management, or supplier flows.
+* Reuse existing components whenever possible.
+* Keep backward compatibility with existing data.
+* Follow the current architecture and coding standards.
+
+====================================================
+PART 1 - SUPPLIER CATEGORY PAGE RESTRUCTURE
+===========================================
+
+Current:
+Supplier > Categories contains "My Categories".
+
+Required:
+
+Replace the page with a switcher:
+
+1. My Categories
+2. Category Requests
+
+---
+
+## A. MY CATEGORIES
+
+Keep existing behavior exactly as it is.
+
+Do not modify any current functionality.
+
+---
+
+## B. CATEGORY REQUESTS
+
+Create a new section where suppliers can suggest new catalog values.
+
+Reuse the same component structure and UI patterns from:
+
+Admin > Categories > Category Management
+
+BUT:
+
+* Do NOT load admin catalog data into supplier tables.
+* Supplier only sees records he created.
+* Tables should initially be empty.
+* This section is for suggestions only.
+
+Supplier can create:
+
+* Category
+* Sub Category
+* Brand
+* Flavor
+* Size
+
+Every new record must automatically have:
+
+status = PENDING
+createdBySupplier = true
+createdByUserId = supplierId
+createdAt
+
+While Pending:
+
+* Record cannot be used as an approved platform catalog item.
+* Record must display a Pending badge.
+* Record remains frozen until admin review.
+
+Supplier permissions:
+
+Can:
+
+* Create own suggestions
+* Edit own Pending suggestions
+* Delete own Pending suggestions
+
+Cannot:
+
+* Approve
+* Activate
+* Reject
+
+====================================================
+PART 2 - ADMIN CATEGORY PAGE RESTRUCTURE
+========================================
+
+Current:
+Category Requests exists as a separate tab/page.
+
+Required:
+
+Inside Admin > Categories create a switcher:
+
+1. Category Management
+2. Category Requests
+3. Supplier Categories
+
+---
+
+## A. CATEGORY MANAGEMENT
+
+Keep existing functionality unchanged.
+
+---
+
+## B. CATEGORY REQUESTS
+
+Move existing Category Requests functionality into this switcher.
+
+No functionality should be lost.
+
+---
+
+## C. SUPPLIER CATEGORIES
+
+Create a new admin section showing supplier-created:
+
+* Categories
+* Sub Categories
+* Brands
+* Flavors
+* Sizes
+
+Display:
+
+* Name
+* Type
+* Supplier
+* Status
+* Created Date
+
+Admin actions:
+
+* Approve
+* Edit
+* Delete
+
+Approve:
+
+status = ACTIVE
+approvedAt = currentDate
+approvedBy = adminId
+
+Edit:
+
+Admin can modify values before approval.
+
+Delete:
+
+Use existing project deletion rules.
+
+====================================================
+PART 3 - DATA MODEL
+===================
+
+Add approval workflow support for:
+
+* Category
+* Sub Category
+* Brand
+* Flavor
+* Size
+
+Required fields:
+
+status
+createdBySupplier
+createdByUserId
+approvedBy
+approvedAt
+createdAt
+
+Statuses:
+
+PENDING
+ACTIVE
+REJECTED
+
+====================================================
+PART 4 - GLOBAL BEHAVIOR
+========================
+
+After admin approval:
+
+* Suggested category data becomes available platform-wide.
+* Appears in standard category selectors.
+* Can be used by suppliers in product creation workflows.
+* Status changes from PENDING to ACTIVE.
+
+====================================================
+PART 5 - UI REQUIREMENTS
+========================
+
+Use existing design system.
+
+Add:
+
+* Pending badge
+* Active badge
+* Rejected badge
+
+Add:
+
+* Success notifications
+* Error notifications
+* Loading states
+* Delete confirmations
+
+====================================================
+PART 6 - VALIDATION
+===================
+
+Before finishing:
+
+1. Verify database migrations.
+2. Verify supplier permissions.
+3. Verify admin permissions.
+4. Verify approval workflow.
+5. Verify approved category values appear in platform selectors.
+6. Verify no existing category functionality is broken.
+
+Provide a final implementation report with:
+
+* Database changes
+* API changes
+* UI changes
+* Files modified
+* Migrations executed

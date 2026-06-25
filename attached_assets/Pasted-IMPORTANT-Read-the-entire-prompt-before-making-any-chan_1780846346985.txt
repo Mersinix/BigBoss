@@ -1,0 +1,345 @@
+IMPORTANT: Read the entire prompt before making any changes.
+
+The goal is to evolve the Favorites system into a unified cross-service favorites center while preserving the existing architecture, routing, APIs, authentication, and current functionality.
+
+CRITICAL RULES
+
+* Do NOT redesign the application
+* Do NOT break existing favorites functionality
+* Do NOT change existing APIs unless absolutely necessary
+* Do NOT duplicate favorite systems
+* Reuse existing favorite logic from SHOP
+* Preserve existing modal structure
+* Preserve current design system
+* Preserve current responsive behavior
+
+Only extend the Favorites experience.
+
+---
+
+1. FAVORITES MODAL - ADD SERVICE SWITCHER
+
+---
+
+Current modal:
+
+My Favorites
+
+[ Favorite Cards ]
+
+Add a service switcher directly BELOW the title.
+
+Visual style:
+
+Reuse the exact same switcher style used in Messages:
+
+[ SHOP ] [ PRINT ] [ BARISTA ] [ MARKETING ]
+
+Requirements:
+
+* Same active state
+* Same spacing
+* Same colors
+* Same design language
+* Same responsive behavior
+
+Default selected:
+
+SHOP
+
+---
+
+2. SHOP FAVORITES
+
+---
+
+Keep existing behavior exactly as it is.
+
+Display:
+
+* favorite products
+* image
+* supplier
+* price
+* favorite heart
+
+Allow removing from favorites directly from the card.
+
+No functional changes.
+
+---
+
+3. PRINT FAVORITES
+
+---
+
+When PRINT is selected:
+
+Display favorite PRINT products/services.
+
+Each card should show:
+
+* image
+* title
+* provider
+* price (according to visibility rules)
+* favorite heart
+
+Allow removing from favorites directly.
+
+---
+
+4. BARISTA FAVORITES
+
+---
+
+When BARISTA is selected:
+
+Display a SECONDARY SWITCHER below the main switcher.
+
+Example:
+
+Main:
+[ SHOP ] [ PRINT ] [ BARISTA ] [ MARKETING ]
+
+Secondary:
+[ Barista Academy ] [ Marketplace Baristas ]
+
+Default:
+
+Barista Academy
+
+---
+
+## BARISTA ACADEMY FAVORITES
+
+Display favorited:
+
+* courses
+* schools
+* trainers
+
+Each card should show:
+
+* image
+* title
+* provider
+* duration
+* rating
+* favorite heart
+
+Allow removing from favorites.
+
+---
+
+## MARKETPLACE BARISTAS FAVORITES
+
+Display favorited:
+
+* baristas
+* trainers
+* profiles
+
+Each card should show:
+
+* profile image
+* name
+* skills
+* location
+* rating
+* favorite heart
+
+Allow removing from favorites.
+
+---
+
+5. MARKETING FAVORITES
+
+---
+
+Display favorite:
+
+* providers
+* agencies
+* freelancers
+* services
+
+Each card should show:
+
+* image
+* company name
+* category
+* rating
+* favorite heart
+
+Allow removing from favorites.
+
+---
+
+6. FAVORITE HEARTS ON CARDS
+
+---
+
+Synchronize ALL service modules with the Favorites modal.
+
+The same favorite state must be used everywhere.
+
+If a user favorites/unfavorites a card:
+
+→ card updates immediately
+→ favorites modal updates immediately
+
+Single source of truth.
+
+---
+
+## SHOP
+
+Already implemented.
+
+Do NOT change.
+
+---
+
+## PRINT
+
+Add favorite heart to PRINT cards.
+
+Use the exact same placement and behavior used in SHOP cards.
+
+Requirements:
+
+* same size
+* same styling
+* same hover effect
+* same selected state
+
+---
+
+## BARISTA ACADEMY
+
+Add favorite heart:
+
+TOP LEFT corner of card.
+
+Requirements:
+
+* consistent spacing
+* visible above card content
+* same favorite behavior
+
+---
+
+## MARKETPLACE BARISTAS
+
+Add favorite heart:
+
+TOP RIGHT corner of card.
+
+Requirements:
+
+* same design system
+* same behavior
+
+---
+
+## MARKETING
+
+Add favorite heart:
+
+Position:
+
+Top right area of the card,
+aligned with the provider/company name,
+just below the card image section.
+
+Example:
+
+Agency Name                ♥
+Marketing Category
+Rating
+
+Maintain clean alignment.
+
+---
+
+7. SYNCHRONIZATION RULES
+
+---
+
+Favoriting from:
+
+SHOP
+PRINT
+BARISTA ACADEMY
+MARKETPLACE BARISTAS
+MARKETING
+
+must instantly update:
+
+* card state
+* navbar favorite count
+* favorites modal content
+
+Unfavoriting from modal:
+
+must instantly update:
+
+* original card
+* favorite count
+* corresponding service list
+
+No page refresh.
+
+---
+
+## DO NOT MODIFY
+
+Do NOT modify:
+
+* cart
+* orders
+* checkout
+* messaging
+* authentication
+* routing
+* visibility rules
+* approval workflow
+* filters
+* search
+
+Only extend favorites functionality.
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ SHOP favorites still work
+
+✓ PRINT favorites work
+✓ Favorite heart visible on PRINT cards
+
+✓ BARISTA Academy favorites work
+✓ Heart top-left
+
+✓ Marketplace Baristas favorites work
+✓ Heart top-right
+
+✓ MARKETING favorites work
+✓ Heart positioned beside provider name
+
+✓ Favorites modal has service switcher
+
+✓ BARISTA secondary switcher works
+
+✓ Favorite count updates instantly
+
+✓ Unfavorite from modal updates original card
+
+✓ No duplicate favorite states
+
+✓ No architecture changes
+
+✓ No regressions

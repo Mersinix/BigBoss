@@ -1,0 +1,491 @@
+Build a production-ready full-stack B2B marketplace platform called “BigBossCoffee”.
+
+The platform connects:
+
+Coffee shop owners (buyers)
+
+Suppliers (products providers)
+
+Delivery companies / drivers
+
+Admin management
+
+The platform must support both:
+
+🌐 Web Application (Next.js)
+
+📱 Mobile Application (React Native with Expo)
+
+🧠 Backend API (NestJS)
+
+🗄 Database (PostgreSQL with Prisma ORM)
+
+🐳 Dockerized environment
+
+🧩 Fully written in TypeScript
+
+🔐 Modular architecture with roles and permissions
+
+1️⃣ ARCHITECTURE REQUIREMENTS
+
+Use a monorepo structure:
+
+bigbosscoffee/
+ ├── apps/
+ │   ├── web (Next.js 14 App Router)
+ │   ├── mobile (Expo React Native)
+ │   └── api (NestJS)
+ ├── packages/
+ │   ├── ui (shared components)
+ │   ├── types (shared types)
+ │   └── config (eslint, tsconfig)
+ ├── prisma/
+ ├── docker/
+ └── docker-compose.yml
+2️⃣ USER ROLES & PERMISSIONS
+
+Implement Role-Based Access Control (RBAC).
+
+Roles:
+
+SUPER_ADMIN
+
+ADMIN
+
+SUPPLIER
+
+CAFE_OWNER
+
+DELIVERY_COMPANY
+
+DRIVER
+
+Permissions examples:
+
+Manage users
+
+Manage products
+
+Approve suppliers
+
+Create orders
+
+Accept orders
+
+Assign delivery
+
+Manage invoices
+
+Manage commissions
+
+Use JWT authentication + refresh tokens.
+
+3️⃣ DATABASE DESIGN (PRISMA + POSTGRESQL)
+
+Design a clean, scalable schema including:
+
+Core Models
+
+User
+
+Role
+
+Permission
+
+SupplierProfile
+
+CafeProfile
+
+DeliveryCompanyProfile
+
+DriverProfile
+
+Product
+
+Category
+
+ProductImage
+
+Order
+
+OrderItem
+
+Invoice
+
+Payment
+
+Review
+
+Notification
+
+Address
+
+Warehouse
+
+StockMovement
+
+Advanced Logic
+
+Multi-vendor marketplace
+
+Supplier owns products
+
+Cafe creates order
+
+Supplier confirms order
+
+Delivery assigned
+
+Commission percentage
+
+Platform fees
+
+Add:
+
+createdAt
+
+updatedAt
+
+soft delete (deletedAt)
+
+Use indexes and relations properly.
+
+4️⃣ BACKEND (NESTJS)
+
+Use clean modular architecture:
+
+Modules:
+
+AuthModule
+
+UsersModule
+
+RolesModule
+
+ProductsModule
+
+OrdersModule
+
+PaymentsModule
+
+DeliveryModule
+
+NotificationsModule
+
+ReviewsModule
+
+AdminModule
+
+Features:
+
+JWT auth
+
+Refresh tokens
+
+Role guards
+
+Permission guards
+
+Global validation pipes
+
+Error handling
+
+Logging middleware
+
+Swagger documentation
+
+Rate limiting
+
+Secure password hashing (bcrypt)
+
+Environment variables config
+
+Centralized config module
+
+Include:
+
+Pagination
+
+Filtering
+
+Search
+
+Sorting
+
+Order status workflow
+
+Order status:
+
+PENDING
+CONFIRMED
+PREPARING
+READY
+IN_DELIVERY
+DELIVERED
+CANCELLED
+
+5️⃣ FRONTEND – NEXT.JS (WEB)
+
+Use:
+
+Next.js 14 App Router
+
+Server Components
+
+React Query or TanStack Query
+
+Axios API layer
+
+Tailwind CSS
+
+Responsive dashboard layout
+
+Create dashboards for:
+
+Admin Dashboard
+
+KPIs
+
+Revenue
+
+Orders stats
+
+Manage users
+
+Approve suppliers
+
+Commission settings
+
+Supplier Dashboard
+
+Manage products
+
+Manage stock
+
+Accept orders
+
+View invoices
+
+Analytics
+
+Cafe Owner Dashboard
+
+Browse products
+
+Add to cart
+
+Place order
+
+Order tracking
+
+Reviews
+
+Delivery Dashboard
+
+Assigned orders
+
+Route tracking
+
+Status update
+
+6️⃣ MOBILE APP – REACT NATIVE EXPO
+
+Features:
+
+Login / Register
+
+Role-based UI
+
+Product browsing
+
+Cart & checkout
+
+Order tracking
+
+Push notifications
+
+Profile management
+
+Use:
+
+Expo Router
+
+Zustand or Redux Toolkit
+
+Axios
+
+SecureStore for tokens
+
+Modular folder structure
+
+Make mobile UI modern, clean, enterprise-level.
+
+7️⃣ PAYMENT INTEGRATION
+
+Prepare integration-ready module for:
+
+Stripe
+
+PayPal
+
+Local Tunisian gateway (abstract provider pattern)
+
+Include:
+
+Payment intent
+
+Webhook handling
+
+Transaction logs
+
+Invoice generation
+
+8️⃣ DOCKER SETUP
+
+Create:
+
+Dockerfile for API
+
+Dockerfile for Web
+
+Dockerfile for PostgreSQL
+
+docker-compose.yml
+
+Services:
+
+api
+
+web
+
+mobile (optional dev container)
+
+postgres
+
+redis (for caching)
+
+pgadmin
+
+Include:
+
+Health checks
+
+Environment configuration
+
+Dev and production configs
+
+9️⃣ SECURITY & PERFORMANCE
+
+Include:
+
+Helmet
+
+CORS config
+
+Rate limiting
+
+Input validation
+
+SQL injection prevention
+
+XSS prevention
+
+API versioning
+
+Redis caching for products
+
+Proper indexing
+
+Optimized queries
+
+🔟 EXTRA ENTERPRISE FEATURES
+
+Add support for:
+
+Multi-language (Arabic / French / English)
+
+Commission system
+
+Subscription plans for suppliers
+
+Promotional discounts
+
+Analytics module
+
+Email notifications (SendGrid)
+
+SMS notifications
+
+Audit logs
+
+UI DESIGN REQUIREMENTS
+
+Design must look like:
+
+Alibaba B2B
+
+Glovo supplier dashboard
+
+Enterprise SaaS
+
+Clean white + dark theme option
+
+Card-based layout
+
+Modern sidebar navigation
+
+DEVELOPMENT RULES
+
+Use strict TypeScript
+
+Use SOLID principles
+
+Clean code
+
+Separation of concerns
+
+No hardcoded values
+
+Use DTO validation
+
+Write reusable components
+
+Prepare for scaling to 10,000+ users
+
+Tunisia first but scalable internationally
+
+OUTPUT EXPECTATION
+
+Generate:
+
+Full project structure
+
+Prisma schema
+
+NestJS modules
+
+Example controllers & services
+
+Auth flow
+
+Sample frontend pages
+
+Mobile starter structure
+
+Docker setup
+
+README setup instructions
+
+Now build this project step by step with production-grade code and clean architecture.
+
+🔥 IMPORTANT
+
+After generating structure:
+
+Ask what module to build first.
+
+Build incrementally.
+
+Never generate incomplete architecture.
+
+Follow enterprise standards.

@@ -1,0 +1,263 @@
+BIGBOSSCOFFEE – PRODUCT APPROVAL WORKFLOW
+
+IMPORTANT:
+
+* Assume Category Approval Workflow already exists.
+* Preserve all existing product functionality.
+* Do NOT break current product catalog, supplier products, APIs, permissions, or database relations.
+* Reuse existing components whenever possible.
+* Maintain backward compatibility.
+
+====================================================
+PART 1 - SUPPLIER PRODUCTS PAGE RESTRUCTURE
+===========================================
+
+Current switcher:
+
+1. Admin Products
+2. My Products
+
+Required switcher:
+
+1. Admin Products
+2. My Products
+3. New Product
+
+---
+
+## A. ADMIN PRODUCTS
+
+Keep current behavior.
+
+Additionally:
+
+Only display products that belong to approved catalog structures.
+
+Products linked to rejected/inactive categories should not appear.
+
+---
+
+## B. MY PRODUCTS
+
+Keep current functionality.
+
+This tab contains products added by suppliers from the admin catalog.
+
+IMPORTANT:
+
+Audit the Edit Product functionality.
+
+Currently there is a problem when editing products.
+
+Tasks:
+
+* Identify root cause.
+* Fix edit functionality completely.
+* Verify all fields save correctly.
+* Verify validations work correctly.
+* Verify updates persist correctly.
+
+---
+
+## C. NEW PRODUCT
+
+Create a supplier product creation workflow.
+
+Supplier can create new products.
+
+Product can use:
+
+* Approved Categories
+* Approved Sub Categories
+* Approved Brands
+* Approved Flavors
+* Approved Sizes
+
+Additionally:
+
+If supplier has created category suggestions that are still pending,
+allow selecting them during creation.
+
+Product fields should remain editable while Pending.
+
+Every newly created supplier product must automatically have:
+
+status = PENDING
+createdBySupplier = true
+createdByUserId = supplierId
+createdAt
+
+Pending products:
+
+* Cannot be published.
+* Cannot appear in Admin Products.
+* Must display Pending status.
+
+====================================================
+PART 2 - ADMIN PRODUCTS PAGE RESTRUCTURE
+========================================
+
+Create a switcher inside Admin > Products:
+
+1. Product Catalog
+2. Supplier Products
+
+---
+
+## A. PRODUCT CATALOG
+
+Keep current functionality unchanged.
+
+Contains approved products.
+
+---
+
+## B. SUPPLIER PRODUCTS
+
+Create a review queue containing supplier-created products.
+
+Display:
+
+* Product Name
+* Supplier
+* Category
+* Status
+* Created Date
+
+Admin actions:
+
+* Approve
+* Edit
+* Delete
+
+Approve:
+
+status = ACTIVE
+approvedAt = currentDate
+approvedBy = adminId
+
+Edit:
+
+Admin can update product before approval.
+
+Delete:
+
+Use existing project deletion rules.
+
+====================================================
+PART 3 - APPROVAL FLOW
+======================
+
+Supplier creates product
+↓
+Status = PENDING
+↓
+Appears in:
+Admin > Products > Supplier Products
+↓
+Admin reviews
+↓
+Approve
+↓
+Status = ACTIVE
+↓
+Product moves automatically to:
+Admin > Product Catalog
+↓
+Product becomes available inside:
+Supplier > Products > Admin Products
+
+After approval:
+
+* Product disappears from Supplier Products queue.
+* Product disappears from supplier pending list.
+* Product becomes part of approved catalog.
+
+====================================================
+PART 4 - DATA MODEL
+===================
+
+Add approval workflow support for products.
+
+Required fields:
+
+status
+createdBySupplier
+createdByUserId
+approvedBy
+approvedAt
+createdAt
+
+Statuses:
+
+PENDING
+ACTIVE
+REJECTED
+
+====================================================
+PART 5 - PERMISSIONS
+====================
+
+Supplier:
+
+Can:
+
+* Create products
+* Edit own Pending products
+* Delete own Pending products
+
+Cannot:
+
+* Approve products
+* Activate products
+
+Admin:
+
+Can:
+
+* View all supplier products
+* Approve
+* Edit
+* Delete
+
+====================================================
+PART 6 - UI REQUIREMENTS
+========================
+
+Use existing design system.
+
+Add:
+
+* Pending badge
+* Active badge
+* Rejected badge
+
+Add:
+
+* Success notifications
+* Error notifications
+* Loading states
+* Delete confirmations
+
+====================================================
+PART 7 - VALIDATION
+===================
+
+Before finishing:
+
+1. Verify supplier product creation.
+2. Verify approval workflow.
+3. Verify product movement between tabs.
+4. Verify approved products appear in Admin Products.
+5. Verify pending products remain hidden from approved catalog.
+6. Fix and verify Edit Product functionality in My Products.
+7. Verify no existing functionality is broken.
+
+Provide a final implementation report with:
+
+* Database changes
+* API changes
+* UI changes
+* Files modified
+* Bugs fixed
+* Migrations executed

@@ -1,0 +1,1400 @@
+diff --cc .replit
+index e53f0e3,9106278..0000000
+--- a/.replit
++++ b/.replit
+@@@ -42,4 -42,8 +42,12 @@@ waitForPort = 500
+  [userenv]
+  
+  [userenv.shared]
+++<<<<<<< HEAD
+ +DATABASE_URL = "postgresql://postgres:Microgenie00000!!@localhost:5432/postgres"
+++=======
++ DATABASE_URL = "postgresql://postgres:Microgenie00000!!@localhost:5432/postgres?schema=public"
++ 
++ [agent]
++ stack = "FULLSTACK_JS"
++ expertMode = true
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
+diff --cc client/src/pages/cafe/browse-products.tsx
+index 2bcd6af,577d5a8..0000000
+--- a/client/src/pages/cafe/browse-products.tsx
++++ b/client/src/pages/cafe/browse-products.tsx
+@@@ -1,148 -1,897 +1,1043 @@@
+++<<<<<<< HEAD
+ +import { useState, useMemo } from "react";
+ +import { useQuery } from "@tanstack/react-query";
+ +import { useLocation } from "wouter";
+ +import { Card, CardContent } from "@/components/ui/card";
+++=======
++ import { useState, useRef, useMemo, useCallback } from "react";
++ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
++ import { useCart } from "@/hooks/use-cart";
++ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
+  import { Button } from "@/components/ui/button";
+  import { Input } from "@/components/ui/input";
+  import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+ -import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+  import { Badge } from "@/components/ui/badge";
+  import { Skeleton } from "@/components/ui/skeleton";
+++<<<<<<< HEAD
+ +import { Search, Package, Store, ChevronRight } from "lucide-react";
+ +import { formatCurrency } from "@/lib/format";
+ +import type { MarketplaceProduct } from "@shared/schema";
+ +import type { CategoryWithCount } from "@shared/schema";
+ +
+ +export default function BrowseProducts() {
+ +  const [, navigate] = useLocation();
+ +  const [search, setSearch] = useState("");
+ +  const [categoryId, setCategoryId] = useState<string>("");
+ +
+ +  const params = new URLSearchParams();
+ +  if (search.trim()) params.set("search", search.trim());
+ +  if (categoryId) params.set("categoryId", categoryId);
+ +
+ +  const { data: products = [], isLoading } = useQuery<MarketplaceProduct[]>({
+ +    queryKey: ["/api/marketplace", search, categoryId],
+ +    queryFn: async () => {
+ +      const res = await fetch(`/api/marketplace?${params}`);
+ +      if (!res.ok) throw new Error("Failed");
+ +      return res.json();
+ +    },
+ +  });
+ +
+ +  const { data: categories = [] } = useQuery<CategoryWithCount[]>({
+ +    queryKey: ["/api/categories"],
+ +  });
+++=======
++ import {
++   Search, ShoppingCart, ChevronLeft, ChevronRight, Star, Package, Info,
++   MapPin, ChevronDown, X, SlidersHorizontal, Heart, RotateCcw, Plus, Minus,
++   Building2, Phone,
++ } from "lucide-react";
++ import { formatCurrency } from "@/lib/format";
++ import { useToast } from "@/hooks/use-toast";
++ import type { MarketplaceProduct, MarketplaceProductDetail } from "@shared/schema";
++ 
++ // ── Constants ────────────────────────────────────────────────────────────────
++ 
++ const LOCATION_OPTIONS = ["Ariana", "Sousse", "Nabeul", "Bizerte"];
++ const DEFAULT_LOCATION = "Tunis, Tunisia";
++ const LOCATION_KEY = "b2b_marketplace_location";
++ 
++ const SORT_OPTIONS = [
++   { value: "recommended", label: "Recommended" },
++   { value: "top_rated", label: "Top Rated" },
++   { value: "ratings", label: "Ratings (highest to lowest)" },
++   { value: "delivery_fee", label: "Delivery Fee (lowest to highest)" },
++   { value: "near_me", label: "Near Me" },
++ ];
++ 
++ // ── Helpers ──────────────────────────────────────────────────────────────────
++ 
++ function StarRating({ rating, size = "sm" }: { rating: number; size?: "sm" | "md" }) {
++   const sz = size === "sm" ? "w-3 h-3" : "w-4 h-4";
++   return (
++     <div className="flex items-center gap-0.5">
++       {[1, 2, 3, 4, 5].map(i => (
++         <Star
++           key={i}
++           className={`${sz} ${i <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`}
++         />
++       ))}
++     </div>
++   );
++ }
++ 
++ // ── Fetch helpers ─────────────────────────────────────────────────────────────
++ 
++ async function fetchJson(url: string) {
++   const res = await fetch(url, { credentials: "include" });
++   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
++   return res.json();
++ }
++ 
++ function buildUrl(base: string, params: Record<string, string | number | undefined | null>) {
++   const url = new URL(base, window.location.origin);
++   Object.entries(params).forEach(([k, v]) => {
++     if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
++   });
++   return url.toString();
++ }
++ 
++ // ── Product Detail Sheet ──────────────────────────────────────────────────────
++ 
++ function ProductDetailSheet({
++   productId,
++   open,
++   onClose,
++   location,
++   onLocationChange,
++ }: {
++   productId: number | null;
++   open: boolean;
++   onClose: () => void;
++   location: string;
++   onLocationChange: (loc: string) => void;
++ }) {
++   const { addItem } = useCart();
++   const { toast } = useToast();
++   const [qty, setQty] = useState(1);
++   const [selectedSizeId, setSelectedSizeId] = useState<number | null>(null);
++   const [selectedFlavorId, setSelectedFlavorId] = useState<number | null>(null);
++   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
++   const [favorited, setFavorited] = useState(false);
++   const [locationOpen, setLocationOpen] = useState(false);
++ 
++   const { data: detail, isLoading } = useQuery<MarketplaceProductDetail>({
++     queryKey: ["/api/cafe/marketplace", productId],
++     queryFn: () => fetchJson(`/api/cafe/marketplace/${productId}`),
++     enabled: !!productId,
++   });
++ 
++   const allSizesInListings = useMemo(() => {
++     if (!detail?.listings) return [];
++     const ids = new Set<number>();
++     detail.listings.forEach(l => (l.availableSizeIds ?? []).forEach(id => ids.add(id)));
++     return Array.from(ids).map(id => ({ id, name: (detail as any).sizeLabels?.find((s: any) => s.id === id)?.name ?? `Size ${id}` }));
++   }, [detail]);
++ 
++   const allFlavorsInListings = useMemo(() => {
++     if (!detail?.listings) return [];
++     const ids = new Set<number>();
++     detail.listings.forEach(l => (l.availableFlavorIds ?? []).forEach(id => ids.add(id)));
++     return Array.from(ids).map(id => ({ id, name: (detail as any).flavorLabels?.find((f: any) => f.id === id)?.name ?? `Flavor ${id}` }));
++   }, [detail]);
++ 
++   const bestOffer = useMemo(() => {
++     if (!detail?.listings || detail.listings.length === 0) return null;
++     return detail.listings.reduce((min, l) => l.price < min.price ? l : min, detail.listings[0]);
++   }, [detail]);
++ 
++   const selectedSupplierListing = useMemo(() => {
++     if (!detail?.listings) return null;
++     if (selectedSupplierId) return detail.listings.find(l => l.supplierId === selectedSupplierId) ?? null;
++     return bestOffer;
++   }, [detail, selectedSupplierId, bestOffer]);
++ 
++   const effectivePrice = selectedSupplierListing?.price ?? detail?.cheapestPrice ?? 0;
++ 
++   const handleAddToCart = () => {
++     if (!detail) return;
++     const listing = selectedSupplierListing ?? bestOffer;
++     if (!listing) return toast({ title: "No supplier available", variant: "destructive" });
++     if (listing.stock < qty) return toast({ title: "Insufficient stock", description: `Only ${listing.stock} units available.`, variant: "destructive" });
++     addItem({ ...detail, price: listing.price, supplierId: listing.supplierId } as any, qty);
++     toast({ title: "Added to cart", description: `${detail.name} × ${qty} added.` });
++     onClose();
++   };
++ 
++   const handleQtyChange = (delta: number) => {
++     const max = selectedSupplierListing?.stock ?? 999;
++     setQty(q => Math.max(1, Math.min(max, q + delta)));
++   };
++ 
++   if (!open) return null;
++ 
++   return (
++     <Sheet open={open} onOpenChange={v => !v && onClose()}>
++       <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="sheet-product-detail">
++         {isLoading || !detail ? (
++           <div className="space-y-4 pt-4">
++             <Skeleton className="h-56 w-full rounded-xl" />
++             <Skeleton className="h-6 w-3/4" />
++             <Skeleton className="h-4 w-full" />
++             <Skeleton className="h-4 w-2/3" />
++           </div>
++         ) : (
++           <>
++             <SheetHeader className="pr-6">
++               <div className="flex items-start justify-between gap-2">
++                 <SheetTitle className="text-xl font-bold leading-tight">{detail.name}</SheetTitle>
++                 <button
++                   onClick={() => setFavorited(f => !f)}
++                   className="mt-0.5 p-1.5 rounded-full hover:bg-muted transition-colors"
++                   data-testid="button-favorite-toggle"
++                 >
++                   <Heart className={`w-5 h-5 ${favorited ? "fill-rose-500 text-rose-500" : "text-muted-foreground"}`} />
++                 </button>
++               </div>
++             </SheetHeader>
++ 
++             <div className="mt-4 space-y-5 pb-6">
++               {/* Image Gallery */}
++               {detail.imageUrl && (
++                 <div className="aspect-video w-full overflow-hidden rounded-xl bg-secondary">
++                   <img src={detail.imageUrl} alt={detail.name} className="w-full h-full object-cover" />
++                 </div>
++               )}
++ 
++               {/* Meta Badges */}
++               <div className="flex flex-wrap items-center gap-2">
++                 {detail.categoryLabel && (
++                   <Badge variant="secondary" data-testid="badge-category">{detail.categoryLabel.name}</Badge>
++                 )}
++                 {detail.subCategoryLabel && (
++                   <Badge variant="outline" data-testid="badge-subcategory">{detail.subCategoryLabel.name}</Badge>
++                 )}
++                 {detail.brandLabel && (
++                   <Badge variant="outline" className="text-xs" data-testid="badge-brand">{detail.brandLabel.name}</Badge>
++                 )}
++               </div>
++ 
++               {/* Rating */}
++               {detail.rating && (
++                 <div className="flex items-center gap-2">
++                   <StarRating rating={detail.rating} size="md" />
++                   <span className="text-sm font-semibold">{detail.rating.toFixed(1)}</span>
++                   <span className="text-xs text-muted-foreground">({detail.supplierCount} supplier{detail.supplierCount !== 1 ? "s" : ""})</span>
++                 </div>
++               )}
++ 
++               {/* Description */}
++               {detail.description && (
++                 <p className="text-sm text-muted-foreground leading-relaxed">{detail.description}</p>
++               )}
++ 
++               {/* Location */}
++               <div className="border border-border rounded-xl p-4 space-y-3">
++                 <div className="flex items-center justify-between">
++                   <span className="text-sm font-semibold flex items-center gap-1.5">
++                     <MapPin className="w-4 h-4 text-primary" /> Delivery Location
++                   </span>
++                   <div className="relative">
++                     <button
++                       onClick={() => setLocationOpen(o => !o)}
++                       className="flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/30 bg-primary/5 px-3 py-1 rounded-full hover:bg-primary/10 transition-colors"
++                       data-testid="button-detail-location"
++                     >
++                       {location} <ChevronDown className="w-3.5 h-3.5" />
++                     </button>
++                     {locationOpen && (
++                       <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-xl shadow-lg z-50 min-w-36 overflow-hidden">
++                         {[DEFAULT_LOCATION, ...LOCATION_OPTIONS].map(loc => (
++                           <button
++                             key={loc}
++                             onClick={() => { onLocationChange(loc); setLocationOpen(false); }}
++                             className={`w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors ${location === loc ? "bg-primary/10 font-semibold text-primary" : ""}`}
++                             data-testid={`option-detail-loc-${loc}`}
++                           >
++                             {loc}
++                           </button>
++                         ))}
++                       </div>
++                     )}
++                   </div>
++                 </div>
++                 <div className="flex flex-wrap gap-1.5">
++                   {[DEFAULT_LOCATION, ...LOCATION_OPTIONS].map(loc => (
++                     <Badge
++                       key={loc}
++                       variant={location === loc ? "default" : "outline"}
++                       className="text-xs cursor-pointer"
++                       onClick={() => onLocationChange(loc)}
++                       data-testid={`badge-city-${loc}`}
++                     >
++                       {loc}
++                     </Badge>
++                   ))}
++                 </div>
++               </div>
++ 
++               {/* Variants */}
++               {(allFlavorsInListings.length > 0 || allSizesInListings.length > 0) && (
++                 <div className="space-y-3">
++                   <h4 className="text-sm font-semibold">Product Variants</h4>
++                   {allFlavorsInListings.length > 0 && (
++                     <div>
++                       <p className="text-xs text-muted-foreground mb-1.5">Flavor</p>
++                       <div className="flex flex-wrap gap-2">
++                         {allFlavorsInListings.map(f => (
++                           <button
++                             key={f.id}
++                             onClick={() => setSelectedFlavorId(id => id === f.id ? null : f.id)}
++                             className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${selectedFlavorId === f.id ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50"}`}
++                             data-testid={`button-flavor-${f.id}`}
++                           >
++                             {f.name}
++                           </button>
++                         ))}
++                       </div>
++                     </div>
++                   )}
++                   {allSizesInListings.length > 0 && (
++                     <div>
++                       <p className="text-xs text-muted-foreground mb-1.5">Size</p>
++                       <div className="flex flex-wrap gap-2">
++                         {allSizesInListings.map(s => (
++                           <button
++                             key={s.id}
++                             onClick={() => setSelectedSizeId(id => id === s.id ? null : s.id)}
++                             className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${selectedSizeId === s.id ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50"}`}
++                             data-testid={`button-size-${s.id}`}
++                           >
++                             {s.name}
++                           </button>
++                         ))}
++                       </div>
++                     </div>
++                   )}
++                 </div>
++               )}
++ 
++               {/* Quantity */}
++               <div className="flex items-center gap-3">
++                 <span className="text-sm font-semibold">Quantity</span>
++                 <div className="flex items-center gap-2 border border-border rounded-xl overflow-hidden">
++                   <button onClick={() => handleQtyChange(-1)} className="w-9 h-9 flex items-center justify-center hover:bg-muted transition-colors" data-testid="button-qty-minus">
++                     <Minus className="w-3.5 h-3.5" />
++                   </button>
++                   <span className="w-10 text-center font-bold text-sm" data-testid="text-qty">{qty}</span>
++                   <button onClick={() => handleQtyChange(1)} className="w-9 h-9 flex items-center justify-center hover:bg-muted transition-colors" data-testid="button-qty-plus">
++                     <Plus className="w-3.5 h-3.5" />
++                   </button>
++                 </div>
++                 <span className="text-xs text-muted-foreground">
++                   {selectedSupplierListing?.stock ?? detail.totalStock} units in stock
++                 </span>
++               </div>
++ 
++               {/* Best Offer */}
++               {bestOffer && (
++                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
++                   <h4 className="text-sm font-bold text-primary flex items-center gap-1.5">
++                     <Star className="w-4 h-4 fill-primary" /> Best Offer
++                   </h4>
++                   <div className="space-y-2 text-sm">
++                     <div className="flex justify-between">
++                       <span className="text-muted-foreground">Supplier</span>
++                       <span className="font-semibold">{bestOffer.supplier.name}</span>
++                     </div>
++                     <div className="flex justify-between">
++                       <span className="text-muted-foreground">Location</span>
++                       <span className="font-medium">{location}</span>
++                     </div>
++                     {bestOffer.supplier.email && (
++                       <div className="flex justify-between">
++                         <span className="text-muted-foreground">Contact</span>
++                         <span className="font-medium text-xs">{bestOffer.supplier.email}</span>
++                       </div>
++                     )}
++                     <div className="flex justify-between">
++                       <span className="text-muted-foreground">Unit Price</span>
++                       <span className="font-bold text-primary">{formatCurrency(bestOffer.price)}</span>
++                     </div>
++                     <div className="flex justify-between border-t border-primary/20 pt-2">
++                       <span className="text-muted-foreground">Total ({qty} units)</span>
++                       <span className="font-bold text-lg text-primary">{formatCurrency(bestOffer.price * qty)}</span>
++                     </div>
++                   </div>
++                 </div>
++               )}
++ 
++               {/* All Suppliers */}
++               {detail.listings.length > 0 && (
++                 <div className="space-y-3">
++                   <h4 className="text-sm font-semibold flex items-center gap-1.5">
++                     <Building2 className="w-4 h-4" /> All Suppliers ({detail.listings.length})
++                   </h4>
++                   <div className="space-y-2">
++                     {detail.listings.map(listing => {
++                       const isBest = listing.id === bestOffer?.id;
++                       const isSelected = selectedSupplierId === listing.supplierId;
++                       return (
++                         <div
++                           key={listing.id}
++                           onClick={() => setSelectedSupplierId(id => id === listing.supplierId ? null : listing.supplierId)}
++                           className={`border rounded-xl p-3 cursor-pointer transition-all ${isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}
++                           data-testid={`card-supplier-${listing.supplierId}`}
++                         >
++                           <div className="flex items-start justify-between gap-2">
++                             <div className="min-w-0 flex-1">
++                               <div className="flex items-center gap-1.5 flex-wrap">
++                                 <span className="font-semibold text-sm truncate">{listing.supplier.name}</span>
++                                 {isBest && <Badge className="text-xs px-1.5 py-0 h-5 bg-amber-500 text-white border-0">Best Price</Badge>}
++                                 {isSelected && <Badge className="text-xs px-1.5 py-0 h-5">Selected</Badge>}
++                               </div>
++                               <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
++                                 <span>{location}</span>
++                                 <span>·</span>
++                                 <span className={`font-medium ${listing.stock < 10 ? "text-amber-600" : "text-green-600"}`}>
++                                   {listing.stock} units
++                                 </span>
++                               </div>
++                               {/* Available variants summary */}
++                               {((listing.availableSizeIds?.length ?? 0) > 0 || (listing.availableFlavorIds?.length ?? 0) > 0) && (
++                                 <div className="flex flex-wrap gap-1 mt-1.5">
++                                   {(listing.availableSizeIds ?? []).map(sid => {
++                                     const label = detail.sizeLabels?.find((s: any) => s.id === sid);
++                                     return label ? <span key={sid} className="text-xs bg-secondary px-1.5 py-0.5 rounded">{label.name}</span> : null;
++                                   })}
++                                   {(listing.availableFlavorIds ?? []).map(fid => {
++                                     const label = detail.flavorLabels?.find((f: any) => f.id === fid);
++                                     return label ? <span key={fid} className="text-xs bg-secondary px-1.5 py-0.5 rounded">{label.name}</span> : null;
++                                   })}
++                                 </div>
++                               )}
++                             </div>
++                             <div className="text-right shrink-0">
++                               <p className="font-bold text-base text-primary">{formatCurrency(listing.price)}</p>
++                               <p className="text-xs text-muted-foreground">per unit</p>
++                             </div>
++                           </div>
++                         </div>
++                       );
++                     })}
++                   </div>
++                 </div>
++               )}
++ 
++               {/* Add to Cart */}
++               <div className="sticky bottom-0 bg-background/95 backdrop-blur-sm pt-4 border-t border-border">
++                 <div className="flex items-center justify-between mb-3">
++                   <div>
++                     <p className="text-xs text-muted-foreground">
++                       {selectedSupplierId ? "Selected supplier" : "Best offer"} · {qty} unit{qty !== 1 ? "s" : ""}
++                     </p>
++                     <p className="text-2xl font-bold text-primary">{formatCurrency(effectivePrice * qty)}</p>
++                   </div>
++                   <Button
++                     onClick={handleAddToCart}
++                     className="px-6 gap-2 shadow-lg shadow-primary/25"
++                     data-testid="button-add-to-cart-detail"
++                   >
++                     <ShoppingCart className="w-4 h-4" /> Add to Cart
++                   </Button>
++                 </div>
++               </div>
++             </div>
++           </>
++         )}
++       </SheetContent>
++     </Sheet>
++   );
++ }
++ 
++ // ── Main Page ─────────────────────────────────────────────────────────────────
++ 
++ export default function BrowseProducts() {
++   const scrollRef = useRef<HTMLDivElement>(null);
++   const { addItem, items } = useCart();
++   const { toast } = useToast();
++ 
++   // Location (persisted to localStorage)
++   const [location, setLocation] = useState<string>(() => localStorage.getItem(LOCATION_KEY) || DEFAULT_LOCATION);
++   const [locationOpen, setLocationOpen] = useState(false);
++ 
++   // Filters
++   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
++   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<number | null>(null);
++   const [selectedFlavorId, setSelectedFlavorId] = useState<number | null>(null);
++   const [selectedSizeId, setSelectedSizeId] = useState<number | null>(null);
++   const [selectedBrandId, setSelectedBrandId] = useState<number | null>(null);
++   const [showPromotion, setShowPromotion] = useState(false);
++   const [showTopRated, setShowTopRated] = useState(false);
++   const [sortBy, setSortBy] = useState("recommended");
++   const [search, setSearch] = useState("");
++ 
++   // Detail
++   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
++ 
++   // ── Queries ──────────────────────────────────────────────────────────────
++ 
++   const { data: availableCategories = [] } = useQuery<{ id: number; name: string; icon: string | null; productCount: number }[]>({
++     queryKey: ["/api/cafe/marketplace/categories"],
++     queryFn: () => fetchJson("/api/cafe/marketplace/categories"),
++   });
++ 
++   const { data: subCategories = [] } = useQuery<any[]>({
++     queryKey: ["/api/subcategories", selectedCategoryId],
++     queryFn: () => fetchJson(buildUrl("/api/subcategories", { categoryId: selectedCategoryId })),
++   });
++ 
++   const { data: availableFlavors = [] } = useQuery<any[]>({
++     queryKey: ["/api/flavors", selectedCategoryId, selectedSubCategoryId],
++     queryFn: () => fetchJson(buildUrl("/api/flavors", {
++       subCategoryId: selectedSubCategoryId,
++       categoryId: selectedSubCategoryId ? null : selectedCategoryId,
++     })),
++   });
++ 
++   const { data: availableSizes = [] } = useQuery<any[]>({
++     queryKey: ["/api/sizes", selectedCategoryId, selectedSubCategoryId],
++     queryFn: () => fetchJson(buildUrl("/api/sizes", {
++       subCategoryId: selectedSubCategoryId,
++       categoryId: selectedSubCategoryId ? null : selectedCategoryId,
++     })),
++   });
++ 
++   const { data: availableBrands = [] } = useQuery<any[]>({
++     queryKey: ["/api/brands", selectedCategoryId, selectedSubCategoryId],
++     queryFn: () => fetchJson(buildUrl("/api/brands", {
++       subCategoryId: selectedSubCategoryId,
++       categoryId: selectedSubCategoryId ? null : selectedCategoryId,
++     })),
++   });
++ 
++   const { data: products = [], isLoading } = useQuery<MarketplaceProduct[]>({
++     queryKey: ["/api/cafe/marketplace", selectedCategoryId, selectedSubCategoryId, selectedFlavorId, selectedSizeId, selectedBrandId, search],
++     queryFn: () => fetchJson(buildUrl("/api/cafe/marketplace", {
++       categoryId: selectedCategoryId,
++       subCategoryId: selectedSubCategoryId,
++       flavorId: selectedFlavorId,
++       sizeId: selectedSizeId,
++       brandId: selectedBrandId,
++       search: search || null,
++     })),
++   });
++ 
++   // ── Derived state ────────────────────────────────────────────────────────
++ 
++   const sortedProducts = useMemo(() => {
++     let result = [...products];
++     if (showTopRated) result = result.filter(p => (p.rating ?? 0) >= 4.7);
++     switch (sortBy) {
++       case "top_rated":
++       case "ratings":
++         result.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
++         break;
++       case "delivery_fee":
++         result.sort((a, b) => a.cheapestPrice - b.cheapestPrice);
++         break;
++       default:
++         result.sort((a, b) => (b.supplierCount * (b.rating ?? 4)) - (a.supplierCount * (a.rating ?? 4)));
++     }
++     return result;
++   }, [products, showTopRated, sortBy]);
++ 
++   const hasActiveFilters = !!(selectedSubCategoryId || selectedFlavorId || selectedSizeId || selectedBrandId || showPromotion || showTopRated || search || sortBy !== "recommended");
++ 
++   // ── Handlers ─────────────────────────────────────────────────────────────
++ 
++   const handleLocationChange = useCallback((loc: string) => {
++     setLocation(loc);
++     localStorage.setItem(LOCATION_KEY, loc);
++     setLocationOpen(false);
++   }, []);
++ 
++   const handleCategorySelect = useCallback((catId: number | null) => {
++     setSelectedCategoryId(catId);
++     setSelectedSubCategoryId(null);
++     setSelectedFlavorId(null);
++     setSelectedSizeId(null);
++     setSelectedBrandId(null);
++   }, []);
++ 
++   const handleReset = useCallback(() => {
++     setSelectedCategoryId(null);
++     setSelectedSubCategoryId(null);
++     setSelectedFlavorId(null);
++     setSelectedSizeId(null);
++     setSelectedBrandId(null);
++     setShowPromotion(false);
++     setShowTopRated(false);
++     setSortBy("recommended");
++     setSearch("");
++   }, []);
++ 
++   const handleQuickAdd = useCallback((product: MarketplaceProduct) => {
++     addItem({ ...product, price: product.cheapestPrice } as any, 1);
++     toast({ title: "Added to cart", description: `${product.name} added.` });
++   }, [addItem, toast]);
++ 
++   const scroll = (dir: "left" | "right") => {
++     if (scrollRef.current) scrollRef.current.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" });
++   };
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
++ 
++   const getQtyInCart = (id: number) => items.find(i => i.product.id === id)?.quantity ?? 0;
++ 
++   // ── Render ────────────────────────────────────────────────────────────────
+  
+    return (
+++<<<<<<< HEAD
+ +    <div className="flex flex-col gap-6 p-6">
+ +      <div>
+ +        <h1 className="text-2xl font-bold text-foreground">Browse Products</h1>
+ +        <p className="text-sm text-muted-foreground mt-0.5">Discover products from verified suppliers. Click any product to compare suppliers and add to cart.</p>
+ +      </div>
+ +
+ +      {/* Filters */}
+ +      <div className="flex flex-wrap gap-2 items-center">
+ +        <div className="relative flex-1 min-w-[200px]">
+ +          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+ +          <Input
+ +            className="pl-9 h-9"
+ +            placeholder="Search products…"
+ +            value={search}
+ +            onChange={e => setSearch(e.target.value)}
+ +            data-testid="input-product-search"
+ +          />
+ +        </div>
+ +        <Select value={categoryId} onValueChange={v => setCategoryId(v === "__all__" ? "" : v)}>
+ +          <SelectTrigger className="h-9 min-w-[150px]" data-testid="select-category">
+ +            <SelectValue placeholder="All Categories" />
+ +          </SelectTrigger>
+ +          <SelectContent>
+ +            <SelectItem value="__all__">All Categories</SelectItem>
+ +            {categories.map(c => (
+ +              <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>
+ +            ))}
+ +          </SelectContent>
+ +        </Select>
+ +        {(search || categoryId) && (
+ +          <button
+ +            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+ +            onClick={() => { setSearch(""); setCategoryId(""); }}
+ +          >
+ +            Clear filters
+ +          </button>
+ +        )}
+ +      </div>
+ +
+ +      {/* Grid */}
+ +      {isLoading ? (
+ +        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+ +          {[...Array(10)].map((_, i) => <Skeleton key={i} className="h-64 rounded-2xl" />)}
+ +        </div>
+ +      ) : products.length === 0 ? (
+ +        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+ +          <Package className="w-14 h-14 text-muted-foreground opacity-30" />
+ +          <div>
+ +            <p className="font-semibold text-lg">No products available</p>
+ +            <p className="text-sm text-muted-foreground mt-1">
+ +              {search || categoryId ? "Try adjusting your search or filters." : "Suppliers haven't listed any products with variants yet."}
+ +            </p>
+ +          </div>
+ +        </div>
+ +      ) : (
+ +        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+ +          {products.map(product => (
+ +            <Card
+ +              key={product.id}
+ +              data-testid={`card-product-${product.id}`}
+ +              className="group cursor-pointer rounded-2xl border-border/50 shadow-sm hover:shadow-lg transition-all hover:-translate-y-0.5 overflow-hidden flex flex-col"
+ +              onClick={() => navigate(`/products/${product.id}`)}
+ +            >
+ +              <div className="relative aspect-square bg-secondary/30 overflow-hidden">
+ +                {product.imageUrl ? (
+ +                  <img
+ +                    src={product.imageUrl}
+ +                    alt={product.name}
+ +                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+ +                  />
+ +                ) : (
+ +                  <div className="w-full h-full flex items-center justify-center">
+ +                    <Package className="w-10 h-10 text-muted-foreground opacity-30" />
+ +                  </div>
+ +                )}
+ +                {product.category && (
+ +                  <div className="absolute top-2 left-2">
+ +                    <Badge variant="secondary" className="bg-white/90 text-foreground backdrop-blur-sm text-xs font-semibold shadow-sm">
+ +                      {product.category}
+ +                    </Badge>
+ +                  </div>
+ +                )}
+ +              </div>
+ +              <CardContent className="p-4 flex-1 flex flex-col gap-2">
+ +                <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+ +                  {product.name}
+ +                </h3>
+ +                {product.description && (
+ +                  <p className="text-xs text-muted-foreground line-clamp-2">{product.description}</p>
+ +                )}
+ +                <div className="mt-auto pt-2 border-t border-border/30 flex items-center justify-between">
+ +                  <div>
+ +                    <p className="text-xs text-muted-foreground">From</p>
+ +                    <p className="font-bold text-base">
+ +                      {product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}
+ +                    </p>
+ +                  </div>
+ +                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+ +                    <Store className="w-3.5 h-3.5" />
+ +                    <span>{product.supplierCount} supplier{product.supplierCount !== 1 ? "s" : ""}</span>
+ +                    <ChevronRight className="w-3 h-3" />
+ +                  </div>
+ +                </div>
+ +              </CardContent>
+ +            </Card>
+ +          ))}
+ +        </div>
+ +      )}
+++=======
++     <div className="flex flex-col gap-5 p-6">
++       {/* Header */}
++       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
++         <div>
++           <h1 className="text-2xl font-bold tracking-tight">Marketplace</h1>
++           <p className="text-muted-foreground text-sm mt-0.5">Discover premium coffee and supplies from top suppliers.</p>
++         </div>
++         <div className="relative w-full md:w-72">
++           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
++           <Input
++             placeholder="Search products..."
++             value={search}
++             onChange={e => setSearch(e.target.value)}
++             className="pl-9"
++             data-testid="input-search-products"
++           />
++         </div>
++       </div>
++ 
++       {/* Location Button */}
++       <div className="relative self-start">
++         <button
++           onClick={() => setLocationOpen(o => !o)}
++           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-background hover:bg-muted transition-colors shadow-sm text-sm font-medium"
++           data-testid="button-location"
++         >
++           <MapPin className="w-4 h-4 text-primary" />
++           <span>{location}</span>
++           <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${locationOpen ? "rotate-180" : ""}`} />
++         </button>
++         {locationOpen && (
++           <div className="absolute left-0 top-full mt-1.5 bg-popover border border-border rounded-xl shadow-xl z-50 min-w-44 overflow-hidden">
++             <div className="px-3 py-2 border-b border-border">
++               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Select City</p>
++             </div>
++             {[DEFAULT_LOCATION, ...LOCATION_OPTIONS].map(loc => (
++               <button
++                 key={loc}
++                 onClick={() => handleLocationChange(loc)}
++                 className={`w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors ${location === loc ? "bg-primary/10 font-semibold text-primary" : ""}`}
++                 data-testid={`option-location-${loc}`}
++               >
++                 {location === loc && <span className="mr-2">✓</span>}
++                 {loc}
++               </button>
++             ))}
++           </div>
++         )}
++       </div>
++ 
++       {/* Category Slider */}
++       <div className="relative flex items-center gap-1">
++         <button
++           onClick={() => scroll("left")}
++           className="shrink-0 w-7 h-7 rounded-full border border-border bg-background flex items-center justify-center shadow-sm hover:bg-muted transition-colors"
++           data-testid="button-scroll-left"
++         >
++           <ChevronLeft className="w-4 h-4" />
++         </button>
++         <div
++           ref={scrollRef}
++           className="flex gap-2 overflow-x-auto scroll-smooth pb-1 flex-1 no-scrollbar"
++           style={{ scrollbarWidth: "none" }}
++         >
++           <button
++             key="all"
++             data-testid="button-cat-all"
++             onClick={() => handleCategorySelect(null)}
++             className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium border transition-all whitespace-nowrap ${
++               selectedCategoryId === null
++                 ? "bg-primary text-primary-foreground border-primary shadow-sm"
++                 : "bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
++             }`}
++           >
++             All
++           </button>
++           {availableCategories.map(c => (
++             <button
++               key={c.id}
++               data-testid={`button-cat-${c.id}`}
++               onClick={() => handleCategorySelect(c.id)}
++               className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium border transition-all whitespace-nowrap flex items-center gap-1.5 ${
++                 selectedCategoryId === c.id
++                   ? "bg-primary text-primary-foreground border-primary shadow-sm"
++                   : "bg-background border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
++               }`}
++             >
++               {c.icon && <span>{c.icon}</span>}
++               {c.name}
++             </button>
++           ))}
++         </div>
++         <button
++           onClick={() => scroll("right")}
++           className="shrink-0 w-7 h-7 rounded-full border border-border bg-background flex items-center justify-center shadow-sm hover:bg-muted transition-colors"
++           data-testid="button-scroll-right"
++         >
++           <ChevronRight className="w-4 h-4" />
++         </button>
++       </div>
++ 
++       {/* Filter Bar */}
++       <div className="flex flex-wrap items-center gap-2">
++         {/* SubCategory */}
++         {subCategories.length > 0 && (
++           <Select
++             value={selectedSubCategoryId ? String(selectedSubCategoryId) : "all"}
++             onValueChange={v => { setSelectedSubCategoryId(v === "all" ? null : parseInt(v)); setSelectedFlavorId(null); setSelectedSizeId(null); setSelectedBrandId(null); }}
++           >
++             <SelectTrigger className="h-8 w-44 text-xs" data-testid="select-subcategory">
++               <SelectValue placeholder="Subcategory" />
++             </SelectTrigger>
++             <SelectContent>
++               <SelectItem value="all">All Subcategories</SelectItem>
++               {subCategories.map((s: any) => (
++                 <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
++               ))}
++             </SelectContent>
++           </Select>
++         )}
++ 
++         {/* Flavor */}
++         {availableFlavors.length > 0 && (
++           <Select
++             value={selectedFlavorId ? String(selectedFlavorId) : "all"}
++             onValueChange={v => setSelectedFlavorId(v === "all" ? null : parseInt(v))}
++           >
++             <SelectTrigger className="h-8 w-36 text-xs" data-testid="select-flavor">
++               <SelectValue placeholder="Flavor" />
++             </SelectTrigger>
++             <SelectContent>
++               <SelectItem value="all">All Flavors</SelectItem>
++               {availableFlavors.map((f: any) => (
++                 <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>
++               ))}
++             </SelectContent>
++           </Select>
++         )}
++ 
++         {/* Size */}
++         {availableSizes.length > 0 && (
++           <Select
++             value={selectedSizeId ? String(selectedSizeId) : "all"}
++             onValueChange={v => setSelectedSizeId(v === "all" ? null : parseInt(v))}
++           >
++             <SelectTrigger className="h-8 w-32 text-xs" data-testid="select-size">
++               <SelectValue placeholder="Size" />
++             </SelectTrigger>
++             <SelectContent>
++               <SelectItem value="all">All Sizes</SelectItem>
++               {availableSizes.map((s: any) => (
++                 <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
++               ))}
++             </SelectContent>
++           </Select>
++         )}
++ 
++         {/* Brand */}
++         {availableBrands.length > 0 && (
++           <Select
++             value={selectedBrandId ? String(selectedBrandId) : "all"}
++             onValueChange={v => setSelectedBrandId(v === "all" ? null : parseInt(v))}
++           >
++             <SelectTrigger className="h-8 w-32 text-xs" data-testid="select-brand">
++               <SelectValue placeholder="Brand" />
++             </SelectTrigger>
++             <SelectContent>
++               <SelectItem value="all">All Brands</SelectItem>
++               {availableBrands.map((b: any) => (
++                 <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
++               ))}
++             </SelectContent>
++           </Select>
++         )}
++ 
++         {/* Promotion Toggle */}
++         <button
++           onClick={() => setShowPromotion(v => !v)}
++           className={`h-8 px-3 rounded-lg text-xs font-medium border transition-all ${showPromotion ? "bg-orange-500 text-white border-orange-500" : "border-border hover:border-orange-400/50 text-muted-foreground"}`}
++           data-testid="button-filter-promotion"
++         >
++           🎁 Promotions
++         </button>
++ 
++         {/* Top Rated Toggle */}
++         <button
++           onClick={() => setShowTopRated(v => !v)}
++           className={`h-8 px-3 rounded-lg text-xs font-medium border transition-all flex items-center gap-1 ${showTopRated ? "bg-amber-500 text-white border-amber-500" : "border-border hover:border-amber-400/50 text-muted-foreground"}`}
++           data-testid="button-filter-top-rated"
++         >
++           <Star className="w-3 h-3" /> Top Rated
++         </button>
++ 
++         {/* Sort */}
++         <Select value={sortBy} onValueChange={setSortBy}>
++           <SelectTrigger className="h-8 w-52 text-xs ml-auto" data-testid="select-sort">
++             <SlidersHorizontal className="w-3 h-3 mr-1" />
++             <SelectValue placeholder="Sort by" />
++           </SelectTrigger>
++           <SelectContent>
++             {SORT_OPTIONS.map(o => (
++               <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
++             ))}
++           </SelectContent>
++         </Select>
++ 
++         {/* Reset */}
++         {hasActiveFilters && (
++           <button
++             onClick={handleReset}
++             className="h-8 px-3 rounded-lg text-xs font-medium border border-border hover:border-destructive/50 text-muted-foreground hover:text-destructive transition-all flex items-center gap-1"
++             data-testid="button-reset-filters"
++           >
++             <RotateCcw className="w-3 h-3" /> Reset
++           </button>
++         )}
++ 
++         <span className="text-xs text-muted-foreground">
++           {sortedProducts.length} product{sortedProducts.length !== 1 ? "s" : ""}
++         </span>
++       </div>
++ 
++       {/* Product Grid */}
++       {isLoading ? (
++         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
++           {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
++             <div key={i} className="rounded-2xl overflow-hidden border border-border/50">
++               <Skeleton className="h-44 w-full rounded-none" />
++               <div className="p-4 space-y-2">
++                 <Skeleton className="h-4 w-3/4" />
++                 <Skeleton className="h-3 w-full" />
++                 <Skeleton className="h-3 w-1/2" />
++               </div>
++             </div>
++           ))}
++         </div>
++       ) : sortedProducts.length === 0 ? (
++         <div className="flex flex-col items-center justify-center py-24 text-center">
++           <Info className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
++           <h3 className="text-xl font-bold">No products found</h3>
++           <p className="text-muted-foreground max-w-sm mt-2">
++             {products.length === 0
++               ? "No supplier listings are available yet. Check back soon."
++               : "Try adjusting your filters or search terms."}
++           </p>
++           {hasActiveFilters && (
++             <Button variant="outline" size="sm" className="mt-4" onClick={handleReset} data-testid="button-reset-empty">
++               <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset Filters
++             </Button>
++           )}
++         </div>
++       ) : (
++         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
++           {sortedProducts.map(product => {
++             const inCart = getQtyInCart(product.id);
++             return (
++               <Card
++                 key={product.id}
++                 className="overflow-hidden rounded-2xl border-border/50 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group flex flex-col cursor-pointer"
++                 onClick={() => setSelectedProductId(product.id)}
++                 data-testid={`card-product-${product.id}`}
++               >
++                 <div className="relative aspect-square overflow-hidden bg-secondary">
++                   {product.imageUrl ? (
++                     <img
++                       src={product.imageUrl}
++                       alt={product.name}
++                       className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
++                     />
++                   ) : (
++                     <div className="w-full h-full flex items-center justify-center bg-muted">
++                       <Package className="w-12 h-12 text-muted-foreground/30" />
++                     </div>
++                   )}
++                   <div className="absolute top-3 left-3">
++                     <Badge variant="secondary" className="bg-white/90 text-foreground backdrop-blur-sm shadow-sm font-semibold text-xs">
++                       {product.categoryLabel?.name ?? product.category}
++                     </Badge>
++                   </div>
++                   {product.rating && (
++                     <div className="absolute top-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-2 py-0.5 shadow-sm">
++                       <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
++                       <span className="text-xs font-bold">{product.rating.toFixed(1)}</span>
++                     </div>
++                   )}
++                   {product.supplierCount > 1 && (
++                     <div className="absolute bottom-3 left-3">
++                       <Badge className="bg-black/70 text-white backdrop-blur-sm text-xs border-0 font-normal">
++                         {product.supplierCount} suppliers
++                       </Badge>
++                     </div>
++                   )}
++                 </div>
++ 
++                 <CardHeader className="p-4 pb-2 flex-grow">
++                   <h3 className="font-bold text-base leading-tight line-clamp-1 group-hover:text-primary transition-colors">
++                     {product.name}
++                   </h3>
++                   {product.subCategoryLabel && (
++                     <p className="text-xs text-muted-foreground mt-0.5">{product.subCategoryLabel.name}</p>
++                   )}
++                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{product.description}</p>
++                 </CardHeader>
++ 
++                 <CardFooter
++                   className="p-4 pt-0 flex items-center justify-between border-t border-border/10 mt-3"
++                   onClick={e => e.stopPropagation()}
++                 >
++                   <div>
++                     <p className="text-xs text-muted-foreground mb-0.5">Best price</p>
++                     <p className="font-bold text-lg">{formatCurrency(product.cheapestPrice)}</p>
++                   </div>
++                   <Button
++                     data-testid={`button-add-cart-${product.id}`}
++                     onClick={e => { e.stopPropagation(); handleQuickAdd(product); }}
++                     size="sm"
++                     className={`rounded-xl gap-1.5 shadow-md transition-all ${inCart > 0 ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25" : "shadow-primary/25"}`}
++                   >
++                     {inCart > 0 ? `${inCart} in Cart` : <><ShoppingCart className="w-3.5 h-3.5" /> Add</>}
++                   </Button>
++                 </CardFooter>
++               </Card>
++             );
++           })}
++         </div>
++       )}
++ 
++       {/* Product Detail Sheet */}
++       <ProductDetailSheet
++         productId={selectedProductId}
++         open={!!selectedProductId}
++         onClose={() => setSelectedProductId(null)}
++         location={location}
++         onLocationChange={handleLocationChange}
++       />
++ 
++       {/* Click-outside to close location dropdown */}
++       {locationOpen && (
++         <div className="fixed inset-0 z-40" onClick={() => setLocationOpen(false)} />
++       )}
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
+      </div>
+    );
+  }
+diff --cc server/routes.ts
+index 724e0d2,87568ef..0000000
+--- a/server/routes.ts
++++ b/server/routes.ts
+@@@ -627,13 -601,36 +627,45 @@@ export async function registerRoutes(ht
+      } catch { res.status(500).json({ message: "Error" }); }
+    });
+  
+++<<<<<<< HEAD
+ +  // ── Marketplace (cafe browsing — admin products with variant pricing) ────────
+ +
+ +  app.get("/api/marketplace", async (req, res) => {
+++=======
++   // ── Cafe Marketplace ────────────────────────────────────────────────────────
++ 
++   app.get("/api/cafe/marketplace/categories", async (req, res) => {
++     try {
++       res.json(await storage.getMarketplaceCategories());
++     } catch (e) {
++       console.error(e);
++       res.status(500).json({ message: "Error" });
++     }
++   });
++ 
++   app.get("/api/cafe/marketplace/:productId", async (req, res) => {
++     try {
++       const product = await storage.getMarketplaceProductDetail(parseInt(req.params.productId));
++       if (!product) return res.status(404).json({ message: "Not found" });
++       res.json(product);
++     } catch (e) {
++       console.error(e);
++       res.status(500).json({ message: "Error" });
++     }
++   });
++ 
++   app.get("/api/cafe/marketplace", async (req, res) => {
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
+      try {
+        const filters = {
+          categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined,
+          subCategoryId: req.query.subCategoryId ? parseInt(req.query.subCategoryId as string) : undefined,
+++<<<<<<< HEAD
+++=======
++         flavorId: req.query.flavorId ? parseInt(req.query.flavorId as string) : undefined,
++         sizeId: req.query.sizeId ? parseInt(req.query.sizeId as string) : undefined,
++         brandId: req.query.brandId ? parseInt(req.query.brandId as string) : undefined,
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
+          search: req.query.search as string | undefined,
+        };
+        res.json(await storage.getMarketplaceProducts(filters));
+@@@ -643,48 -640,6 +675,51 @@@
+      }
+    });
+  
+++<<<<<<< HEAD
+ +  app.get("/api/marketplace/:productId", async (req, res) => {
+ +    try {
+ +      const product = await storage.getMarketplaceProduct(parseInt(req.params.productId));
+ +      if (!product) return res.status(404).json({ message: "Not found" });
+ +      res.json(product);
+ +    } catch { res.status(500).json({ message: "Error" }); }
+ +  });
+ +
+ +  // ── Supplier Variant Endpoints ─────────────────────────────────────────────
+ +
+ +  app.get("/api/supplier/listings/:id/variants", requireAuth, async (req, res) => {
+ +    try {
+ +      const user = await storage.getUser(req.session.userId!);
+ +      if (!user || user.role !== 'SUPPLIER') return res.status(403).json({ message: 'Forbidden' });
+ +      res.json(await storage.getVariantsByListingId(parseInt(req.params.id)));
+ +    } catch { res.status(500).json({ message: "Error" }); }
+ +  });
+ +
+ +  app.post("/api/supplier/listings/:id/variants", requireAuth, async (req, res) => {
+ +    try {
+ +      const user = await storage.getUser(req.session.userId!);
+ +      if (!user || user.role !== 'SUPPLIER') return res.status(403).json({ message: 'Forbidden' });
+ +      const { variants } = z.object({
+ +        variants: z.array(z.object({
+ +          flavorId: z.number().nullable().optional(),
+ +          sizeId: z.number().nullable().optional(),
+ +          price: z.number().min(0),
+ +          quantity: z.number().min(0),
+ +        }))
+ +      }).parse(req.body);
+ +      res.json(await storage.saveVariants(parseInt(req.params.id), variants.map(v => ({
+ +        flavorId: v.flavorId ?? null,
+ +        sizeId: v.sizeId ?? null,
+ +        price: Math.round(v.price * 100),
+ +        quantity: v.quantity,
+ +      }))));
+ +    } catch (err) {
+ +      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+ +      else res.status(500).json({ message: "Error" });
+ +    }
+ +  });
+ +
+++=======
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
+    // Seed on startup (with delay to wait for DB pool to stabilise)
+    setTimeout(() => seedDatabase().catch(console.error), 3000);
+  
+diff --cc server/storage.ts
+index a18f5b8,c749c60..0000000
+--- a/server/storage.ts
++++ b/server/storage.ts
+@@@ -16,10 -14,9 +16,14 @@@ import 
+    type InsertBrand, type Brand, type BrandWithCount,
+    type SupplierCategoryMapping,
+    type InsertSupplierProductListing, type SupplierProductListing, type SupplierListingWithProduct,
+++<<<<<<< HEAD
+ +  type MarketplaceProduct, type MarketplaceListing, type MarketplaceVariant,
+ +  type CreateOrderItem,
+++=======
++   type MarketplaceProduct, type MarketplaceProductDetail,
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
+  } from "@shared/schema";
+- import { eq, and } from "drizzle-orm";
++ import { eq, and, gt, inArray } from "drizzle-orm";
+  
+  export interface IStorage {
+    getUser(id: number): Promise<User | undefined>;
+@@@ -637,109 -553,105 +646,211 @@@ export class DatabaseStorage implement
+      return listing;
+    }
+  
+++<<<<<<< HEAD
+ +  // ── Supplier Product Variants ──────────────────────────────────────────────
+ +
+ +  async getVariantsByListingId(listingId: number): Promise<SupplierVariantWithLabels[]> {
+ +    const variants = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
+ +    const tax = await buildTaxonomyMaps();
+ +    return variants.map(v => ({
+ +      ...v,
+ +      flavorName: v.flavorId ? (tax.allFlavs.find(f => f.id === v.flavorId)?.name ?? null) : null,
+ +      sizeName: v.sizeId ? (tax.allSizes.find(s => s.id === v.sizeId)?.name ?? null) : null,
+ +    }));
+ +  }
+ +
+ +  async saveVariants(listingId: number, variantInputs: { flavorId?: number | null; sizeId?: number | null; price: number; quantity: number }[]): Promise<SupplierVariantWithLabels[]> {
+ +    // Replace all variants for this listing
+ +    await db.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
+ +
+ +    if (variantInputs.length > 0) {
+ +      await db.insert(supplierProductVariants).values(variantInputs.map(v => ({
+ +        listingId,
+ +        flavorId: v.flavorId ?? null,
+ +        sizeId: v.sizeId ?? null,
+ +        price: v.price,
+ +        quantity: v.quantity,
+ +      })));
+ +    }
+ +
+ +    // Also update the listing's aggregate price/stock
+ +    const minPrice = variantInputs.length > 0 ? Math.min(...variantInputs.map(v => v.price)) : 0;
+ +    const totalStock = variantInputs.reduce((s, v) => s + v.quantity, 0);
+ +    await db.update(supplierProductListings).set({ price: minPrice, stock: totalStock }).where(eq(supplierProductListings.id, listingId));
+ +
+ +    return this.getVariantsByListingId(listingId);
+ +  }
+ +
+ +  // ── Marketplace ─────────────────────────────────────────────────────────────
+ +
+ +  async getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string }): Promise<MarketplaceProduct[]> {
+ +    let adminProds = await db.select().from(products).where(eq(products.isAdminProduct, true));
+ +    if (filters?.categoryId) adminProds = adminProds.filter(p => p.categoryId === filters.categoryId);
+ +    if (filters?.subCategoryId) adminProds = adminProds.filter(p => p.subCategoryId === filters.subCategoryId);
+ +    if (filters?.search) {
+ +      const q = filters.search.toLowerCase();
+ +      adminProds = adminProds.filter(p => p.name.toLowerCase().includes(q));
+ +    }
+ +
+ +    const tax = await buildTaxonomyMaps();
+ +    const allListings = await db.select().from(supplierProductListings);
+ +    const allVariants = await db.select().from(supplierProductVariants);
+ +    const allSuppliers = await db.select({ id: users.id, name: users.name }).from(users);
+ +
+ +    const result: MarketplaceProduct[] = [];
+ +
+ +    for (const p of adminProds) {
+ +      const productListings = allListings.filter(l => l.productId === p.id);
+ +      const enrichedListings: MarketplaceListing[] = [];
+ +
+ +      for (const listing of productListings) {
+ +        const listingVariants = allVariants.filter(v => v.listingId === listing.id && v.quantity > 0);
+ +        if (listingVariants.length === 0) continue;
+ +
+ +        const supplier = allSuppliers.find(s => s.id === listing.supplierId);
+ +        const variants: MarketplaceVariant[] = listingVariants.map(v => ({
+ +          id: v.id,
+ +          listingId: v.listingId,
+ +          flavorId: v.flavorId,
+ +          sizeId: v.sizeId,
+ +          flavorName: v.flavorId ? (tax.allFlavs.find(f => f.id === v.flavorId)?.name ?? null) : null,
+ +          sizeName: v.sizeId ? (tax.allSizes.find(s => s.id === v.sizeId)?.name ?? null) : null,
+ +          price: v.price,
+ +          quantity: v.quantity,
+ +        }));
+ +
+ +        enrichedListings.push({
+ +          id: listing.id,
+ +          supplierId: listing.supplierId,
+ +          supplierName: supplier?.name ?? 'Unknown',
+ +          variants,
+ +          totalStock: variants.reduce((s, v) => s + v.quantity, 0),
+ +          minPrice: Math.min(...variants.map(v => v.price)),
+ +        });
+ +      }
+ +
+ +      if (enrichedListings.length === 0) continue;
+ +
+ +      const enriched = await enrichProduct(p, tax);
+ +      const bestPrice = Math.min(...enrichedListings.map(l => l.minPrice));
+ +      const totalStock = enrichedListings.reduce((s, l) => s + l.totalStock, 0);
+ +
+ +      result.push({
+ +        ...enriched,
+ +        listings: enrichedListings,
+ +        bestPrice,
+ +        totalStock,
+ +        supplierCount: enrichedListings.length,
+ +      });
+ +    }
+ +
+ +    return result;
+ +  }
+ +
+ +  async getMarketplaceProduct(productId: number): Promise<MarketplaceProduct | undefined> {
+ +    const all = await this.getMarketplaceProducts();
+ +    return all.find(p => p.id === productId);
+++=======
++   // ── Cafe Marketplace ───────────────────────────────────────────────────────
++ 
++   async getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; flavorId?: number; sizeId?: number; brandId?: number; search?: string }): Promise<MarketplaceProduct[]> {
++     // Only listings with stock > 0
++     const allListings = await db.select().from(supplierProductListings).where(gt(supplierProductListings.stock, 0));
++     if (allListings.length === 0) return [];
++ 
++     const productIds = Array.from(new Set(allListings.map(l => l.productId)));
++     const tax = await buildTaxonomyMaps();
++ 
++     const allAdminProds = await db.select().from(products).where(
++       and(eq(products.isAdminProduct, true), inArray(products.id, productIds))
++     );
++ 
++     let filtered = allAdminProds;
++     if (filters?.categoryId) filtered = filtered.filter(p => p.categoryId === filters.categoryId);
++     if (filters?.subCategoryId) filtered = filtered.filter(p => p.subCategoryId === filters.subCategoryId);
++     if (filters?.flavorId) {
++       filtered = filtered.filter(p =>
++         p.flavorId === filters.flavorId || (p.flavorIds ?? []).includes(filters.flavorId!)
++       );
++     }
++     if (filters?.sizeId) {
++       filtered = filtered.filter(p =>
++         p.sizeId === filters.sizeId || (p.sizeIds ?? []).includes(filters.sizeId!)
++       );
++     }
++     if (filters?.brandId) filtered = filtered.filter(p => p.brandId === filters.brandId);
++     if (filters?.search) {
++       const q = filters.search.toLowerCase();
++       filtered = filtered.filter(p =>
++         p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)
++       );
++     }
++ 
++     return Promise.all(filtered.map(async p => {
++       const listings = allListings.filter(l => l.productId === p.id);
++       const cheapestPrice = Math.min(...listings.map(l => l.price));
++       const totalStock = listings.reduce((sum, l) => sum + l.stock, 0);
++       const enriched = await enrichProduct(p, tax);
++       // Deterministic mock rating (4.0–5.0 range based on id)
++       const rating = 4.0 + (p.id % 10) * 0.1;
++       return { ...enriched, cheapestPrice, totalStock, supplierCount: listings.length, rating };
++     }));
++   }
++ 
++   async getMarketplaceProductDetail(productId: number): Promise<MarketplaceProductDetail | undefined> {
++     const [p] = await db.select().from(products).where(eq(products.id, productId));
++     if (!p) return undefined;
++ 
++     const listings = await db.select().from(supplierProductListings).where(
++       and(eq(supplierProductListings.productId, productId), gt(supplierProductListings.stock, 0))
++     );
++ 
++     const tax = await buildTaxonomyMaps();
++     const enriched = await enrichProduct(p, tax);
++ 
++     const allSuppliers = await db.select({ id: users.id, name: users.name, email: users.email }).from(users);
++ 
++     const listingsWithSupplier = listings.map(l => ({
++       ...l,
++       supplier: allSuppliers.find(s => s.id === l.supplierId) ?? { id: l.supplierId, name: "Unknown", email: "" },
++     }));
++ 
++     const cheapestPrice = listings.length > 0 ? Math.min(...listings.map(l => l.price)) : 0;
++     const totalStock = listings.reduce((sum, l) => sum + l.stock, 0);
++     const rating = 4.0 + (p.id % 10) * 0.1;
++ 
++     return {
++       ...enriched,
++       cheapestPrice,
++       totalStock,
++       supplierCount: listings.length,
++       rating,
++       listings: listingsWithSupplier,
++     };
++   }
++ 
++   async getMarketplaceCategories(): Promise<{ id: number; name: string; icon: string | null; productCount: number }[]> {
++     const allListings = await db.select().from(supplierProductListings).where(gt(supplierProductListings.stock, 0));
++     if (allListings.length === 0) return [];
++ 
++     const productIds = Array.from(new Set(allListings.map(l => l.productId)));
++     const adminProds = await db.select({ id: products.id, categoryId: products.categoryId }).from(products).where(
++       and(eq(products.isAdminProduct, true), inArray(products.id, productIds))
++     );
++ 
++     const activeCatIds = new Set(adminProds.map(p => p.categoryId).filter(Boolean) as number[]);
++     if (activeCatIds.size === 0) return [];
++ 
++     const allCats = await db.select().from(categories).where(eq(categories.isActive, true));
++     return allCats
++       .filter(c => activeCatIds.has(c.id))
++       .map(c => ({
++         id: c.id,
++         name: c.name,
++         icon: c.icon,
++         productCount: adminProds.filter(p => p.categoryId === c.id).length,
++       }));
+++>>>>>>> 6932f8abc79e4635fef81ce60835ef90019f5e72
+    }
+  }
+  

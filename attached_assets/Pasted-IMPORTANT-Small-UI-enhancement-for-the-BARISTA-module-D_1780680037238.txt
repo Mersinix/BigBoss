@@ -1,0 +1,156 @@
+IMPORTANT: Small UI enhancement for the BARISTA module.
+
+Do NOT modify architecture, routing, APIs, filters, visibility rules, authentication, messaging, or existing functionality.
+
+Only apply the following UI improvements.
+
+---
+
+1. BARISTA HERO BANNER
+
+---
+
+Use the attached image as the hero banner background.
+
+Requirements:
+
+* Replace the current banner background
+* Use the uploaded image as the full-width hero image
+* Add the same dark overlay / blur layer used in the MARKETING page
+* Ensure text remains highly readable
+* Keep existing hero text
+* Keep existing spacing
+* Keep existing responsiveness
+* Keep existing banner height
+
+The visual result should match the MARKETING hero pattern:
+
+Background Image
++
+Dark overlay / blur layer
++
+Existing text content
+
+Do NOT redesign the hero section.
+
+Only update the background image and overlay treatment.
+
+---
+
+2. ADD TAB SWITCHER
+
+---
+
+The BARISTA page currently contains:
+
+* Training Section
+* Hiring / Marketplace Section
+
+Keep both sections exactly as they are.
+
+Instead of displaying both one after another, introduce a tab switcher below the hero banner.
+
+Tabs:
+
+[ Barista Academy ]
+[ Marketplace Baristas ]
+
+Default tab:
+Barista Academy
+
+---
+
+## TAB 1: BARISTA ACADEMY
+
+Display the existing training content:
+
+* training programs
+* schools
+* trainers
+* certifications
+* levels
+* ratings
+* enroll actions
+
+No functional changes.
+
+---
+
+## TAB 2: MARKETPLACE BARISTAS
+
+Display the existing hiring marketplace:
+
+* barista profiles
+* search
+* filters
+* availability
+* ratings
+* skills
+* daily rates
+* hire button
+* chat button
+
+No functional changes.
+
+---
+
+## TAB SWITCHER REQUIREMENTS
+
+Use existing design system.
+
+Reuse existing Tabs component if one already exists.
+
+Do NOT create a new custom design if a reusable tab component already exists.
+
+Requirements:
+
+* same blue theme
+* responsive
+* accessible
+* preserve URL state if already supported
+* smooth switching
+* no page reload
+
+---
+
+## LAYOUT REQUIREMENTS
+
+Desired structure:
+
+Hero Banner
+
+Tab Switcher
+
+Selected Tab Content
+
+Barista Academy
+OR
+Marketplace Baristas
+
+Only one section visible at a time.
+
+---
+
+## VALIDATION
+
+After implementation verify:
+
+✓ Hero uses uploaded image
+✓ Overlay applied
+✓ Text remains readable
+
+✓ Tab switcher added
+✓ Barista Academy tab works
+✓ Marketplace Baristas tab works
+
+✓ No functionality lost
+✓ No API changes
+✓ No routing changes
+✓ No auth changes
+✓ No visibility rule changes
+
+✓ Existing filters still work
+✓ Existing search still works
+✓ Existing messaging still works
+
+Provide modified files list after implementation.

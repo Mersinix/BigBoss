@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 
 const CATALOG_EVENTS = [
@@ -7,7 +7,16 @@ const CATALOG_EVENTS = [
   "catalog_suggestion_updated",
   "catalog_suggestion_approved",
   "catalog_suggestion_deleted",
+  "supplier_mapping_changed",
 ];
+
+function invalidateSupplierMappingQueries(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] });
+  qc.invalidateQueries({ queryKey: ["/api/admin/supplier-mappings"] });
+  qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
+  qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
+  invalidateMarketplace(qc);
+}
 
 export function useRealtime() {
   const qc = useQueryClient();
@@ -34,9 +43,13 @@ export function useRealtime() {
             qc.invalidateQueries({ queryKey: ["/api/flavors"] });
             qc.invalidateQueries({ queryKey: ["/api/sizes"] });
             qc.invalidateQueries({ queryKey: ["/api/brands"] });
-            qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] });
-            qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
-            invalidateMarketplace(qc);
+            if (event === "supplier_mapping_changed") {
+              invalidateSupplierMappingQueries(qc);
+            } else {
+              qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] });
+              qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
+              invalidateMarketplace(qc);
+            }
           }
         } catch {}
       };

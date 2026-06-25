@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Store, Package, ShoppingCart, LayoutDashboard,
@@ -32,7 +32,11 @@ type NavGroup = {
 
 function NavLink({ item }: { item: { title: string; url: string; icon: ComponentType<{ className?: string }> } }) {
   const [location] = useLocation();
-  const isActive = location === item.url || (item.url !== "/" && location.startsWith(item.url));
+  const search = useSearch();
+  const fullPath = `${location}${search}`;
+  const isActive = item.url.includes("?")
+    ? fullPath === item.url
+    : location === item.url && !search.includes("section=category-requests") && !search.includes("section=supplier-cats");
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -78,7 +82,7 @@ export function AppSidebar() {
           items: [
             { title: "Users", url: "/admin/users", icon: Users },
             { title: "Roles & Permissions", url: "/admin/roles", icon: ShieldCheck },
-            { title: "Category Requests", url: "/admin/category-requests", icon: Tag },
+            { title: "Category Requests", url: "/admin/categories?section=category-requests", icon: Tag },
           ],
         },
         {

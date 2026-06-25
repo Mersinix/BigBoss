@@ -10,7 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Check, Layers, ChevronDown, ChevronUp, RefreshCw, Pencil, Trash2, SendHorizonal, MousePointerClick, Package } from "lucide-react";
+import { Plus, Search, Check, Layers, ChevronDown, ChevronUp, RefreshCw, Pencil, Trash2, SendHorizonal, MousePointerClick, Package, Snowflake } from "lucide-react";
+import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
+import type { QueryClient } from "@tanstack/react-query";
+
+function invalidateCategoryMappingSync(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] });
+  qc.invalidateQueries({ queryKey: ["/api/admin/supplier-mappings"] });
+  qc.refetchQueries({ queryKey: ["/api/admin/supplier-mappings"], type: "active" });
+}
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { CategoryWithCount, SupplierCategoryMapping, SubCategoryWithDetails, CatalogSuggestion } from "@shared/schema";
@@ -28,23 +36,24 @@ function StatusBadge({ status }: { status: string }) {
 // ── Category Selection Modal ─────────────────────────────────────────────────
 
 function CategorySelectModal({
-  open, onClose, allCategories, selectedIds, onConfirm, isPending,
+  open, onClose, allCategories, mappedIds, onConfirm, isPending,
 }: {
   open: boolean; onClose: () => void; allCategories: CategoryWithCount[];
-  selectedIds: number[]; onConfirm: (ids: number[]) => void; isPending: boolean;
+  mappedIds: number[]; onConfirm: (ids: number[]) => void; isPending: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const [local, setLocal] = useState<number[]>(selectedIds);
-  const filtered = allCategories.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  const [local, setLocal] = useState<number[]>([]);
+  const available = allCategories.filter(c => !mappedIds.includes(c.id));
+  const filtered = available.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
   const toggle = (id: number) => setLocal(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Layers className="w-5 h-5 text-primary" />Select Categories</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Layers className="w-5 h-5 text-primary" />Add Categories</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground -mt-1">Choose the categories your business operates in.</p>
+        <p className="text-sm text-muted-foreground -mt-1">Select categories to request. New requests require admin approval.</p>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Search categories…" value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-categories" />
@@ -64,14 +73,14 @@ function CategorySelectModal({
               </button>
             );
           })}
-          {filtered.length === 0 && <div className="col-span-2 text-center py-8 text-muted-foreground text-sm">No categories match your search.</div>}
+          {filtered.length === 0 && <div className="col-span-2 text-center py-8 text-muted-foreground text-sm">{available.length === 0 ? "All categories are already mapped." : "No categories match your search."}</div>}
         </div>
         <div className="flex items-center justify-between pt-2 border-t">
           <span className="text-sm text-muted-foreground">{local.length} selected</span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => onConfirm(local)} disabled={isPending} data-testid="button-confirm-categories">
-              {isPending ? <RefreshCw className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}Confirm Selection
+            <Button onClick={() => { onConfirm(local); setLocal([]); }} disabled={isPending || local.length === 0} data-testid="button-confirm-categories">
+              {isPending ? <RefreshCw className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}Request {local.length || ""} Categor{local.length === 1 ? "y" : "ies"}
             </Button>
           </div>
         </div>
@@ -86,6 +95,7 @@ function CategoryMappingCard({
   mapping, onSubToggle, isSaving,
   isSelected, onSelect,
   selectedSubCategoryId, onSelectSubCategory,
+  onFreeze, onRemove, isActionPending,
 }: {
   mapping: SupplierCategoryMapping;
   onSubToggle: (subId: number, checked: boolean) => void;
@@ -94,14 +104,23 @@ function CategoryMappingCard({
   onSelect: () => void;
   selectedSubCategoryId: number | null;
   onSelectSubCategory: (id: number) => void;
+  onFreeze: () => void;
+  onRemove: () => void;
+  isActionPending: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const { category, subCategories, selectedSubCategoryIds } = mapping;
+  const { category, subCategories, selectedSubCategoryIds, mappingStatus, isFrozen } = mapping;
   const selectedCount = selectedSubCategoryIds.length;
+
+  const borderClass = isFrozen
+    ? "border-muted-foreground/50 bg-muted/20"
+    : mappingStatus === "APPROVED"
+      ? "border-emerald-400 dark:border-emerald-700"
+      : "border-red-400 dark:border-red-700";
 
   return (
     <Card
-      className={`overflow-hidden transition-all ${isSelected ? "border-primary ring-1 ring-primary shadow-sm" : "hover:border-primary/30"}`}
+      className={`overflow-hidden transition-all ${borderClass} ${isSelected ? "ring-1 ring-primary shadow-sm" : "hover:border-primary/30"}`}
       data-testid={`card-category-${category.id}`}
     >
       <div className="p-4 pb-0">
@@ -117,9 +136,18 @@ function CategoryMappingCard({
               <p className="text-xs text-muted-foreground mt-0.5">{selectedCount} of {subCategories.length} sub-categories selected</p>
             </div>
           </button>
-          <div className="flex items-center gap-2">
-            {isSelected && <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">Active</Badge>}
-            {selectedCount > 0 && !isSelected && <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">{selectedCount} active</Badge>}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {isFrozen && <Badge variant="secondary" className="text-xs">Frozen</Badge>}
+            {!isFrozen && mappingStatus === "PENDING" && <Badge className="bg-red-100 text-red-700 border-0 text-xs">Pending</Badge>}
+            {!isFrozen && mappingStatus === "APPROVED" && <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Approved</Badge>}
+            {mappingStatus === "APPROVED" && (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onFreeze} disabled={isActionPending}>
+                <Snowflake className="w-3 h-3 mr-1" />{isFrozen ? "Unfreeze" : "Freeze"}
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={onRemove} disabled={isActionPending}>
+              <Trash2 className="w-3 h-3 mr-1" />Remove
+            </Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { if (!expanded) onSelect(); setExpanded(e => !e); }} data-testid={`button-toggle-cat-${category.id}`}>
               {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </Button>
@@ -184,13 +212,31 @@ function MyCategoriesSection() {
 
   const saveCategories = useMutation({
     mutationFn: (categoryIds: number[]) => apiRequest("POST", "/api/supplier/categories", { categoryIds }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] }); toast({ title: "Categories updated" }); setModalOpen(false); },
+    onSuccess: () => {
+      invalidateCategoryMappingSync(qc);
+      invalidateMarketplace(qc);
+      toast({ title: "Category request submitted", description: "Waiting for admin approval." });
+      setModalOpen(false);
+    },
     onError: () => toast({ title: "Error saving categories", variant: "destructive" }),
+  });
+
+  const freezeCategory = useMutation({
+    mutationFn: ({ categoryId, isFrozen }: { categoryId: number; isFrozen: boolean }) =>
+      apiRequest("PATCH", `/api/supplier/categories/${categoryId}/freeze`, { isFrozen }),
+    onSuccess: () => { invalidateCategoryMappingSync(qc); invalidateMarketplace(qc); toast({ title: "Freeze status updated" }); },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
+  });
+
+  const removeCategory = useMutation({
+    mutationFn: (categoryId: number) => apiRequest("DELETE", `/api/supplier/categories/${categoryId}`),
+    onSuccess: () => { invalidateCategoryMappingSync(qc); invalidateMarketplace(qc); toast({ title: "Category removed" }); },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
   const saveSubCategories = useMutation({
     mutationFn: (subCategoryIds: number[]) => apiRequest("POST", "/api/supplier/subcategories", { subCategoryIds }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] }); toast({ title: "Sub-categories saved" }); },
+    onSuccess: () => { invalidateCategoryMappingSync(qc); toast({ title: "Sub-categories saved" }); },
     onError: () => toast({ title: "Error saving sub-categories", variant: "destructive" }),
   });
 
@@ -278,13 +324,16 @@ function MyCategoriesSection() {
               onSelect={() => handleSelectCategory(mapping.category.id)}
               selectedSubCategoryId={selectedCategoryId === mapping.category.id ? selectedSubCategoryId : null}
               onSelectSubCategory={(subId) => handleSelectSubCategory(mapping.category.id, subId)}
+              onFreeze={() => freezeCategory.mutate({ categoryId: mapping.category.id, isFrozen: !mapping.isFrozen })}
+              onRemove={() => removeCategory.mutate(mapping.category.id)}
+              isActionPending={freezeCategory.isPending || removeCategory.isPending}
             />
           ))}
           <Button variant="outline" onClick={() => setModalOpen(true)} className="gap-2" data-testid="button-manage-categories"><Plus className="w-4 h-4" />Manage Category Selection</Button>
         </div>
       )}
 
-      <CategorySelectModal open={modalOpen} onClose={() => setModalOpen(false)} allCategories={allCats} selectedIds={selectedCatIds} onConfirm={ids => saveCategories.mutate(ids)} isPending={saveCategories.isPending} />
+      <CategorySelectModal open={modalOpen} onClose={() => setModalOpen(false)} allCategories={allCats} mappedIds={selectedCatIds} onConfirm={ids => saveCategories.mutate(ids)} isPending={saveCategories.isPending} />
     </div>
   );
 }

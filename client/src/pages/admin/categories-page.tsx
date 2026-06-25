@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useSearch } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,10 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Folder, Tag, Ruler, Award, Layers, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Clock, Building2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Folder, Tag, Ruler, Award, Layers, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Clock, Building2, ChevronDown, ChevronUp, Snowflake } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount, CatalogSuggestion } from "@shared/schema";
+import type { CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount, CatalogSuggestion, AdminSupplierCategoryOverview, SupplierCategoryMapping } from "@shared/schema";
+import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -839,16 +841,156 @@ function CategoryEditModalInline({ user, open, onClose, supplierCatIds }: { user
   );
 }
 
+function SupplierCategoryOverviewPanel({ supplierId }: { supplierId: number }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const { data: overview, isLoading, isError, error, refetch } = useQuery<AdminSupplierCategoryOverview>({
+    queryKey: ["/api/admin/supplier-mappings", supplierId, "overview"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/supplier-mappings/${supplierId}/overview`, { credentials: "include" });
+      if (!res.ok) {
+        const text = await res.text().catch(() => res.statusText);
+        throw new Error(text || `Failed to load overview (${res.status})`);
+      }
+      return res.json();
+    },
+    retry: 1,
+  });
+
+  const invalidate = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["/api/admin/supplier-mappings"] }),
+      qc.refetchQueries({ queryKey: ["/api/admin/supplier-mappings", supplierId, "overview"] }),
+      qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] }),
+      qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] }),
+    ]);
+    invalidateMarketplace(qc);
+  };
+
+  const approve = useMutation({
+    mutationFn: (categoryId: number) => apiRequest("PATCH", `/api/admin/supplier-mappings/${supplierId}/categories/${categoryId}/approve`, {}),
+    onSuccess: () => { invalidate(); toast({ title: "Category approved for supplier" }); },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
+  });
+
+  const addToSupplier = useMutation({
+    mutationFn: (categoryId: number) => apiRequest("POST", `/api/admin/supplier-mappings/${supplierId}/categories/${categoryId}`, {}),
+    onSuccess: () => { invalidate(); toast({ title: "Category added to supplier" }); },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
+  });
+
+  const freeze = useMutation({
+    mutationFn: ({ categoryId, isFrozen }: { categoryId: number; isFrozen: boolean }) =>
+      apiRequest("PATCH", `/api/admin/supplier-mappings/${supplierId}/categories/${categoryId}/freeze`, { isFrozen }),
+    onSuccess: () => { invalidate(); toast({ title: "Category freeze status updated" }); },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
+  });
+
+  const remove = useMutation({
+    mutationFn: (categoryId: number) => apiRequest("DELETE", `/api/admin/supplier-mappings/${supplierId}/categories/${categoryId}`),
+    onSuccess: () => { invalidate(); toast({ title: "Category removed from supplier" }); },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-4 bg-secondary/10 border-t">
+        <Skeleton className="h-32 w-full" />
+        <p className="text-xs text-muted-foreground mt-2">Loading category mappings…</p>
+      </div>
+    );
+  }
+
+  if (isError || !overview) {
+    return (
+      <div className="p-4 bg-secondary/10 border-t space-y-2">
+        <p className="text-sm text-destructive font-medium">Could not load category mappings for this supplier.</p>
+        <p className="text-xs text-muted-foreground">{error instanceof Error ? error.message : "Unknown error"}</p>
+        <Button type="button" size="sm" variant="outline" className="text-xs" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
+
+  const renderRow = (m: SupplierCategoryMapping, actions: ReactNode) => (
+    <div key={m.category.id} className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${m.isFrozen ? "border-muted-foreground/40 bg-muted/30" : m.mappingStatus === "APPROVED" ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-800"}`}>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-lg">{m.category.icon || "📦"}</span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate">{m.category.name}</p>
+          <p className="text-xs text-muted-foreground">{m.selectedSubCategoryIds.length} sub-categories selected</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">{actions}</div>
+    </div>
+  );
+
+  return (
+    <div className="p-4 bg-secondary/10 space-y-4 border-t">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">A. Approved Categories</p>
+        {overview.approved.filter(m => m.mappingStatus === "APPROVED").length === 0 ? (
+          <p className="text-xs text-muted-foreground italic px-1">No approved categories.</p>
+        ) : overview.approved.filter(m => m.mappingStatus === "APPROVED").map(m => renderRow(m, (
+          <>
+            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => freeze.mutate({ categoryId: m.category.id, isFrozen: !m.isFrozen })} disabled={freeze.isPending}>
+              <Snowflake className="w-3 h-3 mr-1" />{m.isFrozen ? "Unfreeze" : "Freeze Category"}
+            </Button>
+            <Button size="sm" variant="destructive" className="text-xs h-7" onClick={() => remove.mutate(m.category.id)} disabled={remove.isPending}>Remove from Supplier</Button>
+          </>
+        )))}
+      </div>
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">B. Pending Supplier Categories</p>
+        {overview.pending.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic px-1">No pending category requests.</p>
+        ) : overview.pending.map(m => renderRow(m, (
+          <Button size="sm" className="text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={() => approve.mutate(m.category.id)} disabled={approve.isPending}>
+            <CheckCircle className="w-3 h-3 mr-1" />Approve
+          </Button>
+        )))}
+      </div>
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-400">C. Not Yet Added Categories</p>
+        {overview.notAdded.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic px-1">All active categories are assigned.</p>
+        ) : overview.notAdded.slice(0, 12).map(cat => (
+          <div key={cat.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-dashed">
+            <div className="flex items-center gap-2"><span>{cat.icon || "📦"}</span><span className="text-sm">{cat.name}</span></div>
+            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => addToSupplier.mutate(cat.id)} disabled={addToSupplier.isPending}>Add to Supplier</Button>
+          </div>
+        ))}
+        {overview.notAdded.length > 12 && <p className="text-xs text-muted-foreground">+{overview.notAdded.length - 12} more categories</p>}
+      </div>
+    </div>
+  );
+}
+
+function getSupplierMappingCounts(
+  supplierId: number,
+  entries: { user?: { id: number }; mappings?: SupplierCategoryMapping[] }[],
+): { approvedCount: number; pendingCount: number; frozenCount: number } {
+  const entry = entries.find((e) => Number(e.user?.id) === supplierId);
+  const mappings = (entry?.mappings ?? []) as SupplierCategoryMapping[];
+  return {
+    approvedCount: mappings.filter((m) => m.mappingStatus === "APPROVED" && !m.isFrozen).length,
+    pendingCount: mappings.filter((m) => m.mappingStatus === "PENDING").length,
+    frozenCount: mappings.filter((m) => m.isFrozen).length,
+  };
+}
+
 function CategoryRequestsSection() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
   const [editUser, setEditUser] = useState<UserRowLocal | null>(null);
   const [editUserCatIds, setEditUserCatIds] = useState<number[]>([]);
+  const didAutoExpand = useRef(false);
 
   const { data: allUsers = [], isLoading: usersLoading } = useQuery<UserRowLocal[]>({ queryKey: ["/api/admin/users"] });
-  const { data: supplierMappingEntries = [], isLoading: mappingsLoading } = useQuery<{ user: any; mappings: any[] }[]>({
+  const { data: supplierMappingEntries = [], isLoading: mappingsLoading } = useQuery<{ user: any; mappings: SupplierCategoryMapping[] }[]>({
     queryKey: ["/api/admin/supplier-mappings"],
   });
 
@@ -856,7 +998,7 @@ function CategoryRequestsSection() {
 
   const getDisplayCategories = (u: UserRowLocal): string[] => {
     if (u.role === 'SUPPLIER') {
-      const entry = (supplierMappingEntries as any[]).find((e: any) => e.user?.id === u.id);
+      const entry = (supplierMappingEntries as any[]).find((e: any) => Number(e.user?.id) === Number(u.id));
       if (entry?.mappings?.length > 0) {
         return entry.mappings.map((m: any) => m.category?.name ?? '').filter(Boolean);
       }
@@ -866,7 +1008,7 @@ function CategoryRequestsSection() {
   };
 
   const getSupplierCatIds = (u: UserRowLocal): number[] => {
-    const entry = (supplierMappingEntries as any[]).find((e: any) => e.user?.id === u.id);
+    const entry = (supplierMappingEntries as any[]).find((e: any) => Number(e.user?.id) === Number(u.id));
     return entry?.mappings?.map((m: any) => m.category?.id).filter(Boolean) ?? [];
   };
 
@@ -882,11 +1024,11 @@ function CategoryRequestsSection() {
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
-  const usersToShow = allUsers.filter(u => {
+  const usersToShow = useMemo(() => allUsers.filter(u => {
     if (!CAT_ROLES.includes(u.role)) return false;
     if (u.role === 'SUPPLIER') return true;
     return getUserCategories(u).length > 0;
-  });
+  }), [allUsers]);
 
   let filtered = usersToShow;
   if (roleFilter !== "all") filtered = filtered.filter(u => u.role === roleFilter);
@@ -895,6 +1037,22 @@ function CategoryRequestsSection() {
     filtered = filtered.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   }
   const pendingCount = usersToShow.filter(u => u.status === "pending").length;
+
+  useEffect(() => {
+    if (didAutoExpand.current || mappingsLoading) return;
+    didAutoExpand.current = true;
+    const firstWithPending = usersToShow.find((u) => {
+      if (u.role !== "SUPPLIER") return false;
+      return getSupplierMappingCounts(Number(u.id), supplierMappingEntries).pendingCount > 0;
+    });
+    if (firstWithPending) {
+      setExpandedSupplierId(Number(firstWithPending.id));
+    }
+  }, [mappingsLoading, supplierMappingEntries, usersToShow]);
+
+  const toggleSupplierExpand = (supplierId: number) => {
+    setExpandedSupplierId((prev) => (prev === supplierId ? null : supplierId));
+  };
 
   const openEdit = (u: UserRowLocal) => {
     setEditUser(u);
@@ -945,36 +1103,84 @@ function CategoryRequestsSection() {
             <div className="divide-y divide-border/40">
               {filtered.map(u => {
                 const displayCats = getDisplayCategories(u);
+                const isSupplier = u.role === 'SUPPLIER';
+                const supplierId = Number(u.id);
+                const isExpanded = isSupplier && expandedSupplierId === supplierId;
+                const mappingCounts = isSupplier ? getSupplierMappingCounts(supplierId, supplierMappingEntries) : null;
+                const hasPendingMappings = (mappingCounts?.pendingCount ?? 0) > 0;
                 return (
-                  <div key={u.id} className="flex items-center gap-4 p-4 hover:bg-secondary/20 transition-colors" data-testid={`row-user-${u.id}`}>
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <Building2 className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold truncate">{u.name}</p>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(u.role)}`}>{ROLE_LABELS[u.role]}</span>
-                        {u.status === "pending" && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Clock className="w-3 h-3 inline mr-0.5" />En attente</span>}
+                  <div key={u.id} data-testid={`row-user-${u.id}`} className={hasPendingMappings ? "bg-amber-50/60 dark:bg-amber-950/10" : undefined}>
+                    <div className={`flex items-center gap-4 p-4 hover:bg-secondary/20 transition-colors ${hasPendingMappings ? "border-l-4 border-l-amber-400" : ""} ${isExpanded ? "bg-secondary/30" : ""}`}>
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Building2 className="w-4 h-4 text-primary" />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
-                      {displayCats.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {displayCats.slice(0, 5).map(cat => <span key={cat} className="px-2 py-0.5 bg-secondary text-secondary-foreground text-xs rounded-full">{cat}</span>)}
-                          {displayCats.length > 5 && <span className="text-xs text-muted-foreground self-center">+{displayCats.length - 5}</span>}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold truncate">{u.name}</p>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(u.role)}`}>{ROLE_LABELS[u.role]}</span>
+                          {u.status === "pending" && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Clock className="w-3 h-3 inline mr-0.5" />En attente</span>}
                         </div>
-                      ) : u.role === 'SUPPLIER' ? (
-                        <p className="text-xs text-muted-foreground mt-1 italic">Aucune catégorie sélectionnée dans My Categories</p>
-                      ) : null}
+                        <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
+                        {!isSupplier && displayCats.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {displayCats.slice(0, 5).map(cat => <span key={cat} className="px-2 py-0.5 bg-secondary text-secondary-foreground text-xs rounded-full">{cat}</span>)}
+                            {displayCats.length > 5 && <span className="text-xs text-muted-foreground self-center">+{displayCats.length - 5}</span>}
+                          </div>
+                        )}
+                        {isSupplier && !isExpanded && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            {mappingCounts!.approvedCount > 0 && (
+                              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0 text-xs">
+                                Approved {mappingCounts!.approvedCount}
+                              </Badge>
+                            )}
+                            {mappingCounts!.pendingCount > 0 && (
+                              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">
+                                Pending {mappingCounts!.pendingCount}
+                              </Badge>
+                            )}
+                            {mappingCounts!.frozenCount > 0 && (
+                              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-0 text-xs">
+                                Frozen {mappingCounts!.frozenCount}
+                              </Badge>
+                            )}
+                            {displayCats.length === 0 && (
+                              <span className="text-xs text-muted-foreground">No category mappings</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isSupplier && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-xs"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleSupplierExpand(supplierId);
+                            }}
+                            data-testid={`button-expand-supplier-${u.id}`}
+                            aria-expanded={isExpanded}
+                          >
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 mr-1" /> : <ChevronDown className="w-3.5 h-3.5 mr-1" />}
+                            Categories
+                          </Button>
+                        )}
+                        {!isSupplier && (
+                          <Button variant="outline" size="sm" className="text-xs" onClick={() => openEdit(u)} data-testid={`button-edit-cats-${u.id}`}><Tag className="w-3.5 h-3.5 mr-1" />Modifier</Button>
+                        )}
+                        {u.status === "pending" && (
+                          <>
+                            <Button size="sm" className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMutation.mutate(u.id)} disabled={approveMutation.isPending} data-testid={`button-approve-${u.id}`}><CheckCircle className="w-3.5 h-3.5 mr-1" />Approuver</Button>
+                            <Button size="sm" variant="destructive" className="text-xs" onClick={() => rejectMutation.mutate(u.id)} disabled={rejectMutation.isPending} data-testid={`button-reject-${u.id}`}><XCircle className="w-3.5 h-3.5 mr-1" />Rejeter</Button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button variant="outline" size="sm" className="text-xs" onClick={() => openEdit(u)} data-testid={`button-edit-cats-${u.id}`}><Tag className="w-3.5 h-3.5 mr-1" />Modifier</Button>
-                      {u.status === "pending" && (
-                        <>
-                          <Button size="sm" className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMutation.mutate(u.id)} disabled={approveMutation.isPending} data-testid={`button-approve-${u.id}`}><CheckCircle className="w-3.5 h-3.5 mr-1" />Approuver</Button>
-                          <Button size="sm" variant="destructive" className="text-xs" onClick={() => rejectMutation.mutate(u.id)} disabled={rejectMutation.isPending} data-testid={`button-reject-${u.id}`}><XCircle className="w-3.5 h-3.5 mr-1" />Rejeter</Button>
-                        </>
-                      )}
-                    </div>
+                    {isExpanded && <SupplierCategoryOverviewPanel supplierId={supplierId} />}
                   </div>
                 );
               })}
@@ -1222,7 +1428,23 @@ function SupplierCategoriesSection() {
 // ── PAGE ──────────────────────────────────────────────────────────────────────
 
 export default function AdminCategoriesPage() {
+  const [, setLocation] = useLocation();
+  const searchStr = useSearch();
   const [section, setSection] = useState<'management' | 'category-requests' | 'supplier-cats'>('management');
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchStr);
+    const urlSection = params.get("section");
+    if (urlSection === "category-requests" || urlSection === "supplier-cats" || urlSection === "management") {
+      setSection(urlSection);
+    }
+  }, [searchStr]);
+
+  const handleSectionChange = (key: 'management' | 'category-requests' | 'supplier-cats') => {
+    setSection(key);
+    if (key === "management") setLocation("/admin/categories");
+    else setLocation(`/admin/categories?section=${key}`);
+  };
 
   const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
   const { data: subs = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
@@ -1256,7 +1478,7 @@ export default function AdminCategoriesPage() {
       {/* Section switcher */}
       <div className="flex gap-1 p-1 bg-secondary/30 rounded-lg w-fit border">
         {sections.map(s => (
-          <button key={s.key} onClick={() => setSection(s.key)}
+          <button key={s.key} onClick={() => handleSectionChange(s.key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${section === s.key ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             data-testid={`section-tab-${s.key}`}>
             {s.label}

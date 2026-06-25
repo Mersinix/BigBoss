@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, Layers } from "lucide-react";
+import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, Layers, LayoutGrid, LayoutList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -106,33 +106,26 @@ function CategorySubCategoryNav({
   const subcats: any[] = selectedMapping?.subCategories ?? [];
 
   return (
-    <div className="flex gap-3 flex-wrap">
-      <div className="border rounded-lg overflow-hidden shrink-0 min-w-[140px]">
-        <div className="px-3 py-1.5 bg-secondary/40 border-b">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Categories</p>
-        </div>
-        <div className="flex flex-col max-h-40 overflow-y-auto">
-          {mappings.length === 0 && <p className="text-xs text-muted-foreground px-3 py-4 text-center">No categories selected</p>}
+    <div className="space-y-2">
+      <div className="overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="flex gap-2 min-w-max">
+          {mappings.length === 0 && <p className="text-xs text-muted-foreground py-2">No categories selected</p>}
           {mappings.map((m: any) => (
             <button key={m.category.id} onClick={() => onSelectCat(m.category.id)}
-              className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-secondary/50 transition-colors border-b border-border/30 last:border-0 ${localCatId === m.category.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
+              className={`shrink-0 px-3 py-2 rounded-lg border text-sm flex items-center gap-2 transition-colors ${localCatId === m.category.id ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-primary/40'}`}
               data-testid={`nav-cat-${m.category.id}`}>
               {m.category.icon && <span className="text-base leading-none">{m.category.icon}</span>}
-              <span className="truncate">{m.category.name}</span>
+              <span>{m.category.name}</span>
             </button>
           ))}
         </div>
       </div>
-      {localCatId !== null && (
-        <div className="border rounded-lg overflow-hidden shrink-0 min-w-[140px]">
-          <div className="px-3 py-1.5 bg-secondary/40 border-b">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sub-categories</p>
-          </div>
-          <div className="flex flex-col max-h-40 overflow-y-auto">
-            {subcats.length === 0 && <p className="text-xs text-muted-foreground px-3 py-4 text-center">None available</p>}
+      {localCatId !== null && subcats.length > 0 && (
+        <div className="overflow-x-auto pb-1 -mx-1 px-1">
+          <div className="flex gap-2 min-w-max">
             {subcats.map((s: any) => (
               <button key={s.id} onClick={() => onSelectSub(s.id)}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-secondary/50 transition-colors border-b border-border/30 last:border-0 ${localSubId === s.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}`}
+                className={`shrink-0 px-3 py-1.5 rounded-full border text-sm transition-colors ${localSubId === s.id ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-primary/40'}`}
                 data-testid={`nav-sub-${s.id}`}>
                 {s.name}
               </button>
@@ -189,6 +182,7 @@ function ProductDetailModal({
 // ── Variant Entry type ────────────────────────────────────────────────────────
 
 type VEntry = { flavorId: number | null; sizeId: number | null; flavorName: string | null; sizeName: string | null; price: string; qty: string };
+type VariantGroup = { id: string; sizeId: string; flavorIds: number[]; price: string; qty: string };
 
 function buildEntries(flavors: { id: number; name: string }[], sizes: { id: number; name: string }[]): VEntry[] {
   if (flavors.length > 0 && sizes.length > 0) {
@@ -197,6 +191,87 @@ function buildEntries(flavors: { id: number; name: string }[], sizes: { id: numb
   if (flavors.length > 0) return flavors.map(f => ({ flavorId: f.id, sizeId: null, flavorName: f.name, sizeName: null, price: '', qty: '' }));
   if (sizes.length > 0) return sizes.map(s => ({ flavorId: null, sizeId: s.id, flavorName: null, sizeName: s.name, price: '', qty: '' }));
   return [{ flavorId: null, sizeId: null, flavorName: null, sizeName: null, price: '', qty: '' }];
+}
+
+function groupsToEntries(groups: VariantGroup[], flavors: { id: number; name: string }[], sizes: { id: number; name: string }[]): VEntry[] {
+  const entries: VEntry[] = [];
+  for (const g of groups) {
+    const price = g.price;
+    const qty = g.qty;
+    const size = g.sizeId ? sizes.find(s => String(s.id) === g.sizeId) : null;
+    const selectedFlavors = g.flavorIds.length ? flavors.filter(f => g.flavorIds.includes(f.id)) : [];
+    if (selectedFlavors.length && size) {
+      selectedFlavors.forEach(f => entries.push({ flavorId: f.id, sizeId: size.id, flavorName: f.name, sizeName: size.name, price, qty }));
+    } else if (selectedFlavors.length) {
+      selectedFlavors.forEach(f => entries.push({ flavorId: f.id, sizeId: null, flavorName: f.name, sizeName: null, price, qty }));
+    } else if (size) {
+      entries.push({ flavorId: null, sizeId: size.id, flavorName: null, sizeName: size.name, price, qty });
+    } else {
+      entries.push({ flavorId: null, sizeId: null, flavorName: null, sizeName: null, price, qty });
+    }
+  }
+  return entries;
+}
+
+function VariantGroupBuilder({
+  flavors, sizes, groups, onChange,
+}: {
+  flavors: { id: number; name: string }[];
+  sizes: { id: number; name: string }[];
+  groups: VariantGroup[];
+  onChange: (groups: VariantGroup[]) => void;
+}) {
+  const addGroup = () => onChange([...groups, { id: crypto.randomUUID(), sizeId: "", flavorIds: [], price: "", qty: "" }]);
+  const update = (id: string, patch: Partial<VariantGroup>) => onChange(groups.map(g => g.id === id ? { ...g, ...patch } : g));
+  const remove = (id: string) => onChange(groups.filter(g => g.id !== id));
+
+  return (
+    <div className="space-y-3">
+      {groups.map((g, idx) => (
+        <div key={g.id} className="border rounded-lg p-3 space-y-3 bg-secondary/20">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Variant group {idx + 1}</p>
+            {groups.length > 1 && (
+              <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => remove(g.id)}>Remove</Button>
+            )}
+          </div>
+          {sizes.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-xs">Size</Label>
+              <Select value={g.sizeId || "__none__"} onValueChange={v => update(g.id, { sizeId: v === "__none__" ? "" : v })}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Select size (optional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Any / no size</SelectItem>
+                  {sizes.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {flavors.length > 0 && (
+            <MultiSelectList
+              label="Flavors (multi-select)"
+              items={flavors}
+              selected={g.flavorIds}
+              onChange={ids => update(g.id, { flavorIds: ids })}
+            />
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Price (USD)</Label>
+              <Input type="number" step="0.01" min="0" value={g.price} onChange={e => update(g.id, { price: e.target.value })} placeholder="0.00" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Stock</Label>
+              <Input type="number" min="0" value={g.qty} onChange={e => update(g.id, { qty: e.target.value })} placeholder="0" />
+            </div>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={addGroup} className="w-full">
+        <Plus className="w-4 h-4 mr-1" />Add variant group
+      </Button>
+    </div>
+  );
 }
 
 // ── Variant Matrix Table ──────────────────────────────────────────────────────
@@ -274,17 +349,18 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
     return ids.length > 0 ? szs.filter(s => ids.includes(s.id)) : [];
   }, [product.sizeIds, product.sizeId, szs]);
 
-  const [entries, setEntries] = useState<VEntry[]>(() => buildEntries(availableFlavors, availableSizes));
+  const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "" }]);
 
   const add = useMutation({
     mutationFn: async () => {
+      const entries = groupsToEntries(groups, availableFlavors, availableSizes);
       const listingRes = await apiRequest("POST", "/api/supplier/listings", {
         productId: product.id,
         price: 0,
         stock: 0,
         availableFlavorIds: availableFlavors.map(f => f.id),
         availableSizeIds: availableSizes.map(s => s.id),
-        availableBrandIds: [],
+        availableBrandIds: product.brandId ? [product.brandId] : [],
       });
       const listing = await listingRes.json();
       const listingId = listing.id;
@@ -304,13 +380,14 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
     onError: (err: any) => toast({ title: err?.message ?? "Error", variant: "destructive" }),
   });
 
-  const hasAnyPrice = entries.some(e => parseFloat(e.price) > 0);
+  const entries = useMemo(() => groupsToEntries(groups, availableFlavors, availableSizes), [groups, availableFlavors, availableSizes]);
+  const hasAnyPrice = entries.some(e => parseFloat(e.price) > 0 && parseInt(e.qty) > 0);
 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add to My Products</DialogTitle>
+          <DialogTitle>Add to My Products — Variant Builder</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
@@ -326,9 +403,9 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
           </div>
 
           <div>
-            <Label className="mb-2 block">Set Prices & Stock per Variant</Label>
-            <VariantMatrix entries={entries} onChange={setEntries} />
-            <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>
+            <Label className="mb-2 block">Build custom variant groups (size + flavors + price + stock)</Label>
+            <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
+            <p className="text-xs text-muted-foreground mt-1.5">Products only appear in the shop when price &gt; 0 and stock &gt; 0.</p>
           </div>
 
           <div className="flex gap-2 justify-end pt-2">
@@ -723,16 +800,19 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
 
 function AdminProductsTab({
   mappings,
-  flavs, szs,
+  flavs, szs, brnds,
   onGoToCategories,
 }: {
   mappings: any[];
   flavs: FlavorWithCount[];
   szs: SizeWithCount[];
+  brnds: BrandWithCount[];
   onGoToCategories: () => void;
 }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<SimpleFilters>(EMPTY_SIMPLE);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [detailProduct, setDetailProduct] = useState<AdminProductWithListing | null>(null);
   const [addingProduct, setAddingProduct] = useState<AdminProductWithListing | null>(null);
 
@@ -758,11 +838,16 @@ function AdminProductsTab({
       : null;
   }, [selectedCategoryId, mappings]);
 
+  const setFilter = (key: keyof SimpleFilters, value: string) => {
+    setFilters(f => ({ ...f, [key]: value === "__all__" ? "" : value }));
+  };
+
   const handleSelectCat = (id: number) => {
     setSelectedCategory(id);
     const m = (mappings as any[]).find((m: any) => m.category.id === id);
     const firstSub = m?.subCategories?.[0];
     if (firstSub) setSelectedSubCategory(firstSub.id);
+    setFilters(EMPTY_SIMPLE);
   };
 
   // Fetch ALL products for this supplier's mapped categories (backend handles the multi-category filter)
@@ -786,10 +871,18 @@ function AdminProductsTab({
   }, [allAdminProducts, validCatId, selectedSubCategoryId]);
 
   const displayed = useMemo(() => {
-    if (!search.trim()) return adminProducts;
-    const q = search.toLowerCase();
-    return adminProducts.filter((p: any) => p.name.toLowerCase().includes(q));
-  }, [adminProducts, search]);
+    let list = adminProducts as any[];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((p: any) => p.name.toLowerCase().includes(q));
+    }
+    if (filters.flavorId) list = list.filter((p: any) => p.flavorId === parseInt(filters.flavorId) || p.flavorIds?.includes(parseInt(filters.flavorId)));
+    if (filters.sizeId) list = list.filter((p: any) => p.sizeId === parseInt(filters.sizeId) || p.sizeIds?.includes(parseInt(filters.sizeId)));
+    if (filters.brandId) list = list.filter((p: any) => p.brandId === parseInt(filters.brandId));
+    return list;
+  }, [adminProducts, search, filters]);
+
+  const hasExtraFilters = filters.flavorId || filters.sizeId || filters.brandId || search;
 
   return (
     <div className="space-y-4">
@@ -802,16 +895,41 @@ function AdminProductsTab({
       />
 
       {hasMappings && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <div className="relative flex-1 min-w-[160px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input className="pl-9 h-9" placeholder="Search products…" value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-admin-products" />
           </div>
-          {search && (
-            <Button variant="ghost" size="sm" onClick={() => setSearch("")} className="h-9 text-muted-foreground">
+          <Select value={filters.flavorId} onValueChange={v => setFilter("flavorId", v)}>
+            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Flavor" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Flavors</SelectItem>
+              {flavs.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filters.sizeId} onValueChange={v => setFilter("sizeId", v)}>
+            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Size" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Sizes</SelectItem>
+              {szs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filters.brandId} onValueChange={v => setFilter("brandId", v)}>
+            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Brand" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Brands</SelectItem>
+              {brnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {hasExtraFilters && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFilters(EMPTY_SIMPLE); }} className="h-9 text-muted-foreground">
               <X className="w-4 h-4 mr-1" />Clear
             </Button>
           )}
+          <div className="flex border rounded-md overflow-hidden ml-auto">
+            <Button size="sm" variant={viewMode === "grid" ? "secondary" : "ghost"} className="h-9 rounded-none" onClick={() => setViewMode("grid")}><LayoutGrid className="w-4 h-4" /></Button>
+            <Button size="sm" variant={viewMode === "list" ? "secondary" : "ghost"} className="h-9 rounded-none" onClick={() => setViewMode("list")}><LayoutList className="w-4 h-4" /></Button>
+          </div>
         </div>
       )}
 
@@ -825,9 +943,29 @@ function AdminProductsTab({
           <div>
             <p className="font-medium">No products available</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {search ? "Try adjusting your search." : "No admin products found for your selected category."}
+              {hasExtraFilters ? "Try adjusting your filters." : "No admin products found for your selected category."}
             </p>
           </div>
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {displayed.map((p: AdminProductWithListing) => (
+            <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`card-admin-product-${p.id}`}>
+              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                {p.imageUrl ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
+              </div>
+              <div className="p-2.5 space-y-1.5">
+                <p className="font-medium text-sm line-clamp-2">{p.name}</p>
+                {p.myListing ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" />Added</span>
+                ) : (
+                  <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={e => { e.stopPropagation(); setAddingProduct(p); }} data-testid={`button-add-to-my-products-${p.id}`}>
+                    <Plus className="w-3 h-3 mr-1" />Add to My Products
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
@@ -915,6 +1053,7 @@ function MyProductsTab({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<SimpleFilters>(EMPTY_SIMPLE);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [editingListing, setEditingListing] = useState<SupplierListingWithProduct | null>(null);
 
   const { selectedCategoryId, selectedSubCategoryId, setSelectedCategory, setSelectedSubCategory } = useSupplierCategoryStore();
@@ -1029,6 +1168,10 @@ function MyProductsTab({
               <X className="w-4 h-4 mr-1" />Clear
             </Button>
           )}
+          <div className="flex border rounded-md overflow-hidden ml-auto">
+            <Button size="sm" variant={viewMode === "grid" ? "secondary" : "ghost"} className="h-9 rounded-none" onClick={() => setViewMode("grid")}><LayoutGrid className="w-4 h-4" /></Button>
+            <Button size="sm" variant={viewMode === "list" ? "secondary" : "ghost"} className="h-9 rounded-none" onClick={() => setViewMode("list")}><LayoutList className="w-4 h-4" /></Button>
+          </div>
         </div>
       )}
 
@@ -1045,6 +1188,25 @@ function MyProductsTab({
               {hasExtraFilters ? "Try adjusting your filters." : "Go to the Admin Products tab to add products to your catalog."}
             </p>
           </div>
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {displayed.map(l => (
+            <div key={l.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`card-my-listing-${l.id}`}>
+              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                {l.product.imageUrl ? <img src={l.product.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
+              </div>
+              <div className="p-2.5 space-y-1">
+                <p className="font-medium text-sm line-clamp-2">{l.product.name}</p>
+                <p className="text-sm font-semibold">{formatCurrency(l.price)}</p>
+                <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} in stock` : "Out of stock"}</p>
+                <div className="flex gap-1 pt-1">
+                  <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={() => setEditingListing(l)}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => { if (confirm(`Remove "${l.product.name}"?`)) removeMutation.mutate(l.id); }}><Trash2 className="w-3 h-3" /></Button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
@@ -1129,6 +1291,11 @@ export default function ManageProducts() {
     },
   });
 
+  const activeMappings = useMemo(
+    () => (mappings as any[]).filter((m: any) => m.mappingStatus === "APPROVED" && !m.isFrozen),
+    [mappings],
+  );
+
   const handleGoToCategories = () => navigate("/supplier/categories");
 
   return (
@@ -1155,16 +1322,17 @@ export default function ManageProducts() {
 
         <TabsContent value="admin-products">
           <AdminProductsTab
-            mappings={mappings as any[]}
+            mappings={activeMappings}
             flavs={flavs}
             szs={szs}
+            brnds={brnds}
             onGoToCategories={handleGoToCategories}
           />
         </TabsContent>
 
         <TabsContent value="my-products">
           <MyProductsTab
-            mappings={mappings as any[]}
+            mappings={activeMappings}
             flavs={flavs}
             szs={szs}
             brnds={brnds}
@@ -1173,7 +1341,7 @@ export default function ManageProducts() {
         </TabsContent>
 
         <TabsContent value="new-product">
-          <NewProductTab cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} mappings={mappings as any[]} />
+          <NewProductTab cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} mappings={activeMappings} />
         </TabsContent>
       </Tabs>
     </div>

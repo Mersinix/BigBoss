@@ -60,6 +60,7 @@ import EarningsPage from "@/pages/admin/earnings-page";
 import { useAuth } from "@/hooks/use-auth";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { MarketplaceLayout } from "@/components/cafe/marketplace-layout";
+import { PendingApprovalScreen } from "@/components/auth/pending-approval-screen";
 
 // ── Protected route helpers ───────────────────────────────────────────────────
 
@@ -69,19 +70,34 @@ const Spinner = () => (
   </div>
 );
 
-const ProtectedRoute = ({ component: Component, allowedRoles }: { component: any; allowedRoles?: string[] }) => {
+const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN"];
+const CAFE_ROLES = ["CAFE_OWNER"];
+const PROVIDER_ROLES = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY"];
+
+function needsApproval(user: { role: string; status: string }) {
+  return PROVIDER_ROLES.includes(user.role) && user.status !== "approved";
+}
+
+const ProtectedRoute = ({
+  component: Component,
+  allowedRoles,
+  requireApproved = false,
+}: {
+  component: any;
+  allowedRoles?: string[];
+  requireApproved?: boolean;
+}) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return <Spinner />;
   if (!user) return <Redirect to="/auth" />;
   if (allowedRoles && !allowedRoles.includes(user.role)) return <Redirect to="/" />;
+  if (requireApproved && needsApproval(user)) return <PendingApprovalScreen />;
   return <Component />;
 };
 
-const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN"];
-const CAFE_ROLES = ["CAFE_OWNER"];
-
 function SmartDashboard() {
   const { user } = useAuth();
+  if (user && needsApproval(user)) return <PendingApprovalScreen />;
   if (user?.role === "SUPPLIER") return <SupplierDashboard />;
   if (user?.role === "PRINTER") return <PrinterDashboard />;
   if (user?.role === "MARKETING") return <MarketingDashboard />;
@@ -140,75 +156,75 @@ function Router() {
 
       {/* ── Supplier routes ── */}
       <Route path="/supplier/products">
-        {() => (<DashboardLayout><ProtectedRoute component={ManageProducts} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={ManageProducts} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/categories">
-        {() => (<DashboardLayout><ProtectedRoute component={CategoriesPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={CategoriesPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/inventory">
-        {() => (<DashboardLayout><ProtectedRoute component={InventoryPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={InventoryPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/order-requests">
-        {() => (<DashboardLayout><ProtectedRoute component={OrderRequestsPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={OrderRequestsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/returns">
-        {() => (<DashboardLayout><ProtectedRoute component={ReturnsPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={ReturnsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/drivers">
-        {() => (<DashboardLayout><ProtectedRoute component={DriversPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={DriversPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/delivery-status">
-        {() => (<DashboardLayout><ProtectedRoute component={DeliveryStatusPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={DeliveryStatusPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/analytics">
-        {() => (<DashboardLayout><ProtectedRoute component={FinanceAnalyticsPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={FinanceAnalyticsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/payouts">
-        {() => (<DashboardLayout><ProtectedRoute component={PayoutsPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={PayoutsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/invoices">
-        {() => (<DashboardLayout><ProtectedRoute component={SupplierInvoicesPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={SupplierInvoicesPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/cafes">
-        {() => (<DashboardLayout><ProtectedRoute component={CafesPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={CafesPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/reviews">
-        {() => (<DashboardLayout><ProtectedRoute component={ReviewsPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={ReviewsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/notifications">
-        {() => (<DashboardLayout><ProtectedRoute component={SupplierNotificationsPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={SupplierNotificationsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/promotions">
-        {() => (<DashboardLayout><ProtectedRoute component={PromotionsPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={PromotionsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/discount-codes">
-        {() => (<DashboardLayout><ProtectedRoute component={DiscountCodesPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={DiscountCodesPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/settings">
         {() => (<DashboardLayout><ProtectedRoute component={SupplierSettingsPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/help">
-        {() => (<DashboardLayout><ProtectedRoute component={HelpCenterPage} allowedRoles={["SUPPLIER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={HelpCenterPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       {/* ── Printer routes ── */}
       <Route path="/printer/:rest*">
-        {() => (<DashboardLayout><ProtectedRoute component={PrinterDashboard} allowedRoles={["PRINTER"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={PrinterDashboard} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       {/* ── Marketing Panel routes ── */}
       <Route path="/marketing-panel/:rest*">
-        {() => (<DashboardLayout><ProtectedRoute component={MarketingDashboard} allowedRoles={["MARKETING"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={MarketingDashboard} allowedRoles={["MARKETING"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       {/* ── Barista Academy routes ── */}
       <Route path="/barista-academy/:rest*">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaAcademyDashboard} allowedRoles={["BARISTA_ACADEMY"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={BaristaAcademyDashboard} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       {/* ── Barista Marketplace routes ── */}
       <Route path="/barista-marketplace/:rest*">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceDashboard} allowedRoles={["BARISTA_MARKETPLACE"]} /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceDashboard} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       {/* ── Service pages (publicly viewable) ── */}

@@ -63,6 +63,16 @@ function DeleteConfirm({ open, name, onClose, onConfirm, isPending }: { open: bo
 
 // ── Taxonomy Badges ──────────────────────────────────────────────────────────
 
+function CardTaxBadges({ product }: { product: ProductWithTaxonomy }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {product.categoryLabel && <Badge variant="secondary" className="text-xs">{product.categoryLabel.name}</Badge>}
+      {product.subCategoryLabel && <Badge variant="outline" className="text-xs">{product.subCategoryLabel.name}</Badge>}
+      {product.brandLabel && <Badge className="text-xs bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400 hover:bg-green-100 border-0">{product.brandLabel.name}</Badge>}
+    </div>
+  );
+}
+
 function TaxBadges({ product }: { product: ProductWithTaxonomy }) {
   const flavorLabels = product.flavorLabels?.length ? product.flavorLabels : (product.flavorLabel ? [product.flavorLabel] : []);
   const sizeLabels = product.sizeLabels?.length ? product.sizeLabels : (product.sizeLabel ? [product.sizeLabel] : []);
@@ -240,11 +250,12 @@ function ProductFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit Product" : "Add Product to Catalog"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 mt-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+          <div className="space-y-4">
           {/* Name */}
           <div className="space-y-1.5">
             <Label>Product Name *</Label>
@@ -322,13 +333,45 @@ function ProductFormModal({
               Flavor and Size options are filtered by sub-category assignment. Select a sub-category to narrow results further.
             </p>
           )}
-
-          <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSave} disabled={save.isPending || !form.name.trim()} data-testid="button-save-product">
-              {save.isPending ? "Saving…" : editing ? "Save Changes" : "Create Product"}
-            </Button>
           </div>
+
+          <div className="lg:sticky lg:top-0">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
+            <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
+              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                {form.imageUrl ? (
+                  <img src={form.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <Package className="w-16 h-16 text-muted-foreground opacity-40" />
+                )}
+              </div>
+              <div className="p-4 space-y-2">
+                <p className="font-semibold text-lg leading-tight">{form.name || "Product name"}</p>
+                {form.description && <p className="text-sm text-muted-foreground line-clamp-3">{form.description}</p>}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {form.categoryId && <Badge variant="secondary" className="text-xs">{cats.find(c => String(c.id) === form.categoryId)?.name}</Badge>}
+                  {form.subCategoryId && <Badge variant="outline" className="text-xs">{filteredSubs.find(s => String(s.id) === form.subCategoryId)?.name}</Badge>}
+                  {form.brandId && <Badge className="text-xs">{filteredBrnds.find(b => String(b.id) === form.brandId)?.name}</Badge>}
+                </div>
+                {(form.flavorIds.length > 0 || form.sizeIds.length > 0) && (
+                  <div className="flex flex-wrap gap-1">
+                    {filteredFlavs.filter(f => form.flavorIds.includes(f.id)).map(f => (
+                      <Badge key={f.id} className="text-xs bg-pink-100 text-pink-700 border-0">{f.name}</Badge>
+                    ))}
+                    {filteredSzs.filter(s => form.sizeIds.includes(s.id)).map(s => (
+                      <Badge key={s.id} className="text-xs bg-amber-100 text-amber-700 border-0">{s.name}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end pt-4 border-t mt-4">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={save.isPending || !form.name.trim()} data-testid="button-save-product">
+            {save.isPending ? "Saving…" : editing ? "Save Changes" : "Create Product"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -450,7 +493,7 @@ export default function AdminProductsPage() {
   const qc = useQueryClient();
 
   const [section, setSection] = useState<'catalog' | 'supplier'>('catalog');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ProductWithTaxonomy | null>(null);
@@ -729,7 +772,7 @@ export default function AdminProductsPage() {
               </div>
               <div className="p-2.5 space-y-1.5">
                 <p className="font-medium text-sm line-clamp-2 leading-tight">{p.name}</p>
-                <TaxBadges product={p} />
+                <CardTaxBadges product={p} />
                 <div className="flex gap-1 pt-0.5">
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-xs flex-1" onClick={() => openEdit(p)} data-testid={`button-edit-product-${p.id}`}>
                     <Pencil className="w-3 h-3 mr-1" />Edit

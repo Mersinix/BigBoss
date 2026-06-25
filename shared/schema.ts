@@ -205,6 +205,8 @@ export const supplierCategories = pgTable("supplier_categories", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id").notNull(),
   categoryId: integer("category_id").notNull(),
+  mappingStatus: text("mapping_status").notNull().default('APPROVED'),
+  isFrozen: boolean("is_frozen").notNull().default(false),
 });
 
 export const supplierSubCategories = pgTable("supplier_sub_categories", {
@@ -425,6 +427,15 @@ export type SupplierCategoryMapping = {
   category: Category;
   subCategories: SubCategory[];
   selectedSubCategoryIds: number[];
+  mappingStatus: 'APPROVED' | 'PENDING';
+  isFrozen: boolean;
+};
+
+export type AdminSupplierCategoryOverview = {
+  supplierId: number;
+  approved: SupplierCategoryMapping[];
+  pending: SupplierCategoryMapping[];
+  notAdded: Category[];
 };
 
 // ── Marketplace Types (for cafe browsing) ────────────────────────────────────

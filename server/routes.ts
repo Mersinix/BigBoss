@@ -498,6 +498,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const supplierId = parseInt(req.params.supplierId);
       const { categoryIds } = req.body;
       await storage.setSupplierCategories(supplierId, Array.isArray(categoryIds) ? categoryIds : []);
+      broadcast("supplier_mapping_changed", { supplierId });
+      res.json({ success: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/admin/supplier-mappings/:supplierId/overview", requireAdmin, async (req, res) => {
+    try {
+      const supplierId = parseInt(req.params.supplierId);
+      res.json(await storage.getAdminSupplierCategoryOverview(supplierId));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.post("/api/admin/supplier-mappings/:supplierId/categories/:categoryId", requireAdmin, async (req, res) => {
+    try {
+      const supplierId = parseInt(req.params.supplierId);
+      const categoryId = parseInt(req.params.categoryId);
+      await storage.addSupplierCategories(supplierId, [categoryId], 'APPROVED');
+      broadcast("supplier_mapping_changed", { supplierId, categoryId });
+      res.json({ success: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.patch("/api/admin/supplier-mappings/:supplierId/categories/:categoryId/approve", requireAdmin, async (req, res) => {
+    try {
+      const supplierId = parseInt(req.params.supplierId);
+      const categoryId = parseInt(req.params.categoryId);
+      await storage.approveSupplierCategoryMapping(supplierId, categoryId);
+      broadcast("supplier_mapping_changed", { supplierId, categoryId });
+      res.json({ success: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.patch("/api/admin/supplier-mappings/:supplierId/categories/:categoryId/freeze", requireAdmin, async (req, res) => {
+    try {
+      const supplierId = parseInt(req.params.supplierId);
+      const categoryId = parseInt(req.params.categoryId);
+      const { isFrozen } = z.object({ isFrozen: z.boolean() }).parse(req.body);
+      await storage.setSupplierCategoryFrozen(supplierId, categoryId, isFrozen);
+      broadcast("supplier_mapping_changed", { supplierId, categoryId, isFrozen });
+      res.json({ success: true });
+    } catch { res.status(400).json({ message: "Invalid" }); }
+  });
+
+  app.delete("/api/admin/supplier-mappings/:supplierId/categories/:categoryId", requireAdmin, async (req, res) => {
+    try {
+      const supplierId = parseInt(req.params.supplierId);
+      const categoryId = parseInt(req.params.categoryId);
+      await storage.removeSupplierCategory(supplierId, categoryId);
+      broadcast("supplier_mapping_changed", { supplierId, categoryId });
       res.json({ success: true });
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -906,9 +955,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const user = await storage.getUser(req.session.userId!);
       const { categoryIds } = z.object({ categoryIds: z.array(z.number()) }).parse(req.body);
-      await storage.setSupplierCategories(user!.id, categoryIds);
+      await storage.addSupplierCategories(user!.id, categoryIds, 'PENDING');
+      broadcast("supplier_mapping_changed", { supplierId: user!.id });
       res.json({ message: "Saved" });
     } catch { res.status(400).json({ message: "Invalid" }); }
+  });
+
+  app.patch("/api/supplier/categories/:categoryId/freeze", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const categoryId = parseInt(req.params.categoryId);
+      const { isFrozen } = z.object({ isFrozen: z.boolean() }).parse(req.body);
+      await storage.setSupplierCategoryFrozen(user!.id, categoryId, isFrozen);
+      broadcast("supplier_mapping_changed", { supplierId: user!.id, categoryId, isFrozen });
+      res.json({ success: true });
+    } catch { res.status(400).json({ message: "Invalid" }); }
+  });
+
+  app.delete("/api/supplier/categories/:categoryId", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const categoryId = parseInt(req.params.categoryId);
+      await storage.removeSupplierCategory(user!.id, categoryId);
+      broadcast("supplier_mapping_changed", { supplierId: user!.id, categoryId });
+      res.json({ success: true });
+    } catch { res.status(500).json({ message: "Error" }); }
   });
 
   app.post("/api/supplier/subcategories", requireApprovedSupplier, async (req, res) => {
@@ -916,6 +987,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = await storage.getUser(req.session.userId!);
       const { subCategoryIds } = z.object({ subCategoryIds: z.array(z.number()) }).parse(req.body);
       await storage.setSupplierSubCategories(user!.id, subCategoryIds);
+      broadcast("supplier_mapping_changed", { supplierId: user!.id });
       res.json({ message: "Saved" });
     } catch { res.status(400).json({ message: "Invalid" }); }
   });
@@ -938,7 +1010,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const [adminProds, supplierMappings, myListings] = await Promise.all([
         storage.getAdminProducts(filters),
-        storage.getSupplierCategoryMappings(user!.id),
+        storage.getSupplierCategoryMappings(user!.id, { approvedOnly: true }),
         db.select().from(supplierProductListings).where(eq(supplierProductListings.supplierId, user!.id)),
       ]);
 

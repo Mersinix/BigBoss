@@ -15,11 +15,12 @@ import {
   type InsertSize, type Size, type SizeWithCount,
   type InsertBrand, type Brand, type BrandWithCount,
   type SupplierCategoryMapping,
+  type AdminSupplierCategoryOverview,
   type InsertSupplierProductListing, type SupplierProductListing, type SupplierListingWithProduct,
   type MarketplaceProduct, type MarketplaceListing, type MarketplaceVariant,
   type CreateOrderItem, type BillingInfo, type CreateOrderItemInput,
 } from "@shared/schema";
-import { eq, and, inArray, ne, sql } from "drizzle-orm";
+import { eq, and, inArray, ne, sql, notInArray } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -89,8 +90,13 @@ export interface IStorage {
   deleteBrand(id: number): Promise<void>;
 
   // Supplier mappings
-  getSupplierCategoryMappings(supplierId: number): Promise<SupplierCategoryMapping[]>;
+  getSupplierCategoryMappings(supplierId: number, options?: { approvedOnly?: boolean }): Promise<SupplierCategoryMapping[]>;
+  getAdminSupplierCategoryOverview(supplierId: number): Promise<AdminSupplierCategoryOverview>;
   setSupplierCategories(supplierId: number, categoryIds: number[]): Promise<void>;
+  addSupplierCategories(supplierId: number, categoryIds: number[], status?: 'APPROVED' | 'PENDING'): Promise<void>;
+  removeSupplierCategory(supplierId: number, categoryId: number): Promise<void>;
+  setSupplierCategoryFrozen(supplierId: number, categoryId: number, isFrozen: boolean): Promise<void>;
+  approveSupplierCategoryMapping(supplierId: number, categoryId: number): Promise<void>;
   setSupplierSubCategories(supplierId: number, subCategoryIds: number[]): Promise<void>;
   isProductAllowedForSupplier(supplierId: number, productId: number): Promise<boolean>;
 
@@ -438,9 +444,12 @@ export class DatabaseStorage implements IStorage {
     const allListings = await db.select().from(supplierProductListings);
     const allVariants = await db.select().from(supplierProductVariants);
     const allUsers = await db.select().from(users);
+    const frozenMappings = await db.select().from(supplierCategories).where(eq(supplierCategories.isFrozen, true));
+    const frozenSet = new Set(frozenMappings.map((f) => `${f.supplierId}:${f.categoryId}`));
     const tx = await buildTaxonomyCache();
 
     const supplierMap = new Map(allUsers.map((u) => [u.id, u.name]));
+    const productMap = new Map(allProducts.map((p) => [p.id, p]));
     const variantsByListing = new Map<number, typeof allVariants>();
     for (const v of allVariants) {
       if (!variantsByListing.has(v.listingId)) variantsByListing.set(v.listingId, []);
@@ -459,12 +468,30 @@ export class DatabaseStorage implements IStorage {
     for (const prod of prods) {
       const listings = allListings.filter((l) => l.productId === prod.id);
       if (!listings.length) continue;
-      const marketListings: MarketplaceListing[] = listings.map((l) => {
-        const variants = variantsByListing.get(l.id) ?? [];
-        const totalStock = variants.length ? variants.reduce((s, v) => s + v.quantity, 0) : l.stock;
-        const minPrice = variants.length ? Math.min(...variants.map((v) => v.price)) : l.price;
-        return { id: l.id, supplierId: l.supplierId, supplierName: supplierMap.get(l.supplierId) ?? "", variants: variants.map((v) => ({ id: v.id, listingId: v.listingId, flavorId: v.flavorId, sizeId: v.sizeId, flavorName: v.flavorId ? (tx.flvMap.get(v.flavorId)?.name ?? null) : null, sizeName: v.sizeId ? (tx.szMap.get(v.sizeId)?.name ?? null) : null, price: v.price, quantity: v.quantity })), totalStock, minPrice };
-      }).filter((l) => l.totalStock > 0);
+      const marketListings: MarketplaceListing[] = listings
+        .filter((l) => {
+          if (prod.categoryId && frozenSet.has(`${l.supplierId}:${prod.categoryId}`)) return false;
+          return true;
+        })
+        .map((l) => {
+          const rawVariants = variantsByListing.get(l.id) ?? [];
+          const variants = rawVariants
+            .filter((v) => v.price > 0 && v.quantity > 0)
+            .map((v) => ({
+              id: v.id,
+              listingId: v.listingId,
+              flavorId: v.flavorId,
+              sizeId: v.sizeId,
+              flavorName: v.flavorId ? (tx.flvMap.get(v.flavorId)?.name ?? null) : null,
+              sizeName: v.sizeId ? (tx.szMap.get(v.sizeId)?.name ?? null) : null,
+              price: v.price,
+              quantity: v.quantity,
+            }));
+          const totalStock = variants.length ? variants.reduce((s, v) => s + v.quantity, 0) : (l.stock > 0 && l.price > 0 ? l.stock : 0);
+          const minPrice = variants.length ? Math.min(...variants.map((v) => v.price)) : (l.price > 0 ? l.price : 0);
+          return { id: l.id, supplierId: l.supplierId, supplierName: supplierMap.get(l.supplierId) ?? "", variants, totalStock, minPrice };
+        })
+        .filter((l) => l.totalStock > 0 && l.minPrice > 0);
       if (!marketListings.length) continue;
       const bestPrice = Math.min(...marketListings.map((l) => l.minPrice));
       const totalStock = marketListings.reduce((s, l) => s + l.totalStock, 0);
@@ -672,32 +699,121 @@ export class DatabaseStorage implements IStorage {
 
   // ── Supplier mappings ───────────────────────────────────────────────────────
 
-  async getSupplierCategoryMappings(supplierId: number): Promise<SupplierCategoryMapping[]> {
+  async getSupplierCategoryMappings(supplierId: number, options?: { approvedOnly?: boolean }): Promise<SupplierCategoryMapping[]> {
     const allCats = await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true)));
     const allSubs = await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
     const supplierCats = await db.select().from(supplierCategories).where(eq(supplierCategories.supplierId, supplierId));
     const supplierSubs = await db.select().from(supplierSubCategories).where(eq(supplierSubCategories.supplierId, supplierId));
-    const selectedCatIds = new Set(supplierCats.map((sc) => sc.categoryId));
+    const catMeta = new Map(supplierCats.map((sc) => [sc.categoryId, sc]));
+
     return allCats
-      .filter((cat) => selectedCatIds.has(cat.id))
-      .map((cat) => ({
-        category: cat,
-        subCategories: allSubs.filter((s) => s.categoryId === cat.id),
-        selectedSubCategoryIds: supplierSubs
-          .filter((ss) => allSubs.some((s) => s.id === ss.subCategoryId && s.categoryId === cat.id))
-          .map((ss) => ss.subCategoryId),
-      }));
+      .filter((cat) => catMeta.has(cat.id))
+      .filter((cat) => {
+        const meta = catMeta.get(cat.id)!;
+        if (options?.approvedOnly) {
+          return meta.mappingStatus === 'APPROVED' && !meta.isFrozen;
+        }
+        return true;
+      })
+      .map((cat) => {
+        const meta = catMeta.get(cat.id)!;
+        return {
+          category: cat,
+          subCategories: allSubs.filter((s) => s.categoryId === cat.id),
+          selectedSubCategoryIds: supplierSubs
+            .filter((ss) => allSubs.some((s) => s.id === ss.subCategoryId && s.categoryId === cat.id))
+            .map((ss) => ss.subCategoryId),
+          mappingStatus: (meta.mappingStatus === 'PENDING' ? 'PENDING' : 'APPROVED') as 'APPROVED' | 'PENDING',
+          isFrozen: meta.isFrozen ?? false,
+        };
+      });
+  }
+
+  async getAdminSupplierCategoryOverview(supplierId: number): Promise<AdminSupplierCategoryOverview> {
+    const allMappings = await this.getSupplierCategoryMappings(supplierId);
+    const allCats = await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true)));
+    const mappedIds = new Set(allMappings.map((m) => m.category.id));
+
+    return {
+      supplierId,
+      approved: allMappings.filter((m) => m.mappingStatus === 'APPROVED'),
+      pending: allMappings.filter((m) => m.mappingStatus === 'PENDING'),
+      notAdded: allCats.filter((c) => !mappedIds.has(c.id)),
+    };
+  }
+
+  async addSupplierCategories(supplierId: number, categoryIds: number[], status: 'APPROVED' | 'PENDING' = 'PENDING') {
+    const existing = await db.select().from(supplierCategories).where(eq(supplierCategories.supplierId, supplierId));
+    const existingIds = new Set(existing.map((e) => e.categoryId));
+    const newIds = categoryIds.filter((id) => !existingIds.has(id));
+    if (newIds.length) {
+      await db.insert(supplierCategories).values(
+        newIds.map((categoryId) => ({ supplierId, categoryId, mappingStatus: status, isFrozen: false })),
+      );
+    }
+  }
+
+  async removeSupplierCategory(supplierId: number, categoryId: number) {
+    const allSubs = await db.select().from(subCategories).where(eq(subCategories.categoryId, categoryId));
+    const subIds = allSubs.map((s) => s.id);
+    await db.delete(supplierCategories).where(
+      and(eq(supplierCategories.supplierId, supplierId), eq(supplierCategories.categoryId, categoryId)),
+    );
+    if (subIds.length) {
+      await db.delete(supplierSubCategories).where(
+        and(eq(supplierSubCategories.supplierId, supplierId), inArray(supplierSubCategories.subCategoryId, subIds)),
+      );
+    }
+  }
+
+  async setSupplierCategoryFrozen(supplierId: number, categoryId: number, isFrozen: boolean) {
+    await db.update(supplierCategories)
+      .set({ isFrozen })
+      .where(and(eq(supplierCategories.supplierId, supplierId), eq(supplierCategories.categoryId, categoryId)));
+  }
+
+  async approveSupplierCategoryMapping(supplierId: number, categoryId: number) {
+    await db.update(supplierCategories)
+      .set({ mappingStatus: 'APPROVED' })
+      .where(and(eq(supplierCategories.supplierId, supplierId), eq(supplierCategories.categoryId, categoryId)));
   }
 
   async setSupplierCategories(supplierId: number, categoryIds: number[]) {
+    const existing = await db.select().from(supplierCategories).where(eq(supplierCategories.supplierId, supplierId));
+
+    // Never drop supplier-initiated PENDING mappings omitted from bulk admin selection
+    const pendingPreservedIds = existing
+      .filter((e) => e.mappingStatus === 'PENDING' && !categoryIds.includes(e.categoryId))
+      .map((e) => e.categoryId);
+    const finalCategoryIds = Array.from(new Set([...categoryIds, ...pendingPreservedIds]));
+
     const allSubs = await db.select().from(subCategories);
-    const validSubIds = new Set(allSubs.filter((s) => categoryIds.includes(s.categoryId)).map((s) => s.id));
+    const validSubIds = new Set(allSubs.filter((s) => finalCategoryIds.includes(s.categoryId)).map((s) => s.id));
     const supplierSubs = await db.select().from(supplierSubCategories).where(eq(supplierSubCategories.supplierId, supplierId));
     const orphanSubIds = supplierSubs.filter((ss) => !validSubIds.has(ss.subCategoryId)).map((ss) => ss.subCategoryId);
 
-    await db.delete(supplierCategories).where(eq(supplierCategories.supplierId, supplierId));
-    if (categoryIds.length) {
-      await db.insert(supplierCategories).values(categoryIds.map((cid) => ({ supplierId, categoryId: cid })));
+    if (finalCategoryIds.length === 0) {
+      await db.delete(supplierCategories).where(eq(supplierCategories.supplierId, supplierId));
+    } else {
+      await db.delete(supplierCategories).where(
+        and(
+          eq(supplierCategories.supplierId, supplierId),
+          notInArray(supplierCategories.categoryId, finalCategoryIds),
+        ),
+      );
+    }
+
+    const existingIds = new Set(existing.map((e) => e.categoryId));
+    const toInsert = finalCategoryIds.filter((cid) => !existingIds.has(cid));
+    if (toInsert.length) {
+      await db.insert(supplierCategories).values(
+        toInsert.map((cid) => ({
+          supplierId,
+          categoryId: cid,
+          mappingStatus: 'APPROVED' as const,
+          isFrozen: false,
+        })),
+      );
     }
     if (orphanSubIds.length) {
       await db.delete(supplierSubCategories).where(
@@ -726,7 +842,7 @@ export class DatabaseStorage implements IStorage {
     if (!product?.isAdminProduct) return false;
     if (!product.categoryId) return false;
 
-    const mappings = await this.getSupplierCategoryMappings(supplierId);
+    const mappings = await this.getSupplierCategoryMappings(supplierId, { approvedOnly: true });
     if (!mappings.length) return false;
 
     const mappedCatIds = new Set(mappings.map((m) => m.category.id));

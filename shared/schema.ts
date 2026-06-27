@@ -27,6 +27,7 @@ export const users = pgTable("users", {
   locationLat: text("location_lat"),
   locationLng: text("location_lng"),
   locationPlaceId: text("location_place_id"),
+  locationDetails: jsonb("location_details"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -88,6 +89,8 @@ export const orders = pgTable("orders", {
   deliveryId: integer("delivery_id"),
   status: orderStatusEnum("status").notNull().default('PENDING'),
   totalAmount: integer("total_amount").notNull(),
+  deliveryAddress: jsonb("delivery_address"),
+  courierInstructions: text("courier_instructions"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -496,8 +499,32 @@ export type CreateOrderItemInput = Omit<CreateOrderItem, 'unitPrice' | 'supplier
   unitPrice?: number;
 };
 
+export type AddressDetails = {
+  street?: string;
+  buildingNumber?: string;
+  postalCode?: string;
+  governorate?: string;
+  municipality?: string;
+  buildingType?: string;
+  apartment?: string;
+  floor?: string;
+  door?: string;
+  additionalNotes?: string;
+};
+
+/** Map pin + optional manual details (account or order delivery). */
+export type GeoLocation = {
+  address: string;
+  lat: string;
+  lng: string;
+  placeId: string;
+  details?: AddressDetails;
+};
+
 export type CreateOrderRequest = {
   items: CreateOrderItem[];
+  deliveryAddress?: GeoLocation;
+  courierInstructions?: string;
 };
 
 export type UpdateOrderStatusRequest = { status: typeof orders.$inferSelect.status; deliveryId?: number };

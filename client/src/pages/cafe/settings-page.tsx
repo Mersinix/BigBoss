@@ -229,7 +229,11 @@ export default function CafeSettingsPage() {
   const handleLocationConfirm = async (loc: PickedLocation) => {
     try {
       await apiRequest("PATCH", "/api/auth/me/location", {
-        address: loc.address, lat: loc.lat, lng: loc.lng, placeId: loc.placeId,
+        address: loc.address,
+        lat: loc.lat,
+        lng: loc.lng,
+        placeId: loc.placeId,
+        details: loc.details,
       });
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setLocationPickerOpen(false);
@@ -242,6 +246,7 @@ export default function CafeSettingsPage() {
 
   const hasLocation = !!(user as any)?.locationAddress;
   const locationAddress = (user as any)?.locationAddress as string | undefined;
+  const locationDetails = (user as any)?.locationDetails as import("@shared/schema").AddressDetails | undefined;
   const billing = (user as any)?.billingInfo ?? {};
 
   const sections = [
@@ -389,10 +394,12 @@ export default function CafeSettingsPage() {
       <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
       <LocationPickerModal
         open={locationPickerOpen}
-        title="Où se trouve votre café ?"
+        mode="account"
+        title="Choisissez votre adresse"
         onClose={() => setLocationPickerOpen(false)}
         onConfirm={handleLocationConfirm}
         initialAddress={locationAddress}
+        initialDetails={locationDetails}
       />
     </>
   );

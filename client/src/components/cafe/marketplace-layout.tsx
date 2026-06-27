@@ -15,9 +15,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
+import { useSearchLocationStore, formatLocationLabel, pickedToGeoLocation } from "@/store/search-location-store";
 import {
   Coffee, MapPin, ChevronDown, ChevronLeft, ShoppingBag, Heart, MessageCircle,
   Search, LogOut, Settings, LayoutDashboard, Store, Send,
@@ -616,44 +616,24 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const isCafeOwner = user?.role === "CAFE_OWNER";
-  const savedAddress = (user as any)?.locationAddress as string | undefined;
+  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+  const setSearchLocation = useSearchLocationStore((s) => s.setSearchLocation);
 
-  const LS_KEY = "bigboss_location";
-  const [localStoredAddress, setLocalStoredAddress] = useState<string | null>(() => {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (raw) return (JSON.parse(raw) as { address: string }).address ?? null;
-    } catch {}
-    return null;
-  });
+  const isOnSettings = location.startsWith("/cafe/settings");
+  const showSearchLocation = !isOnSettings;
 
-  // Derive a short label for the navbar button
-  const locationLabel = (() => {
-    const addr = isCafeOwner ? savedAddress : (savedAddress ?? localStoredAddress);
-    if (addr) {
-      const parts = addr.split(",");
-      return parts[0]?.trim() ?? addr;
-    }
-    return "Tunis";
-  })();
+  const locationLabel = searchLocation?.address
+    ? formatLocationLabel(searchLocation.address)
+    : "Tunis";
 
   const handleLocationButtonClick = () => {
     setLocationPickerOpen(true);
   };
 
-  const handleLocationConfirm = async (loc: PickedLocation) => {
-    const entry = { address: loc.address, lat: loc.lat, lng: loc.lng, placeId: loc.placeId };
-    try { localStorage.setItem(LS_KEY, JSON.stringify(entry)); } catch {}
-    setLocalStoredAddress(loc.address);
-    if (user) {
-      try {
-        await apiRequest("PATCH", "/api/auth/me/location", entry);
-        await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      } catch {}
-    }
+  const handleLocationConfirm = (loc: PickedLocation) => {
+    setSearchLocation(pickedToGeoLocation(loc));
     setLocationPickerOpen(false);
-    toast({ title: "📍 Adresse mise à jour", description: loc.address });
+    toast({ title: "📍 Zone de recherche mise à jour", description: formatLocationLabel(loc.address) });
   };
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -691,16 +671,18 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          {/* Location */}
-          <button
-            onClick={handleLocationButtonClick}
-            className="flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-amber-600 transition-colors border border-gray-200 rounded-full px-2.5 py-1.5 shrink-0 max-w-[160px]"
-            data-testid="button-marketplace-location"
-          >
-            <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
-            <span className="hidden sm:block truncate">{locationLabel}</span>
-            <ChevronDown className="w-3 h-3 shrink-0" />
-          </button>
+          {/* Location — search zone only (never updates profile) */}
+          {showSearchLocation && (
+            <button
+              onClick={handleLocationButtonClick}
+              className="flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-amber-600 transition-colors border border-gray-200 rounded-full px-2.5 py-1.5 shrink-0 max-w-[160px]"
+              data-testid="button-marketplace-location"
+            >
+              <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
+              <span className="hidden sm:block truncate">{locationLabel}</span>
+              <ChevronDown className="w-3 h-3 shrink-0" />
+            </button>
+          )}
 
           {/* Search */}
           <form onSubmit={handleSearch} className="flex-1 max-w-md hidden sm:block">
@@ -850,14 +832,16 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
         </button>
       )}
 
-      {/* ── Google Maps Location Picker (all users) ── */}
-      <LocationPickerModal
-        open={locationPickerOpen}
-        title="Où livrer votre commande ?"
-        onClose={() => setLocationPickerOpen(false)}
-        onConfirm={handleLocationConfirm}
-        initialAddress={savedAddress ?? localStoredAddress ?? undefined}
-      />
+      {showSearchLocation && (
+        <LocationPickerModal
+          open={locationPickerOpen}
+          mode="search"
+          title="Où voulez-vous rechercher ?"
+          onClose={() => setLocationPickerOpen(false)}
+          onConfirm={handleLocationConfirm}
+          initialAddress={searchLocation?.address}
+        />
+      )}
 
       {/* ── Profile Modal ── */}
       {user && (

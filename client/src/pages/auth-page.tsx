@@ -354,13 +354,13 @@ export default function AuthPage() {
   const handleLocationConfirm = async (loc: PickedLocation) => {
     setLocationModalOpen(false);
     if (pendingFormData) {
-      // Include location in registration payload and submit
       const payload = {
         ...pendingFormData,
         locationAddress: loc.address,
         locationLat: parseFloat(loc.lat),
         locationLng: parseFloat(loc.lng),
         locationPlaceId: loc.placeId,
+        locationDetails: loc.details ?? null,
       };
       setPendingFormData(null);
       await submitRegistration(payload);
@@ -504,7 +504,8 @@ export default function AuthPage() {
       {/* Location Picker modal — triggered before registration for location-required roles */}
       <LocationPickerModal
         open={locationModalOpen}
-        title="Où se trouve votre établissement ?"
+        mode="account"
+        title="Choisissez votre adresse"
         required={true}
         onClose={() => { setPendingFormData(null); setLocationModalOpen(false); }}
         onConfirm={handleLocationConfirm}

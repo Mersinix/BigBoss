@@ -15,6 +15,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
+import { useSearchLocationStore } from "@/store/search-location-store";
 import type { MarketplaceProduct, CategoryWithCount } from "@shared/schema";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
@@ -128,7 +129,7 @@ function ProductCard({ product, onClick, hasCommercialAccess }: { product: Marke
 
 interface FilterState { subCategoryId: string; brandId: string; flavorId: string; sizeId: string; sortBy: string; }
 
-function FilterBar({ products, filters, onChange, onReset, hasUserLocation }: { products: MarketplaceProduct[]; filters: FilterState; onChange: (key: keyof FilterState, val: string) => void; onReset: () => void; hasUserLocation: boolean }) {
+function FilterBar({ products, filters, onChange, onReset, hasSearchLocation }: { products: MarketplaceProduct[]; filters: FilterState; onChange: (key: keyof FilterState, val: string) => void; onReset: () => void; hasSearchLocation: boolean }) {
   const hasActive = Object.values(filters).some(Boolean);
   const subCategories = useMemo(() => { const map = new Map<string, string>(); products.forEach((p) => { if (p.subCategoryLabel?.id && p.subCategoryLabel?.name) map.set(String(p.subCategoryLabel.id), p.subCategoryLabel.name); }); return Array.from(map.entries()).map(([id, name]) => ({ id, name })); }, [products]);
   const brands = useMemo(() => { const map = new Map<string, string>(); products.forEach((p) => { if (p.brandLabel?.id && p.brandLabel?.name) map.set(String(p.brandLabel.id), p.brandLabel.name); }); return Array.from(map.entries()).map(([id, name]) => ({ id, name })); }, [products]);
@@ -170,7 +171,7 @@ function FilterBar({ products, filters, onChange, onReset, hasUserLocation }: { 
             <SelectItem value="price_asc">Price: Low to High</SelectItem>
             <SelectItem value="price_desc">Price: High to Low</SelectItem>
             <SelectItem value="suppliers">Most Suppliers</SelectItem>
-            {hasUserLocation && <SelectItem value="nearest"><span className="flex items-center gap-1"><Navigation className="w-3 h-3 inline" /> Nearest First</span></SelectItem>}
+            {hasSearchLocation && <SelectItem value="nearest"><span className="flex items-center gap-1"><Navigation className="w-3 h-3 inline" /> Nearest First</span></SelectItem>}
           </SelectContent>
         </Select>
         {hasActive && <button onClick={onReset} className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors ml-1"><RotateCcw className="w-3 h-3" /> Reset</button>}
@@ -185,10 +186,10 @@ export default function BrowseProducts() {
   const [, navigate] = useLocation();
   const searchStr = useSearch();
   const hasCommercialAccess = useCommercialAccess();
-  const { user } = useAuth();
-  const userLat = (user as any)?.locationLat ? parseFloat((user as any).locationLat) : null;
-  const userLng = (user as any)?.locationLng ? parseFloat((user as any).locationLng) : null;
-  const hasUserLocation = userLat !== null && userLng !== null;
+  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+  const searchLat = searchLocation?.lat ? parseFloat(searchLocation.lat) : null;
+  const searchLng = searchLocation?.lng ? parseFloat(searchLocation.lng) : null;
+  const hasSearchLocation = searchLat !== null && searchLng !== null && !Number.isNaN(searchLat) && !Number.isNaN(searchLng);
 
   const urlParams = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
   const initialSearch = urlParams.get("q") ?? "";
@@ -228,19 +229,19 @@ export default function BrowseProducts() {
     if (filters.sortBy === "price_asc") list = [...list].sort((a, b) => (a.bestPrice ?? Infinity) - (b.bestPrice ?? Infinity));
     if (filters.sortBy === "price_desc") list = [...list].sort((a, b) => (b.bestPrice ?? 0) - (a.bestPrice ?? 0));
     if (filters.sortBy === "suppliers") list = [...list].sort((a, b) => b.supplierCount - a.supplierCount);
-    if (filters.sortBy === "nearest" && hasUserLocation) {
+    if (filters.sortBy === "nearest" && hasSearchLocation) {
       list = [...list].sort((a, b) => {
         const aLat = (a as any).supplierLat ? parseFloat((a as any).supplierLat) : null;
         const aLng = (a as any).supplierLng ? parseFloat((a as any).supplierLng) : null;
         const bLat = (b as any).supplierLat ? parseFloat((b as any).supplierLat) : null;
         const bLng = (b as any).supplierLng ? parseFloat((b as any).supplierLng) : null;
-        const distA = aLat && aLng ? calculateDistance(userLat!, userLng!, aLat, aLng) : Infinity;
-        const distB = bLat && bLng ? calculateDistance(userLat!, userLng!, bLat, bLng) : Infinity;
+        const distA = aLat && aLng ? calculateDistance(searchLat!, searchLng!, aLat, aLng) : Infinity;
+        const distB = bLat && bLng ? calculateDistance(searchLat!, searchLng!, bLat, bLng) : Infinity;
         return distA - distB;
       });
     }
     return list;
-  }, [allProducts, search, categoryId, filters, hasUserLocation, userLat, userLng]);
+  }, [allProducts, search, categoryId, filters, hasSearchLocation, searchLat, searchLng]);
 
   const updateFilter = (key: keyof FilterState, val: string) => setFilters((p) => ({ ...p, [key]: val }));
   const resetFilters = () => setFilters({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" });
@@ -270,7 +271,7 @@ export default function BrowseProducts() {
           }}
         />
 
-        <FilterBar products={filtered.length > 0 ? filtered : allProducts} filters={filters} onChange={updateFilter} onReset={resetFilters} hasUserLocation={hasUserLocation} />
+        <FilterBar products={filtered.length > 0 ? filtered : allProducts} filters={filters} onChange={updateFilter} onReset={resetFilters} hasSearchLocation={hasSearchLocation} />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">

@@ -105,6 +105,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     locationLat: z.number().optional().nullable(),
     locationLng: z.number().optional().nullable(),
     locationPlaceId: z.string().optional().nullable(),
+    locationDetails: z.object({
+      street: z.string().optional(),
+      buildingNumber: z.string().optional(),
+      postalCode: z.string().optional(),
+      governorate: z.string().optional(),
+      municipality: z.string().optional(),
+      buildingType: z.string().optional(),
+      apartment: z.string().optional(),
+      floor: z.string().optional(),
+      door: z.string().optional(),
+      additionalNotes: z.string().optional(),
+    }).optional().nullable(),
   });
 
   app.post(api.auth.register.path, async (req, res) => {
@@ -143,6 +155,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         locationLat: body.locationLat ?? null,
         locationLng: body.locationLng ?? null,
         locationPlaceId: body.locationPlaceId ?? null,
+        locationDetails: body.locationDetails ?? null,
       };
 
       const user = await storage.createUser(userData);
@@ -214,13 +227,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch('/api/auth/me/location', requireAuth, async (req, res) => {
     try {
-      const { address, lat, lng, placeId } = req.body;
+      const { address, lat, lng, placeId, details } = req.body;
       if (!address || !lat || !lng) return res.status(400).json({ message: "address, lat and lng are required" });
       const user = await storage.updateUserLocation(req.session.userId!, {
         address: String(address),
         lat: String(lat),
         lng: String(lng),
         placeId: String(placeId ?? ""),
+        details: details ?? undefined,
       });
       res.json(user);
     } catch (err) {
@@ -430,7 +444,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post(api.orders.create.path, requireApprovedCafeOwner, async (req, res) => {
     try {
-      const { items } = z.object({
+      const deliveryAddressSchema = z.object({
+        address: z.string(),
+        lat: z.string(),
+        lng: z.string(),
+        placeId: z.string().optional(),
+        details: z.object({
+          street: z.string().optional(),
+          buildingNumber: z.string().optional(),
+          postalCode: z.string().optional(),
+          governorate: z.string().optional(),
+          municipality: z.string().optional(),
+          buildingType: z.string().optional(),
+          apartment: z.string().optional(),
+          floor: z.string().optional(),
+          door: z.string().optional(),
+          additionalNotes: z.string().optional(),
+        }).optional(),
+      }).optional();
+
+      const { items, deliveryAddress, courierInstructions } = z.object({
         items: z.array(z.object({
           listingId: z.number(),
           productId: z.number(),
@@ -442,11 +475,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           sizeName: z.string().nullable().optional(),
           quantity: z.number().min(1),
           unitPrice: z.number().min(0).optional(),
-        }))
+        })),
+        deliveryAddress: deliveryAddressSchema,
+        courierInstructions: z.string().max(500).optional(),
       }).parse(req.body);
 
       const validatedItems = await storage.resolveOrderItems(items);
-      const order = await storage.createOrder(req.session.userId!, validatedItems);
+      const normalizedDelivery = deliveryAddress ? {
+        ...deliveryAddress,
+        placeId: deliveryAddress.placeId ?? "",
+      } : undefined;
+      const order = await storage.createOrder(req.session.userId!, validatedItems, {
+        deliveryAddress: normalizedDelivery,
+        courierInstructions,
+      });
       res.status(201).json(order);
     } catch (err: any) {
       if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });

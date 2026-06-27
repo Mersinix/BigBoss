@@ -28,7 +28,7 @@ export interface IStorage {
   getUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserStatus(id: number, status: 'pending' | 'approved' | 'rejected'): Promise<User>;
-  updateUserLocation(id: number, loc: { address: string; lat: string; lng: string; placeId: string }): Promise<User>;
+  updateUserLocation(id: number, loc: { address: string; lat: string; lng: string; placeId: string; details?: import("@shared/schema").AddressDetails }): Promise<User>;
   updateUserProfile(id: number, updates: { name?: string; phone?: string; email?: string }): Promise<User>;
   updateUserBilling(id: number, billing: BillingInfo): Promise<User>;
 
@@ -46,7 +46,7 @@ export interface IStorage {
   getOrders(filters?: { cafeId?: number; supplierId?: number; deliveryId?: number }): Promise<OrderWithDetails[]>;
   getOrder(id: number): Promise<OrderWithDetails | undefined>;
   resolveOrderItems(items: CreateOrderItemInput[]): Promise<CreateOrderItem[]>;
-  createOrder(cafeId: number, cartItems: CreateOrderItem[]): Promise<Order>;
+  createOrder(cafeId: number, cartItems: CreateOrderItem[], opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string }): Promise<Order>;
   canUserAccessOrder(userId: number, userRole: string, orderId: number): Promise<boolean>;
   updateOrderStatus(id: number, status: typeof orders.$inferSelect.status, deliveryId?: number): Promise<Order>;
 
@@ -180,12 +180,13 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async updateUserLocation(id: number, loc: { address: string; lat: string; lng: string; placeId: string }) {
+  async updateUserLocation(id: number, loc: { address: string; lat: string; lng: string; placeId: string; details?: import("@shared/schema").AddressDetails }) {
     const [updated] = await db.update(users).set({
       locationAddress: loc.address,
       locationLat: loc.lat,
       locationLng: loc.lng,
       locationPlaceId: loc.placeId,
+      locationDetails: loc.details ?? null,
     }).where(eq(users.id, id)).returning();
     return updated;
   }
@@ -375,7 +376,11 @@ export class DatabaseStorage implements IStorage {
     return resolved;
   }
 
-  async createOrder(cafeId: number, cartItems: CreateOrderItem[]): Promise<Order> {
+  async createOrder(
+    cafeId: number,
+    cartItems: CreateOrderItem[],
+    opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string },
+  ): Promise<Order> {
     const totalAmount = cartItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
     const supplierIds = Array.from(new Set(cartItems.map((i) => i.supplierId)));
     const primarySupplierId = supplierIds.length === 1 ? supplierIds[0] : null;
@@ -385,6 +390,8 @@ export class DatabaseStorage implements IStorage {
       supplierId: primarySupplierId,
       status: 'PENDING',
       totalAmount,
+      deliveryAddress: opts?.deliveryAddress ?? null,
+      courierInstructions: opts?.courierInstructions?.trim() || null,
     }).returning();
 
     for (const item of cartItems) {

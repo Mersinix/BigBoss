@@ -13,24 +13,9 @@ import {
 import { Link, Redirect } from "wouter";
 import type { CategoryWithCount } from "@shared/schema";
 import { PRINT_CATEGORIES } from "@/data/print-data";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
-
-const LS_KEY = "bigboss_location";
-
-function readStoredLocation(): { address: string; lat: string; lng: string; placeId: string } | null {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return null;
-}
-
-function formatLocationLabel(address: string): string {
-  const parts = address.split(",");
-  return parts[0]?.trim() ?? address;
-}
+import { useSearchLocationStore, formatLocationLabel, pickedToGeoLocation } from "@/store/search-location-store";
 
 const SERVICES = [
   { id: "shop", label: "SHOP", icon: ShoppingBag, href: "/products", color: "bg-amber-100 text-amber-700", active: true },
@@ -129,12 +114,13 @@ export default function LandingPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
-  const [storedLocation, setStoredLocation] = useState(readStoredLocation);
+  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+  const setSearchLocation = useSearchLocationStore((s) => s.setSearchLocation);
   const [search, setSearch] = useState("");
   const [roleModalOpen, setRoleModalOpen] = useState(false);
 
-  const locationLabel = storedLocation?.address
-    ? formatLocationLabel(storedLocation.address)
+  const locationLabel = searchLocation?.address
+    ? formatLocationLabel(searchLocation.address)
     : "Tunis";
 
   const { data: categories = [] } = useQuery<CategoryWithCount[]>({
@@ -159,20 +145,10 @@ export default function LandingPage() {
     else navigate("/products");
   };
 
-  const handleLocationConfirm = async (loc: PickedLocation) => {
-    const entry = { address: loc.address, lat: loc.lat, lng: loc.lng, placeId: loc.placeId };
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(entry));
-    } catch {}
-    setStoredLocation(entry);
+  const handleLocationConfirm = (loc: PickedLocation) => {
+    setSearchLocation(pickedToGeoLocation(loc));
     setLocationPickerOpen(false);
-    if (user) {
-      try {
-        await apiRequest("PATCH", "/api/auth/me/location", entry);
-        await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      } catch {}
-    }
-    toast({ title: "📍 Adresse enregistrée", description: formatLocationLabel(loc.address) });
+    toast({ title: "📍 Zone de recherche mise à jour", description: formatLocationLabel(loc.address) });
   };
 
   const activeCategories = categories.filter((c) => (c.productCount ?? 0) > 0);
@@ -479,10 +455,11 @@ export default function LandingPage() {
 
       <LocationPickerModal
         open={locationPickerOpen}
-        title="Où livrer votre commande ?"
+        mode="search"
+        title="Où voulez-vous rechercher ?"
         onClose={() => setLocationPickerOpen(false)}
         onConfirm={handleLocationConfirm}
-        initialAddress={storedLocation?.address}
+        initialAddress={searchLocation?.address}
       />
 
       {/* ── Connexion / Role-selection modal ── */}

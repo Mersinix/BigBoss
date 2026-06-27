@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapPin, Search, Navigation, ChevronLeft, CheckCircle, Loader2, X } from "lucide-react";
+import type { AddressDetails } from "@shared/schema";
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
 
@@ -35,13 +36,14 @@ function loadGoogleMapsScript(): Promise<void> {
   });
 }
 
+export type LocationPickerMode = "account" | "search" | "delivery";
+
 export interface PickedLocation {
   address: string;
   lat: string;
   lng: string;
   placeId: string;
-  floor?: string;
-  notes?: string;
+  details?: AddressDetails;
 }
 
 interface Props {
@@ -50,7 +52,9 @@ interface Props {
   onConfirm: (loc: PickedLocation) => void;
   title?: string;
   required?: boolean;
+  mode?: LocationPickerMode;
   initialAddress?: string;
+  initialDetails?: AddressDetails;
 }
 
 interface Suggestion {
@@ -62,7 +66,32 @@ interface Suggestion {
 
 const DEFAULT_CENTER = { lat: 36.8189, lng: 10.1658 };
 
-export default function LocationPickerModal({ open, onClose, onConfirm, title = "Où se trouve votre établissement ?", required = false, initialAddress }: Props) {
+const EMPTY_DETAILS: AddressDetails = {
+  street: "",
+  buildingNumber: "",
+  postalCode: "",
+  governorate: "",
+  municipality: "",
+  buildingType: "",
+  apartment: "",
+  floor: "",
+  door: "",
+  additionalNotes: "",
+};
+
+export default function LocationPickerModal({
+  open,
+  onClose,
+  onConfirm,
+  title = "Où se trouve votre établissement ?",
+  required = false,
+  mode = "account",
+  initialAddress,
+  initialDetails,
+}: Props) {
+  const hasDetailsStep = mode !== "search";
+  const totalSteps = hasDetailsStep ? 3 : 2;
+
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [mapsReady, setMapsReady] = useState(false);
   const [search, setSearch] = useState(initialAddress ?? "");
@@ -71,8 +100,7 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
   const [selectedAddress, setSelectedAddress] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number }>(DEFAULT_CENTER);
   const [placeId, setPlaceId] = useState("");
-  const [floor, setFloor] = useState("");
-  const [notes, setNotes] = useState("");
+  const [details, setDetails] = useState<AddressDetails>({ ...EMPTY_DETAILS, ...initialDetails });
   const [saving, setSaving] = useState(false);
 
   const mapDivRef = useRef<HTMLDivElement>(null);
@@ -173,10 +201,11 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
         setCoords({ lat: loc.lat(), lng: loc.lng() });
         setSelectedAddress(results[0].formatted_address);
         setPlaceId(sug.placeId);
+        if (!details.street) setDetails((d) => ({ ...d, street: results[0].formatted_address }));
         setStep(2);
       }
     });
-  }, []);
+  }, [details.street]);
 
   const useMyPosition = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -191,6 +220,7 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
             setSelectedAddress(results[0].formatted_address);
             setSearch(results[0].formatted_address);
             setPlaceId(results[0].place_id ?? "");
+            if (!details.street) setDetails((d) => ({ ...d, street: results[0].formatted_address }));
             setStep(2);
           }
         });
@@ -198,19 +228,23 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
       () => setLoadingGeo(false),
       { enableHighAccuracy: true, timeout: 8000 }
     );
-  }, []);
+  }, [details.street]);
 
   const handleConfirm = useCallback(() => {
     setSaving(true);
+    const cleaned: AddressDetails = {};
+    (Object.keys(details) as (keyof AddressDetails)[]).forEach((k) => {
+      const v = details[k]?.trim();
+      if (v) cleaned[k] = v;
+    });
     onConfirm({
       address: selectedAddress,
       lat: String(coords.lat),
       lng: String(coords.lng),
       placeId,
-      floor,
-      notes,
+      details: Object.keys(cleaned).length ? cleaned : undefined,
     });
-  }, [selectedAddress, coords, placeId, floor, notes, onConfirm]);
+  }, [selectedAddress, coords, placeId, details, onConfirm]);
 
   const reset = () => {
     setStep(1);
@@ -219,8 +253,7 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
     setSelectedAddress("");
     setCoords(DEFAULT_CENTER);
     setPlaceId("");
-    setFloor("");
-    setNotes("");
+    setDetails({ ...EMPTY_DETAILS, ...initialDetails });
     setSaving(false);
     mapRef.current = null;
     markerRef.current = null;
@@ -231,14 +264,27 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
     onClose();
   };
 
+  const confirmMapStep = () => {
+    if (hasDetailsStep) {
+      if (!details.street) setDetails((d) => ({ ...d, street: selectedAddress }));
+      setStep(3);
+    } else {
+      handleConfirm();
+    }
+  };
+
+  const setDetail = (key: keyof AddressDetails, value: string) => {
+    setDetails((d) => ({ ...d, [key]: value }));
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-[480px] p-0 gap-0 rounded-3xl overflow-hidden shadow-2xl" hideClose>
-        {/* ── Header ───────────────────────────────────────────── */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             {step > 1 && (
               <button
+                type="button"
                 onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}
                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
               >
@@ -252,19 +298,19 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
                 {step === 3 && "Détails de l'adresse"}
               </DialogTitle>
               <p className="text-xs text-gray-500 mt-0.5">
-                Étape {step} sur 3
+                Étape {step} sur {totalSteps}
               </p>
             </div>
             <button
+              type="button"
               onClick={handleClose}
               className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
             >
               <X className="w-4 h-4 text-gray-500" />
             </button>
           </div>
-          {/* Step dots */}
           <div className="flex items-center gap-1.5 mt-3">
-            {[1, 2, 3].map((s) => (
+            {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
               <div
                 key={s}
                 className={`h-1.5 rounded-full transition-all ${s <= step ? "bg-amber-500 w-8" : "bg-gray-200 w-4"}`}
@@ -273,7 +319,6 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
           </div>
         </DialogHeader>
 
-        {/* ── Step 1: Search ───────────────────────────────────── */}
         {step === 1 && (
           <div className="px-6 py-5 flex flex-col gap-4">
             {!mapsReady ? (
@@ -294,21 +339,18 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
                     data-testid="input-location-search"
                   />
                   {search && (
-                    <button
-                      onClick={() => { setSearch(""); setSuggestions([]); }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2"
-                    >
+                    <button type="button" onClick={() => { setSearch(""); setSuggestions([]); }} className="absolute right-3 top-1/2 -translate-y-1/2">
                       <X className="w-4 h-4 text-gray-400" />
                     </button>
                   )}
                 </div>
 
-                {/* Autocomplete suggestions */}
                 {suggestions.length > 0 && (
                   <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                     {suggestions.map((sug) => (
                       <button
                         key={sug.placeId}
+                        type="button"
                         onClick={() => pickSuggestion(sug)}
                         className="w-full flex items-start gap-3 px-4 py-3 hover:bg-amber-50 transition-colors border-b border-gray-50 last:border-0 text-left"
                         data-testid={`button-suggestion-${sug.placeId}`}
@@ -323,7 +365,6 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
                   </div>
                 )}
 
-                {/* Use my position */}
                 <div className="border border-amber-100 bg-amber-50 rounded-2xl p-4">
                   <p className="text-xs font-semibold text-amber-700 mb-1">Recommandé</p>
                   <div className="flex items-center justify-between gap-3">
@@ -336,6 +377,7 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
                     </div>
                     <Button
                       size="sm"
+                      type="button"
                       onClick={useMyPosition}
                       disabled={loadingGeo}
                       className="shrink-0 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs px-4"
@@ -356,7 +398,6 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
           </div>
         )}
 
-        {/* ── Step 2: Map ──────────────────────────────────────── */}
         {step === 2 && (
           <div className="flex flex-col">
             <div ref={mapDivRef} className="w-full h-64 bg-gray-100" />
@@ -372,57 +413,93 @@ export default function LocationPickerModal({ open, onClose, onConfirm, title = 
                 Faites glisser le repère pour ajuster précisément votre position
               </p>
               <Button
-                onClick={() => setStep(3)}
+                type="button"
+                onClick={confirmMapStep}
+                disabled={saving}
                 className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white py-5"
                 data-testid="button-confirm-map"
               >
-                Confirmer cette position
+                {hasDetailsStep ? "Confirmer cette position" : (
+                  saving ? (
+                    <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Enregistrement…</span>
+                  ) : (
+                    <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4" /> Confirmer la zone de recherche</span>
+                  )
+                )}
               </Button>
             </div>
           </div>
         )}
 
-        {/* ── Step 3: Details ──────────────────────────────────── */}
-        {step === 3 && (
-          <div className="px-6 py-5 flex flex-col gap-4">
+        {step === 3 && hasDetailsStep && (
+          <div className="px-6 py-5 flex flex-col gap-4 max-h-[60vh] overflow-y-auto">
             <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-100 rounded-2xl">
               <CheckCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
               <p className="text-sm font-medium text-amber-800 leading-snug">{selectedAddress}</p>
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-700">Adresse (optionnel)</Label>
+              <Input value={details.street ?? ""} onChange={(e) => setDetail("street", e.target.value)} placeholder="Rue, avenue…" className="rounded-xl border-gray-200 text-sm" data-testid="input-street" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-700">N° bâtiment (optionnel)</Label>
+                <Input value={details.buildingNumber ?? ""} onChange={(e) => setDetail("buildingNumber", e.target.value)} placeholder="Ex: 12" className="rounded-xl border-gray-200 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-700">Code postal (optionnel)</Label>
+                <Input value={details.postalCode ?? ""} onChange={(e) => setDetail("postalCode", e.target.value)} placeholder="Ex: 1000" className="rounded-xl border-gray-200 text-sm" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-700">Gouvernorat (optionnel)</Label>
+                <Input value={details.governorate ?? ""} onChange={(e) => setDetail("governorate", e.target.value)} placeholder="Ex: Tunis" className="rounded-xl border-gray-200 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-700">Municipalité (optionnel)</Label>
+                <Input value={details.municipality ?? ""} onChange={(e) => setDetail("municipality", e.target.value)} placeholder="Ex: La Marsa" className="rounded-xl border-gray-200 text-sm" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-700">Type de bâtiment (optionnel)</Label>
+                <Input value={details.buildingType ?? ""} onChange={(e) => setDetail("buildingType", e.target.value)} placeholder="Ex: Immeuble" className="rounded-xl border-gray-200 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-700">Appartement (optionnel)</Label>
+                <Input value={details.apartment ?? ""} onChange={(e) => setDetail("apartment", e.target.value)} placeholder="Ex: 4B" className="rounded-xl border-gray-200 text-sm" />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-gray-700">Étage (optionnel)</Label>
-                <Input
-                  value={floor}
-                  onChange={(e) => setFloor(e.target.value)}
-                  placeholder="Ex: 2"
-                  className="rounded-xl border-gray-200 text-sm"
-                  data-testid="input-floor"
-                />
+                <Input value={details.floor ?? ""} onChange={(e) => setDetail("floor", e.target.value)} placeholder="Ex: 2" className="rounded-xl border-gray-200 text-sm" data-testid="input-floor" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-gray-700">Porte (optionnel)</Label>
-                <Input
-                  placeholder="Ex: A"
-                  className="rounded-xl border-gray-200 text-sm"
-                  data-testid="input-door"
-                />
+                <Input value={details.door ?? ""} onChange={(e) => setDetail("door", e.target.value)} placeholder="Ex: A" className="rounded-xl border-gray-200 text-sm" data-testid="input-door" />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-gray-700">Instructions pour le livreur (optionnel)</Label>
+              <Label className="text-xs font-medium text-gray-700">Notes complémentaires (optionnel)</Label>
               <Input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Ex: Sonnez à l'interphone entrée principale"
+                value={details.additionalNotes ?? ""}
+                onChange={(e) => setDetail("additionalNotes", e.target.value)}
+                placeholder="Ex: Entrée côté parking"
                 className="rounded-xl border-gray-200 text-sm"
                 data-testid="input-notes"
               />
             </div>
 
             <Button
+              type="button"
               onClick={handleConfirm}
               disabled={saving}
               className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white py-5 mt-2"

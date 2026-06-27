@@ -1,26 +1,52 @@
+import { useState, useEffect } from "react";
 import { useCart } from "@/hooks/use-cart";
 import { useCreateOrder } from "@/hooks/use-orders";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
-  Clock, Package
+  Clock, Package, MapPin, CheckCircle
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, Link } from "wouter";
-import type { CreateOrderRequest } from "@shared/schema";
+import type { CreateOrderRequest, GeoLocation } from "@shared/schema";
+import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
+import { userToAccountAddress, pickedToGeoLocation } from "@/store/search-location-store";
 
 export default function CartPage() {
   const {
     items, updateQuantity, removeItem, clearCart, getTotal, getItemsBySupplier,
     printItems, removePrintItem, clearPrintItems, getPrintTotal,
   } = useCart();
+  const { user } = useAuth();
   const createOrder = useCreateOrder();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
+  const savedAccountAddress = userToAccountAddress(user as any);
+
+  const [useSavedAddress, setUseSavedAddress] = useState(true);
+  const [customDeliveryAddress, setCustomDeliveryAddress] = useState<GeoLocation | null>(null);
+  const [courierInstructions, setCourierInstructions] = useState("");
+  const [deliveryPickerOpen, setDeliveryPickerOpen] = useState(false);
+
+  useEffect(() => {
+    if (savedAccountAddress) {
+      setUseSavedAddress(true);
+    } else {
+      setUseSavedAddress(false);
+    }
+  }, [savedAccountAddress?.address]);
+
+  const activeDeliveryAddress = useSavedAddress
+    ? savedAccountAddress
+    : customDeliveryAddress;
 
   const totalShop = getTotal();
   const totalPrint = getPrintTotal();
@@ -28,8 +54,24 @@ export default function CartPage() {
   const hasPrint = printItems.length > 0;
   const grandTotal = totalShop + totalPrint;
 
+  const handleDeliveryConfirm = (loc: PickedLocation) => {
+    setCustomDeliveryAddress(pickedToGeoLocation(loc));
+    setUseSavedAddress(false);
+    setDeliveryPickerOpen(false);
+  };
+
   const handleCheckout = () => {
     if (!hasShop) return;
+    if (!activeDeliveryAddress) {
+      toast({
+        title: "Adresse de livraison requise",
+        description: savedAccountAddress
+          ? "Choisissez une adresse de livraison ou ajoutez-en une dans votre profil."
+          : "Ajoutez une adresse de livraison avant de valider la commande.",
+        variant: "destructive",
+      });
+      return;
+    }
     const request: CreateOrderRequest = {
       items: items.map((i) => ({
         listingId: i.listingId,
@@ -43,11 +85,15 @@ export default function CartPage() {
         quantity: i.quantity,
         unitPrice: i.unitPrice,
       })),
+      deliveryAddress: activeDeliveryAddress,
+      courierInstructions: courierInstructions.trim() || undefined,
     };
     createOrder.mutate(request, {
       onSuccess: () => {
         toast({ title: "Commande envoyée !", description: "Vos commandes ont été transmises aux fournisseurs." });
         clearCart();
+        setCourierInstructions("");
+        setCustomDeliveryAddress(null);
         setLocation("/orders");
       },
       onError: (error) => {
@@ -245,12 +291,68 @@ export default function CartPage() {
 
         {/* ── Order Summary ── */}
         <div className="lg:col-span-1 space-y-4">
-          {/* SHOP checkout */}
           {hasShop && (
             <Card className="rounded-2xl border-border/50 shadow-sm sticky top-24">
               <CardContent className="p-5 space-y-4">
                 <h3 className="font-bold text-lg flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> Commande SHOP</h3>
-                <div className="space-y-2 text-sm">
+
+                {/* Delivery address — order-only, never updates profile */}
+                <div className="space-y-3 border-t border-border/40 pt-4">
+                  <h4 className="text-sm font-semibold flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" /> Adresse de livraison</h4>
+
+                  {savedAccountAddress && (
+                    <button
+                      type="button"
+                      onClick={() => setUseSavedAddress(true)}
+                      className={`w-full text-left p-3 rounded-xl border transition-colors ${useSavedAddress ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}
+                      data-testid="button-use-saved-address"
+                    >
+                      <div className="flex items-start gap-2">
+                        {useSavedAddress && <CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />}
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-muted-foreground">Adresse enregistrée (profil)</p>
+                          <p className="text-sm font-medium truncate">{savedAccountAddress.address}</p>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryPickerOpen(true)}
+                    className={`w-full text-left p-3 rounded-xl border transition-colors ${!useSavedAddress && customDeliveryAddress ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}
+                    data-testid="button-other-delivery-address"
+                  >
+                    <div className="flex items-start gap-2">
+                      {!useSavedAddress && customDeliveryAddress && <CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-muted-foreground">Choisir une autre adresse</p>
+                        <p className="text-sm font-medium truncate">
+                          {customDeliveryAddress?.address ?? "Ouvrir la carte pour sélectionner"}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  {!savedAccountAddress && !customDeliveryAddress && (
+                    <p className="text-xs text-amber-600">Aucune adresse enregistrée — choisissez une adresse de livraison.</p>
+                  )}
+                </div>
+
+                <div className="space-y-2 border-t border-border/40 pt-4">
+                  <Label htmlFor="courier-instructions" className="text-sm font-semibold">Instructions pour le coursier</Label>
+                  <Textarea
+                    id="courier-instructions"
+                    value={courierInstructions}
+                    onChange={(e) => setCourierInstructions(e.target.value)}
+                    placeholder="Ex: Sonner à l'interphone, laisser à l'accueil, 3e étage…"
+                    className="min-h-[72px] text-sm rounded-xl resize-none"
+                    data-testid="input-courier-instructions"
+                  />
+                  <p className="text-xs text-muted-foreground">Ces instructions s'appliquent uniquement à cette commande.</p>
+                </div>
+
+                <div className="space-y-2 text-sm border-t border-border/40 pt-4">
                   {supplierEntries.map(([sid, group]) => {
                     const t = group.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
                     return (
@@ -273,7 +375,6 @@ export default function CartPage() {
             </Card>
           )}
 
-          {/* PRINT checkout */}
           {hasPrint && (
             <Card className="rounded-2xl border-blue-100 shadow-sm">
               <CardContent className="p-5 space-y-4">
@@ -298,7 +399,6 @@ export default function CartPage() {
             </Card>
           )}
 
-          {/* Grand Total */}
           {hasShop && hasPrint && (
             <Card className="rounded-2xl border-gray-200 shadow-sm">
               <CardContent className="p-5">
@@ -316,6 +416,16 @@ export default function CartPage() {
           </div>
         </div>
       </div>
+
+      <LocationPickerModal
+        open={deliveryPickerOpen}
+        mode="delivery"
+        title="Adresse de livraison"
+        onClose={() => setDeliveryPickerOpen(false)}
+        onConfirm={handleDeliveryConfirm}
+        initialAddress={customDeliveryAddress?.address ?? savedAccountAddress?.address}
+        initialDetails={customDeliveryAddress?.details ?? savedAccountAddress?.details}
+      />
     </div>
   );
 }

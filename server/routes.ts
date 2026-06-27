@@ -634,36 +634,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── Categories ─────────────────────────────────────────────────────────────
 
   app.get("/api/categories", async (req, res) => {
-    try { res.json(await storage.getCategories()); }
-    catch { res.status(500).json({ message: "Error" }); }
-  });
-
-  // Admin-only: return ALL categories/subcategories/taxonomy including inactive
-  app.get("/api/admin/categories", requireAdmin, async (req, res) => {
-    try { res.json(await storage.getCategories({ includeAll: true })); }
-    catch { res.status(500).json({ message: "Error" }); }
-  });
-
-  app.get("/api/admin/subcategories", requireAdmin, async (req, res) => {
     try {
-      const cid = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
-      res.json(await storage.getSubCategories(cid, { includeAll: true }));
+      const isAdmin = req.session.userId ? await storage.getUser(req.session.userId).then(u => u && ['SUPER_ADMIN', 'ADMIN'].includes(u.role)) : false;
+      res.json(await storage.getCategories({ includeAll: !!isAdmin }));
     } catch { res.status(500).json({ message: "Error" }); }
-  });
-
-  app.get("/api/admin/flavors", requireAdmin, async (req, res) => {
-    try { res.json(await storage.getFlavors({ includeAll: true })); }
-    catch { res.status(500).json({ message: "Error" }); }
-  });
-
-  app.get("/api/admin/sizes", requireAdmin, async (req, res) => {
-    try { res.json(await storage.getSizes({ includeAll: true })); }
-    catch { res.status(500).json({ message: "Error" }); }
-  });
-
-  app.get("/api/admin/brands", requireAdmin, async (req, res) => {
-    try { res.json(await storage.getBrands({ includeAll: true })); }
-    catch { res.status(500).json({ message: "Error" }); }
   });
 
   app.post("/api/categories", requireAdmin, async (req, res) => {
@@ -702,7 +676,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/subcategories", async (req, res) => {
     try {
       const cid = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
-      res.json(await storage.getSubCategories(cid));
+      const isAdmin = req.session.userId ? await storage.getUser(req.session.userId).then(u => u && ['SUPER_ADMIN', 'ADMIN'].includes(u.role)) : false;
+      res.json(await storage.getSubCategories(cid, { includeAll: !!isAdmin }));
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -739,9 +714,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/flavors", async (req, res) => {
     try {
+      const isAdmin = req.session.userId ? await storage.getUser(req.session.userId).then(u => u && ['SUPER_ADMIN', 'ADMIN'].includes(u.role)) : false;
       const filters = {
         categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined,
         subCategoryId: req.query.subCategoryId ? parseInt(req.query.subCategoryId as string) : undefined,
+        includeAll: !!isAdmin,
       };
       res.json(await storage.getFlavors(filters));
     } catch { res.status(500).json({ message: "Error" }); }
@@ -776,9 +753,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/sizes", async (req, res) => {
     try {
+      const isAdmin = req.session.userId ? await storage.getUser(req.session.userId).then(u => u && ['SUPER_ADMIN', 'ADMIN'].includes(u.role)) : false;
       const filters = {
         categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined,
         subCategoryId: req.query.subCategoryId ? parseInt(req.query.subCategoryId as string) : undefined,
+        includeAll: !!isAdmin,
       };
       res.json(await storage.getSizes(filters));
     } catch { res.status(500).json({ message: "Error" }); }
@@ -809,9 +788,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/brands", async (req, res) => {
     try {
+      const isAdmin = req.session.userId ? await storage.getUser(req.session.userId).then(u => u && ['SUPER_ADMIN', 'ADMIN'].includes(u.role)) : false;
       const filters = {
         categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined,
         subCategoryId: req.query.subCategoryId ? parseInt(req.query.subCategoryId as string) : undefined,
+        includeAll: !!isAdmin,
       };
       res.json(await storage.getBrands(filters));
     } catch { res.status(500).json({ message: "Error" }); }

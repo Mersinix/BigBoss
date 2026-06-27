@@ -90,10 +90,9 @@ function CategoriesTab() {
   const [deleting, setDeleting] = useState<CategoryWithCount | null>(null);
   const [form, setForm] = useState({ name: "", icon: "", description: "", isActive: true });
 
-  const { data: cats = [], isLoading } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/admin/categories"] });
+  const { data: cats = [], isLoading } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
 
   const invalidateCats = () => {
-    qc.invalidateQueries({ queryKey: ["/api/admin/categories"] });
     qc.invalidateQueries({ queryKey: ["/api/categories"] });
   };
 
@@ -246,8 +245,8 @@ function SubCategoriesTab() {
   const [form, setForm] = useState({ name: "", categoryId: "", description: "", icon: "", isActive: true });
   const [filterCat, setFilterCat] = useState("all");
 
-  const { data: subs = [], isLoading } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/admin/subcategories"] });
-  const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/admin/categories"] });
+  const { data: subs = [], isLoading } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
+  const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
 
   const filtered = filterCat === "all" ? subs : subs.filter(s => String(s.categoryId) === filterCat);
 
@@ -255,9 +254,7 @@ function SubCategoriesTab() {
     subs.some(s => s.name.toLowerCase() === name.toLowerCase().trim() && String(s.categoryId) === form.categoryId && s.id !== editing?.id);
 
   const invalidateSubs = () => {
-    qc.invalidateQueries({ queryKey: ["/api/admin/subcategories"] });
     qc.invalidateQueries({ queryKey: ["/api/subcategories"] });
-    qc.invalidateQueries({ queryKey: ["/api/admin/categories"] });
     qc.invalidateQueries({ queryKey: ["/api/categories"] });
   };
 
@@ -480,8 +477,6 @@ function TaxonomyCrudTab({
 
   const invalidateTaxonomy = () => {
     qc.invalidateQueries({ queryKey: [queryKey] });
-    const publicKey = queryKey.replace("/api/admin/", "/api/");
-    if (publicKey !== queryKey) qc.invalidateQueries({ queryKey: [publicKey] });
   };
 
   const upsert = useMutation({
@@ -1463,11 +1458,11 @@ export default function AdminCategoriesPage() {
     else setLocation(`/admin/categories?section=${key}`);
   };
 
-  const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/admin/categories"] });
-  const { data: subs = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/admin/subcategories"] });
-  const { data: flavs = [] } = useQuery<FlavorWithCount[]>({ queryKey: ["/api/admin/flavors"] });
-  const { data: szs = [] } = useQuery<SizeWithCount[]>({ queryKey: ["/api/admin/sizes"] });
-  const { data: brnds = [] } = useQuery<BrandWithCount[]>({ queryKey: ["/api/admin/brands"] });
+  const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
+  const { data: subs = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
+  const { data: flavs = [] } = useQuery<FlavorWithCount[]>({ queryKey: ["/api/flavors"] });
+  const { data: szs = [] } = useQuery<SizeWithCount[]>({ queryKey: ["/api/sizes"] });
+  const { data: brnds = [] } = useQuery<BrandWithCount[]>({ queryKey: ["/api/brands"] });
 
   const stats = [
     { label: "Categories", value: cats.length, icon: Folder, color: "text-blue-600 bg-blue-50 dark:bg-blue-950/30" },
@@ -1531,15 +1526,15 @@ export default function AdminCategoriesPage() {
             </TabsContent>
             <TabsContent value="flavors">
               <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Tag className="w-4 h-4" />Flavors</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Flavor" icon={Tag} apiPath="/api/flavors" queryKey="/api/admin/flavors" testPrefix="flavor" cats={cats} subs={subs} /></CardContent></Card>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Flavor" icon={Tag} apiPath="/api/flavors" queryKey="/api/flavors" testPrefix="flavor" cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
             <TabsContent value="sizes">
               <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Ruler className="w-4 h-4" />Sizes</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Size" icon={Ruler} apiPath="/api/sizes" queryKey="/api/admin/sizes" testPrefix="size" extraFields={[{ key: "value", label: "Value / Unit", placeholder: "e.g. 500ml, 1kg", hint: "The measurable size unit (optional)" }]} cats={cats} subs={subs} /></CardContent></Card>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Size" icon={Ruler} apiPath="/api/sizes" queryKey="/api/sizes" testPrefix="size" extraFields={[{ key: "value", label: "Value / Unit", placeholder: "e.g. 500ml, 1kg", hint: "The measurable size unit (optional)" }]} cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
             <TabsContent value="brands">
               <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Award className="w-4 h-4" />Brands</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Brand" icon={Award} apiPath="/api/brands" queryKey="/api/admin/brands" testPrefix="brand" cats={cats} subs={subs} /></CardContent></Card>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Brand" icon={Award} apiPath="/api/brands" queryKey="/api/brands" testPrefix="brand" cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
           </Tabs>
         </>

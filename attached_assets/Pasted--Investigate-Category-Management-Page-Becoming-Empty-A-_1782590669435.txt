@@ -1,0 +1,104 @@
+# Investigate Category Management Page Becoming Empty
+
+A regression appeared after the latest changes.
+
+Do **NOT** start implementing random fixes.
+
+First perform a complete investigation to determine the exact root cause before changing anything.
+
+---
+
+## Problem
+
+Admin Panel
+
+**Category → Category Management**
+
+The page is now completely empty.
+
+Nothing is displayed anymore:
+
+* Categories
+* SubCategories
+* Brands
+* Flavors
+* Sizes
+
+Previously everything was displayed correctly.
+
+This happened only after the latest modifications related to keeping inactive Categories/SubCategories visible.
+
+---
+
+## Your task
+
+Perform a complete analysis of the Category Management flow from database to frontend.
+
+Verify every step:
+
+* Data exists in PostgreSQL.
+* Backend queries still return the expected records.
+* API responses contain the data.
+* React Query receives the data.
+* The frontend correctly maps the response.
+* No filter removes all records.
+* No status filter excludes every row.
+* No `is_active` filter hides all entities.
+* No shared query was accidentally modified.
+* No conditional rendering prevents the table from displaying.
+* No cache issue causes an empty state.
+* No runtime error silently stops rendering.
+
+---
+
+## Compare with the previous behavior
+
+Identify exactly which modification introduced this regression.
+
+Explain:
+
+* Which file changed.
+* Which logic changed.
+* Why the table became empty.
+* Why all entity types disappeared instead of only inactive Categories.
+
+---
+
+## Fix Requirements
+
+Once the exact cause is identified:
+
+* Apply the smallest possible fix.
+* Do not rewrite the page.
+* Do not redesign the UI.
+* Do not modify unrelated functionality.
+* Preserve all existing APIs.
+* Preserve realtime synchronization.
+* Preserve all CRUD operations.
+
+The final behavior should be:
+
+* Active Categories visible.
+* Inactive Categories visible.
+* Active SubCategories visible.
+* Inactive SubCategories visible.
+* Brands visible.
+* Flavors visible.
+* Sizes visible.
+
+Status changes should update correctly without making rows disappear.
+
+---
+
+## Final Verification
+
+Before finishing, verify:
+
+* Database contains records.
+* API returns records.
+* Frontend receives records.
+* Table renders all entity types correctly.
+* Status updates still work.
+* No regression has been introduced elsewhere.
+
+

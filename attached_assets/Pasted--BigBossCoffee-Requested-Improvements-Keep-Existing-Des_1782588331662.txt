@@ -1,0 +1,155 @@
+# BigBossCoffee – Requested Improvements (Keep Existing Design & Architecture)
+
+Before making any changes, analyze the existing implementation to understand how these features currently work.
+
+## General Rules
+
+* Do **not** redesign or change the UI.
+* Do **not** break any existing functionality.
+* Reuse existing components whenever possible instead of creating duplicates.
+* Keep all current workflows intact unless explicitly requested below.
+* Preserve all existing APIs unless a change is absolutely necessary.
+* Preserve all current real-time synchronization behavior.
+* Make sure every change updates immediately without requiring a page refresh.
+* When finished, verify that every affected page still works correctly.
+
+---
+
+# 1. Admin → Category → Category Management
+
+## Issue
+
+In the **Category Management** page, the management table displays:
+
+* Categories
+* SubCategories
+* Flavors
+* Brands
+* Sizes
+
+When the administrator changes the Status of a **Category** or **SubCategory** from **Active** to **Inactive**, the row immediately disappears from the table.
+
+The record still exists in the database (only `status` and `is_active` are updated), therefore it should remain visible in the frontend.
+
+## Required behavior
+
+Fix the table so that changing a Category or SubCategory from **Active** to **Inactive** does **not** remove it from the table.
+
+Instead:
+
+* Keep the row visible.
+* Update its Status correctly.
+* Display whether it is Active or Inactive.
+* The administrator must always be able to manage inactive records.
+* Do not delete or hide records after a status change.
+
+Also verify that the same behavior is consistent for:
+
+* Categories
+* SubCategories
+* Brands
+* Flavors
+* Sizes
+
+---
+
+# 2. Supplier → Products → Admin Products
+
+## Variant Builder
+
+When the supplier clicks **"Add to My Products"**, the modal **"Add to My Products — Variant Builder"** opens.
+
+The current workflow is good and should remain unchanged.
+
+The supplier currently creates Variant Groups using:
+
+* Size
+* Flavors (multi-select)
+* Price
+* Stock
+
+## Required improvement
+
+Keep the Variant Builder exactly as it is, but improve the stock management.
+
+When multiple Flavors are selected:
+
+Instead of having one stock value for the whole Variant Group, every Flavor must have its own Stock value.
+
+Example:
+
+**Medium**
+
+* Vanilla → Stock
+* Hazelnut → Stock
+* Caramel → Stock
+
+The Variant Group should still have one common Price exactly as today.
+
+Only the Stock management changes.
+
+The supplier should be able to update the stock independently for every selected Flavor.
+
+Everything else in the Variant Builder should remain unchanged.
+
+---
+
+# 3. Supplier → Products → My Products
+
+When the supplier clicks **Edit** on one of their products, the modal **"Edit Pricing & Stock"** opens.
+
+Currently, this modal is less complete than the Variant Builder used when adding a product.
+
+## Required behavior
+
+Make **Edit Pricing & Stock** use the same complete experience as **Add to My Products — Variant Builder**.
+
+The editing experience should allow the supplier to:
+
+* View all existing Variant Groups.
+* Edit existing Variant Groups.
+* Create new Variant Groups.
+* Delete Variant Groups if necessary.
+* Change the selected Size.
+* Change the selected Flavors.
+* Update the Price of each Variant Group.
+* Update the Stock for every Flavor independently.
+* Add new Flavors.
+* Remove existing Flavors.
+* Add new Sizes.
+* Update existing Sizes.
+
+The editing modal should behave exactly like the creation modal while preserving all existing product data.
+
+The supplier should be able to completely manage all product variants from this single modal.
+
+---
+
+# Final Validation
+
+Before considering the task complete, verify the following:
+
+### Category Management
+
+* Active Categories remain visible.
+* Inactive Categories remain visible.
+* Active SubCategories remain visible.
+* Inactive SubCategories remain visible.
+* Status updates correctly without removing rows.
+
+### Admin Products
+
+* Variant Builder still works exactly as before.
+* Every selected Flavor has its own Stock field.
+* Price remains shared at the Variant Group level.
+
+### My Products
+
+* Edit Pricing & Stock has the same capabilities as the Variant Builder.
+* Existing data loads correctly.
+* Creating, editing, and deleting Variant Groups works correctly.
+* Stock can be managed independently for every Flavor.
+* Prices remain managed at the Variant Group level.
+* No existing product data is lost during editing.
+
+Do not modify unrelated parts of the project. Restrict all work to the scope described above.

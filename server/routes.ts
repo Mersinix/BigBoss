@@ -638,6 +638,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     catch { res.status(500).json({ message: "Error" }); }
   });
 
+  // Admin-only: return ALL categories/subcategories/taxonomy including inactive
+  app.get("/api/admin/categories", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getCategories({ includeAll: true })); }
+    catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/admin/subcategories", requireAdmin, async (req, res) => {
+    try {
+      const cid = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+      res.json(await storage.getSubCategories(cid, { includeAll: true }));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/admin/flavors", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getFlavors({ includeAll: true })); }
+    catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/admin/sizes", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getSizes({ includeAll: true })); }
+    catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/admin/brands", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getBrands({ includeAll: true })); }
+    catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.post("/api/categories", requireAdmin, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);

@@ -90,7 +90,12 @@ function CategoriesTab() {
   const [deleting, setDeleting] = useState<CategoryWithCount | null>(null);
   const [form, setForm] = useState({ name: "", icon: "", description: "", isActive: true });
 
-  const { data: cats = [], isLoading } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
+  const { data: cats = [], isLoading } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/admin/categories"] });
+
+  const invalidateCats = () => {
+    qc.invalidateQueries({ queryKey: ["/api/admin/categories"] });
+    qc.invalidateQueries({ queryKey: ["/api/categories"] });
+  };
 
   const isDuplicate = (name: string) =>
     cats.some(c => c.name.toLowerCase() === name.toLowerCase().trim() && c.id !== editing?.id);
@@ -101,7 +106,7 @@ function CategoriesTab() {
         ? apiRequest("PATCH", `/api/categories/${editing.id}`, data)
         : apiRequest("POST", "/api/categories", data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      invalidateCats();
       toast({ title: editing ? "Category updated" : "Category created" });
       setDialogOpen(false); setEditing(null); setForm({ name: "", icon: "", description: "", isActive: true });
     },
@@ -111,13 +116,13 @@ function CategoriesTab() {
   const toggleActive = useMutation({
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
       apiRequest("PATCH", `/api/categories/${id}`, { isActive }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/categories"] }),
+    onSuccess: () => invalidateCats(),
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/categories/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/categories"] }); toast({ title: "Deleted" }); setDeleting(null); },
+    onSuccess: () => { invalidateCats(); toast({ title: "Deleted" }); setDeleting(null); },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
@@ -241,13 +246,20 @@ function SubCategoriesTab() {
   const [form, setForm] = useState({ name: "", categoryId: "", description: "", icon: "", isActive: true });
   const [filterCat, setFilterCat] = useState("all");
 
-  const { data: subs = [], isLoading } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
-  const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
+  const { data: subs = [], isLoading } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/admin/subcategories"] });
+  const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/admin/categories"] });
 
   const filtered = filterCat === "all" ? subs : subs.filter(s => String(s.categoryId) === filterCat);
 
   const isDuplicate = (name: string) =>
     subs.some(s => s.name.toLowerCase() === name.toLowerCase().trim() && String(s.categoryId) === form.categoryId && s.id !== editing?.id);
+
+  const invalidateSubs = () => {
+    qc.invalidateQueries({ queryKey: ["/api/admin/subcategories"] });
+    qc.invalidateQueries({ queryKey: ["/api/subcategories"] });
+    qc.invalidateQueries({ queryKey: ["/api/admin/categories"] });
+    qc.invalidateQueries({ queryKey: ["/api/categories"] });
+  };
 
   const upsert = useMutation({
     mutationFn: (data: any) =>
@@ -255,8 +267,7 @@ function SubCategoriesTab() {
         ? apiRequest("PATCH", `/api/subcategories/${editing.id}`, { ...data, categoryId: parseInt(data.categoryId) })
         : apiRequest("POST", "/api/subcategories", { ...data, categoryId: parseInt(data.categoryId) }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/subcategories"] });
-      qc.invalidateQueries({ queryKey: ["/api/categories"] });
+      invalidateSubs();
       toast({ title: editing ? "Updated" : "Created" });
       setDialogOpen(false); setEditing(null); setForm({ name: "", categoryId: "", description: "", icon: "", isActive: true });
     },
@@ -266,13 +277,13 @@ function SubCategoriesTab() {
   const toggleActive = useMutation({
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
       apiRequest("PATCH", `/api/subcategories/${id}`, { isActive }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/subcategories"] }),
+    onSuccess: () => invalidateSubs(),
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/subcategories/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/subcategories"] }); qc.invalidateQueries({ queryKey: ["/api/categories"] }); toast({ title: "Deleted" }); setDeleting(null); },
+    onSuccess: () => { invalidateSubs(); toast({ title: "Deleted" }); setDeleting(null); },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
@@ -467,11 +478,17 @@ function TaxonomyCrudTab({
   const isDuplicate = (name: string) =>
     items.some(i => i.name.toLowerCase() === name.toLowerCase().trim() && i.id !== editing?.id);
 
+  const invalidateTaxonomy = () => {
+    qc.invalidateQueries({ queryKey: [queryKey] });
+    const publicKey = queryKey.replace("/api/admin/", "/api/");
+    if (publicKey !== queryKey) qc.invalidateQueries({ queryKey: [publicKey] });
+  };
+
   const upsert = useMutation({
     mutationFn: (data: any) =>
       editing ? apiRequest("PATCH", `${apiPath}/${editing.id}`, data) : apiRequest("POST", apiPath, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [queryKey] });
+      invalidateTaxonomy();
       toast({ title: editing ? "Updated" : "Created" });
       setDialogOpen(false); setEditing(null); resetForm();
     },
@@ -481,13 +498,13 @@ function TaxonomyCrudTab({
   const toggleActive = useMutation({
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
       apiRequest("PATCH", `${apiPath}/${id}`, { isActive }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [queryKey] }),
+    onSuccess: () => invalidateTaxonomy(),
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiPath}/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [queryKey] }); toast({ title: "Deleted" }); setDeleting(null); },
+    onSuccess: () => { invalidateTaxonomy(); toast({ title: "Deleted" }); setDeleting(null); },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
@@ -1446,11 +1463,11 @@ export default function AdminCategoriesPage() {
     else setLocation(`/admin/categories?section=${key}`);
   };
 
-  const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
-  const { data: subs = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
-  const { data: flavs = [] } = useQuery<FlavorWithCount[]>({ queryKey: ["/api/flavors"] });
-  const { data: szs = [] } = useQuery<SizeWithCount[]>({ queryKey: ["/api/sizes"] });
-  const { data: brnds = [] } = useQuery<BrandWithCount[]>({ queryKey: ["/api/brands"] });
+  const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/admin/categories"] });
+  const { data: subs = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/admin/subcategories"] });
+  const { data: flavs = [] } = useQuery<FlavorWithCount[]>({ queryKey: ["/api/admin/flavors"] });
+  const { data: szs = [] } = useQuery<SizeWithCount[]>({ queryKey: ["/api/admin/sizes"] });
+  const { data: brnds = [] } = useQuery<BrandWithCount[]>({ queryKey: ["/api/admin/brands"] });
 
   const stats = [
     { label: "Categories", value: cats.length, icon: Folder, color: "text-blue-600 bg-blue-50 dark:bg-blue-950/30" },
@@ -1514,15 +1531,15 @@ export default function AdminCategoriesPage() {
             </TabsContent>
             <TabsContent value="flavors">
               <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Tag className="w-4 h-4" />Flavors</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Flavor" icon={Tag} apiPath="/api/flavors" queryKey="/api/flavors" testPrefix="flavor" cats={cats} subs={subs} /></CardContent></Card>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Flavor" icon={Tag} apiPath="/api/flavors" queryKey="/api/admin/flavors" testPrefix="flavor" cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
             <TabsContent value="sizes">
               <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Ruler className="w-4 h-4" />Sizes</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Size" icon={Ruler} apiPath="/api/sizes" queryKey="/api/sizes" testPrefix="size" extraFields={[{ key: "value", label: "Value / Unit", placeholder: "e.g. 500ml, 1kg", hint: "The measurable size unit (optional)" }]} cats={cats} subs={subs} /></CardContent></Card>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Size" icon={Ruler} apiPath="/api/sizes" queryKey="/api/admin/sizes" testPrefix="size" extraFields={[{ key: "value", label: "Value / Unit", placeholder: "e.g. 500ml, 1kg", hint: "The measurable size unit (optional)" }]} cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
             <TabsContent value="brands">
               <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Award className="w-4 h-4" />Brands</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Brand" icon={Award} apiPath="/api/brands" queryKey="/api/brands" testPrefix="brand" cats={cats} subs={subs} /></CardContent></Card>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Brand" icon={Award} apiPath="/api/brands" queryKey="/api/admin/brands" testPrefix="brand" cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
           </Tabs>
         </>

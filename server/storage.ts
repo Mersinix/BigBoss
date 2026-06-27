@@ -59,32 +59,32 @@ export interface IStorage {
   saveVariants(listingId: number, variants: { flavorId?: number | null; sizeId?: number | null; price: number; quantity: number }[]): Promise<SupplierVariantWithLabels[]>;
 
   // Categories
-  getCategories(): Promise<CategoryWithCount[]>;
+  getCategories(opts?: { includeAll?: boolean }): Promise<CategoryWithCount[]>;
   getCategory(id: number): Promise<Category | undefined>;
   createCategory(cat: Partial<InsertCategory>): Promise<Category>;
   updateCategory(id: number, updates: Partial<InsertCategory>): Promise<Category>;
   deleteCategory(id: number): Promise<void>;
 
   // SubCategories
-  getSubCategories(categoryId?: number): Promise<SubCategoryWithDetails[]>;
+  getSubCategories(categoryId?: number, opts?: { includeAll?: boolean }): Promise<SubCategoryWithDetails[]>;
   createSubCategory(sub: Partial<InsertSubCategory>): Promise<SubCategory>;
   updateSubCategory(id: number, updates: Partial<InsertSubCategory>): Promise<SubCategory>;
   deleteSubCategory(id: number): Promise<void>;
 
   // Flavors
-  getFlavors(filters?: { categoryId?: number; subCategoryId?: number }): Promise<FlavorWithCount[]>;
+  getFlavors(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<FlavorWithCount[]>;
   createFlavor(f: Partial<InsertFlavor>): Promise<Flavor>;
   updateFlavor(id: number, updates: Partial<InsertFlavor>): Promise<Flavor>;
   deleteFlavor(id: number): Promise<void>;
 
   // Sizes
-  getSizes(filters?: { categoryId?: number; subCategoryId?: number }): Promise<SizeWithCount[]>;
+  getSizes(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<SizeWithCount[]>;
   createSize(s: Partial<InsertSize>): Promise<Size>;
   updateSize(id: number, updates: Partial<InsertSize>): Promise<Size>;
   deleteSize(id: number): Promise<void>;
 
   // Brands
-  getBrands(filters?: { categoryId?: number; subCategoryId?: number }): Promise<BrandWithCount[]>;
+  getBrands(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<BrandWithCount[]>;
   createBrand(b: Partial<InsertBrand>): Promise<Brand>;
   updateBrand(id: number, updates: Partial<InsertBrand>): Promise<Brand>;
   deleteBrand(id: number): Promise<void>;
@@ -544,8 +544,10 @@ export class DatabaseStorage implements IStorage {
 
   // ── Categories ──────────────────────────────────────────────────────────────
 
-  async getCategories(): Promise<CategoryWithCount[]> {
-    const cats = await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true)));
+  async getCategories(opts?: { includeAll?: boolean }): Promise<CategoryWithCount[]> {
+    const cats = opts?.includeAll
+      ? await db.select().from(categories)
+      : await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true)));
     const subs = await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
     const prods = await db.select().from(products);
     return cats.map((c) => ({
@@ -581,10 +583,17 @@ export class DatabaseStorage implements IStorage {
 
   // ── SubCategories ───────────────────────────────────────────────────────────
 
-  async getSubCategories(categoryId?: number): Promise<SubCategoryWithDetails[]> {
-    const subs = categoryId
-      ? await db.select().from(subCategories).where(and(eq(subCategories.categoryId, categoryId), eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)))
-      : await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
+  async getSubCategories(categoryId?: number, opts?: { includeAll?: boolean }): Promise<SubCategoryWithDetails[]> {
+    let subs;
+    if (opts?.includeAll) {
+      subs = categoryId
+        ? await db.select().from(subCategories).where(eq(subCategories.categoryId, categoryId))
+        : await db.select().from(subCategories);
+    } else {
+      subs = categoryId
+        ? await db.select().from(subCategories).where(and(eq(subCategories.categoryId, categoryId), eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)))
+        : await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
+    }
     const cats = await db.select().from(categories);
     const prods = await db.select().from(products);
     const catMap = new Map(cats.map((c) => [c.id, c.name]));
@@ -616,8 +625,10 @@ export class DatabaseStorage implements IStorage {
 
   // ── Flavors ─────────────────────────────────────────────────────────────────
 
-  async getFlavors(filters?: { categoryId?: number; subCategoryId?: number }): Promise<FlavorWithCount[]> {
-    const all = await db.select().from(flavors).where(eq(flavors.status, 'ACTIVE'));
+  async getFlavors(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<FlavorWithCount[]> {
+    const all = filters?.includeAll
+      ? await db.select().from(flavors)
+      : await db.select().from(flavors).where(eq(flavors.status, 'ACTIVE'));
     const prods = await db.select().from(products);
     const subs = await db.select().from(subCategories);
     const subMap = new Map(subs.map((s) => [s.id, s.name]));
@@ -646,8 +657,10 @@ export class DatabaseStorage implements IStorage {
 
   // ── Sizes ───────────────────────────────────────────────────────────────────
 
-  async getSizes(filters?: { categoryId?: number; subCategoryId?: number }): Promise<SizeWithCount[]> {
-    const all = await db.select().from(sizes).where(eq(sizes.status, 'ACTIVE'));
+  async getSizes(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<SizeWithCount[]> {
+    const all = filters?.includeAll
+      ? await db.select().from(sizes)
+      : await db.select().from(sizes).where(eq(sizes.status, 'ACTIVE'));
     const prods = await db.select().from(products);
     const subs = await db.select().from(subCategories);
     const subMap = new Map(subs.map((s) => [s.id, s.name]));
@@ -676,8 +689,10 @@ export class DatabaseStorage implements IStorage {
 
   // ── Brands ──────────────────────────────────────────────────────────────────
 
-  async getBrands(filters?: { categoryId?: number; subCategoryId?: number }): Promise<BrandWithCount[]> {
-    const all = await db.select().from(brands).where(eq(brands.status, 'ACTIVE'));
+  async getBrands(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<BrandWithCount[]> {
+    const all = filters?.includeAll
+      ? await db.select().from(brands)
+      : await db.select().from(brands).where(eq(brands.status, 'ACTIVE'));
     const prods = await db.select().from(products);
     const subs = await db.select().from(subCategories);
     const subMap = new Map(subs.map((s) => [s.id, s.name]));

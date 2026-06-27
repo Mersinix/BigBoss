@@ -182,7 +182,7 @@ function ProductDetailModal({
 // ── Variant Entry type ────────────────────────────────────────────────────────
 
 type VEntry = { flavorId: number | null; sizeId: number | null; flavorName: string | null; sizeName: string | null; price: string; qty: string };
-type VariantGroup = { id: string; sizeId: string; flavorIds: number[]; price: string; qty: string };
+type VariantGroup = { id: string; sizeId: string; flavorIds: number[]; price: string; qty: string; flavorStocks: Record<string, string> };
 
 function buildEntries(flavors: { id: number; name: string }[], sizes: { id: number; name: string }[]): VEntry[] {
   if (flavors.length > 0 && sizes.length > 0) {
@@ -197,20 +197,53 @@ function groupsToEntries(groups: VariantGroup[], flavors: { id: number; name: st
   const entries: VEntry[] = [];
   for (const g of groups) {
     const price = g.price;
-    const qty = g.qty;
     const size = g.sizeId ? sizes.find(s => String(s.id) === g.sizeId) : null;
     const selectedFlavors = g.flavorIds.length ? flavors.filter(f => g.flavorIds.includes(f.id)) : [];
     if (selectedFlavors.length && size) {
-      selectedFlavors.forEach(f => entries.push({ flavorId: f.id, sizeId: size.id, flavorName: f.name, sizeName: size.name, price, qty }));
+      selectedFlavors.forEach(f => entries.push({
+        flavorId: f.id, sizeId: size.id, flavorName: f.name, sizeName: size.name,
+        price, qty: g.flavorStocks[String(f.id)] ?? g.qty,
+      }));
     } else if (selectedFlavors.length) {
-      selectedFlavors.forEach(f => entries.push({ flavorId: f.id, sizeId: null, flavorName: f.name, sizeName: null, price, qty }));
+      selectedFlavors.forEach(f => entries.push({
+        flavorId: f.id, sizeId: null, flavorName: f.name, sizeName: null,
+        price, qty: g.flavorStocks[String(f.id)] ?? g.qty,
+      }));
     } else if (size) {
-      entries.push({ flavorId: null, sizeId: size.id, flavorName: null, sizeName: size.name, price, qty });
+      entries.push({ flavorId: null, sizeId: size.id, flavorName: null, sizeName: size.name, price, qty: g.qty });
     } else {
-      entries.push({ flavorId: null, sizeId: null, flavorName: null, sizeName: null, price, qty });
+      entries.push({ flavorId: null, sizeId: null, flavorName: null, sizeName: null, price, qty: g.qty });
     }
   }
   return entries;
+}
+
+function variantsToGroups(variants: any[], flavors: { id: number; name: string }[], sizes: { id: number; name: string }[]): VariantGroup[] {
+  if (!variants.length) {
+    return [{ id: crypto.randomUUID(), sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }];
+  }
+  const bySize = new Map<string, any[]>();
+  for (const v of variants) {
+    const key = v.sizeId != null ? String(v.sizeId) : "__none__";
+    if (!bySize.has(key)) bySize.set(key, []);
+    bySize.get(key)!.push(v);
+  }
+  const groups: VariantGroup[] = [];
+  for (const [sizeKey, entries] of bySize) {
+    const flavorEntries = entries.filter(e => e.flavorId != null);
+    const noFlavorEntry = entries.find(e => e.flavorId == null);
+    const flavorIds = flavorEntries.map((e: any) => e.flavorId);
+    const flavorStocks: Record<string, string> = {};
+    for (const e of flavorEntries) flavorStocks[String(e.flavorId)] = String(e.quantity);
+    const price = entries[0] ? String(entries[0].price / 100) : "";
+    const qty = noFlavorEntry ? String(noFlavorEntry.quantity) : "";
+    groups.push({
+      id: crypto.randomUUID(),
+      sizeId: sizeKey === "__none__" ? "" : sizeKey,
+      flavorIds, price, qty, flavorStocks,
+    });
+  }
+  return groups;
 }
 
 function VariantGroupBuilder({
@@ -221,52 +254,77 @@ function VariantGroupBuilder({
   groups: VariantGroup[];
   onChange: (groups: VariantGroup[]) => void;
 }) {
-  const addGroup = () => onChange([...groups, { id: crypto.randomUUID(), sizeId: "", flavorIds: [], price: "", qty: "" }]);
+  const addGroup = () => onChange([...groups, { id: crypto.randomUUID(), sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
   const update = (id: string, patch: Partial<VariantGroup>) => onChange(groups.map(g => g.id === id ? { ...g, ...patch } : g));
   const remove = (id: string) => onChange(groups.filter(g => g.id !== id));
 
   return (
     <div className="space-y-3">
-      {groups.map((g, idx) => (
-        <div key={g.id} className="border rounded-lg p-3 space-y-3 bg-secondary/20">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Variant group {idx + 1}</p>
-            {groups.length > 1 && (
-              <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => remove(g.id)}>Remove</Button>
-            )}
-          </div>
-          {sizes.length > 0 && (
-            <div className="space-y-1">
-              <Label className="text-xs">Size</Label>
-              <Select value={g.sizeId || "__none__"} onValueChange={v => update(g.id, { sizeId: v === "__none__" ? "" : v })}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Select size (optional)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Any / no size</SelectItem>
-                  {sizes.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+      {groups.map((g, idx) => {
+        const selectedFlavors = flavors.filter(f => g.flavorIds.includes(f.id));
+        const hasFlavors = selectedFlavors.length > 0;
+        return (
+          <div key={g.id} className="border rounded-lg p-3 space-y-3 bg-secondary/20">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Variant group {idx + 1}</p>
+              {groups.length > 1 && (
+                <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => remove(g.id)}>Remove</Button>
+              )}
             </div>
-          )}
-          {flavors.length > 0 && (
-            <MultiSelectList
-              label="Flavors (multi-select)"
-              items={flavors}
-              selected={g.flavorIds}
-              onChange={ids => update(g.id, { flavorIds: ids })}
-            />
-          )}
-          <div className="grid grid-cols-2 gap-2">
+            {sizes.length > 0 && (
+              <div className="space-y-1">
+                <Label className="text-xs">Size</Label>
+                <Select value={g.sizeId || "__none__"} onValueChange={v => update(g.id, { sizeId: v === "__none__" ? "" : v })}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Select size (optional)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Any / no size</SelectItem>
+                    {sizes.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {flavors.length > 0 && (
+              <MultiSelectList
+                label="Flavors (multi-select)"
+                items={flavors}
+                selected={g.flavorIds}
+                onChange={ids => {
+                  const newStocks = { ...g.flavorStocks };
+                  Object.keys(newStocks).forEach(k => { if (!ids.includes(parseInt(k))) delete newStocks[k]; });
+                  update(g.id, { flavorIds: ids, flavorStocks: newStocks });
+                }}
+              />
+            )}
             <div className="space-y-1">
               <Label className="text-xs">Price (USD)</Label>
               <Input type="number" step="0.01" min="0" value={g.price} onChange={e => update(g.id, { price: e.target.value })} placeholder="0.00" />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Stock</Label>
-              <Input type="number" min="0" value={g.qty} onChange={e => update(g.id, { qty: e.target.value })} placeholder="0" />
-            </div>
+            {hasFlavors ? (
+              <div className="space-y-2">
+                <Label className="text-xs">Stock per Flavor</Label>
+                {selectedFlavors.map(f => (
+                  <div key={f.id} className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground flex-1 truncate">{f.name}</span>
+                    <Input
+                      type="number" min="0"
+                      className="h-8 w-24 shrink-0"
+                      value={g.flavorStocks[String(f.id)] ?? ""}
+                      onChange={e => update(g.id, { flavorStocks: { ...g.flavorStocks, [String(f.id)]: e.target.value } })}
+                      placeholder="0"
+                      data-testid={`input-stock-flavor-${f.id}-group-${g.id}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Label className="text-xs">Stock</Label>
+                <Input type="number" min="0" value={g.qty} onChange={e => update(g.id, { qty: e.target.value })} placeholder="0" />
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
       <Button type="button" variant="outline" size="sm" onClick={addGroup} className="w-full">
         <Plus className="w-4 h-4 mr-1" />Add variant group
       </Button>
@@ -349,7 +407,7 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
     return ids.length > 0 ? szs.filter(s => ids.includes(s.id)) : [];
   }, [product.sizeIds, product.sizeId, szs]);
 
-  const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "" }]);
+  const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
 
   const add = useMutation({
     mutationFn: async () => {
@@ -450,25 +508,28 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
     },
   });
 
-  const [entries, setEntries] = useState<VEntry[]>(() => buildEntries(availableFlavors, availableSizes));
+  const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!existingVariants.length) return;
-    setEntries(buildEntries(availableFlavors, availableSizes).map(b => {
-      const match = (existingVariants as any[]).find(v => v.flavorId === b.flavorId && v.sizeId === b.sizeId);
-      return match ? { ...b, price: String(match.price / 100), qty: String(match.quantity) } : b;
-    }));
-  }, [existingVariants]);
+    if (!loaded && (existingVariants as any[]).length > 0) {
+      setGroups(variantsToGroups(existingVariants as any[], availableFlavors, availableSizes));
+      setLoaded(true);
+    }
+  }, [existingVariants, loaded, availableFlavors, availableSizes]);
 
   const save = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/supplier/listings/${listing.id}/variants`, {
-      variants: entries.map(e => ({
-        flavorId: e.flavorId,
-        sizeId: e.sizeId,
-        price: parseFloat(e.price) || 0,
-        quantity: parseInt(e.qty) || 0,
-      })),
-    }),
+    mutationFn: async () => {
+      const entries = groupsToEntries(groups, availableFlavors, availableSizes);
+      await apiRequest("POST", `/api/supplier/listings/${listing.id}/variants`, {
+        variants: entries.map(e => ({
+          flavorId: e.flavorId,
+          sizeId: e.sizeId,
+          price: parseFloat(e.price) || 0,
+          quantity: parseInt(e.qty) || 0,
+        })),
+      });
+    },
     onSuccess: () => { toast({ title: "Variants updated" }); onSuccess(); onClose(); },
     onError: () => toast({ title: "Error updating", variant: "destructive" }),
   });
@@ -476,7 +537,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Edit Pricing & Stock</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Edit Pricing & Stock — Variant Builder</DialogTitle></DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
             {listing.product.imageUrl ? (
@@ -491,8 +552,8 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
           </div>
 
           <div>
-            <Label className="mb-2 block">Variant Pricing & Stock</Label>
-            <VariantMatrix entries={entries} onChange={setEntries} />
+            <Label className="mb-2 block">Manage variant groups (size + flavors + price + stock per flavor)</Label>
+            <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
             <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>
           </div>
 

@@ -45,7 +45,7 @@ waitForPort = 5000
 [userenv]
 
 [userenv.shared]
-DATABASE_URL = "postgresql://postgres:Microgenie00000!!@localhost:5432/postgres"
+VITE_GOOGLE_MAPS_API_KEY = "AIzaSyDX4SG2_rPzd4a5ddiGzR7oeCCANJDeYD4"
 
 [agent]
 stack = "FULLSTACK_JS"

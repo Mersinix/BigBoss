@@ -1,0 +1,232 @@
+# BigBossCoffee – Supplier Product Experience Improvements
+
+Before making any changes, analyze the existing implementation to understand how these pages currently work.
+
+## General Rules
+
+* Do **not** redesign the UI.
+* Do **not** break any existing functionality.
+* Reuse existing components whenever possible instead of creating duplicates.
+* If a component already exists (Filter Bar, Stats Strip, Live Preview, etc.), reuse it rather than rebuilding it.
+* Preserve all existing APIs and business logic.
+* Preserve all realtime synchronization.
+* Keep all current workflows unless explicitly requested below.
+* Before implementing, verify that the requested functionality does not already exist elsewhere in the project and reuse it if appropriate.
+* Restrict your work to the Product module described below.
+
+---
+
+# 1. Supplier → Product
+
+## Pages concerned
+
+* Admin Products
+* My Products
+* New Product
+
+---
+
+## Unify the filtering experience
+
+Currently these pages use a different filtering interface.
+
+Replace their current filtering section with the same user experience used in:
+
+**Admin → Product → Product Management**
+
+Use the same:
+
+* Stats Strip
+* Filter Bar
+* Search input
+* Overall layout
+
+The goal is to have a consistent product browsing experience between Admin and Supplier while preserving each page's own functionality.
+
+Do not redesign anything.
+
+Reuse the existing components.
+
+---
+
+## Supplier Stats Strip
+
+Add the same Stats Strip above the Filter Bar, adapted to supplier data.
+
+Display statistics that are meaningful for suppliers depending on the current page.
+
+The style should remain identical to the Admin Product Management page.
+
+---
+
+## Filter synchronization
+
+The following filters:
+
+* Category
+* SubCategory
+* Brand
+* Flavor
+* Size
+
+must stay synchronized.
+
+Required behavior:
+
+* Selecting a Category should update the available SubCategories.
+* Selecting a Category or SubCategory should automatically limit the available Brands, Flavors and Sizes to only those that belong to the current selection.
+* Clearing filters should restore all available options.
+* The Search input should continue working together with every filter.
+
+The filtering experience should feel consistent across all three Supplier Product pages.
+
+---
+
+# 2. Supplier → My Products
+
+## Edit Product
+
+When the supplier clicks **Edit**, the modal already opens.
+
+Keep the existing editing workflow.
+
+Add a **Live Preview** section on the right side of the modal.
+
+The Live Preview should update immediately as the supplier edits the product.
+
+The preview should reflect all editable information including:
+
+* Images
+* Product information
+* Variant Groups
+* Sizes
+* Flavors
+* Prices
+* Stock
+* Brand
+* Category
+* SubCategory
+
+The supplier should always see how the product will appear before saving.
+
+Do not remove any existing editing functionality.
+
+---
+
+# 3. Supplier → Admin Products
+
+When the supplier clicks:
+
+**Add to My Products**
+
+the Variant Builder modal opens.
+
+Keep the current Variant Builder exactly as it is.
+
+Add a **Live Preview** panel on the right side of this modal.
+
+The preview should update immediately while the supplier creates Variant Groups, edits prices, modifies stock, changes flavors, selects sizes, or updates any other product information.
+
+The current workflow must remain unchanged.
+
+Only enhance the experience by adding the preview.
+
+---
+
+# 4. Supplier → New Product
+
+## Product list
+
+Add the same display options available elsewhere:
+
+* Grid View (default)
+* List View
+
+The supplier must be able to switch between both views without affecting filters or search.
+
+---
+
+## New Product modal
+
+When the supplier clicks **New Product**, keep the current creation workflow.
+
+Add a **Live Preview** panel on the right side of the modal.
+
+The preview should update instantly while the supplier creates the product.
+
+It should reflect all information entered in the form, including:
+
+* Images
+* Product details
+* Categories
+* SubCategories
+* Brand
+* Variant Groups
+* Sizes
+* Flavors
+* Prices
+* Stock
+
+The supplier should always be able to visualize the final product before saving.
+
+---
+
+# Final Validation
+
+Before completing the task, verify the following:
+
+## Supplier Product Pages
+
+* Admin Products
+* My Products
+* New Product
+
+all use the same Product Management filtering experience.
+
+---
+
+## Filtering
+
+Verify that:
+
+* Category updates SubCategory.
+* Category/SubCategory update Brand.
+* Category/SubCategory update Flavor.
+* Category/SubCategory update Size.
+* Search works together with every filter.
+* Filters remain synchronized without page refresh.
+
+---
+
+## Live Preview
+
+Verify that Live Preview exists in:
+
+* Add to My Products
+* Edit Product
+* New Product
+
+and updates immediately while editing.
+
+---
+
+## Product Views
+
+Verify that:
+
+* Grid View is the default.
+* List View works correctly.
+* Switching views does not reset filters or search.
+
+---
+
+## Regression Check
+
+Before finishing, confirm that:
+
+* No existing Product functionality has been broken.
+* Existing CRUD operations still work.
+* Existing Variant Builder functionality still works.
+* Existing realtime synchronization still works.
+* No APIs were unnecessarily modified.
+* No visual redesign was introduced outside the requested scope.

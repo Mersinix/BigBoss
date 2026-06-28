@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/format";
 import { useLocation } from "wouter";
 import type { ProductWithTaxonomy, FlavorWithCount, SizeWithCount, BrandWithCount, SupplierListingWithProduct, CategoryWithCount, SubCategoryWithDetails } from "@shared/schema";
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type AdminProductWithListing = ProductWithTaxonomy & {
@@ -87,52 +88,6 @@ function NoSelectionEmptyState({ onGoToCategories, needsSubCategory }: { onGoToC
       <Button variant="outline" onClick={onGoToCategories} className="gap-2" data-testid="button-go-to-categories">
         <Layers className="w-4 h-4" />Go to My Categories
       </Button>
-    </div>
-  );
-}
-
-// ── Category + SubCategory Inline Nav ────────────────────────────────────────
-
-function CategorySubCategoryNav({
-  mappings, localCatId, localSubId, onSelectCat, onSelectSub,
-}: {
-  mappings: any[];
-  localCatId: number | null;
-  localSubId: number | null;
-  onSelectCat: (id: number) => void;
-  onSelectSub: (id: number) => void;
-}) {
-  const selectedMapping = mappings.find((m: any) => m.category?.id === localCatId);
-  const subcats: any[] = selectedMapping?.subCategories ?? [];
-
-  return (
-    <div className="space-y-2">
-      <div className="overflow-x-auto pb-1 -mx-1 px-1">
-        <div className="flex gap-2 min-w-max">
-          {mappings.length === 0 && <p className="text-xs text-muted-foreground py-2">No categories selected</p>}
-          {mappings.map((m: any) => (
-            <button key={m.category.id} onClick={() => onSelectCat(m.category.id)}
-              className={`shrink-0 px-3 py-2 rounded-lg border text-sm flex items-center gap-2 transition-colors ${localCatId === m.category.id ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-primary/40'}`}
-              data-testid={`nav-cat-${m.category.id}`}>
-              {m.category.icon && <span className="text-base leading-none">{m.category.icon}</span>}
-              <span>{m.category.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      {localCatId !== null && subcats.length > 0 && (
-        <div className="overflow-x-auto pb-1 -mx-1 px-1">
-          <div className="flex gap-2 min-w-max">
-            {subcats.map((s: any) => (
-              <button key={s.id} onClick={() => onSelectSub(s.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-full border text-sm transition-colors ${localSubId === s.id ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border hover:border-primary/40'}`}
-                data-testid={`nav-sub-${s.id}`}>
-                {s.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -229,9 +184,9 @@ function variantsToGroups(variants: any[], flavors: { id: number; name: string }
     bySize.get(key)!.push(v);
   }
   const groups: VariantGroup[] = [];
-  for (const [sizeKey, entries] of bySize) {
-    const flavorEntries = entries.filter(e => e.flavorId != null);
-    const noFlavorEntry = entries.find(e => e.flavorId == null);
+  for (const [sizeKey, entries] of Array.from(bySize.entries())) {
+    const flavorEntries = entries.filter((e: any) => e.flavorId != null);
+    const noFlavorEntry = entries.find((e: any) => e.flavorId == null);
     const flavorIds = flavorEntries.map((e: any) => e.flavorId);
     const flavorStocks: Record<string, string> = {};
     for (const e of flavorEntries) flavorStocks[String(e.flavorId)] = String(e.quantity);
@@ -386,6 +341,64 @@ function VariantMatrix({ entries, onChange }: { entries: VEntry[]; onChange: (en
   );
 }
 
+// ── Listing Live Preview ──────────────────────────────────────────────────────
+
+function ListingLivePreview({
+  product, groups, availableFlavors, availableSizes,
+}: {
+  product: { imageUrl?: string | null; name: string; description?: string | null } & Record<string, any>;
+  groups: VariantGroup[];
+  availableFlavors: { id: number; name: string }[];
+  availableSizes: { id: number; name: string }[];
+}) {
+  const previewEntries = useMemo(
+    () => groupsToEntries(groups, availableFlavors, availableSizes),
+    [groups, availableFlavors, availableSizes],
+  );
+  const hasVariantData = previewEntries.some(e => parseFloat(e.price) > 0 || parseInt(e.qty) > 0);
+
+  return (
+    <div className="lg:sticky lg:top-0">
+      <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
+      <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
+        <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+          {product.imageUrl ? (
+            <img src={product.imageUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          ) : (
+            <Package className="w-16 h-16 text-muted-foreground opacity-40" />
+          )}
+        </div>
+        <div className="p-4 space-y-2">
+          <p className="font-semibold text-lg leading-tight">{product.name}</p>
+          {product.description && <p className="text-sm text-muted-foreground line-clamp-3">{product.description}</p>}
+          {'categoryLabel' in product && <TaxBadges product={product as ProductWithTaxonomy} />}
+          {hasVariantData && (
+            <div className="pt-2 border-t space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Variants</p>
+              {previewEntries.map((e, i) => {
+                const label = [e.flavorName, e.sizeName].filter(Boolean).join(" · ") || "Default";
+                const price = parseFloat(e.price);
+                const qty = parseInt(e.qty) || 0;
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-muted-foreground truncate">{label}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {price > 0 && <span className="font-medium">${price.toFixed(2)}</span>}
+                      <span className={`text-xs px-1.5 py-0.5 rounded-md ${qty > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}>
+                        {qty > 0 ? `${qty} in stock` : "No stock"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Add to My Products Modal ──────────────────────────────────────────────────
 
 function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
@@ -443,35 +456,46 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add to My Products — Variant Builder</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 mt-2">
-          <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
-            {product.imageUrl ? (
-              <img src={product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
-            ) : (
-              <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
-            )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+          {/* Left – Builder */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
+              {product.imageUrl ? (
+                <img src={product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
+              )}
+              <div>
+                <p className="font-medium text-sm">{product.name}</p>
+                <TaxBadges product={product} />
+              </div>
+            </div>
+
             <div>
-              <p className="font-medium text-sm">{product.name}</p>
-              <TaxBadges product={product} />
+              <Label className="mb-2 block">Build custom variant groups (size + flavors + price + stock)</Label>
+              <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
+              <p className="text-xs text-muted-foreground mt-1.5">Products only appear in the shop when price &gt; 0 and stock &gt; 0.</p>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button onClick={() => add.mutate()} disabled={add.isPending || !hasAnyPrice} data-testid="button-confirm-add-listing">
+                {add.isPending ? "Adding…" : "Add to My Products"}
+              </Button>
             </div>
           </div>
 
-          <div>
-            <Label className="mb-2 block">Build custom variant groups (size + flavors + price + stock)</Label>
-            <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
-            <p className="text-xs text-muted-foreground mt-1.5">Products only appear in the shop when price &gt; 0 and stock &gt; 0.</p>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => add.mutate()} disabled={add.isPending || !hasAnyPrice} data-testid="button-confirm-add-listing">
-              {add.isPending ? "Adding…" : "Add to My Products"}
-            </Button>
-          </div>
+          {/* Right – Live Preview */}
+          <ListingLivePreview
+            product={product}
+            groups={groups}
+            availableFlavors={availableFlavors}
+            availableSizes={availableSizes}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -536,33 +560,44 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Edit Pricing & Stock — Variant Builder</DialogTitle></DialogHeader>
-        <div className="space-y-4 mt-2">
-          <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
-            {listing.product.imageUrl ? (
-              <img src={listing.product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
-            ) : (
-              <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
-            )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+          {/* Left – Builder */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
+              {listing.product.imageUrl ? (
+                <img src={listing.product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
+              )}
+              <div>
+                <p className="font-medium text-sm">{listing.product.name}</p>
+                <TaxBadges product={listing.product} />
+              </div>
+            </div>
+
             <div>
-              <p className="font-medium text-sm">{listing.product.name}</p>
-              <TaxBadges product={listing.product} />
+              <Label className="mb-2 block">Manage variant groups (size + flavors + price + stock per flavor)</Label>
+              <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
+              <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button onClick={() => save.mutate()} disabled={save.isPending} data-testid="button-save-listing">
+                {save.isPending ? "Saving…" : "Save Changes"}
+              </Button>
             </div>
           </div>
 
-          <div>
-            <Label className="mb-2 block">Manage variant groups (size + flavors + price + stock per flavor)</Label>
-            <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
-            <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => save.mutate()} disabled={save.isPending} data-testid="button-save-listing">
-              {save.isPending ? "Saving…" : "Save Changes"}
-            </Button>
-          </div>
+          {/* Right – Live Preview */}
+          <ListingLivePreview
+            product={listing.product}
+            groups={groups}
+            availableFlavors={availableFlavors}
+            availableSizes={availableSizes}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -624,7 +659,6 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
     });
   };
 
-  // Filter cats to only supplier's mapped categories
   const supplierCats = useMemo(() => {
     if (!mappings.length) return cats;
     const mappedCatIds = mappings.map((m: any) => m.category?.id).filter(Boolean);
@@ -639,6 +673,7 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
     const mappingSubIds = mapping.subCategories?.map((sc: any) => sc.id) ?? [];
     return subs.filter(s => String(s.categoryId) === form.categoryId && mappingSubIds.includes(s.id));
   }, [form.categoryId, subs, mappings]);
+
   const filterBySubCat = <T extends { subCategoryIds?: number[] | null }>(items: T[]): T[] => {
     const subId = form.subCategoryId ? parseInt(form.subCategoryId) : null;
     const catId = form.categoryId ? parseInt(form.categoryId) : null;
@@ -652,6 +687,7 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
     }
     return items;
   };
+
   const filteredFlavs = useMemo(() => filterBySubCat(flavs), [flavs, form.categoryId, form.subCategoryId, subs]);
   const filteredSzs = useMemo(() => filterBySubCat(szs), [szs, form.categoryId, form.subCategoryId, subs]);
   const filteredBrnds = useMemo(() => filterBySubCat(brnds), [brnds, form.categoryId, form.subCategoryId, subs]);
@@ -688,63 +724,99 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit Product" : "Create New Product"}</DialogTitle>
           {!editing && <p className="text-sm text-muted-foreground mt-1">Submitted products go to admin for review and approval.</p>}
         </DialogHeader>
-        <div className="space-y-4 mt-2">
-          <div className="space-y-1.5">
-            <Label>Product Name *</Label>
-            <Input data-testid="input-sprod-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="e.g. Single Origin Ethiopia 250g" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Description</Label>
-            <Input data-testid="input-sprod-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brief description" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Image URL</Label>
-            <Input data-testid="input-sprod-image" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://…" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+          {/* Left – Form */}
+          <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={form.categoryId} onValueChange={v => setField("categoryId", v === "__none__" ? "" : v)}>
-                <SelectTrigger data-testid="select-sprod-category"><SelectValue placeholder="Select…" /></SelectTrigger>
+              <Label>Product Name *</Label>
+              <Input data-testid="input-sprod-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="e.g. Single Origin Ethiopia 250g" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description</Label>
+              <Input data-testid="input-sprod-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brief description" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Image URL</Label>
+              <Input data-testid="input-sprod-image" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://…" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select value={form.categoryId} onValueChange={v => setField("categoryId", v === "__none__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-sprod-category"><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {supplierCats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sub-category</Label>
+                <Select value={form.subCategoryId} onValueChange={v => setField("subCategoryId", v === "__none__" ? "" : v)} disabled={!form.categoryId}>
+                  <SelectTrigger data-testid="select-sprod-subcat"><SelectValue placeholder={form.categoryId ? "Select…" : "Pick category first"} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {filteredSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <MultiSelectList label="Flavors" items={filteredFlavs} selected={form.flavorIds} onChange={ids => setField("flavorIds", ids)} />
+            <MultiSelectList label="Sizes" items={filteredSzs} selected={form.sizeIds} onChange={ids => setField("sizeIds", ids)} />
+            <div className="space-y-1.5">
+              <Label>Brand</Label>
+              <Select value={form.brandId} onValueChange={v => setField("brandId", v === "__none__" ? "" : v)}>
+                <SelectTrigger data-testid="select-sprod-brand"><SelectValue placeholder="Select…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">None</SelectItem>
-                  {supplierCats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
+                  {filteredBrnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Sub-category</Label>
-              <Select value={form.subCategoryId} onValueChange={v => setField("subCategoryId", v === "__none__" ? "" : v)} disabled={!form.categoryId}>
-                <SelectTrigger data-testid="select-sprod-subcat"><SelectValue placeholder={form.categoryId ? "Select…" : "Pick category first"} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {filteredSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button onClick={handleSave} disabled={save.isPending || !form.name.trim()} data-testid="button-save-sprod">
+                {save.isPending ? "Saving…" : editing ? "Save Changes" : "Submit for Review"}
+              </Button>
             </div>
           </div>
-          <MultiSelectList label="Flavors" items={filteredFlavs} selected={form.flavorIds} onChange={ids => setField("flavorIds", ids)} />
-          <MultiSelectList label="Sizes" items={filteredSzs} selected={form.sizeIds} onChange={ids => setField("sizeIds", ids)} />
-          <div className="space-y-1.5">
-            <Label>Brand</Label>
-            <Select value={form.brandId} onValueChange={v => setField("brandId", v === "__none__" ? "" : v)}>
-              <SelectTrigger data-testid="select-sprod-brand"><SelectValue placeholder="Select…" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
-                {filteredBrnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSave} disabled={save.isPending || !form.name.trim()} data-testid="button-save-sprod">
-              {save.isPending ? "Saving…" : editing ? "Save Changes" : "Submit for Review"}
-            </Button>
+
+          {/* Right – Live Preview */}
+          <div className="lg:sticky lg:top-0">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
+            <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
+              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                {form.imageUrl ? (
+                  <img src={form.imageUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <Package className="w-16 h-16 text-muted-foreground opacity-40" />
+                )}
+              </div>
+              <div className="p-4 space-y-2">
+                <p className="font-semibold text-lg leading-tight">{form.name || "Product name"}</p>
+                {form.description && <p className="text-sm text-muted-foreground line-clamp-3">{form.description}</p>}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {form.categoryId && <Badge variant="secondary" className="text-xs">{supplierCats.find(c => String(c.id) === form.categoryId)?.name}</Badge>}
+                  {form.subCategoryId && <Badge variant="outline" className="text-xs">{filteredSubs.find(s => String(s.id) === form.subCategoryId)?.name}</Badge>}
+                  {form.brandId && <Badge className="text-xs bg-green-100 text-green-700 border-0">{filteredBrnds.find(b => String(b.id) === form.brandId)?.name}</Badge>}
+                </div>
+                {(form.flavorIds.length > 0 || form.sizeIds.length > 0) && (
+                  <div className="flex flex-wrap gap-1">
+                    {filteredFlavs.filter(f => form.flavorIds.includes(f.id)).map(f => (
+                      <Badge key={f.id} className="text-xs bg-pink-100 text-pink-700 border-0">{f.name}</Badge>
+                    ))}
+                    {filteredSzs.filter(s => form.sizeIds.includes(s.id)).map(s => (
+                      <Badge key={s.id} className="text-xs bg-amber-100 text-amber-700 border-0">{s.name}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>
@@ -753,6 +825,9 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
 }
 
 // ── Tab 3: New Product ────────────────────────────────────────────────────────
+
+type NewProductFilters = { search: string; categoryId: string; subCategoryId: string; flavorId: string; sizeId: string; brandId: string };
+const EMPTY_NEW_FILTERS: NewProductFilters = { search: "", categoryId: "", subCategoryId: "", flavorId: "", sizeId: "", brandId: "" };
 
 function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
   cats: CategoryWithCount[]; subs: SubCategoryWithDetails[];
@@ -763,6 +838,8 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
   const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProd, setEditingProd] = useState<ProductWithTaxonomy | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [filters, setFilters] = useState<NewProductFilters>(EMPTY_NEW_FILTERS);
 
   const { data: createdProducts = [], isLoading } = useQuery<ProductWithTaxonomy[]>({
     queryKey: ["/api/supplier/created-products"],
@@ -777,23 +854,215 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
     onError: () => toast({ title: "Error deleting product", variant: "destructive" }),
   });
 
+  // Stats
+  const totalCount = createdProducts.length;
+  const pendingCount = (createdProducts as any[]).filter(p => (p as any).status === 'PENDING').length;
+  const approvedCount = (createdProducts as any[]).filter(p => (p as any).status === 'ACTIVE').length;
+
+  // Dynamic filter options — cat/subcat aware
+  const filteredSubsForFilter = useMemo(() =>
+    filters.categoryId ? subs.filter(s => String(s.categoryId) === filters.categoryId) : subs,
+    [filters.categoryId, subs]
+  );
+
+  const filterTaxNew = <T extends { subCategoryIds?: number[] | null }>(items: T[]): T[] => {
+    const subId = filters.subCategoryId ? parseInt(filters.subCategoryId) : null;
+    const catId = filters.categoryId ? parseInt(filters.categoryId) : null;
+    const catSubIds = subs.filter(s => String(s.categoryId) === filters.categoryId).map(s => s.id);
+    if (subId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).includes(subId));
+    } else if (catId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).some(sid => catSubIds.includes(sid)));
+    }
+    return items;
+  };
+
+  const filteredFlavsNew = useMemo(() => filterTaxNew(flavs), [flavs, filters.categoryId, filters.subCategoryId, subs]);
+  const filteredSzsNew = useMemo(() => filterTaxNew(szs), [szs, filters.categoryId, filters.subCategoryId, subs]);
+  const filteredBrndsNew = useMemo(() => filterTaxNew(brnds), [brnds, filters.categoryId, filters.subCategoryId, subs]);
+
+  const setFilter = (key: keyof NewProductFilters, value: string) => {
+    setFilters(prev => {
+      const next = { ...prev, [key]: value === "__all__" ? "" : value };
+      if (key === "categoryId") { next.subCategoryId = ""; next.flavorId = ""; next.sizeId = ""; next.brandId = ""; }
+      if (key === "subCategoryId") { next.flavorId = ""; next.sizeId = ""; next.brandId = ""; }
+      return next;
+    });
+  };
+
+  // Client-side filtering
+  const displayed = useMemo(() => {
+    let list = createdProducts as any[];
+    if (filters.search.trim()) {
+      const q = filters.search.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q));
+    }
+    if (filters.categoryId) list = list.filter(p => String(p.categoryId) === filters.categoryId);
+    if (filters.subCategoryId) list = list.filter(p => String(p.subCategoryId) === filters.subCategoryId);
+    if (filters.flavorId) list = list.filter(p => p.flavorId === parseInt(filters.flavorId) || p.flavorIds?.includes(parseInt(filters.flavorId)));
+    if (filters.sizeId) list = list.filter(p => p.sizeId === parseInt(filters.sizeId) || p.sizeIds?.includes(parseInt(filters.sizeId)));
+    if (filters.brandId) list = list.filter(p => String(p.brandId) === filters.brandId);
+    return list;
+  }, [createdProducts, filters]);
+
+  const hasActiveFilters = Object.values(filters).some(v => v !== "");
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Submit new products for admin review and approval.</p>
-        <Button onClick={() => { setEditingProd(null); setModalOpen(true); }} data-testid="button-create-supplier-product">
-          <Plus className="w-4 h-4 mr-1.5" />New Product
-        </Button>
+      {/* Stats Strip */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <Plus className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">{totalCount} product{totalCount !== 1 ? 's' : ''} created</span>
+        </div>
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{pendingCount} pending review · {approvedCount} approved</span>
+        </div>
       </div>
+
+      {/* Filter Bar */}
+      <Card className="border shadow-none">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-3 items-end">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                data-testid="input-new-product-search"
+                className="pl-9"
+                placeholder="Search products…"
+                value={filters.search}
+                onChange={e => setFilter("search", e.target.value)}
+              />
+            </div>
+            {/* Category */}
+            <div className="min-w-[150px]">
+              <Select value={filters.categoryId} onValueChange={v => setFilter("categoryId", v)}>
+                <SelectTrigger data-testid="select-new-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All Categories</SelectItem>
+                  {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* SubCategory */}
+            <div className="min-w-[150px]">
+              <Select value={filters.subCategoryId} onValueChange={v => setFilter("subCategoryId", v)} disabled={!filters.categoryId}>
+                <SelectTrigger data-testid="select-new-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All Sub-categories</SelectItem>
+                  {filteredSubsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Flavor */}
+            <div className="min-w-[130px]">
+              <Select value={filters.flavorId} onValueChange={v => setFilter("flavorId", v)}>
+                <SelectTrigger data-testid="select-new-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All Flavors</SelectItem>
+                  {filteredFlavsNew.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Size */}
+            <div className="min-w-[130px]">
+              <Select value={filters.sizeId} onValueChange={v => setFilter("sizeId", v)}>
+                <SelectTrigger data-testid="select-new-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All Sizes</SelectItem>
+                  {filteredSzsNew.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Brand */}
+            <div className="min-w-[130px]">
+              <Select value={filters.brandId} onValueChange={v => setFilter("brandId", v)}>
+                <SelectTrigger data-testid="select-new-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All Brands</SelectItem>
+                  {filteredBrndsNew.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Clear */}
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_NEW_FILTERS)} className="text-muted-foreground">
+                <X className="w-4 h-4 mr-1" />Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Toolbar: action + view toggle */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Submit new products for admin review and approval.</p>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 border rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="toggle-new-view-list"
+              title="List view"
+            >
+              <LayoutList className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="toggle-new-view-grid"
+              title="Grid view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+          <Button onClick={() => { setEditingProd(null); setModalOpen(true); }} data-testid="button-create-supplier-product">
+            <Plus className="w-4 h-4 mr-1.5" />New Product
+          </Button>
+        </div>
+      </div>
+
+      {/* Product list / grid */}
       {isLoading ? (
         <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}</div>
-      ) : createdProducts.length === 0 ? (
+      ) : displayed.length === 0 ? (
         <div className="p-12 flex flex-col items-center gap-3 text-center border rounded-lg bg-secondary/10">
           <Package className="w-10 h-10 text-muted-foreground opacity-40" />
           <div>
-            <p className="font-medium">No products created yet</p>
-            <p className="text-sm text-muted-foreground mt-1">Click "New Product" to submit a product for admin approval.</p>
+            <p className="font-medium">{hasActiveFilters ? "No products match your filters" : "No products created yet"}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {hasActiveFilters ? "Try adjusting your filters." : "Click \"New Product\" to submit a product for admin approval."}
+            </p>
           </div>
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {displayed.map(p => (
+            <div key={p.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`card-created-product-${p.id}`}>
+              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                {p.imageUrl ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
+              </div>
+              <div className="p-2.5 space-y-1">
+                <p className="font-medium text-sm line-clamp-2">{p.name}</p>
+                <StatusBadge status={(p as any).status ?? 'PENDING'} />
+                <div className="flex gap-1 pt-1">
+                  {(p as any).status === 'PENDING' && (
+                    <>
+                      <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={() => { setEditingProd(p); setModalOpen(true); }} data-testid={`button-edit-sprod-${p.id}`}>
+                        <Pencil className="w-3 h-3 mr-1" />Edit
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => { if (confirm(`Delete "${p.name}"?`)) deleteMut.mutate(p.id); }} data-testid={`button-delete-sprod-grid-${p.id}`}>
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
@@ -807,7 +1076,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {createdProducts.map(p => (
+              {displayed.map(p => (
                 <TableRow key={p.id} data-testid={`row-created-product-${p.id}`} className="hover:bg-secondary/20">
                   <TableCell className="p-3">
                     {p.imageUrl ? (
@@ -844,6 +1113,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
           </Table>
         </div>
       )}
+
       {modalOpen && (
         <SupplierProductFormModal
           open={modalOpen}
@@ -860,9 +1130,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
 // ── Tab 1: Admin Products ─────────────────────────────────────────────────────
 
 function AdminProductsTab({
-  mappings,
-  flavs, szs, brnds,
-  onGoToCategories,
+  mappings, flavs, szs, brnds, onGoToCategories,
 }: {
   mappings: any[];
   flavs: FlavorWithCount[];
@@ -871,7 +1139,6 @@ function AdminProductsTab({
   onGoToCategories: () => void;
 }) {
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<SimpleFilters>(EMPTY_SIMPLE);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [detailProduct, setDetailProduct] = useState<AdminProductWithListing | null>(null);
@@ -899,19 +1166,63 @@ function AdminProductsTab({
       : null;
   }, [selectedCategoryId, mappings]);
 
-  const setFilter = (key: keyof SimpleFilters, value: string) => {
-    setFilters(f => ({ ...f, [key]: value === "__all__" ? "" : value }));
-  };
+  // Mapped cats and subcats for filter dropdowns
+  const mappedCats = useMemo(() =>
+    (mappings as any[]).map((m: any) => m.category),
+    [mappings]
+  );
+  const mappedSubcats = useMemo(() => {
+    if (!validCatId) return [];
+    const m = (mappings as any[]).find((m: any) => m.category.id === validCatId);
+    return m?.subCategories ?? [];
+  }, [mappings, validCatId]);
 
-  const handleSelectCat = (id: number) => {
-    setSelectedCategory(id);
-    const m = (mappings as any[]).find((m: any) => m.category.id === id);
-    const firstSub = m?.subCategories?.[0];
-    if (firstSub) setSelectedSubCategory(firstSub.id);
+  // Change category via filter bar → update Zustand store
+  const handleCatChange = (v: string) => {
+    if (v === "__all__") {
+      setSelectedCategory(null);
+      setSelectedSubCategory(null);
+    } else {
+      const id = parseInt(v);
+      setSelectedCategory(id);
+      const m = (mappings as any[]).find((m: any) => m.category.id === id);
+      const firstSub = m?.subCategories?.[0];
+      setSelectedSubCategory(firstSub ? firstSub.id : null);
+    }
     setFilters(EMPTY_SIMPLE);
   };
 
-  // Fetch ALL products for this supplier's mapped categories (backend handles the multi-category filter)
+  // Change subcategory via filter bar → update Zustand store
+  const handleSubCatChange = (v: string) => {
+    setSelectedSubCategory(v === "__all__" ? null : parseInt(v));
+    setFilters(prev => ({ ...prev, flavorId: "", sizeId: "", brandId: "" }));
+  };
+
+  const setFilter = (key: keyof SimpleFilters, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value === "__all__" ? "" : value }));
+  };
+
+  // Dynamic filter options — narrowed by selected cat/subcat
+  const filterTaxBySubCat = <T extends { subCategoryIds?: number[] | null }>(items: T[]): T[] => {
+    const subId = selectedSubCategoryId;
+    const catId = validCatId;
+    const catSubIds = (mappings as any[])
+      .find((m: any) => m.category.id === catId)?.subCategories?.map((s: any) => s.id) ?? [];
+    if (subId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).includes(subId));
+    } else if (catId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).some(sid => catSubIds.includes(sid)));
+    }
+    return items;
+  };
+
+  const filteredFlavsForFilter = useMemo(() => filterTaxBySubCat(flavs), [flavs, validCatId, selectedSubCategoryId, mappings]);
+  const filteredSzsForFilter = useMemo(() => filterTaxBySubCat(szs), [szs, validCatId, selectedSubCategoryId, mappings]);
+  const filteredBrndsForFilter = useMemo(() => filterTaxBySubCat(brnds), [brnds, validCatId, selectedSubCategoryId, mappings]);
+
+  // Fetch ALL products for this supplier's mapped categories
   const { data: allAdminProducts = [], isLoading } = useQuery<AdminProductWithListing[]>({
     queryKey: ["/api/supplier/admin-products"],
     queryFn: async () => {
@@ -922,7 +1233,7 @@ function AdminProductsTab({
     enabled: hasMappings,
   });
 
-  // Local filter: narrow by selected category/subcategory for the nav UX
+  // Narrow by selected category/subcategory (client-side)
   const adminProducts = useMemo(() => {
     if (!validCatId) return allAdminProducts;
     if (selectedSubCategoryId) {
@@ -933,143 +1244,214 @@ function AdminProductsTab({
 
   const displayed = useMemo(() => {
     let list = adminProducts as any[];
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    if (filters.search.trim()) {
+      const q = filters.search.toLowerCase();
       list = list.filter((p: any) => p.name.toLowerCase().includes(q));
     }
     if (filters.flavorId) list = list.filter((p: any) => p.flavorId === parseInt(filters.flavorId) || p.flavorIds?.includes(parseInt(filters.flavorId)));
     if (filters.sizeId) list = list.filter((p: any) => p.sizeId === parseInt(filters.sizeId) || p.sizeIds?.includes(parseInt(filters.sizeId)));
     if (filters.brandId) list = list.filter((p: any) => p.brandId === parseInt(filters.brandId));
     return list;
-  }, [adminProducts, search, filters]);
+  }, [adminProducts, filters]);
 
-  const hasExtraFilters = filters.flavorId || filters.sizeId || filters.brandId || search;
+  // Stats
+  const addedCount = (allAdminProducts as any[]).filter(p => p.myListing != null).length;
+  const hasActiveFilters = validCatId !== null || selectedSubCategoryId !== null || Object.values(filters).some(v => v !== "");
+
+  const catIdStr = validCatId ? String(validCatId) : "";
+  const subCatIdStr = selectedSubCategoryId ? String(selectedSubCategoryId) : "";
 
   return (
     <div className="space-y-4">
-      <CategorySubCategoryNav
-        mappings={mappings}
-        localCatId={validCatId}
-        localSubId={selectedSubCategoryId}
-        onSelectCat={handleSelectCat}
-        onSelectSub={setSelectedSubCategory}
-      />
-
-      {hasMappings && (
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-[160px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input className="pl-9 h-9" placeholder="Search products…" value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-admin-products" />
-          </div>
-          <Select value={filters.flavorId} onValueChange={v => setFilter("flavorId", v)}>
-            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Flavor" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Flavors</SelectItem>
-              {flavs.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.sizeId} onValueChange={v => setFilter("sizeId", v)}>
-            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Size" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Sizes</SelectItem>
-              {szs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.brandId} onValueChange={v => setFilter("brandId", v)}>
-            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Brand" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Brands</SelectItem>
-              {brnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {hasExtraFilters && (
-            <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFilters(EMPTY_SIMPLE); }} className="h-9 text-muted-foreground">
-              <X className="w-4 h-4 mr-1" />Clear
-            </Button>
-          )}
-          <div className="flex border rounded-md overflow-hidden ml-auto">
-            <Button size="sm" variant={viewMode === "grid" ? "secondary" : "ghost"} className="h-9 rounded-none" onClick={() => setViewMode("grid")}><LayoutGrid className="w-4 h-4" /></Button>
-            <Button size="sm" variant={viewMode === "list" ? "secondary" : "ghost"} className="h-9 rounded-none" onClick={() => setViewMode("list")}><LayoutList className="w-4 h-4" /></Button>
-          </div>
+      {/* Stats Strip */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <Package className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">{allAdminProducts.length} products available</span>
         </div>
-      )}
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{addedCount} added to my catalog · {mappings.length} categories</span>
+        </div>
+      </div>
 
       {!hasMappings ? (
         <NoSelectionEmptyState onGoToCategories={onGoToCategories} />
-      ) : isLoading ? (
-        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
-      ) : displayed.length === 0 ? (
-        <div className="p-12 flex flex-col items-center gap-3 text-center border rounded-lg">
-          <Package className="w-10 h-10 text-muted-foreground opacity-40" />
-          <div>
-            <p className="font-medium">No products available</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {hasExtraFilters ? "Try adjusting your filters." : "No admin products found for your selected category."}
-            </p>
-          </div>
-        </div>
-      ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {displayed.map((p: AdminProductWithListing) => (
-            <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`card-admin-product-${p.id}`}>
-              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
-                {p.imageUrl ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
+      ) : (
+        <>
+          {/* Filter Bar */}
+          <Card className="border shadow-none">
+            <CardContent className="p-4">
+              <div className="flex flex-wrap gap-3 items-end">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    data-testid="input-search-admin-products"
+                    className="pl-9"
+                    placeholder="Search products…"
+                    value={filters.search}
+                    onChange={e => setFilter("search", e.target.value)}
+                  />
+                </div>
+                {/* Category */}
+                <div className="min-w-[150px]">
+                  <Select value={catIdStr || "__all__"} onValueChange={handleCatChange}>
+                    <SelectTrigger data-testid="select-admin-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Categories</SelectItem>
+                      {mappedCats.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* SubCategory */}
+                <div className="min-w-[150px]">
+                  <Select value={subCatIdStr || "__all__"} onValueChange={handleSubCatChange} disabled={!catIdStr}>
+                    <SelectTrigger data-testid="select-admin-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Sub-categories</SelectItem>
+                      {mappedSubcats.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Flavor */}
+                <div className="min-w-[130px]">
+                  <Select value={filters.flavorId || "__all__"} onValueChange={v => setFilter("flavorId", v)}>
+                    <SelectTrigger data-testid="select-admin-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Flavors</SelectItem>
+                      {filteredFlavsForFilter.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Size */}
+                <div className="min-w-[130px]">
+                  <Select value={filters.sizeId || "__all__"} onValueChange={v => setFilter("sizeId", v)}>
+                    <SelectTrigger data-testid="select-admin-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Sizes</SelectItem>
+                      {filteredSzsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Brand */}
+                <div className="min-w-[130px]">
+                  <Select value={filters.brandId || "__all__"} onValueChange={v => setFilter("brandId", v)}>
+                    <SelectTrigger data-testid="select-admin-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Brands</SelectItem>
+                      {filteredBrndsForFilter.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* View toggle + Clear */}
+                <div className="flex items-center gap-2 ml-auto">
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setFilters(EMPTY_SIMPLE);
+                      setSelectedCategory(null);
+                      setSelectedSubCategory(null);
+                    }} className="text-muted-foreground">
+                      <X className="w-4 h-4 mr-1" />Clear
+                    </Button>
+                  )}
+                  <div className="flex border rounded-md overflow-hidden">
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      data-testid="toggle-admin-view-list" title="List view"
+                    >
+                      <LayoutList className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      data-testid="toggle-admin-view-grid" title="Grid view"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="p-2.5 space-y-1.5">
-                <p className="font-medium text-sm line-clamp-2">{p.name}</p>
-                {p.myListing ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" />Added</span>
-                ) : (
-                  <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={e => { e.stopPropagation(); setAddingProduct(p); }} data-testid={`button-add-to-my-products-${p.id}`}>
-                    <Plus className="w-3 h-3 mr-1" />Add to My Products
-                  </Button>
-                )}
+            </CardContent>
+          </Card>
+
+          {/* Products */}
+          {isLoading ? (
+            <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
+          ) : displayed.length === 0 ? (
+            <div className="p-12 flex flex-col items-center gap-3 text-center border rounded-lg">
+              <Package className="w-10 h-10 text-muted-foreground opacity-40" />
+              <div>
+                <p className="font-medium">No products available</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {hasActiveFilters ? "Try adjusting your filters." : "No admin products found for your selected category."}
+                </p>
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader className="bg-secondary/30">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-14" />
-                <TableHead>Product</TableHead>
-                <TableHead>Taxonomy</TableHead>
-                <TableHead className="text-right w-40">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {displayed.map(p => (
-                <TableRow key={p.id} className="hover:bg-secondary/20 cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`row-admin-product-${p.id}`}>
-                  <TableCell className="p-3">
-                    {p.imageUrl ? (
-                      <img src={p.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <p className="font-medium text-sm">{p.name}</p>
-                    {p.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</p>}
-                  </TableCell>
-                  <TableCell><TaxBadges product={p} /></TableCell>
-                  <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+          ) : viewMode === "grid" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {displayed.map((p: AdminProductWithListing) => (
+                <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`card-admin-product-${p.id}`}>
+                  <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                    {p.imageUrl ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
+                  </div>
+                  <div className="p-2.5 space-y-1.5">
+                    <p className="font-medium text-sm line-clamp-2">{p.name}</p>
                     {p.myListing ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 rounded-md font-medium">
-                        <CheckCircle2 className="w-3.5 h-3.5" />Added
-                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" />Added</span>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => setAddingProduct(p)} data-testid={`button-add-to-my-products-${p.id}`}>
-                        <Plus className="w-3.5 h-3.5 mr-1" />Add to My Products
+                      <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={e => { e.stopPropagation(); setAddingProduct(p); }} data-testid={`button-add-to-my-products-${p.id}`}>
+                        <Plus className="w-3 h-3 mr-1" />Add to My Products
                       </Button>
                     )}
-                  </TableCell>
-                </TableRow>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-secondary/30">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-14" />
+                    <TableHead>Product</TableHead>
+                    <TableHead>Taxonomy</TableHead>
+                    <TableHead className="text-right w-40">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayed.map(p => (
+                    <TableRow key={p.id} className="hover:bg-secondary/20 cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`row-admin-product-${p.id}`}>
+                      <TableCell className="p-3">
+                        {p.imageUrl ? (
+                          <img src={p.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-medium text-sm">{p.name}</p>
+                        {p.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</p>}
+                      </TableCell>
+                      <TableCell><TaxBadges product={p} /></TableCell>
+                      <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                        {p.myListing ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 rounded-md font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5" />Added
+                          </span>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => setAddingProduct(p)} data-testid={`button-add-to-my-products-${p.id}`}>
+                            <Plus className="w-3.5 h-3.5 mr-1" />Add to My Products
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </>
       )}
 
       {detailProduct && (
@@ -1101,9 +1483,7 @@ function AdminProductsTab({
 // ── Tab 2: My Products ────────────────────────────────────────────────────────
 
 function MyProductsTab({
-  mappings,
-  flavs, szs, brnds,
-  onGoToCategories,
+  mappings, flavs, szs, brnds, onGoToCategories,
 }: {
   mappings: any[];
   flavs: FlavorWithCount[];
@@ -1139,17 +1519,61 @@ function MyProductsTab({
       : null;
   }, [selectedCategoryId, mappings]);
 
-  const handleSelectCat = (id: number) => {
-    setSelectedCategory(id);
-    const m = (mappings as any[]).find((m: any) => m.category.id === id);
-    const firstSub = m?.subCategories?.[0];
-    if (firstSub) setSelectedSubCategory(firstSub.id);
+  // Mapped cats/subcats for filter dropdowns
+  const mappedCats = useMemo(() =>
+    (mappings as any[]).map((m: any) => m.category),
+    [mappings]
+  );
+  const mappedSubcats = useMemo(() => {
+    if (!validCatId) return [];
+    const m = (mappings as any[]).find((m: any) => m.category.id === validCatId);
+    return m?.subCategories ?? [];
+  }, [mappings, validCatId]);
+
+  // Change category via filter bar → update Zustand store
+  const handleCatChange = (v: string) => {
+    if (v === "__all__") {
+      setSelectedCategory(null);
+      setSelectedSubCategory(null);
+    } else {
+      const id = parseInt(v);
+      setSelectedCategory(id);
+      const m = (mappings as any[]).find((m: any) => m.category.id === id);
+      const firstSub = m?.subCategories?.[0];
+      setSelectedSubCategory(firstSub ? firstSub.id : null);
+    }
     setFilters(EMPTY_SIMPLE);
   };
 
-  const setField = (key: keyof SimpleFilters, value: string) => {
-    setFilters(f => ({ ...f, [key]: value === "__all__" ? "" : value }));
+  // Change subcategory via filter bar → update Zustand store
+  const handleSubCatChange = (v: string) => {
+    setSelectedSubCategory(v === "__all__" ? null : parseInt(v));
+    setFilters(prev => ({ ...prev, flavorId: "", sizeId: "", brandId: "" }));
   };
+
+  const setFilter = (key: keyof SimpleFilters, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value === "__all__" ? "" : value }));
+  };
+
+  // Dynamic filter options — narrowed by selected cat/subcat
+  const filterTaxBySubCat = <T extends { subCategoryIds?: number[] | null }>(items: T[]): T[] => {
+    const subId = selectedSubCategoryId;
+    const catId = validCatId;
+    const catSubIds = (mappings as any[])
+      .find((m: any) => m.category.id === catId)?.subCategories?.map((s: any) => s.id) ?? [];
+    if (subId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).includes(subId));
+    } else if (catId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).some(sid => catSubIds.includes(sid)));
+    }
+    return items;
+  };
+
+  const filteredFlavsForFilter = useMemo(() => filterTaxBySubCat(flavs), [flavs, validCatId, selectedSubCategoryId, mappings]);
+  const filteredSzsForFilter = useMemo(() => filterTaxBySubCat(szs), [szs, validCatId, selectedSubCategoryId, mappings]);
+  const filteredBrndsForFilter = useMemo(() => filterTaxBySubCat(brnds), [brnds, validCatId, selectedSubCategoryId, mappings]);
 
   const params = new URLSearchParams();
   if (validCatId) params.set("categoryId", String(validCatId));
@@ -1174,7 +1598,13 @@ function MyProductsTab({
     return listings.filter(l => l.product.name.toLowerCase().includes(q));
   }, [listings, filters.search]);
 
-  const hasExtraFilters = filters.flavorId || filters.sizeId || filters.brandId || filters.search;
+  // Stats
+  const inStockCount = listings.filter(l => l.stock > 0).length;
+  const outOfStockCount = listings.filter(l => l.stock === 0).length;
+
+  const hasActiveFilters = validCatId !== null || selectedSubCategoryId !== null || Object.values(filters).some(v => v !== "");
+  const catIdStr = validCatId ? String(validCatId) : "";
+  const subCatIdStr = selectedSubCategoryId ? String(selectedSubCategoryId) : "";
 
   const removeMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/supplier/listings/${id}`),
@@ -1189,135 +1619,201 @@ function MyProductsTab({
 
   return (
     <div className="space-y-4">
-      <CategorySubCategoryNav
-        mappings={mappings}
-        localCatId={validCatId}
-        localSubId={selectedSubCategoryId}
-        onSelectCat={handleSelectCat}
-        onSelectSub={setSelectedSubCategory}
-      />
-
-      {hasMappings && (
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-[160px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input className="pl-9 h-9" placeholder="Search…" value={filters.search} onChange={e => setField("search", e.target.value)} data-testid="input-search-my-products" />
-          </div>
-          <Select value={filters.flavorId} onValueChange={v => setField("flavorId", v)}>
-            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Flavor" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Flavors</SelectItem>
-              {flavs.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.sizeId} onValueChange={v => setField("sizeId", v)}>
-            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Size" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Sizes</SelectItem>
-              {szs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filters.brandId} onValueChange={v => setField("brandId", v)}>
-            <SelectTrigger className="h-9 min-w-[110px]"><SelectValue placeholder="Brand" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Brands</SelectItem>
-              {brnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {hasExtraFilters && (
-            <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_SIMPLE)} className="h-9 text-muted-foreground">
-              <X className="w-4 h-4 mr-1" />Clear
-            </Button>
-          )}
-          <div className="flex border rounded-md overflow-hidden ml-auto">
-            <Button size="sm" variant={viewMode === "grid" ? "secondary" : "ghost"} className="h-9 rounded-none" onClick={() => setViewMode("grid")}><LayoutGrid className="w-4 h-4" /></Button>
-            <Button size="sm" variant={viewMode === "list" ? "secondary" : "ghost"} className="h-9 rounded-none" onClick={() => setViewMode("list")}><LayoutList className="w-4 h-4" /></Button>
-          </div>
+      {/* Stats Strip */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <ShoppingBag className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">{listings.length} product{listings.length !== 1 ? 's' : ''} in my catalog</span>
         </div>
-      )}
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{inStockCount} in stock · {outOfStockCount} out of stock</span>
+        </div>
+      </div>
 
       {!hasMappings ? (
         <NoSelectionEmptyState onGoToCategories={onGoToCategories} />
-      ) : isLoading ? (
-        <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
-      ) : displayed.length === 0 ? (
-        <div className="p-12 flex flex-col items-center gap-3 text-center border rounded-lg">
-          <ShoppingBag className="w-10 h-10 text-muted-foreground opacity-40" />
-          <div>
-            <p className="font-medium">No products in your catalog</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {hasExtraFilters ? "Try adjusting your filters." : "Go to the Admin Products tab to add products to your catalog."}
-            </p>
-          </div>
-        </div>
-      ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {displayed.map(l => (
-            <div key={l.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`card-my-listing-${l.id}`}>
-              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
-                {l.product.imageUrl ? <img src={l.product.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
-              </div>
-              <div className="p-2.5 space-y-1">
-                <p className="font-medium text-sm line-clamp-2">{l.product.name}</p>
-                <p className="text-sm font-semibold">{formatCurrency(l.price)}</p>
-                <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} in stock` : "Out of stock"}</p>
-                <div className="flex gap-1 pt-1">
-                  <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={() => setEditingListing(l)}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => { if (confirm(`Remove "${l.product.name}"?`)) removeMutation.mutate(l.id); }}><Trash2 className="w-3 h-3" /></Button>
+      ) : (
+        <>
+          {/* Filter Bar */}
+          <Card className="border shadow-none">
+            <CardContent className="p-4">
+              <div className="flex flex-wrap gap-3 items-end">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    data-testid="input-search-my-products"
+                    className="pl-9"
+                    placeholder="Search products…"
+                    value={filters.search}
+                    onChange={e => setFilter("search", e.target.value)}
+                  />
+                </div>
+                {/* Category */}
+                <div className="min-w-[150px]">
+                  <Select value={catIdStr || "__all__"} onValueChange={handleCatChange}>
+                    <SelectTrigger data-testid="select-my-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Categories</SelectItem>
+                      {mappedCats.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* SubCategory */}
+                <div className="min-w-[150px]">
+                  <Select value={subCatIdStr || "__all__"} onValueChange={handleSubCatChange} disabled={!catIdStr}>
+                    <SelectTrigger data-testid="select-my-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Sub-categories</SelectItem>
+                      {mappedSubcats.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Flavor */}
+                <div className="min-w-[130px]">
+                  <Select value={filters.flavorId || "__all__"} onValueChange={v => setFilter("flavorId", v)}>
+                    <SelectTrigger data-testid="select-my-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Flavors</SelectItem>
+                      {filteredFlavsForFilter.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Size */}
+                <div className="min-w-[130px]">
+                  <Select value={filters.sizeId || "__all__"} onValueChange={v => setFilter("sizeId", v)}>
+                    <SelectTrigger data-testid="select-my-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Sizes</SelectItem>
+                      {filteredSzsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Brand */}
+                <div className="min-w-[130px]">
+                  <Select value={filters.brandId || "__all__"} onValueChange={v => setFilter("brandId", v)}>
+                    <SelectTrigger data-testid="select-my-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Brands</SelectItem>
+                      {filteredBrndsForFilter.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* View toggle + Clear */}
+                <div className="flex items-center gap-2 ml-auto">
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setFilters(EMPTY_SIMPLE);
+                      setSelectedCategory(null);
+                      setSelectedSubCategory(null);
+                    }} className="text-muted-foreground">
+                      <X className="w-4 h-4 mr-1" />Clear
+                    </Button>
+                  )}
+                  <div className="flex border rounded-md overflow-hidden">
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      data-testid="toggle-my-view-list" title="List view"
+                    >
+                      <LayoutList className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      data-testid="toggle-my-view-grid" title="Grid view"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Product list/grid */}
+          {isLoading ? (
+            <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}</div>
+          ) : displayed.length === 0 ? (
+            <div className="p-12 flex flex-col items-center gap-3 text-center border rounded-lg">
+              <ShoppingBag className="w-10 h-10 text-muted-foreground opacity-40" />
+              <div>
+                <p className="font-medium">No products in your catalog</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {hasActiveFilters ? "Try adjusting your filters." : "Go to the Admin Products tab to add products to your catalog."}
+                </p>
+              </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader className="bg-secondary/30">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-14" />
-                <TableHead>Product</TableHead>
-                <TableHead>Taxonomy</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead className="text-right w-24">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          ) : viewMode === "grid" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {displayed.map(l => (
-                <TableRow key={l.id} className="hover:bg-secondary/20" data-testid={`row-my-listing-${l.id}`}>
-                  <TableCell className="p-3">
-                    {l.product.imageUrl ? (
-                      <img src={l.product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <p className="font-medium text-sm">{l.product.name}</p>
-                    {l.product.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{l.product.description}</p>}
-                  </TableCell>
-                  <TableCell><TaxBadges product={l.product} /></TableCell>
-                  <TableCell className="font-medium">{formatCurrency(l.price)}</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded-md text-xs font-medium ${l.stock > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"}`}>
-                      {l.stock > 0 ? `${l.stock} units` : "Out of stock"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => {
-                      if (confirm(`Remove "${l.product.name}" from your products?`)) removeMutation.mutate(l.id);
-                    }} data-testid={`button-remove-listing-${l.id}`}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                <div key={l.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`card-my-listing-${l.id}`}>
+                  <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                    {l.product.imageUrl ? <img src={l.product.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
+                  </div>
+                  <div className="p-2.5 space-y-1">
+                    <p className="font-medium text-sm line-clamp-2">{l.product.name}</p>
+                    <p className="text-sm font-semibold">{formatCurrency(l.price)}</p>
+                    <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} in stock` : "Out of stock"}</p>
+                    <div className="flex gap-1 pt-1">
+                      <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => { if (confirm(`Remove "${l.product.name}"?`)) removeMutation.mutate(l.id); }}><Trash2 className="w-3 h-3" /></Button>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-secondary/30">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-14" />
+                    <TableHead>Product</TableHead>
+                    <TableHead>Taxonomy</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead className="text-right w-24">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayed.map(l => (
+                    <TableRow key={l.id} className="hover:bg-secondary/20" data-testid={`row-my-listing-${l.id}`}>
+                      <TableCell className="p-3">
+                        {l.product.imageUrl ? (
+                          <img src={l.product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-medium text-sm">{l.product.name}</p>
+                        {l.product.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{l.product.description}</p>}
+                      </TableCell>
+                      <TableCell><TaxBadges product={l.product} /></TableCell>
+                      <TableCell className="font-medium">{formatCurrency(l.price)}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-md text-xs font-medium ${l.stock > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"}`}>
+                          {l.stock > 0 ? `${l.stock} units` : "Out of stock"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => {
+                          if (confirm(`Remove "${l.product.name}" from your products?`)) removeMutation.mutate(l.id);
+                        }} data-testid={`button-remove-listing-${l.id}`}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </>
       )}
 
       {editingListing && (

@@ -91,6 +91,29 @@ function TaxBadges({ product }: { product: ProductWithTaxonomy }) {
   );
 }
 
+// ── Product effective status ──────────────────────────────────────────────────
+
+function computeProductStatus(p: ProductWithTaxonomy): 'active' | 'inactive' {
+  if (p.categoryId && !p.categoryLabel) return 'inactive';
+  if (p.subCategoryId && !p.subCategoryLabel) return 'inactive';
+  if (p.brandId && !p.brandLabel) return 'inactive';
+  const hasFlavorIds = (p.flavorIds?.length ?? 0) > 0 || p.flavorId != null;
+  const hasFlavorLabels = (p.flavorLabels?.length ?? 0) > 0 || p.flavorLabel != null;
+  if (hasFlavorIds && !hasFlavorLabels) return 'inactive';
+  const hasSizeIds = (p.sizeIds?.length ?? 0) > 0 || p.sizeId != null;
+  const hasSizeLabels = (p.sizeLabels?.length ?? 0) > 0 || p.sizeLabel != null;
+  if (hasSizeIds && !hasSizeLabels) return 'inactive';
+  return 'active';
+}
+
+function ProductStatusBadge({ product }: { product: ProductWithTaxonomy }) {
+  const status = computeProductStatus(product);
+  if (status === 'inactive') {
+    return <Badge className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0">Inactive</Badge>;
+  }
+  return <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0">Active</Badge>;
+}
+
 // ── Multi-select list ─────────────────────────────────────────────────────────
 
 function MultiSelectList({ label, items, selected, onChange, hint }: {
@@ -380,11 +403,44 @@ function ProductFormModal({
 
 // ── Supplier Products Section ──────────────────────────────────────────────────
 
-function SupplierProductsSection() {
+type SpFilters = {
+  search: string;
+  categoryId: string;
+  subCategoryId: string;
+  flavorId: string;
+  sizeId: string;
+  brandId: string;
+};
+
+const EMPTY_SP_FILTERS: SpFilters = { search: "", categoryId: "", subCategoryId: "", flavorId: "", sizeId: "", brandId: "" };
+
+type SupplierProductItem = ProductWithTaxonomy & { creatorName?: string };
+
+function SpStatusBadge({ status }: { status: string }) {
+  if (status === 'PENDING') return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">Pending</Badge>;
+  if (status === 'ACTIVE') return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0 text-xs">Approved</Badge>;
+  if (status === 'REJECTED') return <Badge className="bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-0 text-xs">Rejected</Badge>;
+  return <Badge className="bg-secondary text-muted-foreground border-0 text-xs">Unknown</Badge>;
+}
+
+function SupplierProductsSection({
+  cats, subs, flavs, szs, brnds,
+}: {
+  cats: CategoryWithCount[];
+  subs: SubCategoryWithDetails[];
+  flavs: FlavorWithCount[];
+  szs: SizeWithCount[];
+  brnds: BrandWithCount[];
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: supplierProducts = [], isLoading } = useQuery<ProductWithTaxonomy[]>({
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [spFilters, setSpFilters] = useState<SpFilters>(EMPTY_SP_FILTERS);
+  const [selectedProduct, setSelectedProduct] = useState<SupplierProductItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SupplierProductItem | null>(null);
+
+  const { data: supplierProducts = [], isLoading } = useQuery<SupplierProductItem[]>({
     queryKey: ["/api/admin/supplier-products"],
   });
 
@@ -395,6 +451,7 @@ function SupplierProductsSection() {
       qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
       invalidateMarketplace(qc);
       toast({ title: "Product approved" });
+      setSelectedProduct(null);
     },
     onError: () => toast({ title: "Error approving", variant: "destructive" }),
   });
@@ -404,20 +461,167 @@ function SupplierProductsSection() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/supplier-products"] });
       toast({ title: "Product deleted" });
+      setDeleteTarget(null);
+      setSelectedProduct(null);
     },
     onError: () => toast({ title: "Error deleting", variant: "destructive" }),
   });
 
-  const pendingCount = (supplierProducts as any[]).filter(p => (p as any).status === 'PENDING').length;
+  // ── Dynamic filter dropdowns ────────────────────────────────────────────────
+
+  const filteredSubsSp = useMemo(() =>
+    spFilters.categoryId ? subs.filter(s => String(s.categoryId) === spFilters.categoryId) : subs,
+    [spFilters.categoryId, subs]
+  );
+
+  const filterTaxSp = <T extends { subCategoryIds?: number[] | null }>(items: T[]): T[] => {
+    const subId = spFilters.subCategoryId ? parseInt(spFilters.subCategoryId) : null;
+    const catId = spFilters.categoryId ? parseInt(spFilters.categoryId) : null;
+    const catSubIds = subs.filter(s => String(s.categoryId) === spFilters.categoryId).map(s => s.id);
+    if (subId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).includes(subId));
+    } else if (catId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).some(sid => catSubIds.includes(sid)));
+    }
+    return items;
+  };
+
+  const filteredFlavsSp = useMemo(() => filterTaxSp(flavs), [flavs, spFilters.categoryId, spFilters.subCategoryId, subs]);
+  const filteredSzsSp = useMemo(() => filterTaxSp(szs), [szs, spFilters.categoryId, spFilters.subCategoryId, subs]);
+  const filteredBrndsSp = useMemo(() => filterTaxSp(brnds), [brnds, spFilters.categoryId, spFilters.subCategoryId, subs]);
+
+  const setSpFilter = (key: keyof SpFilters, value: string) => {
+    setSpFilters(prev => {
+      const next = { ...prev, [key]: value };
+      if (key === "categoryId") { next.subCategoryId = ""; next.flavorId = ""; next.sizeId = ""; next.brandId = ""; }
+      if (key === "subCategoryId") { next.flavorId = ""; next.sizeId = ""; next.brandId = ""; }
+      return next;
+    });
+  };
+
+  const hasActiveSpFilters = Object.values(spFilters).some(v => v !== "");
+
+  const displayed = useMemo(() => {
+    let list = supplierProducts as SupplierProductItem[];
+    if (spFilters.search.trim()) {
+      const q = spFilters.search.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q));
+    }
+    if (spFilters.categoryId) list = list.filter(p => String(p.categoryId) === spFilters.categoryId);
+    if (spFilters.subCategoryId) list = list.filter(p => String(p.subCategoryId) === spFilters.subCategoryId);
+    if (spFilters.flavorId) {
+      const fid = parseInt(spFilters.flavorId);
+      list = list.filter(p => (p.flavorIds ?? []).includes(fid) || p.flavorId === fid);
+    }
+    if (spFilters.sizeId) {
+      const sid = parseInt(spFilters.sizeId);
+      list = list.filter(p => (p.sizeIds ?? []).includes(sid) || p.sizeId === sid);
+    }
+    if (spFilters.brandId) list = list.filter(p => String(p.brandId) === spFilters.brandId);
+    return list;
+  }, [supplierProducts, spFilters]);
+
+  const pendingCount = supplierProducts.filter(p => (p as any).status === 'PENDING').length;
+  const rejectedCount = supplierProducts.filter(p => (p as any).status === 'REJECTED').length;
 
   return (
     <div className="space-y-4">
-      {pendingCount > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-          <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-          <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">{pendingCount} supplier product(s) awaiting review</p>
+      {/* Stats strip */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <Package className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">{supplierProducts.length} total products</span>
         </div>
-      )}
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <Clock className="w-4 h-4 text-amber-500" />
+          <span className="text-sm text-muted-foreground">{pendingCount} pending review</span>
+        </div>
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{rejectedCount} rejected</span>
+        </div>
+      </div>
+
+      {/* Filter bar + view toggle */}
+      <div className="flex items-start gap-3">
+        <Card className="border shadow-none flex-1">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  data-testid="input-sp-search"
+                  className="pl-9"
+                  placeholder="Search products…"
+                  value={spFilters.search}
+                  onChange={e => setSpFilter("search", e.target.value)}
+                />
+              </div>
+              <div className="min-w-[150px]">
+                <Select value={spFilters.categoryId} onValueChange={v => setSpFilter("categoryId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-sp-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Categories</SelectItem>
+                    {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-[150px]">
+                <Select value={spFilters.subCategoryId} onValueChange={v => setSpFilter("subCategoryId", v === "__all__" ? "" : v)} disabled={!spFilters.categoryId}>
+                  <SelectTrigger data-testid="select-sp-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Sub-categories</SelectItem>
+                    {filteredSubsSp.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-[130px]">
+                <Select value={spFilters.flavorId} onValueChange={v => setSpFilter("flavorId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-sp-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Flavors</SelectItem>
+                    {filteredFlavsSp.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-[130px]">
+                <Select value={spFilters.sizeId} onValueChange={v => setSpFilter("sizeId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-sp-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Sizes</SelectItem>
+                    {filteredSzsSp.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-[130px]">
+                <Select value={spFilters.brandId} onValueChange={v => setSpFilter("brandId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-sp-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Brands</SelectItem>
+                    {filteredBrndsSp.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {hasActiveSpFilters && (
+                <Button variant="ghost" size="sm" onClick={() => setSpFilters(EMPTY_SP_FILTERS)} className="text-muted-foreground">
+                  <X className="w-4 h-4 mr-1" />Clear
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <div className="flex gap-1 border rounded-lg p-0.5 self-start mt-0 shrink-0">
+          <button onClick={() => setViewMode('list')} className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-list" title="List view">
+            <LayoutList className="w-4 h-4" />
+          </button>
+          <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-grid" title="Grid view">
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
       {isLoading ? (
         <div className="space-y-2">{[...Array(3)].map((_, i) => (
           <div key={i} className="flex items-center gap-4 p-4 border rounded-lg">
@@ -425,11 +629,47 @@ function SupplierProductsSection() {
             <div className="flex-1 space-y-2"><Skeleton className="h-4 w-48" /><Skeleton className="h-3 w-64" /></div>
           </div>
         ))}</div>
-      ) : supplierProducts.length === 0 ? (
+      ) : displayed.length === 0 ? (
         <div className="p-16 flex flex-col items-center gap-3 text-center border rounded-lg">
           <Package className="w-12 h-12 text-muted-foreground opacity-40" />
-          <p className="font-medium">No supplier products yet</p>
-          <p className="text-sm text-muted-foreground">Products created by suppliers will appear here for review.</p>
+          <p className="font-medium">{hasActiveSpFilters ? "No products match your filters" : "No supplier products yet"}</p>
+          <p className="text-sm text-muted-foreground">
+            {hasActiveSpFilters ? "Try adjusting your filters." : "Products created by suppliers will appear here for review."}
+          </p>
+        </div>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {displayed.map(p => (
+            <div
+              key={p.id}
+              className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer"
+              data-testid={`card-supplier-product-${p.id}`}
+              onClick={() => setSelectedProduct(p)}
+            >
+              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                {p.imageUrl ? (
+                  <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <Package className="w-8 h-8 text-muted-foreground opacity-40" />
+                )}
+              </div>
+              <div className="p-2.5 space-y-1.5">
+                <p className="font-medium text-sm line-clamp-2 leading-tight">{p.name}</p>
+                <CardTaxBadges product={p} />
+                <SpStatusBadge status={(p as any).status} />
+                <div className="flex gap-1 pt-0.5" onClick={e => e.stopPropagation()}>
+                  {(p as any).status !== 'ACTIVE' && (
+                    <Button size="sm" className="h-7 px-2 text-xs flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMut.mutate(p.id)} disabled={approveMut.isPending} data-testid={`button-approve-sprod-${p.id}`}>
+                      <CheckCircle2 className="w-3 h-3 mr-1" />Approve
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(p)} disabled={deleteMut.isPending} data-testid={`button-delete-sprod-${p.id}`}>
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
@@ -444,8 +684,8 @@ function SupplierProductsSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(supplierProducts as any[]).map(p => (
-                <TableRow key={p.id} data-testid={`row-supplier-product-${p.id}`} className="hover:bg-secondary/20">
+              {displayed.map(p => (
+                <TableRow key={p.id} data-testid={`row-supplier-product-${p.id}`} className="hover:bg-secondary/20 cursor-pointer" onClick={() => setSelectedProduct(p)}>
                   <TableCell className="p-3">
                     {p.imageUrl ? (
                       <img src={p.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
@@ -456,31 +696,87 @@ function SupplierProductsSection() {
                   <TableCell>
                     <p className="font-medium text-sm">{p.name}</p>
                     {p.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</p>}
+                    {(p as any).creatorName && <p className="text-xs text-muted-foreground mt-0.5">By: {(p as any).creatorName}</p>}
                   </TableCell>
                   <TableCell><TaxBadges product={p} /></TableCell>
-                  <TableCell>
-                    {p.status === 'PENDING' && <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">Pending</Badge>}
-                    {p.status === 'ACTIVE' && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0 text-xs">Approved</Badge>}
-                    {p.status === 'REJECTED' && <Badge className="bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-0 text-xs">Rejected</Badge>}
-                    {!p.status && <Badge className="bg-secondary text-muted-foreground border-0 text-xs">Unknown</Badge>}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {p.status === 'PENDING' && (
-                      <div className="flex justify-end gap-2">
+                  <TableCell><SpStatusBadge status={(p as any).status} /></TableCell>
+                  <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-end gap-2">
+                      {(p as any).status !== 'ACTIVE' && (
                         <Button size="sm" className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMut.mutate(p.id)} disabled={approveMut.isPending} data-testid={`button-approve-sprod-${p.id}`}>
                           <CheckCircle2 className="w-3.5 h-3.5 mr-1" />Approve
                         </Button>
-                        <Button size="sm" variant="destructive" className="text-xs" onClick={() => { if (confirm(`Delete "${p.name}"?`)) deleteMut.mutate(p.id); }} data-testid={`button-delete-sprod-${p.id}`}>
-                          <Trash2 className="w-3.5 h-3.5 mr-1" />Delete
-                        </Button>
-                      </div>
-                    )}
+                      )}
+                      <Button size="sm" variant="destructive" className="text-xs" onClick={() => setDeleteTarget(p)} disabled={deleteMut.isPending} data-testid={`button-delete-sprod-${p.id}`}>
+                        <Trash2 className="w-3.5 h-3.5 mr-1" />Delete
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <Dialog open={!!selectedProduct} onOpenChange={() => setSelectedProduct(null)}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Product Details</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-2">
+              <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
+                <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                  {selectedProduct.imageUrl ? (
+                    <img src={selectedProduct.imageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Package className="w-16 h-16 text-muted-foreground opacity-40" />
+                  )}
+                </div>
+                <div className="p-4 space-y-2">
+                  <p className="font-semibold text-lg leading-tight">{selectedProduct.name}</p>
+                  {selectedProduct.description && <p className="text-sm text-muted-foreground">{selectedProduct.description}</p>}
+                  <TaxBadges product={selectedProduct} />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">Status</p>
+                  <SpStatusBadge status={(selectedProduct as any).status} />
+                </div>
+                {(selectedProduct as any).creatorName && (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Submitted by</p>
+                    <p className="text-sm font-medium">{(selectedProduct as any).creatorName}</p>
+                  </div>
+                )}
+                <div className="pt-2 space-y-2">
+                  {(selectedProduct as any).status !== 'ACTIVE' && (
+                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMut.mutate(selectedProduct.id)} disabled={approveMut.isPending} data-testid={`button-approve-modal-${selectedProduct.id}`}>
+                      <CheckCircle2 className="w-4 h-4 mr-2" />{approveMut.isPending ? "Approving…" : "Approve Product"}
+                    </Button>
+                  )}
+                  <Button variant="destructive" className="w-full" onClick={() => { setSelectedProduct(null); setDeleteTarget(selectedProduct); }} data-testid={`button-delete-modal-${selectedProduct.id}`}>
+                    <Trash2 className="w-4 h-4 mr-2" />Delete Product
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Delete confirm */}
+      {deleteTarget && (
+        <DeleteConfirm
+          open
+          name={deleteTarget.name}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => deleteMut.mutate(deleteTarget.id)}
+          isPending={deleteMut.isPending}
+        />
       )}
     </div>
   );
@@ -643,7 +939,7 @@ export default function AdminProductsPage() {
         )}
       </div>
 
-      {section === 'supplier' && <SupplierProductsSection />}
+      {section === 'supplier' && <SupplierProductsSection cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} />}
 
       {section === 'catalog' && <>
       {/* Stats strip */}
@@ -651,6 +947,9 @@ export default function AdminProductsPage() {
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <Package className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium">{allProducts.length} total products</span>
+        </div>
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{allProducts.filter(p => computeProductStatus(p) === 'active').length} active · {allProducts.filter(p => computeProductStatus(p) === 'inactive').length} inactive</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <span className="text-sm text-muted-foreground">{cats.length} categories · {subs.length} sub-categories · {flavs.length} flavors · {szs.length} sizes · {brnds.length} brands</span>
@@ -773,6 +1072,7 @@ export default function AdminProductsPage() {
               <div className="p-2.5 space-y-1.5">
                 <p className="font-medium text-sm line-clamp-2 leading-tight">{p.name}</p>
                 <CardTaxBadges product={p} />
+                <ProductStatusBadge product={p} />
                 <div className="flex gap-1 pt-0.5">
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-xs flex-1" onClick={() => openEdit(p)} data-testid={`button-edit-product-${p.id}`}>
                     <Pencil className="w-3 h-3 mr-1" />Edit
@@ -793,6 +1093,7 @@ export default function AdminProductsPage() {
                 <TableHead className="w-14" />
                 <TableHead>Name</TableHead>
                 <TableHead>Taxonomy</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="w-20 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -811,6 +1112,7 @@ export default function AdminProductsPage() {
                     {p.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</p>}
                   </TableCell>
                   <TableCell><TaxBadges product={p} /></TableCell>
+                  <TableCell><ProductStatusBadge product={p} /></TableCell>
                   <TableCell className="text-right">
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(p)} data-testid={`button-edit-product-${p.id}`}>
                       <Pencil className="w-3.5 h-3.5" />

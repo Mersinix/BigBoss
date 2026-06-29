@@ -219,8 +219,6 @@ export class DatabaseStorage implements IStorage {
       const q = filters.search.toLowerCase();
       enriched = enriched.filter((p) => p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q));
     }
-    // Filter out products whose category is inactive/rejected
-    enriched = enriched.filter((p) => !p.categoryId || tx.catMap.has(p.categoryId));
     return enriched;
   }
 

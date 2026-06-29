@@ -10,6 +10,8 @@ const CATALOG_EVENTS = [
   "supplier_mapping_changed",
 ];
 
+const TAXONOMY_EVENTS = ["taxonomy_updated"];
+
 function invalidateSupplierMappingQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] });
   qc.invalidateQueries({ queryKey: ["/api/admin/supplier-mappings"] });
@@ -50,6 +52,16 @@ export function useRealtime() {
               qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
               invalidateMarketplace(qc);
             }
+          }
+          if (TAXONOMY_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/categories"] });
+            qc.invalidateQueries({ queryKey: ["/api/subcategories"] });
+            qc.invalidateQueries({ queryKey: ["/api/flavors"] });
+            qc.invalidateQueries({ queryKey: ["/api/sizes"] });
+            qc.invalidateQueries({ queryKey: ["/api/brands"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
+            qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
+            invalidateMarketplace(qc);
           }
         } catch {}
       };

@@ -660,13 +660,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const user = await storage.getUser(req.session.userId!);
       const data = insertCategorySchema.partial().parse(req.body);
-      res.json(await storage.updateCategory(parseInt(req.params.id), data));
+      const result = await storage.updateCategory(parseInt(req.params.id), data);
+      broadcast("taxonomy_updated", {});
+      res.json(result);
     } catch { res.status(400).json({ message: "Invalid" }); }
   });
 
   app.delete("/api/categories/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteCategory(parseInt(req.params.id));
+      broadcast("taxonomy_updated", {});
       res.json({ message: "Deleted" });
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -701,12 +704,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/subcategories/:id", requireAdmin, async (req, res) => {
     try {
-      res.json(await storage.updateSubCategory(parseInt(req.params.id), insertSubCategorySchema.partial().parse(req.body)));
+      const result = await storage.updateSubCategory(parseInt(req.params.id), insertSubCategorySchema.partial().parse(req.body));
+      broadcast("taxonomy_updated", {});
+      res.json(result);
     } catch { res.status(400).json({ message: "Invalid" }); }
   });
 
   app.delete("/api/subcategories/:id", requireAdmin, async (req, res) => {
-    try { await storage.deleteSubCategory(parseInt(req.params.id)); res.json({ message: "Deleted" }); }
+    try { await storage.deleteSubCategory(parseInt(req.params.id)); broadcast("taxonomy_updated", {}); res.json({ message: "Deleted" }); }
     catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -740,12 +745,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/flavors/:id", requireAdmin, async (req, res) => {
-    try { res.json(await storage.updateFlavor(parseInt(req.params.id), insertFlavorSchema.partial().parse(req.body))); }
+    try { const result = await storage.updateFlavor(parseInt(req.params.id), insertFlavorSchema.partial().parse(req.body)); broadcast("taxonomy_updated", {}); res.json(result); }
     catch { res.status(400).json({ message: "Invalid" }); }
   });
 
   app.delete("/api/flavors/:id", requireAdmin, async (req, res) => {
-    try { await storage.deleteFlavor(parseInt(req.params.id)); res.json({ message: "Deleted" }); }
+    try { await storage.deleteFlavor(parseInt(req.params.id)); broadcast("taxonomy_updated", {}); res.json({ message: "Deleted" }); }
     catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -775,12 +780,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/sizes/:id", requireAdmin, async (req, res) => {
-    try { res.json(await storage.updateSize(parseInt(req.params.id), insertSizeSchema.partial().parse(req.body))); }
+    try { const result = await storage.updateSize(parseInt(req.params.id), insertSizeSchema.partial().parse(req.body)); broadcast("taxonomy_updated", {}); res.json(result); }
     catch { res.status(400).json({ message: "Invalid" }); }
   });
 
   app.delete("/api/sizes/:id", requireAdmin, async (req, res) => {
-    try { await storage.deleteSize(parseInt(req.params.id)); res.json({ message: "Deleted" }); }
+    try { await storage.deleteSize(parseInt(req.params.id)); broadcast("taxonomy_updated", {}); res.json({ message: "Deleted" }); }
     catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -810,12 +815,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.patch("/api/brands/:id", requireAdmin, async (req, res) => {
-    try { res.json(await storage.updateBrand(parseInt(req.params.id), insertBrandSchema.partial().parse(req.body))); }
+    try { const result = await storage.updateBrand(parseInt(req.params.id), insertBrandSchema.partial().parse(req.body)); broadcast("taxonomy_updated", {}); res.json(result); }
     catch { res.status(400).json({ message: "Invalid" }); }
   });
 
   app.delete("/api/brands/:id", requireAdmin, async (req, res) => {
-    try { await storage.deleteBrand(parseInt(req.params.id)); res.json({ message: "Deleted" }); }
+    try { await storage.deleteBrand(parseInt(req.params.id)); broadcast("taxonomy_updated", {}); res.json({ message: "Deleted" }); }
     catch { res.status(500).json({ message: "Error" }); }
   });
 

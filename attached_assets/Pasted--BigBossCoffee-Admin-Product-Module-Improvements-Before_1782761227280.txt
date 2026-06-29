@@ -1,0 +1,198 @@
+# BigBossCoffee – Admin Product Module Improvements
+
+Before making any changes, analyze the current implementation to understand how these pages work today.
+
+## General Rules
+
+* Do **not** redesign the UI.
+* Do **not** change the existing user experience unless explicitly requested below.
+* Do **not** break any existing functionality.
+* Reuse existing components whenever possible instead of creating duplicates.
+* If a component already exists elsewhere (Filter Bar, Stats Strip, Live Preview, Grid/List view, Product Cards, etc.), reuse it.
+* Preserve all existing APIs and business logic.
+* Preserve all realtime synchronization.
+* Before implementing any change, verify whether the requested functionality already exists in another part of the project and reuse it where appropriate.
+* Restrict all work to the scope described below.
+
+---
+
+# 1. Admin → Product → Supplier Products
+
+This page should provide the same level of usability as the other Product Management pages while keeping its own business logic.
+
+## Filtering Experience
+
+Replace the current filtering section with the same experience used in:
+
+**Admin → Product → Product Management**
+
+Reuse the same:
+
+* Stats Strip
+* Filter Bar
+* Search input
+* Filter layout
+
+Maintain the existing design so the Product pages have a consistent interface.
+
+---
+
+## Product Display
+
+Allow products to be displayed in:
+
+* Grid View (default)
+* List View
+
+The administrator should be able to switch between both views without affecting filters or search.
+
+---
+
+## Product Cards
+
+Every product card should expose the same primary actions:
+
+* Approve
+* Delete
+
+These actions should always stay synchronized with the current product status.
+
+---
+
+## Product Details
+
+When the administrator clicks anywhere on a product card, open a Product Details modal.
+
+The modal should reuse the existing Live Preview experience already used elsewhere in the project.
+
+The modal should display all product information in preview mode.
+
+Inside this modal, the administrator should also be able to perform the same actions:
+
+* Approve
+* Delete
+
+There should be no difference between using the card actions and using the modal actions.
+
+Both should remain synchronized.
+
+---
+
+# 2. Admin → Product → Product Management
+
+## Product Status Visibility
+
+Currently, products disappear from the frontend when one of their related entities becomes inactive.
+
+Example:
+
+* Category becomes Inactive
+* SubCategory becomes Inactive
+* Brand becomes Inactive
+* Flavor becomes Inactive
+* Size becomes Inactive
+
+The product still exists in the database but disappears from the Product Management page.
+
+This behavior should be changed.
+
+---
+
+## Required Behavior
+
+Every product must always remain visible in Product Management.
+
+Instead of disappearing, the product should display an appropriate Status indicating that it is inactive.
+
+The administrator must always be able to:
+
+* See the product.
+* Edit the product.
+* Review the product.
+* Reactivate it later if the related entities become active again.
+
+No product should disappear simply because one of its related entities is inactive.
+
+---
+
+## Product Status
+
+Every product should expose a clear Status.
+
+The displayed status should accurately reflect its current availability based on its related data.
+
+The Product Management page should always show:
+
+* Active products.
+* Inactive products.
+
+The administrator must be able to manage both.
+
+---
+
+## Synchronization
+
+Whenever one of the following changes:
+
+* Category
+* SubCategory
+* Brand
+* Flavor
+* Size
+
+the related Product Status should update automatically.
+
+The Product Management page should refresh immediately without requiring a manual page refresh.
+
+Products should never disappear from the interface because of these updates.
+
+---
+
+# Final Validation
+
+Before completing the work, verify the following.
+
+## Supplier Products
+
+* Filter Bar matches Product Management.
+* Stats Strip matches Product Management.
+* Search works correctly.
+* Grid View works.
+* List View works.
+* Switching views does not reset filters.
+* Product cards display correctly.
+* Product cards expose Approve and Delete actions.
+* Clicking a card opens the Product Details modal.
+* The Product Details modal displays the Live Preview.
+* Approve/Delete actions work correctly both from the card and from the modal.
+* All actions remain synchronized in real time.
+
+---
+
+## Product Management
+
+Verify that:
+
+* Active products remain visible.
+* Inactive products remain visible.
+* Products no longer disappear when related Categories, SubCategories, Brands, Flavors, or Sizes become inactive.
+* Product Status updates correctly.
+* Products can still be edited.
+* Products can be reactivated when applicable.
+* Database state and frontend state remain synchronized.
+
+---
+
+## Regression Check
+
+Before finishing, confirm that:
+
+* No existing Product functionality has been broken.
+* Existing CRUD operations continue to work.
+* Existing filters continue to work.
+* Existing search continues to work.
+* Existing Grid/List behavior continues to work.
+* Existing Live Preview continues to work.
+* Existing realtime synchronization continues to work.
+* No unnecessary API or architecture changes were introduced.
+* No visual redesign was introduced outside the requested scope.

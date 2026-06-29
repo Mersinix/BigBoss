@@ -45,7 +45,6 @@ waitForPort = 5000
 [userenv]
 
 [userenv.shared]
-VITE_GOOGLE_MAPS_API_KEY = "AIzaSyDX4SG2_rPzd4a5ddiGzR7oeCCANJDeYD4"
 
 [agent]
 stack = "FULLSTACK_JS"

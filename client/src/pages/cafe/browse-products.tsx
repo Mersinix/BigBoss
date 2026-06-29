@@ -29,8 +29,20 @@ function useCommercialAccess() {
 
 // ── Category Strip ────────────────────────────────────────────────────────────
 
-function CategoryStrip({ categories, selected, onSelect }: { categories: CategoryWithCount[]; selected: string; onSelect: (id: string) => void }) {
-  const active = categories.filter((c) => (c.productCount ?? 0) > 0);
+function CategoryStrip({
+  categories,
+  selected,
+  onSelect,
+  visibleCategoryIds,
+}: {
+  categories: CategoryWithCount[];
+  selected: string;
+  onSelect: (id: string) => void;
+  visibleCategoryIds: Set<number>;
+}) {
+  // Only show categories that have at least one visible marketplace product
+  // (accounts for frozen supplier categories, out-of-stock listings, etc.)
+  const active = categories.filter((c) => visibleCategoryIds.has(c.id));
   if (!active.length) return null;
   return (
     <div className="bg-white border-b border-gray-100">
@@ -129,12 +141,63 @@ function ProductCard({ product, onClick, hasCommercialAccess }: { product: Marke
 
 interface FilterState { subCategoryId: string; brandId: string; flavorId: string; sizeId: string; sortBy: string; }
 
-function FilterBar({ products, filters, onChange, onReset, hasSearchLocation }: { products: MarketplaceProduct[]; filters: FilterState; onChange: (key: keyof FilterState, val: string) => void; onReset: () => void; hasSearchLocation: boolean }) {
+function FilterBar({
+  categoryProducts,
+  filters,
+  onChange,
+  onReset,
+  hasSearchLocation,
+}: {
+  // Products scoped only to the selected category (not to other active filters).
+  // This keeps option lists stable — selecting Brand=X won't remove Brand=Y from the dropdown.
+  categoryProducts: MarketplaceProduct[];
+  filters: FilterState;
+  onChange: (key: keyof FilterState, val: string) => void;
+  onReset: () => void;
+  hasSearchLocation: boolean;
+}) {
   const hasActive = Object.values(filters).some(Boolean);
-  const subCategories = useMemo(() => { const map = new Map<string, string>(); products.forEach((p) => { if (p.subCategoryLabel?.id && p.subCategoryLabel?.name) map.set(String(p.subCategoryLabel.id), p.subCategoryLabel.name); }); return Array.from(map.entries()).map(([id, name]) => ({ id, name })); }, [products]);
-  const brands = useMemo(() => { const map = new Map<string, string>(); products.forEach((p) => { if (p.brandLabel?.id && p.brandLabel?.name) map.set(String(p.brandLabel.id), p.brandLabel.name); }); return Array.from(map.entries()).map(([id, name]) => ({ id, name })); }, [products]);
-  const flavors = useMemo(() => { const map = new Map<string, string>(); products.forEach((p) => { (p.flavorLabels ?? []).forEach((fl) => { if (fl.id && fl.name) map.set(String(fl.id), fl.name); }); }); return Array.from(map.entries()).map(([id, name]) => ({ id, name })); }, [products]);
-  const sizes = useMemo(() => { const map = new Map<string, string>(); products.forEach((p) => { (p.sizeLabels ?? []).forEach((sl) => { if (sl.id && sl.name) map.set(String(sl.id), sl.name); }); }); return Array.from(map.entries()).map(([id, name]) => ({ id, name })); }, [products]);
+
+  // Compute options from category-scoped products so that picking one filter
+  // value never collapses the other options in that same filter.
+  const subCategories = useMemo(() => {
+    const map = new Map<string, string>();
+    categoryProducts.forEach((p) => {
+      if (p.subCategoryLabel?.id && p.subCategoryLabel?.name)
+        map.set(String(p.subCategoryLabel.id), p.subCategoryLabel.name);
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [categoryProducts]);
+
+  const brands = useMemo(() => {
+    const map = new Map<string, string>();
+    categoryProducts.forEach((p) => {
+      if (p.brandLabel?.id && p.brandLabel?.name)
+        map.set(String(p.brandLabel.id), p.brandLabel.name);
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [categoryProducts]);
+
+  const flavors = useMemo(() => {
+    const map = new Map<string, string>();
+    categoryProducts.forEach((p) => {
+      (p.flavorLabels ?? []).forEach((fl) => {
+        if (fl.id && fl.name) map.set(String(fl.id), fl.name);
+      });
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [categoryProducts]);
+
+  const sizes = useMemo(() => {
+    const map = new Map<string, string>();
+    categoryProducts.forEach((p) => {
+      (p.sizeLabels ?? []).forEach((sl) => {
+        if (sl.id && sl.name) map.set(String(sl.id), sl.name);
+      });
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [categoryProducts]);
+
   if (!subCategories.length && !brands.length && !flavors.length && !sizes.length) return null;
   return (
     <div className="bg-white border-b border-gray-100 py-2 px-4">
@@ -218,10 +281,35 @@ export default function BrowseProducts() {
 
   const { data: categories = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
 
-  const filtered = useMemo(() => {
+  // Derive which category IDs currently have at least one visible marketplace
+  // product. This accounts for frozen supplier categories, out-of-stock
+  // listings, and any other visibility rules enforced by the backend.
+  // Updates automatically whenever allProducts is refetched (e.g. via WebSocket).
+  const visibleCategoryIds = useMemo(() => {
+    const ids = new Set<number>();
+    allProducts.forEach((p) => {
+      if (p.categoryId != null) ids.add(p.categoryId);
+    });
+    return ids;
+  }, [allProducts]);
+
+  // Products scoped to the selected category (and text search) but NOT filtered
+  // by brand/subcategory/flavor/size. These are used to build the filter option
+  // lists so that selecting one filter value never removes other options from
+  // that same filter.
+  const categoryFiltered = useMemo(() => {
     let list = allProducts;
-    if (search.trim()) { const q = search.toLowerCase(); list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)); }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q));
+    }
     if (categoryId) list = list.filter((p) => String(p.categoryId) === categoryId);
+    return list;
+  }, [allProducts, search, categoryId]);
+
+  // Fully filtered product list used for the product grid.
+  const filtered = useMemo(() => {
+    let list = categoryFiltered;
     if (filters.subCategoryId) list = list.filter((p) => String(p.subCategoryId) === filters.subCategoryId);
     if (filters.brandId) list = list.filter((p) => p.brandLabel && String(p.brandLabel.id) === filters.brandId);
     if (filters.flavorId) list = list.filter((p) => (p.flavorLabels ?? []).some((fl) => String(fl.id) === filters.flavorId));
@@ -241,7 +329,7 @@ export default function BrowseProducts() {
       });
     }
     return list;
-  }, [allProducts, search, categoryId, filters, hasSearchLocation, searchLat, searchLng]);
+  }, [categoryFiltered, filters, hasSearchLocation, searchLat, searchLng]);
 
   const updateFilter = (key: keyof FilterState, val: string) => setFilters((p) => ({ ...p, [key]: val }));
   const resetFilters = () => setFilters({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" });
@@ -261,6 +349,7 @@ export default function BrowseProducts() {
         <CategoryStrip
           categories={categories}
           selected={categoryId}
+          visibleCategoryIds={visibleCategoryIds}
           onSelect={(id) => {
             setCategoryId(id);
             resetFilters();
@@ -271,7 +360,13 @@ export default function BrowseProducts() {
           }}
         />
 
-        <FilterBar products={filtered.length > 0 ? filtered : allProducts} filters={filters} onChange={updateFilter} onReset={resetFilters} hasSearchLocation={hasSearchLocation} />
+        <FilterBar
+          categoryProducts={categoryFiltered}
+          filters={filters}
+          onChange={updateFilter}
+          onReset={resetFilters}
+          hasSearchLocation={hasSearchLocation}
+        />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">

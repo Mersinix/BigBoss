@@ -1,0 +1,125 @@
+You already know the project architecture. Before making any change, analyze the existing implementation of the Coffee Owner product browsing flow and verify whether similar logic already exists elsewhere. Reuse existing components and behaviors whenever possible. Do **not** change the UI design, styling, routes, APIs, or database structure unless absolutely necessary. Preserve all existing functionality and make sure every update is synchronized in real time without requiring a page refresh.
+
+## Scope
+
+Only modify the Coffee Owner side described below. Do not touch Admin, Supplier, Authentication, Marketplace logic outside of this scope, or any unrelated feature.
+
+---
+
+# 1. Coffee Owner → Hide empty categories automatically
+
+Currently, when a supplier freezes one of his categories, the Coffee Owner can still see that category and when selecting it, the page simply displays:
+
+> "No products found"
+
+This is not the expected behavior.
+
+The category navigation should only display categories that currently have products available for the Coffee Owner.
+
+A category should be displayed only if all of the following are true:
+
+* the category is active from the Admin side
+* there is at least one visible product belonging to that category
+* at least one supplier has that category available
+* the supplier category is not frozen
+* the product itself is available to be shown in the marketplace
+
+If none of the suppliers currently expose any visible product for that category, then the category should not appear at all in the Coffee Owner interface.
+
+Examples:
+
+* Supplier A freezes Coffee Beans.
+
+* Supplier B still sells Coffee Beans.
+  → Coffee Beans must still appear.
+
+* Supplier A freezes Coffee Beans.
+
+* Supplier B has no Coffee Bean products.
+  → Coffee Beans must disappear completely.
+
+* Category is active but contains zero visible products.
+  → Do not display the category.
+
+The goal is that the Coffee Owner never reaches a category page that simply shows "No products found" because that category should have already been hidden.
+
+---
+
+# 2. Coffee Owner → Keep filter options visible
+
+Currently there is a UX problem.
+
+Example:
+
+Coffee Owner selects:
+
+Category:
+Coffee Beans
+
+Then chooses Brand:
+Lavazza
+
+Immediately after that, the Brand dropdown is rebuilt and now only contains Lavazza.
+
+The user is forced to click Reset Filters before selecting another brand.
+
+This should not happen.
+
+The filter controls must remain stable.
+
+Expected behavior:
+
+After selecting a Category:
+
+* Brand filter should always display every available Brand belonging to the selected Category.
+* SubCategory filter should always display every available SubCategory belonging to the selected Category.
+* Flavor filter should always display every available Flavor belonging to the selected Category/SubCategory context.
+* Size filter should always display every available Size belonging to the selected Category/SubCategory context.
+
+Selecting one filter value must **not** remove the other possible values from that same filter.
+
+Example:
+
+Category:
+Coffee Beans
+
+Brands available:
+
+* Lavazza
+* Illy
+* Segafredo
+* Kimbo
+
+If the user selects Lavazza, the Brand dropdown should still contain:
+
+✔ Lavazza
+✔ Illy
+✔ Segafredo
+✔ Kimbo
+
+The selected value simply changes.
+
+The same behavior must apply to:
+
+* Brand
+* SubCategory
+* Flavor
+* Size
+
+Only the displayed products should change.
+
+The filter option lists themselves should remain available so the user can switch filters without resetting the page.
+
+---
+
+# Validation
+
+Before finishing:
+
+* Verify that category visibility updates immediately after supplier changes (freeze/unfreeze, stock updates, product availability, etc.).
+* Verify that filtering never requires a page refresh.
+* Verify that changing one filter never removes the remaining choices from that filter.
+* Verify that no regression has been introduced into Supplier or Admin pages.
+* Verify that the design, layout, spacing, cards, and existing components remain unchanged.
+
+If you discover an existing implementation that already solves part of this behavior, reuse it instead of creating duplicate logic.

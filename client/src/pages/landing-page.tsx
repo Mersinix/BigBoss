@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   ShoppingBag, Printer, Coffee, Megaphone, Search, MapPin,
   ChevronDown, User, Instagram, Facebook, Twitter, Mail,
-  Phone, ArrowRight, CheckCircle, Building2, Truck, GraduationCap, Users, ChevronRight
+  Phone, ArrowRight, CheckCircle, Building2, Truck, GraduationCap, Users, ChevronRight,
+  ChevronLeft, Clock
 } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import type { CategoryWithCount } from "@shared/schema";
@@ -304,7 +305,7 @@ function BaristaMarketplaceForm({ onSubmit, isLoading }: { onSubmit: (data: any)
 // ── Main Landing Page ─────────────────────────────────────────────────────────
 
 export default function LandingPage() {
-  const { user, isLoading, login, isLoggingIn } = useAuth();
+  const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
@@ -325,6 +326,12 @@ export default function LandingPage() {
   const [pendingFormData, setPendingFormData] = useState<any | null>(null);
   const [authLocationModalOpen, setAuthLocationModalOpen] = useState(false);
 
+  // Post-auth states
+  const [registrationDone, setRegistrationDone] = useState(false);
+  const [loginPendingState, setLoginPendingState] = useState(false);
+  const [isDoingLogin, setIsDoingLogin] = useState(false);
+  const [authModalPreLocationClose, setAuthModalPreLocationClose] = useState(false);
+
   const loginForm = useForm({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
   const locationLabel = searchLocation?.address
@@ -339,7 +346,41 @@ export default function LandingPage() {
   const openAuth = (tab: "login" | "register" = "login", role?: string) => {
     if (role) setSelectedRole(role);
     setAuthTab(tab);
+    setRegistrationDone(false);
+    setLoginPendingState(false);
     setAuthModalOpen(true);
+  };
+
+  // Custom login handler — intercepts pending accounts before navigating away
+  const handleModalLogin = async (d: { email: string; password: string }) => {
+    setIsDoingLogin(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(d),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Connexion échouée", description: (err as any).message ?? "Email ou mot de passe incorrect." });
+        return;
+      }
+      const userData = await res.json();
+      queryClient.setQueryData(["/api/auth/me"], userData);
+      const PROVIDER_ROLES_CHECK = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY"];
+      if (PROVIDER_ROLES_CHECK.includes(userData.role) && userData.status !== "approved") {
+        setLoginPendingState(true);
+        return;
+      }
+      setAuthModalOpen(false);
+      if (userData.role === "CAFE_OWNER") navigate("/products");
+      else navigate("/");
+    } catch {
+      toast({ variant: "destructive", title: "Connexion échouée", description: "Une erreur s'est produite." });
+    } finally {
+      setIsDoingLogin(false);
+    }
   };
 
   if (isLoading) {
@@ -400,7 +441,7 @@ export default function LandingPage() {
     try {
       await apiRequest("POST", "/api/auth/register", payload);
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setAuthModalOpen(false);
+      setRegistrationDone(true);
     } catch (err: any) {
       toast({ variant: "destructive", title: "Inscription échouée", description: err?.message ?? "Une erreur s'est produite." });
     } finally {
@@ -412,6 +453,9 @@ export default function LandingPage() {
     const payload = buildPayload(selectedRole, data);
     if (NEED_LOCATION.includes(selectedRole)) {
       setPendingFormData(payload);
+      // Close auth modal first to prevent overlapping Dialog overlays
+      setAuthModalOpen(false);
+      setAuthModalPreLocationClose(true);
       setAuthLocationModalOpen(true);
       return;
     }
@@ -420,6 +464,7 @@ export default function LandingPage() {
 
   const handleAuthLocationConfirm = async (loc: PickedLocation) => {
     setAuthLocationModalOpen(false);
+    setAuthModalPreLocationClose(false);
     if (pendingFormData) {
       const payload = {
         ...pendingFormData,
@@ -431,6 +476,16 @@ export default function LandingPage() {
       };
       setPendingFormData(null);
       await submitRegistration(payload);
+      setAuthModalOpen(true);
+    }
+  };
+
+  const handleAuthLocationClose = () => {
+    setPendingFormData(null);
+    setAuthLocationModalOpen(false);
+    if (authModalPreLocationClose) {
+      setAuthModalPreLocationClose(false);
+      setAuthModalOpen(true);
     }
   };
 
@@ -757,123 +812,205 @@ export default function LandingPage() {
         mode="account"
         title="Choisissez votre adresse"
         required={true}
-        onClose={() => { setPendingFormData(null); setAuthLocationModalOpen(false); }}
+        onClose={handleAuthLocationClose}
         onConfirm={handleAuthLocationConfirm}
       />
 
       {/* ── Auth modal ── */}
-      <Dialog open={authModalOpen} onOpenChange={setAuthModalOpen}>
+      <Dialog open={authModalOpen} onOpenChange={(open) => {
+        if (!open) { setRegistrationDone(false); setLoginPendingState(false); }
+        setAuthModalOpen(open);
+      }}>
         <DialogContent className="sm:max-w-md w-full rounded-3xl p-0 overflow-hidden max-h-[95vh] flex flex-col">
           <div className="overflow-y-auto flex-1">
             <div className="p-6 sm:p-8">
-              {/* Header */}
-              <div className="flex items-center gap-3 mb-6">
-                <div className="bg-primary p-2 rounded-xl text-white shrink-0">
-                  <Coffee className="w-5 h-5" />
+
+              {/* ── Post-registration pending view ── */}
+              {registrationDone ? (
+                <div className="flex flex-col items-center text-center gap-5 py-4">
+                  <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Clock className="w-8 h-8 text-amber-500" />
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="font-bold text-xl text-foreground">Compte créé avec succès !</h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
+                      Votre compte est en <strong>attente d'approbation</strong> par un administrateur.<br />
+                      L'accès à la plateforme sera disponible dès que votre compte sera validé.<br />
+                      Vous recevrez une notification par email ou téléphone.
+                    </p>
+                  </div>
+                  <Button
+                    className="w-full rounded-xl py-5 text-base"
+                    data-testid="button-registration-done-close"
+                    onClick={() => { setRegistrationDone(false); setAuthModalOpen(false); }}
+                  >
+                    Compris
+                  </Button>
                 </div>
-                <div>
-                  <h2 className="font-bold text-xl text-foreground leading-tight">Bienvenue</h2>
-                  <p className="text-sm text-muted-foreground">Connectez-vous ou créez un compte pour démarrer.</p>
+
+              ) : loginPendingState ? (
+                /* ── Post-login pending view ── */
+                <div className="flex flex-col items-center text-center gap-5 py-4">
+                  <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Clock className="w-8 h-8 text-amber-500" />
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="font-bold text-xl text-foreground">Compte en attente</h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
+                      Votre compte est en <strong>attente d'approbation</strong> par l'administrateur.<br />
+                      Vous ne pouvez pas accéder à l'application pour l'instant.<br />
+                      Vous serez notifié dès que votre compte sera approuvé.
+                    </p>
+                  </div>
+                  <Button
+                    className="w-full rounded-xl py-5 text-base"
+                    data-testid="button-login-pending-close"
+                    onClick={() => {
+                      setLoginPendingState(false);
+                      setAuthModalOpen(false);
+                      fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => {
+                        queryClient.setQueryData(["/api/auth/me"], null);
+                      });
+                    }}
+                  >
+                    Compris
+                  </Button>
                 </div>
-              </div>
 
-              <Tabs value={authTab} onValueChange={(v) => setAuthTab(v as "login" | "register")} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-5 p-1 bg-secondary/50 rounded-xl">
-                  <TabsTrigger value="login" className="rounded-lg py-2" data-testid="tab-login">Connexion</TabsTrigger>
-                  <TabsTrigger value="register" className="rounded-lg py-2" data-testid="tab-register">Inscription</TabsTrigger>
-                </TabsList>
-
-                {/* ── Login tab ── */}
-                <TabsContent value="login" className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                  <form onSubmit={loginForm.handleSubmit((d) => login(d))} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="login-email">Email ou téléphone</Label>
-                      <Input
-                        id="login-email"
-                        placeholder="email@exemple.com ou +216…"
-                        data-testid="input-login-email"
-                        className="rounded-xl px-4 py-5 bg-secondary/30 border-border/50"
-                        {...loginForm.register("email")}
-                      />
-                      {loginForm.formState.errors.email && (
-                        <p className="text-xs text-destructive">{loginForm.formState.errors.email.message}</p>
-                      )}
+              ) : (
+                /* ── Normal login / register view ── */
+                <>
+                  {/* Header */}
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="bg-primary p-2 rounded-xl text-white shrink-0">
+                      <Coffee className="w-5 h-5" />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="login-password">Mot de passe</Label>
-                      <Input
-                        id="login-password"
-                        type="password"
-                        placeholder="••••••••"
-                        data-testid="input-login-password"
-                        className="rounded-xl px-4 py-5 bg-secondary/30 border-border/50"
-                        {...loginForm.register("password")}
-                      />
-                      {loginForm.formState.errors.password && (
-                        <p className="text-xs text-destructive">{loginForm.formState.errors.password.message}</p>
-                      )}
+                    <div>
+                      <h2 className="font-bold text-xl text-foreground leading-tight">Bienvenue</h2>
+                      <p className="text-sm text-muted-foreground">Connectez-vous ou créez un compte pour démarrer.</p>
                     </div>
-                    <Button
-                      type="submit"
-                      data-testid="button-login"
-                      disabled={isLoggingIn}
-                      className="w-full rounded-xl py-5 text-base shadow-lg shadow-primary/25 mt-2"
-                    >
-                      {isLoggingIn ? "Connexion..." : <span className="flex items-center gap-2">Se connecter <ArrowRight className="w-4 h-4" /></span>}
-                    </Button>
-                  </form>
-                  <p className="text-center text-sm text-muted-foreground pt-2">
-                    Pas encore de compte ?{" "}
-                    <button className="text-primary font-medium hover:underline" onClick={() => setAuthTab("register")}>
-                      S'inscrire
-                    </button>
-                  </p>
-                </TabsContent>
-
-                {/* ── Register tab ── */}
-                <TabsContent value="register" className="animate-in fade-in slide-in-from-left-4 duration-300">
-                  {/* Type de compte selector */}
-                  <div className="mb-4">
-                    <Label className="text-xs text-muted-foreground uppercase tracking-widest mb-2 block">
-                      Type de compte
-                    </Label>
-                    <button
-                      type="button"
-                      data-testid="button-select-role"
-                      onClick={() => setRoleSubModalOpen(true)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${roleConfig.bg} ${roleConfig.border} hover:shadow-sm`}
-                    >
-                      <div className={`w-9 h-9 ${roleConfig.iconBg} rounded-lg flex items-center justify-center shrink-0`}>
-                        <roleConfig.icon className="w-4 h-4 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-gray-900">{roleConfig.label}</p>
-                        <p className="text-xs text-gray-500 truncate">{roleConfig.desc}</p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                    </button>
-                    <Badge variant="outline" className="mt-2 text-xs border-amber-200 text-amber-700 bg-amber-50">
-                      En attente d'approbation
-                    </Badge>
                   </div>
 
-                  {/* Role-specific form */}
-                  {selectedRole === "CAFE_OWNER"          && <CafeForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                  {selectedRole === "SUPPLIER"            && <SupplierForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                  {selectedRole === "DELIVERY_COMPANY"    && <DeliveryForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                  {selectedRole === "PRINTER"             && <PrinterForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                  {selectedRole === "MARKETING"           && <MarketingForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                  {selectedRole === "BARISTA_ACADEMY"     && <BaristaAcademyForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                  {selectedRole === "BARISTA_MARKETPLACE" && <BaristaMarketplaceForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                  <Tabs value={authTab} onValueChange={(v) => setAuthTab(v as "login" | "register")} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 mb-5 p-1 bg-secondary/50 rounded-xl">
+                      <TabsTrigger value="login" className="rounded-lg py-2" data-testid="tab-login">Connexion</TabsTrigger>
+                      <TabsTrigger value="register" className="rounded-lg py-2" data-testid="tab-register">Inscription</TabsTrigger>
+                    </TabsList>
 
-                  <p className="text-center text-sm text-muted-foreground pt-3">
-                    Déjà un compte ?{" "}
-                    <button className="text-primary font-medium hover:underline" onClick={() => setAuthTab("login")}>
-                      Se connecter
-                    </button>
-                  </p>
-                </TabsContent>
-              </Tabs>
+                    {/* ── Login tab ── */}
+                    <TabsContent value="login" className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                      <form onSubmit={loginForm.handleSubmit(handleModalLogin)} className="space-y-4">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="login-email">Email ou téléphone</Label>
+                          <Input
+                            id="login-email"
+                            placeholder="email@exemple.com ou +216…"
+                            data-testid="input-login-email"
+                            className="rounded-xl px-4 py-5 bg-secondary/30 border-border/50"
+                            {...loginForm.register("email")}
+                          />
+                          {loginForm.formState.errors.email && (
+                            <p className="text-xs text-destructive">{loginForm.formState.errors.email.message}</p>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="login-password">Mot de passe</Label>
+                          <Input
+                            id="login-password"
+                            type="password"
+                            placeholder="••••••••"
+                            data-testid="input-login-password"
+                            className="rounded-xl px-4 py-5 bg-secondary/30 border-border/50"
+                            {...loginForm.register("password")}
+                          />
+                          {loginForm.formState.errors.password && (
+                            <p className="text-xs text-destructive">{loginForm.formState.errors.password.message}</p>
+                          )}
+                        </div>
+                        <Button
+                          type="submit"
+                          data-testid="button-login"
+                          disabled={isDoingLogin}
+                          className="w-full rounded-xl py-5 text-base shadow-lg shadow-primary/25 mt-2"
+                        >
+                          {isDoingLogin ? "Connexion..." : <span className="flex items-center gap-2">Se connecter <ArrowRight className="w-4 h-4" /></span>}
+                        </Button>
+                      </form>
+                      <p className="text-center text-sm text-muted-foreground pt-2">
+                        Pas encore de compte ?{" "}
+                        <button className="text-primary font-medium hover:underline" onClick={() => setAuthTab("register")}>
+                          S'inscrire
+                        </button>
+                      </p>
+                      <div className="flex justify-center pt-1">
+                        <button
+                          type="button"
+                          data-testid="button-back-from-login"
+                          onClick={() => setAuthModalOpen(false)}
+                          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          Retour
+                        </button>
+                      </div>
+                    </TabsContent>
+
+                    {/* ── Register tab ── */}
+                    <TabsContent value="register" className="animate-in fade-in slide-in-from-left-4 duration-300">
+                      <button
+                        type="button"
+                        data-testid="button-back-from-register"
+                        onClick={() => setAuthTab("login")}
+                        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Retour à la connexion
+                      </button>
+
+                      {/* Type de compte selector */}
+                      <div className="mb-4">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-widest mb-2 block">
+                          Type de compte
+                        </Label>
+                        <button
+                          type="button"
+                          data-testid="button-select-role"
+                          onClick={() => setRoleSubModalOpen(true)}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${roleConfig.bg} ${roleConfig.border} hover:shadow-sm`}
+                        >
+                          <div className={`w-9 h-9 ${roleConfig.iconBg} rounded-lg flex items-center justify-center shrink-0`}>
+                            <roleConfig.icon className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm text-gray-900">{roleConfig.label}</p>
+                            <p className="text-xs text-gray-500 truncate">{roleConfig.desc}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                        </button>
+                        <Badge variant="outline" className="mt-2 text-xs border-amber-200 text-amber-700 bg-amber-50">
+                          En attente d'approbation
+                        </Badge>
+                      </div>
+
+                      {/* Role-specific form */}
+                      {selectedRole === "CAFE_OWNER"          && <CafeForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                      {selectedRole === "SUPPLIER"            && <SupplierForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                      {selectedRole === "DELIVERY_COMPANY"    && <DeliveryForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                      {selectedRole === "PRINTER"             && <PrinterForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                      {selectedRole === "MARKETING"           && <MarketingForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                      {selectedRole === "BARISTA_ACADEMY"     && <BaristaAcademyForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                      {selectedRole === "BARISTA_MARKETPLACE" && <BaristaMarketplaceForm onSubmit={handleRegister} isLoading={isRegistering} />}
+
+                      <p className="text-center text-sm text-muted-foreground pt-3">
+                        Déjà un compte ?{" "}
+                        <button className="text-primary font-medium hover:underline" onClick={() => setAuthTab("login")}>
+                          Se connecter
+                        </button>
+                      </p>
+                    </TabsContent>
+                  </Tabs>
+                </>
+              )}
             </div>
           </div>
         </DialogContent>
@@ -881,15 +1018,25 @@ export default function LandingPage() {
 
       {/* ── Role selection sub-modal (opened from Inscription tab) ── */}
       <Dialog open={roleSubModalOpen} onOpenChange={setRoleSubModalOpen}>
-        <DialogContent className="sm:max-w-2xl rounded-3xl p-0 overflow-hidden">
-          <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-6 text-white">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-white">Choisissez votre type de compte</DialogTitle>
-              <p className="text-amber-100 text-sm mt-1">Sélectionnez le profil qui correspond à votre activité.</p>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-lg rounded-3xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-5 text-white">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                data-testid="button-back-role-modal"
+                onClick={() => setRoleSubModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors shrink-0"
+              >
+                <ChevronLeft className="w-4 h-4 text-white" />
+              </button>
+              <div>
+                <DialogTitle className="text-lg font-bold text-white leading-tight">Choisissez votre type de compte</DialogTitle>
+                <p className="text-amber-100 text-sm mt-0.5">Sélectionnez le profil qui correspond à votre activité.</p>
+              </div>
+            </div>
           </div>
-          <div className="p-6">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="p-5 overflow-y-auto flex-1">
+            <div className="flex flex-col gap-3">
               {ROLES.map((role) => (
                 <button
                   key={role.id}
@@ -898,18 +1045,16 @@ export default function LandingPage() {
                     setSelectedRole(role.id);
                     setRoleSubModalOpen(false);
                   }}
-                  className={`flex flex-col items-start gap-3 p-4 rounded-2xl border-2 ${role.bg} ${role.border} ${role.hover} transition-all hover:-translate-y-0.5 hover:shadow-md text-left group ${selectedRole === role.id ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                  className={`flex items-center gap-4 p-4 rounded-2xl border-2 ${role.bg} ${role.border} ${role.hover} transition-all hover:shadow-md text-left w-full group ${selectedRole === role.id ? "ring-2 ring-primary ring-offset-1" : ""}`}
                 >
-                  <div className={`w-10 h-10 ${role.iconBg} rounded-xl flex items-center justify-center`}>
+                  <div className={`w-11 h-11 ${role.iconBg} rounded-xl flex items-center justify-center shrink-0`}>
                     <role.icon className="w-5 h-5 text-white" />
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-bold text-gray-900 text-sm">{role.label}</p>
                     <p className="text-xs text-gray-500 leading-relaxed mt-0.5">{role.desc}</p>
                   </div>
-                  <span className="text-xs font-semibold text-primary flex items-center gap-1 group-hover:gap-2 transition-all">
-                    Sélectionner <ArrowRight className="w-3 h-3" />
-                  </span>
+                  <ArrowRight className="w-4 h-4 text-gray-400 shrink-0 group-hover:text-primary transition-colors" />
                 </button>
               ))}
             </div>

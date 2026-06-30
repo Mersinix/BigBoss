@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
-import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import LandingPage from "@/pages/landing-page";
 import BrowseProducts from "@/pages/cafe/browse-products";
@@ -89,7 +88,7 @@ const ProtectedRoute = ({
 }) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return <Spinner />;
-  if (!user) return <Redirect to="/auth" />;
+  if (!user) return <Redirect to="/" />;
   if (allowedRoles && !allowedRoles.includes(user.role)) return <Redirect to="/" />;
   if (requireApproved && needsApproval(user)) return <PendingApprovalScreen />;
   return <Component />;
@@ -123,9 +122,9 @@ function HomeRoute() {
 function Router() {
   return (
     <Switch>
-      {/* Auth — both /login and /auth work */}
-      <Route path="/login" component={AuthPage} />
-      <Route path="/auth" component={AuthPage} />
+      {/* /login and /auth both redirect to landing page */}
+      <Route path="/login">{() => <Redirect to="/" />}</Route>
+      <Route path="/auth">{() => <Redirect to="/" />}</Route>
 
       <Route path="/" component={HomeRoute} />
 

@@ -1,22 +1,10 @@
-import { Clock, LogOut, User } from "lucide-react";
+import { Clock, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
-import { Link } from "wouter";
-
-const PROFILE_ROUTES: Record<string, string> = {
-  SUPPLIER: "/supplier/settings",
-  PRINTER: "/printer/settings",
-  MARKETING: "/marketing/settings",
-  BARISTA_ACADEMY: "/barista-academy/settings",
-  BARISTA_MARKETPLACE: "/barista-marketplace/settings",
-  DELIVERY_COMPANY: "/delivery/settings",
-  CAFE_OWNER: "/cafe/settings",
-};
 
 export function PendingApprovalScreen() {
-  const { user, logout, isLoggingOut } = useAuth();
-  const profilePath = user ? (PROFILE_ROUTES[user.role] ?? "/settings") : "/";
+  const { logout, isLoggingOut } = useAuth();
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center p-6">
@@ -26,28 +14,23 @@ export function PendingApprovalScreen() {
             <Clock className="w-7 h-7 text-amber-600" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-xl font-semibold">Your account is pending admin approval</h1>
+            <h1 className="text-xl font-semibold">Compte en attente d'approbation</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              You will receive an email or phone notification once your account is activated.
+              Votre compte est en cours de vérification par notre équipe.<br />
+              L'accès à la plateforme sera disponible une fois votre dossier validé.<br />
+              Vous recevrez une notification par email ou téléphone dès approbation.
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
-            <Link href={profilePath}>
-              <Button variant="outline" className="gap-2 w-full sm:w-auto">
-                <User className="w-4 h-4" />
-                View Profile
-              </Button>
-            </Link>
-            <Button
-              variant="secondary"
-              className="gap-2 w-full sm:w-auto"
-              onClick={() => logout()}
-              disabled={isLoggingOut}
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            className="gap-2 w-full"
+            onClick={() => logout()}
+            disabled={isLoggingOut}
+            data-testid="button-pending-logout"
+          >
+            <LogOut className="w-4 h-4" />
+            {isLoggingOut ? "Déconnexion..." : "Retour à l'accueil"}
+          </Button>
         </CardContent>
       </Card>
     </div>

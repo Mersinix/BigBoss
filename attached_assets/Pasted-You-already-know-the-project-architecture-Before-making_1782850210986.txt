@@ -1,0 +1,223 @@
+You already know the project architecture. Before making any changes, analyze the current authentication flow, authentication modals, location modal, account type selection modal, and service selection modals. Reuse the existing components and behavior whenever possible.
+
+Do **not** change the visual identity of the application. Keep the same colors, typography, spacing, animations, and overall design language. Do **not** modify authentication logic, APIs, permissions, validation rules, approval workflow, or any business logic unless it is required to implement the requested behavior.
+
+Everything must remain fully responsive on desktop, tablet, and mobile.
+
+---
+
+# Scope
+
+Implement only the changes described below. Do not introduce unrelated improvements or refactoring.
+
+---
+
+# 1. Improve the "Type de compte" selection modal
+
+This is the modal that displays:
+
+* Café
+* Fournisseur
+* Livraison
+* Imprimerie
+* Marketing
+* Barista Academy
+* Marketplace Barista
+
+Update its layout while preserving the existing design.
+
+### Desktop
+
+Keep the current visual style.
+
+Instead of displaying multiple cards per row, display **one card per row**.
+
+Each card should use the full available width.
+
+Each card should naturally display:
+
+* Icon (if applicable)
+* Title
+* Description
+* Action
+
+The description should have enough horizontal space and should no longer appear compressed.
+
+The goal is only to improve readability while keeping the same visual identity.
+
+### Mobile
+
+The modal must become vertically scrollable.
+
+The user must always be able to scroll to every account type regardless of screen size.
+
+---
+
+# 2. Remove the old /auth page
+
+The Landing Page authentication modal is now the primary authentication entry point.
+
+The old `/auth` page (the page containing the large illustration and split layout) is no longer needed.
+
+Remove it completely.
+
+Also verify that:
+
+* no navigation still points to it;
+* no obsolete components remain;
+* no dead routes remain;
+* removing it does not break authentication.
+
+Only remove what is now obsolete.
+
+---
+
+# 3. Fix the Location modal
+
+Analyze the complete location system.
+
+Currently, when users try to select a location, the location modal is not functioning correctly.
+
+Find the cause and restore the expected behavior.
+
+Verify every location entry point, including:
+
+* Registration
+* User Profile / Address
+* Landing Page search location
+* Product search location
+* Delivery address selection during checkout
+* Any other place where the location modal is used
+
+Each location flow should continue using its own intended behavior while functioning correctly.
+
+Do not modify the previously validated location strategy.
+
+Only restore correct functionality.
+
+---
+
+# 4. Add a Back button to all onboarding-related modals
+
+Provide a consistent navigation experience.
+
+Add a clear **Back** button wherever appropriate in:
+
+* Login modal
+* Registration modal
+* Account Type selection modal
+* Location modal
+* Service selection modal (if applicable)
+
+The Back button should always return the user to the previous step in the current flow.
+
+It should not unexpectedly close the entire process unless the user explicitly chooses to close it.
+
+Navigation should feel natural and consistent across every modal.
+
+---
+
+# 5. Improve the Pending Approval experience
+
+Review the registration and login experience for account types that require administrator approval.
+
+The existing approval workflow must remain unchanged.
+
+Only improve the user experience.
+
+### After registration
+
+When a user successfully creates an account requiring administrator approval:
+
+Display a clear confirmation message explaining that:
+
+* the account has been created successfully;
+* the account is currently waiting for administrator approval;
+* the user cannot access the application until approval;
+* the user will receive a notification (email or any configured notification channel) once the account has been approved.
+
+The message should make it obvious that registration succeeded and that waiting for approval is expected.
+
+---
+
+### During login
+
+If a user whose account is still pending approval attempts to log in:
+
+* do not allow access to the application;
+* display a friendly message explaining that the account is still waiting for administrator approval;
+* explain that access will become available once the administrator approves the account;
+* after the user acknowledges the message, redirect them back to the Landing Page.
+
+The experience should clearly indicate that this is not a login error but the normal approval process.
+
+Approved users must continue logging in exactly as they do today.
+
+---
+
+# Preserve Existing Functionality
+
+Do not modify:
+
+* Authentication APIs
+* Registration APIs
+* User roles
+* Session management
+* Validation rules
+* Permissions
+* Approval workflow
+* Notifications
+* Redirects after successful login
+* Location strategy
+* Existing reusable components
+* Visual design
+
+Only implement the requested UX improvements.
+
+---
+
+# Responsive Requirements
+
+Verify that everything works correctly on:
+
+### Desktop
+
+* Comfortable modal sizes
+* Full-width account type cards
+* Proper spacing
+
+### Tablet
+
+* Smooth scrolling where needed
+* Correct modal sizing
+
+### Mobile
+
+* No horizontal scrolling
+* Scrollable account type modal
+* Responsive forms
+* Responsive location modal
+* Responsive login and registration flow
+
+---
+
+# Final Validation Checklist
+
+Before finishing, verify all of the following:
+
+* The account type modal is scrollable when necessary.
+* On desktop, account type cards are displayed one per row using the available width.
+* The overall design remains consistent with the rest of the application.
+* The obsolete `/auth` page has been completely removed without breaking authentication.
+* No dead routes or obsolete links remain.
+* Every authentication entry point continues working correctly.
+* Every location modal works correctly in all supported flows.
+* All onboarding-related modals now include a consistent Back button.
+* Users creating accounts that require approval receive a clear confirmation explaining that administrator approval is required.
+* Pending users cannot access protected areas.
+* Pending users attempting to log in receive a clear explanation before being redirected to the Landing Page.
+* Approved users continue logging in normally.
+* Desktop, tablet, and mobile experiences remain fully responsive.
+* No existing functionality has been broken.
+* No visual regressions have been introduced.
+* All synchronization and existing workflows continue to function exactly as before.

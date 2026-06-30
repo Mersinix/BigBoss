@@ -1,0 +1,245 @@
+You already know the project architecture. Before making any changes, analyze the current authentication flow, the Landing Page login modal, the `/auth` page, and the registration flow. Reuse the existing authentication, validation, APIs, components, and business logic whenever possible.
+
+The objective is **only to improve the user experience**. Do **not** change authentication logic, APIs, database, approval flow, validations, permissions, redirects after login, or the existing visual design. Keep the current styling, spacing, colors, typography, and responsive behavior consistent with the rest of the application.
+
+Everything must remain fully responsive on desktop, tablet, and mobile.
+
+---
+
+# Goal
+
+The user should no longer leave the Landing Page to log in.
+
+The authentication experience should become:
+
+1. Landing Page
+2. User clicks **Connexion**
+3. Authentication modal opens directly
+4. User can either:
+
+   * log in immediately
+   * or switch to registration
+5. During registration, the only behavior that changes is the **Type de compte** selection.
+
+All existing authentication logic must continue working exactly as it does today.
+
+---
+
+# 1. Landing Page → Connexion
+
+Currently:
+
+Landing Page
+
+↓
+
+Connexion
+
+↓
+
+Account Type modal
+
+↓
+
+"Se connecter"
+
+↓
+
+/auth page
+
+↓
+
+Login form
+
+This flow must change.
+
+The new flow becomes:
+
+Landing Page
+
+↓
+
+Connexion
+
+↓
+
+Authentication modal opens immediately
+
+The authentication modal should display the same content that currently exists on the **right side** of the `/auth` page.
+
+Do **not** include the left illustration/image from `/auth`.
+
+The modal should immediately display:
+
+* Bienvenue
+* Connectez-vous ou créez un compte pour démarrer.
+* Connexion tab
+* Inscription tab
+* Email ou téléphone
+* Mot de passe
+* Se connecter
+* Pas encore de compte ? S'inscrire
+
+The login experience, validation, errors, remember state, redirects, and authentication behavior must remain exactly the same.
+
+The only difference is that it happens inside the modal instead of navigating to `/auth`.
+
+---
+
+# 2. Registration
+
+When the user switches to **Inscription**, keep the existing registration form and workflow.
+
+The only change concerns **Type de compte**.
+
+Currently the account types are displayed directly inside the registration form.
+
+Instead:
+
+The registration form should contain a **Type de compte** selector.
+
+When the user wants to choose the account type, open the existing account type selection modal.
+
+Reuse the existing modal that displays:
+
+* Café
+* Fournisseur
+* Livraison
+* Imprimerie
+* Marketing
+* Barista Academy
+* Marketplace Barista
+
+with their current descriptions and "S'inscrire" actions.
+
+Do not redesign this modal.
+
+Reuse it.
+
+---
+
+# 3. Selecting the account type
+
+When the user selects one account type from that modal:
+
+Close the account type modal.
+
+Return automatically to the registration form.
+
+The selected account type should now be displayed inside the registration form.
+
+Example:
+
+Type de compte
+
+Café
+
+The rest of the registration form must remain exactly as it works today.
+
+Do not modify:
+
+* Nom du café
+* Prénom
+* Email
+* Téléphone
+* Mot de passe
+* Confirmation
+* Location step
+* Approval workflow
+* Validation
+* Create Account button
+
+Everything after selecting the account type must behave exactly as before.
+
+---
+
+# 4. Remove unnecessary navigation
+
+The login flow should no longer redirect the user to `/auth` when coming from the Landing Page.
+
+Authentication should happen directly inside the modal.
+
+Keep `/auth` available if other parts of the application still use it internally.
+
+Do not break existing routes.
+
+Simply stop using `/auth` as the normal login entry from the Landing Page.
+
+---
+
+# 5. Preserve existing behavior
+
+Do not modify:
+
+* Login API
+* Registration API
+* Session management
+* Authentication logic
+* Validation rules
+* Approval workflow
+* Email verification flow
+* Location flow
+* User roles
+* Redirects after successful authentication
+* Existing reusable components
+
+Only reorganize the user flow.
+
+---
+
+# 6. Responsive behavior
+
+Ensure the new authentication modal is fully responsive.
+
+Desktop:
+
+* Same clean layout as today.
+* Comfortable modal width.
+
+Tablet:
+
+* Proper spacing and scrolling if needed.
+
+Mobile:
+
+* Optimized full-width modal.
+* No horizontal scrolling.
+* Forms remain easy to complete.
+
+---
+
+# 7. Synchronization
+
+Verify that all existing synchronization continues working correctly.
+
+Check:
+
+* Login
+* Registration
+* Pending approval users
+* Existing suppliers
+* Existing coffee owners
+* Existing delivery accounts
+* Existing printer accounts
+* Existing marketing accounts
+* Existing Barista Academy accounts
+* Existing Marketplace Barista accounts
+
+No regression should be introduced.
+
+---
+
+# Final validation
+
+Before finishing:
+
+* Verify that clicking **Connexion** from the Landing Page never redirects to `/auth`.
+* Verify that login works exactly as before.
+* Verify that registration works exactly as before.
+* Verify that the only changed behavior is the account type selection flow.
+* Verify that the selected account type is correctly reflected in the registration form.
+* Verify that all validations still work.
+* Verify that all redirects after login remain unchanged.
+* Verify that the UI design remains consistent with the existing application.
+* Verify that desktop, tablet, and mobile layouts are fully responsive.
+* Verify that no existing functionality has been broken.

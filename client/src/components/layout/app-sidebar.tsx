@@ -71,18 +71,18 @@ export function AppSidebar() {
           label: "MAIN",
           items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
-            { title: "Orders", url: "/orders", icon: ClipboardList },
-            { title: "Products", url: "/admin/products", icon: Package },
-            { title: "Suppliers", url: "/admin/suppliers", icon: Store },
             { title: "Categories", url: "/admin/categories", icon: Folder },
+            { title: "Products", url: "/admin/products", icon: Package },
+            { title: "Orders", url: "/orders", icon: ClipboardList },
+           
           ],
         },
         {
           label: "USERS & PERMISSIONS",
           items: [
             { title: "Users", url: "/admin/users", icon: Users },
+            { title: "Suppliers", url: "/admin/suppliers", icon: Store },
             { title: "Roles & Permissions", url: "/admin/roles", icon: ShieldCheck },
-            { title: "Category Requests", url: "/admin/categories?section=category-requests", icon: Tag },
           ],
         },
         {
@@ -154,13 +154,8 @@ export function AppSidebar() {
           label: "MAIN",
           items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
-          ],
-        },
-        {
-          label: "BUSINESS",
-          items: [
+             { title: "Categories", url: "/supplier/categories", icon: Folder },
             { title: "Products", url: "/supplier/products", icon: Package },
-            { title: "Categories", url: "/supplier/categories", icon: Folder },
             { title: "Inventory", url: "/supplier/inventory", icon: Warehouse },
           ],
         },

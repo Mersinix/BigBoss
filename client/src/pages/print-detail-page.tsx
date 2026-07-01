@@ -440,7 +440,7 @@ export default function PrintDetailPage() {
             </div>
 
             {/* Price Summary + CTA */}
-            <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-6 space-y-4 sticky bottom-4">
+            <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-6 space-y-4 sticky top-6">
               <h3 className="font-bold text-gray-900">Récapitulatif</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-gray-600">

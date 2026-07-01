@@ -154,7 +154,7 @@ export function AppSidebar() {
           label: "MAIN",
           items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
-             { title: "Categories", url: "/supplier/categories", icon: Folder },
+            { title: "Categories", url: "/supplier/categories", icon: Folder },
             { title: "Products", url: "/supplier/products", icon: Package },
             { title: "Inventory", url: "/supplier/inventory", icon: Warehouse },
           ],

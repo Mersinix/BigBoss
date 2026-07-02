@@ -1,0 +1,62 @@
+We will refine the existing System Management (Admin → Services Control) feature with stricter behavior for “Hidden” and “Coming Soon”.
+
+Scope: Admin Part → System Management → Services (Print / Marketing / Barista)
+1. “Hidden” behavior (IMPORTANT FIX)
+
+When a service is set to Hidden by the admin:
+
+The service must be completely removed from the entire platform navigation
+Specifically:
+It must NOT appear in the Home page navigation bar (SHOP / PRINT / BARISTA / MARKETING)
+It must NOT appear anywhere in menus, tabs, or service selectors
+It must NOT be accessible through direct UI entry points
+Example requirement
+
+If PRINT = Hidden:
+
+“PRINT” tab disappears completely from Home page navbar
+No placeholder, no disabled state, no empty tab
+It behaves as if the service does not exist in navigation
+2. “Coming Soon” behavior (UPDATED RULE)
+
+When a service is set to Coming Soon:
+
+A. Navigation behavior
+The service tab MUST remain visible in navigation (Home page, menus, etc.)
+B. Page behavior
+When user opens the service route (e.g. /print):
+Show a Coming Soon screen
+BUT preserve the existing page structure:
+Keep the Hero section visible
+Hide all other components/content below the hero section
+Example requirement
+
+If PRINT = Coming Soon:
+
+Navbar still shows “PRINT”
+Clicking PRINT opens /print page
+Page shows:
+Hero section (kept as-is)
+All other sections removed/hidden
+Coming Soon message displayed within layout
+3. Global consistency rule
+
+These rules must apply everywhere:
+
+Home page navbar
+Landing page
+Internal navigation
+Route rendering
+Service access logic
+
+Any change in System Management must reflect instantly across the platform.
+
+Constraints
+Do NOT change UI design or styling
+Do NOT modify routing structure unnecessarily
+Do NOT break existing service pages
+Keep current system intact and only adjust visibility logic
+Expected result
+Hidden = service completely removed from UI navigation everywhere
+Coming Soon = service visible but shows restricted page with only hero + coming soon state
+System remains consistent across all pages and updates in real time

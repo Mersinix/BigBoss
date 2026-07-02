@@ -510,8 +510,8 @@ export default function LandingPage() {
   const isMarketingComingSoon = serviceStates.MARKETING === "COMING_SOON";
   const isBaristaComingSoon = serviceStates.BARISTA === "COMING_SOON";
 
-  const goToServiceOrComingSoon = (href: string, comingSoon: boolean) => {
-    navigate(comingSoon ? `/coming-soon?service=${encodeURIComponent(href.replace("/", ""))}` : href);
+  const goToServiceOrComingSoon = (href: string, _comingSoon: boolean) => {
+    navigate(href);
   };
 
   return (

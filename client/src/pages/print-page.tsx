@@ -232,7 +232,7 @@ function PrintFilterBar({ products, filters, onChange, onReset, categoryId }: {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function PrintPage() {
+export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean }) {
   const [, navigate] = useLocation();
   const searchStr = useSearch();
 
@@ -319,6 +319,20 @@ export default function PrintPage() {
         </div>
       </section>
 
+      {comingSoon ? (
+        <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
+            <Clock className="w-8 h-8 text-blue-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2" data-testid="text-coming-soon-title">
+            Bientôt disponible
+          </h2>
+          <p className="text-sm text-gray-500 max-w-md mx-auto">
+            Ce service est en cours de préparation. Revenez bientôt pour le découvrir.
+          </p>
+        </div>
+      ) : (
+      <>
       <div className="sticky top-14 z-30">
         <PrintCategoryStrip
           selected={categoryId}
@@ -372,6 +386,8 @@ export default function PrintPage() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

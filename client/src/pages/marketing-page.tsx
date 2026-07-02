@@ -31,6 +31,7 @@ import {
   FileText,
   Users,
   Heart,
+  Clock,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 
@@ -668,7 +669,7 @@ function ProviderDetailDialog({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function MarketingPage() {
+export default function MarketingPage({ comingSoon = false }: { comingSoon?: boolean }) {
   const { user } = useAuth();
   const accessLevel = useAccessLevel();
 
@@ -755,6 +756,20 @@ export default function MarketingPage() {
         </div>
       </section>
 
+      {comingSoon ? (
+        <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-5">
+            <Clock className="w-8 h-8 text-purple-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2" data-testid="text-coming-soon-title">
+            Bientôt disponible
+          </h2>
+          <p className="text-sm text-gray-500 max-w-md mx-auto">
+            Ce service est en cours de préparation. Revenez bientôt pour le découvrir.
+          </p>
+        </div>
+      ) : (
+      <>
       {/* ── Pending notice ──────────────────────────────────────────────── */}
       {accessLevel === "pending" && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
@@ -906,6 +921,8 @@ export default function MarketingPage() {
           )}
         </section>
       </div>
+      </>
+      )}
 
       {/* ── Provider Detail Dialog ─────────────────────────────────────── */}
       <ProviderDetailDialog

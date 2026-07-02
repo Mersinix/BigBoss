@@ -26,6 +26,7 @@ import {
   Printer, Megaphone, User, GraduationCap
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount } from "@/hooks/use-favorites";
+import { useServiceStates } from "@/hooks/use-service-states";
 import type { CategoryWithCount, ShopFavoriteItem } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
@@ -241,9 +242,20 @@ function SuppliersPanel() {
 type FavService = "SHOP" | "PRINT" | "BARISTA" | "MARKETING";
 type BaristaSubTab = "academy" | "marketplace";
 const FAV_SERVICES: FavService[] = ["SHOP", "PRINT", "BARISTA", "MARKETING"];
+const FAV_SERVICE_TO_KEY: Record<FavService, "PRINTING" | "BARISTA" | "MARKETING" | null> = {
+  SHOP: null,
+  PRINT: "PRINTING",
+  BARISTA: "BARISTA",
+  MARKETING: "MARKETING",
+};
 
 function FavoritesPanel({ onNavigate }: { onNavigate?: () => void }) {
   const [, navigate] = useLocation();
+  const { states: serviceStates } = useServiceStates();
+  const visibleFavServices = FAV_SERVICES.filter((s) => {
+    const key = FAV_SERVICE_TO_KEY[s];
+    return !key || serviceStates[key] !== "HIDDEN";
+  });
   const [activeService, setActiveService] = useState<FavService>("SHOP");
   const [baristaTab, setBaristaTab] = useState<BaristaSubTab>("academy");
   const {
@@ -274,7 +286,7 @@ function FavoritesPanel({ onNavigate }: { onNavigate?: () => void }) {
     <div className="space-y-4">
       {/* Service switcher */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-        {FAV_SERVICES.map((s) => (
+        {visibleFavServices.map((s) => (
           <button
             key={s}
             data-testid={`tab-fav-${s.toLowerCase()}`}
@@ -480,8 +492,19 @@ function FavoritesPanel({ onNavigate }: { onNavigate?: () => void }) {
 // ── Chat Panel ────────────────────────────────────────────────────────────────
 
 const SERVICES_LIST: ServiceId[] = ["SHOP", "PRINT", "BARISTA", "MARKETING"];
+const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "BARISTA" | "MARKETING" | null> = {
+  SHOP: null,
+  PRINT: "PRINTING",
+  BARISTA: "BARISTA",
+  MARKETING: "MARKETING",
+};
 
 function ChatPanel() {
+  const { states: serviceStates } = useServiceStates();
+  const visibleServicesList = SERVICES_LIST.filter((s) => {
+    const key = SERVICE_ID_TO_KEY[s];
+    return !key || serviceStates[key] !== "HIDDEN";
+  });
   const [service, setService] = useState<ServiceId>("SHOP");
   const [threads, setThreads] = useState<Thread[]>(fakeThreads);
   const [active, setActive] = useState<Thread | null>(null);
@@ -511,7 +534,7 @@ function ChatPanel() {
     <div className="h-[480px] flex flex-col gap-3">
       {/* Service switcher — same pill style as Profile tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
-        {SERVICES_LIST.map((s) => (
+        {visibleServicesList.map((s) => (
           <button
             key={s}
             data-testid={`tab-messages-${s.toLowerCase()}`}
@@ -624,6 +647,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const { isVisitor, isPending, isApproved, hasCommercial } = computeAccess(user);
   const favTotalCount = useFavorites(selectTotalFavCount);
   const hydrateShop = useFavorites((s) => s.hydrateShop);
+  const { states: headerServiceStates } = useServiceStates();
 
   const { data: favoritesData } = useQuery<ShopFavoriteItem[]>({
     queryKey: ["/api/favorites"],
@@ -803,11 +827,11 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {[
-              { id: "shop", label: "SHOP", icon: ShoppingBag, href: "/products" },
-              { id: "print", label: "PRINT", icon: Printer, href: "/print" },
-              { id: "barista", label: "BARISTA", icon: Coffee, href: "/barista" },
-              { id: "marketing", label: "MARKETING", icon: Megaphone, href: "/marketing" },
-            ].map((svc) => {
+              { id: "shop", label: "SHOP", icon: ShoppingBag, href: "/products", service: null },
+              { id: "print", label: "PRINT", icon: Printer, href: "/print", service: "PRINTING" as const },
+              { id: "barista", label: "BARISTA", icon: Coffee, href: "/barista", service: "BARISTA" as const },
+              { id: "marketing", label: "MARKETING", icon: Megaphone, href: "/marketing", service: "MARKETING" as const },
+            ].filter((svc) => !svc.service || headerServiceStates[svc.service] !== "HIDDEN").map((svc) => {
               const isActive = location.startsWith("/" + svc.id) || (svc.href === "/products" && (location === "/products" || location.startsWith("/products")));
               return (
                 <Link key={svc.id} href={svc.href}>

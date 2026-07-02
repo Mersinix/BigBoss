@@ -97,19 +97,12 @@ const ProtectedRoute = ({
   return <Component />;
 };
 
-const SERVICE_LABELS: Record<ServiceKey, string> = {
-  PRINTING: "PRINT",
-  MARKETING: "MARKETING",
-  BARISTA: "BARISTA",
-};
-
 function GatedServiceRoute({ service, component: Component }: { service: ServiceKey; component: any }) {
   const { states, isLoading } = useServiceStates();
   if (isLoading) return <Spinner />;
   const state = states[service];
   if (state === "HIDDEN") return <NotFound />;
-  if (state === "COMING_SOON") return <ComingSoonPage label={SERVICE_LABELS[service]} />;
-  return <Component />;
+  return <Component comingSoon={state === "COMING_SOON"} />;
 }
 
 function SmartDashboard() {

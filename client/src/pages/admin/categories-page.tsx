@@ -128,6 +128,30 @@ function CategoriesTab() {
   const openAdd = () => { setEditing(null); setForm({ name: "", icon: "", description: "", isActive: true }); setDialogOpen(true); };
   const openEdit = (c: CategoryWithCount) => { setEditing(c); setForm({ name: c.name, icon: c.icon ?? "", description: c.description ?? "", isActive: c.isActive }); setDialogOpen(true); };
 
+  const [reordering, setReordering] = useState(false);
+
+  const sortedCats = useMemo(() =>
+    [...cats].sort((a, b) => ((a.displayOrder ?? 0) || a.id) - ((b.displayOrder ?? 0) || b.id)),
+    [cats]
+  );
+
+  const moveCategory = async (idx: number, dir: "up" | "down") => {
+    const targetIdx = dir === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= sortedCats.length || reordering) return;
+    setReordering(true);
+    try {
+      const normalized = sortedCats.map((c, i) => ({ id: c.id, order: i + 1 }));
+      [normalized[idx].order, normalized[targetIdx].order] = [normalized[targetIdx].order, normalized[idx].order];
+      await Promise.all([
+        apiRequest("PATCH", `/api/categories/${normalized[idx].id}`, { displayOrder: normalized[idx].order }),
+        apiRequest("PATCH", `/api/categories/${normalized[targetIdx].id}`, { displayOrder: normalized[targetIdx].order }),
+      ]);
+      invalidateCats();
+    } finally {
+      setReordering(false);
+    }
+  };
+
   const handleSave = () => {
     if (!form.name.trim()) return toast({ title: "Name is required", variant: "destructive" });
     if (isDuplicate(form.name)) return toast({ title: "A category with this name already exists", variant: "destructive" });
@@ -148,6 +172,8 @@ function CategoriesTab() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16" />
+                <TableHead className="w-24 text-center">Order</TableHead>
                 <TableHead>Icon</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
@@ -155,12 +181,24 @@ function CategoriesTab() {
                 <TableHead className="text-center">Products</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created By</TableHead>
-                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cats.map(c => (
+              {sortedCats.map((c, idx) => (
                 <TableRow key={c.id} data-testid={`row-category-${c.id}`} className={!c.isActive ? "opacity-60" : ""}>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(c)} data-testid={`button-edit-cat-${c.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(c)} data-testid={`button-delete-cat-${c.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <Button size="icon" variant="ghost" className="h-6 w-6" disabled={idx === 0 || reordering} onClick={() => moveCategory(idx, "up")} data-testid={`button-order-up-${c.id}`}><ChevronUp className="w-3.5 h-3.5" /></Button>
+                      <span className="text-xs font-mono text-muted-foreground">{idx + 1}</span>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" disabled={idx === sortedCats.length - 1 || reordering} onClick={() => moveCategory(idx, "down")} data-testid={`button-order-down-${c.id}`}><ChevronDown className="w-3.5 h-3.5" /></Button>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-xl">{c.icon || <Folder className="w-5 h-5 text-muted-foreground" />}</TableCell>
                   <TableCell className="font-medium">{c.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{c.description || "—"}</TableCell>
@@ -170,16 +208,10 @@ function CategoriesTab() {
                     <ActiveToggle active={c.isActive} onChange={v => toggleActive.mutate({ id: c.id, isActive: v })} />
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{c.createdBy || "—"}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 justify-end">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(c)} data-testid={`button-edit-cat-${c.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(c)} data-testid={`button-delete-cat-${c.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))}
               {cats.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No categories yet. Add one to get started.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No categories yet. Add one to get started.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -323,18 +355,24 @@ function SubCategoriesTab() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16" />
                 <TableHead className="w-12">Icon</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Parent Category</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created By</TableHead>
-                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map(s => (
                 <TableRow key={s.id} data-testid={`row-subcat-${s.id}`} className={!s.isActive ? "opacity-60" : ""}>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-subcat-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(s)} data-testid={`button-delete-subcat-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-xl">
                     {(s as any).icon ? <span>{(s as any).icon}</span> : <Layers className="w-4 h-4 text-muted-foreground" />}
                   </TableCell>
@@ -349,12 +387,6 @@ function SubCategoriesTab() {
                     <ActiveToggle active={s.isActive} onChange={v => toggleActive.mutate({ id: s.id, isActive: v })} />
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{s.createdBy || "—"}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 justify-end">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-subcat-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(s)} data-testid={`button-delete-subcat-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))}
               {filtered.length === 0 && (
@@ -588,6 +620,7 @@ function TaxonomyCrudTab({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16" />
                 <TableHead className="w-12">Icon</TableHead>
                 <TableHead>Name</TableHead>
                 {extraFields?.map(f => <TableHead key={f.key}>{f.label}</TableHead>)}
@@ -595,12 +628,17 @@ function TaxonomyCrudTab({
                 <TableHead className="text-center">Products</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created By</TableHead>
-                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredItems.map(item => (
                 <TableRow key={item.id} data-testid={`row-${testPrefix}-${item.id}`} className={!item.isActive ? "opacity-60" : ""}>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(item)} data-testid={`button-edit-${testPrefix}-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(item)} data-testid={`button-delete-${testPrefix}-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-xl">
                     {item.icon ? <span>{item.icon}</span> : <Icon className="w-4 h-4 text-muted-foreground" />}
                   </TableCell>
@@ -623,12 +661,6 @@ function TaxonomyCrudTab({
                     <ActiveToggle active={item.isActive} onChange={v => toggleActive.mutate({ id: item.id, isActive: v })} />
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{item.createdBy || "—"}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 justify-end">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(item)} data-testid={`button-edit-${testPrefix}-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(item)} data-testid={`button-delete-${testPrefix}-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))}
               {filteredItems.length === 0 && (

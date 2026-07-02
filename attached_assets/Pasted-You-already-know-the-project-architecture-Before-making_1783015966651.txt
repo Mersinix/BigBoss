@@ -1,0 +1,97 @@
+You already know the project architecture. Before making any changes, analyze the current implementation of **Admin → Category → Category Management**. Reuse the existing components, tables, actions, validations, and synchronization mechanisms whenever possible.
+
+Do **not** change the visual identity of the application. Keep the current design, spacing, typography, colors, animations, table layout, and modal styles. Do **not** modify business logic, APIs, permissions, or database structure unless it is absolutely necessary.
+
+All updates must remain synchronized in real time without requiring a page refresh.
+
+---
+
+# Scope
+
+Only implement the changes described below.
+
+---
+
+# 1. Move the Actions column
+
+Keep the existing table exactly as it is.
+
+The only change is to move the **Actions** column.
+
+Instead of being at the end of the table, it should become the **first column**, before the Icon column.
+
+Apply this consistently to every taxonomy table:
+
+* Categories
+* SubCategories
+* Flavors
+* Sizes
+* Brands
+
+Do not remove any existing actions.
+
+Do not redesign the table.
+
+Only reposition the Actions column to make administration easier.
+
+---
+
+# 2. Add Category Display Order
+
+This feature applies **only to Categories**.
+
+Add a new column that allows the administrator to define the display order of categories.
+
+The administrator should be able to organize categories from:
+
+1
+2
+3
+...
+N
+
+This order determines how categories are displayed throughout the Coffee Owner experience.
+
+Requirements:
+
+* Categories must always appear according to this order.
+* The administrator can change the order at any time.
+* Any change should immediately update the Coffee Owner interface without requiring a refresh.
+* Existing categories continue working normally.
+* Category editing must remain unchanged.
+
+Do **not** add this feature to:
+
+* SubCategories
+* Flavors
+* Sizes
+* Brands
+
+---
+
+# Preserve Existing Functionality
+
+Do not modify:
+
+* Existing CRUD behavior
+* Existing APIs
+* Existing synchronization
+* Existing validations
+* Existing UI components
+* Existing page layout
+
+Only implement the requested improvements.
+
+---
+
+# Final Validation
+
+Before finishing, verify that:
+
+* The Actions column is now the first column in every taxonomy table.
+* Only Categories have the new display order column.
+* Category ordering immediately affects the Coffee Owner category display.
+* Category order can be changed at any time.
+* All synchronization works without refreshing.
+* No visual regressions have been introduced.
+* Desktop, tablet, and mobile layouts continue to work correctly.

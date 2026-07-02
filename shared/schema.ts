@@ -125,6 +125,7 @@ export const categories = pgTable("categories", {
   icon: text("icon"),
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
+  displayOrder: integer("display_order").notNull().default(0),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

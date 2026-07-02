@@ -20,7 +20,7 @@ import {
   type MarketplaceProduct, type MarketplaceListing, type MarketplaceVariant,
   type CreateOrderItem, type BillingInfo, type CreateOrderItemInput,
 } from "@shared/schema";
-import { eq, and, inArray, ne, sql, notInArray } from "drizzle-orm";
+import { eq, and, inArray, ne, sql, notInArray, asc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -544,8 +544,8 @@ export class DatabaseStorage implements IStorage {
 
   async getCategories(opts?: { includeAll?: boolean }): Promise<CategoryWithCount[]> {
     const cats = opts?.includeAll
-      ? await db.select().from(categories)
-      : await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true)));
+      ? await db.select().from(categories).orderBy(asc(categories.displayOrder), asc(categories.id))
+      : await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true))).orderBy(asc(categories.displayOrder), asc(categories.id));
     const subs = await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
     const prods = await db.select().from(products);
     return cats.map((c) => ({

@@ -28,6 +28,8 @@ export interface IStorage {
   getUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserStatus(id: number, status: 'pending' | 'approved' | 'rejected'): Promise<User>;
+  updateUser(id: number, data: Partial<any>): Promise<User>;
+  deleteUser(id: number): Promise<void>;
   updateUserLocation(id: number, loc: { address: string; lat: string; lng: string; placeId: string; details?: import("@shared/schema").AddressDetails }): Promise<User>;
   updateUserProfile(id: number, updates: { name?: string; phone?: string; email?: string }): Promise<User>;
   updateUserBilling(id: number, billing: BillingInfo): Promise<User>;
@@ -178,6 +180,15 @@ export class DatabaseStorage implements IStorage {
   async updateUserStatus(id: number, status: 'pending' | 'approved' | 'rejected') {
     const [updated] = await db.update(users).set({ status }).where(eq(users.id, id)).returning();
     return updated;
+  }
+
+  async updateUser(id: number, data: Partial<any>) {
+    const [updated] = await db.update(users).set(data).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async deleteUser(id: number) {
+    await db.delete(users).where(eq(users.id, id));
   }
 
   async updateUserLocation(id: number, loc: { address: string; lat: string; lng: string; placeId: string; details?: import("@shared/schema").AddressDetails }) {

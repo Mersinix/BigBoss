@@ -524,6 +524,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
+  app.post("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const { name, email, password, role, phone, governorates, printCategories, marketingCategories, categories } = req.body;
+      if (!name || !email || !password || !role) return res.status(400).json({ message: "name, email, password and role are required" });
+      const existing = await storage.getUserByEmail(email);
+      if (existing) return res.status(400).json({ message: "Email already exists" });
+      if (phone) {
+        const existingPhone = await storage.getUserByPhone(phone);
+        if (existingPhone) return res.status(400).json({ message: "Phone number already in use" });
+      }
+      const user = await storage.createUser({
+        name, email, password, role, status: 'approved',
+        phone: phone ?? null,
+        governorates: governorates ?? null,
+        printCategories: printCategories ?? null,
+        marketingCategories: marketingCategories ?? null,
+        categories: categories ?? null,
+      } as any);
+      res.status(201).json(user);
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { name, email, phone, governorates, printCategories, marketingCategories, categories, locationAddress } = req.body;
+      const updates: any = {};
+      if (name !== undefined) updates.name = name;
+      if (email !== undefined) updates.email = email;
+      if (phone !== undefined) updates.phone = phone;
+      if (governorates !== undefined) updates.governorates = governorates;
+      if (printCategories !== undefined) updates.printCategories = printCategories;
+      if (marketingCategories !== undefined) updates.marketingCategories = marketingCategories;
+      if (categories !== undefined) updates.categories = categories;
+      if (locationAddress !== undefined) updates.locationAddress = locationAddress;
+      const updated = await storage.updateUser(id, updates);
+      res.json(updated);
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteUser(parseInt(req.params.id));
+      res.json({ message: "Deleted" });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.get("/api/admin/supplier-mappings", requireAdmin, async (req, res) => {
     try {
       const allSuppliers = await db.select().from(users).where(eq(users.role, 'SUPPLIER'));

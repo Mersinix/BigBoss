@@ -1,0 +1,131 @@
+You already know the project architecture. Before making any changes, analyze the current implementation of **Admin → Users**. Reuse the existing components, forms, actions, validations, and synchronization mechanisms whenever possible.
+
+Do **not** change the visual identity of the application. Keep the current design, spacing, typography, colors, animations, table layout, and modal styles. Do **not** modify business logic, APIs, permissions, authentication, approval workflow, or database structure unless absolutely necessary.
+
+All updates must remain synchronized in real time without requiring a page refresh.
+
+---
+
+# Scope
+
+Only implement the changes described below.
+
+---
+
+# 1. Add Delete User action
+
+Keep the current Users page exactly as it is.
+
+Add one additional action to every user:
+
+**Delete User**
+
+The administrator should be able to permanently remove a user.
+
+Keep the confirmation flow consistent with the rest of the application.
+
+Do not change the existing actions.
+
+---
+
+# 2. Improve the User Details modal
+
+Currently clicking on a user's name opens a modal.
+
+Update this modal so it becomes the complete user management view.
+
+The administrator should be able to:
+
+* View all available user information.
+* Edit any editable information.
+* Add missing information.
+* Save changes.
+* Immediately see those changes reflected everywhere in the application.
+
+The modal should become the primary place for managing a user.
+
+Do not redesign it.
+
+Keep the current visual style.
+
+---
+
+# 3. Add all user actions inside the modal
+
+The User Details modal should also contain all administrative actions.
+
+The administrator should be able to perform directly from the modal:
+
+* Approve
+* Put On Hold
+* Reject
+* Delete
+
+The modal and the Users table must always stay synchronized.
+
+Any action performed inside the modal should immediately update the table without requiring a refresh.
+
+---
+
+# 4. Synchronize the Add User modal
+
+The current Add User modal no longer matches the latest registration workflow.
+
+Update it so it is fully aligned with the current registration form.
+
+The administrator should be able to create any supported account type using the same fields and workflow as the current registration process.
+
+Reuse the existing registration experience.
+
+Do not introduce a separate version of the form.
+
+Keep validations and behavior consistent.
+
+---
+
+# Preserve Existing Functionality
+
+Do not modify:
+
+* Authentication
+* Registration logic
+* Approval workflow
+* Roles and permissions
+* Existing APIs
+* Existing validations
+* Existing page layouts
+* Existing UI components
+
+Only extend the requested functionality.
+
+---
+
+# Synchronization
+
+Verify that every modification updates immediately across the application.
+
+Changes should instantly be reflected in:
+
+* Users table
+* User Details modal
+* User status
+* User information
+* Related pages
+
+No manual refresh should ever be required.
+
+---
+
+# Final Validation
+
+Before finishing, verify that:
+
+* Every user now has a Delete action.
+* The User Details modal displays all available information.
+* User information can be edited directly from the modal.
+* All edits synchronize immediately across the application.
+* The modal contains all administrative actions (Approve, Put On Hold, Reject, Delete).
+* The Add User modal matches the latest registration workflow.
+* No existing functionality has been broken.
+* No visual regressions have been introduced.
+* Desktop, tablet, and mobile layouts continue to work correctly.

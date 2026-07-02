@@ -12,6 +12,8 @@ const CATALOG_EVENTS = [
 
 const TAXONOMY_EVENTS = ["taxonomy_updated"];
 
+const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
+
 function invalidateSupplierMappingQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] });
   qc.invalidateQueries({ queryKey: ["/api/admin/supplier-mappings"] });
@@ -52,6 +54,9 @@ export function useRealtime() {
               qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
               invalidateMarketplace(qc);
             }
+          }
+          if (SYSTEM_SERVICES_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/system-services"] });
           }
           if (TAXONOMY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/categories"] });

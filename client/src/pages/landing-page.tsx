@@ -25,14 +25,15 @@ import { useToast } from "@/hooks/use-toast";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { useSearchLocationStore, formatLocationLabel, pickedToGeoLocation } from "@/store/search-location-store";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useServiceStates, ROLE_TO_SERVICE, type ServiceKey } from "@/hooks/use-service-states";
 
 // ── Services & marketing data ─────────────────────────────────────────────────
 
 const SERVICES = [
   { id: "shop", label: "SHOP", icon: ShoppingBag, href: "/products", active: true },
-  { id: "print", label: "PRINT", icon: Printer, href: "/print", active: true },
-  { id: "barista", label: "BARISTA", icon: Coffee, href: "/barista", active: true },
-  { id: "marketing", label: "MARKETING", icon: Megaphone, href: "/marketing", active: true },
+  { id: "print", label: "PRINT", icon: Printer, href: "/print", active: true, service: "PRINTING" as ServiceKey },
+  { id: "barista", label: "BARISTA", icon: Coffee, href: "/barista", active: true, service: "BARISTA" as ServiceKey },
+  { id: "marketing", label: "MARKETING", icon: Megaphone, href: "/marketing", active: true, service: "MARKETING" as ServiceKey },
 ];
 
 const MARKETING_SERVICES = [
@@ -334,6 +335,8 @@ export default function LandingPage() {
 
   const loginForm = useForm({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
+  const { states: serviceStates } = useServiceStates();
+
   const locationLabel = searchLocation?.address
     ? formatLocationLabel(searchLocation.address)
     : "Tunis";
@@ -492,6 +495,25 @@ export default function LandingPage() {
   const roleConfig = ROLES.find((r) => r.id === selectedRole) ?? ROLES[0];
   const activeCategories = categories.filter((c) => (c.productCount ?? 0) > 0);
 
+  // Filter roles: hidden AND coming-soon services must not appear in register flow
+  const filteredRoles = ROLES.filter((role) => {
+    const service = ROLE_TO_SERVICE[role.id];
+    if (!service) return true;
+    return serviceStates[service] === "VISIBLE";
+  });
+
+  const visibleServices = SERVICES.filter((svc) => !svc.service || serviceStates[svc.service] !== "HIDDEN");
+  const isPrintVisible = serviceStates.PRINTING !== "HIDDEN";
+  const isMarketingVisible = serviceStates.MARKETING !== "HIDDEN";
+  const isBaristaVisible = serviceStates.BARISTA !== "HIDDEN";
+  const isPrintComingSoon = serviceStates.PRINTING === "COMING_SOON";
+  const isMarketingComingSoon = serviceStates.MARKETING === "COMING_SOON";
+  const isBaristaComingSoon = serviceStates.BARISTA === "COMING_SOON";
+
+  const goToServiceOrComingSoon = (href: string, comingSoon: boolean) => {
+    navigate(comingSoon ? `/coming-soon?service=${encodeURIComponent(href.replace("/", ""))}` : href);
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* ── Navbar ── */}
@@ -547,19 +569,27 @@ export default function LandingPage() {
           </p>
 
           <div className="flex justify-center gap-4 md:gap-8 mb-10">
-            {SERVICES.map((svc) => (
-              <button
-                key={svc.id}
-                data-testid={`button-service-${svc.id}`}
-                onClick={() => navigate(svc.href)}
-                className="flex flex-col items-center gap-2 group transition-transform hover:-translate-y-1 cursor-pointer"
-              >
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white shadow-lg flex items-center justify-center group-hover:shadow-xl transition-shadow">
-                  <svc.icon className="w-7 h-7 md:w-9 md:h-9 text-amber-600" />
-                </div>
-                <span className="text-white text-xs md:text-sm font-semibold tracking-wide">{svc.label}</span>
-              </button>
-            ))}
+            {visibleServices.map((svc) => {
+              const comingSoon = svc.service ? serviceStates[svc.service] === "COMING_SOON" : false;
+              return (
+                <button
+                  key={svc.id}
+                  data-testid={`button-service-${svc.id}`}
+                  onClick={() => goToServiceOrComingSoon(svc.href, comingSoon)}
+                  className="relative flex flex-col items-center gap-2 group transition-transform hover:-translate-y-1 cursor-pointer"
+                >
+                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white shadow-lg flex items-center justify-center group-hover:shadow-xl transition-shadow">
+                    <svc.icon className="w-7 h-7 md:w-9 md:h-9 text-amber-600" />
+                  </div>
+                  <span className="text-white text-xs md:text-sm font-semibold tracking-wide">{svc.label}</span>
+                  {comingSoon && (
+                    <Badge className="absolute -top-1 -right-1 bg-amber-900/80 text-white text-[9px] px-1.5 py-0 border-0">
+                      Bientôt
+                    </Badge>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <form onSubmit={handleSearch} className="max-w-xl mx-auto">
@@ -610,17 +640,19 @@ export default function LandingPage() {
       )}
 
       {/* ── PRINT Categories ── */}
+      {isPrintVisible && (
       <section className="py-14 px-4 bg-white">
         <div className="max-w-7xl mx-auto">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center flex items-center justify-center gap-2">
             Catégories <span className="text-blue-600">PRINT</span>
+            {isPrintComingSoon && <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50 text-xs">Bientôt disponible</Badge>}
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {PRINT_CATEGORIES.map((cat) => (
               <button
                 key={cat.id}
                 data-testid={`button-print-category-${cat.id}`}
-                onClick={() => navigate(`/print?categoryId=${cat.id}`)}
+                onClick={() => goToServiceOrComingSoon(`/print?categoryId=${cat.id}`, isPrintComingSoon)}
                 className="flex flex-col items-center gap-3 p-5 bg-white rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all border border-gray-100 group"
               >
                 <span className="text-3xl">{cat.icon}</span>
@@ -629,25 +661,28 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="text-center mt-8">
-            <Button onClick={() => navigate("/print")} variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50 rounded-xl" data-testid="button-see-all-print">
+            <Button onClick={() => goToServiceOrComingSoon("/print", isPrintComingSoon)} variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50 rounded-xl" data-testid="button-see-all-print">
               Voir tous les services PRINT <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
         </div>
       </section>
+      )}
 
       {/* ── MARKETING Services ── */}
+      {isMarketingVisible && (
       <section className="py-14 px-4 bg-gray-50">
         <div className="max-w-7xl mx-auto">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center flex items-center justify-center gap-2">
             Services <span className="text-purple-600">MARKETING</span>
+            {isMarketingComingSoon && <Badge variant="outline" className="border-purple-200 text-purple-600 bg-purple-50 text-xs">Bientôt disponible</Badge>}
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {MARKETING_SERVICES.map((svc) => (
               <button
                 key={svc.id}
                 data-testid={`button-marketing-service-${svc.id}`}
-                onClick={() => navigate(`/marketing?service=${svc.id}`)}
+                onClick={() => goToServiceOrComingSoon(`/marketing?service=${svc.id}`, isMarketingComingSoon)}
                 className="flex flex-col items-center gap-3 p-5 bg-white rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all border border-gray-100 group"
               >
                 <span className="text-3xl">{svc.icon}</span>
@@ -656,23 +691,26 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="text-center mt-8">
-            <Button onClick={() => navigate("/marketing")} variant="outline" className="border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl" data-testid="button-see-all-marketing">
+            <Button onClick={() => goToServiceOrComingSoon("/marketing", isMarketingComingSoon)} variant="outline" className="border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl" data-testid="button-see-all-marketing">
               Voir tous les prestataires <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
         </div>
       </section>
+      )}
 
       {/* ── BARISTA ── */}
+      {isBaristaVisible && (
       <section className="py-14 px-4 bg-white">
         <div className="max-w-7xl mx-auto">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center flex items-center justify-center gap-2">
             Services <span className="text-green-600">BARISTA</span>
+            {isBaristaComingSoon && <Badge variant="outline" className="border-green-200 text-green-600 bg-green-50 text-xs">Bientôt disponible</Badge>}
           </h2>
           <div className="grid md:grid-cols-2 gap-6">
             <button
               data-testid="button-barista-academy"
-              onClick={() => navigate("/barista?tab=academy")}
+              onClick={() => goToServiceOrComingSoon("/barista?tab=academy", isBaristaComingSoon)}
               className="flex flex-col items-start gap-4 p-8 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-left group"
             >
               <div className="w-14 h-14 bg-green-500/15 rounded-2xl flex items-center justify-center">
@@ -689,7 +727,7 @@ export default function LandingPage() {
 
             <button
               data-testid="button-barista-marketplace"
-              onClick={() => navigate("/barista?tab=marketplace")}
+              onClick={() => goToServiceOrComingSoon("/barista?tab=marketplace", isBaristaComingSoon)}
               className="flex flex-col items-start gap-4 p-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-left group"
             >
               <div className="w-14 h-14 bg-blue-500/15 rounded-2xl flex items-center justify-center">
@@ -706,6 +744,7 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── Why BigBossCoffee ── */}
       <section className="py-14 px-4 bg-white">
@@ -767,9 +806,9 @@ export default function LandingPage() {
               <h4 className="font-semibold text-white mb-4">Services</h4>
               <ul className="space-y-2 text-sm">
                 <li><button onClick={() => navigate("/products")} className="hover:text-amber-400 transition-colors">Marketplace SHOP</button></li>
-                <li><button onClick={() => navigate("/print")} className="hover:text-amber-400 transition-colors">Marketplace PRINT</button></li>
-                <li><button onClick={() => navigate("/barista")} className="hover:text-amber-400 transition-colors">Services BARISTA</button></li>
-                <li><button onClick={() => navigate("/marketing")} className="hover:text-amber-400 transition-colors">Services MARKETING</button></li>
+                {isPrintVisible && <li><button onClick={() => goToServiceOrComingSoon("/print", isPrintComingSoon)} className="hover:text-amber-400 transition-colors">Marketplace PRINT</button></li>}
+                {isBaristaVisible && <li><button onClick={() => goToServiceOrComingSoon("/barista", isBaristaComingSoon)} className="hover:text-amber-400 transition-colors">Services BARISTA</button></li>}
+                {isMarketingVisible && <li><button onClick={() => goToServiceOrComingSoon("/marketing", isMarketingComingSoon)} className="hover:text-amber-400 transition-colors">Services MARKETING</button></li>}
               </ul>
             </div>
             <div>
@@ -1037,7 +1076,7 @@ export default function LandingPage() {
           </div>
           <div className="p-5 overflow-y-auto flex-1">
             <div className="flex flex-col gap-3">
-              {ROLES.map((role) => (
+              {filteredRoles.map((role) => (
                 <button
                   key={role.id}
                   data-testid={`role-card-${role.id}`}

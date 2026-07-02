@@ -193,6 +193,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     req.session.destroy(() => res.json({ message: "Logged out" }));
   });
 
+  // ── System Management (platform service visibility) ────────────────────────
+
+  app.get("/api/system-services", async (_req, res) => {
+    try {
+      const states = await storage.getServiceStates();
+      res.json(states);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load service states" });
+    }
+  });
+
+  app.patch("/api/admin/system-services/:service", requireAdmin, async (req, res) => {
+    try {
+      const service = req.params.service as string;
+      const VALID_SERVICES = ['PRINTING', 'MARKETING', 'BARISTA'];
+      const VALID_STATES = ['VISIBLE', 'HIDDEN', 'COMING_SOON'];
+      if (!VALID_SERVICES.includes(service)) return res.status(400).json({ message: "Invalid service" });
+      const { state } = req.body;
+      if (!VALID_STATES.includes(state)) return res.status(400).json({ message: "Invalid state" });
+      const states = await storage.setServiceState(service as any, state);
+      broadcast("system_services_updated", states);
+      res.json(states);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update service state" });
+    }
+  });
+
   app.patch('/api/auth/me/billing', requireAuth, async (req, res) => {
     try {
       const billing = req.body;

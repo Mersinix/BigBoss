@@ -3,6 +3,7 @@ import {
   users, products, orders, orderItems, subOrders, supplierProductVariants,
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
+  platformServices,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
   type InsertOrder, type Order, type OrderWithDetails,
@@ -20,6 +21,7 @@ import {
   type MarketplaceProduct, type MarketplaceListing, type MarketplaceVariant,
   type CreateOrderItem, type BillingInfo, type CreateOrderItemInput,
   type ShopFavoriteItem,
+  type ServiceKey, type ServiceState, type ServiceStatesMap,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc } from "drizzle-orm";
 
@@ -122,6 +124,10 @@ export interface IStorage {
   deleteSupplierProduct(id: number, supplierId: number): Promise<boolean>;
   getAdminSupplierProducts(): Promise<(ProductWithTaxonomy & { creatorName: string })[]>;
   approveSupplierProduct(id: number, adminId: number): Promise<Product>;
+
+  // Platform services (System Management)
+  getServiceStates(): Promise<ServiceStatesMap>;
+  setServiceState(service: ServiceKey, state: ServiceState): Promise<ServiceStatesMap>;
 }
 
 // ── Taxonomy cache helper ─────────────────────────────────────────────────────
@@ -1043,6 +1049,32 @@ export class DatabaseStorage implements IStorage {
       approvedAt: new Date(),
     } as any).where(eq(products.id, id)).returning();
     return updated;
+  }
+
+  async getServiceStates(): Promise<ServiceStatesMap> {
+    const ALL_SERVICES: ServiceKey[] = ['PRINTING', 'MARKETING', 'BARISTA'];
+    const rows = await db.select().from(platformServices);
+    const map: ServiceStatesMap = { PRINTING: 'VISIBLE', MARKETING: 'VISIBLE', BARISTA: 'VISIBLE' };
+    for (const row of rows) {
+      map[row.service as ServiceKey] = row.state as ServiceState;
+    }
+    const missing = ALL_SERVICES.filter((s) => !rows.some((r) => r.service === s));
+    if (missing.length) {
+      for (const service of missing) {
+        await db.insert(platformServices).values({ service, state: 'VISIBLE' }).onConflictDoNothing();
+      }
+    }
+    return map;
+  }
+
+  async setServiceState(service: ServiceKey, state: ServiceState): Promise<ServiceStatesMap> {
+    const existing = await db.select().from(platformServices).where(eq(platformServices.service, service));
+    if (existing.length) {
+      await db.update(platformServices).set({ state, updatedAt: new Date() }).where(eq(platformServices.service, service));
+    } else {
+      await db.insert(platformServices).values({ service, state });
+    }
+    return this.getServiceStates();
   }
 }
 

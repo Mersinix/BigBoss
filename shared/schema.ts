@@ -9,6 +9,8 @@ export const userRoleEnum = pgEnum('user_role', [
 ]);
 export const orderStatusEnum = pgEnum('order_status', ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'IN_DELIVERY', 'DELIVERED', 'CANCELLED']);
 export const userAccountStatusEnum = pgEnum('user_account_status', ['pending', 'approved', 'rejected']);
+export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA']);
+export const serviceStateEnum = pgEnum('service_state', ['VISIBLE', 'HIDDEN', 'COMING_SOON']);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -219,6 +221,14 @@ export const supplierSubCategories = pgTable("supplier_sub_categories", {
   subCategoryId: integer("sub_category_id").notNull(),
 });
 
+// Platform services — admin-controlled global visibility (System Management)
+export const platformServices = pgTable("platform_services", {
+  id: serial("id").primaryKey(),
+  service: serviceKeyEnum("service").notNull().unique(),
+  state: serviceStateEnum("state").notNull().default('VISIBLE'),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Favorites — persisted per-user shop (product) favorites
 export const favorites = pgTable("favorites", {
   id: serial("id").primaryKey(),
@@ -321,6 +331,7 @@ export const insertSizeSchema = createInsertSchema(sizes).omit({ id: true, creat
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSupplierProductListingSchema = createInsertSchema(supplierProductListings).omit({ id: true, createdAt: true });
 export const insertFavoriteSchema = createInsertSchema(favorites).omit({ id: true, createdAt: true });
+export const insertPlatformServiceSchema = createInsertSchema(platformServices).omit({ id: true, updatedAt: true });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -365,6 +376,12 @@ export type InsertSupplierProductListing = z.infer<typeof insertSupplierProductL
 
 export type Favorite = typeof favorites.$inferSelect;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
+
+export type PlatformService = typeof platformServices.$inferSelect;
+export type InsertPlatformService = z.infer<typeof insertPlatformServiceSchema>;
+export type ServiceKey = 'PRINTING' | 'MARKETING' | 'BARISTA';
+export type ServiceState = 'VISIBLE' | 'HIDDEN' | 'COMING_SOON';
+export type ServiceStatesMap = Record<ServiceKey, ServiceState>;
 
 export type ShopFavoriteItem = {
   id: number;

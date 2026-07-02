@@ -2,3 +2,4 @@
 - [Three-tier access pattern](three-tier-access.md) — Visitor/Pending/Approved; server hasCommercialAccess() and client computeAccess() mirror each other for marketplace commercial data.
 - [Supplier category-products coupling](supplier-category-products.md) — My Categories selection (Zustand store) drives product visibility in Products page; real-time sync via WebSocket on /ws path.
 - [Partial favorites DB persistence](favorites-partial-persistence.md) — pattern for adding DB persistence to one favorites category only, leaving others as local zustand state.
+- [Global service visibility gating](service-visibility-gating.md) — single admin-controlled Visible/Hidden/ComingSoon state per service must be enforced consistently across nav, landing, register, and routing.

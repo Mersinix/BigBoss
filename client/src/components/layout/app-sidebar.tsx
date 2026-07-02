@@ -9,7 +9,7 @@ import {
   Folder, Warehouse, ClipboardCheck, RotateCcw,
   MapPin, Wallet, Tag, Ticket, HelpCircle,
   Printer, Megaphone, GraduationCap, Image, Briefcase,
-  BookOpen, UserCheck
+  BookOpen, UserCheck, Sliders
 } from "lucide-react";
 import {
   Sidebar,
@@ -91,6 +91,7 @@ export function AppSidebar() {
             { title: "Delivery", url: "/admin/delivery", icon: Truck },
             { title: "Payments", url: "/admin/payments", icon: DollarSign },
             { title: "Invoices", url: "/admin/invoices", icon: FileText },
+            { title: "System Management", url: "/admin/system-management", icon: Sliders },
           ],
         },
         {

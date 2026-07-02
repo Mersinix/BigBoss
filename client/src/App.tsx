@@ -55,8 +55,11 @@ import InvoicesPage from "@/pages/admin/invoices-page";
 import AnalyticsPage from "@/pages/admin/analytics-page";
 import NotificationsPage from "@/pages/admin/notifications-page";
 import EarningsPage from "@/pages/admin/earnings-page";
+import SystemManagementPage from "@/pages/admin/system-management-page";
+import ComingSoonPage from "@/pages/coming-soon-page";
 
 import { useAuth } from "@/hooks/use-auth";
+import { useServiceStates, type ServiceKey } from "@/hooks/use-service-states";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { MarketplaceLayout } from "@/components/cafe/marketplace-layout";
 import { PendingApprovalScreen } from "@/components/auth/pending-approval-screen";
@@ -93,6 +96,21 @@ const ProtectedRoute = ({
   if (requireApproved && needsApproval(user)) return <PendingApprovalScreen />;
   return <Component />;
 };
+
+const SERVICE_LABELS: Record<ServiceKey, string> = {
+  PRINTING: "PRINT",
+  MARKETING: "MARKETING",
+  BARISTA: "BARISTA",
+};
+
+function GatedServiceRoute({ service, component: Component }: { service: ServiceKey; component: any }) {
+  const { states, isLoading } = useServiceStates();
+  if (isLoading) return <Spinner />;
+  const state = states[service];
+  if (state === "HIDDEN") return <NotFound />;
+  if (state === "COMING_SOON") return <ComingSoonPage label={SERVICE_LABELS[service]} />;
+  return <Component />;
+}
 
 function SmartDashboard() {
   const { user } = useAuth();
@@ -226,32 +244,39 @@ function Router() {
         {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceDashboard} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
       </Route>
 
-      {/* ── Service pages (publicly viewable) ── */}
+      {/* ── Service pages (publicly viewable, gated by System Management) ── */}
+      <Route path="/coming-soon">
+        {() => (
+          <MarketplaceLayout>
+            <ComingSoonPage />
+          </MarketplaceLayout>
+        )}
+      </Route>
       <Route path="/print/:productId">
         {() => (
           <MarketplaceLayout>
-            <PrintDetailPage />
+            <GatedServiceRoute service="PRINTING" component={PrintDetailPage} />
           </MarketplaceLayout>
         )}
       </Route>
       <Route path="/print">
         {() => (
           <MarketplaceLayout>
-            <PrintPage />
+            <GatedServiceRoute service="PRINTING" component={PrintPage} />
           </MarketplaceLayout>
         )}
       </Route>
       <Route path="/barista">
         {() => (
           <MarketplaceLayout>
-            <BaristaPage />
+            <GatedServiceRoute service="BARISTA" component={BaristaPage} />
           </MarketplaceLayout>
         )}
       </Route>
       <Route path="/marketing">
         {() => (
           <MarketplaceLayout>
-            <MarketingPage />
+            <GatedServiceRoute service="MARKETING" component={MarketingPage} />
           </MarketplaceLayout>
         )}
       </Route>
@@ -325,6 +350,9 @@ function Router() {
       </Route>
       <Route path="/admin/category-requests">
         {() => (<DashboardLayout><ProtectedRoute component={CategoryRequestsPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      <Route path="/admin/system-management">
+        {() => (<DashboardLayout><ProtectedRoute component={SystemManagementPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
 
       <Route component={NotFound} />

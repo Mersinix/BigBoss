@@ -401,6 +401,250 @@ function ProductFormModal({
   );
 }
 
+// ── Supplier Product Edit Modal ─────────────────────────────────────────────────
+
+function SupplierProductEditModal({
+  product, cats, subs, flavs, szs, brnds, onClose, onSave, isSaving, onApprove, isApproving, onDelete,
+}: {
+  product: ProductWithTaxonomy & { creatorName?: string; status?: string };
+  cats: CategoryWithCount[];
+  subs: SubCategoryWithDetails[];
+  flavs: FlavorWithCount[];
+  szs: SizeWithCount[];
+  brnds: BrandWithCount[];
+  onClose: () => void;
+  onSave: (data: any) => void;
+  isSaving: boolean;
+  onApprove: () => void;
+  isApproving: boolean;
+  onDelete: () => void;
+}) {
+  const { toast } = useToast();
+
+  const [form, setForm] = useState<ProductForm>(() => {
+    const flavorIds = product.flavorIds?.length
+      ? product.flavorIds
+      : (product.flavorId ? [product.flavorId] : []);
+    const sizeIds = product.sizeIds?.length
+      ? product.sizeIds
+      : (product.sizeId ? [product.sizeId] : []);
+    return {
+      name: product.name,
+      description: product.description ?? "",
+      imageUrl: product.imageUrl ?? "",
+      categoryId: product.categoryId ? String(product.categoryId) : "",
+      subCategoryId: product.subCategoryId ? String(product.subCategoryId) : "",
+      flavorIds,
+      sizeIds,
+      brandId: product.brandId ? String(product.brandId) : "",
+    };
+  });
+
+  const setField = (key: keyof ProductForm, value: any) => {
+    setForm(prev => {
+      const next = { ...prev, [key]: value };
+      if (key === "categoryId") {
+        next.subCategoryId = "";
+        next.flavorIds = [];
+        next.sizeIds = [];
+        next.brandId = "";
+      }
+      if (key === "subCategoryId") {
+        next.flavorIds = [];
+        next.sizeIds = [];
+        next.brandId = "";
+      }
+      return next;
+    });
+  };
+
+  const filteredSubs = useMemo(() =>
+    form.categoryId ? subs.filter(s => String(s.categoryId) === form.categoryId) : subs,
+    [form.categoryId, subs]
+  );
+
+  const filterTaxBySubCat = <T extends { subCategoryIds?: number[] | null }>(items: T[], subId: number | null, catId: number | null, catSubIds: number[]): T[] => {
+    if (subId) {
+      const withSubCats = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubCats.length > 0) return items.filter(i => (i.subCategoryIds ?? []).includes(subId));
+    } else if (catId) {
+      const withSubCats = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubCats.length > 0) return items.filter(i => (i.subCategoryIds ?? []).some(sid => catSubIds.includes(sid)));
+    }
+    return items;
+  };
+
+  const subId = form.subCategoryId ? parseInt(form.subCategoryId) : null;
+  const catId = form.categoryId ? parseInt(form.categoryId) : null;
+  const catSubIds = useMemo(() => subs.filter(s => String(s.categoryId) === form.categoryId).map(s => s.id), [subs, form.categoryId]);
+
+  const filteredFlavs = useMemo(() => filterTaxBySubCat(flavs, subId, catId, catSubIds), [flavs, subId, catId, catSubIds]);
+  const filteredSzs = useMemo(() => filterTaxBySubCat(szs, subId, catId, catSubIds), [szs, subId, catId, catSubIds]);
+  const filteredBrnds = useMemo(() => filterTaxBySubCat(brnds, subId, catId, catSubIds), [brnds, subId, catId, catSubIds]);
+
+  const handleSave = () => {
+    if (!form.name.trim()) return toast({ title: "Name is required", variant: "destructive" });
+    const flavorId = form.flavorIds[0] ?? null;
+    const sizeId = form.sizeIds[0] ?? null;
+    onSave({
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      imageUrl: form.imageUrl.trim() || null,
+      categoryId: form.categoryId || null,
+      subCategoryId: form.subCategoryId || null,
+      flavorId,
+      sizeId,
+      brandId: form.brandId || null,
+      flavorIds: form.flavorIds.length > 0 ? form.flavorIds : null,
+      sizeIds: form.sizeIds.length > 0 ? form.sizeIds : null,
+      category: cats.find(c => String(c.id) === form.categoryId)?.name ?? "",
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Supplier Product</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Product Name *</Label>
+              <Input data-testid="input-sp-edit-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="e.g. Lavazza Super Crema 1kg" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Description</Label>
+              <Input data-testid="input-sp-edit-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brief description of the product" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Image URL</Label>
+              <Input data-testid="input-sp-edit-image" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://..." />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select value={form.categoryId} onValueChange={v => setField("categoryId", v === "__none__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-sp-edit-category"><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sub-category</Label>
+                <Select value={form.subCategoryId} onValueChange={v => setField("subCategoryId", v === "__none__" ? "" : v)} disabled={!form.categoryId}>
+                  <SelectTrigger data-testid="select-sp-edit-subcat"><SelectValue placeholder={form.categoryId ? "Select…" : "Pick category first"} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {filteredSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <MultiSelectList
+              label="Flavors"
+              items={filteredFlavs}
+              selected={form.flavorIds}
+              onChange={ids => setField("flavorIds", ids)}
+              hint={form.subCategoryId ? "Filtered by selected sub-category" : form.categoryId ? "Filtered by selected category" : undefined}
+            />
+
+            <MultiSelectList
+              label="Sizes"
+              items={filteredSzs}
+              selected={form.sizeIds}
+              onChange={ids => setField("sizeIds", ids)}
+              hint={form.subCategoryId ? "Filtered by selected sub-category" : form.categoryId ? "Filtered by selected category" : undefined}
+            />
+
+            <div className="space-y-1.5">
+              <Label>Brand</Label>
+              <Select value={form.brandId} onValueChange={v => setField("brandId", v === "__none__" ? "" : v)}>
+                <SelectTrigger data-testid="select-sp-edit-brand"><SelectValue placeholder="Select…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {filteredBrnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(form.categoryId || form.subCategoryId) && (
+              <p className="text-xs text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                Flavor and Size options are filtered by sub-category assignment. Select a sub-category to narrow results further.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Preview</Label>
+              <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
+                <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+                  {form.imageUrl ? (
+                    <img src={form.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  ) : (
+                    <Package className="w-16 h-16 text-muted-foreground opacity-40" />
+                  )}
+                </div>
+                <div className="p-4 space-y-2">
+                  <p className="font-semibold text-lg leading-tight">{form.name || "Product name"}</p>
+                  {form.description && <p className="text-sm text-muted-foreground line-clamp-3">{form.description}</p>}
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {form.categoryId && <Badge variant="secondary" className="text-xs">{cats.find(c => String(c.id) === form.categoryId)?.name}</Badge>}
+                    {form.subCategoryId && <Badge variant="outline" className="text-xs">{filteredSubs.find(s => String(s.id) === form.subCategoryId)?.name}</Badge>}
+                    {form.brandId && <Badge className="text-xs">{filteredBrnds.find(b => String(b.id) === form.brandId)?.name}</Badge>}
+                  </div>
+                  {(form.flavorIds.length > 0 || form.sizeIds.length > 0) && (
+                    <div className="flex flex-wrap gap-1">
+                      {filteredFlavs.filter(f => form.flavorIds.includes(f.id)).map(f => (
+                        <Badge key={f.id} className="text-xs bg-pink-100 text-pink-700 border-0">{f.name}</Badge>
+                      ))}
+                      {filteredSzs.filter(s => form.sizeIds.includes(s.id)).map(s => (
+                        <Badge key={s.id} className="text-xs bg-amber-100 text-amber-700 border-0">{s.name}</Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">Status</p>
+              <SpStatusBadge status={product.status ?? ""} />
+            </div>
+            {product.creatorName && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Submitted by</p>
+                <p className="text-sm font-medium">{product.creatorName}</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 justify-end pt-4 border-t mt-4">
+          <Button variant="destructive" onClick={onDelete} data-testid={`button-delete-modal-${product.id}`}>
+            <Trash2 className="w-4 h-4 mr-2" />Delete Product
+          </Button>
+          {product.status !== 'ACTIVE' && (
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={onApprove} disabled={isApproving} data-testid={`button-approve-modal-${product.id}`}>
+              <CheckCircle2 className="w-4 h-4 mr-2" />{isApproving ? "Approving…" : "Approve Product"}
+            </Button>
+          )}
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={isSaving || !form.name.trim()} data-testid="button-save-sp-product">
+            {isSaving ? "Saving…" : "Save Changes"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Supplier Products Section ──────────────────────────────────────────────────
 
 type SpFilters = {
@@ -454,6 +698,17 @@ function SupplierProductsSection({
       setSelectedProduct(null);
     },
     onError: () => toast({ title: "Error approving", variant: "destructive" }),
+  });
+
+  const updateSpMut = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/admin/supplier-products/${id}`, data),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/supplier-products"] });
+      qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      invalidateMarketplace(qc);
+      toast({ title: "Product updated" });
+    },
+    onError: () => toast({ title: "Error updating", variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
@@ -719,53 +974,22 @@ function SupplierProductsSection({
         </div>
       )}
 
-      {/* Product Detail Modal */}
+      {/* Product Detail / Edit Modal */}
       {selectedProduct && (
-        <Dialog open={!!selectedProduct} onOpenChange={() => setSelectedProduct(null)}>
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Product Details</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-2">
-              <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
-                <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
-                  {selectedProduct.imageUrl ? (
-                    <img src={selectedProduct.imageUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <Package className="w-16 h-16 text-muted-foreground opacity-40" />
-                  )}
-                </div>
-                <div className="p-4 space-y-2">
-                  <p className="font-semibold text-lg leading-tight">{selectedProduct.name}</p>
-                  {selectedProduct.description && <p className="text-sm text-muted-foreground">{selectedProduct.description}</p>}
-                  <TaxBadges product={selectedProduct} />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">Status</p>
-                  <SpStatusBadge status={(selectedProduct as any).status} />
-                </div>
-                {(selectedProduct as any).creatorName && (
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Submitted by</p>
-                    <p className="text-sm font-medium">{(selectedProduct as any).creatorName}</p>
-                  </div>
-                )}
-                <div className="pt-2 space-y-2">
-                  {(selectedProduct as any).status !== 'ACTIVE' && (
-                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMut.mutate(selectedProduct.id)} disabled={approveMut.isPending} data-testid={`button-approve-modal-${selectedProduct.id}`}>
-                      <CheckCircle2 className="w-4 h-4 mr-2" />{approveMut.isPending ? "Approving…" : "Approve Product"}
-                    </Button>
-                  )}
-                  <Button variant="destructive" className="w-full" onClick={() => { setSelectedProduct(null); setDeleteTarget(selectedProduct); }} data-testid={`button-delete-modal-${selectedProduct.id}`}>
-                    <Trash2 className="w-4 h-4 mr-2" />Delete Product
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <SupplierProductEditModal
+          product={selectedProduct}
+          cats={cats}
+          subs={subs}
+          flavs={flavs}
+          szs={szs}
+          brnds={brnds}
+          onClose={() => setSelectedProduct(null)}
+          onSave={(data) => updateSpMut.mutate({ id: selectedProduct.id, data })}
+          isSaving={updateSpMut.isPending}
+          onApprove={() => approveMut.mutate(selectedProduct.id)}
+          isApproving={approveMut.isPending}
+          onDelete={() => { setSelectedProduct(null); setDeleteTarget(selectedProduct); }}
+        />
       )}
 
       {/* Delete confirm */}

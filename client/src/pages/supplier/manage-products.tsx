@@ -1148,17 +1148,7 @@ function AdminProductsTab({
 
   const hasMappings = mappings.length > 0;
 
-  // Seed the store from the first mapping when no selection is persisted
-  useEffect(() => {
-    if (hasMappings && selectedCategoryId === null) {
-      const first = mappings[0] as any;
-      setSelectedCategory(first.category.id);
-      const firstSub = first.subCategories?.[0];
-      if (firstSub) setSelectedSubCategory(firstSub.id);
-    }
-  }, [hasMappings, selectedCategoryId, mappings, setSelectedCategory, setSelectedSubCategory]);
-
-  // Validate stored selection against current mappings
+  // Validate stored selection against current mappings ("All Categories" = null is a valid default)
   const validCatId = useMemo(() => {
     if (selectedCategoryId === null) return null;
     return (mappings as any[]).some((m: any) => m.category.id === selectedCategoryId)
@@ -1185,9 +1175,7 @@ function AdminProductsTab({
     } else {
       const id = parseInt(v);
       setSelectedCategory(id);
-      const m = (mappings as any[]).find((m: any) => m.category.id === id);
-      const firstSub = m?.subCategories?.[0];
-      setSelectedSubCategory(firstSub ? firstSub.id : null);
+      setSelectedSubCategory(null);
     }
     setFilters(EMPTY_SIMPLE);
   };
@@ -1501,17 +1489,7 @@ function MyProductsTab({
 
   const hasMappings = mappings.length > 0;
 
-  // Seed the store from the first mapping when no selection is persisted
-  useEffect(() => {
-    if (hasMappings && selectedCategoryId === null) {
-      const first = mappings[0] as any;
-      setSelectedCategory(first.category.id);
-      const firstSub = first.subCategories?.[0];
-      if (firstSub) setSelectedSubCategory(firstSub.id);
-    }
-  }, [hasMappings, selectedCategoryId, mappings, setSelectedCategory, setSelectedSubCategory]);
-
-  // Validate stored selection against current mappings
+  // Validate stored selection against current mappings ("All Categories" = null is a valid default)
   const validCatId = useMemo(() => {
     if (selectedCategoryId === null) return null;
     return (mappings as any[]).some((m: any) => m.category.id === selectedCategoryId)
@@ -1538,9 +1516,7 @@ function MyProductsTab({
     } else {
       const id = parseInt(v);
       setSelectedCategory(id);
-      const m = (mappings as any[]).find((m: any) => m.category.id === id);
-      const firstSub = m?.subCategories?.[0];
-      setSelectedSubCategory(firstSub ? firstSub.id : null);
+      setSelectedSubCategory(null);
     }
     setFilters(EMPTY_SIMPLE);
   };

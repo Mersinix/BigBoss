@@ -219,6 +219,14 @@ export const supplierSubCategories = pgTable("supplier_sub_categories", {
   subCategoryId: integer("sub_category_id").notNull(),
 });
 
+// Favorites — persisted per-user shop (product) favorites
+export const favorites = pgTable("favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  productId: integer("product_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ── Relations ────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -292,6 +300,11 @@ export const supplierSubCategoriesRelations = relations(supplierSubCategories, (
   subCategory: one(subCategories, { fields: [supplierSubCategories.subCategoryId], references: [subCategories.id] }),
 }));
 
+export const favoritesRelations = relations(favorites, ({ one }) => ({
+  user: one(users, { fields: [favorites.userId], references: [users.id] }),
+  product: one(products, { fields: [favorites.productId], references: [products.id] }),
+}));
+
 // ── Insert Schemas ───────────────────────────────────────────────────────────
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -307,6 +320,7 @@ export const insertFlavorSchema = createInsertSchema(flavors).omit({ id: true, c
 export const insertSizeSchema = createInsertSchema(sizes).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSupplierProductListingSchema = createInsertSchema(supplierProductListings).omit({ id: true, createdAt: true });
+export const insertFavoriteSchema = createInsertSchema(favorites).omit({ id: true, createdAt: true });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -348,6 +362,17 @@ export type SupplierSubCategory = typeof supplierSubCategories.$inferSelect;
 
 export type SupplierProductListing = typeof supplierProductListings.$inferSelect;
 export type InsertSupplierProductListing = z.infer<typeof insertSupplierProductListingSchema>;
+
+export type Favorite = typeof favorites.$inferSelect;
+export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
+
+export type ShopFavoriteItem = {
+  id: number;
+  name: string;
+  supplier: string;
+  price: number;
+  image: string;
+};
 
 // ── Marketplace Types ─────────────────────────────────────────────────────────
 

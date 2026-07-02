@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
@@ -26,7 +26,7 @@ import {
   Printer, Megaphone, User, GraduationCap
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount } from "@/hooks/use-favorites";
-import type { CategoryWithCount } from "@shared/schema";
+import type { CategoryWithCount, ShopFavoriteItem } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
@@ -242,13 +242,19 @@ type FavService = "SHOP" | "PRINT" | "BARISTA" | "MARKETING";
 type BaristaSubTab = "academy" | "marketplace";
 const FAV_SERVICES: FavService[] = ["SHOP", "PRINT", "BARISTA", "MARKETING"];
 
-function FavoritesPanel() {
+function FavoritesPanel({ onNavigate }: { onNavigate?: () => void }) {
+  const [, navigate] = useLocation();
   const [activeService, setActiveService] = useState<FavService>("SHOP");
   const [baristaTab, setBaristaTab] = useState<BaristaSubTab>("academy");
   const {
     shop, print, academy, baristaMarket, marketing,
     removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing,
   } = useFavorites();
+
+  const goToProduct = (id: number) => {
+    navigate(`/products/${id}`);
+    onNavigate?.();
+  };
 
   const shopItems = Object.values(shop);
   const printItems = Object.values(print);
@@ -301,7 +307,12 @@ function FavoritesPanel() {
         shopItems.length === 0 ? renderEmpty() : (
           <div className="grid grid-cols-2 gap-3">
             {shopItems.map((item) => (
-              <div key={item.id} className="group border border-border rounded-xl overflow-hidden">
+              <div
+                key={item.id}
+                className="group border border-border rounded-xl overflow-hidden cursor-pointer hover:shadow-sm transition-shadow"
+                onClick={() => goToProduct(item.id)}
+                data-testid={`card-fav-shop-${item.id}`}
+              >
                 <div className="relative h-28">
                   {item.image ? (
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
@@ -310,7 +321,7 @@ function FavoritesPanel() {
                   )}
                   <button
                     className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => removeShop(item.id)}
+                    onClick={(e) => { e.stopPropagation(); removeShop(item.id); }}
                     data-testid={`button-fav-remove-shop-${item.id}`}
                   >
                     <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
@@ -612,6 +623,16 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
   const { isVisitor, isPending, isApproved, hasCommercial } = computeAccess(user);
   const favTotalCount = useFavorites(selectTotalFavCount);
+  const hydrateShop = useFavorites((s) => s.hydrateShop);
+
+  const { data: favoritesData } = useQuery<ShopFavoriteItem[]>({
+    queryKey: ["/api/favorites"],
+    enabled: !!user && hasCommercial,
+  });
+
+  useEffect(() => {
+    if (favoritesData) hydrateShop(favoritesData);
+  }, [favoritesData, hydrateShop]);
 
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -878,7 +899,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
           <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
             <div className="space-y-4">
               <div className="flex items-center gap-2"><Heart className="w-5 h-5 text-rose-500 fill-rose-500" /><h2 className="font-bold text-lg">My Favorites</h2></div>
-              <FavoritesPanel />
+              <FavoritesPanel onNavigate={() => setFavOpen(false)} />
             </div>
           </DialogContent>
         </Dialog>

@@ -242,7 +242,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Products (Legacy — restricted) ─────────────────────────────────────────
+  // ── Favorites (shop/product favorites, persisted per-user) ─────────────────
+
+  app.get('/api/favorites', requireAuth, async (req: any, res) => {
+    const favorites = await storage.getFavoritesByUser(req.session.userId);
+    res.json(favorites);
+  });
+
+  app.post('/api/favorites', requireAuth, async (req: any, res) => {
+    const productId = Number(req.body?.productId);
+    if (!productId) return res.status(400).json({ message: 'productId is required' });
+    await storage.addFavorite(req.session.userId, productId);
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete('/api/favorites/:productId', requireAuth, async (req: any, res) => {
+    const productId = Number(req.params.productId);
+    if (!productId) return res.status(400).json({ message: 'Invalid productId' });
+    await storage.removeFavorite(req.session.userId, productId);
+    res.json({ ok: true });
+  });
 
   app.get(api.products.list.path, requireAuth, async (req, res) => {
     try {

@@ -2,7 +2,7 @@ import { db } from "./db";
 import {
   users, products, orders, orderItems, subOrders, supplierProductVariants,
   categories, subCategories, flavors, sizes, brands,
-  supplierCategories, supplierSubCategories, supplierProductListings,
+  supplierCategories, supplierSubCategories, supplierProductListings, favorites,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
   type InsertOrder, type Order, type OrderWithDetails,
@@ -19,6 +19,7 @@ import {
   type InsertSupplierProductListing, type SupplierProductListing, type SupplierListingWithProduct,
   type MarketplaceProduct, type MarketplaceListing, type MarketplaceVariant,
   type CreateOrderItem, type BillingInfo, type CreateOrderItemInput,
+  type ShopFavoriteItem,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc } from "drizzle-orm";
 
@@ -90,6 +91,11 @@ export interface IStorage {
   createBrand(b: Partial<InsertBrand>): Promise<Brand>;
   updateBrand(id: number, updates: Partial<InsertBrand>): Promise<Brand>;
   deleteBrand(id: number): Promise<void>;
+
+  // Favorites (shop/product favorites, persisted per-user)
+  getFavoritesByUser(userId: number): Promise<ShopFavoriteItem[]>;
+  addFavorite(userId: number, productId: number): Promise<void>;
+  removeFavorite(userId: number, productId: number): Promise<void>;
 
   // Supplier mappings
   getSupplierCategoryMappings(supplierId: number, options?: { approvedOnly?: boolean }): Promise<SupplierCategoryMapping[]>;
@@ -519,6 +525,37 @@ export class DatabaseStorage implements IStorage {
   async getMarketplaceProduct(productId: number): Promise<MarketplaceProduct | undefined> {
     const all = await this.getMarketplaceProducts();
     return all.find((p) => p.id === productId);
+  }
+
+  // ── Favorites ───────────────────────────────────────────────────────────────
+
+  async getFavoritesByUser(userId: number): Promise<ShopFavoriteItem[]> {
+    const rows = await db.select().from(favorites).where(eq(favorites.userId, userId));
+    if (!rows.length) return [];
+    const productIds = rows.map((r) => r.productId);
+    const prods = await db.select().from(products).where(inArray(products.id, productIds));
+    const prodMap = new Map(prods.map((p) => [p.id, p]));
+    return rows
+      .map((r) => prodMap.get(r.productId))
+      .filter((p): p is typeof products.$inferSelect => !!p)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        supplier: p.category ?? "",
+        price: p.price ?? 0,
+        image: p.imageUrl ?? "",
+      }));
+  }
+
+  async addFavorite(userId: number, productId: number): Promise<void> {
+    const existing = await db.select().from(favorites)
+      .where(and(eq(favorites.userId, userId), eq(favorites.productId, productId)));
+    if (existing.length) return;
+    await db.insert(favorites).values({ userId, productId });
+  }
+
+  async removeFavorite(userId: number, productId: number): Promise<void> {
+    await db.delete(favorites).where(and(eq(favorites.userId, userId), eq(favorites.productId, productId)));
   }
 
   // ── Supplier variants ───────────────────────────────────────────────────────

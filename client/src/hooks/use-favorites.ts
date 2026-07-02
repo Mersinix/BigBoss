@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface ShopFavItem {
   id: number;
@@ -63,22 +64,31 @@ interface FavoritesStore {
   removeAcademy: (id: number) => void;
   removeBaristaMarket: (id: number) => void;
   removeMarketing: (id: number) => void;
+
+  hydrateShop: (items: ShopFavItem[]) => void;
 }
 
-export const useFavorites = create<FavoritesStore>((set) => ({
+export const useFavorites = create<FavoritesStore>((set, get) => ({
   shop: {},
   print: {},
   academy: {},
   baristaMarket: {},
   marketing: {},
 
-  toggleShop: (item) =>
+  toggleShop: (item) => {
+    const wasFav = !!get().shop[item.id];
     set((s) => {
       const next = { ...s.shop };
-      if (next[item.id]) delete next[item.id];
+      if (wasFav) delete next[item.id];
       else next[item.id] = item;
       return { shop: next };
-    }),
+    });
+    if (wasFav) {
+      apiRequest("DELETE", `/api/favorites/${item.id}`).catch(() => {});
+    } else {
+      apiRequest("POST", "/api/favorites", { productId: item.id }).catch(() => {});
+    }
+  },
 
   togglePrint: (item) =>
     set((s) => {
@@ -112,8 +122,17 @@ export const useFavorites = create<FavoritesStore>((set) => ({
       return { marketing: next };
     }),
 
-  removeShop: (id) =>
-    set((s) => { const next = { ...s.shop }; delete next[id]; return { shop: next }; }),
+  removeShop: (id) => {
+    set((s) => { const next = { ...s.shop }; delete next[id]; return { shop: next }; });
+    apiRequest("DELETE", `/api/favorites/${id}`).catch(() => {});
+  },
+
+  hydrateShop: (items) =>
+    set(() => {
+      const next: Record<number, ShopFavItem> = {};
+      for (const item of items) next[item.id] = item;
+      return { shop: next };
+    }),
 
   removePrint: (id) =>
     set((s) => { const next = { ...s.print }; delete next[id]; return { print: next }; }),

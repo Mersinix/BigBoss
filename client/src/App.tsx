@@ -13,6 +13,8 @@ import CartPage from "@/pages/cafe/cart-page";
 import SupplierDashboard from "@/pages/supplier/dashboard";
 import ManageProducts from "@/pages/supplier/manage-products";
 import CategoriesPage from "@/pages/supplier/categories-page";
+import StorePage from "@/pages/supplier/store-page";
+import StoreDetailPage from "@/pages/cafe/store-detail-page";
 import InventoryPage from "@/pages/supplier/inventory-page";
 import OrderRequestsPage from "@/pages/supplier/order-requests-page";
 import ReturnsPage from "@/pages/supplier/returns-page";
@@ -156,6 +158,14 @@ function Router() {
         )}
       </Route>
 
+      <Route path="/stores/:storeId">
+        {() => (
+          <MarketplaceLayout>
+            <StoreDetailPage />
+          </MarketplaceLayout>
+        )}
+      </Route>
+
       <Route path="/cart">
         {() => (
           <MarketplaceLayout>
@@ -170,6 +180,9 @@ function Router() {
       </Route>
       <Route path="/supplier/categories">
         {() => (<DashboardLayout><ProtectedRoute component={CategoriesPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/supplier/store">
+        {() => (<DashboardLayout><ProtectedRoute component={StorePage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/inventory">
         {() => (<DashboardLayout><ProtectedRoute component={InventoryPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}

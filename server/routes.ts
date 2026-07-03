@@ -290,6 +290,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── Store favorites (persisted per-user, kept separate from product favorites) ──
+
+  app.get('/api/store-favorites', requireAuth, async (req: any, res) => {
+    const ids = await storage.getStoreFavoritesByUser(req.session.userId);
+    res.json(ids);
+  });
+
+  app.post('/api/store-favorites', requireAuth, async (req: any, res) => {
+    const storeId = Number(req.body?.storeId);
+    if (!storeId) return res.status(400).json({ message: 'storeId is required' });
+    await storage.addStoreFavorite(req.session.userId, storeId);
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete('/api/store-favorites/:storeId', requireAuth, async (req: any, res) => {
+    const storeId = Number(req.params.storeId);
+    if (!storeId) return res.status(400).json({ message: 'Invalid storeId' });
+    await storage.removeStoreFavorite(req.session.userId, storeId);
+    res.json({ ok: true });
+  });
+
   app.get(api.products.list.path, requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
@@ -1362,6 +1383,98 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.deleteSupplierListing(listingId);
       res.json({ message: "Removed" });
     } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // ── Supplier Store (own public store profile) ────────────────────────────────
+
+  app.get('/api/supplier/store', requireApprovedSupplier, async (req: any, res) => {
+    try {
+      const store = await storage.getSupplierStore(req.session.userId);
+      res.json(store ?? null);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.put('/api/supplier/store', requireApprovedSupplier, async (req: any, res) => {
+    try {
+      const { coverUrl, logoUrl, name, description, isOpen, visibility } = req.body ?? {};
+      if (visibility !== undefined && !['VISIBLE', 'HIDDEN'].includes(visibility)) {
+        return res.status(400).json({ message: 'Invalid visibility' });
+      }
+      const store = await storage.upsertSupplierStore(req.session.userId, {
+        coverUrl, logoUrl, name, description, isOpen, visibility,
+      });
+      broadcast('store_updated', { supplierId: req.session.userId, storeId: store.id });
+      res.json(store);
+    } catch (e) { console.error(e); res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Admin Stores management ──────────────────────────────────────────────────
+
+  app.get('/api/admin/stores', requireAdmin, async (req, res) => {
+    try {
+      res.json(await storage.getAllStoresAdmin());
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.get('/api/admin/stores/:id', requireAdmin, async (req, res) => {
+    try {
+      const detail = await storage.getStoreDetail(parseInt(req.params.id));
+      if (!detail) return res.status(404).json({ message: 'Not found' });
+      res.json(detail);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.patch('/api/admin/stores/:id/approve', requireAdmin, async (req, res) => {
+    try {
+      const store = await storage.setStoreApprovalStatus(parseInt(req.params.id), 'APPROVED');
+      if (!store) return res.status(404).json({ message: 'Not found' });
+      broadcast('store_approval_changed', { storeId: store.id, supplierId: store.supplierId, status: 'APPROVED' });
+      res.json(store);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.patch('/api/admin/stores/:id/reject', requireAdmin, async (req, res) => {
+    try {
+      const store = await storage.setStoreApprovalStatus(parseInt(req.params.id), 'REJECTED');
+      if (!store) return res.status(404).json({ message: 'Not found' });
+      broadcast('store_approval_changed', { storeId: store.id, supplierId: store.supplierId, status: 'REJECTED' });
+      res.json(store);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.patch('/api/admin/stores/:id/hold', requireAdmin, async (req, res) => {
+    try {
+      const store = await storage.setStoreApprovalStatus(parseInt(req.params.id), 'ON_HOLD');
+      if (!store) return res.status(404).json({ message: 'Not found' });
+      broadcast('store_approval_changed', { storeId: store.id, supplierId: store.supplierId, status: 'ON_HOLD' });
+      res.json(store);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.delete('/api/admin/stores/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const detail = await storage.getStoreDetail(id);
+      await storage.deleteStore(id);
+      broadcast('store_approval_changed', { storeId: id, supplierId: detail?.supplierId, status: 'DELETED' });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Stores (coffee owner browsing) ───────────────────────────────────────────
+
+  app.get('/api/stores', async (req, res) => {
+    try {
+      res.json(await storage.getVisibleStores());
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.get('/api/stores/:id', async (req, res) => {
+    try {
+      const detail = await storage.getStoreDetail(parseInt(req.params.id), { requireVisible: true });
+      if (!detail) return res.status(404).json({ message: 'Not found' });
+      res.json(detail);
+    } catch { res.status(500).json({ message: 'Error' }); }
   });
 
   // ── Marketplace (cafe browsing — admin products with variant pricing) ────────

@@ -3,7 +3,7 @@ import {
   users, products, orders, orderItems, subOrders, supplierProductVariants,
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
-  platformServices,
+  platformServices, supplierStores, storeFavorites,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
   type InsertOrder, type Order, type OrderWithDetails,
@@ -22,6 +22,7 @@ import {
   type CreateOrderItem, type BillingInfo, type CreateOrderItemInput,
   type ShopFavoriteItem,
   type ServiceKey, type ServiceState, type ServiceStatesMap,
+  type SupplierStore, type InsertSupplierStore, type StoreCard, type StoreAdminRow, type StoreDetail,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc } from "drizzle-orm";
 
@@ -98,6 +99,20 @@ export interface IStorage {
   getFavoritesByUser(userId: number): Promise<ShopFavoriteItem[]>;
   addFavorite(userId: number, productId: number): Promise<void>;
   removeFavorite(userId: number, productId: number): Promise<void>;
+
+  // Supplier stores
+  getSupplierStore(supplierId: number): Promise<SupplierStore | undefined>;
+  upsertSupplierStore(supplierId: number, data: Partial<InsertSupplierStore>): Promise<SupplierStore>;
+  getAllStoresAdmin(): Promise<StoreAdminRow[]>;
+  setStoreApprovalStatus(id: number, status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ON_HOLD'): Promise<SupplierStore | undefined>;
+  deleteStore(id: number): Promise<void>;
+  getVisibleStores(): Promise<StoreCard[]>;
+  getStoreDetail(id: number, opts?: { requireVisible?: boolean }): Promise<StoreDetail | undefined>;
+
+  // Store favorites
+  getStoreFavoritesByUser(userId: number): Promise<number[]>;
+  addStoreFavorite(userId: number, storeId: number): Promise<void>;
+  removeStoreFavorite(userId: number, storeId: number): Promise<void>;
 
   // Supplier mappings
   getSupplierCategoryMappings(supplierId: number, options?: { approvedOnly?: boolean }): Promise<SupplierCategoryMapping[]>;
@@ -1075,6 +1090,173 @@ export class DatabaseStorage implements IStorage {
       await db.insert(platformServices).values({ service, state });
     }
     return this.getServiceStates();
+  }
+
+  // ── Supplier stores ─────────────────────────────────────────────────────────
+
+  async getSupplierStore(supplierId: number): Promise<SupplierStore | undefined> {
+    const [store] = await db.select().from(supplierStores).where(eq(supplierStores.supplierId, supplierId));
+    return store;
+  }
+
+  async upsertSupplierStore(supplierId: number, data: Partial<InsertSupplierStore>): Promise<SupplierStore> {
+    const existing = await this.getSupplierStore(supplierId);
+    if (!existing) {
+      const [created] = await db.insert(supplierStores).values({
+        supplierId,
+        coverUrl: data.coverUrl ?? null,
+        logoUrl: data.logoUrl ?? null,
+        name: data.name ?? '',
+        description: data.description ?? null,
+        isOpen: data.isOpen ?? true,
+        visibility: data.visibility ?? 'VISIBLE',
+        approvalStatus: 'PENDING',
+      }).returning();
+      return created;
+    }
+    const identityChanged = (
+      (data.name !== undefined && data.name !== existing.name) ||
+      (data.description !== undefined && (data.description ?? null) !== (existing.description ?? null)) ||
+      (data.coverUrl !== undefined && (data.coverUrl ?? null) !== (existing.coverUrl ?? null)) ||
+      (data.logoUrl !== undefined && (data.logoUrl ?? null) !== (existing.logoUrl ?? null))
+    );
+    let approvalStatus = existing.approvalStatus;
+    if (identityChanged && (existing.approvalStatus === 'APPROVED' || existing.approvalStatus === 'REJECTED')) {
+      approvalStatus = 'PENDING';
+    }
+    const [updated] = await db.update(supplierStores).set({
+      ...(data.coverUrl !== undefined ? { coverUrl: data.coverUrl } : {}),
+      ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl } : {}),
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.description !== undefined ? { description: data.description } : {}),
+      ...(data.isOpen !== undefined ? { isOpen: data.isOpen } : {}),
+      ...(data.visibility !== undefined ? { visibility: data.visibility } : {}),
+      approvalStatus,
+      updatedAt: new Date(),
+    }).where(eq(supplierStores.id, existing.id)).returning();
+    return updated;
+  }
+
+  private async buildStoreCards(stores: SupplierStore[]): Promise<StoreCard[]> {
+    if (!stores.length) return [];
+    const supplierIds = stores.map((s) => s.supplierId);
+    const [allUsers, allListings, allProducts] = await Promise.all([
+      db.select().from(users).where(inArray(users.id, supplierIds)),
+      db.select().from(supplierProductListings).where(inArray(supplierProductListings.supplierId, supplierIds)),
+      db.select().from(products),
+    ]);
+    const userMap = new Map(allUsers.map((u) => [u.id, u]));
+    const productMap = new Map(allProducts.map((p) => [p.id, p]));
+    const listingsBySupplier = new Map<number, typeof allListings>();
+    for (const l of allListings) {
+      if (!listingsBySupplier.has(l.supplierId)) listingsBySupplier.set(l.supplierId, []);
+      listingsBySupplier.get(l.supplierId)!.push(l);
+    }
+    return stores.map((store) => {
+      const supplier = userMap.get(store.supplierId);
+      const listings = (listingsBySupplier.get(store.supplierId) ?? []).filter((l) => l.stock > 0 && l.price > 0);
+      const categoryIds = new Set<number>();
+      const subCategoryIds = new Set<number>();
+      const brandIds = new Set<number>();
+      for (const l of listings) {
+        const prod = productMap.get(l.productId);
+        if (!prod) continue;
+        if (prod.categoryId) categoryIds.add(prod.categoryId);
+        if (prod.subCategoryId) subCategoryIds.add(prod.subCategoryId);
+        if (prod.brandId) brandIds.add(prod.brandId);
+      }
+      return {
+        id: store.id,
+        supplierId: store.supplierId,
+        name: store.name,
+        description: store.description,
+        coverUrl: store.coverUrl,
+        logoUrl: store.logoUrl,
+        isOpen: store.isOpen,
+        visibility: store.visibility,
+        approvalStatus: store.approvalStatus,
+        supplierLat: supplier?.locationLat ?? null,
+        supplierLng: supplier?.locationLng ?? null,
+        categoryIds: Array.from(categoryIds),
+        subCategoryIds: Array.from(subCategoryIds),
+        brandIds: Array.from(brandIds),
+        productCount: listings.length,
+      };
+    });
+  }
+
+  async getAllStoresAdmin(): Promise<StoreAdminRow[]> {
+    const stores = await db.select().from(supplierStores);
+    const cards = await this.buildStoreCards(stores);
+    const supplierIds = stores.map((s) => s.supplierId);
+    const allUsers = await db.select().from(users).where(inArray(users.id, supplierIds));
+    const userMap = new Map(allUsers.map((u) => [u.id, u]));
+    const storeMap = new Map(stores.map((s) => [s.id, s]));
+    return cards.map((card) => {
+      const supplier = userMap.get(card.supplierId);
+      const store = storeMap.get(card.id)!;
+      return {
+        ...card,
+        supplierName: supplier?.name ?? '',
+        supplierEmail: supplier?.email ?? '',
+        createdAt: store.createdAt,
+        updatedAt: store.updatedAt,
+      };
+    });
+  }
+
+  async setStoreApprovalStatus(id: number, status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ON_HOLD'): Promise<SupplierStore | undefined> {
+    const [updated] = await db.update(supplierStores).set({ approvalStatus: status, updatedAt: new Date() }).where(eq(supplierStores.id, id)).returning();
+    return updated;
+  }
+
+  async deleteStore(id: number): Promise<void> {
+    await db.delete(storeFavorites).where(eq(storeFavorites.storeId, id));
+    await db.delete(supplierStores).where(eq(supplierStores.id, id));
+  }
+
+  async getVisibleStores(): Promise<StoreCard[]> {
+    const stores = await db.select().from(supplierStores)
+      .where(and(eq(supplierStores.approvalStatus, 'APPROVED'), eq(supplierStores.visibility, 'VISIBLE')));
+    return this.buildStoreCards(stores);
+  }
+
+  async getStoreDetail(id: number, opts?: { requireVisible?: boolean }): Promise<StoreDetail | undefined> {
+    const [store] = await db.select().from(supplierStores).where(eq(supplierStores.id, id));
+    if (!store) return undefined;
+    if (opts?.requireVisible && (store.approvalStatus !== 'APPROVED' || store.visibility !== 'VISIBLE')) return undefined;
+    const [card] = await this.buildStoreCards([store]);
+    const listings = await db.select().from(supplierProductListings)
+      .where(and(eq(supplierProductListings.supplierId, store.supplierId)));
+    const activeListings = listings.filter((l) => l.stock > 0 && l.price > 0);
+    if (!activeListings.length) return { ...card, products: [] };
+    const productIds = activeListings.map((l) => l.productId);
+    const prods = await db.select().from(products).where(inArray(products.id, productIds));
+    const listingByProduct = new Map(activeListings.map((l) => [l.productId, l]));
+    const tx = await buildTaxonomyCache();
+    const enriched = prods.map((p) => {
+      const listing = listingByProduct.get(p.id)!;
+      return { ...enrichProduct(p, tx), price: listing.price, bestPrice: listing.price, totalStock: listing.stock } as unknown as ProductWithTaxonomy;
+    });
+    return { ...card, products: enriched };
+  }
+
+  // ── Store favorites ─────────────────────────────────────────────────────────
+
+  async getStoreFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select().from(storeFavorites).where(eq(storeFavorites.userId, userId));
+    return rows.map((r) => r.storeId);
+  }
+
+  async addStoreFavorite(userId: number, storeId: number): Promise<void> {
+    const existing = await db.select().from(storeFavorites)
+      .where(and(eq(storeFavorites.userId, userId), eq(storeFavorites.storeId, storeId)));
+    if (existing.length) return;
+    await db.insert(storeFavorites).values({ userId, storeId });
+  }
+
+  async removeStoreFavorite(userId: number, storeId: number): Promise<void> {
+    await db.delete(storeFavorites).where(and(eq(storeFavorites.userId, userId), eq(storeFavorites.storeId, storeId)));
   }
 }
 

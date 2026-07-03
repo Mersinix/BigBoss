@@ -237,6 +237,33 @@ export const favorites = pgTable("favorites", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ── Supplier Stores ─────────────────────────────────────────────────────────
+
+export const storeApprovalStatusEnum = pgEnum('store_approval_status', ['PENDING', 'APPROVED', 'REJECTED', 'ON_HOLD']);
+export const storeVisibilityEnum = pgEnum('store_visibility', ['VISIBLE', 'HIDDEN']);
+
+export const supplierStores = pgTable("supplier_stores", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").notNull().unique(),
+  coverUrl: text("cover_url"),
+  logoUrl: text("logo_url"),
+  name: text("name").notNull().default(''),
+  description: text("description"),
+  isOpen: boolean("is_open").notNull().default(true),
+  visibility: storeVisibilityEnum("visibility").notNull().default('VISIBLE'),
+  approvalStatus: storeApprovalStatusEnum("approval_status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Store favorites — persisted per-user store favorites (separate from product favorites)
+export const storeFavorites = pgTable("store_favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  storeId: integer("store_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ── Relations ────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -315,6 +342,15 @@ export const favoritesRelations = relations(favorites, ({ one }) => ({
   product: one(products, { fields: [favorites.productId], references: [products.id] }),
 }));
 
+export const supplierStoresRelations = relations(supplierStores, ({ one }) => ({
+  supplier: one(users, { fields: [supplierStores.supplierId], references: [users.id] }),
+}));
+
+export const storeFavoritesRelations = relations(storeFavorites, ({ one }) => ({
+  user: one(users, { fields: [storeFavorites.userId], references: [users.id] }),
+  store: one(supplierStores, { fields: [storeFavorites.storeId], references: [supplierStores.id] }),
+}));
+
 // ── Insert Schemas ───────────────────────────────────────────────────────────
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -332,6 +368,8 @@ export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, cre
 export const insertSupplierProductListingSchema = createInsertSchema(supplierProductListings).omit({ id: true, createdAt: true });
 export const insertFavoriteSchema = createInsertSchema(favorites).omit({ id: true, createdAt: true });
 export const insertPlatformServiceSchema = createInsertSchema(platformServices).omit({ id: true, updatedAt: true });
+export const insertSupplierStoreSchema = createInsertSchema(supplierStores).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertStoreFavoriteSchema = createInsertSchema(storeFavorites).omit({ id: true, createdAt: true });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -382,6 +420,43 @@ export type InsertPlatformService = z.infer<typeof insertPlatformServiceSchema>;
 export type ServiceKey = 'PRINTING' | 'MARKETING' | 'BARISTA';
 export type ServiceState = 'VISIBLE' | 'HIDDEN' | 'COMING_SOON';
 export type ServiceStatesMap = Record<ServiceKey, ServiceState>;
+
+export type SupplierStore = typeof supplierStores.$inferSelect;
+export type InsertSupplierStore = z.infer<typeof insertSupplierStoreSchema>;
+
+export type StoreFavorite = typeof storeFavorites.$inferSelect;
+export type InsertStoreFavorite = z.infer<typeof insertStoreFavoriteSchema>;
+
+// ── Store Types ───────────────────────────────────────────────────────────────
+
+export type StoreCard = {
+  id: number;
+  supplierId: number;
+  name: string;
+  description: string | null;
+  coverUrl: string | null;
+  logoUrl: string | null;
+  isOpen: boolean;
+  visibility: 'VISIBLE' | 'HIDDEN';
+  approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ON_HOLD';
+  supplierLat: string | null;
+  supplierLng: string | null;
+  categoryIds: number[];
+  subCategoryIds: number[];
+  brandIds: number[];
+  productCount: number;
+};
+
+export type StoreAdminRow = StoreCard & {
+  supplierName: string;
+  supplierEmail: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
+export type StoreDetail = StoreCard & {
+  products: ProductWithTaxonomy[];
+};
 
 export type ShopFavoriteItem = {
   id: number;

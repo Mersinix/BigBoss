@@ -1,0 +1,237 @@
+You already know the project architecture. Before making any changes, analyze the current marketplace flow, supplier management flow, product filtering flow, favorites flow, and real-time synchronization logic. Reuse existing components and behaviors whenever possible.
+
+Do NOT change the visual identity of the application. Keep the current design, spacing, typography, colors, animations, card styles, filters, and page layouts. Do NOT modify existing business logic unless it is necessary to support the new Store feature.
+
+Everything must remain fully synchronized in real time without requiring a page refresh.
+
+Scope
+
+Implement only the changes described below.
+
+1. Supplier Part → Add new “Store” Tab
+
+Add a new tab called “Store” in the Supplier panel.
+
+This tab allows the supplier to configure the public store profile.
+
+Store Information
+
+The supplier should be able to set:
+
+Cover Picture URL
+
+Logo URL
+
+Store Name
+
+Description
+
+Availability / Open status
+
+Visibility (Visible / Hidden)
+
+Live Preview
+
+On the right side of the page, display a Live Preview that updates immediately while the supplier edits the store information.
+
+The preview should show exactly how the store card will appear to Coffee Owners.
+
+Store Visibility Rule
+
+If the supplier sets the store to Hidden:
+
+The store must not appear in the Coffee Owner “Stores” section.
+
+The supplier’s products should still appear in normal product results and product mapping.
+
+2. Admin Part → Suppliers → Add “Stores” switcher
+
+Keep the existing Suppliers page.
+
+Add a switcher with two views:
+
+Suppliers (existing page)
+
+Stores (new view)
+
+Stores view
+
+Display all supplier stores waiting for approval.
+
+The admin should be able to:
+
+Approve store
+
+Reject store
+
+Put store on hold
+
+Delete store
+
+View full store details
+
+Only approved stores should become visible to Coffee Owners.
+
+3. Coffee Owner Part → Add “Stores” results
+
+When the Coffee Owner selects:
+
+Category
+
+SubCategory
+
+Brand
+
+or any combination of filters
+
+the page should display both products and supplier stores matching the current selection.
+
+Store Cards
+
+Each store card should contain:
+
+Large cover image
+
+Store logo
+
+Store name
+
+Store description
+
+Favorite heart
+
+Distance in KM between the supplier store location and the Coffee Owner default location
+
+Display behavior
+
+Show two rows of store cards initially.
+
+Add a “See More” button.
+
+Clicking “See More” should display all matching stores.
+
+4. Store Details Page
+
+When the Coffee Owner clicks on a store card:
+
+Open a dedicated store page that shows:
+
+Store cover picture at the top
+
+Store logo
+
+Store name
+
+Store description
+
+All products belonging to that supplier
+
+Filters built only from that supplier’s products:
+
+Category
+
+SubCategory
+
+Brand
+
+Flavor
+
+Size
+
+Synchronization
+
+All filters on the store page must be synchronized with the selected supplier store.
+
+The Coffee Owner should never see products from another supplier while browsing a specific store.
+
+5. Filtering Rules
+
+Store results must respect:
+
+Category selection
+
+SubCategory selection
+
+Brand selection
+
+Supplier store visibility
+
+Store approval status
+
+Product availability rules already implemented in the marketplace
+
+6. Favorites
+
+Store cards should support the existing favorite system.
+
+Favoriting a store should persist exactly like product favorites.
+
+7. Preserve Existing Functionality
+
+Do NOT modify:
+
+Current product marketplace logic
+
+Current product favorites logic
+
+Current product detail pages
+
+Current authentication flow
+
+Current approval workflow
+
+Current supplier product management
+
+Current admin supplier management
+
+Current UI design
+
+Only extend the platform with the Store feature.
+
+8. Real-time Synchronization
+
+Verify that changes update immediately:
+
+Supplier edits store information → Live Preview updates instantly.
+
+Admin approves store → Store appears for Coffee Owners without refresh.
+
+Admin rejects/hides store → Store disappears immediately.
+
+Supplier changes visibility → Coffee Owner store list updates immediately.
+
+Favorites update immediately.
+
+9. Final Validation
+
+Before finishing, verify:
+
+Supplier can create and edit a store profile.
+
+Live Preview works correctly.
+
+Admin can approve/reject stores.
+
+Only approved stores are visible.
+
+Hidden stores are not visible.
+
+Products still appear normally even if the store is hidden.
+
+Store cards display correctly.
+
+Distance is displayed correctly.
+
+“See More” works correctly.
+
+Store detail page shows only that supplier’s products.
+
+Filters inside the store page work correctly.
+
+Store favorites are persisted.
+
+No existing marketplace functionality has been broken.
+
+No visual regressions have been introduced.
+
+Desktop, tablet, and mobile layouts remain fully responsive.

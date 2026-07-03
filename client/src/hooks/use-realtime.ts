@@ -14,6 +14,14 @@ const TAXONOMY_EVENTS = ["taxonomy_updated"];
 
 const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
 
+const STORE_EVENTS = ["store_updated", "store_approval_changed"];
+
+function invalidateStoreQueries(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["/api/supplier/store"] });
+  qc.invalidateQueries({ queryKey: ["/api/admin/stores"] });
+  qc.invalidateQueries({ queryKey: ["/api/stores"] });
+}
+
 function invalidateSupplierMappingQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] });
   qc.invalidateQueries({ queryKey: ["/api/admin/supplier-mappings"] });
@@ -57,6 +65,9 @@ export function useRealtime() {
           }
           if (SYSTEM_SERVICES_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/system-services"] });
+          }
+          if (STORE_EVENTS.includes(event)) {
+            invalidateStoreQueries(qc);
           }
           if (TAXONOMY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/categories"] });

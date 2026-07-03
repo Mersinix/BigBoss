@@ -14,9 +14,10 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
-import type { MarketplaceProduct, CategoryWithCount } from "@shared/schema";
+import type { MarketplaceProduct, CategoryWithCount, StoreCard } from "@shared/schema";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
@@ -133,6 +134,128 @@ function ProductCard({ product, onClick, hasCommercialAccess }: { product: Marke
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Store Card ────────────────────────────────────────────────────────────────
+
+function StoreCardTile({ store, onClick, searchLat, searchLng, hasSearchLocation }: {
+  store: StoreCard;
+  onClick: () => void;
+  searchLat: number | null;
+  searchLng: number | null;
+  hasSearchLocation: boolean;
+}) {
+  const faved = useStoreFavorites((s) => !!s.stores[store.id]);
+  const toggleStore = useStoreFavorites((s) => s.toggleStore);
+
+  const distance = useMemo(() => {
+    if (!hasSearchLocation || !store.supplierLat || !store.supplierLng) return null;
+    const lat = parseFloat(store.supplierLat);
+    const lng = parseFloat(store.supplierLng);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return calculateDistance(searchLat!, searchLng!, lat, lng);
+  }, [store.supplierLat, store.supplierLng, searchLat, searchLng, hasSearchLocation]);
+
+  return (
+    <div
+      data-testid={`card-store-${store.id}`}
+      className="group cursor-pointer bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
+      onClick={onClick}
+    >
+      <div className="relative aspect-[16/9] bg-gray-50 overflow-hidden">
+        {store.coverUrl ? (
+          <img src={store.coverUrl} alt={store.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center"><Store className="w-10 h-10 text-gray-200" /></div>
+        )}
+        {!store.isOpen && (
+          <div className="absolute top-2 left-2">
+            <Badge className="bg-gray-900/80 text-white border-0 text-[10px] font-semibold shadow-sm">Closed</Badge>
+          </div>
+        )}
+        <button
+          className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleStore(store.id);
+          }}
+          data-testid={`button-fav-store-${store.id}`}
+        >
+          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+        </button>
+      </div>
+      <div className="p-3 flex gap-3">
+        <div className="w-11 h-11 rounded-full border-2 border-white -mt-8 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
+          {store.logoUrl ? (
+            <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
+          ) : (
+            <Store className="w-4 h-4 text-gray-300" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0 pt-1">
+          <h3 className="font-bold text-sm leading-tight truncate group-hover:text-blue-600 transition-colors">{store.name}</h3>
+          {store.description && <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{store.description}</p>}
+          <div className="flex items-center gap-3 text-[11px] text-gray-400 mt-1.5">
+            <span className="flex items-center gap-1"><Package className="w-3 h-3" />{store.productCount} product{store.productCount !== 1 ? "s" : ""}</span>
+            {distance != null && <span>{formatDistance(distance)}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searchLng, hasSearchLocation }: {
+  stores: StoreCard[];
+  categoryId: string;
+  filters: FilterState;
+  onSelect: (storeId: number) => void;
+  searchLat: number | null;
+  searchLng: number | null;
+  hasSearchLocation: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const INITIAL_LIMIT = 10;
+
+  const filteredStores = useMemo(() => {
+    let list = stores;
+    if (categoryId) list = list.filter((s) => s.categoryIds.includes(Number(categoryId)));
+    if (filters.subCategoryId) list = list.filter((s) => s.subCategoryIds.includes(Number(filters.subCategoryId)));
+    if (filters.brandId) list = list.filter((s) => s.brandIds.includes(Number(filters.brandId)));
+    return list;
+  }, [stores, categoryId, filters.subCategoryId, filters.brandId]);
+
+  if (!filteredStores.length) return null;
+
+  const visible = expanded ? filteredStores : filteredStores.slice(0, INITIAL_LIMIT);
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2"><Store className="w-5 h-5 text-blue-600" />Stores</h2>
+        <p className="text-sm text-gray-400">{filteredStores.length} store{filteredStores.length !== 1 ? "s" : ""}</p>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        {visible.map((store) => (
+          <StoreCardTile
+            key={store.id}
+            store={store}
+            onClick={() => onSelect(store.id)}
+            searchLat={searchLat}
+            searchLng={searchLng}
+            hasSearchLocation={hasSearchLocation}
+          />
+        ))}
+      </div>
+      {filteredStores.length > INITIAL_LIMIT && (
+        <div className="flex justify-center mt-4">
+          <Button variant="outline" size="sm" onClick={() => setExpanded((e) => !e)} data-testid="button-toggle-stores">
+            {expanded ? "Show Less" : `See More (${filteredStores.length - INITIAL_LIMIT})`}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -281,6 +404,16 @@ export default function BrowseProducts() {
 
   const { data: categories = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
 
+  const { data: stores = [] } = useQuery<StoreCard[]>({
+    queryKey: ["/api/stores"],
+    queryFn: async () => {
+      const res = await fetch("/api/stores");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 30000,
+  });
+
   // Derive which category IDs currently have at least one visible marketplace
   // product. This accounts for frozen supplier categories, out-of-stock
   // listings, and any other visibility rules enforced by the backend.
@@ -370,6 +503,18 @@ export default function BrowseProducts() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {!search.trim() && (
+          <StoresSection
+            stores={stores}
+            categoryId={categoryId}
+            filters={filters}
+            onSelect={(storeId) => navigate(`/stores/${storeId}`)}
+            searchLat={searchLat}
+            searchLng={searchLng}
+            hasSearchLocation={hasSearchLocation}
+          />
+        )}
+
         <div className="flex items-center justify-between mb-4">
           <div>
             {categoryId ? (

@@ -26,6 +26,7 @@ import {
   Printer, Megaphone, User, GraduationCap
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount } from "@/hooks/use-favorites";
+import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates } from "@/hooks/use-service-states";
 import type { CategoryWithCount, ShopFavoriteItem } from "@shared/schema";
 
@@ -647,6 +648,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const { isVisitor, isPending, isApproved, hasCommercial } = computeAccess(user);
   const favTotalCount = useFavorites(selectTotalFavCount);
   const hydrateShop = useFavorites((s) => s.hydrateShop);
+  const hydrateStores = useStoreFavorites((s) => s.hydrateStores);
   const { states: headerServiceStates } = useServiceStates();
 
   const { data: favoritesData } = useQuery<ShopFavoriteItem[]>({
@@ -654,9 +656,18 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
     enabled: !!user && hasCommercial,
   });
 
+  const { data: storeFavoritesData } = useQuery<number[]>({
+    queryKey: ["/api/store-favorites"],
+    enabled: !!user && hasCommercial,
+  });
+
   useEffect(() => {
     if (favoritesData) hydrateShop(favoritesData);
   }, [favoritesData, hydrateShop]);
+
+  useEffect(() => {
+    if (storeFavoritesData) hydrateStores(storeFavoritesData);
+  }, [storeFavoritesData, hydrateStores]);
 
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [search, setSearch] = useState("");

@@ -186,7 +186,7 @@ function StoreCardTile({ store, onClick, searchLat, searchLng, hasSearchLocation
           <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
         </button>
       </div>
-      <div className="p-3 flex gap-3">
+      <div className="p-3 flex gap-3 relative z-20">
         <div className="w-11 h-11 rounded-full border-2 border-white -mt-8 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
           {store.logoUrl ? (
             <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
@@ -197,7 +197,7 @@ function StoreCardTile({ store, onClick, searchLat, searchLng, hasSearchLocation
         <div className="flex-1 min-w-0 pt-1">
           <h3 className="font-bold text-sm leading-tight truncate group-hover:text-blue-600 transition-colors">{store.name}</h3>
           {store.description && <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{store.description}</p>}
-          <div className="flex items-center gap-3 text-[11px] text-gray-400 mt-1.5">
+          <div className="flex items-center gap-3 text-[11px] text-amber-600 mt-1.5">
             <span className="flex items-center gap-1"><Package className="w-3 h-3" />{store.productCount} product{store.productCount !== 1 ? "s" : ""}</span>
             {distance != null && <span>{formatDistance(distance)}</span>}
           </div>

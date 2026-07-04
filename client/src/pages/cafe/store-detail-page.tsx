@@ -194,10 +194,10 @@ export default function StoreDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="relative h-48 sm:h-56 bg-gray-100 overflow-hidden">
+    <div className="min-h-screen h-96 bg-gray-50">
+      <div className="relative h-96 lg:h-[330px] sm:h-56 bg-gray-100 overflow-hidden">
         {store.coverUrl ? (
-          <img src={store.coverUrl} alt={store.name} className="w-full h-full object-cover" />
+          <img src={store.coverUrl} alt={store.name} className="w-full h-full object-cover object-center" />
         ) : (
           <div className="w-full h-full flex items-center justify-center"><Store className="w-14 h-14 text-gray-200" /></div>
         )}
@@ -222,7 +222,7 @@ export default function StoreDetailPage() {
         )}
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 pt-3">
+      <div className="max-w-7xl mx-auto px-4 pt-3 relative z-20">
         <div className="flex items-end gap-4 -mt-8">
           <div className="w-16 h-16 rounded-2xl border-4 border-gray-50 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
             {store.logoUrl ? (
@@ -231,15 +231,15 @@ export default function StoreDetailPage() {
               <Store className="w-7 h-7 text-gray-300" />
             )}
           </div>
-          <div className="pb-0.5 min-w-0">
+          <div className="relative top-2 min-w-0">
             <h1 className="font-bold text-xl text-gray-900 truncate" data-testid="text-store-name">{store.name}</h1>
-            <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+            <div className="flex items-center gap-3 text-xs text-amber-600 mt-1">
               <span className="flex items-center gap-1"><Package className="w-3 h-3" />{store.productCount} products</span>
               {distance != null && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{formatDistance(distance)}</span>}
             </div>
           </div>
         </div>
-        {store.description && <p className="text-sm text-gray-500 mt-3 max-w-2xl">{store.description}</p>}
+        {store.description && <p className="text-sm text-gray-500 mt-3 mx-auto text-center line-clamp-2">{store.description}</p>}
       </div>
 
       {(categories.length > 0 || subCategories.length > 0 || brands.length > 0) && (

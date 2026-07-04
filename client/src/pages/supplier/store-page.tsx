@@ -159,7 +159,7 @@ export default function StorePage() {
                 </div>
               )}
             </div>
-            <div className="p-3 flex gap-3">
+            <div className="p-3 flex gap-3 relative z-20">
               <div className="w-12 h-12 rounded-full border-2 border-white dark:border-card -mt-8 bg-white dark:bg-card shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
                 {form.logoUrl ? (
                   <img src={form.logoUrl} alt="Logo" className="w-full h-full object-cover" />
@@ -167,10 +167,10 @@ export default function StorePage() {
                   <Store className="w-5 h-5 text-gray-300" />
                 )}
               </div>
-              <div className="flex-1 min-w-0 pt-1">
+              <div className="flex-1 min-w-0 mt-0.5">
                 <h3 className="font-bold text-sm leading-tight truncate">{form.name || "Your Store Name"}</h3>
                 <p className="text-xs text-gray-400 line-clamp-2 mt-0.5">{form.description || "Your store description will appear here."}</p>
-                <div className="flex items-center gap-1 text-[11px] text-gray-400 mt-1.5">
+                <div className="flex items-center gap-1 text-[11px] text-amber-600 mt-1.5">
                   <Package className="w-3 h-3" /><span>Distance shown to nearby cafe owners</span>
                 </div>
               </div>

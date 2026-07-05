@@ -28,6 +28,8 @@ import {
 import { useFavorites, selectTotalFavCount } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates } from "@/hooks/use-service-states";
+import { useQuickView } from "@/hooks/use-quick-view";
+import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import type { CategoryWithCount, ShopFavoriteItem } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
@@ -264,8 +266,9 @@ function FavoritesPanel({ onNavigate }: { onNavigate?: () => void }) {
     removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing,
   } = useFavorites();
 
+  const openQuickView = useQuickView((s) => s.open);
   const goToProduct = (id: number) => {
-    navigate(`/products/${id}`);
+    openQuickView(id);
     onNavigate?.();
   };
 
@@ -963,6 +966,9 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ── Product Quick View Modal ── */}
+      <ProductQuickViewModal />
     </div>
   );
 }

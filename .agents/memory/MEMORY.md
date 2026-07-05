@@ -3,3 +3,4 @@
 - [Supplier category-products coupling](supplier-category-products.md) — My Categories selection (Zustand store) drives product visibility in Products page; real-time sync via WebSocket on /ws path.
 - [Partial favorites DB persistence](favorites-partial-persistence.md) — pattern for adding DB persistence to one favorites category only, leaving others as local zustand state.
 - [Global service visibility gating](service-visibility-gating.md) — single admin-controlled Visible/Hidden/ComingSoon state per service must be enforced consistently across nav, landing, register, and routing.
+- [Global quick-view modal pattern](quick-view-modal-pattern.md) — use a tiny zustand store + one modal instance in the shared layout when many unrelated components need to trigger the same modal.

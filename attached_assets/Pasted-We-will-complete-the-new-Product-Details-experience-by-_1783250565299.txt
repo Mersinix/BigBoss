@@ -1,0 +1,97 @@
+We will complete the new Product Details experience by making it consistent everywhere in the Coffee Owner marketplace.
+
+Before making any changes, analyze the current product card components used across the marketplace and inside supplier stores. Reuse the existing Product Details modal implementation that was recently added. Do not recreate it.
+
+Do NOT change the design, layout, or business logic. This is only a navigation/interaction update.
+
+Scope
+
+Coffee Owner Part
+
+Marketplace (Shop)
+Supplier Store pages
+Any location where product cards are displayed to the Coffee Owner
+1. Apply the "+" Quick View button everywhere
+
+The same "+" button already implemented in the marketplace must also be available on all product cards displayed inside Supplier Store pages.
+
+Requirements:
+
+Same position (bottom-right of the product image)
+Same design
+Same behavior
+Same animations
+Same spacing
+Same modal
+
+The experience must be identical everywhere products are displayed.
+
+2. Remove product card navigation
+
+The product card itself should no longer open Product Details.
+
+Remove the behavior where clicking anywhere on the product card opens the old Product Details page.
+
+After this change:
+
+Clicking the product card does nothing except its existing non-navigation interactions (if any).
+The only way to open Product Details is by clicking the new "+" button.
+3. Remove the old Product Details page flow
+
+The platform should no longer use the standalone Product Details page.
+
+Replace the old navigation flow with the new modal experience everywhere.
+
+Any place that previously navigated to the Product Details page should now use the Product Details modal instead.
+
+The Product Details content itself must remain exactly the same.
+
+4. Preserve all functionality
+
+Inside the modal, keep everything exactly as it already works:
+
+Product gallery
+Images
+Description
+Supplier information
+Variants
+Flavor selection
+Size selection
+Price
+Stock
+Favorites
+Add to Cart
+Quantity management
+All existing actions
+All current synchronization
+
+No redesign.
+
+No content changes.
+
+No business logic changes.
+
+5. Synchronization
+
+Verify that the modal works correctly from every product list:
+
+Marketplace products
+Supplier Store products
+Any future reusable product card component
+
+The same modal should always display the correct product information.
+
+Constraints
+Do NOT change the visual design.
+Do NOT duplicate Product Details components.
+Do NOT break existing cart functionality.
+Do NOT break favorites.
+Do NOT change filtering behavior.
+Keep desktop, tablet, and mobile responsive.
+Keep all existing real-time synchronization.
+Expected result
+Every product card across the Coffee Owner experience has the "+" quick-view button.
+The "+" button is the only entry point to Product Details.
+Clicking the product card itself no longer opens anything.
+The old standalone Product Details page/navigation is no longer used.
+The Product Details experience is fully modal-based everywhere, with no regression in functionality or synchronization.

@@ -9,13 +9,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, ChevronLeft, MapPin
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, ChevronLeft, MapPin, Plus
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
+import { useQuickView } from "@/hooks/use-quick-view";
 import type { StoreDetail, ProductWithTaxonomy } from "@shared/schema";
 
 function useCommercialAccess() {
@@ -25,19 +26,18 @@ function useCommercialAccess() {
   return user.role === 'CAFE_OWNER' && (user as any).status === 'approved';
 }
 
-function StoreProductCard({ product, onClick, hasCommercialAccess }: {
+function StoreProductCard({ product, hasCommercialAccess }: {
   product: ProductWithTaxonomy & { bestPrice?: number };
-  onClick: () => void;
   hasCommercialAccess: boolean;
 }) {
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
+  const openQuickView = useQuickView((s) => s.open);
 
   return (
     <div
       data-testid={`card-product-${product.id}`}
-      className="group cursor-pointer bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
-      onClick={onClick}
+      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
     >
       <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden">
         {product.imageUrl ? (
@@ -68,6 +68,16 @@ function StoreProductCard({ product, onClick, hasCommercialAccess }: {
             <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
           </button>
         )}
+        <button
+          className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            openQuickView(product.id);
+          }}
+          data-testid={`button-quick-view-${product.id}`}
+        >
+          <Plus className="w-3.5 h-3.5 text-gray-500" />
+        </button>
       </div>
       <div className="p-3 flex-1 flex flex-col gap-2">
         <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">{product.name}</h3>
@@ -284,7 +294,6 @@ export default function StoreDetailPage() {
                 key={product.id}
                 product={product}
                 hasCommercialAccess={hasCommercialAccess}
-                onClick={() => navigate(`/products/${product.id}`)}
               />
             ))}
           </div>

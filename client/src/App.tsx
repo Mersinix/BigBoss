@@ -8,7 +8,6 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import LandingPage from "@/pages/landing-page";
 import BrowseProducts from "@/pages/cafe/browse-products";
-import ProductDetailPage from "@/pages/cafe/product-detail-page";
 import CartPage from "@/pages/cafe/cart-page";
 import SupplierDashboard from "@/pages/supplier/dashboard";
 import ManageProducts from "@/pages/supplier/manage-products";
@@ -150,13 +149,7 @@ function Router() {
         )}
       </Route>
 
-      <Route path="/products/:productId">
-        {() => (
-          <MarketplaceLayout>
-            <ProductDetailPage />
-          </MarketplaceLayout>
-        )}
-      </Route>
+      <Route path="/products/:productId">{() => <Redirect to="/products" />}</Route>
 
       <Route path="/stores/:storeId">
         {() => (

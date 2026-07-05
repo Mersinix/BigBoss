@@ -17,7 +17,7 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
-import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
+import { useQuickView } from "@/hooks/use-quick-view";
 import type { MarketplaceProduct, CategoryWithCount, StoreCard } from "@shared/schema";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
@@ -68,15 +68,15 @@ function CategoryStrip({
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 
-function ProductCard({ product, onClick, onQuickView, hasCommercialAccess }: { product: MarketplaceProduct; onClick: () => void; onQuickView: () => void; hasCommercialAccess: boolean }) {
+function ProductCard({ product, hasCommercialAccess }: { product: MarketplaceProduct; hasCommercialAccess: boolean }) {
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
+  const openQuickView = useQuickView((s) => s.open);
 
   return (
     <div
       data-testid={`card-product-${product.id}`}
-      className="group cursor-pointer bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
-      onClick={onClick}
+      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
     >
       <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden">
         {product.imageUrl ? (
@@ -111,7 +111,7 @@ function ProductCard({ product, onClick, onQuickView, hasCommercialAccess }: { p
           className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
             e.stopPropagation();
-            onQuickView();
+            openQuickView(product.id);
           }}
           data-testid={`button-quick-view-${product.id}`}
         >
@@ -383,7 +383,6 @@ export default function BrowseProducts() {
   const [, navigate] = useLocation();
   const searchStr = useSearch();
   const hasCommercialAccess = useCommercialAccess();
-  const [quickViewProductId, setQuickViewProductId] = useState<number | null>(null);
   const searchLocation = useSearchLocationStore((s) => s.searchLocation);
   const searchLat = searchLocation?.lat ? parseFloat(searchLocation.lat) : null;
   const searchLng = searchLocation?.lng ? parseFloat(searchLocation.lng) : null;
@@ -555,19 +554,11 @@ export default function BrowseProducts() {
                 key={product.id}
                 product={product}
                 hasCommercialAccess={hasCommercialAccess}
-                onClick={() => navigate(`/products/${product.id}`)}
-                onQuickView={() => setQuickViewProductId(product.id)}
               />
             ))}
           </div>
         )}
       </div>
-
-      <ProductQuickViewModal
-        productId={quickViewProductId}
-        open={quickViewProductId != null}
-        onOpenChange={(open) => { if (!open) setQuickViewProductId(null); }}
-      />
     </div>
   );
 }

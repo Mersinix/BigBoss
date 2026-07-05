@@ -191,7 +191,7 @@ export function ProductDetailContent({
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="p-6 w-full max-w-4xl mx-auto space-y-6">
       {/* Back + Cart */}
       <div className="flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="button-back-browse">

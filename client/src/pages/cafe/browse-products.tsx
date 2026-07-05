@@ -228,7 +228,7 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
   hasSearchLocation: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const INITIAL_LIMIT = 10;
+  const INITIAL_LIMIT = 5;
 
   const filteredStores = useMemo(() => {
     let list = stores;
@@ -244,10 +244,11 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
 
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2"><Store className="w-5 h-5 text-blue-600" />Stores</h2>
+      <div className="items-center justify-between mb-4">
+        <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2">Marques populaires</h2>
         <p className="text-sm text-gray-400">{filteredStores.length} store{filteredStores.length !== 1 ? "s" : ""}</p>
       </div>
+      <div className="overflow-x-auto">
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {visible.map((store) => (
           <StoreCardTile
@@ -259,6 +260,7 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
             hasSearchLocation={hasSearchLocation}
           />
         ))}
+      </div>
       </div>
       {filteredStores.length > INITIAL_LIMIT && (
         <div className="flex justify-center mt-4">

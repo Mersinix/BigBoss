@@ -853,7 +853,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
                     data-testid={`nav-service-${svc.id}`}
                     className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-all shrink-0 ${
                       isActive
-                        ? "border-blue-600 text-blue-600"
+                        ? "border-amber-500 text-amber-500"
                         : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                     }`}
                   >

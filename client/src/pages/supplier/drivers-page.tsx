@@ -15,7 +15,7 @@ const fakeDrivers = [
 
 const statusStyle: Record<string, string> = {
   Active: "bg-green-100 text-green-700",
-  "On Leave": "bg-amber-100 text-amber-700",
+  "On Leave": "bg-amber-400 text-amber-700",
   Inactive: "bg-gray-100 text-gray-600",
 };
 

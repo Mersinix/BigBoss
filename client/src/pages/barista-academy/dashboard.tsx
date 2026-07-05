@@ -82,7 +82,7 @@ export default function BaristaAcademyDashboard() {
                     <p className="text-xs text-muted-foreground">{e.course} · {e.date}</p>
                   </div>
                   <Badge variant="secondary" className={
-                    e.status === "Confirmé" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                    e.status === "Confirmé" ? "bg-green-100 text-green-700" : "bg-amber-400 text-amber-700"
                   }>{e.status}</Badge>
                 </div>
               ))}

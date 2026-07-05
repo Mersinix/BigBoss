@@ -798,7 +798,7 @@ function getRoleBadgeColor(role: string) {
   const map: Record<string, string> = {
     SUPPLIER: "bg-blue-100 text-blue-700", PRINTER: "bg-orange-100 text-orange-700",
     MARKETING: "bg-purple-100 text-purple-700", BARISTA_ACADEMY: "bg-emerald-100 text-emerald-700",
-    BARISTA_MARKETPLACE: "bg-indigo-100 text-indigo-700", CAFE_OWNER: "bg-amber-100 text-amber-700",
+    BARISTA_MARKETPLACE: "bg-indigo-100 text-indigo-700", CAFE_OWNER: "bg-amber-400 text-amber-700",
     DELIVERY_COMPANY: "bg-teal-100 text-teal-700",
   };
   return map[role] ?? "bg-secondary text-secondary-foreground";
@@ -1162,7 +1162,7 @@ function CategoryRequestsSection() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-semibold truncate">{u.name}</p>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(u.role)}`}>{ROLE_LABELS[u.role]}</span>
-                          {u.status === "pending" && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Clock className="w-3 h-3 inline mr-0.5" />En attente</span>}
+                          {u.status === "pending" && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-400 text-amber-700"><Clock className="w-3 h-3 inline mr-0.5" />En attente</span>}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
                         {!isSupplier && displayCats.length > 0 && (
@@ -1179,7 +1179,7 @@ function CategoryRequestsSection() {
                               </Badge>
                             )}
                             {mappingCounts!.pendingCount > 0 && (
-                              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">
+                              <Badge className="bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">
                                 Pending {mappingCounts!.pendingCount}
                               </Badge>
                             )}
@@ -1251,7 +1251,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 function SuggestionStatusBadge({ status }: { status: string }) {
-  if (status === 'PENDING') return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">Pending</Badge>;
+  if (status === 'PENDING') return <Badge className="bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">Pending</Badge>;
   if (status === 'ACTIVE') return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0 text-xs">Approved</Badge>;
   if (status === 'REJECTED') return <Badge className="bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-0 text-xs">Rejected</Badge>;
   return <Badge variant="secondary" className="text-xs">{status}</Badge>;

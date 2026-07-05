@@ -13,7 +13,7 @@ const fakeDeliveries = [
 const statusStyle: Record<string, { badge: string; icon: any }> = {
   "In Transit": { badge: "bg-indigo-100 text-indigo-700", icon: Truck },
   "Delivered": { badge: "bg-green-100 text-green-700", icon: CheckCircle },
-  "Pending Pickup": { badge: "bg-amber-100 text-amber-700", icon: Clock },
+  "Pending Pickup": { badge: "bg-amber-400 text-amber-700", icon: Clock },
 };
 
 export default function DeliveryStatusPage() {

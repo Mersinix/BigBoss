@@ -13,7 +13,7 @@ const fakePayouts = [
 
 const statusStyle: Record<string, string> = {
   Paid: "bg-green-100 text-green-700",
-  Pending: "bg-amber-100 text-amber-700",
+  Pending: "bg-amber-400 text-amber-700",
 };
 
 export default function PayoutsPage() {

@@ -17,7 +17,7 @@ const roles = [
   },
   {
     name: "SUPPLIER",
-    color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    color: "bg-amber-400 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
     description: "Vendors that list and sell coffee-related products.",
     permissions: ["Manage Products", "View Orders", "Confirm Orders", "View Invoices"],
   },
@@ -35,7 +35,7 @@ const roles = [
   },
   {
     name: "DRIVER",
-    color: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
+    color: "bg-pink-300 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
     description: "Individual delivery drivers assigned by delivery companies.",
     permissions: ["View Delivery Queue", "Update Delivery Status"],
   },

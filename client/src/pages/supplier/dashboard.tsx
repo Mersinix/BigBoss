@@ -53,7 +53,7 @@ const statusColors: Record<string, string> = {
   Cancelled: "bg-red-100 text-red-700",
   Preparing: "bg-indigo-100 text-indigo-700",
   Delivered: "bg-green-100 text-green-700",
-  Pending: "bg-amber-100 text-amber-700",
+  Pending: "bg-amber-400 text-amber-700",
   "Out for Delivery": "bg-cyan-100 text-cyan-700",
 };
 

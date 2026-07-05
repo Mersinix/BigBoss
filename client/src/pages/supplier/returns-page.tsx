@@ -12,7 +12,7 @@ const fakeReturns = [
 ];
 
 const statusStyle: Record<string, string> = {
-  "Under Review": "bg-amber-100 text-amber-700",
+  "Under Review": "bg-amber-400 text-amber-700",
   "Approved": "bg-blue-100 text-blue-700",
   "Resolved": "bg-green-100 text-green-700",
 };

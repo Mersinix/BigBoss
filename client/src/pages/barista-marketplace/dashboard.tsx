@@ -84,7 +84,7 @@ export default function BaristaMarketplaceDashboard() {
                   <Badge variant="secondary" className={
                     r.status === "Accepté" ? "bg-green-100 text-green-700" :
                     r.status === "En discussion" ? "bg-blue-100 text-blue-700" :
-                    "bg-amber-100 text-amber-700"
+                    "bg-amber-400 text-amber-700"
                   }>{r.status}</Badge>
                 </div>
               ))}

@@ -10,7 +10,7 @@ export function PendingApprovalScreen() {
     <div className="min-h-[70vh] flex items-center justify-center p-6">
       <Card className="max-w-md w-full border shadow-sm">
         <CardContent className="pt-8 pb-8 px-6 text-center space-y-5">
-          <div className="mx-auto w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
+          <div className="mx-auto w-14 h-14 rounded-full bg-amber-400 dark:bg-amber-950/40 flex items-center justify-center">
             <Clock className="w-7 h-7 text-amber-600" />
           </div>
           <div className="space-y-2">

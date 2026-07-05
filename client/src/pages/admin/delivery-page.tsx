@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 const statusColors: Record<string, string> = {
   PENDING: "bg-gray-100 text-gray-600",
   CONFIRMED: "bg-blue-100 text-blue-700",
-  PREPARING: "bg-amber-100 text-amber-700",
+  PREPARING: "bg-amber-400 text-amber-700",
   READY: "bg-yellow-100 text-yellow-700",
   IN_DELIVERY: "bg-indigo-100 text-indigo-700",
   DELIVERED: "bg-green-100 text-green-700",
@@ -107,7 +107,7 @@ export default function DeliveryPage() {
                     <TableCell className="font-medium">#{o.id}</TableCell>
                     <TableCell>{o.cafe?.name}</TableCell>
                     <TableCell>{o.supplier?.name}</TableCell>
-                    <TableCell>${((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
+                    <TableCell>DT{((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={statusColors[o.status] || ""}>
                         {o.status.replace(/_/g, " ")}

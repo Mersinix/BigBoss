@@ -86,7 +86,7 @@ export default function MarketingDashboard() {
                     <Badge variant="secondary" className={
                       p.status === "Terminé" ? "bg-green-100 text-green-700" :
                       p.status === "Actif" ? "bg-purple-100 text-purple-700" :
-                      "bg-amber-100 text-amber-700"
+                      "bg-amber-400 text-amber-700"
                     }>{p.status}</Badge>
                   </div>
                 </div>

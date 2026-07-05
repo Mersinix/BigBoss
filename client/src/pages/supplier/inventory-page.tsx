@@ -21,7 +21,7 @@ const fakeInventory = [
 
 const statusStyle: Record<string, string> = {
   "In Stock": "bg-green-100 text-green-700",
-  "Low Stock": "bg-amber-100 text-amber-700",
+  "Low Stock": "bg-amber-400 text-amber-700",
   "Out of Stock": "bg-red-100 text-red-700",
 };
 

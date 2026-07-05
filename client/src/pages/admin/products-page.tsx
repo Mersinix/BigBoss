@@ -68,7 +68,7 @@ function CardTaxBadges({ product }: { product: ProductWithTaxonomy }) {
     <div className="flex flex-wrap gap-1">
       {product.categoryLabel && <Badge variant="secondary" className="text-xs">{product.categoryLabel.name}</Badge>}
       {product.subCategoryLabel && <Badge variant="outline" className="text-xs">{product.subCategoryLabel.name}</Badge>}
-      {product.brandLabel && <Badge className="text-xs bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400 hover:bg-green-100 border-0">{product.brandLabel.name}</Badge>}
+      {product.brandLabel && <Badge className="text-xs">{product.brandLabel.name}</Badge>}
     </div>
   );
 }
@@ -81,10 +81,10 @@ function TaxBadges({ product }: { product: ProductWithTaxonomy }) {
       {product.categoryLabel && <Badge variant="secondary" className="text-xs">{product.categoryLabel.name}</Badge>}
       {product.subCategoryLabel && <Badge variant="outline" className="text-xs">{product.subCategoryLabel.name}</Badge>}
       {flavorLabels.map(f => (
-        <Badge key={f.id} className="text-xs bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-400 hover:bg-pink-100 border-0">{f.name}</Badge>
+        <Badge key={f.id} className="text-xs bg-pink-300 text-pink-700 dark:bg-pink-950/40 dark:text-pink-400 hover:bg-pink-300 border-0">{f.name}</Badge>
       ))}
       {sizeLabels.map(s => (
-        <Badge key={s.id} className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 hover:bg-amber-100 border-0">{s.name}</Badge>
+        <Badge key={s.id} className="text-xs bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 hover:bg-amber-400 border-0">{s.name}</Badge>
       ))}
       {product.brandLabel && <Badge className="text-xs bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400 hover:bg-green-100 border-0">{product.brandLabel.name}</Badge>}
     </div>
@@ -109,9 +109,9 @@ function computeProductStatus(p: ProductWithTaxonomy): 'active' | 'inactive' {
 function ProductStatusBadge({ product }: { product: ProductWithTaxonomy }) {
   const status = computeProductStatus(product);
   if (status === 'inactive') {
-    return <Badge className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0">Inactive</Badge>;
+    return <Badge className="text-xs bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0">Inactive</Badge>;
   }
-  return <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0">Active</Badge>;
+  return <Badge className="text-xs bg-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0">Active</Badge>;
 }
 
 // ── Multi-select list ─────────────────────────────────────────────────────────
@@ -379,10 +379,10 @@ function ProductFormModal({
                 {(form.flavorIds.length > 0 || form.sizeIds.length > 0) && (
                   <div className="flex flex-wrap gap-1">
                     {filteredFlavs.filter(f => form.flavorIds.includes(f.id)).map(f => (
-                      <Badge key={f.id} className="text-xs bg-pink-100 text-pink-700 border-0">{f.name}</Badge>
+                      <Badge key={f.id} className="text-xs bg-pink-300 text-pink-700 border-0">{f.name}</Badge>
                     ))}
                     {filteredSzs.filter(s => form.sizeIds.includes(s.id)).map(s => (
-                      <Badge key={s.id} className="text-xs bg-amber-100 text-amber-700 border-0">{s.name}</Badge>
+                      <Badge key={s.id} className="text-xs bg-amber-400 text-amber-700 border-0">{s.name}</Badge>
                     ))}
                   </div>
                 )}
@@ -603,10 +603,10 @@ function SupplierProductEditModal({
                   {(form.flavorIds.length > 0 || form.sizeIds.length > 0) && (
                     <div className="flex flex-wrap gap-1">
                       {filteredFlavs.filter(f => form.flavorIds.includes(f.id)).map(f => (
-                        <Badge key={f.id} className="text-xs bg-pink-100 text-pink-700 border-0">{f.name}</Badge>
+                        <Badge key={f.id} className="text-xs bg-pink-300 text-pink-700 border-0">{f.name}</Badge>
                       ))}
                       {filteredSzs.filter(s => form.sizeIds.includes(s.id)).map(s => (
-                        <Badge key={s.id} className="text-xs bg-amber-100 text-amber-700 border-0">{s.name}</Badge>
+                        <Badge key={s.id} className="text-xs bg-amber-400 text-amber-700 border-0">{s.name}</Badge>
                       ))}
                     </div>
                   )}
@@ -661,7 +661,7 @@ const EMPTY_SP_FILTERS: SpFilters = { search: "", categoryId: "", subCategoryId:
 type SupplierProductItem = ProductWithTaxonomy & { creatorName?: string };
 
 function SpStatusBadge({ status }: { status: string }) {
-  if (status === 'PENDING') return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">Pending</Badge>;
+  if (status === 'PENDING') return <Badge className="bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">Pending</Badge>;
   if (status === 'ACTIVE') return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0 text-xs">Approved</Badge>;
   if (status === 'REJECTED') return <Badge className="bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-0 text-xs">Rejected</Badge>;
   return <Badge className="bg-secondary text-muted-foreground border-0 text-xs">Unknown</Badge>;

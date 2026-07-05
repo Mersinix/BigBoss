@@ -867,7 +867,7 @@ export default function LandingPage() {
               {/* ── Post-registration pending view ── */}
               {registrationDone ? (
                 <div className="flex flex-col items-center text-center gap-5 py-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-amber-400 flex items-center justify-center">
                     <Clock className="w-8 h-8 text-amber-500" />
                   </div>
                   <div className="space-y-2">
@@ -890,7 +890,7 @@ export default function LandingPage() {
               ) : loginPendingState ? (
                 /* ── Post-login pending view ── */
                 <div className="flex flex-col items-center text-center gap-5 py-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-amber-400 flex items-center justify-center">
                     <Clock className="w-8 h-8 text-amber-500" />
                   </div>
                   <div className="space-y-2">

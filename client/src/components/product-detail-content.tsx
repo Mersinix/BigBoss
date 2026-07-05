@@ -109,7 +109,7 @@ function SupplierSection({ listing, product }: { listing: MarketplaceListing; pr
 function CommercialGate({ isPending }: { isPending: boolean }) {
   return (
     <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-8 text-center space-y-4">
-      <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto">
+      <div className="w-14 h-14 bg-amber-400 rounded-2xl flex items-center justify-center mx-auto">
         <Lock className="w-7 h-7 text-amber-600" />
       </div>
       <div>

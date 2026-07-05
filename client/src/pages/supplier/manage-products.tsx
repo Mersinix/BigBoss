@@ -37,9 +37,9 @@ function TaxBadges({ product }: { product: ProductWithTaxonomy }) {
     <div className="flex flex-wrap gap-1">
       {product.categoryLabel && <Badge variant="secondary" className="text-xs">{product.categoryLabel.name}</Badge>}
       {product.subCategoryLabel && <Badge variant="outline" className="text-xs">{product.subCategoryLabel.name}</Badge>}
-      {flavorLabels.map(f => <Badge key={f.id} className="text-xs bg-pink-100 text-pink-700 hover:bg-pink-100 dark:bg-pink-950/40 dark:text-pink-400 border-0">{f.name}</Badge>)}
-      {sizeLabels.map(s => <Badge key={s.id} className="text-xs bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400 border-0">{s.name}</Badge>)}
-      {product.brandLabel && <Badge className="text-xs bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 border-0">{product.brandLabel.name}</Badge>}
+      {product.brandLabel && <Badge className="text-xs">{product.brandLabel.name}</Badge>}
+      {flavorLabels.map(f => <Badge key={f.id} className="text-xs bg-pink-300 text-pink-700 hover:bg-pink-300 dark:bg-pink-950/40 dark:text-pink-400 border-0">{f.name}</Badge>)}
+      {sizeLabels.map(s => <Badge key={s.id} className="text-xs bg-amber-400 text-amber-700 hover:bg-amber-400 dark:bg-amber-950/40 dark:text-amber-400 border-0">{s.name}</Badge>)}
     </div>
   );
 }
@@ -251,7 +251,7 @@ function VariantGroupBuilder({
               />
             )}
             <div className="space-y-1">
-              <Label className="text-xs">Price (USD)</Label>
+              <Label className="text-xs">Price (TND)</Label>
               <Input type="number" step="0.01" min="0" value={g.price} onChange={e => update(g.id, { price: e.target.value })} placeholder="0.00" />
             </div>
             {hasFlavors ? (
@@ -383,7 +383,7 @@ function ListingLivePreview({
                   <div key={i} className="flex items-center justify-between gap-2 text-sm">
                     <span className="text-muted-foreground truncate">{label}</span>
                     <div className="flex items-center gap-2 shrink-0">
-                      {price > 0 && <span className="font-medium">${price.toFixed(2)}</span>}
+                      {price > 0 && <span className="font-medium">DT{price.toFixed(2)}</span>}
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${qty > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}>
                         {qty > 0 ? `${qty} in stock` : "No stock"}
                       </span>
@@ -608,7 +608,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
 
 function StatusBadge({ status }: { status: string }) {
   const cls: Record<string, string> = {
-    PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
+    PENDING: "bg-amber-400 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
     ACTIVE: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
     REJECTED: "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400",
   };
@@ -803,15 +803,15 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
                 <div className="flex flex-wrap gap-1 pt-1">
                   {form.categoryId && <Badge variant="secondary" className="text-xs">{supplierCats.find(c => String(c.id) === form.categoryId)?.name}</Badge>}
                   {form.subCategoryId && <Badge variant="outline" className="text-xs">{filteredSubs.find(s => String(s.id) === form.subCategoryId)?.name}</Badge>}
-                  {form.brandId && <Badge className="text-xs bg-green-100 text-green-700 border-0">{filteredBrnds.find(b => String(b.id) === form.brandId)?.name}</Badge>}
+                  {form.brandId && <Badge className="text-xs">{filteredBrnds.find(b => String(b.id) === form.brandId)?.name}</Badge>}
                 </div>
                 {(form.flavorIds.length > 0 || form.sizeIds.length > 0) && (
                   <div className="flex flex-wrap gap-1">
                     {filteredFlavs.filter(f => form.flavorIds.includes(f.id)).map(f => (
-                      <Badge key={f.id} className="text-xs bg-pink-100 text-pink-700 border-0">{f.name}</Badge>
+                      <Badge key={f.id} className="text-xs bg-pink-300 text-pink-700 border-0">{f.name}</Badge>
                     ))}
                     {filteredSzs.filter(s => form.sizeIds.includes(s.id)).map(s => (
-                      <Badge key={s.id} className="text-xs bg-amber-100 text-amber-700 border-0">{s.name}</Badge>
+                      <Badge key={s.id} className="text-xs bg-amber-400 text-amber-700 border-0">{s.name}</Badge>
                     ))}
                   </div>
                 )}

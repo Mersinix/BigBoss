@@ -52,7 +52,7 @@ export default function EarningsPage() {
                   <DollarSign className="w-4 h-4 text-amber-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-amber-500">${(totalEarnings / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-amber-500">DT{(totalEarnings / 100).toFixed(2)}</p>
               <p className="text-xs text-muted-foreground mt-1">All time delivered orders</p>
             </CardContent>
           </Card>
@@ -64,7 +64,7 @@ export default function EarningsPage() {
                   <TrendingUp className="w-4 h-4 text-green-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-green-500">${(thisMonth / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-green-500">DT{(thisMonth / 100).toFixed(2)}</p>
               <p className="text-xs text-muted-foreground mt-1">Current month</p>
             </CardContent>
           </Card>
@@ -88,7 +88,7 @@ export default function EarningsPage() {
                   <Percent className="w-4 h-4 text-blue-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-blue-500">${(commission / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-blue-500">DT{(commission / 100).toFixed(2)}</p>
               <p className="text-xs text-muted-foreground mt-1">5% of total</p>
             </CardContent>
           </Card>

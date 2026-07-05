@@ -14,7 +14,7 @@ const fakeRequests = [
 ];
 
 const statusColors: Record<string, string> = {
-  Pending: "bg-amber-100 text-amber-700",
+  Pending: "bg-amber-400 text-amber-700",
   Approved: "bg-green-100 text-green-700",
   Rejected: "bg-red-100 text-red-700",
 };

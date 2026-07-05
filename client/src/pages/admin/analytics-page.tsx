@@ -44,7 +44,7 @@ export default function AnalyticsPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Revenue</p>
-                <p className="text-xl font-bold text-green-600">${(totalRevenue / 100).toFixed(2)}</p>
+                <p className="text-xl font-bold text-green-600">DT{(totalRevenue / 100).toFixed(2)}</p>
               </div>
             </CardContent>
           </Card>

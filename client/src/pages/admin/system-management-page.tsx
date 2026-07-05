@@ -16,7 +16,7 @@ const SERVICES: { key: ServiceKey; label: string; description: string; icon: any
 
 const STATE_OPTIONS: { value: ServiceState; label: string; icon: any; badgeClass: string }[] = [
   { value: "VISIBLE", label: "Visible", icon: Eye, badgeClass: "bg-green-100 text-green-700 border-green-200" },
-  { value: "COMING_SOON", label: "Coming Soon", icon: Clock, badgeClass: "bg-amber-100 text-amber-700 border-amber-200" },
+  { value: "COMING_SOON", label: "Coming Soon", icon: Clock, badgeClass: "bg-amber-400 text-amber-700 border-amber-200" },
   { value: "HIDDEN", label: "Hidden", icon: EyeOff, badgeClass: "bg-gray-100 text-gray-600 border-gray-200" },
 ];
 

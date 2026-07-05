@@ -72,14 +72,14 @@ export default function InvoicesPage() {
                     <TableCell className="font-medium">INV-{String(o.id).padStart(4, "0")}</TableCell>
                     <TableCell>{o.cafe?.name}</TableCell>
                     <TableCell>{o.supplier?.name}</TableCell>
-                    <TableCell>${((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
+                    <TableCell>DT{((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {o.createdAt ? new Date(o.createdAt).toLocaleDateString() : "—"}
                     </TableCell>
                     <TableCell>
                       <Badge
                         variant="secondary"
-                        className={o.status === "DELIVERED" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}
+                        className={o.status === "DELIVERED" ? "bg-green-100 text-green-700" : "bg-amber-400 text-amber-700"}
                       >
                         {o.status === "DELIVERED" ? "Paid" : "Pending"}
                       </Badge>

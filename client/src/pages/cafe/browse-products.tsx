@@ -10,13 +10,14 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
+import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import type { MarketplaceProduct, CategoryWithCount, StoreCard } from "@shared/schema";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ function CategoryStrip({
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 
-function ProductCard({ product, onClick, hasCommercialAccess }: { product: MarketplaceProduct; onClick: () => void; hasCommercialAccess: boolean }) {
+function ProductCard({ product, onClick, onQuickView, hasCommercialAccess }: { product: MarketplaceProduct; onClick: () => void; onQuickView: () => void; hasCommercialAccess: boolean }) {
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
 
@@ -106,6 +107,16 @@ function ProductCard({ product, onClick, hasCommercialAccess }: { product: Marke
             <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
           </button>
         )}
+        <button
+          className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            onQuickView();
+          }}
+          data-testid={`button-quick-view-${product.id}`}
+        >
+          <Plus className="w-3.5 h-3.5 text-gray-500" />
+        </button>
       </div>
       <div className="p-3 flex-1 flex flex-col gap-2">
         <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">{product.name}</h3>
@@ -372,6 +383,7 @@ export default function BrowseProducts() {
   const [, navigate] = useLocation();
   const searchStr = useSearch();
   const hasCommercialAccess = useCommercialAccess();
+  const [quickViewProductId, setQuickViewProductId] = useState<number | null>(null);
   const searchLocation = useSearchLocationStore((s) => s.searchLocation);
   const searchLat = searchLocation?.lat ? parseFloat(searchLocation.lat) : null;
   const searchLng = searchLocation?.lng ? parseFloat(searchLocation.lng) : null;
@@ -544,11 +556,18 @@ export default function BrowseProducts() {
                 product={product}
                 hasCommercialAccess={hasCommercialAccess}
                 onClick={() => navigate(`/products/${product.id}`)}
+                onQuickView={() => setQuickViewProductId(product.id)}
               />
             ))}
           </div>
         )}
       </div>
+
+      <ProductQuickViewModal
+        productId={quickViewProductId}
+        open={quickViewProductId != null}
+        onOpenChange={(open) => { if (!open) setQuickViewProductId(null); }}
+      />
     </div>
   );
 }

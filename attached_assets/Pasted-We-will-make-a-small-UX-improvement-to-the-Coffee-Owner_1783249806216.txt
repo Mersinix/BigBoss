@@ -1,0 +1,86 @@
+We will make a small UX improvement to the Coffee Owner marketplace without changing the existing design or business logic.
+
+Before making any changes, analyze the current product card component, product details page, favorites behavior, cart flow, and modal system. Reuse the existing Product Details content instead of creating a new version.
+
+Do not redesign anything. Do not modify the product details content or existing functionality. Only change how it is accessed.
+
+Scope
+
+Coffee Owner Part → Shop (Marketplace Products)
+
+1. Add a Quick View button on product cards
+
+Every product card should have a new "+" (plus) button.
+
+Position
+Place the "+" button on the product image, at the bottom-right corner.
+Keep the existing Favorite (heart) button exactly where it is (top-right corner).
+The new "+" button should visually match the existing floating action button style (same design language, size, spacing, shadows, border radius, hover effects, etc.).
+
+Do not move or redesign any existing elements.
+
+2. Open Product Details inside a modal
+
+When the Coffee Owner clicks the new "+" button:
+
+Open the existing Product Details inside a modal.
+Reuse the current Product Details content exactly as it already exists.
+The modal should display the complete Product Details page content without removing or simplifying any information.
+
+The Product Details modal should behave exactly like the current Product Details page, only presented inside a modal.
+
+3. Preserve existing navigation
+
+Keep the existing product navigation behavior unchanged.
+
+If clicking on the product card currently opens the Product Details page, keep that behavior unless it conflicts with the new "+" action.
+
+The new "+" button is simply an additional way to access the Product Details through a modal.
+
+4. Preserve all existing functionality
+
+Inside the modal, everything must continue to work exactly as before, including:
+
+Product information
+Images
+Variants
+Flavor selection
+Size selection
+Pricing
+Stock information
+Supplier information
+Favorites
+Add to Cart
+Quantity changes
+Any existing actions
+Any existing synchronization
+
+Do not remove, redesign, or simplify anything.
+
+5. Synchronization
+
+Verify that all existing real-time behavior continues to work:
+
+Product updates
+Stock changes
+Price updates
+Favorites
+Cart updates
+Variant changes
+
+Everything should remain synchronized without requiring a page refresh.
+
+Constraints
+Do NOT change the UI design.
+Do NOT redesign the Product Details.
+Do NOT duplicate Product Details logic.
+Do NOT break existing routing.
+Do NOT change current business logic.
+Reuse the existing Product Details implementation.
+Keep desktop, tablet, and mobile fully responsive.
+Expected result
+Every marketplace product card has a "+" quick-view button positioned at the bottom-right of the product image.
+Clicking "+" opens the existing Product Details inside a modal.
+The modal contains the exact same content and functionality as the current Product Details page.
+All existing behaviors remain unchanged.
+No regressions or visual changes are introduced elsewhere in the application.

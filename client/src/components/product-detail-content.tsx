@@ -219,7 +219,7 @@ export function ProductDetailContent({
             {product.category && <Badge variant="secondary">{product.category}</Badge>}
             {product.subCategoryLabel && <Badge variant="outline">{product.subCategoryLabel.name}</Badge>}
             {product.brandLabel && (
-              <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-0">{product.brandLabel.name}</Badge>
+              <Badge className="text-xs">{product.brandLabel.name}</Badge>
             )}
           </div>
 

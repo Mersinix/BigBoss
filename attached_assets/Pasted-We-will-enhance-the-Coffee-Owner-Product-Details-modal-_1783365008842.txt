@@ -1,0 +1,110 @@
+We will enhance the Coffee Owner Product Details modal (opened via “+” button) with new filtering, location, stock, and review capabilities.
+
+Before making any changes, analyze the current Product Details modal, location modal system, supplier-product mapping logic, and review system. Reuse existing components wherever possible.
+
+Do NOT change UI design. Do NOT remove existing functionality. Only extend behavior.
+
+Scope
+
+Coffee Owner Part → Product Details Modal (opened via “+” button)
+
+1. Location + Search Radius (Enhancement of existing location modal)
+
+Inside the Product Details modal, reuse the existing location modal system (same one used in shop navbar).
+
+Keep existing behavior:
+Step 1: “Où voulez-vous rechercher ?”
+Step 2: “Confirmer la position”
+NEW addition (Step 2 only):
+Add a distance radius slider (diameter/circle control) in Step 2.
+The coffee owner can define a search radius around the selected location.
+Behavior rules:
+If radius is set:
+Only suppliers within that radius must be displayed on the map and in results.
+Map must visually indicate suppliers inside the circle.
+If radius is NOT set:
+Default behavior:
+Show suppliers sorted by distance (nearest → farthest)
+No filtering by radius
+2. Flavor filtering (badges under product description)
+
+Under the product description:
+
+Display available Flavors as clickable badges
+User can switch between flavors
+Behavior:
+When a flavor is selected:
+Supplier list and product availability must update accordingly
+Only suppliers/products that have the selected flavor must be shown
+3. Size filtering (badges under flavors)
+
+Under the flavor badges:
+
+Display available Sizes as clickable badges
+Behavior:
+When a size is selected:
+Update supplier/product mapping dynamically
+Only suppliers/products matching selected size must be displayed
+4. Supplier filtering rules (availability logic)
+
+When displaying suppliers in Product Details modal:
+
+DO NOT show suppliers if:
+They have zero variants for selected filters
+They are out of stock
+They do not match selected location + radius
+
+Only suppliers with valid available products must be displayed.
+
+5. Stock behavior per variant (IMPORTANT UPDATE)
+
+Stock must NOT be aggregated.
+
+New rule:
+Stock is shown and controlled per flavor/variant
+Each flavor has its own stock value
+Behavior:
+Coffee owner can only select quantity up to the available stock of that specific flavor variant
+Stock info must be clearly visible per flavor selection
+6. Reviews system (Coffee Owner → Supplier/Product reviews)
+
+Add a review system inside Product Details modal.
+
+Features:
+A. Rating
+Coffee owner can rate from 1 to 5 stars
+B. Comment
+Coffee owner can write a review comment
+C. Review modal
+Open a review modal from Product Details page
+User can:
+Select supplier (based on current filters and selected product context)
+Submit rating + comment
+Synchronization:
+Reviews must be synchronized with Supplier Part → Reviews tab
+Every submitted review must update:
+Average rating
+Total number of reviews
+7. Reviews display in Product Details
+
+Inside Product Details modal:
+
+Show:
+Average rating (stars)
+Total number of reviews
+8. Global constraints (VERY IMPORTANT)
+Do NOT change UI design or layout
+Do NOT remove existing Product Details features
+Do NOT break cart / favorites / variants logic
+Do NOT change supplier product mapping logic
+Do NOT break existing location modal outside this scope
+Keep everything responsive (mobile / tablet / desktop)
+Maintain real-time synchronization everywhere
+Expected result
+Location modal now supports radius filtering for suppliers
+Suppliers can be filtered by distance + location circle
+Flavor and Size badges dynamically filter supplier availability
+Only valid suppliers (stock + filters + location) are displayed
+Stock is managed per flavor variant
+Review system is fully functional and synchronized with supplier reviews tab
+Product Details modal remains the central experience with no UI regression

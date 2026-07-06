@@ -12,6 +12,7 @@ import {
   insertCategorySchema, insertSubCategorySchema, insertFlavorSchema,
   insertSizeSchema, insertBrandSchema,
   type MarketplaceProduct,
+  supplierProductReviews,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
@@ -1501,6 +1502,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!product) return res.status(404).json({ message: "Not found" });
       const commercial = await hasCommercialAccess(req);
       res.json(commercial ? product : stripCommercialData(product));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // ── Reviews ─────────────────────────────────────────────────────────────────
+
+  // Supplier reviews — only the supplier themselves or admins can fetch the full list
+  app.get("/api/reviews/supplier/:supplierId", async (req, res) => {
+    try {
+      if (!req.session.userId) return res.status(401).json({ message: "Unauthorized" });
+      const caller = await storage.getUser(req.session.userId);
+      if (!caller) return res.status(401).json({ message: "Unauthorized" });
+      const supplierId = parseInt(req.params.supplierId);
+      const isOwner = caller.id === supplierId;
+      const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(caller.role);
+      if (!isOwner && !isAdmin) return res.status(403).json({ message: "Forbidden" });
+      res.json(await storage.getReviewsBySupplier(supplierId));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Product review stats — available to approved cafe owners/admins/suppliers
+  app.get("/api/reviews/product/:productId", async (req, res) => {
+    try {
+      if (!req.session.userId) return res.status(401).json({ message: "Unauthorized" });
+      const productId = parseInt(req.params.productId);
+      res.json(await storage.getReviewStatsByProduct(productId));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.post("/api/reviews", async (req, res) => {
+    try {
+      if (!req.session.userId) return res.status(401).json({ message: "Unauthorized" });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== 'CAFE_OWNER' || user.status !== 'approved') {
+        return res.status(403).json({ message: "Only approved cafe owners can submit reviews" });
+      }
+      const { supplierId, productId, listingId, rating, comment, productName } = req.body;
+      if (!supplierId || !rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ message: "supplierId and rating (1-5) are required" });
+      }
+      // Validate that supplierId is actually a SUPPLIER
+      const targetSupplier = await storage.getUser(Number(supplierId));
+      if (!targetSupplier || targetSupplier.role !== 'SUPPLIER') {
+        return res.status(400).json({ message: "Invalid supplier" });
+      }
+      // If listingId provided, verify it belongs to supplierId and productId
+      if (listingId) {
+        const [listing] = await db.select().from(supplierProductListings)
+          .where(eq(supplierProductListings.id, Number(listingId)));
+        if (!listing || listing.supplierId !== Number(supplierId)) {
+          return res.status(400).json({ message: "Listing does not belong to this supplier" });
+        }
+        if (productId && listing.productId !== Number(productId)) {
+          return res.status(400).json({ message: "Listing does not match this product" });
+        }
+      }
+      const review = await storage.createReview({
+        supplierId: Number(supplierId),
+        cafeId: user.id,
+        productId: productId ? Number(productId) : null,
+        listingId: listingId ? Number(listingId) : null,
+        rating: Number(rating),
+        comment: comment ?? null,
+        cafeName: user.name,
+        cafeOwnerName: user.name,
+        productName: productName ?? null,
+      });
+      res.status(201).json(review);
     } catch { res.status(500).json({ message: "Error" }); }
   });
 

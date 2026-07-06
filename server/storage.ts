@@ -3,7 +3,7 @@ import {
   users, products, orders, orderItems, subOrders, supplierProductVariants,
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
-  platformServices, supplierStores, storeFavorites,
+  platformServices, supplierStores, storeFavorites, supplierProductReviews,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
   type InsertOrder, type Order, type OrderWithDetails,
@@ -23,8 +23,9 @@ import {
   type ShopFavoriteItem,
   type ServiceKey, type ServiceState, type ServiceStatesMap,
   type SupplierStore, type InsertSupplierStore, type StoreCard, type StoreAdminRow, type StoreDetail,
+  type SupplierProductReview,
 } from "@shared/schema";
-import { eq, and, inArray, ne, sql, notInArray, asc } from "drizzle-orm";
+import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -491,7 +492,7 @@ export class DatabaseStorage implements IStorage {
     const frozenSet = new Set(frozenMappings.map((f) => `${f.supplierId}:${f.categoryId}`));
     const tx = await buildTaxonomyCache();
 
-    const supplierMap = new Map(allUsers.map((u) => [u.id, u.name]));
+    const supplierMap = new Map(allUsers.map((u) => [u.id, { name: u.name, lat: u.locationLat, lng: u.locationLng }]));
     const productMap = new Map(allProducts.map((p) => [p.id, p]));
     const variantsByListing = new Map<number, typeof allVariants>();
     for (const v of allVariants) {
@@ -532,7 +533,8 @@ export class DatabaseStorage implements IStorage {
             }));
           const totalStock = variants.length ? variants.reduce((s, v) => s + v.quantity, 0) : (l.stock > 0 && l.price > 0 ? l.stock : 0);
           const minPrice = variants.length ? Math.min(...variants.map((v) => v.price)) : (l.price > 0 ? l.price : 0);
-          return { id: l.id, supplierId: l.supplierId, supplierName: supplierMap.get(l.supplierId) ?? "", variants, totalStock, minPrice };
+          const sup = supplierMap.get(l.supplierId);
+          return { id: l.id, supplierId: l.supplierId, supplierName: sup?.name ?? "", supplierLat: sup?.lat ?? null, supplierLng: sup?.lng ?? null, variants, totalStock, minPrice };
         })
         .filter((l) => l.totalStock > 0 && l.minPrice > 0);
       if (!marketListings.length) continue;
@@ -1257,6 +1259,54 @@ export class DatabaseStorage implements IStorage {
 
   async removeStoreFavorite(userId: number, storeId: number): Promise<void> {
     await db.delete(storeFavorites).where(and(eq(storeFavorites.userId, userId), eq(storeFavorites.storeId, storeId)));
+  }
+
+  // ── Reviews ──────────────────────────────────────────────────────────────────
+
+  async createReview(data: {
+    supplierId: number;
+    cafeId: number;
+    productId?: number | null;
+    listingId?: number | null;
+    rating: number;
+    comment?: string | null;
+    cafeName: string;
+    cafeOwnerName: string;
+    productName?: string | null;
+  }): Promise<SupplierProductReview> {
+    const [row] = await db.insert(supplierProductReviews).values(data).returning();
+    return row;
+  }
+
+  async getReviewsBySupplier(supplierId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(eq(supplierProductReviews.supplierId, supplierId))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getReviewStatsByProduct(productId: number): Promise<{
+    overall: { avgRating: number; total: number };
+    bySupplier: Record<number, { avgRating: number; total: number }>;
+  }> {
+    const rows = await db.select().from(supplierProductReviews)
+      .where(eq(supplierProductReviews.productId, productId));
+    if (!rows.length) return { overall: { avgRating: 0, total: 0 }, bySupplier: {} };
+    const bySupplier: Record<number, { sum: number; count: number }> = {};
+    for (const r of rows) {
+      if (!bySupplier[r.supplierId]) bySupplier[r.supplierId] = { sum: 0, count: 0 };
+      bySupplier[r.supplierId].sum += r.rating;
+      bySupplier[r.supplierId].count += 1;
+    }
+    const total = rows.length;
+    const avgRating = rows.reduce((s, r) => s + r.rating, 0) / total;
+    return {
+      overall: { avgRating, total },
+      bySupplier: Object.fromEntries(
+        Object.entries(bySupplier).map(([sid, { sum, count }]) => [
+          sid, { avgRating: sum / count, total: count }
+        ])
+      ) as Record<number, { avgRating: number; total: number }>,
+    };
   }
 }
 

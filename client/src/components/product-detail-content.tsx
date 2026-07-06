@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -7,12 +7,25 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Package, Store, Minus, Plus, ShoppingCart, CheckCircle2,
-  Lock, AlertTriangle, LogIn
+  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant } from "@shared/schema";
+import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
+import { ReviewModal } from "@/components/review-modal";
+
+// ── Haversine distance (km) ───────────────────────────────────────────────────
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
@@ -21,6 +34,19 @@ function useAccess(user: any) {
   if (['SUPER_ADMIN', 'ADMIN', 'SUPPLIER'].includes(user?.role)) return { isVisitor: false, isPending: false, hasCommercial: true };
   const approved = user?.role === 'CAFE_OWNER' && user?.status === 'approved';
   return { isVisitor: false, isPending: !approved, hasCommercial: approved };
+}
+
+// ── Stars display ─────────────────────────────────────────────────────────────
+
+function Stars({ rating, size = "sm" }: { rating: number; size?: "sm" | "xs" }) {
+  const cls = size === "xs" ? "w-3 h-3" : "w-3.5 h-3.5";
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star key={i} className={`${cls} ${i <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/25"}`} />
+      ))}
+    </div>
+  );
 }
 
 // ── Variant Row ──────────────────────────────────────────────────────────────
@@ -72,11 +98,18 @@ function VariantRow({ variant, listing, product }: { variant: MarketplaceVariant
 
 // ── Supplier Card ──────────────────────────────────────────────────────────────
 
-function SupplierSection({ listing, product }: { listing: MarketplaceListing; product: MarketplaceProduct }) {
-  const prices = listing.variants.map(v => v.price);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-  const totalStock = listing.variants.reduce((sum, v) => sum + v.quantity, 0);
+function SupplierSection({
+  listing, product, visibleVariants, reviewStats,
+}: {
+  listing: MarketplaceListing;
+  product: MarketplaceProduct;
+  visibleVariants: MarketplaceVariant[];
+  reviewStats?: { avgRating: number; total: number };
+}) {
+  const prices = visibleVariants.map(v => v.price);
+  const minPrice = prices.length ? Math.min(...prices) : 0;
+  const maxPrice = prices.length ? Math.max(...prices) : 0;
+  const totalStock = visibleVariants.reduce((sum, v) => sum + v.quantity, 0);
 
   return (
     <div className="rounded-2xl border border-border/50 overflow-hidden shadow-sm">
@@ -85,10 +118,18 @@ function SupplierSection({ listing, product }: { listing: MarketplaceListing; pr
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center"><Store className="w-5 h-5 text-primary" /></div>
           <div>
             <p className="font-semibold">{listing.supplierName}</p>
-            <p className="text-xs text-muted-foreground">
-              {listing.variants.length} variant{listing.variants.length !== 1 ? "s" : ""}{" · "}
-              {prices.length === 1 || minPrice === maxPrice ? formatCurrency(minPrice) : `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-xs text-muted-foreground">
+                {visibleVariants.length} variant{visibleVariants.length !== 1 ? "s" : ""}{" · "}
+                {prices.length === 0 ? "—" : prices.length === 1 || minPrice === maxPrice ? formatCurrency(minPrice) : `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`}
+              </p>
+              {reviewStats && reviewStats.total > 0 && (
+                <div className="flex items-center gap-1">
+                  <Stars rating={reviewStats.avgRating} size="xs" />
+                  <span className="text-xs text-muted-foreground">({reviewStats.total})</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <Badge variant="outline" className={totalStock > 0 ? "border-emerald-200 text-emerald-700 bg-emerald-50" : "border-red-200 text-red-600"}>
@@ -96,7 +137,7 @@ function SupplierSection({ listing, product }: { listing: MarketplaceListing; pr
         </Badge>
       </div>
       <div className="px-5">
-        {listing.variants.map((v, idx) => (
+        {visibleVariants.map((v, idx) => (
           <VariantRow key={`${v.flavorId ?? 0}-${v.sizeId ?? 0}-${idx}`} variant={v} listing={listing} product={product} />
         ))}
       </div>
@@ -141,8 +182,47 @@ function CommercialGate({ isPending }: { isPending: boolean }) {
   );
 }
 
+// ── Filter badge row ──────────────────────────────────────────────────────────
+
+function FilterBadges<T extends { id: number; name: string }>({
+  label,
+  items,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  items: T[];
+  selected: number | null;
+  onSelect: (id: number | null) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-semibold text-muted-foreground shrink-0">{label}:</span>
+      <button
+        onClick={() => onSelect(null)}
+        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+          selected === null ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50 text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        All
+      </button>
+      {items.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => onSelect(selected === item.id ? null : item.id)}
+          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+            selected === item.id ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {item.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── Shared Product Details Content ────────────────────────────────────────────
-// Reused by both the standalone Product Details page and the Quick View modal.
 
 export function ProductDetailContent({
   productId,
@@ -158,6 +238,14 @@ export function ProductDetailContent({
   const { items } = useCart();
   const { isVisitor, isPending, hasCommercial } = useAccess(user);
 
+  // ── Filter state ─────────────────────────────────────────────────────────
+  const [selectedFlavorId, setSelectedFlavorId] = useState<number | null>(null);
+  const [selectedSizeId, setSelectedSizeId] = useState<number | null>(null);
+  const [locationFilter, setLocationFilter] = useState<{ lat: number; lng: number; radius: number | null; label: string } | null>(null);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+
+  // ── Product data ─────────────────────────────────────────────────────────
   const { data: product, isLoading, error } = useQuery<MarketplaceProduct>({
     queryKey: ["/api/marketplace", productId],
     queryFn: async () => {
@@ -168,7 +256,91 @@ export function ProductDetailContent({
     enabled: !!productId,
   });
 
+  // ── Review stats ─────────────────────────────────────────────────────────
+  const { data: reviewData } = useQuery<{
+    overall: { avgRating: number; total: number };
+    bySupplier: Record<string, { avgRating: number; total: number }>;
+  }>({
+    queryKey: ["/api/reviews/product", productId],
+    queryFn: async () => {
+      const res = await fetch(`/api/reviews/product/${productId}`);
+      if (!res.ok) return { overall: { avgRating: 0, total: 0 }, bySupplier: {} };
+      return res.json();
+    },
+    enabled: !!productId && hasCommercial,
+  });
+
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
+
+  // ── Collect unique flavors / sizes from all listings ────────────────────
+  const { allFlavors, allSizes } = useMemo(() => {
+    if (!product) return { allFlavors: [], allSizes: [] };
+    const fMap = new Map<number, string>();
+    const sMap = new Map<number, string>();
+    for (const l of product.listings) {
+      for (const v of l.variants) {
+        if (v.flavorId && v.flavorName) fMap.set(v.flavorId, v.flavorName);
+        if (v.sizeId && v.sizeName) sMap.set(v.sizeId, v.sizeName);
+      }
+    }
+    return {
+      allFlavors: Array.from(fMap.entries()).map(([id, name]) => ({ id, name })),
+      allSizes: Array.from(sMap.entries()).map(([id, name]) => ({ id, name })),
+    };
+  }, [product]);
+
+  // ── Filtered listings ────────────────────────────────────────────────────
+  const filteredListings = useMemo(() => {
+    if (!product) return [];
+    return product.listings
+      .map((listing) => {
+        // Apply flavor + size filter to variants
+        const variants = listing.variants.filter((v) => {
+          if (selectedFlavorId !== null && v.flavorId !== selectedFlavorId) return false;
+          if (selectedSizeId !== null && v.sizeId !== selectedSizeId) return false;
+          return true;
+        });
+        return { listing, variants };
+      })
+      .filter(({ listing, variants }) => {
+        // Must have matching variants
+        if (variants.length === 0) return false;
+        // Must have stock in at least one visible variant
+        if (variants.every((v) => v.quantity <= 0)) return false;
+        // Location + radius filter
+        if (locationFilter) {
+          // Suppliers without coordinates are excluded when a location filter is active
+          if (!listing.supplierLat || !listing.supplierLng) return false;
+          const dist = haversineKm(
+            locationFilter.lat, locationFilter.lng,
+            parseFloat(listing.supplierLat), parseFloat(listing.supplierLng),
+          );
+          if (locationFilter.radius !== null && dist > locationFilter.radius) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        // Sort by distance when location is set (nearest first)
+        if (!locationFilter) return 0;
+        const distA = a.listing.supplierLat && a.listing.supplierLng
+          ? haversineKm(locationFilter.lat, locationFilter.lng, parseFloat(a.listing.supplierLat), parseFloat(a.listing.supplierLng))
+          : Infinity;
+        const distB = b.listing.supplierLat && b.listing.supplierLng
+          ? haversineKm(locationFilter.lat, locationFilter.lng, parseFloat(b.listing.supplierLat), parseFloat(b.listing.supplierLng))
+          : Infinity;
+        return distA - distB;
+      });
+  }, [product, selectedFlavorId, selectedSizeId, locationFilter]);
+
+  const handleLocationConfirm = (loc: PickedLocation) => {
+    setLocationFilter({
+      lat: parseFloat(loc.lat),
+      lng: parseFloat(loc.lng),
+      radius: loc.radius ?? null,
+      label: loc.address.split(",")[0]?.trim() ?? loc.address,
+    });
+    setLocationModalOpen(false);
+  };
 
   if (isLoading) {
     return (
@@ -189,6 +361,8 @@ export function ProductDetailContent({
       </div>
     );
   }
+
+  const isCafeOwner = user?.role === 'CAFE_OWNER' && user?.status === 'approved';
 
   return (
     <div className="p-6 w-full max-w-4xl mx-auto space-y-6">
@@ -228,6 +402,35 @@ export function ProductDetailContent({
           {/* Description — always visible */}
           {product.description && <p className="text-muted-foreground leading-relaxed">{product.description}</p>}
 
+          {/* Overall review summary */}
+          {hasCommercial && reviewData && reviewData.overall.total > 0 && (
+            <div className="flex items-center gap-2 pt-1">
+              <Stars rating={reviewData.overall.avgRating} />
+              <span className="text-sm font-medium">{reviewData.overall.avgRating.toFixed(1)}</span>
+              <span className="text-xs text-muted-foreground">({reviewData.overall.total} review{reviewData.overall.total !== 1 ? "s" : ""})</span>
+            </div>
+          )}
+
+          {/* Flavor filter badges */}
+          {hasCommercial && allFlavors.length > 0 && (
+            <FilterBadges
+              label="Flavors"
+              items={allFlavors}
+              selected={selectedFlavorId}
+              onSelect={setSelectedFlavorId}
+            />
+          )}
+
+          {/* Size filter badges */}
+          {hasCommercial && allSizes.length > 0 && (
+            <FilterBadges
+              label="Sizes"
+              items={allSizes}
+              selected={selectedSizeId}
+              onSelect={setSelectedSizeId}
+            />
+          )}
+
           {/* Price + Supplier count — only for approved */}
           {hasCommercial ? (
             <div className="flex items-center gap-4 pt-2">
@@ -238,7 +441,7 @@ export function ProductDetailContent({
               <div className="h-8 border-l border-border" />
               <div>
                 <p className="text-xs text-muted-foreground">Suppliers</p>
-                <p className="font-bold text-lg">{product.supplierCount}</p>
+                <p className="font-bold text-lg">{filteredListings.length}<span className="text-xs text-muted-foreground font-normal ml-1">/{product.supplierCount} visible</span></p>
               </div>
             </div>
           ) : (
@@ -253,15 +456,74 @@ export function ProductDetailContent({
       {/* Supplier Listings — only for approved */}
       {hasCommercial ? (
         <div className="space-y-3">
-          <h2 className="font-semibold text-lg">Available from Suppliers</h2>
-          {product.listings.length === 0 ? (
-            <div className="rounded-2xl border border-border/50 p-12 text-center text-muted-foreground">No supplier listings available for this product.</div>
+          {/* Toolbar: location filter + write review */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="font-semibold text-lg">Available from Suppliers</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Location filter button */}
+              {locationFilter ? (
+                <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-1.5 text-xs font-medium">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span>{locationFilter.label}</span>
+                  {locationFilter.radius !== null && <span className="text-amber-600">· {locationFilter.radius} km</span>}
+                  <button type="button" onClick={() => setLocationFilter(null)} className="ml-1 hover:text-red-500 transition-colors">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setLocationModalOpen(true)}>
+                  <MapPin className="w-3.5 h-3.5" /> Filter by location
+                </Button>
+              )}
+              {/* Write review button */}
+              {isCafeOwner && product.listings.length > 0 && (
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setReviewModalOpen(true)}>
+                  <MessageSquarePlus className="w-3.5 h-3.5" /> Write a Review
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {filteredListings.length === 0 ? (
+            <div className="rounded-2xl border border-border/50 p-12 text-center text-muted-foreground">
+              {product.listings.length === 0
+                ? "No supplier listings available for this product."
+                : "No suppliers match the current filters. Try adjusting your flavor, size, or location filters."}
+            </div>
           ) : (
-            product.listings.map(listing => <SupplierSection key={listing.id} listing={listing} product={product} />)
+            filteredListings.map(({ listing, variants }) => (
+              <SupplierSection
+                key={listing.id}
+                listing={listing}
+                product={product}
+                visibleVariants={variants}
+                reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
+              />
+            ))
           )}
         </div>
       ) : (
         <CommercialGate isPending={isPending} />
+      )}
+
+      {/* Location picker modal */}
+      <LocationPickerModal
+        open={locationModalOpen}
+        onClose={() => setLocationModalOpen(false)}
+        onConfirm={handleLocationConfirm}
+        title="Où voulez-vous rechercher ?"
+        mode="search"
+        showRadius
+      />
+
+      {/* Review modal — scoped to currently filtered listings */}
+      {product && (
+        <ReviewModal
+          open={reviewModalOpen}
+          onClose={() => setReviewModalOpen(false)}
+          product={product}
+          listings={filteredListings.length > 0 ? filteredListings.map(fl => fl.listing) : product.listings}
+        />
       )}
     </div>
   );

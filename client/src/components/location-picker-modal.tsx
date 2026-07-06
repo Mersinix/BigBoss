@@ -44,6 +44,7 @@ export interface PickedLocation {
   lng: string;
   placeId: string;
   details?: AddressDetails;
+  radius?: number | null; // km; null = no filter (only when showRadius=true)
 }
 
 interface Props {
@@ -55,6 +56,7 @@ interface Props {
   mode?: LocationPickerMode;
   initialAddress?: string;
   initialDetails?: AddressDetails;
+  showRadius?: boolean; // adds radius slider in step 2
 }
 
 interface Suggestion {
@@ -79,6 +81,15 @@ const EMPTY_DETAILS: AddressDetails = {
   additionalNotes: "",
 };
 
+const RADIUS_OPTIONS = [
+  { label: "Pas de limite", value: null },
+  { label: "5 km", value: 5 },
+  { label: "10 km", value: 10 },
+  { label: "25 km", value: 25 },
+  { label: "50 km", value: 50 },
+  { label: "100 km", value: 100 },
+];
+
 export default function LocationPickerModal({
   open,
   onClose,
@@ -88,6 +99,7 @@ export default function LocationPickerModal({
   mode = "account",
   initialAddress,
   initialDetails,
+  showRadius = false,
 }: Props) {
   const hasDetailsStep = mode !== "search";
   const totalSteps = hasDetailsStep ? 3 : 2;
@@ -102,6 +114,7 @@ export default function LocationPickerModal({
   const [placeId, setPlaceId] = useState("");
   const [details, setDetails] = useState<AddressDetails>({ ...EMPTY_DETAILS, ...initialDetails });
   const [saving, setSaving] = useState(false);
+  const [radiusKm, setRadiusKm] = useState<number | null>(null);
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -243,8 +256,9 @@ export default function LocationPickerModal({
       lng: String(coords.lng),
       placeId,
       details: Object.keys(cleaned).length ? cleaned : undefined,
+      ...(showRadius ? { radius: radiusKm } : {}),
     });
-  }, [selectedAddress, coords, placeId, details, onConfirm]);
+  }, [selectedAddress, coords, placeId, details, onConfirm, showRadius, radiusKm]);
 
   const reset = () => {
     setStep(1);
@@ -255,6 +269,7 @@ export default function LocationPickerModal({
     setPlaceId("");
     setDetails({ ...EMPTY_DETAILS, ...initialDetails });
     setSaving(false);
+    setRadiusKm(null);
     mapRef.current = null;
     markerRef.current = null;
   };
@@ -412,6 +427,27 @@ export default function LocationPickerModal({
               <p className="text-xs text-gray-500 text-center">
                 Faites glisser le repère pour ajuster précisément votre position
               </p>
+              {showRadius && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-700">Rayon de recherche</p>
+                  <div className="flex flex-wrap gap-2">
+                    {RADIUS_OPTIONS.map((opt) => (
+                      <button
+                        key={String(opt.value)}
+                        type="button"
+                        onClick={() => setRadiusKm(opt.value)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                          radiusKm === opt.value
+                            ? "bg-amber-500 text-white border-amber-500"
+                            : "bg-white text-gray-700 border-gray-200 hover:border-amber-300"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Button
                 type="button"
                 onClick={confirmMapStep}

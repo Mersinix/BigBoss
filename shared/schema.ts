@@ -256,6 +256,21 @@ export const supplierStores = pgTable("supplier_stores", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Supplier product reviews — submitted by cafe owners, shown on supplier reviews tab
+export const supplierProductReviews = pgTable("supplier_product_reviews", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").notNull(),
+  cafeId: integer("cafe_id").notNull(),
+  productId: integer("product_id"),
+  listingId: integer("listing_id"),
+  rating: integer("rating").notNull(), // 1-5
+  comment: text("comment"),
+  cafeName: text("cafe_name").notNull().default(''),
+  cafeOwnerName: text("cafe_owner_name").notNull().default(''),
+  productName: text("product_name"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Store favorites — persisted per-user store favorites (separate from product favorites)
 export const storeFavorites = pgTable("store_favorites", {
   id: serial("id").primaryKey(),
@@ -351,6 +366,11 @@ export const storeFavoritesRelations = relations(storeFavorites, ({ one }) => ({
   store: one(supplierStores, { fields: [storeFavorites.storeId], references: [supplierStores.id] }),
 }));
 
+export const supplierProductReviewsRelations = relations(supplierProductReviews, ({ one }) => ({
+  supplier: one(users, { fields: [supplierProductReviews.supplierId], references: [users.id] }),
+  cafe: one(users, { fields: [supplierProductReviews.cafeId], references: [users.id] }),
+}));
+
 // ── Insert Schemas ───────────────────────────────────────────────────────────
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -370,6 +390,7 @@ export const insertFavoriteSchema = createInsertSchema(favorites).omit({ id: tru
 export const insertPlatformServiceSchema = createInsertSchema(platformServices).omit({ id: true, updatedAt: true });
 export const insertSupplierStoreSchema = createInsertSchema(supplierStores).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertStoreFavoriteSchema = createInsertSchema(storeFavorites).omit({ id: true, createdAt: true });
+export const insertSupplierProductReviewSchema = createInsertSchema(supplierProductReviews).omit({ id: true, createdAt: true });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -426,6 +447,9 @@ export type InsertSupplierStore = z.infer<typeof insertSupplierStoreSchema>;
 
 export type StoreFavorite = typeof storeFavorites.$inferSelect;
 export type InsertStoreFavorite = z.infer<typeof insertStoreFavoriteSchema>;
+
+export type SupplierProductReview = typeof supplierProductReviews.$inferSelect;
+export type InsertSupplierProductReview = z.infer<typeof insertSupplierProductReviewSchema>;
 
 // ── Store Types ───────────────────────────────────────────────────────────────
 
@@ -576,6 +600,8 @@ export type MarketplaceListing = {
   id: number;
   supplierId: number;
   supplierName: string;
+  supplierLat: string | null;
+  supplierLng: string | null;
   variants: MarketplaceVariant[];
   totalStock: number;
   minPrice: number;

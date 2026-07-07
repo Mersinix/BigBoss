@@ -1,0 +1,254 @@
+We will make a new set of changes focused only on the Coffee Owner Store experience, the Supplier Store configuration, and the Admin Store management.
+
+Important requirements before starting:
+
+Do not change the existing design language.
+Do not change existing business logic outside the scope below.
+Do not remove or refactor unrelated features.
+Preserve all existing APIs and behaviors unless they must be extended for these requirements.
+Check existing Store, Reviews, Favorites, Product Details, Product Cards and synchronization logic before making any changes to avoid duplicate implementations.
+Keep everything fully synchronized in real time (admin ↔ supplier ↔ coffee owner) exactly like the rest of the project. Any create/update/delete/approve/order/visibility action must immediately update the UI without requiring a page refresh.
+1. Coffee Owner → Home → Stores section
+
+The current Store cards are working correctly.
+
+Update only their presentation.
+
+1.1 Horizontal scrolling
+
+Instead of displaying all stores in a normal grid:
+
+Display the first row as a horizontal scroll carousel.
+The user should be able to scroll horizontally through the stores.
+Keep the existing Store card design.
+1.2 Move the "See More / Show Less" button
+
+Move the button to the same horizontal line as the section title.
+
+Example:
+
+Marques populaires                         See More
+
+When expanded:
+
+Marques populaires                         Show Less
+
+The button should no longer appear at the bottom of the component.
+
+1.3 Expanded mode
+
+When the user clicks See More:
+
+expand the component
+display all stores
+preserve all existing filters
+preserve all existing sorting
+
+When clicking Show Less:
+
+return to the horizontal scrolling view.
+1.4 Empty stores
+
+If a store has no available products, it must never be displayed.
+
+This rule must continue respecting:
+
+supplier visibility
+admin approval
+supplier frozen categories
+product availability
+existing product visibility logic
+
+Do not break the current filtering behavior.
+
+2. Admin → Suppliers → Stores
+
+Keep the existing page exactly as it is.
+
+Add only one new capability.
+
+Store Order
+
+Add an Order column.
+
+The admin must be able to define the display order of stores.
+
+This order must be synchronized everywhere stores are displayed.
+
+Changing the order should immediately update the Coffee Owner interface without refresh.
+
+3. Supplier → Store tab
+
+Keep the current Store page.
+
+Extend it with new configuration options.
+
+3.1 Background Media
+
+Allow the supplier to choose the Store header media type.
+
+Two choices:
+
+Images
+Video
+Images mode
+
+Keep compatibility with the existing cover image.
+
+Extend it so the supplier can:
+
+add multiple Cover Image URLs
+maximum 5 images
+"+ Add Image" button
+remove existing images
+
+The Store page should automatically rotate these images like a slideshow.
+
+Video mode
+
+Allow the supplier to provide one video URL.
+
+When selected:
+
+use the video as the Store cover
+keep the existing Store layout
+3.2 Background music
+
+Add a field:
+
+Store Music URL
+
+The supplier can provide one YouTube URL.
+
+When a Coffee Owner opens the Store:
+
+the music should automatically play
+this only affects that Store
+do not affect the rest of the application
+3.3 Weekly opening hours
+
+Allow the supplier to configure opening hours for every day of the week.
+
+Example:
+
+Monday
+Tuesday
+Wednesday
+Thursday
+Friday
+Saturday
+Sunday
+
+The supplier should be able to define availability for each day.
+
+3.4 Live Preview
+
+Everything added above must also appear instantly inside the existing Live Preview.
+
+The supplier should immediately see:
+
+slideshow
+video
+music configuration
+opening hours
+
+without leaving the page.
+
+4. Coffee Owner → Store page
+
+Keep the Store page exactly as it is.
+
+Only add the following features.
+
+4.1 Information button
+
+Add a new circular button on the Store cover.
+
+Use the same visual style as the Favorite button.
+
+Position:
+
+bottom-right area of the Store cover.
+
+Clicking it opens a modal showing:
+
+weekly opening hours
+store availability information
+4.2 Store Reviews indicator
+
+Next to the Information button,
+
+display the Store review summary:
+
+average rating
+total reviews
+
+Reuse the existing supplier review system.
+
+Do not duplicate reviews.
+
+5. Flash Mode (Tinder Style)
+
+Inside every Store,
+
+add a Flash button.
+
+Use the same circular style as the Favorite button.
+
+Clicking it opens a fullscreen modal.
+
+Fast Product Browser
+
+The modal displays Store products one by one.
+
+Each product occupies the full screen.
+
+Display:
+
+large product image
+product name
+category
+sub-category
+brand
+
+Overlay these details on the image while preserving the existing visual identity.
+
+Navigation
+
+Allow moving to the next product.
+
+Provide a Next action.
+
+Favorites
+
+Allow two ways to favorite a product:
+
+tap the Heart button
+double tap the product image
+
+Both actions must use the existing Favorites system.
+
+Do not create another favorites implementation.
+
+Synchronization
+
+Favorites created from Flash Mode must immediately appear everywhere else:
+
+Favorites modal
+Product cards
+Product Details modal
+
+No refresh should be required.
+
+General Requirements
+Preserve every existing Store feature.
+Preserve existing Product Details behavior.
+Preserve filters exactly as they work today.
+Preserve review logic.
+Preserve favorite logic.
+Preserve Store approval logic.
+Preserve Store visibility logic.
+Preserve supplier visibility settings.
+Preserve responsive behavior on desktop and mobile.
+Keep the existing UI/UX style and component design.
+Verify all synchronization before finishing to ensure Admin, Supplier and Coffee Owner always see consistent data in real time.

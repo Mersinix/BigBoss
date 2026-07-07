@@ -231,7 +231,8 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
   const INITIAL_LIMIT = 5;
 
   const filteredStores = useMemo(() => {
-    let list = stores;
+    // Extra safety: never show stores with no products (server already does this)
+    let list = stores.filter((s) => s.productCount > 0);
     if (categoryId) list = list.filter((s) => s.categoryIds.includes(Number(categoryId)));
     if (filters.subCategoryId) list = list.filter((s) => s.subCategoryIds.includes(Number(filters.subCategoryId)));
     if (filters.brandId) list = list.filter((s) => s.brandIds.includes(Number(filters.brandId)));
@@ -240,33 +241,60 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
 
   if (!filteredStores.length) return null;
 
-  const visible = expanded ? filteredStores : filteredStores.slice(0, INITIAL_LIMIT);
+  const showToggle = filteredStores.length > INITIAL_LIMIT;
 
   return (
     <div className="mb-8">
-      <div className="items-center justify-between mb-4">
-        <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2">Marques populaires</h2>
-        <p className="text-sm text-gray-400">{filteredStores.length} store{filteredStores.length !== 1 ? "s" : ""}</p>
-      </div>
-      <div className="overflow-x-auto">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        {visible.map((store) => (
-          <StoreCardTile
-            key={store.id}
-            store={store}
-            onClick={() => onSelect(store.id)}
-            searchLat={searchLat}
-            searchLng={searchLng}
-            hasSearchLocation={hasSearchLocation}
-          />
-        ))}
-      </div>
-      </div>
-      {filteredStores.length > INITIAL_LIMIT && (
-        <div className="flex justify-center mt-4">
-          <Button variant="outline" size="sm" onClick={() => setExpanded((e) => !e)} data-testid="button-toggle-stores">
-            {expanded ? "Show Less" : `See More (${filteredStores.length - INITIAL_LIMIT})`}
+      {/* Title row with See More / Show Less inline */}
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="font-bold text-lg text-gray-900">Marques populaires</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{filteredStores.length} store{filteredStores.length !== 1 ? "s" : ""}</p>
+        </div>
+        {showToggle && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs font-semibold h-8 px-3"
+            onClick={() => setExpanded((e) => !e)}
+            data-testid="button-toggle-stores"
+          >
+            {expanded ? "Show Less" : `See More (${filteredStores.length - INITIAL_LIMIT}+)`}
           </Button>
+        )}
+      </div>
+
+      {expanded ? (
+        /* Expanded grid — shows all stores */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {filteredStores.map((store) => (
+            <StoreCardTile
+              key={store.id}
+              store={store}
+              onClick={() => onSelect(store.id)}
+              searchLat={searchLat}
+              searchLng={searchLng}
+              hasSearchLocation={hasSearchLocation}
+            />
+          ))}
+        </div>
+      ) : (
+        /* Collapsed carousel — horizontal scroll */
+        <div
+          className="flex gap-3 overflow-x-auto pb-2"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}
+        >
+          {filteredStores.map((store) => (
+            <div key={store.id} className="shrink-0 w-52 sm:w-60">
+              <StoreCardTile
+                store={store}
+                onClick={() => onSelect(store.id)}
+                searchLat={searchLat}
+                searchLng={searchLng}
+                hasSearchLocation={hasSearchLocation}
+              />
+            </div>
+          ))}
         </div>
       )}
     </div>

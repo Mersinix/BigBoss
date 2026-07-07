@@ -1406,13 +1406,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put('/api/supplier/store', requireApprovedSupplier, async (req: any, res) => {
     try {
-      const { coverUrl, logoUrl, name, description, isOpen, visibility } = req.body ?? {};
+      const { coverUrl, logoUrl, name, description, isOpen, visibility, mediaType, coverUrls, videoUrl, musicUrl, openingHours } = req.body ?? {};
       if (visibility !== undefined && !['VISIBLE', 'HIDDEN'].includes(visibility)) {
         return res.status(400).json({ message: 'Invalid visibility' });
       }
+      if (mediaType !== undefined && !['IMAGE', 'VIDEO'].includes(mediaType)) {
+        return res.status(400).json({ message: 'Invalid mediaType' });
+      }
+      if (coverUrls !== undefined && (!Array.isArray(coverUrls) || coverUrls.length > 5)) {
+        return res.status(400).json({ message: 'coverUrls must be an array of up to 5 URLs' });
+      }
       const store = await storage.upsertSupplierStore(req.session.userId, {
         coverUrl, logoUrl, name, description, isOpen, visibility,
-      });
+        mediaType, coverUrls, videoUrl, musicUrl, openingHours,
+      } as any);
       broadcast('store_updated', { supplierId: req.session.userId, storeId: store.id });
       res.json(store);
     } catch (e) { console.error(e); res.status(500).json({ message: 'Error' }); }
@@ -1468,6 +1475,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.deleteStore(id);
       broadcast('store_approval_changed', { storeId: id, supplierId: detail?.supplierId, status: 'DELETED' });
       res.json({ ok: true });
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.patch('/api/admin/stores/:id/order', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const displayOrder = parseInt(req.body?.displayOrder);
+      if (isNaN(displayOrder)) return res.status(400).json({ message: 'Invalid displayOrder' });
+      const store = await storage.updateStoreDisplayOrder(id, displayOrder);
+      if (!store) return res.status(404).json({ message: 'Not found' });
+      broadcast('store_updated', { storeId: id, supplierId: store.supplierId });
+      res.json(store);
     } catch { res.status(500).json({ message: 'Error' }); }
   });
 

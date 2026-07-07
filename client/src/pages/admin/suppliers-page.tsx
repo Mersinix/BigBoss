@@ -61,6 +61,8 @@ function StoresView() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [detailId, setDetailId] = useState<number | null>(null);
+  // Local map of display-order edits (storeId → value string)
+  const [orderEdits, setOrderEdits] = useState<Record<number, string>>({});
   const { data: stores = [], isLoading } = useQuery<StoreAdminRow[]>({ queryKey: ["/api/admin/stores"] });
 
   const actionMutation = useMutation({
@@ -75,6 +77,23 @@ function StoresView() {
     },
     onError: () => toast({ title: "Action failed", variant: "destructive" }),
   });
+
+  const orderMutation = useMutation({
+    mutationFn: async ({ id, displayOrder }: { id: number; displayOrder: number }) =>
+      apiRequest("PATCH", `/api/admin/stores/${id}/order`, { displayOrder }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/stores"] });
+      qc.invalidateQueries({ queryKey: ["/api/stores"] });
+      toast({ title: "Display order updated" });
+    },
+    onError: () => toast({ title: "Failed to update order", variant: "destructive" }),
+  });
+
+  const handleOrderSave = (id: number) => {
+    const val = parseInt(orderEdits[id] ?? "");
+    if (isNaN(val)) return;
+    orderMutation.mutate({ id, displayOrder: val });
+  };
 
   return (
     <>
@@ -94,6 +113,7 @@ function StoresView() {
                   <TableHead>Status</TableHead>
                   <TableHead>Visibility</TableHead>
                   <TableHead>Products</TableHead>
+                  <TableHead>Order</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -114,6 +134,28 @@ function StoresView() {
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{s.productCount}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-14 h-7 text-xs border rounded px-2 bg-background"
+                          value={orderEdits[s.id] ?? String((s as any).displayOrder ?? 0)}
+                          onChange={(e) => setOrderEdits((p) => ({ ...p, [s.id]: e.target.value }))}
+                          onKeyDown={(e) => e.key === "Enter" && handleOrderSave(s.id)}
+                          data-testid={`input-store-order-${s.id}`}
+                        />
+                        <button
+                          className="h-7 px-1.5 text-xs rounded border bg-muted hover:bg-accent transition-colors"
+                          onClick={() => handleOrderSave(s.id)}
+                          disabled={orderMutation.isPending}
+                          title="Save order"
+                          data-testid={`button-save-order-${s.id}`}
+                        >
+                          ✓
+                        </button>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1 flex-wrap">
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setDetailId(s.id)} data-testid={`button-view-store-${s.id}`}>View</Button>
@@ -140,7 +182,7 @@ function StoresView() {
                   </TableRow>
                 ))}
                 {stores.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-10">No stores found</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-10">No stores found</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

@@ -253,6 +253,12 @@ export const supplierStores = pgTable("supplier_stores", {
   isOpen: boolean("is_open").notNull().default(true),
   visibility: storeVisibilityEnum("visibility").notNull().default('VISIBLE'),
   approvalStatus: storeApprovalStatusEnum("approval_status").notNull().default('PENDING'),
+  displayOrder: integer("display_order").notNull().default(0),
+  mediaType: text("media_type").notNull().default('IMAGE'), // 'IMAGE' | 'VIDEO'
+  coverUrls: text("cover_urls").array().default([]),        // up to 5 image URLs for slideshow
+  videoUrl: text("video_url"),
+  musicUrl: text("music_url"),                             // YouTube URL for background music
+  openingHours: jsonb("opening_hours"),                    // { monday: {open, close, closed}, ... }
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -455,6 +461,17 @@ export type InsertSupplierProductReview = z.infer<typeof insertSupplierProductRe
 
 // ── Store Types ───────────────────────────────────────────────────────────────
 
+export type OpeningDayHours = { open: string; close: string; closed: boolean };
+export type OpeningHoursMap = {
+  monday: OpeningDayHours;
+  tuesday: OpeningDayHours;
+  wednesday: OpeningDayHours;
+  thursday: OpeningDayHours;
+  friday: OpeningDayHours;
+  saturday: OpeningDayHours;
+  sunday: OpeningDayHours;
+};
+
 export type StoreCard = {
   id: number;
   supplierId: number;
@@ -471,6 +488,12 @@ export type StoreCard = {
   subCategoryIds: number[];
   brandIds: number[];
   productCount: number;
+  displayOrder: number;
+  mediaType: 'IMAGE' | 'VIDEO';
+  coverUrls: string[];
+  videoUrl: string | null;
+  musicUrl: string | null;
+  openingHours: OpeningHoursMap | null;
 };
 
 export type StoreAdminRow = StoreCard & {
@@ -482,6 +505,8 @@ export type StoreAdminRow = StoreCard & {
 
 export type StoreDetail = StoreCard & {
   products: ProductWithTaxonomy[];
+  avgRating: number;
+  reviewCount: number;
 };
 
 export type ShopFavoriteItem = {

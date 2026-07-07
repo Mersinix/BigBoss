@@ -1,15 +1,17 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, ChevronLeft, MapPin, Plus
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock,
+  ChevronLeft, MapPin, Plus, Info, Star, Music, Zap, Clock,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -17,7 +19,10 @@ import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
-import type { StoreDetail, ProductWithTaxonomy } from "@shared/schema";
+import { FlashMode } from "@/components/flash-mode";
+import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap } from "@shared/schema";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function useCommercialAccess() {
   const { user } = useAuth();
@@ -25,6 +30,120 @@ function useCommercialAccess() {
   if (['SUPER_ADMIN', 'ADMIN', 'SUPPLIER'].includes(user.role)) return true;
   return user.role === 'CAFE_OWNER' && (user as any).status === 'approved';
 }
+
+const DAYS: { key: keyof OpeningHoursMap; label: string }[] = [
+  { key: "monday",    label: "Monday" },
+  { key: "tuesday",   label: "Tuesday" },
+  { key: "wednesday", label: "Wednesday" },
+  { key: "thursday",  label: "Thursday" },
+  { key: "friday",    label: "Friday" },
+  { key: "saturday",  label: "Saturday" },
+  { key: "sunday",    label: "Sunday" },
+];
+
+// ── Slideshow cover ───────────────────────────────────────────────────────────
+
+function CoverSlideshow({ urls, name }: { urls: string[]; name: string }) {
+  const [idx, setIdx] = useState(0);
+  const active = urls.filter(Boolean);
+  useEffect(() => {
+    if (active.length <= 1) return;
+    const t = setInterval(() => setIdx((i) => (i + 1) % active.length), 3500);
+    return () => clearInterval(t);
+  }, [active.length]);
+  if (!active.length) return <div className="w-full h-full flex items-center justify-center"><Store className="w-14 h-14 text-gray-200" /></div>;
+  return (
+    <>
+      <img key={active[idx]} src={active[idx]} alt={name} className="w-full h-full object-cover object-center transition-opacity duration-500" />
+      {active.length > 1 && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+          {active.map((_, i) => (
+            <button key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === idx ? "bg-white scale-125" : "bg-white/50"}`} onClick={() => setIdx(i)} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── YouTube music player ──────────────────────────────────────────────────────
+
+function MusicPlayer({ musicUrl }: { musicUrl: string }) {
+  const embedUrl = useMemo(() => {
+    if (!musicUrl) return null;
+    // Convert watch URL → embed URL with autoplay
+    try {
+      const url = new URL(musicUrl);
+      let videoId = url.searchParams.get("v");
+      if (!videoId && url.hostname === "youtu.be") {
+        videoId = url.pathname.replace("/", "");
+      }
+      if (!videoId) return null;
+      return `https://www.youtube.com/embed/${videoId}?autoplay=1&loop=1&playlist=${videoId}&controls=0&fs=0&modestbranding=1&mute=0`;
+    } catch { return null; }
+  }, [musicUrl]);
+  if (!embedUrl) return null;
+  return (
+    <iframe
+      src={embedUrl}
+      className="absolute w-0 h-0 opacity-0 pointer-events-none"
+      allow="autoplay"
+      title="background-music"
+    />
+  );
+}
+
+// ── Opening hours modal ───────────────────────────────────────────────────────
+
+function InfoModal({ open, onClose, openingHours, storeName }: {
+  open: boolean;
+  onClose: () => void;
+  openingHours: OpeningHoursMap | null;
+  storeName: string;
+}) {
+  const todayKey = DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1].key;
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            {storeName} — Opening Hours
+          </DialogTitle>
+        </DialogHeader>
+        {openingHours ? (
+          <div className="space-y-2 mt-1">
+            {DAYS.map(({ key, label }) => {
+              const day = openingHours[key];
+              const isToday = key === todayKey;
+              return (
+                <div
+                  key={key}
+                  className={`flex items-center justify-between rounded-lg px-3 py-2 ${isToday ? "bg-primary/10 font-semibold" : "bg-muted/40"}`}
+                >
+                  <span className={`text-sm ${isToday ? "text-primary" : "text-foreground"}`}>
+                    {label}{isToday && <span className="ml-1.5 text-[10px] font-normal bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">Today</span>}
+                  </span>
+                  {day?.closed ? (
+                    <span className="text-sm text-red-500">Closed</span>
+                  ) : day ? (
+                    <span className="text-sm">{day.open} – {day.close}</span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-4 text-center">Opening hours not configured by this store.</p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Product card (store context) ──────────────────────────────────────────────
 
 function StoreProductCard({ product, hasCommercialAccess }: {
   product: ProductWithTaxonomy & { bestPrice?: number };
@@ -104,7 +223,11 @@ function StoreProductCard({ product, hasCommercialAccess }: {
   );
 }
 
+// ── Filter state ──────────────────────────────────────────────────────────────
+
 interface FilterState { subCategoryId: string; brandId: string; }
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function StoreDetailPage() {
   const [, params] = useRoute("/stores/:storeId");
@@ -121,6 +244,8 @@ export default function StoreDetailPage() {
 
   const [categoryId, setCategoryId] = useState("");
   const [filters, setFilters] = useState<FilterState>({ subCategoryId: "", brandId: "" });
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [flashOpen, setFlashOpen] = useState(false);
 
   const { data: store, isLoading } = useQuery<StoreDetail>({
     queryKey: ["/api/stores", storeId],
@@ -182,6 +307,18 @@ export default function StoreDetailPage() {
   const resetFilters = () => { setFilters({ subCategoryId: "", brandId: "" }); setCategoryId(""); };
   const hasActive = !!categoryId || Object.values(filters).some(Boolean);
 
+  // Derived media fields (with backward-compat for old coverUrl)
+  const storeAny = store as any;
+  const mediaType: 'IMAGE' | 'VIDEO' = storeAny?.mediaType ?? 'IMAGE';
+  const coverUrls: string[] = Array.isArray(storeAny?.coverUrls) && storeAny.coverUrls.length > 0
+    ? storeAny.coverUrls
+    : store?.coverUrl ? [store.coverUrl] : [];
+  const videoUrl: string | null = storeAny?.videoUrl ?? null;
+  const musicUrl: string | null = storeAny?.musicUrl ?? null;
+  const openingHours: OpeningHoursMap | null = storeAny?.openingHours ?? null;
+  const avgRating: number = storeAny?.avgRating ?? 0;
+  const reviewCount: number = storeAny?.reviewCount ?? 0;
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -205,33 +342,74 @@ export default function StoreDetailPage() {
 
   return (
     <div className="min-h-screen h-96 bg-gray-50">
+      {/* Background music — hidden YouTube iframe, autoplays */}
+      {musicUrl && <MusicPlayer musicUrl={musicUrl} />}
+
+      {/* Cover media */}
       <div className="relative h-96 lg:h-[330px] sm:h-56 bg-gray-100 overflow-hidden">
-        {store.coverUrl ? (
-          <img src={store.coverUrl} alt={store.name} className="w-full h-full object-cover object-center" />
+        {mediaType === "VIDEO" && videoUrl ? (
+          <video src={videoUrl} className="w-full h-full object-cover object-center" autoPlay muted loop playsInline />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"><Store className="w-14 h-14 text-gray-200" /></div>
+          <CoverSlideshow urls={coverUrls} name={store.name} />
         )}
+
+        {/* Back button — top left */}
         <button
-          className="absolute top-4 left-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+          className="absolute top-4 left-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform z-10"
           onClick={() => navigate("/products")}
           data-testid="button-back-marketplace"
         >
           <ChevronLeft className="w-4.5 h-4.5 text-gray-700" />
         </button>
+
+        {/* Favorite button — top right */}
         <button
-          className="absolute top-4 right-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+          className="absolute top-4 right-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform z-10"
           onClick={() => toggleStore(store.id)}
           data-testid="button-fav-store"
         >
           <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
         </button>
+
+        {/* Flash button — bottom left */}
+        {products.length > 0 && (
+          <button
+            className="absolute bottom-4 left-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform z-10"
+            onClick={() => setFlashOpen(true)}
+            data-testid="button-flash-mode"
+            title="Flash Mode — browse products"
+          >
+            <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
+          </button>
+        )}
+
+        {/* Reviews + Info — bottom right */}
+        <div className="absolute bottom-4 right-4 flex items-center gap-2 z-10">
+          {reviewCount > 0 && (
+            <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-1 shadow-sm">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span className="text-xs font-bold text-gray-800">{avgRating.toFixed(1)}</span>
+              <span className="text-[10px] text-gray-500">({reviewCount})</span>
+            </div>
+          )}
+          <button
+            className="w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+            onClick={() => setInfoOpen(true)}
+            data-testid="button-store-info"
+            title="Store information & opening hours"
+          >
+            <Info className="w-4 h-4 text-gray-600" />
+          </button>
+        </div>
+
         {!store.isOpen && (
-          <div className="absolute bottom-4 left-4">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
             <Badge className="bg-gray-900/80 text-white border-0 text-xs font-semibold shadow-sm">Closed</Badge>
           </div>
         )}
       </div>
 
+      {/* Store header info */}
       <div className="max-w-7xl mx-auto px-4 pt-3 relative z-20">
         <div className="flex items-end gap-4 -mt-8">
           <div className="w-16 h-16 rounded-2xl border-4 border-gray-50 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
@@ -246,12 +424,14 @@ export default function StoreDetailPage() {
             <div className="flex items-center gap-3 text-xs text-amber-600 mt-1">
               <span className="flex items-center gap-1"><Package className="w-3 h-3" />{store.productCount} products</span>
               {distance != null && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{formatDistance(distance)}</span>}
+              {musicUrl && <span className="flex items-center gap-1 text-indigo-500"><Music className="w-3 h-3" />Music</span>}
             </div>
           </div>
         </div>
         {store.description && <p className="text-sm text-gray-500 mt-3 mx-auto text-center line-clamp-2">{store.description}</p>}
       </div>
 
+      {/* Filters */}
       {(categories.length > 0 || subCategories.length > 0 || brands.length > 0) && (
         <div className="sticky top-14 z-30 bg-white border-b border-gray-100 mt-4">
           <div className="max-w-7xl mx-auto px-4 py-2 flex items-center gap-2 flex-wrap">
@@ -279,6 +459,7 @@ export default function StoreDetailPage() {
         </div>
       )}
 
+      {/* Products grid */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         <p className="text-sm text-gray-400 mb-4">{filtered.length} product{filtered.length !== 1 ? "s" : ""} available</p>
         {filtered.length === 0 ? (
@@ -299,6 +480,22 @@ export default function StoreDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Info modal */}
+      <InfoModal
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        openingHours={openingHours}
+        storeName={store.name}
+      />
+
+      {/* Flash mode */}
+      <FlashMode
+        open={flashOpen}
+        onClose={() => setFlashOpen(false)}
+        products={products as any[]}
+        storeName={store.name}
+      />
     </div>
   );
 }

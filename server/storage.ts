@@ -106,6 +106,7 @@ export interface IStorage {
   upsertSupplierStore(supplierId: number, data: Partial<InsertSupplierStore>): Promise<SupplierStore>;
   getAllStoresAdmin(): Promise<StoreAdminRow[]>;
   setStoreApprovalStatus(id: number, status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ON_HOLD'): Promise<SupplierStore | undefined>;
+  updateStoreDisplayOrder(id: number, displayOrder: number): Promise<SupplierStore | undefined>;
   deleteStore(id: number): Promise<void>;
   getVisibleStores(): Promise<StoreCard[]>;
   getStoreDetail(id: number, opts?: { requireVisible?: boolean }): Promise<StoreDetail | undefined>;
@@ -1113,6 +1114,11 @@ export class DatabaseStorage implements IStorage {
         isOpen: data.isOpen ?? true,
         visibility: data.visibility ?? 'VISIBLE',
         approvalStatus: 'PENDING',
+        mediaType: (data as any).mediaType ?? 'IMAGE',
+        coverUrls: (data as any).coverUrls ?? [],
+        videoUrl: (data as any).videoUrl ?? null,
+        musicUrl: (data as any).musicUrl ?? null,
+        openingHours: (data as any).openingHours ?? null,
       }).returning();
       return created;
     }
@@ -1133,6 +1139,11 @@ export class DatabaseStorage implements IStorage {
       ...(data.description !== undefined ? { description: data.description } : {}),
       ...(data.isOpen !== undefined ? { isOpen: data.isOpen } : {}),
       ...(data.visibility !== undefined ? { visibility: data.visibility } : {}),
+      ...((data as any).mediaType !== undefined ? { mediaType: (data as any).mediaType } : {}),
+      ...((data as any).coverUrls !== undefined ? { coverUrls: (data as any).coverUrls } : {}),
+      ...((data as any).videoUrl !== undefined ? { videoUrl: (data as any).videoUrl } : {}),
+      ...((data as any).musicUrl !== undefined ? { musicUrl: (data as any).musicUrl } : {}),
+      ...((data as any).openingHours !== undefined ? { openingHours: (data as any).openingHours } : {}),
       approvalStatus,
       updatedAt: new Date(),
     }).where(eq(supplierStores.id, existing.id)).returning();
@@ -1183,6 +1194,12 @@ export class DatabaseStorage implements IStorage {
         subCategoryIds: Array.from(subCategoryIds),
         brandIds: Array.from(brandIds),
         productCount: listings.length,
+        displayOrder: (store as any).displayOrder ?? 0,
+        mediaType: ((store as any).mediaType ?? 'IMAGE') as 'IMAGE' | 'VIDEO',
+        coverUrls: (store as any).coverUrls ?? [],
+        videoUrl: (store as any).videoUrl ?? null,
+        musicUrl: (store as any).musicUrl ?? null,
+        openingHours: (store as any).openingHours ?? null,
       };
     });
   }
@@ -1212,6 +1229,11 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async updateStoreDisplayOrder(id: number, displayOrder: number): Promise<SupplierStore | undefined> {
+    const [updated] = await db.update(supplierStores).set({ displayOrder, updatedAt: new Date() }).where(eq(supplierStores.id, id)).returning();
+    return updated;
+  }
+
   async deleteStore(id: number): Promise<void> {
     await db.delete(storeFavorites).where(eq(storeFavorites.storeId, id));
     await db.delete(supplierStores).where(eq(supplierStores.id, id));
@@ -1219,8 +1241,11 @@ export class DatabaseStorage implements IStorage {
 
   async getVisibleStores(): Promise<StoreCard[]> {
     const stores = await db.select().from(supplierStores)
-      .where(and(eq(supplierStores.approvalStatus, 'APPROVED'), eq(supplierStores.visibility, 'VISIBLE')));
-    return this.buildStoreCards(stores);
+      .where(and(eq(supplierStores.approvalStatus, 'APPROVED'), eq(supplierStores.visibility, 'VISIBLE')))
+      .orderBy(asc(supplierStores.displayOrder), asc(supplierStores.id));
+    const cards = await this.buildStoreCards(stores);
+    // Only return stores that have at least one available product
+    return cards.filter((c) => c.productCount > 0);
   }
 
   async getStoreDetail(id: number, opts?: { requireVisible?: boolean }): Promise<StoreDetail | undefined> {
@@ -1228,10 +1253,16 @@ export class DatabaseStorage implements IStorage {
     if (!store) return undefined;
     if (opts?.requireVisible && (store.approvalStatus !== 'APPROVED' || store.visibility !== 'VISIBLE')) return undefined;
     const [card] = await this.buildStoreCards([store]);
-    const listings = await db.select().from(supplierProductListings)
-      .where(and(eq(supplierProductListings.supplierId, store.supplierId)));
+    const [listings, reviewRows] = await Promise.all([
+      db.select().from(supplierProductListings).where(eq(supplierProductListings.supplierId, store.supplierId)),
+      db.select().from(supplierProductReviews).where(
+        and(eq(supplierProductReviews.supplierId, store.supplierId), eq(supplierProductReviews.reviewType as any, 'SUPPLIER'))
+      ),
+    ]);
     const activeListings = listings.filter((l) => l.stock > 0 && l.price > 0);
-    if (!activeListings.length) return { ...card, products: [] };
+    const reviewCount = reviewRows.length;
+    const avgRating = reviewCount ? reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount : 0;
+    if (!activeListings.length) return { ...card, products: [], avgRating, reviewCount };
     const productIds = activeListings.map((l) => l.productId);
     const prods = await db.select().from(products).where(inArray(products.id, productIds));
     const listingByProduct = new Map(activeListings.map((l) => [l.productId, l]));
@@ -1240,7 +1271,7 @@ export class DatabaseStorage implements IStorage {
       const listing = listingByProduct.get(p.id)!;
       return { ...enrichProduct(p, tx), price: listing.price, bestPrice: listing.price, totalStock: listing.stock } as unknown as ProductWithTaxonomy;
     });
-    return { ...card, products: enriched };
+    return { ...card, products: enriched, avgRating, reviewCount };
   }
 
   // ── Store favorites ─────────────────────────────────────────────────────────

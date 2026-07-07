@@ -1,0 +1,165 @@
+We will make additional enhancements to the Coffee Owner Product Details modal and extend the Admin product catalog to support multiple product images.
+
+Before making any changes, analyze the current Product Details modal, Product Catalog management, supplier/product review system, variant filtering logic, and location logic. Reuse existing components and behaviors wherever possible.
+
+Do NOT change the UI design or layout. Do NOT remove any existing functionality. Only extend the current behavior. Everything must remain responsive and synchronized in real time.
+
+Scope
+Coffee Owner → Product Details Modal
+Admin → Product Tab → "Add Product to Catalog" Modal
+Product Reviews
+Supplier Reviews
+1. Synchronize Flavor and Size filters
+
+The Flavor and Size badges already added inside the Product Details modal must become fully synchronized.
+
+Required behavior
+If the Coffee Owner selects a Flavor:
+Display only the Sizes that are actually available for that selected Flavor.
+Hide Sizes that do not have a valid variant for the selected Flavor.
+If the Coffee Owner selects a Size:
+Display only the Flavors that are actually available for that selected Size.
+Hide Flavors that do not have a valid variant for the selected Size.
+
+The filtering must always reflect the real available product variants.
+
+The user should never be able to select an impossible Flavor/Size combination.
+
+2. Support multiple product images
+Admin Part → Product Tab → "Add Product to Catalog" Modal
+
+Keep the existing Image URL field.
+
+Under it, add a control allowing the admin to add additional image URLs.
+
+The admin should be able to add:
+
+One image
+Or multiple images for the same product
+
+No limit should be imposed unless one already exists elsewhere in the project.
+
+Existing products with only one image must continue to work without any changes.
+
+3. Display multiple images in Product Details
+
+Inside the Product Details modal:
+
+Main image
+Keep the large product image exactly as it is today.
+Thumbnail gallery
+
+Below the main image:
+
+Display all additional product images as thumbnails.
+
+When the user clicks a thumbnail:
+
+That image becomes the large main image.
+Image zoom
+
+When the user hovers over the large image:
+
+Enable image zoom.
+Keep it fully responsive.
+Do not change the page layout.
+4. Display supplier distance
+
+For every supplier shown inside the Product Details modal:
+
+Display the supplier distance.
+
+Default behavior
+
+Distance =
+Supplier address ↔ Coffee Owner default address
+
+After changing search location
+
+If the Coffee Owner changes the search location using the location filter:
+
+Update all displayed distances using:
+
+Supplier address ↔ Newly selected search location
+
+Distances must always remain synchronized with the active search location.
+
+5. Split Reviews into Product Reviews and Supplier Reviews
+
+Keep the existing review modal.
+
+Add a switcher with two sections:
+
+Product Reviews
+Supplier Reviews
+Supplier Reviews
+
+Keep the current functionality exactly as it already exists.
+
+Do not modify the existing supplier review workflow.
+
+Product Reviews
+
+Add a dedicated Product Reviews section.
+
+When submitting a Product Review:
+
+The Coffee Owner only provides:
+
+Rating (required)
+Comment (optional)
+
+The Coffee Owner should NOT choose a supplier.
+
+The review belongs to the product itself.
+
+Product review display
+
+Under the product description:
+
+Replace the current product review summary with the real Product Reviews information.
+
+Display:
+
+Average product rating
+Total number of product reviews
+
+This information must update immediately after a new review is submitted.
+
+Supplier reviews
+
+Supplier reviews remain displayed per supplier exactly as they already work today.
+
+Do not change that behavior.
+
+6. Synchronization
+
+Verify that all new functionality stays synchronized:
+
+Flavor ↔ Size filtering
+Product image gallery
+Product review statistics
+Supplier review statistics
+Supplier distances
+Search location updates
+Variant availability
+
+No page refresh should be required.
+
+Constraints
+Do NOT change the visual design.
+Do NOT redesign the Product Details modal.
+Do NOT remove any existing component.
+Do NOT change business logic outside the requested scope.
+Do NOT break cart, favorites, variants, marketplace, supplier pages, or reviews.
+Keep desktop, tablet, and mobile responsive.
+Expected result
+Flavor and Size badges are fully synchronized.
+Admin can manage multiple product images.
+Product Details displays an image gallery with thumbnail selection.
+Main image supports responsive zoom.
+Supplier distances always reflect the active search location.
+Reviews are separated into Product Reviews and Supplier Reviews.
+Product review statistics update in real time.
+Supplier reviews continue to work exactly as before.
+No regression is introduced anywhere else in the project.

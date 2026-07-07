@@ -395,6 +395,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         name: req.body.name.trim(),
         description: req.body.description?.trim() || null,
         imageUrl: req.body.imageUrl?.trim() || null,
+        imageUrls: Array.isArray(req.body.imageUrls) ? req.body.imageUrls.filter((u: string) => u?.trim()) : null,
         category: req.body.category || "",
         categoryId: req.body.categoryId ? parseInt(req.body.categoryId) : null,
         subCategoryId: req.body.subCategoryId ? parseInt(req.body.subCategoryId) : null,
@@ -428,6 +429,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (req.body.brandId !== undefined) updates.brandId = req.body.brandId ? parseInt(req.body.brandId) : null;
       if (req.body.flavorIds !== undefined) updates.flavorIds = Array.isArray(req.body.flavorIds) ? req.body.flavorIds.map(Number) : null;
       if (req.body.sizeIds !== undefined) updates.sizeIds = Array.isArray(req.body.sizeIds) ? req.body.sizeIds.map(Number) : null;
+      if (req.body.imageUrls !== undefined) updates.imageUrls = Array.isArray(req.body.imageUrls) ? req.body.imageUrls.filter((u: string) => u?.trim()) : null;
       res.json(await storage.updateProduct(parseInt(req.params.id), updates));
     } catch (err) {
       res.status(400).json({ message: "Invalid" });
@@ -1537,31 +1539,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!user || user.role !== 'CAFE_OWNER' || user.status !== 'approved') {
         return res.status(403).json({ message: "Only approved cafe owners can submit reviews" });
       }
-      const { supplierId, productId, listingId, rating, comment, productName } = req.body;
-      if (!supplierId || !rating || rating < 1 || rating > 5) {
-        return res.status(400).json({ message: "supplierId and rating (1-5) are required" });
+      const { supplierId, productId, listingId, rating, comment, productName, reviewType } = req.body;
+      if (!rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ message: "rating (1-5) is required" });
       }
-      // Validate that supplierId is actually a SUPPLIER
-      const targetSupplier = await storage.getUser(Number(supplierId));
-      if (!targetSupplier || targetSupplier.role !== 'SUPPLIER') {
-        return res.status(400).json({ message: "Invalid supplier" });
-      }
-      // If listingId provided, verify it belongs to supplierId and productId
-      if (listingId) {
-        const [listing] = await db.select().from(supplierProductListings)
-          .where(eq(supplierProductListings.id, Number(listingId)));
-        if (!listing || listing.supplierId !== Number(supplierId)) {
-          return res.status(400).json({ message: "Listing does not belong to this supplier" });
+      const isProductReview = reviewType === 'PRODUCT';
+      if (!isProductReview) {
+        // Supplier review — supplierId required
+        if (!supplierId) return res.status(400).json({ message: "supplierId is required for supplier reviews" });
+        const targetSupplier = await storage.getUser(Number(supplierId));
+        if (!targetSupplier || targetSupplier.role !== 'SUPPLIER') {
+          return res.status(400).json({ message: "Invalid supplier" });
         }
-        if (productId && listing.productId !== Number(productId)) {
-          return res.status(400).json({ message: "Listing does not match this product" });
+        // If listingId provided, verify it belongs to supplierId and productId
+        if (listingId) {
+          const [listing] = await db.select().from(supplierProductListings)
+            .where(eq(supplierProductListings.id, Number(listingId)));
+          if (!listing || listing.supplierId !== Number(supplierId)) {
+            return res.status(400).json({ message: "Listing does not belong to this supplier" });
+          }
+          if (productId && listing.productId !== Number(productId)) {
+            return res.status(400).json({ message: "Listing does not match this product" });
+          }
         }
       }
       const review = await storage.createReview({
-        supplierId: Number(supplierId),
+        supplierId: isProductReview ? null : Number(supplierId),
+        reviewType: isProductReview ? 'PRODUCT' : 'SUPPLIER',
         cafeId: user.id,
         productId: productId ? Number(productId) : null,
-        listingId: listingId ? Number(listingId) : null,
+        listingId: (!isProductReview && listingId) ? Number(listingId) : null,
         rating: Number(rating),
         comment: comment ?? null,
         cafeName: user.name,

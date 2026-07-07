@@ -1264,7 +1264,8 @@ export class DatabaseStorage implements IStorage {
   // ── Reviews ──────────────────────────────────────────────────────────────────
 
   async createReview(data: {
-    supplierId: number;
+    supplierId?: number | null;
+    reviewType?: string | null;
     cafeId: number;
     productId?: number | null;
     listingId?: number | null;
@@ -1274,7 +1275,18 @@ export class DatabaseStorage implements IStorage {
     cafeOwnerName: string;
     productName?: string | null;
   }): Promise<SupplierProductReview> {
-    const [row] = await db.insert(supplierProductReviews).values(data).returning();
+    const [row] = await db.insert(supplierProductReviews).values({
+      supplierId: data.supplierId ?? null,
+      reviewType: data.reviewType ?? 'SUPPLIER',
+      cafeId: data.cafeId,
+      productId: data.productId ?? null,
+      listingId: data.listingId ?? null,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.cafeName,
+      cafeOwnerName: data.cafeOwnerName,
+      productName: data.productName ?? null,
+    } as any).returning();
     return row;
   }
 
@@ -1285,21 +1297,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getReviewStatsByProduct(productId: number): Promise<{
+    product: { avgRating: number; total: number };
     overall: { avgRating: number; total: number };
     bySupplier: Record<number, { avgRating: number; total: number }>;
   }> {
     const rows = await db.select().from(supplierProductReviews)
       .where(eq(supplierProductReviews.productId, productId));
-    if (!rows.length) return { overall: { avgRating: 0, total: 0 }, bySupplier: {} };
+    if (!rows.length) return { product: { avgRating: 0, total: 0 }, overall: { avgRating: 0, total: 0 }, bySupplier: {} };
+
+    const productReviews = rows.filter(r => (r as any).reviewType === 'PRODUCT' || !r.supplierId);
+    const supplierReviews = rows.filter(r => (r as any).reviewType !== 'PRODUCT' && !!r.supplierId);
+
+    const productTotal = productReviews.length;
+    const productAvg = productTotal ? productReviews.reduce((s, r) => s + r.rating, 0) / productTotal : 0;
+
     const bySupplier: Record<number, { sum: number; count: number }> = {};
-    for (const r of rows) {
+    for (const r of supplierReviews) {
+      if (!r.supplierId) continue;
       if (!bySupplier[r.supplierId]) bySupplier[r.supplierId] = { sum: 0, count: 0 };
       bySupplier[r.supplierId].sum += r.rating;
       bySupplier[r.supplierId].count += 1;
     }
+
     const total = rows.length;
-    const avgRating = rows.reduce((s, r) => s + r.rating, 0) / total;
+    const avgRating = total ? rows.reduce((s, r) => s + r.rating, 0) / total : 0;
     return {
+      product: { avgRating: productAvg, total: productTotal },
       overall: { avgRating, total },
       bySupplier: Object.fromEntries(
         Object.entries(bySupplier).map(([sid, { sum, count }]) => [

@@ -42,6 +42,7 @@ export const products = pgTable("products", {
   price: integer("price").notNull().default(0),
   stock: integer("stock").notNull().default(0),
   imageUrl: text("image_url"),
+  imageUrls: text("image_urls").array(),
   category: text("category").notNull().default(""),
   categoryId: integer("category_id"),
   subCategoryId: integer("sub_category_id"),
@@ -259,7 +260,8 @@ export const supplierStores = pgTable("supplier_stores", {
 // Supplier product reviews — submitted by cafe owners, shown on supplier reviews tab
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
-  supplierId: integer("supplier_id").notNull(),
+  supplierId: integer("supplier_id"), // nullable for product-level reviews
+  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER'
   cafeId: integer("cafe_id").notNull(),
   productId: integer("product_id"),
   listingId: integer("listing_id"),

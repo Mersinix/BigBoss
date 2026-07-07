@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -99,12 +99,13 @@ function VariantRow({ variant, listing, product }: { variant: MarketplaceVariant
 // ── Supplier Card ──────────────────────────────────────────────────────────────
 
 function SupplierSection({
-  listing, product, visibleVariants, reviewStats,
+  listing, product, visibleVariants, reviewStats, distanceKm,
 }: {
   listing: MarketplaceListing;
   product: MarketplaceProduct;
   visibleVariants: MarketplaceVariant[];
   reviewStats?: { avgRating: number; total: number };
+  distanceKm?: number;
 }) {
   const prices = visibleVariants.map(v => v.price);
   const minPrice = prices.length ? Math.min(...prices) : 0;
@@ -123,6 +124,11 @@ function SupplierSection({
                 {visibleVariants.length} variant{visibleVariants.length !== 1 ? "s" : ""}{" · "}
                 {prices.length === 0 ? "—" : prices.length === 1 || minPrice === maxPrice ? formatCurrency(minPrice) : `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`}
               </p>
+              {distanceKm !== undefined && (
+                <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                  <MapPin className="w-3 h-3 shrink-0" />{distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`}
+                </span>
+              )}
               {reviewStats && reviewStats.total > 0 && (
                 <div className="flex items-center gap-1">
                   <Stars rating={reviewStats.avgRating} size="xs" />
@@ -244,6 +250,16 @@ export function ProductDetailContent({
   const [locationFilter, setLocationFilter] = useState<{ lat: number; lng: number; radius: number | null; label: string } | null>(null);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
+
+  // ── Zoom via ref — no state re-render on mouse move ──────────────────────
+  const mainImgRef = useRef<HTMLImageElement>(null);
+  const handleImageMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    if (mainImgRef.current) mainImgRef.current.style.transformOrigin = `${x}% ${y}%`;
+  }, []);
 
   // ── Product data ─────────────────────────────────────────────────────────
   const { data: product, isLoading, error } = useQuery<MarketplaceProduct>({
@@ -258,19 +274,29 @@ export function ProductDetailContent({
 
   // ── Review stats ─────────────────────────────────────────────────────────
   const { data: reviewData } = useQuery<{
+    product: { avgRating: number; total: number };
     overall: { avgRating: number; total: number };
     bySupplier: Record<string, { avgRating: number; total: number }>;
   }>({
     queryKey: ["/api/reviews/product", productId],
     queryFn: async () => {
       const res = await fetch(`/api/reviews/product/${productId}`);
-      if (!res.ok) return { overall: { avgRating: 0, total: 0 }, bySupplier: {} };
+      if (!res.ok) return { product: { avgRating: 0, total: 0 }, overall: { avgRating: 0, total: 0 }, bySupplier: {} };
       return res.json();
     },
     enabled: !!productId && hasCommercial,
   });
 
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
+
+  // ── All product images ────────────────────────────────────────────────────
+  const allImages = useMemo(() => {
+    if (!product) return [];
+    return [product.imageUrl, ...((product as any).imageUrls ?? [])].filter(Boolean) as string[];
+  }, [product]);
+
+  // Reset active image index when product changes
+  const safeActiveIdx = Math.min(activeImageIdx, Math.max(0, allImages.length - 1));
 
   // ── Collect unique flavors / sizes from all listings ────────────────────
   const { allFlavors, allSizes } = useMemo(() => {
@@ -289,12 +315,71 @@ export function ProductDetailContent({
     };
   }, [product]);
 
+  // ── Synchronized: only show sizes compatible with selected flavor ─────────
+  const availableFlavors = useMemo(() => {
+    if (!product || selectedSizeId === null) return allFlavors;
+    const validIds = new Set<number>();
+    for (const l of product.listings) {
+      for (const v of l.variants) {
+        if (v.sizeId === selectedSizeId && v.flavorId) validIds.add(v.flavorId);
+      }
+    }
+    return allFlavors.filter(f => validIds.has(f.id));
+  }, [product, allFlavors, selectedSizeId]);
+
+  const availableSizes = useMemo(() => {
+    if (!product || selectedFlavorId === null) return allSizes;
+    const validIds = new Set<number>();
+    for (const l of product.listings) {
+      for (const v of l.variants) {
+        if (v.flavorId === selectedFlavorId && v.sizeId) validIds.add(v.sizeId);
+      }
+    }
+    return allSizes.filter(s => validIds.has(s.id));
+  }, [product, allSizes, selectedFlavorId]);
+
+  // ── Flavor/size handlers that auto-reset incompatible cross-selection ─────
+  const handleFlavorSelect = useCallback((id: number | null) => {
+    setSelectedFlavorId(id);
+    if (id !== null && selectedSizeId !== null) {
+      const validSizeIds = new Set<number>();
+      for (const l of (product?.listings ?? [])) {
+        for (const v of l.variants) {
+          if (v.flavorId === id && v.sizeId) validSizeIds.add(v.sizeId);
+        }
+      }
+      if (!validSizeIds.has(selectedSizeId)) setSelectedSizeId(null);
+    }
+  }, [selectedSizeId, product]);
+
+  const handleSizeSelect = useCallback((id: number | null) => {
+    setSelectedSizeId(id);
+    if (id !== null && selectedFlavorId !== null) {
+      const validFlavorIds = new Set<number>();
+      for (const l of (product?.listings ?? [])) {
+        for (const v of l.variants) {
+          if (v.sizeId === id && v.flavorId) validFlavorIds.add(v.flavorId);
+        }
+      }
+      if (!validFlavorIds.has(selectedFlavorId)) setSelectedFlavorId(null);
+    }
+  }, [selectedFlavorId, product]);
+
+  // ── Reference location for distances ────────────────────────────────────
+  // Priority: active location filter → user profile location → none
+  const refLocation = useMemo(() => {
+    if (locationFilter) return { lat: locationFilter.lat, lng: locationFilter.lng };
+    if (user?.locationLat && user?.locationLng) {
+      return { lat: parseFloat(user.locationLat), lng: parseFloat(user.locationLng) };
+    }
+    return null;
+  }, [locationFilter, user?.locationLat, user?.locationLng]);
+
   // ── Filtered listings ────────────────────────────────────────────────────
   const filteredListings = useMemo(() => {
     if (!product) return [];
     return product.listings
       .map((listing) => {
-        // Apply flavor + size filter to variants
         const variants = listing.variants.filter((v) => {
           if (selectedFlavorId !== null && v.flavorId !== selectedFlavorId) return false;
           if (selectedSizeId !== null && v.sizeId !== selectedSizeId) return false;
@@ -303,13 +388,9 @@ export function ProductDetailContent({
         return { listing, variants };
       })
       .filter(({ listing, variants }) => {
-        // Must have matching variants
         if (variants.length === 0) return false;
-        // Must have stock in at least one visible variant
         if (variants.every((v) => v.quantity <= 0)) return false;
-        // Location + radius filter
         if (locationFilter) {
-          // Suppliers without coordinates are excluded when a location filter is active
           if (!listing.supplierLat || !listing.supplierLng) return false;
           const dist = haversineKm(
             locationFilter.lat, locationFilter.lng,
@@ -320,7 +401,6 @@ export function ProductDetailContent({
         return true;
       })
       .sort((a, b) => {
-        // Sort by distance when location is set (nearest first)
         if (!locationFilter) return 0;
         const distA = a.listing.supplierLat && a.listing.supplierLng
           ? haversineKm(locationFilter.lat, locationFilter.lng, parseFloat(a.listing.supplierLat), parseFloat(a.listing.supplierLng))
@@ -380,13 +460,44 @@ export function ProductDetailContent({
 
       {/* Product Header */}
       <div className="flex flex-col sm:flex-row gap-6">
-        <div className="w-full sm:w-56 h-56 rounded-2xl overflow-hidden bg-secondary/30 shrink-0">
-          {product.imageUrl ? (
-            <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center"><Package className="w-16 h-16 text-muted-foreground opacity-20" /></div>
+        {/* Image gallery column */}
+        <div className="shrink-0 flex flex-col gap-2">
+          {/* Main image with hover zoom */}
+          <div
+            className="w-full sm:w-56 h-56 rounded-2xl overflow-hidden bg-secondary/30 cursor-zoom-in group"
+            onMouseMove={handleImageMouseMove}
+          >
+            {allImages.length > 0 ? (
+              <img
+                ref={mainImgRef}
+                src={allImages[safeActiveIdx]}
+                alt={product.name}
+                className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[2]"
+                style={{ transformOrigin: "50% 50%" }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center"><Package className="w-16 h-16 text-muted-foreground opacity-20" /></div>
+            )}
+          </div>
+
+          {/* Thumbnails */}
+          {allImages.length > 1 && (
+            <div className="flex gap-2 flex-wrap sm:w-56">
+              {allImages.map((url, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveImageIdx(idx)}
+                  className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-colors shrink-0 ${
+                    idx === safeActiveIdx ? "border-primary" : "border-border hover:border-primary/50"
+                  }`}
+                >
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
           )}
         </div>
+
         <div className="flex-1 space-y-3">
           {/* Category badges — always visible */}
           <div className="flex flex-wrap gap-2">
@@ -402,32 +513,32 @@ export function ProductDetailContent({
           {/* Description — always visible */}
           {product.description && <p className="text-muted-foreground leading-relaxed">{product.description}</p>}
 
-          {/* Overall review summary */}
-          {hasCommercial && reviewData && reviewData.overall.total > 0 && (
+          {/* Product review summary (product-level reviews only) */}
+          {hasCommercial && reviewData && reviewData.product.total > 0 && (
             <div className="flex items-center gap-2 pt-1">
-              <Stars rating={reviewData.overall.avgRating} />
-              <span className="text-sm font-medium">{reviewData.overall.avgRating.toFixed(1)}</span>
-              <span className="text-xs text-muted-foreground">({reviewData.overall.total} review{reviewData.overall.total !== 1 ? "s" : ""})</span>
+              <Stars rating={reviewData.product.avgRating} />
+              <span className="text-sm font-medium">{reviewData.product.avgRating.toFixed(1)}</span>
+              <span className="text-xs text-muted-foreground">({reviewData.product.total} product review{reviewData.product.total !== 1 ? "s" : ""})</span>
             </div>
           )}
 
-          {/* Flavor filter badges */}
+          {/* Flavor filter badges — synchronized */}
           {hasCommercial && allFlavors.length > 0 && (
             <FilterBadges
               label="Flavors"
-              items={allFlavors}
+              items={availableFlavors}
               selected={selectedFlavorId}
-              onSelect={setSelectedFlavorId}
+              onSelect={handleFlavorSelect}
             />
           )}
 
-          {/* Size filter badges */}
+          {/* Size filter badges — synchronized */}
           {hasCommercial && allSizes.length > 0 && (
             <FilterBadges
               label="Sizes"
-              items={allSizes}
+              items={availableSizes}
               selected={selectedSizeId}
-              onSelect={setSelectedSizeId}
+              onSelect={handleSizeSelect}
             />
           )}
 
@@ -491,15 +602,21 @@ export function ProductDetailContent({
                 : "No suppliers match the current filters. Try adjusting your flavor, size, or location filters."}
             </div>
           ) : (
-            filteredListings.map(({ listing, variants }) => (
-              <SupplierSection
-                key={listing.id}
-                listing={listing}
-                product={product}
-                visibleVariants={variants}
-                reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
-              />
-            ))
+            filteredListings.map(({ listing, variants }) => {
+              const distanceKm = refLocation && listing.supplierLat && listing.supplierLng
+                ? haversineKm(refLocation.lat, refLocation.lng, parseFloat(listing.supplierLat), parseFloat(listing.supplierLng))
+                : undefined;
+              return (
+                <SupplierSection
+                  key={listing.id}
+                  listing={listing}
+                  product={product}
+                  visibleVariants={variants}
+                  reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
+                  distanceKm={distanceKm}
+                />
+              );
+            })
           )}
         </div>
       ) : (

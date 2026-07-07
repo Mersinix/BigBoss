@@ -33,6 +33,7 @@ type ProductForm = {
   name: string;
   description: string;
   imageUrl: string;
+  additionalImageUrls: string[];
   categoryId: string;
   subCategoryId: string;
   flavorIds: number[];
@@ -40,7 +41,7 @@ type ProductForm = {
   brandId: string;
 };
 
-const EMPTY_FORM: ProductForm = { name: "", description: "", imageUrl: "", categoryId: "", subCategoryId: "", flavorIds: [], sizeIds: [], brandId: "" };
+const EMPTY_FORM: ProductForm = { name: "", description: "", imageUrl: "", additionalImageUrls: [], categoryId: "", subCategoryId: "", flavorIds: [], sizeIds: [], brandId: "" };
 
 // ── Delete Confirm ───────────────────────────────────────────────────────────
 
@@ -184,6 +185,7 @@ function ProductFormModal({
         name: editing.name,
         description: editing.description ?? "",
         imageUrl: editing.imageUrl ?? "",
+        additionalImageUrls: (editing as any).imageUrls ?? [],
         categoryId: editing.categoryId ? String(editing.categoryId) : "",
         subCategoryId: editing.subCategoryId ? String(editing.subCategoryId) : "",
         flavorIds,
@@ -256,10 +258,12 @@ function ProductFormModal({
     // Set flavorId/sizeId to primary (first) value for backward compat
     const flavorId = form.flavorIds[0] ?? null;
     const sizeId = form.sizeIds[0] ?? null;
+    const imageUrls = form.additionalImageUrls.filter(u => u.trim());
     save.mutate({
       name: form.name.trim(),
       description: form.description.trim() || null,
       imageUrl: form.imageUrl.trim() || null,
+      imageUrls: imageUrls.length > 0 ? imageUrls : null,
       categoryId: form.categoryId || null,
       subCategoryId: form.subCategoryId || null,
       flavorId,
@@ -295,6 +299,45 @@ function ProductFormModal({
           <div className="space-y-1.5">
             <Label>Image URL</Label>
             <Input data-testid="input-prod-image" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://..." />
+          </div>
+
+          {/* Additional Images */}
+          <div className="space-y-1.5">
+            <Label>Additional Images</Label>
+            <div className="space-y-2">
+              {form.additionalImageUrls.map((url, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <Input
+                    value={url}
+                    onChange={e => {
+                      const updated = [...form.additionalImageUrls];
+                      updated[idx] = e.target.value;
+                      setField("additionalImageUrls", updated);
+                    }}
+                    placeholder="https://..."
+                    className="flex-1 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 px-2"
+                    onClick={() => setField("additionalImageUrls", form.additionalImageUrls.filter((_, i) => i !== idx))}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => setField("additionalImageUrls", [...form.additionalImageUrls, ""])}
+              >
+                <Plus className="w-3.5 h-3.5" /> Add image
+              </Button>
+            </div>
           </div>
 
           {/* Category + SubCategory */}
@@ -432,6 +475,7 @@ function SupplierProductEditModal({
       name: product.name,
       description: product.description ?? "",
       imageUrl: product.imageUrl ?? "",
+      additionalImageUrls: (product as any).imageUrls ?? [],
       categoryId: product.categoryId ? String(product.categoryId) : "",
       subCategoryId: product.subCategoryId ? String(product.subCategoryId) : "",
       flavorIds,

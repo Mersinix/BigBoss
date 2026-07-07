@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, Loader2, CheckCircle } from "lucide-react";
+import { Star, Loader2, CheckCircle, Package, Store } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { MarketplaceListing, MarketplaceProduct } from "@shared/schema";
 
@@ -41,28 +41,35 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
   );
 }
 
+type ReviewType = "PRODUCT" | "SUPPLIER";
+
 export function ReviewModal({ open, onClose, product, listings }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<ReviewType>("PRODUCT");
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [supplierId, setSupplierId] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const listing = listings.find((l) => String(l.supplierId) === supplierId);
+    mutationFn: async (type: ReviewType) => {
+      const body: Record<string, unknown> = {
+        productId: product.id,
+        rating,
+        comment: comment.trim() || null,
+        productName: product.name,
+        reviewType: type,
+      };
+      if (type === "SUPPLIER") {
+        const listing = listings.find((l) => String(l.supplierId) === supplierId);
+        body.supplierId = Number(supplierId);
+        body.listingId = listing?.id ?? null;
+      }
       const res = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          supplierId: Number(supplierId),
-          productId: product.id,
-          listingId: listing?.id ?? null,
-          rating,
-          comment: comment.trim() || null,
-          productName: product.name,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
@@ -85,14 +92,18 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
     setComment("");
     setSupplierId("");
     setSubmitted(false);
+    setActiveTab("PRODUCT");
     onClose();
   };
 
-  const canSubmit = rating > 0 && supplierId;
+  const canSubmit =
+    rating > 0 && (activeTab === "PRODUCT" || (activeTab === "SUPPLIER" && !!supplierId));
+
+  const ratingLabel = ["", "Poor", "Fair", "Good", "Very good", "Excellent"][rating] ?? "";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="sm:max-w-[420px] rounded-3xl p-0 gap-0 overflow-hidden shadow-2xl">
+      <DialogContent className="sm:max-w-[440px] rounded-3xl p-0 gap-0 overflow-hidden shadow-2xl">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
           <DialogTitle className="text-lg font-bold text-gray-900">Write a Review</DialogTitle>
           <p className="text-xs text-muted-foreground mt-0.5">{product.name}</p>
@@ -105,58 +116,98 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
             <p className="text-sm text-muted-foreground">Thank you for your feedback.</p>
           </div>
         ) : (
-          <div className="px-6 py-5 flex flex-col gap-5">
-            {/* Supplier select */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700">Supplier *</label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
-                <SelectTrigger className="rounded-xl border-gray-200 text-sm">
-                  <SelectValue placeholder="Select a supplier…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {listings.map((l) => (
-                    <SelectItem key={l.supplierId} value={String(l.supplierId)}>
-                      {l.supplierName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="flex flex-col gap-0">
+            {/* Tab switcher */}
+            <div className="flex border-b border-gray-100">
+              <button
+                type="button"
+                onClick={() => setActiveTab("PRODUCT")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === "PRODUCT"
+                    ? "border-amber-500 text-amber-600"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Package className="w-3.5 h-3.5" /> Product Review
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("SUPPLIER")}
+                disabled={listings.length === 0}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors border-b-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                  activeTab === "SUPPLIER"
+                    ? "border-amber-500 text-amber-600"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Store className="w-3.5 h-3.5" /> Supplier Review
+              </button>
             </div>
 
-            {/* Star rating */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700">Rating *</label>
-              <StarPicker value={rating} onChange={setRating} />
-              {rating > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {["", "Poor", "Fair", "Good", "Very good", "Excellent"][rating]}
+            <div className="px-6 py-5 flex flex-col gap-5">
+              {/* Supplier select — only on Supplier tab */}
+              {activeTab === "SUPPLIER" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-700">Supplier *</label>
+                  <Select value={supplierId} onValueChange={setSupplierId}>
+                    <SelectTrigger className="rounded-xl border-gray-200 text-sm">
+                      <SelectValue placeholder="Select a supplier…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {listings.map((l) => (
+                        <SelectItem key={l.supplierId} value={String(l.supplierId)}>
+                          {l.supplierName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Context hint for product review */}
+              {activeTab === "PRODUCT" && (
+                <p className="text-xs text-muted-foreground bg-secondary/50 rounded-lg px-3 py-2">
+                  Your review is about the product itself — quality, description accuracy, etc.
                 </p>
               )}
-            </div>
 
-            {/* Comment */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-700">Comment (optional)</label>
-              <Textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Share your experience with this supplier…"
-                className="rounded-xl border-gray-200 text-sm resize-none"
-                rows={3}
-              />
-            </div>
+              {/* Star rating */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700">Rating *</label>
+                <StarPicker value={rating} onChange={setRating} />
+                {rating > 0 && (
+                  <p className="text-xs text-muted-foreground">{ratingLabel}</p>
+                )}
+              </div>
 
-            <Button
-              onClick={() => mutation.mutate()}
-              disabled={!canSubmit || mutation.isPending}
-              className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white py-5"
-            >
-              {mutation.isPending ? (
-                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</span>
-              ) : (
-                "Submit Review"
-              )}
-            </Button>
+              {/* Comment */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700">Comment (optional)</label>
+                <Textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder={
+                    activeTab === "PRODUCT"
+                      ? "Share your experience with this product…"
+                      : "Share your experience with this supplier…"
+                  }
+                  className="rounded-xl border-gray-200 text-sm resize-none"
+                  rows={3}
+                />
+              </div>
+
+              <Button
+                onClick={() => mutation.mutate(activeTab)}
+                disabled={!canSubmit || mutation.isPending}
+                className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 text-white py-5"
+              >
+                {mutation.isPending ? (
+                  <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</span>
+                ) : (
+                  "Submit Review"
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>

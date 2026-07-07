@@ -22,12 +22,19 @@ declare module "express-session" {
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   const SessionStore = MemoryStore(session);
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET environment variable is required");
+  }
   app.use(session({
-    secret: process.env.SESSION_SECRET || 'bigbosscoffee_secret',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store: new SessionStore({ checkPeriod: 86400000 }),
-    cookie: { secure: false },
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      sameSite: 'lax',
+    },
   }));
 
   const requireAuth = (req: any, res: any, next: any) => {

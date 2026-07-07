@@ -56,8 +56,18 @@ export function FlashMode({ open, onClose, products, storeName }: FlashModeProps
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="p-0 border-0 max-w-none w-full h-full sm:w-full sm:h-full sm:max-w-none sm:rounded-none bg-black overflow-hidden" data-testid="flash-mode-modal">
-        <div className="relative w-full h-screen flex flex-col select-none">
+<DialogContent
+  className="
+    p-0
+    border-0
+    w-[92vw]
+    max-w-lg
+    h-[90vh]
+    rounded-3xl
+    bg-black
+    overflow-hidden
+  "
+>      <div className="relative w-full h-full flex flex-col select-none overflow-hidden">
           {/* Header */}
           <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex items-center gap-2">

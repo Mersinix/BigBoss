@@ -9,15 +9,11 @@ import { nanoid } from "nanoid";
 const viteLogger = createLogger();
 
 export async function setupVite(server: Server, app: Express) {
-  const hmrConfig = process.env.REPL_ID
-    ? {
-        server,
-        path: "/vite-hmr",
-        clientPort: 443,
-        protocol: "wss" as const,
-        host: process.env.REPLIT_DEV_DOMAIN,
-      }
-    : { server, path: "/vite-hmr" };
+  // Replit's reverse proxy strips the `sec-websocket-protocol` header that
+  // Vite 7 uses to identify HMR WebSocket connections, so HMR cannot work
+  // through the proxy. Disable it to prevent the console error; file changes
+  // will still be picked up on a manual browser refresh.
+  const hmrConfig = process.env.REPL_ID ? false : { server };
 
   const serverOptions = {
     middlewareMode: true,
@@ -28,13 +24,7 @@ export async function setupVite(server: Server, app: Express) {
   const vite = await createViteServer({
     ...viteConfig,
     configFile: false,
-    customLogger: {
-      ...viteLogger,
-      error: (msg, options) => {
-        viteLogger.error(msg, options);
-        process.exit(1);
-      },
-    },
+    customLogger: viteLogger,
     server: serverOptions,
     appType: "custom",
   });

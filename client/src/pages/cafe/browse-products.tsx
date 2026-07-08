@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -519,6 +519,23 @@ export default function BrowseProducts() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <section className="relative pt-12 pb-16 px-4 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600" />
+        <div className="absolute inset-0 bg-black/10" />
+        <div className="relative max-w-3xl mx-auto text-center">
+          <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
+            <ShoppingBag className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
+            BigBoss <span className="text-amber-200">SHOP</span>
+          </h1>
+          <p className="text-amber-100 text-lg mb-2 max-w-xl mx-auto">
+            Commandez vos produits professionnels directement auprès de fournisseurs vérifiés.
+          </p>
+        </div>
+      </section>
+
       <div className="sticky top-14 z-30">
         <CategoryStrip
           categories={categories}

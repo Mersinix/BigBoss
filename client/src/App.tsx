@@ -100,10 +100,20 @@ const ProtectedRoute = ({
 
 function GatedServiceRoute({ service, component: Component }: { service: ServiceKey; component: any }) {
   const { states, isLoading } = useServiceStates();
-  if (isLoading) return <Spinner />;
+  const { user, isLoading: authLoading } = useAuth();
+  if (isLoading || authLoading) return <Spinner />;
+  if (!user) return <Redirect to="/" />;
   const state = states[service];
   if (state === "HIDDEN") return <NotFound />;
   return <Component comingSoon={state === "COMING_SOON"} />;
+}
+
+// Requires the user to be authenticated; redirects to landing page otherwise
+function RequireAuth({ component: Component }: { component: any }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <Spinner />;
+  if (!user) return <Redirect to="/" />;
+  return <Component />;
 }
 
 function SmartDashboard() {
@@ -144,7 +154,7 @@ function Router() {
       <Route path="/products">
         {() => (
           <MarketplaceLayout>
-            <BrowseProducts />
+            <RequireAuth component={BrowseProducts} />
           </MarketplaceLayout>
         )}
       </Route>
@@ -154,7 +164,7 @@ function Router() {
       <Route path="/stores/:storeId">
         {() => (
           <MarketplaceLayout>
-            <StoreDetailPage />
+            <RequireAuth component={StoreDetailPage} />
           </MarketplaceLayout>
         )}
       </Route>

@@ -1,0 +1,244 @@
+We will now update the Landing Page and the public/private access strategy of the platform.
+
+Important requirements before starting:
+
+Do not change the existing design language.
+Do not modify unrelated pages or features.
+Do not refactor working logic outside the scope below.
+Keep all existing components unless explicitly requested.
+Preserve all current synchronization and approvals.
+Check the current implementation before making changes to avoid duplicating existing functionality.
+Keep everything fully responsive (desktop, tablet and mobile).
+Keep all existing animations and UI quality.
+Do not make technical architecture changes unless they are required to satisfy these functional requirements.
+1. Public / Private Platform Strategy
+
+The Landing Page must become the only public page of the platform.
+
+Any visitor should be able to freely browse only the Landing Page.
+
+The following areas must become private:
+
+Shop
+Print
+Marketing
+Barista
+Any marketplace pages related to these services
+
+If a visitor is not authenticated and tries to access one of these pages (through a direct URL or any internal link), they must be redirected to the authentication flow.
+
+The Landing Page remains fully accessible without login.
+
+2. Landing Page Navbar
+
+Update only the Landing Page navbar.
+
+Remove the Location button
+
+The Landing Page no longer needs the Location selector.
+
+Remove only this button from the Landing Page.
+
+Do not remove the Location feature from the rest of the application.
+
+3. Landing Page Hero
+
+Remove the search input from the Landing Page Hero.
+
+The Landing Page Hero should become a promotional Hero only.
+
+Do not remove the Hero itself.
+
+Keep the existing visual identity.
+
+4. Shop Hero
+
+The Shop (/products) page should use the same Hero layout already introduced on the Print page.
+
+Reuse the same Hero positioning and style.
+
+Do not change the Shop logic.
+
+Only align its Hero presentation with the Print page.
+
+5. Landing Page Sections
+SHOP section
+
+Display:
+
+only the first 6 Shop categories
+categories positioned on the right side
+one large related image on the left side
+
+Clicking a category should no longer redirect anywhere.
+
+Nothing should happen.
+
+Replace the existing "Voir tous..." button with a registration-oriented CTA for Coffee Owners.
+
+The button should guide visitors toward creating the appropriate account.
+
+PRINT section
+
+Display:
+
+only the first 6 Print categories
+categories on the left side
+one related image on the right side
+
+Clicking a category should do nothing.
+
+Replace the bottom button with a registration CTA for Print providers.
+
+MARKETING section
+
+Display:
+
+only the first 6 Marketing categories
+categories on the right side
+one related image on the left side
+
+Clicking a category should do nothing.
+
+Replace the bottom button with a registration CTA for Marketing providers.
+
+BARISTA section
+
+Keep the existing two components:
+
+Barista Academy
+Marketplace Baristas
+
+Do not redesign them.
+
+Simply add one contextual image for each component.
+
+Both images should appear on the right side.
+
+On mobile, the images should automatically move below the text.
+
+Replace the existing bottom buttons with registration CTAs adapted to each Barista service.
+
+6. Landing Page Language Switcher
+
+Only on the Landing Page,
+
+add a language selector.
+
+Supported languages:
+
+French
+English
+Arabic (Tunisian dialect)
+
+The Arabic version should use natural Tunisian Arabic rather than formal Arabic.
+
+The language selector is required only on the Landing Page.
+
+Do not modify the language behavior of the rest of the application.
+
+7. Landing Page Dark Mode
+
+Only on the Landing Page,
+
+add a Dark Mode toggle.
+
+This should affect only the Landing Page.
+
+Do not change the appearance of the rest of the application.
+
+8. Hero Carousel
+
+Transform the Landing Page Hero into a promotional carousel.
+
+The Hero should support multiple promotional slides.
+
+Each slide can contain:
+
+image
+title
+description
+
+The carousel should preserve the current design language.
+
+9. Admin → System Management
+
+Extend the existing System Management page.
+
+Add a Landing Page configuration section.
+
+The admin should be able to configure:
+
+Hero
+Hero title
+Hero description
+Hero slides/images
+Landing Sections
+
+Allow configuring the illustration image used for:
+
+Shop section
+Print section
+Marketing section
+Barista Academy section
+Marketplace Barista section
+Footer
+
+Allow the admin to manage:
+
+footer description
+contact information
+email
+phone
+social media links
+
+Supported social networks:
+
+Facebook
+Instagram
+TikTok
+10. Footer
+
+Keep the current Footer.
+
+Under Liens utiles, keep the existing "Devenir fournisseur" link.
+
+Add equivalent links for the remaining services so every service has its own registration entry.
+
+These links should point to the corresponding registration flow.
+
+11. Access Protection
+
+After these changes:
+
+Landing Page remains public.
+Every marketplace page becomes accessible only after authentication.
+Internal navigation from the Landing Page toward marketplace pages should follow this rule.
+Direct URL access should also follow this rule.
+12. Preserve Existing Functionality
+
+Do not modify:
+
+Shop behavior
+Product logic
+Store logic
+Favorites
+Reviews
+Location system
+Admin workflows
+Supplier workflows
+Coffee Owner workflows
+Existing approvals
+Existing synchronization
+Existing responsive layouts outside the Landing Page
+
+Only implement the requested Landing Page and access-control updates.
+
+Before finishing, verify that:
+
+all Landing Page sections remain synchronized with admin configuration,
+hero updates appear immediately,
+footer updates appear immediately,
+service visibility rules continue to work correctly,
+public/private navigation behaves consistently throughout the application,
+and no existing functionality outside this scope has been changed or broken.

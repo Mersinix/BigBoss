@@ -4,6 +4,8 @@ import {
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
+  landingConfig,
+  type LandingConfig,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
   type InsertOrder, type Order, type OrderWithDetails,
@@ -144,6 +146,8 @@ export interface IStorage {
 
   // Platform services (System Management)
   getServiceStates(): Promise<ServiceStatesMap>;
+  getLandingConfig(): Promise<LandingConfig>;
+  updateLandingConfig(data: Partial<Omit<LandingConfig, "id" | "updatedAt">>): Promise<LandingConfig>;
   setServiceState(service: ServiceKey, state: ServiceState): Promise<ServiceStatesMap>;
 }
 
@@ -1361,6 +1365,25 @@ export class DatabaseStorage implements IStorage {
         ])
       ) as Record<number, { avgRating: number; total: number }>,
     };
+  }
+  // ── Landing Config ──────────────────────────────────────────────────────────
+
+  async getLandingConfig(): Promise<LandingConfig> {
+    const rows = await db.select().from(landingConfig).limit(1);
+    if (rows.length > 0) return rows[0];
+    // Auto-create default row
+    const [created] = await db.insert(landingConfig).values({}).returning();
+    return created;
+  }
+
+  async updateLandingConfig(data: Partial<Omit<LandingConfig, "id" | "updatedAt">>): Promise<LandingConfig> {
+    const existing = await this.getLandingConfig();
+    const [updated] = await db
+      .update(landingConfig)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(landingConfig.id, existing.id))
+      .returning();
+    return updated;
   }
 }
 

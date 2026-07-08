@@ -230,6 +230,27 @@ export const platformServices = pgTable("platform_services", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Landing page configuration — admin-managed content for hero, sections & footer
+export const landingConfig = pgTable("landing_config", {
+  id: serial("id").primaryKey(),
+  heroSlides: jsonb("hero_slides").$type<{ imageUrl: string; title: string; description: string }[]>().default([]),
+  shopImage: text("shop_image"),
+  printImage: text("print_image"),
+  marketingImage: text("marketing_image"),
+  baristaAcademyImage: text("barista_academy_image"),
+  baristaMarketplaceImage: text("barista_marketplace_image"),
+  footerDescription: text("footer_description"),
+  footerEmail: text("footer_email"),
+  footerPhone: text("footer_phone"),
+  footerFacebook: text("footer_facebook"),
+  footerInstagram: text("footer_instagram"),
+  footerTiktok: text("footer_tiktok"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type LandingConfig = typeof landingConfig.$inferSelect;
+export type HeroSlide = { imageUrl: string; title: string; description: string };
+
 // Favorites — persisted per-user shop (product) favorites
 export const favorites = pgTable("favorites", {
   id: serial("id").primaryKey(),

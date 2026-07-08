@@ -228,6 +228,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Landing Page Config ───────────────────────────────────────────────────
+
+  app.get("/api/landing-config", async (_req, res) => {
+    try {
+      const config = await storage.getLandingConfig();
+      res.json(config);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load landing config" });
+    }
+  });
+
+  app.patch("/api/admin/landing-config", requireAdmin, async (req, res) => {
+    try {
+      const config = await storage.updateLandingConfig(req.body);
+      res.json(config);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update landing config" });
+    }
+  });
+
   app.patch('/api/auth/me/billing', requireAuth, async (req, res) => {
     try {
       const billing = req.body;

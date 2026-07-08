@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { setupWebSocket } from "./ws";
+import { seedDatabase } from "./seed";
 
 const app = express();
 const httpServer = createServer(app);
@@ -63,6 +64,10 @@ app.use((req, res, next) => {
 (async () => {
   setupWebSocket(httpServer);
   await registerRoutes(httpServer, app);
+
+  // Seed the database before accepting traffic. seedDatabase() is idempotent —
+  // safe to call on every restart, no duplicates will be created.
+  await seedDatabase();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

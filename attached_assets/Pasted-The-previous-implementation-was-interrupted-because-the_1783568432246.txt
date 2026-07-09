@@ -1,0 +1,40 @@
+The previous implementation was interrupted because the session reached the daily quota limit. Before making any new changes, continue by reviewing everything against my original specification and determine whether anything is still incomplete, partially implemented, or incorrectly implemented.
+
+Do not assume the work is finished simply because the application builds successfully.
+
+Please perform a complete audit of the implementation and compare it point by point with the original requirements.
+
+Specifically:
+
+* Verify every requirement from sections 1 through 12 of the original prompt.
+* Check both the frontend and backend.
+* Verify every authentication rule and every public/private access rule.
+* Verify every admin configuration feature.
+* Verify every Landing Page section.
+* Verify the Hero carousel configuration.
+* Verify the language selector.
+* Verify the Landing Page dark mode.
+* Verify the Shop Hero alignment with the Print Hero.
+* Verify every CTA and every registration flow.
+* Verify the footer configuration and social links.
+* Verify that every Landing Page section remains synchronized with the admin configuration.
+* Verify that all images configured by the admin update correctly.
+* Verify that all responsive behavior matches the requested specifications.
+* Verify that no unrelated functionality has been modified or broken.
+
+If you discover any missing, partially completed, or inconsistent implementation, complete it before considering the task finished.
+
+Do not refactor unrelated code.
+
+Do not redesign anything that already satisfies the requirements.
+
+Only make the minimum additional changes necessary to fully satisfy the original specification.
+
+When you are finished, provide a final checklist showing:
+
+* ✅ Fully completed requirements
+* ⚠️ Requirements that required additional work and what was completed
+* ⚠️ Any requirement that could not be completed, with the exact reason
+* ✅ Confirmation that no unrelated functionality was changed
+
+Do not stop after the audit. If anything is missing, implement it, verify it, and only then provide the final completion report.

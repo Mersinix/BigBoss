@@ -473,6 +473,9 @@ export default function LandingPage() {
   const [slideIndex, setSlideIndex] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Language dropdown open state (click-based, works on touch)
+  const [langOpen, setLangOpen] = useState(false);
+
   // Auth modal state
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"login" | "register">("login");
@@ -510,6 +513,13 @@ export default function LandingPage() {
     startTimer();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [slides.length]);
+
+  // Clamp slideIndex if admin reduces slide count while page is open
+  useEffect(() => {
+    if (slides.length > 0 && slideIndex >= slides.length) {
+      setSlideIndex(0);
+    }
+  }, [slides.length, slideIndex]);
 
   const goToSlide = (idx: number) => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -687,21 +697,32 @@ export default function LandingPage() {
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
 
-            {/* Language selector */}
-            <div className="relative group">
-              <button className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-3 py-1.5 transition-colors ${dk("text-gray-700 border-gray-200 hover:border-amber-300", "text-gray-200 border-gray-700 hover:border-amber-400")}`}>
+            {/* Language selector — click-based for touch/mobile compatibility */}
+            <div className="relative">
+              <button
+                onClick={() => setLangOpen(!langOpen)}
+                className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-3 py-1.5 transition-colors ${dk("text-gray-700 border-gray-200 hover:border-amber-300", "text-gray-200 border-gray-700 hover:border-amber-400")}`}
+                aria-haspopup="listbox"
+                aria-expanded={langOpen}
+              >
                 <Globe className="w-3.5 h-3.5 text-amber-500" />
                 <span>{lang === "fr" ? "FR" : lang === "en" ? "EN" : "عربي"}</span>
-                <ChevronDown className="w-3 h-3" />
+                <ChevronDown className={`w-3 h-3 transition-transform ${langOpen ? "rotate-180" : ""}`} />
               </button>
-              <div className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-1 w-32 rounded-xl border shadow-lg overflow-hidden z-50 hidden group-hover:block ${dk("bg-white border-gray-200", "bg-gray-800 border-gray-700")}`}>
-                {(["fr", "en", "tn"] as Lang[]).map((l) => (
-                  <button key={l} onClick={() => setLang(l)}
-                    className={`w-full text-left px-3 py-2 text-sm transition-colors ${lang === l ? "bg-amber-500 text-white" : dk("hover:bg-gray-50 text-gray-700", "hover:bg-gray-700 text-gray-200")}`}>
-                    {l === "fr" ? "🇫🇷 Français" : l === "en" ? "🇬🇧 English" : "🇹🇳 عربي تونسي"}
-                  </button>
-                ))}
-              </div>
+              {langOpen && (
+                <>
+                  {/* Invisible backdrop to close on outside click */}
+                  <div className="fixed inset-0 z-40" onClick={() => setLangOpen(false)} />
+                  <div className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-1 w-36 rounded-xl border shadow-lg overflow-hidden z-50 ${dk("bg-white border-gray-200", "bg-gray-800 border-gray-700")}`}>
+                    {(["fr", "en", "tn"] as Lang[]).map((l) => (
+                      <button key={l} onClick={() => { setLang(l); setLangOpen(false); }}
+                        className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${lang === l ? "bg-amber-500 text-white" : dk("hover:bg-gray-50 text-gray-700", "hover:bg-gray-700 text-gray-200")}`}>
+                        {l === "fr" ? "🇫🇷 Français" : l === "en" ? "🇬🇧 English" : "🇹🇳 عربي تونسي"}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Auth / Dashboard */}

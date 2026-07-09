@@ -17,6 +17,7 @@ import {
   users,
   categories,
   products,
+  landingConfig,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -269,6 +270,13 @@ export async function seedDatabase(): Promise<void> {
 
     console.log("✅ [seed] Database seeded successfully");
     return;
+  }
+
+  // ── Landing Config singleton — always ensure one row exists ─────────────
+  const lcRows = await db.select().from(landingConfig).limit(1);
+  if (lcRows.length === 0) {
+    await db.insert(landingConfig).values({}).execute();
+    console.log("✅ [seed] Landing config initialized");
   }
 
   console.log("[seed] Database already populated — skipping seed");

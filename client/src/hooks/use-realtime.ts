@@ -16,10 +16,23 @@ const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
 
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
 
+const PACK_EVENTS = ["pack_updated"];
+
 function invalidateStoreQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/store"] });
   qc.invalidateQueries({ queryKey: ["/api/admin/stores"] });
   qc.invalidateQueries({ queryKey: ["/api/stores"] });
+}
+
+function invalidatePackQueries(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
+  qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
+  qc.invalidateQueries({ queryKey: ["/api/admin/packs"] });
+  // Also invalidate store-specific pack queries (any /api/stores/.../packs key)
+  qc.invalidateQueries({ predicate: (q) => {
+    const key = q.queryKey as string[];
+    return Array.isArray(key) && key[0] === "/api/stores" && key[2] === "packs";
+  }});
 }
 
 function invalidateSupplierMappingQueries(qc: QueryClient) {
@@ -68,6 +81,9 @@ export function useRealtime() {
           }
           if (STORE_EVENTS.includes(event)) {
             invalidateStoreQueries(qc);
+          }
+          if (PACK_EVENTS.includes(event)) {
+            invalidatePackQueries(qc);
           }
           if (TAXONOMY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/categories"] });

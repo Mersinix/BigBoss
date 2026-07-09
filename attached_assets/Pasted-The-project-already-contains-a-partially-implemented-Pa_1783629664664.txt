@@ -1,0 +1,75 @@
+The project already contains a partially implemented Pack feature. The previous implementation was interrupted before completion because the daily quota was reached.
+
+The original functional specification is stored in:
+
+Pasted-We-are-introducing-a-new-Pack-feature-for-suppliers-Thi_1783627558049.txt
+
+Your task
+
+Before making any changes:
+
+Read the entire specification from Pasted-We-are-introducing-a-new-Pack-feature-for-suppliers-Thi_1783627558049.txt.
+Scan the entire project.
+Inspect the current implementation.
+Determine exactly what has already been implemented and what is still missing.
+Check the database, backend, APIs, frontend, synchronization, routing, permissions, marketplace, supplier pages, admin pages, coffee owner pages, cart, favorites, reviews, and Pack-related logic.
+Detect unfinished components, TODOs, placeholder code, duplicate logic, partially connected features, and anything left incomplete.
+
+Once you fully understand the current state, continue the implementation automatically.
+
+Do not restart the feature from scratch.
+
+Do not replace working code.
+
+Only complete what is still missing or incomplete.
+
+If something was already implemented correctly, leave it untouched.
+
+If something is partially implemented, finish it using the existing architecture.
+
+If you discover inconsistencies or broken synchronization introduced during the partial implementation, fix them as part of the completion.
+
+While implementing
+Do not change the existing UI design.
+Do not change unrelated features.
+Do not refactor unrelated code.
+Preserve all existing business logic.
+Preserve all existing APIs unless they require extension for the Pack feature.
+Reuse existing components whenever possible.
+Avoid duplicate implementations.
+Keep desktop and mobile responsive behavior.
+Keep all current animations and user experience.
+Synchronization
+
+Verify that every Pack-related action updates correctly in real time between:
+
+Supplier
+Admin
+Coffee Owner
+
+No page refresh should ever be required.
+
+Verify synchronization for:
+
+Pack creation
+Pack editing
+Pack deletion
+Pack approval (if applicable)
+Pack visibility
+Pack expiration
+Pack stock
+Pack favorites
+Cart
+Marketplace
+Store pages
+Filtering
+Variant updates
+Before finishing
+
+Perform a complete verification to ensure that every requirement described in:
+
+Pasted-We-are-introducing-a-new-Pack-feature-for-suppliers-Thi_1783627558049.txt
+
+has been fully implemented.
+
+Only make changes that are necessary to complete the Pack feature. Keep the rest of the project intact and fully functional.

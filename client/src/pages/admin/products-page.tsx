@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGrid, LayoutList } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGrid, LayoutList, Layers, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -1050,13 +1050,200 @@ function SupplierProductsSection({
   );
 }
 
+// ── Admin Packs Section ───────────────────────────────────────────────────────
+
+function AdminPacksSection() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
+
+  const { data: packs = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/packs"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/packs", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
+  const patchMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Record<string, any> }) =>
+      apiRequest("PATCH", `/api/admin/packs/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/packs"] });
+      qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
+      toast({ title: "Pack updated" });
+    },
+    onError: () => toast({ title: "Error", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/admin/packs/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/packs"] });
+      qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
+      toast({ title: "Pack deleted" });
+      setDeleting(null);
+    },
+    onError: () => toast({ title: "Error deleting pack", variant: "destructive" }),
+  });
+
+  const displayed = useMemo(() => {
+    if (!search.trim()) return packs;
+    const q = search.toLowerCase();
+    return packs.filter((p: any) => p.name.toLowerCase().includes(q) || (p.supplierName ?? "").toLowerCase().includes(q));
+  }, [packs, search]);
+
+  return (
+    <div className="space-y-4">
+      {/* Stats */}
+      <div className="flex gap-3 flex-wrap">
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-amber-500" />
+          <span className="text-sm font-medium">{packs.length} total packs</span>
+        </div>
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {packs.filter((p: any) => p.isAvailable).length} available ·{" "}
+            {packs.filter((p: any) => !p.isAvailable).length} unavailable
+          </span>
+        </div>
+      </div>
+
+      {/* Search */}
+      <Card className="border shadow-none">
+        <CardContent className="p-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search packs or suppliers…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              data-testid="input-pack-search"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Table */}
+      {isLoading ? (
+        <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-secondary/30 rounded-lg animate-pulse" />)}</div>
+      ) : displayed.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <Layers className="w-12 h-12 text-muted-foreground opacity-40 mb-4" />
+          <p className="font-semibold">{search ? "No packs match your search" : "No packs found"}</p>
+          <p className="text-sm text-muted-foreground mt-1">Suppliers can create packs from their Pack tab.</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border overflow-hidden">
+          <Table>
+            <TableHeader className="bg-secondary/30">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-14" />
+                <TableHead>Pack</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead>Categories</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Stock</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-24 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {displayed.map((pack: any) => (
+                <TableRow key={pack.id} data-testid={`row-pack-${pack.id}`} className="hover:bg-secondary/20">
+                  <TableCell className="p-3">
+                    {pack.imageUrl ? (
+                      <img src={pack.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-amber-50 flex items-center justify-center">
+                        <Layers className="w-5 h-5 text-amber-300" />
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <p className="font-medium text-sm">{pack.name}</p>
+                    {pack.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{pack.description}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {(pack.items ?? []).length} item{(pack.items ?? []).length !== 1 ? "s" : ""} included
+                    </p>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{pack.supplierName ?? "—"}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {(pack.categoryLabels ?? []).slice(0, 2).map((c: any) => (
+                        <Badge key={c.id} variant="secondary" className="text-xs">{c.name}</Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm font-medium">
+                    {pack.price != null ? `${(pack.price / 100).toFixed(2)} TND` : "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {pack.quantityAvailable ?? 0}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      className={`text-xs border-0 ${pack.isAvailable ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}
+                    >
+                      {pack.isAvailable ? "Available" : "Unavailable"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        title={pack.visibility === "VISIBLE" ? "Hide pack" : "Show pack"}
+                        onClick={() => patchMutation.mutate({ id: pack.id, data: { visibility: pack.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE" } })}
+                        disabled={patchMutation.isPending}
+                        data-testid={`button-toggle-visibility-pack-${pack.id}`}
+                      >
+                        {pack.visibility === "VISIBLE" ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setDeleting({ id: pack.id, name: pack.name })}
+                        data-testid={`button-delete-pack-${pack.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {deleting && (
+        <DeleteConfirm
+          open
+          name={deleting.name}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => deleteMutation.mutate(deleting.id)}
+          isPending={deleteMutation.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AdminProductsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [section, setSection] = useState<'catalog' | 'supplier'>('catalog');
+  const [section, setSection] = useState<'catalog' | 'supplier' | 'packs'>('catalog');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1184,6 +1371,13 @@ export default function AdminProductsPage() {
           >
             Supplier Products
           </button>
+          <button
+            onClick={() => setSection('packs')}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${section === 'packs' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            data-testid="section-packs"
+          >
+            <Layers className="w-3.5 h-3.5" />Packs
+          </button>
         </div>
         {section === 'catalog' && (
           <div className="flex gap-1 border rounded-lg p-0.5">
@@ -1208,6 +1402,8 @@ export default function AdminProductsPage() {
       </div>
 
       {section === 'supplier' && <SupplierProductsSection cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} />}
+
+      {section === 'packs' && <AdminPacksSection />}
 
       {section === 'catalog' && <>
       {/* Stats strip */}

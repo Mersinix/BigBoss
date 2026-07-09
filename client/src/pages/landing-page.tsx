@@ -465,7 +465,7 @@ export default function LandingPage() {
 
   // Language & dark mode
   const [lang, setLang] = useState<Lang>("fr");
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const t = TRANSLATIONS[lang];
   const isRtl = lang === "tn";
 

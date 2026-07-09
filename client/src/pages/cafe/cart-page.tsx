@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
-  Clock, Package, MapPin, CheckCircle
+  Clock, Package, MapPin, CheckCircle, Layers
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,7 @@ export default function CartPage() {
   const {
     items, updateQuantity, removeItem, clearCart, getTotal, getItemsBySupplier,
     printItems, removePrintItem, clearPrintItems, getPrintTotal,
+    packItems, updatePackQuantity, removePackItem, clearPackItems, getPackTotal,
   } = useCart();
   const { user } = useAuth();
   const createOrder = useCreateOrder();
@@ -50,9 +51,10 @@ export default function CartPage() {
 
   const totalShop = getTotal();
   const totalPrint = getPrintTotal();
-  const hasShop = items.length > 0;
+  const totalPack = getPackTotal();
+  const hasShop = items.length > 0 || packItems.length > 0;
   const hasPrint = printItems.length > 0;
-  const grandTotal = totalShop + totalPrint;
+  const grandTotal = totalShop + totalPack + totalPrint;
 
   const handleDeliveryConfirm = (loc: PickedLocation) => {
     setCustomDeliveryAddress(pickedToGeoLocation(loc));
@@ -85,6 +87,11 @@ export default function CartPage() {
         quantity: i.quantity,
         unitPrice: i.unitPrice,
       })),
+      packItems: packItems.map((p) => ({
+        packId: p.packId,
+        supplierId: p.supplierId,
+        quantity: p.quantity,
+      })),
       deliveryAddress: activeDeliveryAddress,
       courierInstructions: courierInstructions.trim() || undefined,
     };
@@ -92,6 +99,7 @@ export default function CartPage() {
       onSuccess: () => {
         toast({ title: "Commande envoyée !", description: "Vos commandes ont été transmises aux fournisseurs." });
         clearCart();
+        clearPackItems();
         setCourierInstructions("");
         setCustomDeliveryAddress(null);
         setLocation("/orders");
@@ -139,7 +147,7 @@ export default function CartPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Votre panier</h1>
         <p className="text-muted-foreground mt-1">
-          {items.length + printItems.length} article{items.length + printItems.length !== 1 ? "s" : ""}
+          {items.length + packItems.length + printItems.length} article{items.length + packItems.length + printItems.length !== 1 ? "s" : ""}
           {hasShop && hasPrint ? " · SHOP + PRINT" : hasShop ? " · SHOP" : " · PRINT"}
         </p>
       </div>
@@ -201,6 +209,49 @@ export default function CartPage() {
                   </Card>
                 );
               })}
+
+              {packItems.map((pack) => (
+                <Card key={`pack-${pack.packId}`} className="rounded-2xl border-amber-100 shadow-sm overflow-hidden" data-testid={`cart-pack-${pack.packId}`}>
+                  <div className="bg-amber-50 px-4 py-3 border-b border-amber-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-amber-600" />
+                      <span className="font-semibold text-sm text-amber-700">{pack.supplierName} · Pack</span>
+                    </div>
+                    <span className="text-sm font-medium">{formatCurrency(pack.unitPrice * pack.quantity)}</span>
+                  </div>
+                  <CardContent className="p-4">
+                    <div className="flex gap-3">
+                      <div className="w-16 h-16 rounded-lg bg-secondary/50 overflow-hidden shrink-0">
+                        {pack.packImageUrl ? (
+                          <img src={pack.packImageUrl} className="w-full h-full object-cover" alt="" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">—</div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{pack.packName}</p>
+                        <p className="text-xs text-muted-foreground">{formatCurrency(pack.unitPrice)} le pack</p>
+                        {pack.includedProducts.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                            {pack.includedProducts.map((ip) => `${ip.quantity}× ${ip.productName}`).join(", ")}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <div className="flex items-center border border-border rounded-lg overflow-hidden">
+                            <button className="px-2 py-1 hover:bg-secondary transition-colors" onClick={() => updatePackQuantity(pack.packId, Math.max(1, pack.quantity - 1))} data-testid={`button-decrease-pack-${pack.packId}`}><Minus className="w-3 h-3" /></button>
+                            <span className="px-3 text-sm font-medium w-8 text-center">{pack.quantity}</span>
+                            <button className="px-2 py-1 hover:bg-secondary transition-colors" onClick={() => updatePackQuantity(pack.packId, pack.quantity + 1)} data-testid={`button-increase-pack-${pack.packId}`}><Plus className="w-3 h-3" /></button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <p className="font-bold text-sm">{formatCurrency(pack.unitPrice * pack.quantity)}</p>
+                        <button className="text-muted-foreground hover:text-destructive transition-colors" onClick={() => removePackItem(pack.packId)} data-testid={`button-remove-pack-${pack.packId}`}><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
 
@@ -362,9 +413,15 @@ export default function CartPage() {
                       </div>
                     );
                   })}
+                  {packItems.length > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Packs</span>
+                      <span>{formatCurrency(totalPack)}</span>
+                    </div>
+                  )}
                   <div className="border-t border-border pt-3 flex justify-between items-center font-bold">
                     <span>Total SHOP</span>
-                    <span className="text-xl text-primary">{formatCurrency(totalShop)}</span>
+                    <span className="text-xl text-primary">{formatCurrency(totalShop + totalPack)}</span>
                   </div>
                 </div>
                 <Button onClick={handleCheckout} disabled={createOrder.isPending} className="w-full shadow-lg shadow-primary/25" data-testid="button-place-order">

@@ -70,6 +70,9 @@ export const supplierProductListings = pgTable("supplier_product_listings", {
   availableFlavorIds: integer("available_flavor_ids").array(),
   availableSizeIds: integer("available_size_ids").array(),
   availableBrandIds: integer("available_brand_ids").array(),
+  // When true, this listing's variants are pack-exclusive: hidden from "My Products"
+  // and the individual marketplace, but still usable inside the supplier's Packs.
+  onlyForPack: boolean("only_for_pack").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -112,7 +115,9 @@ export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull(),
   subOrderId: integer("sub_order_id"),
-  productId: integer("product_id").notNull(),
+  productId: integer("product_id"),
+  packId: integer("pack_id"),
+  packName: text("pack_name"),
   quantity: integer("quantity").notNull(),
   unitPrice: integer("unit_price").notNull(),
   totalPrice: integer("total_price"),
@@ -308,6 +313,45 @@ export const storeFavorites = pgTable("store_favorites", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ── Packs ────────────────────────────────────────────────────────────────────
+// A Pack bundles one or more of a supplier's own product listings into a single
+// sellable offer. Taxonomy (category/subcategory/brand) is always derived from
+// the included products — never stored/selected manually.
+
+export const packVisibilityEnum = pgEnum('pack_visibility', ['VISIBLE', 'HIDDEN']);
+
+export const packs = pgTable("packs", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  price: integer("price").notNull().default(0),
+  quantityAvailable: integer("quantity_available").notNull().default(0),
+  expirationDate: timestamp("expiration_date"),
+  visibility: packVisibilityEnum("visibility").notNull().default('VISIBLE'),
+  isArchived: boolean("is_archived").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Pack items — which listing (and optional specific variant) makes up a Pack, and how many units.
+export const packItems = pgTable("pack_items", {
+  id: serial("id").primaryKey(),
+  packId: integer("pack_id").notNull(),
+  listingId: integer("listing_id").notNull(),
+  variantId: integer("variant_id"),
+  quantity: integer("quantity").notNull().default(1),
+});
+
+// Pack favorites — persisted per-user, mirrors store_favorites / favorites pattern.
+export const packFavorites = pgTable("pack_favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  packId: integer("pack_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ── Relations ────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -395,6 +439,21 @@ export const storeFavoritesRelations = relations(storeFavorites, ({ one }) => ({
   store: one(supplierStores, { fields: [storeFavorites.storeId], references: [supplierStores.id] }),
 }));
 
+export const packsRelations = relations(packs, ({ one, many }) => ({
+  supplier: one(users, { fields: [packs.supplierId], references: [users.id] }),
+  items: many(packItems),
+}));
+
+export const packItemsRelations = relations(packItems, ({ one }) => ({
+  pack: one(packs, { fields: [packItems.packId], references: [packs.id] }),
+  listing: one(supplierProductListings, { fields: [packItems.listingId], references: [supplierProductListings.id] }),
+}));
+
+export const packFavoritesRelations = relations(packFavorites, ({ one }) => ({
+  user: one(users, { fields: [packFavorites.userId], references: [users.id] }),
+  pack: one(packs, { fields: [packFavorites.packId], references: [packs.id] }),
+}));
+
 export const supplierProductReviewsRelations = relations(supplierProductReviews, ({ one }) => ({
   supplier: one(users, { fields: [supplierProductReviews.supplierId], references: [users.id] }),
   cafe: one(users, { fields: [supplierProductReviews.cafeId], references: [users.id] }),
@@ -420,6 +479,9 @@ export const insertPlatformServiceSchema = createInsertSchema(platformServices).
 export const insertSupplierStoreSchema = createInsertSchema(supplierStores).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertStoreFavoriteSchema = createInsertSchema(storeFavorites).omit({ id: true, createdAt: true });
 export const insertSupplierProductReviewSchema = createInsertSchema(supplierProductReviews).omit({ id: true, createdAt: true });
+export const insertPackSchema = createInsertSchema(packs).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPackItemSchema = createInsertSchema(packItems).omit({ id: true });
+export const insertPackFavoriteSchema = createInsertSchema(packFavorites).omit({ id: true, createdAt: true });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -479,6 +541,47 @@ export type InsertStoreFavorite = z.infer<typeof insertStoreFavoriteSchema>;
 
 export type SupplierProductReview = typeof supplierProductReviews.$inferSelect;
 export type InsertSupplierProductReview = z.infer<typeof insertSupplierProductReviewSchema>;
+
+export type Pack = typeof packs.$inferSelect;
+export type InsertPack = z.infer<typeof insertPackSchema>;
+
+export type PackItem = typeof packItems.$inferSelect;
+export type InsertPackItem = z.infer<typeof insertPackItemSchema>;
+
+export type PackFavorite = typeof packFavorites.$inferSelect;
+export type InsertPackFavorite = z.infer<typeof insertPackFavoriteSchema>;
+
+// ── Pack Rich Types ───────────────────────────────────────────────────────────
+
+export type PackItemDetail = {
+  id: number;
+  listingId: number;
+  variantId: number | null;
+  quantity: number;
+  productId: number;
+  productName: string;
+  productImageUrl: string | null;
+  flavorId: number | null;
+  flavorName: string | null;
+  sizeId: number | null;
+  sizeName: string | null;
+  unitPrice: number;
+  availableQuantity: number; // stock available for this listing/variant right now
+};
+
+export type PackDetail = Pack & {
+  supplierName: string;
+  items: PackItemDetail[];
+  categoryIds: number[];
+  subCategoryIds: number[];
+  brandIds: number[];
+  categoryLabels: TaxonomyLabel[];
+  subCategoryLabels: TaxonomyLabel[];
+  brandLabels: TaxonomyLabel[];
+  maxBuildable: number; // how many packs could be assembled given current stock
+  isAvailable: boolean; // maxBuildable > 0, not expired, visible, not archived
+  isExpired: boolean;
+};
 
 // ── Store Types ───────────────────────────────────────────────────────────────
 
@@ -691,6 +794,21 @@ export type CreateOrderItemInput = Omit<CreateOrderItem, 'unitPrice' | 'supplier
   unitPrice?: number;
 };
 
+export type CreatePackOrderItem = {
+  packId: number;
+  supplierId: number;
+  quantity: number;
+};
+
+export type ResolvedPackOrderItem = {
+  packId: number;
+  packName: string;
+  supplierId: number;
+  supplierName: string;
+  quantity: number;
+  unitPrice: number;
+};
+
 export type AddressDetails = {
   street?: string;
   buildingNumber?: string;
@@ -715,6 +833,7 @@ export type GeoLocation = {
 
 export type CreateOrderRequest = {
   items: CreateOrderItem[];
+  packItems?: CreatePackOrderItem[];
   deliveryAddress?: GeoLocation;
   courierInstructions?: string;
 };

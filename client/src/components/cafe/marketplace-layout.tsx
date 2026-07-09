@@ -30,6 +30,7 @@ import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates } from "@/hooks/use-service-states";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
+import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import type { CategoryWithCount, ShopFavoriteItem } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
@@ -651,6 +652,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const { isVisitor, isPending, isApproved, hasCommercial } = computeAccess(user);
   const favTotalCount = useFavorites(selectTotalFavCount);
   const hydrateShop = useFavorites((s) => s.hydrateShop);
+  const hydratePack = useFavorites((s) => s.hydratePack);
   const hydrateStores = useStoreFavorites((s) => s.hydrateStores);
   const { states: headerServiceStates } = useServiceStates();
 
@@ -664,6 +666,11 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
     enabled: !!user && hasCommercial,
   });
 
+  const { data: packFavoritesData } = useQuery<number[]>({
+    queryKey: ["/api/pack-favorites"],
+    enabled: !!user && hasCommercial,
+  });
+
   useEffect(() => {
     if (favoritesData) hydrateShop(favoritesData);
   }, [favoritesData, hydrateShop]);
@@ -671,6 +678,10 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (storeFavoritesData) hydrateStores(storeFavoritesData);
   }, [storeFavoritesData, hydrateStores]);
+
+  useEffect(() => {
+    if (packFavoritesData) hydratePack(packFavoritesData);
+  }, [packFavoritesData, hydratePack]);
 
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -969,6 +980,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Product Quick View Modal ── */}
       <ProductQuickViewModal />
+      <PackQuickViewModal />
     </div>
   );
 }

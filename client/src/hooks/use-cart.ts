@@ -47,11 +47,34 @@ export interface PrintCartItem {
   priceUnit: string;
 }
 
+// ── PACK cart item ────────────────────────────────────────────────────────────
+// A Pack is purchased as a single line item; the products it contains are kept
+// only for display (receipt/cart breakdown), not as separate cart lines.
+
+export interface PackCartItemProduct {
+  productName: string;
+  flavorName: string | null;
+  sizeName: string | null;
+  quantity: number;
+}
+
+export interface PackCartItem {
+  packId: number;
+  packName: string;
+  packImageUrl: string | null;
+  supplierId: number;
+  supplierName: string;
+  unitPrice: number;
+  quantity: number;
+  includedProducts: PackCartItemProduct[];
+}
+
 // ── Combined cart state ───────────────────────────────────────────────────────
 
 interface CartState {
   items: CartItem[];
   printItems: PrintCartItem[];
+  packItems: PackCartItem[];
 
   // SHOP actions
   addItem: (item: Omit<CartItem, 'quantity'>, quantity: number) => void;
@@ -69,6 +92,14 @@ interface CartState {
   clearPrintItems: () => void;
   getPrintTotal: () => number;
   getTotalItemCount: () => number;
+
+  // PACK actions
+  addPackItem: (item: Omit<PackCartItem, 'quantity'>, quantity: number) => void;
+  removePackItem: (packId: number) => void;
+  updatePackQuantity: (packId: number, quantity: number) => void;
+  clearPackItems: () => void;
+  getPackTotal: () => number;
+  getPackQuantity: (packId: number) => number;
 }
 
 export const useCart = create<CartState>()(
@@ -76,6 +107,7 @@ export const useCart = create<CartState>()(
     (set, get) => ({
       items: [],
       printItems: [],
+      packItems: [],
 
       // ── SHOP ──
       addItem: (itemData, quantity) => {
@@ -150,8 +182,38 @@ export const useCart = create<CartState>()(
       getTotalItemCount: () => {
         const shop = get().items.reduce((s, i) => s + i.quantity, 0);
         const print = get().printItems.reduce((s, i) => s + i.totalQuantity, 0);
-        return shop + print;
+        const pack = get().packItems.reduce((s, i) => s + i.quantity, 0);
+        return shop + print + pack;
       },
+
+      // ── PACK ──
+      addPackItem: (itemData, quantity) => {
+        set((state) => {
+          const existing = state.packItems.find(i => i.packId === itemData.packId);
+          if (existing) {
+            return { packItems: state.packItems.map(i => i.packId === itemData.packId ? { ...i, quantity: i.quantity + quantity } : i) };
+          }
+          return { packItems: [...state.packItems, { ...itemData, quantity }] };
+        });
+      },
+
+      removePackItem: (packId) => {
+        set((state) => ({ packItems: state.packItems.filter(i => i.packId !== packId) }));
+      },
+
+      updatePackQuantity: (packId, quantity) => {
+        set((state) => ({
+          packItems: quantity <= 0
+            ? state.packItems.filter(i => i.packId !== packId)
+            : state.packItems.map(i => i.packId === packId ? { ...i, quantity } : i),
+        }));
+      },
+
+      clearPackItems: () => set({ packItems: [] }),
+
+      getPackTotal: () => get().packItems.reduce((t, i) => t + i.unitPrice * i.quantity, 0),
+
+      getPackQuantity: (packId) => get().packItems.find(i => i.packId === packId)?.quantity ?? 0,
     }),
     { name: 'b2b-cart-v3' }
   )

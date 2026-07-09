@@ -52,20 +52,24 @@ interface FavoritesStore {
   academy: Record<number, AcademyFavItem>;
   baristaMarket: Record<number, BaristaMktFavItem>;
   marketing: Record<number, MarketingFavItem>;
+  pack: Record<number, true>;
 
   toggleShop: (item: ShopFavItem) => void;
   togglePrint: (item: PrintFavItem) => void;
   toggleAcademy: (item: AcademyFavItem) => void;
   toggleBaristaMarket: (item: BaristaMktFavItem) => void;
   toggleMarketing: (item: MarketingFavItem) => void;
+  togglePack: (packId: number) => void;
 
   removeShop: (id: number) => void;
   removePrint: (id: string) => void;
   removeAcademy: (id: number) => void;
   removeBaristaMarket: (id: number) => void;
   removeMarketing: (id: number) => void;
+  removePack: (id: number) => void;
 
   hydrateShop: (items: ShopFavItem[]) => void;
+  hydratePack: (ids: number[]) => void;
 }
 
 export const useFavorites = create<FavoritesStore>((set, get) => ({
@@ -74,6 +78,34 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
   academy: {},
   baristaMarket: {},
   marketing: {},
+  pack: {},
+
+  togglePack: (packId) => {
+    const wasFav = !!get().pack[packId];
+    set((s) => {
+      const next = { ...s.pack };
+      if (wasFav) delete next[packId];
+      else next[packId] = true;
+      return { pack: next };
+    });
+    if (wasFav) {
+      apiRequest("DELETE", `/api/pack-favorites/${packId}`).catch(() => {});
+    } else {
+      apiRequest("POST", "/api/pack-favorites", { packId }).catch(() => {});
+    }
+  },
+
+  removePack: (id) => {
+    set((s) => { const next = { ...s.pack }; delete next[id]; return { pack: next }; });
+    apiRequest("DELETE", `/api/pack-favorites/${id}`).catch(() => {});
+  },
+
+  hydratePack: (ids) =>
+    set(() => {
+      const next: Record<number, true> = {};
+      for (const id of ids) next[id] = true;
+      return { pack: next };
+    }),
 
   toggleShop: (item) => {
     const wasFav = !!get().shop[item.id];
@@ -152,4 +184,5 @@ export const selectTotalFavCount = (s: FavoritesStore) =>
   Object.keys(s.print).length +
   Object.keys(s.academy).length +
   Object.keys(s.baristaMarket).length +
-  Object.keys(s.marketing).length;
+  Object.keys(s.marketing).length +
+  Object.keys(s.pack).length;

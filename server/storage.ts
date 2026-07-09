@@ -4,7 +4,7 @@ import {
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
-  landingConfig,
+  landingConfig, packs, packItems, packFavorites,
   type LandingConfig,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
@@ -26,6 +26,8 @@ import {
   type ServiceKey, type ServiceState, type ServiceStatesMap,
   type SupplierStore, type InsertSupplierStore, type StoreCard, type StoreAdminRow, type StoreDetail,
   type SupplierProductReview,
+  type Pack, type PackItem, type PackFavorite, type PackDetail, type PackItemDetail, type TaxonomyLabel,
+  type CreatePackOrderItem, type ResolvedPackOrderItem,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
 
@@ -55,7 +57,8 @@ export interface IStorage {
   getOrders(filters?: { cafeId?: number; supplierId?: number; deliveryId?: number }): Promise<OrderWithDetails[]>;
   getOrder(id: number): Promise<OrderWithDetails | undefined>;
   resolveOrderItems(items: CreateOrderItemInput[]): Promise<CreateOrderItem[]>;
-  createOrder(cafeId: number, cartItems: CreateOrderItem[], opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string }): Promise<Order>;
+  resolvePackOrderItems(items: CreatePackOrderItem[]): Promise<ResolvedPackOrderItem[]>;
+  createOrder(cafeId: number, cartItems: CreateOrderItem[], opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[] }): Promise<Order>;
   canUserAccessOrder(userId: number, userRole: string, orderId: number): Promise<boolean>;
   updateOrderStatus(id: number, status: typeof orders.$inferSelect.status, deliveryId?: number): Promise<Order>;
 
@@ -102,6 +105,19 @@ export interface IStorage {
   getFavoritesByUser(userId: number): Promise<ShopFavoriteItem[]>;
   addFavorite(userId: number, productId: number): Promise<void>;
   removeFavorite(userId: number, productId: number): Promise<void>;
+
+  // Packs
+  getSupplierPacks(supplierId: number): Promise<PackDetail[]>;
+  getPackDetail(id: number): Promise<PackDetail | undefined>;
+  createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail>;
+  updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail | undefined>;
+  duplicatePack(id: number, supplierId: number): Promise<PackDetail | undefined>;
+  deletePack(id: number): Promise<void>;
+  getMarketplacePacks(filters?: { categoryId?: number; subCategoryId?: number; brandId?: number; flavorId?: number; sizeId?: number; supplierId?: number }): Promise<PackDetail[]>;
+  getAdminPacks(): Promise<PackDetail[]>;
+  getPackFavoritesByUser(userId: number): Promise<number[]>;
+  addPackFavorite(userId: number, packId: number): Promise<void>;
+  removePackFavorite(userId: number, packId: number): Promise<void>;
 
   // Supplier stores
   getSupplierStore(supplierId: number): Promise<SupplierStore | undefined>;
@@ -338,10 +354,10 @@ export class DatabaseStorage implements IStorage {
       const delivery = order.deliveryId ? userMap.get(order.deliveryId) : null;
       const items = allItems
         .filter((i) => i.orderId === order.id)
-        .map((i) => ({ ...i, product: productMap.get(i.productId) ?? {} as Product }));
+        .map((i) => ({ ...i, product: (i.productId != null ? productMap.get(i.productId) : undefined) ?? {} as Product }));
       const orderSubOrders = allSubOrders.filter((so) => so.orderId === order.id).map((so) => ({
         ...so,
-        items: allItems.filter((i) => i.subOrderId === so.id).map((i) => ({ ...i, product: productMap.get(i.productId) ?? {} as Product })),
+        items: allItems.filter((i) => i.subOrderId === so.id).map((i) => ({ ...i, product: (i.productId != null ? productMap.get(i.productId) : undefined) ?? {} as Product })),
       }));
       return {
         ...order,
@@ -418,13 +434,39 @@ export class DatabaseStorage implements IStorage {
     return resolved;
   }
 
+  async resolvePackOrderItems(items: CreatePackOrderItem[]): Promise<ResolvedPackOrderItem[]> {
+    const resolved: ResolvedPackOrderItem[] = [];
+    for (const item of items) {
+      const [pack] = await db.select().from(packs).where(eq(packs.id, item.packId));
+      if (!pack) throw new Error(`Pack ${item.packId} not found`);
+      if (pack.supplierId !== item.supplierId) throw new Error('Supplier mismatch for pack');
+      const [detail] = await this.buildPackDetails([pack]);
+      if (!detail || !detail.isAvailable) throw new Error(`Pack ${pack.name} is not available`);
+      if (item.quantity > Math.min(pack.quantityAvailable, detail.maxBuildable)) {
+        throw new Error(`Insufficient stock for pack ${pack.name}`);
+      }
+      const [supplier] = await db.select().from(users).where(eq(users.id, pack.supplierId));
+      resolved.push({
+        packId: pack.id,
+        packName: pack.name,
+        supplierId: pack.supplierId,
+        supplierName: supplier?.name ?? 'Unknown',
+        quantity: item.quantity,
+        unitPrice: pack.price,
+      });
+    }
+    return resolved;
+  }
+
   async createOrder(
     cafeId: number,
     cartItems: CreateOrderItem[],
-    opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string },
+    opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[] },
   ): Promise<Order> {
-    const totalAmount = cartItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-    const supplierIds = Array.from(new Set(cartItems.map((i) => i.supplierId)));
+    const packOrderItems = opts?.packItems ?? [];
+    const totalAmount = cartItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+      + packOrderItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+    const supplierIds = Array.from(new Set([...cartItems.map((i) => i.supplierId), ...packOrderItems.map((i) => i.supplierId)]));
     const primarySupplierId = supplierIds.length === 1 ? supplierIds[0] : null;
 
     const [order] = await db.insert(orders).values({
@@ -461,19 +503,33 @@ export class DatabaseStorage implements IStorage {
         .where(eq(supplierProductListings.id, item.listingId));
     }
 
+    for (const item of packOrderItems) {
+      await db.update(packs)
+        .set({ quantityAvailable: sql`${packs.quantityAvailable} - ${item.quantity}` })
+        .where(eq(packs.id, item.packId));
+    }
+
     if (supplierIds.length > 1) {
       for (const sid of supplierIds) {
         const supplierItems = cartItems.filter((i) => i.supplierId === sid);
-        const subtotal = supplierItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-        const supplierName = supplierItems[0].supplierName;
+        const supplierPackItems = packOrderItems.filter((i) => i.supplierId === sid);
+        const subtotal = supplierItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+          + supplierPackItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+        const supplierName = supplierItems[0]?.supplierName ?? supplierPackItems[0]?.supplierName ?? 'Unknown';
         const [so] = await db.insert(subOrders).values({ orderId: order.id, supplierId: sid, supplierName, subtotal }).returning();
         for (const item of supplierItems) {
           await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, productId: item.productId, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity, flavorId: item.flavorId ?? null, sizeId: item.sizeId ?? null });
+        }
+        for (const item of supplierPackItems) {
+          await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, packId: item.packId, packName: item.packName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity });
         }
       }
     } else {
       for (const item of cartItems) {
         await db.insert(orderItems).values({ orderId: order.id, productId: item.productId, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity, flavorId: item.flavorId ?? null, sizeId: item.sizeId ?? null });
+      }
+      for (const item of packOrderItems) {
+        await db.insert(orderItems).values({ orderId: order.id, packId: item.packId, packName: item.packName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity });
       }
     }
     return order;
@@ -519,6 +575,7 @@ export class DatabaseStorage implements IStorage {
       if (!listings.length) continue;
       const marketListings: MarketplaceListing[] = listings
         .filter((l) => {
+          if (l.onlyForPack) return false;
           if (prod.categoryId && frozenSet.has(`${l.supplierId}:${prod.categoryId}`)) return false;
           return true;
         })
@@ -998,6 +1055,186 @@ export class DatabaseStorage implements IStorage {
   async deleteSupplierListing(id: number) {
     await db.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, id));
     await db.delete(supplierProductListings).where(eq(supplierProductListings.id, id));
+  }
+
+  // ── Packs ────────────────────────────────────────────────────────────────────
+
+  private async buildPackDetails(rows: Pack[]): Promise<PackDetail[]> {
+    if (!rows.length) return [];
+    const packIds = rows.map((p) => p.id);
+    const allItems = await db.select().from(packItems).where(inArray(packItems.packId, packIds));
+    const listingIds = Array.from(new Set(allItems.map((i) => i.listingId)));
+    const listings = listingIds.length ? await db.select().from(supplierProductListings).where(inArray(supplierProductListings.id, listingIds)) : [];
+    const listingMap = new Map(listings.map((l) => [l.id, l]));
+    const variants = listingIds.length ? await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.listingId, listingIds)) : [];
+    const variantMap = new Map(variants.map((v) => [v.id, v]));
+    const productIds = Array.from(new Set(listings.map((l) => l.productId)));
+    const prods = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
+    const productMap = new Map(prods.map((p) => [p.id, p]));
+    const supplierIds = Array.from(new Set(rows.map((p) => p.supplierId)));
+    const suppliers = supplierIds.length ? await db.select().from(users).where(inArray(users.id, supplierIds)) : [];
+    const supplierMap = new Map(suppliers.map((u) => [u.id, u.name]));
+    const tx = await buildTaxonomyCache();
+    const itemsByPack = new Map<number, typeof allItems>();
+    for (const it of allItems) {
+      if (!itemsByPack.has(it.packId)) itemsByPack.set(it.packId, []);
+      itemsByPack.get(it.packId)!.push(it);
+    }
+
+    const now = new Date();
+    const result: PackDetail[] = [];
+    for (const pack of rows) {
+      const items = itemsByPack.get(pack.id) ?? [];
+      const itemDetails: PackItemDetail[] = [];
+      const categoryIds = new Set<number>();
+      const subCategoryIds = new Set<number>();
+      const brandIds = new Set<number>();
+      let maxBuildable = items.length ? Infinity : 0;
+      for (const it of items) {
+        const listing = listingMap.get(it.listingId);
+        const product = listing ? productMap.get(listing.productId) : undefined;
+        const variant = it.variantId ? variantMap.get(it.variantId) : undefined;
+        const unitPrice = variant ? variant.price : (listing?.price ?? 0);
+        const availableQuantity = variant ? variant.quantity : (listing?.stock ?? 0);
+        if (product?.categoryId) categoryIds.add(product.categoryId);
+        if (product?.subCategoryId) subCategoryIds.add(product.subCategoryId);
+        if (product?.brandId) brandIds.add(product.brandId);
+        const buildable = it.quantity > 0 ? Math.floor(availableQuantity / it.quantity) : 0;
+        maxBuildable = Math.min(maxBuildable, buildable);
+        itemDetails.push({
+          id: it.id,
+          listingId: it.listingId,
+          variantId: it.variantId,
+          quantity: it.quantity,
+          productId: product?.id ?? 0,
+          productName: product?.name ?? "Unknown product",
+          productImageUrl: product?.imageUrl ?? null,
+          flavorId: variant?.flavorId ?? null,
+          flavorName: variant?.flavorId ? (tx.flvMap.get(variant.flavorId)?.name ?? null) : null,
+          sizeId: variant?.sizeId ?? null,
+          sizeName: variant?.sizeId ? (tx.szMap.get(variant.sizeId)?.name ?? null) : null,
+          unitPrice,
+          availableQuantity,
+        });
+      }
+      if (!isFinite(maxBuildable)) maxBuildable = 0;
+      const isExpired = !!(pack.expirationDate && new Date(pack.expirationDate) < now);
+      const isAvailable = !pack.isArchived && pack.visibility === 'VISIBLE' && !isExpired && maxBuildable > 0;
+      result.push({
+        ...pack,
+        supplierName: supplierMap.get(pack.supplierId) ?? "",
+        items: itemDetails,
+        categoryIds: Array.from(categoryIds),
+        subCategoryIds: Array.from(subCategoryIds),
+        brandIds: Array.from(brandIds),
+        categoryLabels: Array.from(categoryIds).map((id) => tx.catMap.get(id)).filter((l): l is NonNullable<typeof l> => !!l).map((l) => ({ id: l.id, name: l.name })),
+        subCategoryLabels: Array.from(subCategoryIds).map((id) => tx.subMap.get(id)).filter((l): l is NonNullable<typeof l> => !!l).map((l) => ({ id: l.id, name: l.name })),
+        brandLabels: Array.from(brandIds).map((id) => tx.brdMap.get(id)).filter((l): l is NonNullable<typeof l> => !!l).map((l) => ({ id: l.id, name: l.name })),
+        maxBuildable,
+        isAvailable,
+        isExpired,
+      });
+    }
+    return result;
+  }
+
+  async getSupplierPacks(supplierId: number): Promise<PackDetail[]> {
+    const rows = await db.select().from(packs).where(and(eq(packs.supplierId, supplierId), eq(packs.isArchived, false))).orderBy(desc(packs.createdAt));
+    const archived = await db.select().from(packs).where(and(eq(packs.supplierId, supplierId), eq(packs.isArchived, true))).orderBy(desc(packs.createdAt));
+    return this.buildPackDetails([...rows, ...archived]);
+  }
+
+  async getPackDetail(id: number): Promise<PackDetail | undefined> {
+    const [row] = await db.select().from(packs).where(eq(packs.id, id));
+    if (!row) return undefined;
+    const [detail] = await this.buildPackDetails([row]);
+    return detail;
+  }
+
+  async createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail> {
+    const [pack] = await db.insert(packs).values({
+      supplierId,
+      name: data.name,
+      description: data.description ?? null,
+      imageUrl: data.imageUrl ?? null,
+      price: data.price,
+      quantityAvailable: data.quantityAvailable,
+      expirationDate: data.expirationDate ?? null,
+      visibility: data.visibility ?? 'VISIBLE',
+    }).returning();
+    if (items.length) {
+      await db.insert(packItems).values(items.map((i) => ({ packId: pack.id, listingId: i.listingId, variantId: i.variantId ?? null, quantity: i.quantity })));
+    }
+    const [detail] = await this.buildPackDetails([pack]);
+    return detail;
+  }
+
+  async updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail | undefined> {
+    const [existing] = await db.select().from(packs).where(and(eq(packs.id, id), eq(packs.supplierId, supplierId)));
+    if (!existing) return undefined;
+    const [updated] = await db.update(packs).set({ ...data, updatedAt: new Date() } as any).where(eq(packs.id, id)).returning();
+    if (items !== undefined) {
+      await db.delete(packItems).where(eq(packItems.packId, id));
+      if (items.length) {
+        await db.insert(packItems).values(items.map((i) => ({ packId: id, listingId: i.listingId, variantId: i.variantId ?? null, quantity: i.quantity })));
+      }
+    }
+    const [detail] = await this.buildPackDetails([updated]);
+    return detail;
+  }
+
+  async duplicatePack(id: number, supplierId: number): Promise<PackDetail | undefined> {
+    const [existing] = await db.select().from(packs).where(and(eq(packs.id, id), eq(packs.supplierId, supplierId)));
+    if (!existing) return undefined;
+    const existingItems = await db.select().from(packItems).where(eq(packItems.packId, id));
+    return this.createPack(supplierId, {
+      name: `${existing.name} (copy)`,
+      description: existing.description,
+      imageUrl: existing.imageUrl,
+      price: existing.price,
+      quantityAvailable: existing.quantityAvailable,
+      expirationDate: existing.expirationDate,
+      visibility: existing.visibility === 'VISIBLE' ? 'HIDDEN' : existing.visibility,
+    }, existingItems.map((i) => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity })));
+  }
+
+  async deletePack(id: number): Promise<void> {
+    await db.delete(packFavorites).where(eq(packFavorites.packId, id));
+    await db.delete(packItems).where(eq(packItems.packId, id));
+    await db.delete(packs).where(eq(packs.id, id));
+  }
+
+  async getMarketplacePacks(filters?: { categoryId?: number; subCategoryId?: number; brandId?: number; flavorId?: number; sizeId?: number; supplierId?: number }): Promise<PackDetail[]> {
+    let rows = await db.select().from(packs).where(and(eq(packs.visibility, 'VISIBLE'), eq(packs.isArchived, false)));
+    if (filters?.supplierId) rows = rows.filter((p) => p.supplierId === filters.supplierId);
+    let details = await this.buildPackDetails(rows);
+    details = details.filter((p) => p.isAvailable);
+    if (filters?.categoryId) details = details.filter((p) => p.categoryIds.includes(filters.categoryId!));
+    if (filters?.subCategoryId) details = details.filter((p) => p.subCategoryIds.includes(filters.subCategoryId!));
+    if (filters?.brandId) details = details.filter((p) => p.brandIds.includes(filters.brandId!));
+    if (filters?.flavorId) details = details.filter((p) => p.items.some((i) => i.flavorId === filters.flavorId));
+    if (filters?.sizeId) details = details.filter((p) => p.items.some((i) => i.sizeId === filters.sizeId));
+    return details;
+  }
+
+  async getAdminPacks(): Promise<PackDetail[]> {
+    const rows = await db.select().from(packs).orderBy(desc(packs.createdAt));
+    return this.buildPackDetails(rows);
+  }
+
+  async getPackFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select().from(packFavorites).where(eq(packFavorites.userId, userId));
+    return rows.map((r) => r.packId);
+  }
+
+  async addPackFavorite(userId: number, packId: number): Promise<void> {
+    const existing = await db.select().from(packFavorites).where(and(eq(packFavorites.userId, userId), eq(packFavorites.packId, packId)));
+    if (existing.length) return;
+    await db.insert(packFavorites).values({ userId, packId });
+  }
+
+  async removePackFavorite(userId: number, packId: number): Promise<void> {
+    await db.delete(packFavorites).where(and(eq(packFavorites.userId, userId), eq(packFavorites.packId, packId)));
   }
 
   async getSupplierListingByProductId(supplierId: number, productId: number) {

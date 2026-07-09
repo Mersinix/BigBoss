@@ -12,7 +12,7 @@ import {
   insertCategorySchema, insertSubCategorySchema, insertFlavorSchema,
   insertSizeSchema, insertBrandSchema,
   type MarketplaceProduct,
-  supplierProductReviews,
+  supplierProductReviews, supplierStores, packs,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
@@ -339,6 +339,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── Pack favorites (persisted per-user, mirrors product favorites) ──────────
+
+  app.get('/api/pack-favorites', requireAuth, async (req: any, res) => {
+    const ids = await storage.getPackFavoritesByUser(req.session.userId);
+    res.json(ids);
+  });
+
+  app.post('/api/pack-favorites', requireAuth, async (req: any, res) => {
+    const packId = Number(req.body?.packId);
+    if (!packId) return res.status(400).json({ message: 'packId is required' });
+    await storage.addPackFavorite(req.session.userId, packId);
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete('/api/pack-favorites/:packId', requireAuth, async (req: any, res) => {
+    const packId = Number(req.params.packId);
+    if (!packId) return res.status(400).json({ message: 'Invalid packId' });
+    await storage.removePackFavorite(req.session.userId, packId);
+    res.json({ ok: true });
+  });
+
   app.get(api.products.list.path, requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
@@ -560,7 +581,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }).optional(),
       }).optional();
 
-      const { items, deliveryAddress, courierInstructions } = z.object({
+      const { items, packItems, deliveryAddress, courierInstructions } = z.object({
         items: z.array(z.object({
           listingId: z.number(),
           productId: z.number(),
@@ -572,12 +593,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           sizeName: z.string().nullable().optional(),
           quantity: z.number().min(1),
           unitPrice: z.number().min(0).optional(),
-        })),
+        })).default([]),
+        packItems: z.array(z.object({
+          packId: z.number(),
+          supplierId: z.number(),
+          quantity: z.number().min(1),
+        })).optional(),
         deliveryAddress: deliveryAddressSchema,
         courierInstructions: z.string().max(500).optional(),
       }).parse(req.body);
 
       const validatedItems = await storage.resolveOrderItems(items);
+      const validatedPackItems = packItems?.length ? await storage.resolvePackOrderItems(packItems) : [];
+      if (!validatedItems.length && !validatedPackItems.length) {
+        return res.status(400).json({ message: "No items in order" });
+      }
       const normalizedDelivery = deliveryAddress ? {
         ...deliveryAddress,
         placeId: deliveryAddress.placeId ?? "",
@@ -585,6 +615,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const order = await storage.createOrder(req.session.userId!, validatedItems, {
         deliveryAddress: normalizedDelivery,
         courierInstructions,
+        packItems: validatedPackItems,
       });
       res.status(201).json(order);
     } catch (err: any) {
@@ -1329,6 +1360,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = await storage.getUser(req.session.userId!);
       const body = z.object({
         productId: z.number(),
+        onlyForPack: z.boolean().optional(),
         variants: z.array(z.object({
           flavorId: z.number().nullable().optional(),
           sizeId: z.number().nullable().optional(),
@@ -1351,6 +1383,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         availableFlavorIds: null,
         availableSizeIds: null,
         availableBrandIds: null,
+        onlyForPack: body.onlyForPack ?? false,
       });
 
       if (body.variants && body.variants.length > 0) {
@@ -1378,6 +1411,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (listing.supplierId !== user!.id) return res.status(403).json({ message: "Forbidden" });
 
       const body = z.object({
+        onlyForPack: z.boolean().optional(),
         variants: z.array(z.object({
           flavorId: z.number().nullable().optional(),
           sizeId: z.number().nullable().optional(),
@@ -1385,6 +1419,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           quantity: z.number().min(0),
         })).optional(),
       }).parse(req.body);
+
+      if (body.onlyForPack !== undefined) {
+        await db.update(supplierProductListings).set({ onlyForPack: body.onlyForPack }).where(eq(supplierProductListings.id, listingId));
+      }
 
       if (body.variants !== undefined) {
         await storage.saveVariants(listingId, body.variants.map(v => ({
@@ -1413,6 +1451,169 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.deleteSupplierListing(listingId);
       res.json({ message: "Removed" });
     } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // ── Supplier Packs (bundle own listings into a sellable Pack) ────────────────
+
+  const packItemSchema = z.object({
+    listingId: z.number(),
+    variantId: z.number().nullable().optional(),
+    quantity: z.number().min(1),
+  });
+  const packBodySchema = z.object({
+    name: z.string().min(1),
+    description: z.string().nullable().optional(),
+    imageUrl: z.string().nullable().optional(),
+    price: z.number().min(0),
+    quantityAvailable: z.number().min(0),
+    expirationDate: z.string().nullable().optional(),
+    visibility: z.enum(['VISIBLE', 'HIDDEN']).optional(),
+    items: z.array(packItemSchema).min(1),
+  });
+
+  app.get('/api/supplier/packs', requireApprovedSupplier, async (req: any, res) => {
+    try { res.json(await storage.getSupplierPacks(req.session.userId)); }
+    catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.post('/api/supplier/packs', requireApprovedSupplier, async (req: any, res) => {
+    try {
+      const body = packBodySchema.parse(req.body);
+      for (const item of body.items) {
+        const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, item.listingId));
+        if (!listing || listing.supplierId !== req.session.userId) return res.status(403).json({ message: 'One of the selected products is not yours' });
+      }
+      const pack = await storage.createPack(req.session.userId, {
+        name: body.name,
+        description: body.description ?? null,
+        imageUrl: body.imageUrl ?? null,
+        price: Math.round(body.price * 100),
+        quantityAvailable: body.quantityAvailable,
+        expirationDate: body.expirationDate ? new Date(body.expirationDate) : null,
+        visibility: body.visibility ?? 'VISIBLE',
+      }, body.items);
+      broadcast('pack_updated', { packId: pack.id, supplierId: req.session.userId });
+      res.status(201).json(pack);
+    } catch (err) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else { console.error(err); res.status(500).json({ message: 'Error' }); }
+    }
+  });
+
+  app.patch('/api/supplier/packs/:id', requireApprovedSupplier, async (req: any, res) => {
+    try {
+      const packId = parseInt(req.params.id);
+      const body = packBodySchema.partial({ items: true } as any).extend({ isArchived: z.boolean().optional() }).parse(req.body);
+      if (body.items) {
+        for (const item of body.items) {
+          const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, item.listingId));
+          if (!listing || listing.supplierId !== req.session.userId) return res.status(403).json({ message: 'One of the selected products is not yours' });
+        }
+      }
+      const updated = await storage.updatePack(packId, req.session.userId, {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.description !== undefined && { description: body.description }),
+        ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl }),
+        ...(body.price !== undefined && { price: Math.round(body.price * 100) }),
+        ...(body.quantityAvailable !== undefined && { quantityAvailable: body.quantityAvailable }),
+        ...(body.expirationDate !== undefined && { expirationDate: body.expirationDate ? new Date(body.expirationDate) : null }),
+        ...(body.visibility !== undefined && { visibility: body.visibility }),
+        ...(body.isArchived !== undefined && { isArchived: body.isArchived }),
+      }, body.items as any);
+      if (!updated) return res.status(404).json({ message: 'Not found' });
+      broadcast('pack_updated', { packId, supplierId: req.session.userId });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else { console.error(err); res.status(500).json({ message: 'Error' }); }
+    }
+  });
+
+  app.post('/api/supplier/packs/:id/duplicate', requireApprovedSupplier, async (req: any, res) => {
+    try {
+      const dup = await storage.duplicatePack(parseInt(req.params.id), req.session.userId);
+      if (!dup) return res.status(404).json({ message: 'Not found' });
+      broadcast('pack_updated', { packId: dup.id, supplierId: req.session.userId });
+      res.status(201).json(dup);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.delete('/api/supplier/packs/:id', requireApprovedSupplier, async (req: any, res) => {
+    try {
+      const packId = parseInt(req.params.id);
+      const [existing] = await db.select().from(packs).where(eq(packs.id, packId));
+      if (!existing || existing.supplierId !== req.session.userId) return res.status(404).json({ message: 'Not found' });
+      await storage.deletePack(packId);
+      broadcast('pack_updated', { packId, supplierId: req.session.userId });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Marketplace Packs (cafe browsing) ────────────────────────────────────────
+
+  app.get('/api/marketplace/packs', async (req, res) => {
+    try {
+      const filters = {
+        categoryId: req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined,
+        subCategoryId: req.query.subCategoryId ? parseInt(req.query.subCategoryId as string) : undefined,
+        brandId: req.query.brandId ? parseInt(req.query.brandId as string) : undefined,
+        flavorId: req.query.flavorId ? parseInt(req.query.flavorId as string) : undefined,
+        sizeId: req.query.sizeId ? parseInt(req.query.sizeId as string) : undefined,
+      };
+      res.json(await storage.getMarketplacePacks(filters));
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.get('/api/marketplace/packs/:id', async (req, res) => {
+    try {
+      const pack = await storage.getPackDetail(parseInt(req.params.id));
+      if (!pack || !pack.isAvailable) return res.status(404).json({ message: 'Not found' });
+      res.json(pack);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.get('/api/stores/:id/packs', async (req, res) => {
+    try {
+      const [store] = await db.select().from(supplierStores).where(eq(supplierStores.id, parseInt(req.params.id)));
+      if (!store) return res.status(404).json({ message: 'Not found' });
+      res.json(await storage.getMarketplacePacks({ supplierId: store.supplierId }));
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Admin Packs management ───────────────────────────────────────────────────
+
+  app.get('/api/admin/packs', requireAdmin, async (req, res) => {
+    try { res.json(await storage.getAdminPacks()); }
+    catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.patch('/api/admin/packs/:id', requireAdmin, async (req, res) => {
+    try {
+      const packId = parseInt(req.params.id);
+      const [existing] = await db.select().from(packs).where(eq(packs.id, packId));
+      if (!existing) return res.status(404).json({ message: 'Not found' });
+      const body = z.object({
+        visibility: z.enum(['VISIBLE', 'HIDDEN']).optional(),
+        isArchived: z.boolean().optional(),
+      }).parse(req.body);
+      const updated = await storage.updatePack(packId, existing.supplierId, body);
+      broadcast('pack_updated', { packId, supplierId: existing.supplierId });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else res.status(500).json({ message: 'Error' });
+    }
+  });
+
+  app.delete('/api/admin/packs/:id', requireAdmin, async (req, res) => {
+    try {
+      const packId = parseInt(req.params.id);
+      const [existing] = await db.select().from(packs).where(eq(packs.id, packId));
+      if (!existing) return res.status(404).json({ message: 'Not found' });
+      await storage.deletePack(packId);
+      broadcast('pack_updated', { packId, supplierId: existing.supplierId });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: 'Error' }); }
   });
 
   // ── Supplier Store (own public store profile) ────────────────────────────────

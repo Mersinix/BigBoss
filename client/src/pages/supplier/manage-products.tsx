@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/format";
 import { useLocation } from "wouter";
 import type { ProductWithTaxonomy, FlavorWithCount, SizeWithCount, BrandWithCount, SupplierListingWithProduct, CategoryWithCount, SubCategoryWithDetails } from "@shared/schema";
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";
+import { PackTab } from "./manage-packs";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -421,9 +422,10 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
   }, [product.sizeIds, product.sizeId, szs]);
 
   const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
+  const [onlyForPack, setOnlyForPack] = useState(false);
 
   const add = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts: { forPack: boolean }) => {
       const entries = groupsToEntries(groups, availableFlavors, availableSizes);
       const listingRes = await apiRequest("POST", "/api/supplier/listings", {
         productId: product.id,
@@ -432,6 +434,7 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
         availableFlavorIds: availableFlavors.map(f => f.id),
         availableSizeIds: availableSizes.map(s => s.id),
         availableBrandIds: product.brandId ? [product.brandId] : [],
+        onlyForPack: opts.forPack ? true : onlyForPack,
       });
       const listing = await listingRes.json();
       const listingId = listing.id;
@@ -443,8 +446,8 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
       }));
       await apiRequest("POST", `/api/supplier/listings/${listingId}/variants`, { variants });
     },
-    onSuccess: () => {
-      toast({ title: "Added to your products!" });
+    onSuccess: (_data, opts) => {
+      toast({ title: opts.forPack ? "Sent to your Pack workspace!" : "Added to your products!" });
       onSuccess();
       onClose();
     },
@@ -481,9 +484,20 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
               <p className="text-xs text-muted-foreground mt-1.5">Products only appear in the shop when price &gt; 0 and stock &gt; 0.</p>
             </div>
 
-            <div className="flex gap-2 justify-end pt-2">
+            <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer">
+              <input type="checkbox" className="mt-0.5 rounded" checked={onlyForPack} onChange={e => setOnlyForPack(e.target.checked)} data-testid="checkbox-only-for-pack" />
+              <span className="text-sm">
+                <span className="font-medium">Only for Pack</span>
+                <span className="block text-xs text-muted-foreground">These variants won't appear in "My Products" or the individual marketplace — only inside your Packs.</span>
+              </span>
+            </label>
+
+            <div className="flex flex-wrap gap-2 justify-end pt-2">
               <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button onClick={() => add.mutate()} disabled={add.isPending || !hasAnyPrice} data-testid="button-confirm-add-listing">
+              <Button variant="secondary" onClick={() => add.mutate({ forPack: true })} disabled={add.isPending || !hasAnyPrice} data-testid="button-add-to-my-pack">
+                <Layers className="w-4 h-4 mr-1.5" />{add.isPending ? "Adding…" : "Add to My Pack"}
+              </Button>
+              <Button onClick={() => add.mutate({ forPack: false })} disabled={add.isPending || !hasAnyPrice} data-testid="button-confirm-add-listing">
                 {add.isPending ? "Adding…" : "Add to My Products"}
               </Button>
             </div>
@@ -1568,15 +1582,17 @@ function MyProductsTab({
     enabled: hasMappings,
   });
 
+  const visibleListings = useMemo(() => listings.filter((l: any) => !l.onlyForPack), [listings]);
+
   const displayed = useMemo(() => {
-    if (!filters.search.trim()) return listings;
+    if (!filters.search.trim()) return visibleListings;
     const q = filters.search.toLowerCase();
-    return listings.filter(l => l.product.name.toLowerCase().includes(q));
-  }, [listings, filters.search]);
+    return visibleListings.filter(l => l.product.name.toLowerCase().includes(q));
+  }, [visibleListings, filters.search]);
 
   // Stats
-  const inStockCount = listings.filter(l => l.stock > 0).length;
-  const outOfStockCount = listings.filter(l => l.stock === 0).length;
+  const inStockCount = visibleListings.filter(l => l.stock > 0).length;
+  const outOfStockCount = visibleListings.filter(l => l.stock === 0).length;
 
   const hasActiveFilters = validCatId !== null || selectedSubCategoryId !== null || Object.values(filters).some(v => v !== "");
   const catIdStr = validCatId ? String(validCatId) : "";
@@ -1599,7 +1615,7 @@ function MyProductsTab({
       <div className="flex gap-3 flex-wrap">
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <ShoppingBag className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium">{listings.length} product{listings.length !== 1 ? 's' : ''} in my catalog</span>
+          <span className="text-sm font-medium">{visibleListings.length} product{visibleListings.length !== 1 ? 's' : ''} in my catalog</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <span className="text-sm text-muted-foreground">{inStockCount} in stock · {outOfStockCount} out of stock</span>
@@ -1851,6 +1867,9 @@ export default function ManageProducts() {
           <TabsTrigger value="new-product" data-testid="tab-new-product">
             <Plus className="w-4 h-4 mr-1.5" />New Product
           </TabsTrigger>
+          <TabsTrigger value="pack" data-testid="tab-pack">
+            <Layers className="w-4 h-4 mr-1.5" />Pack
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="admin-products">
@@ -1875,6 +1894,10 @@ export default function ManageProducts() {
 
         <TabsContent value="new-product">
           <NewProductTab cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} mappings={activeMappings} />
+        </TabsContent>
+
+        <TabsContent value="pack">
+          <PackTab />
         </TabsContent>
       </Tabs>
     </div>

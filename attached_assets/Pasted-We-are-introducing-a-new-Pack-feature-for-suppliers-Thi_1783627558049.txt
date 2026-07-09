@@ -1,0 +1,331 @@
+We are introducing a new Pack feature for suppliers. This feature must integrate naturally with the existing product workflow without changing or breaking the current product logic.
+
+Important requirements before starting:
+
+Do not change the existing UI style or design language.
+Do not modify existing Product, Store, Cart, Reviews, Favorites, Marketplace, or Product Details logic unless required for Pack support.
+Do not duplicate existing functionality.
+Reuse the current user experience wherever possible.
+Check the existing Product, Variant Builder, Store, Shop, Cart, Favorites, and synchronization flows before implementing.
+Keep everything fully synchronized in real time between Supplier, Admin, and Coffee Owner.
+Preserve responsive behavior on desktop and mobile.
+Overall Goal
+
+Allow suppliers to create commercial Packs composed of one or more existing supplier products and sell them as a single offer while preserving the current product workflow.
+
+The Pack should become a first-class object in the marketplace, with its own information, price, stock, favorite support, details modal, and cart support.
+
+1. Supplier → Products → Admin Products
+
+Keep the existing workflow exactly as it is.
+
+When the supplier clicks:
+
+Add to My Products
+
+the existing Variant Builder opens.
+
+Keep every current feature.
+
+Only extend it.
+
+1.1 "Only for Pack" option
+
+Inside the Variant Builder,
+
+add a new option:
+
+Only for Pack
+
+Behavior:
+
+If enabled:
+
+the created product variants are available only for Packs
+they must NOT appear in "My Products"
+they must NOT be shown individually in the marketplace
+they remain available inside the Pack module
+
+If disabled:
+
+the product behaves exactly as today
+it appears in "My Products"
+it can also be used inside Packs
+1.2 Add to My Pack
+
+Inside the same Variant Builder,
+
+add another action next to the existing one.
+
+Current:
+
+Add to My Products
+
+New:
+
+Add to My Pack
+
+Behavior:
+
+Add to My Products keeps its current behavior.
+Add to My Pack sends the configured product (with its created variants) to the Pack workspace.
+
+Do not remove or change the existing Add to My Products workflow.
+
+2. Supplier → New Pack Tab
+
+Create a new top-level tab for suppliers:
+
+Pack
+
+This is the workspace for creating and managing Packs.
+
+2.1 Available Products
+
+Display all products previously added to the Pack workspace.
+
+The supplier can select one or many products.
+
+Selected products should be clearly highlighted.
+
+2.2 Create Pack
+
+When at least one product is selected,
+
+display a new action:
+
+Add New Pack
+
+Opening it should allow the supplier to configure:
+
+Pack name
+Pack description
+Pack image URL
+Pack selling price
+Pack quantity available
+Expiration date (optional)
+Visibility
+Availability
+2.3 Product quantities
+
+For every selected product,
+
+allow the supplier to define how many units belong to the Pack.
+
+Example:
+
+Coffee A ×3
+
+Coffee B ×1
+
+Coffee C ×4
+
+Each product should maintain its own variant information.
+
+2.4 Automatic taxonomy
+
+The Pack should automatically inherit the taxonomy from its products.
+
+This includes:
+
+Categories
+Subcategories
+Brands
+
+The Pack should automatically remain synchronized if the included products change.
+
+No manual taxonomy selection is needed.
+
+2.5 Live Preview
+
+The Pack creation modal should include the existing Live Preview layout on the right.
+
+The preview should update in real time while editing.
+
+Display:
+
+Pack image
+Name
+Description
+Included products
+Quantities
+Total Pack price
+Expiration information
+Availability
+3. Supplier → Pack Management
+
+After creation,
+
+the supplier should be able to:
+
+edit Pack information
+edit included products
+edit quantities
+edit Pack price
+edit Pack stock
+edit expiration date
+enable/disable visibility
+duplicate a Pack
+archive a Pack
+
+Keep the design consistent with existing product management pages.
+
+4. Pack Stock Strategy
+
+Use a professional Pack strategy.
+
+The Pack should only be purchasable when every required product has enough available quantity.
+
+If one required product becomes unavailable,
+
+the Pack should automatically become unavailable.
+
+If the Pack expires,
+
+it should automatically disappear from customer-facing pages while remaining manageable by the supplier.
+
+Pack stock should always remain synchronized with the included products.
+
+5. Coffee Owner → Shop
+
+Display Packs as a separate section.
+
+Place them below the Store section.
+
+Reuse the same horizontal scrolling behavior already implemented for Stores.
+
+Include:
+
+Pack image
+Pack name
+Pack price
+Favorite button
+
+Keep the existing design language.
+
+See More
+
+Reuse the same:
+
+See More
+Show Less
+
+behavior already used for Stores.
+
+6. Coffee Owner → Store
+
+Inside each Store,
+
+display the supplier's Packs below the existing filter bar.
+
+Keep products exactly as they are.
+
+Simply add the Pack section.
+
+7. Filtering
+
+Pack filtering must work naturally.
+
+Whenever the Coffee Owner filters by:
+
+Category
+Subcategory
+Brand
+Flavor
+Size
+
+the Packs should appear whenever at least one included product matches the selected filters.
+
+Filtering should feel consistent with the rest of the marketplace.
+
+8. Pack Details Modal
+
+Clicking a Pack should open a dedicated modal.
+
+Reuse the same design language as the Product Details modal.
+
+Display:
+
+Pack image
+Name
+Description
+Included products
+Quantity of each included product
+Total Pack price
+Availability
+Expiration information (if applicable)
+
+Allow the Coffee Owner to add the Pack directly to the shopping cart.
+
+9. Favorites
+
+Packs should support Favorites.
+
+Favorites should work exactly like Products.
+
+The existing Favorites system should be reused.
+
+No duplicate favorite implementation.
+
+Favorites must synchronize immediately everywhere.
+
+10. Shopping Cart
+
+A Pack should be treated as a single purchasable item.
+
+The cart should clearly show:
+
+Pack name
+Included products
+Quantities
+Pack price
+
+The Pack should remain synchronized with stock and availability.
+
+11. Admin
+
+The Admin should have visibility over Packs.
+
+Add Pack management within the existing product administration area.
+
+The Admin should be able to:
+
+review Packs
+edit Pack information
+approve or reject Packs (if the current approval workflow applies)
+delete Packs
+change visibility
+
+Use the same moderation experience already used for supplier products.
+
+12. Synchronization
+
+Verify complete synchronization across the platform.
+
+Changes made by the supplier should immediately update:
+
+Supplier Pack page
+Supplier Store
+Admin Pack management
+Shop Pack section
+Store Pack section
+Favorites
+Shopping cart
+
+No manual refresh should ever be required.
+
+13. Professional Pack Strategy
+
+While implementing this feature, improve the Pack experience where appropriate without changing the overall design or workflow.
+
+Examples of expected professional behavior include:
+
+preventing duplicate products in the same Pack where appropriate,
+clearly distinguishing Packs from individual products,
+keeping Pack pricing independent from the sum of product prices,
+automatically handling expired Packs,
+ensuring Pack availability always reflects the availability of its included products,
+maintaining consistent filtering and search behavior,
+preserving all current product, store, review, favorite, and cart features.
+
+The final result should feel like a native extension of the existing marketplace rather than a separate feature, while keeping every existing feature intact and fully synchronized.

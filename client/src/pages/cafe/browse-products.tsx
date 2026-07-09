@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag, Layers
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -18,7 +18,8 @@ import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
-import type { MarketplaceProduct, CategoryWithCount, StoreCard } from "@shared/schema";
+import { usePackQuickView } from "@/hooks/use-pack-quick-view";
+import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail } from "@shared/schema";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
@@ -301,6 +302,110 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
   );
 }
 
+// ── Pack Card ─────────────────────────────────────────────────────────────────
+
+function PackCardTile({ pack, hasCommercialAccess }: { pack: PackDetail; hasCommercialAccess: boolean }) {
+  const faved = useFavorites((s) => !!s.pack[pack.id]);
+  const togglePack = useFavorites((s) => s.togglePack);
+  const openPackQuickView = usePackQuickView((s) => s.open);
+  const maxQty = Math.min(pack.quantityAvailable, pack.maxBuildable);
+
+  return (
+    <div
+      data-testid={`card-pack-${pack.id}`}
+      className="group bg-white rounded-2xl border border-amber-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col cursor-pointer"
+      onClick={() => openPackQuickView(pack.id)}
+    >
+      <div className="relative aspect-[4/3] bg-amber-50 overflow-hidden">
+        {pack.imageUrl ? (
+          <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center"><Layers className="w-10 h-10 text-amber-200" /></div>
+        )}
+        <div className="absolute top-2 left-2">
+          <Badge className="bg-amber-500 text-white text-[10px] font-semibold shadow-sm border-0 px-2"><Layers className="w-3 h-3 mr-1 inline" />Pack</Badge>
+        </div>
+        {hasCommercialAccess && (
+          <button
+            className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+            onClick={(e) => { e.stopPropagation(); togglePack(pack.id); }}
+            data-testid={`button-fav-pack-${pack.id}`}
+          >
+            <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+          </button>
+        )}
+      </div>
+      <div className="p-3 flex-1 flex flex-col gap-2">
+        <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-amber-600 transition-colors">{pack.name}</h3>
+        <p className="text-xs text-gray-400 line-clamp-1">{pack.items.length} produit{pack.items.length !== 1 ? "s" : ""} inclus</p>
+        <div className="mt-auto pt-2 border-t border-gray-50">
+          {hasCommercialAccess ? (
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-sm text-amber-600">{formatCurrency(pack.price)}</p>
+              <span className="text-[11px] text-gray-400">{maxQty} dispo.</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-[11px] text-amber-700 font-medium">
+              <Lock className="w-3 h-3 shrink-0" />
+              <span>Price for approved owners</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PacksSection({ packs, categoryId, filters }: {
+  packs: PackDetail[];
+  categoryId: string;
+  filters: FilterState;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasCommercialAccess = useCommercialAccess();
+  const INITIAL_LIMIT = 5;
+
+  const filteredPacks = useMemo(() => {
+    let list = packs;
+    if (categoryId) list = list.filter((p) => p.categoryIds.includes(Number(categoryId)));
+    if (filters.subCategoryId) list = list.filter((p) => p.subCategoryIds.includes(Number(filters.subCategoryId)));
+    if (filters.brandId) list = list.filter((p) => p.brandIds.includes(Number(filters.brandId)));
+    return list;
+  }, [packs, categoryId, filters.subCategoryId, filters.brandId]);
+
+  if (!filteredPacks.length) return null;
+  const showToggle = filteredPacks.length > INITIAL_LIMIT;
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="font-bold text-lg text-gray-900 flex items-center gap-1.5"><Layers className="w-4 h-4 text-amber-500" />Packs</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{filteredPacks.length} pack{filteredPacks.length !== 1 ? "s" : ""}</p>
+        </div>
+        {showToggle && (
+          <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 text-xs font-semibold h-8 px-3" onClick={() => setExpanded((e) => !e)} data-testid="button-toggle-packs">
+            {expanded ? "Show Less" : `See More (${filteredPacks.length - INITIAL_LIMIT}+)`}
+          </Button>
+        )}
+      </div>
+      {expanded ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {filteredPacks.map((pack) => <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} />)}
+        </div>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
+          {filteredPacks.map((pack) => (
+            <div key={pack.id} className="shrink-0 w-44 sm:w-52">
+              <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Filter Bar ────────────────────────────────────────────────────────────────
 
 interface FilterState { subCategoryId: string; brandId: string; flavorId: string; sizeId: string; sortBy: string; }
@@ -455,6 +560,16 @@ export default function BrowseProducts() {
     staleTime: 30000,
   });
 
+  const { data: packs = [] } = useQuery<PackDetail[]>({
+    queryKey: ["/api/marketplace/packs"],
+    queryFn: async () => {
+      const res = await fetch("/api/marketplace/packs");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 30000,
+  });
+
   // Derive which category IDs currently have at least one visible marketplace
   // product. This accounts for frozen supplier categories, out-of-stock
   // listings, and any other visibility rules enforced by the backend.
@@ -571,6 +686,10 @@ export default function BrowseProducts() {
             searchLng={searchLng}
             hasSearchLocation={hasSearchLocation}
           />
+        )}
+
+        {!search.trim() && (
+          <PacksSection packs={packs} categoryId={categoryId} filters={filters} />
         )}
 
         <div className="flex items-center justify-between mb-4">

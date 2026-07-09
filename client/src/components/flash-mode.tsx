@@ -69,7 +69,7 @@ export function FlashMode({ open, onClose, products, storeName }: FlashModeProps
   "
 >      <div className="relative w-full h-full flex flex-col select-none overflow-hidden">
           {/* Header */}
-          <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/70 to-transparent">
+          <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
               <span className="text-white font-bold text-sm">{storeName}</span>
@@ -164,7 +164,7 @@ export function FlashMode({ open, onClose, products, storeName }: FlashModeProps
           </div>
 
           {/* Next button */}
-          <div className="absolute inset-x-0 bottom-0 z-20 px-5 pb-safe pb-6">
+          {/* <div className="absolute inset-x-0 bottom-0 z-20 px-5 pb-safe pb-6">
             <button
               className="w-full flex items-center justify-center gap-2 bg-white text-gray-900 font-bold py-3.5 rounded-2xl shadow-lg active:scale-98 transition-all"
               onClick={goNext}
@@ -176,7 +176,56 @@ export function FlashMode({ open, onClose, products, storeName }: FlashModeProps
                 <>Start Over <ChevronRight className="w-4 h-4" /></>
               )}
             </button>
-          </div>
+          </div> */}
+
+          {/* Navigation buttons */}
+<div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-4 z-30 pointer-events-none">
+
+  {/* Previous */}
+  <button
+    onClick={() =>
+      setIdx((i) => (i === 0 ? products.length - 1 : i - 1))
+    }
+    className="
+      pointer-events-auto
+      w-12
+      h-12
+      rounded-full
+      bg-black/40
+      backdrop-blur-sm
+      flex
+      items-center
+      justify-center
+      active:scale-95
+      transition
+    "
+    data-testid="button-flash-prev"
+  >
+    <ChevronRight className="w-6 h-6 text-white rotate-180" />
+  </button>
+
+  {/* Next */}
+  <button
+    onClick={goNext}
+    className="
+      pointer-events-auto
+      w-12
+      h-12
+      rounded-full
+      bg-black/40
+      backdrop-blur-sm
+      flex
+      items-center
+      justify-center
+      active:scale-95
+      transition
+    "
+    data-testid="button-flash-next"
+  >
+    <ChevronRight className="w-6 h-6 text-white" />
+  </button>
+
+</div>
         </div>
       </DialogContent>
     </Dialog>

@@ -52,4 +52,8 @@ migrations/      Drizzle migration files
 - **Cafe Owner** — browses marketplace, places orders
 - **Driver** — handles deliveries
 
+## Setup notes
+
+- Ran `npm install` and `npm run db:push` to provision the Helium DB schema; the seed script auto-creates default users/products on server start.
+
 ## User preferences

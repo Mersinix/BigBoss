@@ -1,0 +1,195 @@
+The current Pack feature is working well overall. I would like to make the following improvements while keeping the existing architecture, APIs, synchronization, and design intact.
+
+Before making any changes, please review the current Pack implementation to avoid duplicating existing functionality and ensure all synchronization remains consistent across Supplier, Coffee Owner, and Admin. Only modify the areas described below.
+
+
+1. Supplier Part
+Admin Products → Add to My Products modal
+
+Keep everything exactly as it works today.
+
+Add one new option:
+
+Only for My Products
+
+This option should behave as follows:
+
+Only for Pack
+Product is available only inside Pack Products.
+It is not mapped inside My Products.
+Only for My Products
+Product is available only inside My Products.
+It is not mapped inside Pack Products.
+No option selected
+
+The product is available in both:
+
+My Products
+Pack Products
+
+These two options must be mutually exclusive.
+
+Only one can be selected at a time.
+
+Shop synchronization
+
+If a supplier adds products as Only for Pack, the related Categories/SubCategories must still remain available in the Coffee Owner Shop whenever Pack content exists for those categories.
+
+The Shop should never hide a category simply because it contains Pack-only products.
+
+Categories should continue to appear whenever there are valid products or Packs associated with them.
+
+Supplier → Products → Packs
+
+Split the current page into three sections using a switcher.
+
+1. Pack Products
+
+Display every product available for Pack creation.
+
+Use the same Filter Bar used elsewhere.
+
+The supplier selects products from this page.
+
+Rules:
+
+At least two products are required before creating a Pack.
+After selecting products, the supplier clicks Create Pack.
+The existing Create Pack modal opens.
+Only the selected products appear inside the modal.
+
+Inside this modal:
+
+For every selected product:
+
+choose one variant from its available variants
+
+Keep all existing Pack information exactly as it already works.
+
+2. New Packs
+
+Show active Packs as grid cards.
+
+Improve the card layout while keeping the current design language.
+
+Each Pack card should expose:
+
+Edit
+Visibility
+Duplicate
+Archive
+Delete
+
+Delete must use a confirmation dialog.
+
+Clicking the Pack card opens the Pack Preview modal.
+
+The Preview should display the same information already available in the Live Preview used during editing.
+
+3. Old Packs
+
+Archived Packs should appear here.
+
+Use the same Filter Bar.
+
+Allow normal management actions where appropriate.
+
+Visibility
+
+Fix the existing Visibility action if it is currently not functioning correctly.
+
+Stock synchronization
+
+Keep stock synchronized between:
+
+My Products
+Pack Products
+Packs
+
+Whenever the same variants are shared between standalone products and Packs.
+
+No stock inconsistencies should be introduced.
+
+2. Coffee Owner
+
+The current Pack integration is good.
+
+Please improve it without changing its behavior.
+
+Pack Cards
+
+In both:
+
+Shop
+Store pages
+
+Make Pack cards larger and richer.
+
+Display:
+
+Pack Name
+Description
+Included Brands
+Included Categories
+Expiration date
+Remaining stock
+Review summary
+
+Keep the existing style consistent with the rest of the marketplace.
+
+Pack Details modal
+
+Keep the current modal.
+
+Add the same Reviews system used for Product Details.
+
+Instead of:
+
+Product Reviews
+Supplier Reviews
+
+Use:
+
+Pack Reviews
+Supplier Reviews
+
+Supplier Reviews remain exactly as they already work.
+
+Pack Reviews should be dedicated to the Pack itself.
+
+Flavor selection inside Packs
+
+Each product already has a predefined variant chosen by the supplier when building the Pack.
+
+Within those available variant options, allow the Coffee Owner to choose the flavor distribution.
+
+Example:
+
+If the Pack contains:
+
+Product A ×3
+
+and Product A's selected variant provides two available flavors,
+
+the Coffee Owner should be able to choose something like:
+
+Flavor A ×2
+Flavor B ×1
+
+If multiple Packs are purchased, this flavor allocation should scale accordingly.
+
+The selection must always respect:
+
+available variants
+available stock
+Pack quantities
+General Requirements
+Do not redesign the application.
+Do not change the existing user flows unless described above.
+Do not remove any existing functionality.
+Do not break synchronization between Admin, Supplier, and Coffee Owner.
+Preserve all existing APIs unless changes are absolutely necessary.
+Preserve database integrity.
+Preserve WebSocket and real-time synchronization.
+Reuse existing components wherever possible to keep the UI consistent.
+Verify the complete Pack workflow end-to-end after implementing these changes, including creation, editing, archiving, visibility, stock synchronization, reviews, filtering, preview modals, and Coffee Owner purchasing.

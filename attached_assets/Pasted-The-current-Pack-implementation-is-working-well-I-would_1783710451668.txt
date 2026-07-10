@@ -1,0 +1,176 @@
+The current Pack implementation is working well. I would like to complete a few remaining improvements while keeping the existing architecture, APIs, synchronization, database, and design intact.
+
+Before making any changes, review the current implementation and only modify the parts described below.
+
+1. Supplier → Products → Admin Products → Add to My Products modal
+
+Currently the modal contains two buttons:
+
+Add to My Pack
+Add to My Products
+
+Replace these with a single button:
+
+Add
+
+The destination should be determined automatically according to the selected Availability Restriction.
+
+Availability Restriction:
+
+Only for Pack
+Only for My Products
+No option selected
+
+Expected behavior:
+
+Only for Pack
+
+The product is added only to Pack Products.
+
+Only for My Products
+
+The product is added only to My Products.
+
+No option selected
+
+The product is added to both:
+
+My Products
+Pack Products
+
+The user should never need to choose between two different Add buttons.
+
+Everything else inside this modal must remain unchanged.
+
+2. Supplier → Products → Packs → Pack Products
+
+Add the complete Filter Bar.
+
+It should include:
+
+Search
+Category
+Sub Category
+Brand
+Flavor
+Size
+
+The filters should stay synchronized exactly like the other Product pages.
+
+Variant display
+
+Improve how variants are displayed in the Pack Products page.
+
+Currently, if one product contains two variants, each variant is expanded into one line per flavor, for example:
+
+Oatly Barista 6x1L Pack
+
+Vanilla · Espresso Shot — $22.00 · 22 in stock
+Caramel · Espresso Shot — $22.00 · 22 in stock
+Hazelnut · Espresso Shot — $22.00 · 22 in stock
+
+Hazelnut · Small — $33.00 · 33 in stock
+Unflavored · Small — $33.00 · 33 in stock
+
+Instead, variants should remain grouped.
+
+Example:
+
+Oatly Barista 6x1L Pack
+
+( Vanilla • Caramel • Hazelnut ) · Espresso Shot — $22.00 · 22 in stock
+
+( Unflavored • Hazelnut ) · Small — $33.00 · 33 in stock
+
+The supplier should work with variants, not individual flavors.
+
+Each variant should display:
+
+Variant size
+Available flavors grouped together
+Price
+Available stock
+
+When creating a Pack, the supplier should choose the variant and specify the quantity for that variant only.
+
+Later, when the Coffee Owner purchases the Pack, they will distribute that quantity between the available flavors belonging to the selected variant.
+
+This keeps the supplier workflow simple while still allowing the Coffee Owner to customize flavor distribution.
+
+Pack creation rule
+
+Update the Pack creation requirement.
+
+Currently the workflow requires at least two products before creating a Pack.
+
+Replace this rule.
+
+A Pack should require at least two selected variants, regardless of which products they belong to.
+
+Examples:
+
+Product A → Variant 1 + Variant 2 → ✅ Allowed
+Product A → Variant 1 + Product B → Variant 1 → ✅ Allowed
+Product A → Variant 1 + Product B → Variant 2 → ✅ Allowed
+Only one selected variant → ❌ Not allowed
+
+The minimum requirement is two variants, not two different products.
+
+Everything else in the Pack creation workflow should remain unchanged.
+
+3. Supplier → Products → Packs → New Packs
+
+Improve this page while keeping the current design language.
+
+Pack cards
+
+Reduce the size of Pack cards so multiple Packs can appear on the same row.
+
+Do not redesign the cards.
+
+Simply optimize the layout to display more Packs per row.
+
+Pack stock
+
+"Packs available (stock)" must always display the real synchronized value.
+
+It should never remain fixed to an incorrect value.
+
+Archive
+
+A Pack should automatically move to Old Packs when:
+
+the supplier archives it, or
+the Pack expiration date is reached.
+Visibility
+
+The current Hide/Show action has an issue.
+
+Please identify and fix it.
+
+Pack actions
+
+Remove the following actions from the Pack cards:
+
+Edit
+Hide / Show
+Duplicate
+Archive
+Delete
+
+Instead, when the supplier clicks the Pack card, open the Pack Preview modal.
+
+Inside the Preview modal display all of these actions.
+
+The Preview becomes the central place for managing the Pack.
+
+General Requirements
+Do not redesign any page.
+Do not remove any existing functionality.
+Do not modify parts that are already working correctly.
+Keep Admin, Supplier, and Coffee Owner synchronization intact.
+Preserve all existing APIs unless absolutely necessary.
+Preserve database integrity.
+Preserve WebSocket synchronization.
+Reuse existing components wherever possible.
+Verify the complete Pack workflow after implementing these changes, including creation, editing, visibility, archive, stock synchronization, preview modals, and Coffee Owner browsing, ensuring nothing else in the project is affected.

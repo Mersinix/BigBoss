@@ -521,11 +521,12 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
 
             <div className="flex flex-wrap gap-2 justify-end pt-2">
               <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button variant="secondary" onClick={() => add.mutate({ forPack: true })} disabled={add.isPending || !hasAnyPrice} data-testid="button-add-to-my-pack">
-                <Layers className="w-4 h-4 mr-1.5" />{add.isPending ? "Adding…" : "Add to My Pack"}
-              </Button>
-              <Button onClick={() => add.mutate({ forPack: false })} disabled={add.isPending || !hasAnyPrice} data-testid="button-confirm-add-listing">
-                {add.isPending ? "Adding…" : "Add to My Products"}
+              <Button
+                onClick={() => add.mutate({ forPack: onlyForPack })}
+                disabled={add.isPending || !hasAnyPrice}
+                data-testid="button-confirm-add-listing"
+              >
+                {add.isPending ? "Adding…" : "Add"}
               </Button>
             </div>
           </div>

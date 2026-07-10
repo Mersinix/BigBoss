@@ -8,11 +8,22 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Package, Pencil, Trash2, Copy, Eye, EyeOff, Layers, ImageOff } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
+} from "@/components/ui/alert-dialog";
+import {
+  Plus, Package, Pencil, Trash2, Copy, Eye, EyeOff, Layers, ImageOff,
+  Archive, ArchiveRestore, Search, Calendar, BoxesIcon, Star
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency } from "@/lib/format";
 import type { SupplierListingWithProduct, PackDetail } from "@shared/schema";
+
+// ── Data hooks ────────────────────────────────────────────────────────────────
 
 function usePackListings() {
   return useQuery<SupplierListingWithProduct[]>({
@@ -31,8 +42,14 @@ function usePacks() {
 
 type PackItemDraft = { listingId: number; variantId: number | null; quantity: number };
 
-function PackFormModal({ open, onClose, editing, listings }: {
-  open: boolean; onClose: () => void; editing: PackDetail | null; listings: SupplierListingWithProduct[];
+// ── Pack Form Modal ───────────────────────────────────────────────────────────
+
+function PackFormModal({ open, onClose, editing, listings, preSelectedItems = [] }: {
+  open: boolean;
+  onClose: () => void;
+  editing: PackDetail | null;
+  listings: SupplierListingWithProduct[];
+  preSelectedItems?: PackItemDraft[];
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -43,10 +60,31 @@ function PackFormModal({ open, onClose, editing, listings }: {
   const [quantityAvailable, setQuantityAvailable] = useState(editing ? String(editing.quantityAvailable) : "1");
   const [expirationDate, setExpirationDate] = useState(editing?.expirationDate ? new Date(editing.expirationDate).toISOString().slice(0, 10) : "");
   const [items, setItems] = useState<PackItemDraft[]>(
-    editing ? editing.items.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity })) : []
+    editing
+      ? editing.items.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity }))
+      : preSelectedItems
   );
 
-  const usableListings = useMemo(() => listings.filter(l => (l.variants ?? []).some(v => v.price > 0 && v.quantity > 0) || (l.price > 0 && l.stock > 0)), [listings]);
+  // Determine which listings to show in the product selection:
+  // - If we have preSelectedItems (coming from Pack Products tab), show only those listings
+  // - Otherwise show all pack-eligible listings
+  const preSelectedListingIds = useMemo(() =>
+    preSelectedItems.length ? new Set(preSelectedItems.map(i => i.listingId)) : null,
+    [preSelectedItems]
+  );
+
+  const usableListings = useMemo(() => {
+    let base = listings.filter(l =>
+      (l.variants ?? []).some(v => v.price > 0 && v.quantity > 0) || (l.price > 0 && l.stock > 0)
+    );
+    // Exclude onlyForMyProducts listings from pack building
+    base = base.filter(l => !(l as any).onlyForMyProducts);
+    // If coming from Pack Products selection, restrict to selected listings
+    if (preSelectedListingIds) {
+      base = base.filter(l => preSelectedListingIds.has(l.id));
+    }
+    return base;
+  }, [listings, preSelectedListingIds]);
 
   const toggleItem = (listingId: number, variantId: number | null) => {
     setItems(prev => {
@@ -102,7 +140,7 @@ function PackFormModal({ open, onClose, editing, listings }: {
     onError: (err: any) => toast({ title: err?.message ?? "Error saving pack", variant: "destructive" }),
   });
 
-  const canSave = name.trim().length > 0 && items.length > 0 && parseFloat(price) >= 0 && parseInt(quantityAvailable) >= 0;
+  const canSave = name.trim().length > 0 && items.length >= 2 && parseFloat(price) >= 0 && parseInt(quantityAvailable) >= 0;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -138,10 +176,13 @@ function PackFormModal({ open, onClose, editing, listings }: {
             </div>
 
             <div>
-              <Label className="mb-2 block">Select products to include</Label>
+              <Label className="mb-2 block">
+                Products in pack
+                {items.length < 2 && <span className="text-xs text-amber-600 ml-2">(select at least 2)</span>}
+              </Label>
               <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
                 {usableListings.length === 0 && (
-                  <p className="text-sm text-muted-foreground p-3">Add products to "My Products" or "My Pack" first — they'll show up here.</p>
+                  <p className="text-sm text-muted-foreground p-3">No pack-eligible products found.</p>
                 )}
                 {usableListings.map(listing => {
                   const rows = (listing.variants ?? []).length
@@ -152,6 +193,7 @@ function PackFormModal({ open, onClose, editing, listings }: {
                       <div className="flex items-center gap-2 text-sm font-medium mb-1">
                         {listing.product.imageUrl ? <img src={listing.product.imageUrl} className="w-6 h-6 rounded object-cover" /> : <Package className="w-4 h-4 text-muted-foreground" />}
                         {listing.product.name}
+                        {(listing as any).onlyForPack && <Badge variant="outline" className="text-[10px]">Pack only</Badge>}
                       </div>
                       <div className="space-y-1 pl-6">
                         {rows.map(r => {
@@ -224,93 +266,606 @@ function PackFormModal({ open, onClose, editing, listings }: {
   );
 }
 
+// ── Pack Preview Modal (read-only) ────────────────────────────────────────────
+
+function PackPreviewModal({ pack, open, onClose, listings }: {
+  pack: PackDetail | null;
+  open: boolean;
+  onClose: () => void;
+  listings: SupplierListingWithProduct[];
+}) {
+  if (!pack) return null;
+  const maxQty = Math.min(pack.quantityAvailable, pack.maxBuildable);
+  const individualTotal = pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Pack Preview</DialogTitle></DialogHeader>
+        <div className="space-y-4 mt-1">
+          <div className="aspect-video bg-secondary rounded-lg overflow-hidden flex items-center justify-center">
+            {pack.imageUrl ? <img src={pack.imageUrl} className="w-full h-full object-cover" alt={pack.name} /> : <ImageOff className="w-8 h-8 text-muted-foreground" />}
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">{pack.name}</h3>
+            {pack.description && <p className="text-sm text-muted-foreground mt-1">{pack.description}</p>}
+          </div>
+          <div className="flex items-baseline gap-3">
+            <span className="text-2xl font-bold text-primary">{formatCurrency(pack.price)}</span>
+            {individualTotal > pack.price && (
+              <span className="text-sm text-muted-foreground line-through">{formatCurrency(individualTotal)}</span>
+            )}
+            <span className="text-sm text-muted-foreground">{maxQty} available</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {pack.categoryLabels.map(c => <Badge key={c.id} variant="secondary" className="text-xs">{c.name}</Badge>)}
+            {pack.subCategoryLabels.map(c => <Badge key={c.id} variant="outline" className="text-xs">{c.name}</Badge>)}
+            {pack.brandLabels.map(b => <Badge key={b.id} className="text-xs">{b.name}</Badge>)}
+          </div>
+          {pack.expirationDate && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Expires {new Date(pack.expirationDate).toLocaleDateString()}</span>
+            </div>
+          )}
+          <div className="border rounded-lg divide-y">
+            <p className="text-xs font-medium text-muted-foreground px-3 py-2">Includes:</p>
+            {pack.items.map(item => (
+              <div key={item.id} className="flex items-center gap-3 px-3 py-2">
+                <div className="w-9 h-9 rounded bg-secondary overflow-hidden flex items-center justify-center shrink-0">
+                  {item.productImageUrl ? <img src={item.productImageUrl} className="w-full h-full object-cover" alt="" /> : <Package className="w-4 h-4 text-muted-foreground" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{item.productName}</p>
+                  {(item.flavorName || item.sizeName) && (
+                    <p className="text-xs text-muted-foreground">{[item.flavorName, item.sizeName].filter(Boolean).join(" · ")}</p>
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-muted-foreground shrink-0">×{item.quantity}</span>
+                <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(item.unitPrice * item.quantity)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Pack Products Tab ─────────────────────────────────────────────────────────
+
+function PackProductsTab({ listings, onCreatePack }: {
+  listings: SupplierListingWithProduct[];
+  onCreatePack: (preSelected: PackItemDraft[]) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<PackItemDraft[]>([]);
+
+  // Only pack-eligible listings (not onlyForMyProducts)
+  const eligible = useMemo(() =>
+    listings.filter(l => !(l as any).onlyForMyProducts &&
+      ((l.variants ?? []).some(v => v.price > 0 && v.quantity > 0) || (l.price > 0 && l.stock > 0))
+    ), [listings]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return eligible;
+    const q = search.toLowerCase();
+    return eligible.filter(l =>
+      l.product.name.toLowerCase().includes(q) ||
+      l.product.categoryLabel?.name.toLowerCase().includes(q) ||
+      l.product.brandLabel?.name.toLowerCase().includes(q)
+    );
+  }, [eligible, search]);
+
+  const toggleVariant = (listingId: number, variantId: number | null) => {
+    setSelected(prev => {
+      const exists = prev.find(i => i.listingId === listingId && i.variantId === variantId);
+      if (exists) return prev.filter(i => !(i.listingId === listingId && i.variantId === variantId));
+      return [...prev, { listingId, variantId, quantity: 1 }];
+    });
+  };
+
+  const setQty = (listingId: number, variantId: number | null, quantity: number) => {
+    setSelected(prev => prev.map(i =>
+      i.listingId === listingId && i.variantId === variantId ? { ...i, quantity: Math.max(1, quantity) } : i
+    ));
+  };
+
+  // Count distinct products selected (not variants) for the ≥2 rule
+  const distinctProductsSelected = new Set(selected.map(i => i.listingId)).size;
+  const canCreate = distinctProductsSelected >= 2;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Search products…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            data-testid="input-pack-products-search"
+          />
+        </div>
+        <Button
+          onClick={() => onCreatePack(selected)}
+          disabled={!canCreate}
+          data-testid="button-create-pack-from-selection"
+        >
+          <Plus className="w-4 h-4 mr-1.5" />
+          Create Pack
+          {selected.length > 0 && <span className="ml-1 bg-white/20 text-xs rounded-full px-1.5">{selected.length}</span>}
+        </Button>
+      </div>
+
+      {!canCreate && selected.length > 0 && (
+        <p className="text-xs text-amber-600">Select at least 2 products to create a Pack.</p>
+      )}
+
+      {eligible.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            <BoxesIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p>No pack-eligible products yet. Add products to "My Products" first.</p>
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No products match your search.</p>
+      ) : (
+        <div className="border rounded-lg divide-y">
+          {filtered.map(listing => {
+            const rows = (listing.variants ?? []).length
+              ? (listing.variants ?? []).filter(v => v.price > 0 && v.quantity > 0).map(v => ({
+                  variantId: v.id as number | null,
+                  label: [v.flavorName, v.sizeName].filter(Boolean).join(" · ") || "Default",
+                  price: v.price,
+                  stock: v.quantity,
+                }))
+              : [{ variantId: null as number | null, label: "Default", price: listing.price, stock: listing.stock }];
+
+            const anySelected = rows.some(r => selected.some(s => s.listingId === listing.id && s.variantId === r.variantId));
+
+            return (
+              <div key={listing.id} className={`p-3 transition-colors ${anySelected ? "bg-primary/5" : ""}`}>
+                <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                  {listing.product.imageUrl
+                    ? <img src={listing.product.imageUrl} className="w-8 h-8 rounded object-cover" alt="" />
+                    : <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center"><Package className="w-4 h-4 text-muted-foreground" /></div>
+                  }
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{listing.product.name}</p>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {listing.product.categoryLabel && <Badge variant="secondary" className="text-[10px]">{listing.product.categoryLabel.name}</Badge>}
+                      {listing.product.brandLabel && <Badge variant="outline" className="text-[10px]">{listing.product.brandLabel.name}</Badge>}
+                      {(listing as any).onlyForPack && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-0">Pack only</Badge>}
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1.5 pl-10">
+                  {rows.map(r => {
+                    const isChecked = selected.some(s => s.listingId === listing.id && s.variantId === r.variantId);
+                    const item = selected.find(s => s.listingId === listing.id && s.variantId === r.variantId);
+                    return (
+                      <div key={String(r.variantId)} className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 flex-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleVariant(listing.id, r.variantId)}
+                            className="rounded"
+                            data-testid={`checkbox-pack-product-${listing.id}-${r.variantId}`}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            {r.label} — {formatCurrency(r.price)} · <span className="text-green-600">{r.stock} in stock</span>
+                          </span>
+                        </label>
+                        {isChecked && (
+                          <div className="flex items-center gap-1">
+                            <Label className="text-xs">Qty:</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={r.stock}
+                              value={item?.quantity ?? 1}
+                              onChange={e => setQty(listing.id, r.variantId, parseInt(e.target.value) || 1)}
+                              className="w-16 h-7 text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Active Pack Card ──────────────────────────────────────────────────────────
+
+function ActivePackCard({ pack, onEdit, onPreview, onToggleVisibility, onDuplicate, onArchive, onDelete }: {
+  pack: PackDetail;
+  onEdit: () => void;
+  onPreview: () => void;
+  onToggleVisibility: () => void;
+  onDuplicate: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const maxQty = Math.min(pack.quantityAvailable, pack.maxBuildable);
+  const individualTotal = pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+
+  return (
+    <Card
+      className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
+      onClick={onPreview}
+      data-testid={`card-pack-${pack.id}`}
+    >
+      <div className="relative aspect-[16/7] bg-secondary overflow-hidden">
+        {pack.imageUrl
+          ? <img src={pack.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt={pack.name} />
+          : <div className="w-full h-full flex items-center justify-center"><Layers className="w-10 h-10 text-muted-foreground/40" /></div>
+        }
+        <div className="absolute top-2 left-2 flex gap-1">
+          <Badge variant={pack.visibility === "VISIBLE" ? "default" : "secondary"} className="text-[10px]">
+            {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}
+          </Badge>
+          {pack.isExpired && <Badge variant="destructive" className="text-[10px]">Expired</Badge>}
+          {!pack.isAvailable && !pack.isExpired && <Badge variant="outline" className="text-[10px] bg-white/80">Out of stock</Badge>}
+        </div>
+      </div>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-base leading-tight">{pack.name}</h3>
+            {pack.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{pack.description}</p>}
+            <div className="flex flex-wrap gap-1 mt-2">
+              {pack.brandLabels.map(b => <Badge key={b.id} className="text-[10px]">{b.name}</Badge>)}
+              {pack.categoryLabels.map(c => <Badge key={c.id} variant="secondary" className="text-[10px]">{c.name}</Badge>)}
+            </div>
+            <div className="flex items-center gap-4 mt-3">
+              <div>
+                <span className="text-lg font-bold text-primary">{formatCurrency(pack.price)}</span>
+                {individualTotal > pack.price && (
+                  <span className="text-xs text-muted-foreground line-through ml-1.5">{formatCurrency(individualTotal)}</span>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <BoxesIcon className="w-3 h-3" />
+                {maxQty} available
+              </div>
+              {pack.expirationDate && (
+                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  {new Date(pack.expirationDate).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{pack.items.length} item{pack.items.length !== 1 ? "s" : ""} · {pack.packReviewCount} review{pack.packReviewCount !== 1 ? "s" : ""}</p>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onEdit}
+              className="h-8 w-8 p-0"
+              title="Edit"
+              data-testid={`button-edit-pack-${pack.id}`}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onToggleVisibility}
+              className="h-8 w-8 p-0"
+              title={pack.visibility === "VISIBLE" ? "Hide" : "Show"}
+              data-testid={`button-toggle-visibility-pack-${pack.id}`}
+            >
+              {pack.visibility === "VISIBLE" ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onDuplicate}
+              className="h-8 w-8 p-0"
+              title="Duplicate"
+              data-testid={`button-duplicate-pack-${pack.id}`}
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onArchive}
+              className="h-8 w-8 p-0"
+              title="Archive"
+              data-testid={`button-archive-pack-${pack.id}`}
+            >
+              <Archive className="w-3.5 h-3.5" />
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8 w-8 p-0"
+                  title="Delete"
+                  data-testid={`button-delete-pack-${pack.id}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Pack?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete <strong>{pack.name}</strong> and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Archived Pack Row ─────────────────────────────────────────────────────────
+
+function ArchivedPackRow({ pack, onToggleVisibility, onUnarchive, onDelete }: {
+  pack: PackDetail;
+  onToggleVisibility: () => void;
+  onUnarchive: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Card className="overflow-hidden opacity-75" data-testid={`card-pack-archived-${pack.id}`}>
+      <CardContent className="p-3 flex gap-3 items-center">
+        <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center overflow-hidden shrink-0">
+          {pack.imageUrl ? <img src={pack.imageUrl} className="w-full h-full object-cover" alt={pack.name} /> : <Layers className="w-5 h-5 text-muted-foreground" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">{pack.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {pack.items.length} items · {formatCurrency(pack.price)} · {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}
+          </p>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {pack.categoryLabels.map(c => <Badge key={c.id} variant="secondary" className="text-[10px]">{c.name}</Badge>)}
+          </div>
+        </div>
+        <div className="flex gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+          <Button size="sm" variant="outline" onClick={onToggleVisibility} className="h-8 w-8 p-0" title={pack.visibility === "VISIBLE" ? "Hide" : "Show"}>
+            {pack.visibility === "VISIBLE" ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+          </Button>
+          <Button size="sm" variant="outline" onClick={onUnarchive} className="h-8 px-2 gap-1" title="Restore">
+            <ArchiveRestore className="w-3.5 h-3.5" />
+            <span className="text-xs">Restore</span>
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="destructive" className="h-8 w-8 p-0" title="Delete">
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Pack?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete <strong>{pack.name}</strong> and cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Main PackTab ──────────────────────────────────────────────────────────────
+
 export function PackTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: listings = [], isLoading: loadingListings } = usePackListings();
   const { data: packRows = [], isLoading: loadingPacks } = usePacks();
-  const [modalOpen, setModalOpen] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<"products" | "packs" | "archived">("products");
+  const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PackDetail | null>(null);
+  const [preSelectedItems, setPreSelectedItems] = useState<PackItemDraft[]>([]);
+  const [previewPack, setPreviewPack] = useState<PackDetail | null>(null);
+  const [archivedSearch, setArchivedSearch] = useState("");
 
   const activePacks = packRows.filter(p => !p.isArchived);
   const archivedPacks = packRows.filter(p => p.isArchived);
 
+  const filteredArchived = useMemo(() => {
+    if (!archivedSearch.trim()) return archivedPacks;
+    const q = archivedSearch.toLowerCase();
+    return archivedPacks.filter(p => p.name.toLowerCase().includes(q));
+  }, [archivedPacks, archivedSearch]);
+
   const toggleVisibility = useMutation({
     mutationFn: (p: PackDetail) => apiRequest("PATCH", `/api/supplier/packs/${p.id}`, { visibility: p.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] }); },
+    onError: () => toast({ title: "Failed to update visibility", variant: "destructive" }),
   });
 
   const archive = useMutation({
     mutationFn: (p: PackDetail) => apiRequest("PATCH", `/api/supplier/packs/${p.id}`, { isArchived: !p.isArchived }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] }); toast({ title: "Pack updated" }); },
+    onSuccess: (_, p) => {
+      qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
+      toast({ title: p.isArchived ? "Pack restored" : "Pack archived" });
+    },
   });
 
   const duplicate = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/supplier/packs/${id}/duplicate`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] }); toast({ title: "Pack duplicated" }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
+      toast({ title: "Pack duplicated" });
+      setActiveTab("packs");
+    },
   });
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/supplier/packs/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] }); toast({ title: "Pack deleted" }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
+      toast({ title: "Pack deleted" });
+    },
   });
+
+  const openCreate = (preSelected: PackItemDraft[]) => {
+    setEditing(null);
+    setPreSelectedItems(preSelected);
+    setFormOpen(true);
+  };
+
+  const openEdit = (pack: PackDetail) => {
+    setEditing(pack);
+    setPreSelectedItems([]);
+    setFormOpen(true);
+  };
 
   if (loadingListings || loadingPacks) {
     return <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full" />)}</div>;
   }
 
-  const renderPackCard = (pack: PackDetail) => (
-    <Card key={pack.id} className="overflow-hidden" data-testid={`card-pack-${pack.id}`}>
-      <CardContent className="p-4 flex gap-4">
-        <div className="w-20 h-20 rounded-lg bg-secondary flex items-center justify-center overflow-hidden shrink-0">
-          {pack.imageUrl ? <img src={pack.imageUrl} className="w-full h-full object-cover" /> : <Layers className="w-6 h-6 text-muted-foreground" />}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-semibold truncate">{pack.name}</p>
-            <Badge variant={pack.visibility === "VISIBLE" ? "default" : "secondary"} className="text-xs">{pack.visibility}</Badge>
-            {pack.isExpired && <Badge variant="destructive" className="text-xs">Expired</Badge>}
-            {!pack.isAvailable && !pack.isExpired && <Badge variant="outline" className="text-xs">Out of stock</Badge>}
-          </div>
-          <p className="text-sm text-muted-foreground truncate">{pack.items.length} item{pack.items.length !== 1 ? "s" : ""} · {formatCurrency(pack.price)} · {Math.min(pack.quantityAvailable, pack.maxBuildable)} available</p>
-          <div className="flex flex-wrap gap-1 mt-1">
-            {pack.categoryLabels.map(c => <Badge key={c.id} variant="secondary" className="text-xs">{c.name}</Badge>)}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1 shrink-0">
-          <Button size="sm" variant="outline" onClick={() => { setEditing(pack); setModalOpen(true); }} data-testid={`button-edit-pack-${pack.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-          <Button size="sm" variant="outline" onClick={() => toggleVisibility.mutate(pack)} data-testid={`button-toggle-visibility-pack-${pack.id}`}>{pack.visibility === "VISIBLE" ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}</Button>
-          <Button size="sm" variant="outline" onClick={() => duplicate.mutate(pack.id)} data-testid={`button-duplicate-pack-${pack.id}`}><Copy className="w-3.5 h-3.5" /></Button>
-          <Button size="sm" variant="outline" onClick={() => archive.mutate(pack)} data-testid={`button-archive-pack-${pack.id}`}>{pack.isArchived ? "Unarchive" : "Archive"}</Button>
-          <Button size="sm" variant="destructive" onClick={() => { if (confirm("Delete this pack?")) remove.mutate(pack.id); }} data-testid={`button-delete-pack-${pack.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">Bundle your existing products into a sellable Pack with its own price and stock.</p>
-        <Button onClick={() => { setEditing(null); setModalOpen(true); }} data-testid="button-create-pack"><Plus className="w-4 h-4 mr-1.5" />Create Pack</Button>
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="products" data-testid="tab-pack-products">
+            Pack Products
+          </TabsTrigger>
+          <TabsTrigger value="packs" data-testid="tab-new-packs">
+            New Packs{activePacks.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px]">{activePacks.length}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="archived" data-testid="tab-old-packs">
+            Old Packs{archivedPacks.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px]">{archivedPacks.length}</Badge>}
+          </TabsTrigger>
+        </TabsList>
 
-      {activePacks.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">No packs yet. Create one from your existing products.</CardContent></Card>
-      ) : (
-        <div className="space-y-3">{activePacks.map(renderPackCard)}</div>
+        {/* ── Pack Products ───────────────────────────────────────────────── */}
+        <TabsContent value="products" className="mt-4">
+          <div className="text-sm text-muted-foreground mb-3">
+            Select at least 2 products, then click <strong>Create Pack</strong> to bundle them.
+          </div>
+          <PackProductsTab listings={listings} onCreatePack={openCreate} />
+        </TabsContent>
+
+        {/* ── New Packs ───────────────────────────────────────────────────── */}
+        <TabsContent value="packs" className="mt-4">
+          <div className="flex justify-between items-center mb-3">
+            <p className="text-sm text-muted-foreground">Active packs visible in the marketplace.</p>
+            <Button size="sm" variant="outline" onClick={() => openCreate([])}>
+              <Plus className="w-4 h-4 mr-1.5" />Create Pack
+            </Button>
+          </div>
+          {activePacks.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Layers className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p>No active packs yet. Select products in the <strong>Pack Products</strong> tab to get started.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {activePacks.map(pack => (
+                <ActivePackCard
+                  key={pack.id}
+                  pack={pack}
+                  onEdit={() => openEdit(pack)}
+                  onPreview={() => setPreviewPack(pack)}
+                  onToggleVisibility={() => toggleVisibility.mutate(pack)}
+                  onDuplicate={() => duplicate.mutate(pack.id)}
+                  onArchive={() => archive.mutate(pack)}
+                  onDelete={() => remove.mutate(pack.id)}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Old Packs ───────────────────────────────────────────────────── */}
+        <TabsContent value="archived" className="mt-4">
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Search archived packs…"
+                value={archivedSearch}
+                onChange={e => setArchivedSearch(e.target.value)}
+              />
+            </div>
+            {archivedPacks.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  <Archive className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p>No archived packs.</p>
+                </CardContent>
+              </Card>
+            ) : filteredArchived.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No packs match your search.</p>
+            ) : (
+              <div className="space-y-2">
+                {filteredArchived.map(pack => (
+                  <ArchivedPackRow
+                    key={pack.id}
+                    pack={pack}
+                    onToggleVisibility={() => toggleVisibility.mutate(pack)}
+                    onUnarchive={() => archive.mutate(pack)}
+                    onDelete={() => remove.mutate(pack.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Pack Form Modal */}
+      {formOpen && (
+        <PackFormModal
+          open={formOpen}
+          onClose={() => { setFormOpen(false); setEditing(null); setPreSelectedItems([]); }}
+          editing={editing}
+          listings={listings}
+          preSelectedItems={preSelectedItems}
+        />
       )}
 
-      {archivedPacks.length > 0 && (
-        <div className="pt-4">
-          <p className="text-sm font-medium text-muted-foreground mb-2">Archived</p>
-          <div className="space-y-3 opacity-70">{archivedPacks.map(renderPackCard)}</div>
-        </div>
-      )}
-
-      {modalOpen && (
-        <PackFormModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} editing={editing} listings={listings} />
-      )}
+      {/* Pack Preview Modal */}
+      <PackPreviewModal
+        pack={previewPack}
+        open={previewPack !== null}
+        onClose={() => setPreviewPack(null)}
+        listings={listings}
+      />
     </div>
   );
 }

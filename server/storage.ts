@@ -1068,6 +1068,12 @@ export class DatabaseStorage implements IStorage {
     const listingMap = new Map(listings.map((l) => [l.id, l]));
     const variants = listingIds.length ? await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.listingId, listingIds)) : [];
     const variantMap = new Map(variants.map((v) => [v.id, v]));
+    // Group variants by listing for flavor-distribution selection
+    const variantsByListing = new Map<number, typeof variants>();
+    for (const v of variants) {
+      if (!variantsByListing.has(v.listingId)) variantsByListing.set(v.listingId, []);
+      variantsByListing.get(v.listingId)!.push(v);
+    }
     const productIds = Array.from(new Set(listings.map((l) => l.productId)));
     const prods = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
     const productMap = new Map(prods.map((p) => [p.id, p]));
@@ -1079,6 +1085,17 @@ export class DatabaseStorage implements IStorage {
     for (const it of allItems) {
       if (!itemsByPack.has(it.packId)) itemsByPack.set(it.packId, []);
       itemsByPack.get(it.packId)!.push(it);
+    }
+    // Batch-fetch pack review stats
+    const packReviews = packIds.length
+      ? await db.select().from(supplierProductReviews)
+          .where(and(inArray(supplierProductReviews.packId as any, packIds), eq(supplierProductReviews.reviewType, 'PACK')))
+      : [];
+    const reviewsByPack = new Map<number, typeof packReviews>();
+    for (const r of packReviews) {
+      const pid = (r as any).packId as number;
+      if (!reviewsByPack.has(pid)) reviewsByPack.set(pid, []);
+      reviewsByPack.get(pid)!.push(r);
     }
 
     const now = new Date();
@@ -1101,6 +1118,16 @@ export class DatabaseStorage implements IStorage {
         if (product?.brandId) brandIds.add(product.brandId);
         const buildable = it.quantity > 0 ? Math.floor(availableQuantity / it.quantity) : 0;
         maxBuildable = Math.min(maxBuildable, buildable);
+        // All variants of this listing for flavor-distribution selection
+        const listingVariants: import('@shared/schema').PackVariantOption[] = (variantsByListing.get(it.listingId) ?? []).map((v) => ({
+          variantId: v.id,
+          flavorId: v.flavorId ?? null,
+          flavorName: v.flavorId ? (tx.flvMap.get(v.flavorId)?.name ?? null) : null,
+          sizeId: v.sizeId ?? null,
+          sizeName: v.sizeId ? (tx.szMap.get(v.sizeId)?.name ?? null) : null,
+          price: v.price,
+          availableQuantity: v.quantity,
+        }));
         itemDetails.push({
           id: it.id,
           listingId: it.listingId,
@@ -1115,11 +1142,15 @@ export class DatabaseStorage implements IStorage {
           sizeName: variant?.sizeId ? (tx.szMap.get(variant.sizeId)?.name ?? null) : null,
           unitPrice,
           availableQuantity,
+          listingVariants,
         });
       }
       if (!isFinite(maxBuildable)) maxBuildable = 0;
       const isExpired = !!(pack.expirationDate && new Date(pack.expirationDate) < now);
       const isAvailable = !pack.isArchived && pack.visibility === 'VISIBLE' && !isExpired && maxBuildable > 0;
+      const packRevs = reviewsByPack.get(pack.id) ?? [];
+      const packReviewCount = packRevs.length;
+      const packAvgRating = packReviewCount ? packRevs.reduce((s, r) => s + r.rating, 0) / packReviewCount : 0;
       result.push({
         ...pack,
         supplierName: supplierMap.get(pack.supplierId) ?? "",
@@ -1133,6 +1164,8 @@ export class DatabaseStorage implements IStorage {
         maxBuildable,
         isAvailable,
         isExpired,
+        packReviewCount,
+        packAvgRating,
       });
     }
     return result;
@@ -1603,6 +1636,39 @@ export class DatabaseStorage implements IStorage {
       ) as Record<number, { avgRating: number; total: number }>,
     };
   }
+  // ── Pack Reviews ─────────────────────────────────────────────────────────────
+
+  async getPackReviews(packId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.packId as any, packId), eq(supplierProductReviews.reviewType, 'PACK')))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async createPackReview(data: {
+    packId: number;
+    supplierId: number;
+    cafeId: number;
+    rating: number;
+    comment?: string | null;
+    cafeName: string;
+    cafeOwnerName: string;
+  }): Promise<SupplierProductReview> {
+    const [row] = await db.insert(supplierProductReviews).values({
+      supplierId: data.supplierId,
+      reviewType: 'PACK',
+      cafeId: data.cafeId,
+      packId: data.packId,
+      productId: null,
+      listingId: null,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.cafeName,
+      cafeOwnerName: data.cafeOwnerName,
+      productName: null,
+    } as any).returning();
+    return row;
+  }
+
   // ── Landing Config ──────────────────────────────────────────────────────────
 
   async getLandingConfig(): Promise<LandingConfig> {

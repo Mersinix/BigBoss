@@ -1361,6 +1361,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const body = z.object({
         productId: z.number(),
         onlyForPack: z.boolean().optional(),
+        onlyForMyProducts: z.boolean().optional(),
         variants: z.array(z.object({
           flavorId: z.number().nullable().optional(),
           sizeId: z.number().nullable().optional(),
@@ -1375,6 +1376,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const existing = await storage.getSupplierListingByProductId(user!.id, body.productId);
       if (existing) return res.status(409).json({ message: "Product already in your listings" });
 
+      // Enforce mutual exclusivity server-side
+      const onlyForPack = body.onlyForPack ?? false;
+      const onlyForMyProducts = body.onlyForMyProducts ?? false;
+      if (onlyForPack && onlyForMyProducts) {
+        return res.status(400).json({ message: "A listing cannot be both 'Only for Pack' and 'Only for My Products' at the same time" });
+      }
+
       const listing = await storage.createSupplierListing({
         supplierId: user!.id,
         productId: body.productId,
@@ -1383,7 +1391,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         availableFlavorIds: null,
         availableSizeIds: null,
         availableBrandIds: null,
-        onlyForPack: body.onlyForPack ?? false,
+        onlyForPack,
+        onlyForMyProducts,
       });
 
       if (body.variants && body.variants.length > 0) {
@@ -1412,6 +1421,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const body = z.object({
         onlyForPack: z.boolean().optional(),
+        onlyForMyProducts: z.boolean().optional(),
         variants: z.array(z.object({
           flavorId: z.number().nullable().optional(),
           sizeId: z.number().nullable().optional(),
@@ -1420,8 +1430,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         })).optional(),
       }).parse(req.body);
 
-      if (body.onlyForPack !== undefined) {
-        await db.update(supplierProductListings).set({ onlyForPack: body.onlyForPack }).where(eq(supplierProductListings.id, listingId));
+      // Enforce mutual exclusivity server-side
+      const resolvedOnlyForPack = body.onlyForPack !== undefined ? body.onlyForPack : listing.onlyForPack;
+      const resolvedOnlyForMyProducts = body.onlyForMyProducts !== undefined ? body.onlyForMyProducts : (listing as any).onlyForMyProducts;
+      if (resolvedOnlyForPack && resolvedOnlyForMyProducts) {
+        return res.status(400).json({ message: "A listing cannot be both 'Only for Pack' and 'Only for My Products' at the same time" });
+      }
+
+      const listingUpdate: Record<string, any> = {};
+      if (body.onlyForPack !== undefined) listingUpdate.onlyForPack = body.onlyForPack;
+      if (body.onlyForMyProducts !== undefined) listingUpdate.onlyForMyProducts = body.onlyForMyProducts;
+      if (Object.keys(listingUpdate).length) {
+        await db.update(supplierProductListings).set(listingUpdate).where(eq(supplierProductListings.id, listingId));
       }
 
       if (body.variants !== undefined) {
@@ -1824,6 +1844,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       res.status(201).json(review);
     } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Pack reviews — any cafe owner can read; approved cafe owners can submit
+  app.get("/api/reviews/pack/:packId", async (req, res) => {
+    try {
+      const packId = parseInt(req.params.packId);
+      res.json(await storage.getPackReviews(packId));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.post("/api/reviews/pack/:packId", async (req: any, res) => {
+    try {
+      if (!req.session.userId) return res.status(401).json({ message: "Unauthorized" });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== 'CAFE_OWNER' || (user as any).status !== 'approved') {
+        return res.status(403).json({ message: "Only approved cafe owners can submit reviews" });
+      }
+      const packId = parseInt(req.params.packId);
+      const [pack] = await db.select().from(packs).where(eq(packs.id, packId));
+      if (!pack) return res.status(404).json({ message: "Pack not found" });
+      const body = z.object({
+        rating: z.number().int().min(1).max(5),
+        comment: z.string().optional(),
+      }).parse(req.body);
+      const review = await storage.createPackReview({
+        packId,
+        supplierId: pack.supplierId,
+        cafeId: user.id,
+        rating: body.rating,
+        comment: body.comment ?? null,
+        cafeName: user.name,
+        cafeOwnerName: user.name,
+      });
+      res.status(201).json(review);
+    } catch (err) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else res.status(500).json({ message: "Error" });
+    }
   });
 
   // ── Supplier Variant Endpoints ─────────────────────────────────────────────

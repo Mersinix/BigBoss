@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag, Layers
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag, Layers, Star
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -304,11 +304,25 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
 
 // ── Pack Card ─────────────────────────────────────────────────────────────────
 
+function StarRating({ rating, count }: { rating: number; count: number }) {
+  if (!count) return null;
+  return (
+    <div className="flex items-center gap-1">
+      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+      <span className="text-[11px] font-medium text-gray-700">{rating.toFixed(1)}</span>
+      <span className="text-[10px] text-gray-400">({count})</span>
+    </div>
+  );
+}
+
 function PackCardTile({ pack, hasCommercialAccess }: { pack: PackDetail; hasCommercialAccess: boolean }) {
   const faved = useFavorites((s) => !!s.pack[pack.id]);
   const togglePack = useFavorites((s) => s.togglePack);
   const openPackQuickView = usePackQuickView((s) => s.open);
   const maxQty = Math.min(pack.quantityAvailable, pack.maxBuildable);
+  const isExpiringSoon = pack.expirationDate
+    ? (new Date(pack.expirationDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 7
+    : false;
 
   return (
     <div
@@ -322,8 +336,13 @@ function PackCardTile({ pack, hasCommercialAccess }: { pack: PackDetail; hasComm
         ) : (
           <div className="w-full h-full flex items-center justify-center"><Layers className="w-10 h-10 text-amber-200" /></div>
         )}
-        <div className="absolute top-2 left-2">
+        <div className="absolute top-2 left-2 flex gap-1">
           <Badge className="bg-amber-500 text-white text-[10px] font-semibold shadow-sm border-0 px-2"><Layers className="w-3 h-3 mr-1 inline" />Pack</Badge>
+          {isExpiringSoon && pack.expirationDate && (
+            <Badge className="bg-orange-500 text-white text-[10px] font-semibold shadow-sm border-0 px-2">
+              Expires {new Date(pack.expirationDate).toLocaleDateString()}
+            </Badge>
+          )}
         </div>
         {hasCommercialAccess && (
           <button
@@ -335,15 +354,37 @@ function PackCardTile({ pack, hasCommercialAccess }: { pack: PackDetail; hasComm
           </button>
         )}
       </div>
-      <div className="p-3 flex-1 flex flex-col gap-2">
+      <div className="p-3 flex-1 flex flex-col gap-1.5">
         <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-amber-600 transition-colors">{pack.name}</h3>
-        <p className="text-xs text-gray-400 line-clamp-1">{pack.items.length} produit{pack.items.length !== 1 ? "s" : ""} inclus</p>
+        {pack.description && <p className="text-xs text-gray-500 line-clamp-2">{pack.description}</p>}
+
+        {/* Brands */}
+        {pack.brandLabels.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {pack.brandLabels.slice(0, 2).map(b => (
+              <Badge key={b.id} className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0">{b.name}</Badge>
+            ))}
+            {pack.brandLabels.length > 2 && <span className="text-[10px] text-gray-400">+{pack.brandLabels.length - 2}</span>}
+          </div>
+        )}
+
+        {/* Categories */}
+        {pack.categoryLabels.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {pack.categoryLabels.slice(0, 2).map(c => (
+              <Badge key={c.id} variant="secondary" className="text-[10px] px-1.5 py-0">{c.name}</Badge>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-0.5">
+          <StarRating rating={pack.packAvgRating} count={pack.packReviewCount} />
+          <span className="text-[11px] text-gray-400">{maxQty} dispo.</span>
+        </div>
+
         <div className="mt-auto pt-2 border-t border-gray-50">
           {hasCommercialAccess ? (
-            <div className="flex items-center justify-between">
-              <p className="font-bold text-sm text-amber-600">{formatCurrency(pack.price)}</p>
-              <span className="text-[11px] text-gray-400">{maxQty} dispo.</span>
-            </div>
+            <p className="font-bold text-sm text-amber-600">{formatCurrency(pack.price)}</p>
           ) : (
             <div className="flex items-center gap-1 text-[11px] text-amber-700 font-medium">
               <Lock className="w-3 h-3 shrink-0" />
@@ -571,16 +612,21 @@ export default function BrowseProducts() {
   });
 
   // Derive which category IDs currently have at least one visible marketplace
-  // product. This accounts for frozen supplier categories, out-of-stock
-  // listings, and any other visibility rules enforced by the backend.
-  // Updates automatically whenever allProducts is refetched (e.g. via WebSocket).
+  // product OR active pack. This accounts for frozen supplier categories,
+  // out-of-stock listings, and "Only for Pack" products whose category should
+  // still appear whenever a Pack in that category is available.
   const visibleCategoryIds = useMemo(() => {
     const ids = new Set<number>();
     allProducts.forEach((p) => {
       if (p.categoryId != null) ids.add(p.categoryId);
     });
+    // Also include categories that have available packs, so "Only for Pack"
+    // products don't cause their category to disappear from the strip.
+    packs.forEach((p) => {
+      p.categoryIds.forEach((id) => ids.add(id));
+    });
     return ids;
-  }, [allProducts]);
+  }, [allProducts, packs]);
 
   // Products scoped to the selected category (and text search) but NOT filtered
   // by brand/subcategory/flavor/size. These are used to build the filter option

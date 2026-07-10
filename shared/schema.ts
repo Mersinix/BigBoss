@@ -73,6 +73,9 @@ export const supplierProductListings = pgTable("supplier_product_listings", {
   // When true, this listing's variants are pack-exclusive: hidden from "My Products"
   // and the individual marketplace, but still usable inside the supplier's Packs.
   onlyForPack: boolean("only_for_pack").notNull().default(false),
+  // When true, this listing's variants are only shown in "My Products" / standalone
+  // marketplace — excluded from Pack product selection.
+  onlyForMyProducts: boolean("only_for_my_products").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -293,10 +296,11 @@ export const supplierStores = pgTable("supplier_stores", {
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id"), // nullable for product-level reviews
-  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER'
+  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK'
   cafeId: integer("cafe_id").notNull(),
   productId: integer("product_id"),
   listingId: integer("listing_id"),
+  packId: integer("pack_id"), // for PACK reviews
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   cafeName: text("cafe_name").notNull().default(''),
@@ -553,6 +557,16 @@ export type InsertPackFavorite = z.infer<typeof insertPackFavoriteSchema>;
 
 // ── Pack Rich Types ───────────────────────────────────────────────────────────
 
+export type PackVariantOption = {
+  variantId: number;
+  flavorId: number | null;
+  flavorName: string | null;
+  sizeId: number | null;
+  sizeName: string | null;
+  price: number;
+  availableQuantity: number;
+};
+
 export type PackItemDetail = {
   id: number;
   listingId: number;
@@ -567,6 +581,8 @@ export type PackItemDetail = {
   sizeName: string | null;
   unitPrice: number;
   availableQuantity: number; // stock available for this listing/variant right now
+  // All variants available for this listing (for flavor-distribution selection by Coffee Owner)
+  listingVariants: PackVariantOption[];
 };
 
 export type PackDetail = Pack & {
@@ -581,6 +597,8 @@ export type PackDetail = Pack & {
   maxBuildable: number; // how many packs could be assembled given current stock
   isAvailable: boolean; // maxBuildable > 0, not expired, visible, not archived
   isExpired: boolean;
+  packReviewCount: number;
+  packAvgRating: number;
 };
 
 // ── Store Types ───────────────────────────────────────────────────────────────

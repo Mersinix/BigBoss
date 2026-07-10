@@ -423,6 +423,7 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
 
   const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
   const [onlyForPack, setOnlyForPack] = useState(false);
+  const [onlyForMyProducts, setOnlyForMyProducts] = useState(false);
 
   const add = useMutation({
     mutationFn: async (opts: { forPack: boolean }) => {
@@ -435,6 +436,7 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
         availableSizeIds: availableSizes.map(s => s.id),
         availableBrandIds: product.brandId ? [product.brandId] : [],
         onlyForPack: opts.forPack ? true : onlyForPack,
+        onlyForMyProducts: opts.forPack ? false : onlyForMyProducts,
       });
       const listing = await listingRes.json();
       const listingId = listing.id;
@@ -484,13 +486,38 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
               <p className="text-xs text-muted-foreground mt-1.5">Products only appear in the shop when price &gt; 0 and stock &gt; 0.</p>
             </div>
 
-            <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer">
-              <input type="checkbox" className="mt-0.5 rounded" checked={onlyForPack} onChange={e => setOnlyForPack(e.target.checked)} data-testid="checkbox-only-for-pack" />
-              <span className="text-sm">
-                <span className="font-medium">Only for Pack</span>
-                <span className="block text-xs text-muted-foreground">These variants won't appear in "My Products" or the individual marketplace — only inside your Packs.</span>
-              </span>
-            </label>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Availability restriction (optional)</Label>
+              <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded"
+                  checked={onlyForPack}
+                  onChange={e => { setOnlyForPack(e.target.checked); if (e.target.checked) setOnlyForMyProducts(false); }}
+                  data-testid="checkbox-only-for-pack"
+                />
+                <span className="text-sm">
+                  <span className="font-medium">Only for Pack</span>
+                  <span className="block text-xs text-muted-foreground">Product is only available inside Pack Products. Not shown in My Products.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded"
+                  checked={onlyForMyProducts}
+                  onChange={e => { setOnlyForMyProducts(e.target.checked); if (e.target.checked) setOnlyForPack(false); }}
+                  data-testid="checkbox-only-for-my-products"
+                />
+                <span className="text-sm">
+                  <span className="font-medium">Only for My Products</span>
+                  <span className="block text-xs text-muted-foreground">Product is only available in My Products. Not shown in Pack Products.</span>
+                </span>
+              </label>
+              {!onlyForPack && !onlyForMyProducts && (
+                <p className="text-xs text-muted-foreground pl-1">No restriction selected — product will appear in both My Products and Pack Products.</p>
+              )}
+            </div>
 
             <div className="flex flex-wrap gap-2 justify-end pt-2">
               <Button variant="outline" onClick={onClose}>Cancel</Button>

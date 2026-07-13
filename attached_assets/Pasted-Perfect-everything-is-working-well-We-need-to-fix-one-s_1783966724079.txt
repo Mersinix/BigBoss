@@ -1,0 +1,259 @@
+Perfect, everything is working well. We need to fix one synchronization issue between Supplier Pack creation and Coffee Owner Pack display.
+
+Please review the current Pack implementation before making changes to understand the existing variant logic and avoid breaking the current workflow.
+
+Do not change the design, existing components, APIs, database structure, or other Pack functionalities unless required for this synchronization fix.
+
+## Issue to Fix
+
+### Supplier Side → Products → Packs → Pack Products
+
+The variant display logic is now correct.
+
+Example of the current correct supplier Pack configuration:
+
+Packito
+
+pack pack pack
+
+$300.00
+$374.00
+7 available
+Visible
+
+Tea & Herbal
+Herbal Infusions
+Alpro
+
+Expires 01/08/2026
+
+Includes:
+
+Chamomile Herbal Infusion x50
+
+( Vanilla • Caramel • Unflavored ) · Small
+
+×6
+$264.00
+
+Chamomile Herbal Infusion x50
+
+( Vanilla • Caramel ) · Medium
+
+×2
+$110.00
+
+Meaning:
+
+* Each Pack item contains a selected product variant.
+* A variant represents:
+
+  * Size
+  * Available flavors inside that variant
+  * Price
+  * Stock quantity
+
+The supplier quantity is attached to the variant, not separately to each flavor.
+
+Keep this logic exactly as it is.
+
+## Problem
+
+### Coffee Owner Side → Pack Details Modal
+
+The Pack display is incorrectly rebuilding the variants and showing flavors independently.
+
+Current incorrect behavior:
+
+Chamomile Herbal Infusion x50
+
+Vanilla · Small
+
+×6
+
+Chamomile Herbal Infusion x50
+
+Vanilla · Medium
+
+×2
+
+Then the flavor distribution section shows:
+
+Chamomile Herbal Infusion x50
+
+6/6
+
+Vanilla · Small
+6
+
+Caramel · Small
+0
+
+Unflavored · Small
+0
+
+Vanilla · Medium
+0
+
+Caramel · Medium
+0
+
+And:
+
+Chamomile Herbal Infusion x50
+
+2/2
+
+Vanilla · Small
+0
+
+Caramel · Small
+0
+
+Unflavored · Small
+0
+
+Vanilla · Medium
+2
+
+Caramel · Medium
+0
+
+This is incorrect because it separates flavors from their original variants.
+
+## Expected Behavior
+
+The Coffee Owner side must respect the exact same variant structure created by the supplier.
+
+The Pack Details modal should display the variants exactly as created by the supplier.
+
+Example expected result:
+
+Packito
+
+Premium Beans Co
+
+pack pack pack
+
+$300.00
+$374.00
+7 available
+
+Expires 01/08/2026
+
+Pack Details
+
+Reviews
+
+Chamomile Herbal Infusion x50
+
+Vanilla · Small
+
+×6
+
+Chamomile Herbal Infusion x50
+
+Vanilla · Medium
+
+×2
+
+Choose your flavor distribution
+
+Distribute the quantities across available flavors for each product.
+
+Chamomile Herbal Infusion x50
+
+6/6
+
+Vanilla · Small (44 in stock)
+
+6
+
+Caramel · Small (44 in stock)
+
+0
+
+Unflavored · Small (44 in stock)
+
+0
+
+Chamomile Herbal Infusion x50
+
+2/2
+
+Vanilla · Medium (55 in stock)
+
+2
+
+Caramel · Medium (55 in stock)
+
+0
+
+Meaning:
+
+* The flavor selection must only show flavors available inside the selected variant.
+* The size must stay linked to its variant.
+* Do not display flavors from other sizes.
+* Do not merge flavors between variants.
+* The Coffee Owner can only distribute quantities between flavors belonging to the same variant.
+
+Example:
+
+If a supplier creates:
+
+Variant 1:
+Size: Small
+Flavors:
+
+* Vanilla
+* Caramel
+* Unflavored
+  Quantity: 6
+
+Variant 2:
+Size: Medium
+Flavors:
+
+* Vanilla
+* Caramel
+  Quantity: 2
+
+The Coffee Owner should see:
+
+Small:
+
+* Vanilla
+* Caramel
+* Unflavored
+
+Quantity distribution: 6
+
+Medium:
+
+* Vanilla
+* Caramel
+
+Quantity distribution: 2
+
+Not:
+
+Small + Medium flavors mixed together.
+
+## Requirements
+
+* Keep Supplier Pack creation unchanged.
+* Keep the current Pack database structure.
+* Keep stock synchronization unchanged.
+* Keep the current Coffee Owner design.
+* Only fix the data mapping between supplier-created variants and Coffee Owner Pack Details modal.
+* Verify that:
+
+  * Packs with multiple products still work.
+  * Packs with multiple variants still work.
+  * Packs with the same product but different sizes still work.
+  * Flavor distribution respects variant boundaries.
+  * Stock limits remain correct.
+
+After the modification, verify the complete workflow:
+
+Supplier creates Pack → Supplier selects variants → Pack saved → Coffee Owner opens Pack → Pack variants displayed correctly → Flavor distribution works correctly.

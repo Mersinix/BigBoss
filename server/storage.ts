@@ -1118,8 +1118,14 @@ export class DatabaseStorage implements IStorage {
         if (product?.brandId) brandIds.add(product.brandId);
         const buildable = it.quantity > 0 ? Math.floor(availableQuantity / it.quantity) : 0;
         maxBuildable = Math.min(maxBuildable, buildable);
-        // All variants of this listing for flavor-distribution selection
-        const listingVariants: import('@shared/schema').PackVariantOption[] = (variantsByListing.get(it.listingId) ?? []).map((v) => ({
+        // Variants of this listing that share the same size as the selected variant
+        // (flavor distribution must stay within the supplier-created size group — never
+        // mix flavors across sizes).
+        const sameGroupVariants = (variantsByListing.get(it.listingId) ?? []).filter((v) => {
+          if (!variant) return true;
+          return (v.sizeId ?? null) === (variant.sizeId ?? null);
+        });
+        const listingVariants: import('@shared/schema').PackVariantOption[] = sameGroupVariants.map((v) => ({
           variantId: v.id,
           flavorId: v.flavorId ?? null,
           flavorName: v.flavorId ? (tx.flvMap.get(v.flavorId)?.name ?? null) : null,

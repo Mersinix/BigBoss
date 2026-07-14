@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency } from "@/lib/format";
 import { ChevronLeft, ChevronRight, EyeOff, Eye, Trash2, X } from "lucide-react";
-import type { InventoryStats, InventoryListResult, InventoryItem, CategoryWithCount, BrandWithCount } from "@shared/schema";
+import type { InventoryStats, InventoryListResult, InventoryItem, InventoryVariantItem, CategoryWithCount, BrandWithCount } from "@shared/schema";
 import { InventoryStatsCards } from "./inventory/inventory-stats-cards";
 import { InventoryFilterBar, EMPTY_INVENTORY_FILTERS, type InventoryFilterState } from "./inventory/inventory-filter-bar";
 import { InventoryTable } from "./inventory/inventory-table";
@@ -37,6 +37,7 @@ export default function InventoryPage() {
   const [pageSize, setPageSize] = useState(50);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
+  const [adjustVariant, setAdjustVariant] = useState<{ item: InventoryItem; variant: InventoryVariantItem } | null>(null);
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
 
@@ -186,6 +187,7 @@ export default function InventoryPage() {
             onToggleSelect={toggleSelect}
             onToggleSelectAll={toggleSelectAll}
             onAdjust={setAdjustItem}
+            onAdjustVariant={(item, variant) => setAdjustVariant({ item, variant })}
             onHistory={setHistoryItem}
             onEdit={setEditItem}
             onToggleVisibility={(item) => visibilityMutation.mutate({ listingId: item.listingId, visibility: item.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE" })}
@@ -216,6 +218,7 @@ export default function InventoryPage() {
       </Card>
 
       {adjustItem && <AdjustStockDialog item={adjustItem} onClose={() => setAdjustItem(null)} />}
+      {adjustVariant && <AdjustStockDialog item={adjustVariant.item} variant={adjustVariant.variant} onClose={() => setAdjustVariant(null)} />}
       {historyItem && <StockHistoryDialog item={historyItem} onClose={() => setHistoryItem(null)} />}
       {editItem && <EditListingDialog item={editItem} onClose={() => setEditItem(null)} />}
     </div>

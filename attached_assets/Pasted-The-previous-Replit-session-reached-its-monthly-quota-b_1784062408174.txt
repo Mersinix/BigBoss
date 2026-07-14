@@ -1,0 +1,71 @@
+The previous Replit session reached its monthly quota before finishing the work.
+
+Start from the latest commit named:
+
+INVENTORY NOT YET COMPLETE
+
+That commit already contains partial implementation of the requested Inventory improvements.
+
+Also read the committed text file containing the original prompt so you have the complete list of requirements.
+
+Important
+
+Do not perform a separate audit or rewrite the feature.
+
+Instead:
+
+Checkout/read the latest commit INVENTORY NOT YET COMPLETE
+Understand what has already been implemented
+Continue directly from that state
+Complete only the remaining missing work
+
+Do not redo completed work.
+
+Rules
+Do NOT redesign the Inventory page.
+Do NOT change the UI layout.
+Do NOT remove existing functionality.
+Do NOT refactor unrelated code.
+Do NOT replace working implementations.
+Keep all existing synchronization intact.
+Preserve WebSocket updates.
+Preserve the current architecture.
+Modify only what is necessary to complete the feature.
+Complete the remaining requirements
+
+Finish every requirement from the original prompt that is still incomplete, including verifying that:
+
+Every product exposes all of its variants.
+Each variant has its own:
+Stock Quantity
+Minimum Stock
+Maximum Stock
+Unit of Measure
+Suppliers can edit every variant independently.
+The Inventory table status is calculated from all variants using the priority:
+Out of Stock (if any variant has stock = 0)
+Low Stock (if any variant is at or below its minimum stock)
+In Stock (only if every variant is above zero and above its minimum stock)
+Stock History is tracked separately for each variant.
+Low Stock notifications work correctly per variant.
+Maximum Stock validation works independently for each variant.
+All inventory changes remain synchronized with Orders, Order Cancellation, Dashboard statistics, Product Variants, Inventory, WebSocket updates, and every feature that depends on stock.
+Before finishing
+
+Verify that none of the existing Inventory functionality has been broken, including:
+
+Dashboard statistics
+Search
+Filters
+Sorting
+Pagination
+CSV Export
+Bulk Actions
+Quick Stock Adjustment
+Edit Inventory Details
+Stock History
+Real-time synchronization
+Permissions
+Existing APIs
+
+The objective is only to finish the unfinished work from the INVENTORY NOT YET COMPLETE commit, keeping everything else exactly as it is. Do not rewrite or redesign the module—complete it cleanly and safely.

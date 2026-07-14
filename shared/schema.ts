@@ -94,6 +94,12 @@ export const supplierProductListings = pgTable("supplier_product_listings", {
 export const inventoryAdjustments = pgTable("inventory_adjustments", {
   id: serial("id").primaryKey(),
   listingId: integer("listing_id").notNull(),
+  // variantId is best-effort (variant rows get recreated whenever a supplier resaves the
+  // Variant Builder, via delete+reinsert in saveVariants). flavorId/sizeId are the durable
+  // identity of "which variant slot" this history row belongs to, independent of row churn.
+  variantId: integer("variant_id"),
+  flavorId: integer("flavor_id"),
+  sizeId: integer("size_id"),
   supplierId: integer("supplier_id").notNull(),
   userId: integer("user_id"), // null for system-driven adjustments (order placed/cancelled)
   adjustmentType: text("adjustment_type").notNull(), // 'INCREASE' | 'DECREASE' | 'SET'
@@ -105,7 +111,9 @@ export const inventoryAdjustments = pgTable("inventory_adjustments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Supplier product variants — per-flavor/size pricing and stock within a listing
+// Supplier product variants — per-flavor/size pricing and stock within a listing.
+// minStock/maxStock are per-variant thresholds; unit of measure is NOT stored here —
+// it is always derived from the variant's linked size label (see buildInventoryItems).
 export const supplierProductVariants = pgTable("supplier_product_variants", {
   id: serial("id").primaryKey(),
   listingId: integer("listing_id").notNull(),
@@ -113,6 +121,8 @@ export const supplierProductVariants = pgTable("supplier_product_variants", {
   sizeId: integer("size_id"),
   price: integer("price").notNull().default(0),
   quantity: integer("quantity").notNull().default(0),
+  minStock: integer("min_stock"),
+  maxStock: integer("max_stock"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -562,6 +572,7 @@ export type InsertSupplierProductListing = z.infer<typeof insertSupplierProductL
 
 export type InventoryAdjustment = typeof inventoryAdjustments.$inferSelect;
 export type InsertInventoryAdjustment = z.infer<typeof insertInventoryAdjustmentSchema>;
+export type InventoryAdjustmentWithVariant = InventoryAdjustment & { variantName: string | null };
 
 export type Favorite = typeof favorites.$inferSelect;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
@@ -729,6 +740,20 @@ export type SupplierVariantWithLabels = SupplierProductVariant & {
 
 export type StockStatus = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
 
+export type InventoryVariantItem = {
+  variantId: number;
+  listingId: number;
+  flavorId: number | null;
+  sizeId: number | null;
+  variantName: string; // e.g. "Vanilla · 250g Bag", or just the size/flavor when only one is set
+  unit: string; // derived from the variant's size label; falls back to the listing's unit
+  stock: number;
+  minStock: number | null;
+  maxStock: number | null;
+  price: number;
+  stockStatus: StockStatus;
+};
+
 export type InventoryItem = {
   listingId: number;
   productId: number;
@@ -747,13 +772,14 @@ export type InventoryItem = {
   unit: string;
   price: number; // selling price (TND, major unit)
   inventoryValue: number; // stock * price
-  stockStatus: StockStatus;
+  stockStatus: StockStatus; // for variant products: worst-of-all-variants status (OUT_OF_STOCK > LOW_STOCK > IN_STOCK)
   productStatus: string; // 'ACTIVE' | 'PENDING' | ...
   visibility: 'VISIBLE' | 'HIDDEN';
   hasVariants: boolean;
   hasPacks: boolean;
   onlyForPack: boolean;
   onlyForMyProducts: boolean;
+  variants: InventoryVariantItem[]; // populated when hasVariants is true
   createdAt: Date | null;
   updatedAt: Date | null;
 };

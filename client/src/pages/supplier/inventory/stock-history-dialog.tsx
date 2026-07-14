@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/format";
 import { ArrowUp, ArrowDown, Equal } from "lucide-react";
-import type { InventoryAdjustment, InventoryItem } from "@shared/schema";
+import type { InventoryAdjustmentWithVariant, InventoryItem } from "@shared/schema";
 
 const TYPE_META: Record<string, { icon: JSX.Element; cls: string }> = {
   INCREASE: { icon: <ArrowUp className="w-3 h-3" />, cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" },
@@ -13,7 +13,7 @@ const TYPE_META: Record<string, { icon: JSX.Element; cls: string }> = {
 };
 
 export function StockHistoryDialog({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
-  const { data, isLoading } = useQuery<InventoryAdjustment[]>({
+  const { data, isLoading } = useQuery<InventoryAdjustmentWithVariant[]>({
     queryKey: ["/api/supplier/inventory", item.listingId, "history"],
     queryFn: async () => {
       const res = await fetch(`/api/supplier/inventory/${item.listingId}/history`, { credentials: "include" });
@@ -41,7 +41,10 @@ export function StockHistoryDialog({ item, onClose }: { item: InventoryItem; onC
                   <div className="flex items-start gap-2">
                     <Badge variant="secondary" className={`${meta.cls} border-0 shrink-0`}>{meta.icon}</Badge>
                     <div>
-                      <p className="text-sm font-medium">{h.reason}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium">{h.reason}</p>
+                        {h.variantName && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{h.variantName}</Badge>}
+                      </div>
                       {h.notes && <p className="text-xs text-muted-foreground mt-0.5">{h.notes}</p>}
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {h.createdAt ? formatDate(h.createdAt) : ""}{h.userId == null ? " · System" : ""}

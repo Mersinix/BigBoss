@@ -1,0 +1,221 @@
+First, analyze the current implementation completely before making any changes.
+
+Verify how the current Inventory module is synchronized with:
+
+Supplier Products
+Product Variants
+Orders
+Inventory
+Stock History
+Dashboard statistics
+WebSocket updates
+Existing database structure
+
+Do not start modifying anything until you fully understand the current synchronization.
+
+The current Inventory module is working well and I do NOT want a redesign or a rewrite.
+
+Important Rules
+Do NOT change the UI design.
+Do NOT remove any existing features.
+Do NOT modify features that are already working correctly.
+Do NOT refactor unrelated code.
+Do NOT break WebSocket synchronization.
+Do NOT change existing business logic unless required by the requests below.
+Keep the page structure exactly as it is.
+Extend the existing implementation only where necessary.
+1. Edit Inventory Details Modal
+
+The current modal contains:
+
+SKU
+Barcode
+Minimum Stock
+Maximum Stock
+Unit of Measure
+
+This is not sufficient because stock is actually managed per variant, not per product.
+
+Update this modal so that it displays every variant belonging to the product.
+
+For each variant display its own inventory information independently.
+
+Each variant should have its own:
+
+Variant name
+Unit of Measure
+Stock Quantity
+Minimum Stock
+Maximum Stock
+
+The supplier must be able to update each variant independently from this same modal.
+
+Saving must update only the modified variant(s).
+
+2. Stock Quantity
+
+Currently the modal does not expose the stock quantity.
+
+Add the current Stock Quantity for every variant.
+
+The supplier must be able to update the stock quantity directly from this modal for each variant separately.
+
+3. Unit of Measure
+
+The "Unit of Measure" must no longer be a generic product value.
+
+Instead, it must always correspond to the size/unit information already defined on the related variant.
+
+For example:
+
+250 g
+
+500 g
+
+1 kg
+
+5 L
+
+50 Cups
+
+etc.
+
+Each variant should display its own unit of measure.
+
+4. Inventory Table Status Logic
+
+The Inventory table should NOT display stock quantities.
+
+Keep showing only the Stock Status.
+
+However, that status must now be calculated from all variants of the mapped product.
+
+Rules:
+
+Out of Stock
+
+If any variant has a stock quantity equal to 0,
+
+the product status becomes:
+
+Out of Stock
+
+(highest priority)
+
+Low Stock
+
+If no variant is Out of Stock, but at least one variant has reached or gone below its Minimum Stock,
+
+the product status becomes:
+
+Low Stock
+
+In Stock
+
+Only when every variant
+
+has stock greater than zero
+and is above its own Minimum Stock
+
+should the product status become:
+
+In Stock
+
+This status must stay synchronized everywhere in the Inventory module.
+
+5. Expand Product Rows
+
+Inside the Inventory table,
+
+under each product,
+
+display all of its variants.
+
+Each variant should expose its own inventory information.
+
+The supplier should clearly see the inventory state of every variant without leaving the page.
+
+The supplier should also be able to update inventory for each variant independently.
+
+Keep the current table layout and design consistent.
+
+6. Stock History
+
+The current Stock History does not correctly distinguish variants.
+
+Update it so inventory history is tracked separately for each variant.
+
+When viewing Stock History, the supplier should clearly know:
+
+which variant changed
+previous quantity
+new quantity
+adjustment
+reason
+notes
+date
+user
+
+History must never mix multiple variants together.
+
+7. Low Stock Notification
+
+When a variant reaches or goes below its configured Minimum Stock,
+
+notify the supplier that the variant should be restocked.
+
+The notification should only appear when a Minimum Stock value exists for that variant.
+
+It should remain synchronized with inventory updates.
+
+8. Maximum Stock Validation
+
+If a Maximum Stock value is configured for a variant,
+
+the supplier must not be able to save a stock quantity greater than that value.
+
+This validation must happen independently for every variant.
+
+Variants without a Maximum Stock should continue to behave normally.
+
+9. Synchronization
+
+After these changes, verify that everything remains synchronized correctly with:
+
+Supplier Products
+Product Variants
+Inventory
+Orders
+Order Cancellation
+Dashboard statistics
+Inventory table
+Stock History
+Notifications
+WebSocket updates
+Any other feature that depends on stock
+
+Nothing should become inconsistent after these modifications.
+
+Final Verification
+
+Before considering this task complete, verify that:
+
+No existing Inventory features were removed.
+The current UI design remains unchanged.
+All existing filters, pagination, exports, search, sorting, bulk actions, and statistics still work.
+Every inventory operation now works per variant.
+Stock Quantity is editable per variant.
+Minimum Stock is managed per variant.
+Maximum Stock is managed per variant.
+Unit of Measure comes from each variant.
+Stock History is separated per variant.
+Product status correctly reflects all of its variants using the priority:
+Out of Stock
+Low Stock
+In Stock
+Supplier notifications trigger correctly when a variant reaches its Minimum Stock.
+Maximum Stock validation works correctly.
+All synchronization remains correct across the entire application.
+No regressions or broken functionality have been introduced outside the requested changes.
+
+The objective is to extend the existing Inventory module, not redesign or rewrite it. Preserve everything that already works well and implement only the requested improvements.

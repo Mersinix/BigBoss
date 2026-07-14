@@ -1582,6 +1582,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.patch("/api/supplier/inventory/:listingId/variants/:variantId", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const variantId = parseInt(req.params.variantId);
+      const body = z.object({
+        minStock: z.number().min(0).nullable().optional(),
+        maxStock: z.number().min(0).nullable().optional(),
+      }).parse(req.body);
+      const updated = await storage.updateVariantInventoryFields(variantId, user!.id, body);
+      broadcast("inventory_updated", { supplierId: user!.id, listingId: parseInt(req.params.listingId) });
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else res.status(400).json({ message: err?.message ?? "Error" });
+    }
+  });
+
+  app.patch("/api/supplier/inventory/:listingId/variants/:variantId/stock", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const variantId = parseInt(req.params.variantId);
+      const body = z.object({
+        type: z.enum(['INCREASE', 'DECREASE', 'SET']),
+        quantity: z.number().min(0),
+        reason: z.string().min(1),
+        notes: z.string().optional(),
+      }).parse(req.body);
+      const result = await storage.adjustVariantStock(variantId, user!.id, user!.id, body);
+      broadcast("inventory_updated", { supplierId: user!.id, listingId: parseInt(req.params.listingId) });
+      invalidateMarketplaceOnBroadcast();
+      if (result.lowStockTriggered) {
+        broadcast("low_stock_alert", {
+          supplierId: user!.id,
+          listingId: parseInt(req.params.listingId),
+          variantId,
+          stock: result.variant.quantity,
+          minStock: result.variant.minStock,
+          status: result.variant.quantity <= 0 ? 'OUT_OF_STOCK' : 'LOW_STOCK',
+        });
+      }
+      res.json(result);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else res.status(400).json({ message: err?.message ?? "Error" });
+    }
+  });
+
   app.post("/api/supplier/inventory/bulk", requireApprovedSupplier, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);

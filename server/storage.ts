@@ -28,7 +28,7 @@ import {
   type SupplierProductReview,
   type Pack, type PackItem, type PackFavorite, type PackDetail, type PackItemDetail, type TaxonomyLabel,
   type CreatePackOrderItem, type ResolvedPackOrderItem,
-  type InventoryItem, type InventoryListResult, type InventoryStats, type InventoryFilters, type InventorySort,
+  type InventoryItem, type InventoryVariantItem, type InventoryListResult, type InventoryStats, type InventoryFilters, type InventorySort, type InventoryAdjustmentWithVariant,
   type InventoryAdjustment, type StockStatus,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
@@ -175,8 +175,10 @@ export interface IStorage {
   getSupplierInventoryStats(supplierId: number, filters?: InventoryFilters): Promise<InventoryStats>;
   getListingForSupplier(listingId: number, supplierId: number): Promise<SupplierProductListing | undefined>;
   adjustListingStock(listingId: number, supplierId: number, userId: number | null, input: { type: 'INCREASE' | 'DECREASE' | 'SET'; quantity: number; reason: string; notes?: string }): Promise<{ listing: SupplierProductListing; history: InventoryAdjustment }>;
-  getListingStockHistory(listingId: number, supplierId: number): Promise<InventoryAdjustment[]>;
+  getListingStockHistory(listingId: number, supplierId: number): Promise<InventoryAdjustmentWithVariant[]>;
   updateListingInventoryFields(listingId: number, supplierId: number, updates: { sku?: string | null; barcode?: string | null; minStock?: number; maxStock?: number | null; unit?: string; visibility?: 'VISIBLE' | 'HIDDEN' }): Promise<SupplierProductListing>;
+  adjustVariantStock(variantId: number, supplierId: number, userId: number | null, input: { type: 'INCREASE' | 'DECREASE' | 'SET'; quantity: number; reason: string; notes?: string }): Promise<{ variant: SupplierProductVariant; listing: SupplierProductListing; history: InventoryAdjustment; lowStockTriggered: boolean }>;
+  updateVariantInventoryFields(variantId: number, supplierId: number, updates: { minStock?: number | null; maxStock?: number | null }): Promise<SupplierProductVariant>;
   bulkInventoryAction(supplierId: number, listingIds: number[], action: 'hide' | 'show' | 'delete' | 'setMinStock' | 'stock', payload?: { minStock?: number; type?: 'INCREASE' | 'DECREASE' | 'SET'; quantity?: number; reason?: string; userId?: number | null }): Promise<{ updated: number }>;
 }
 
@@ -1118,6 +1120,20 @@ export class DatabaseStorage implements IStorage {
     return 'IN_STOCK';
   }
 
+  /** Per-variant status: only counts as LOW_STOCK when a minStock has actually been configured for it. */
+  private computeVariantStockStatus(stock: number, minStock: number | null): StockStatus {
+    if (stock <= 0) return 'OUT_OF_STOCK';
+    if (minStock != null && stock <= minStock) return 'LOW_STOCK';
+    return 'IN_STOCK';
+  }
+
+  /** Rolls up a set of per-variant statuses into one product-level status: Out of Stock > Low Stock > In Stock. */
+  private aggregateStockStatus(statuses: StockStatus[]): StockStatus {
+    if (statuses.some((s) => s === 'OUT_OF_STOCK')) return 'OUT_OF_STOCK';
+    if (statuses.some((s) => s === 'LOW_STOCK')) return 'LOW_STOCK';
+    return 'IN_STOCK';
+  }
+
   /** Builds the full enriched inventory row set for a supplier (pre-filter/sort/paginate). */
   private async buildInventoryItems(supplierId: number): Promise<InventoryItem[]> {
     const listings = await db.select().from(supplierProductListings).where(eq(supplierProductListings.supplierId, supplierId));
@@ -1126,8 +1142,12 @@ export class DatabaseStorage implements IStorage {
     const prods = await db.select().from(products).where(inArray(products.id, productIds));
     const productMap = new Map(prods.map((p) => [p.id, p]));
     const allVariants = await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.listingId, listings.map((l) => l.id)));
-    const variantCountByListing = new Map<number, number>();
-    for (const v of allVariants) variantCountByListing.set(v.listingId, (variantCountByListing.get(v.listingId) ?? 0) + 1);
+    const variantsByListing = new Map<number, typeof allVariants>();
+    for (const v of allVariants) {
+      const arr = variantsByListing.get(v.listingId) ?? [];
+      arr.push(v);
+      variantsByListing.set(v.listingId, arr);
+    }
     const packItemRows = await db.select().from(packItems).where(inArray(packItems.listingId, listings.map((l) => l.id)));
     const listingsWithPacks = new Set(packItemRows.map((pi) => pi.listingId));
     const tx = await buildTaxonomyCache();
@@ -1136,9 +1156,34 @@ export class DatabaseStorage implements IStorage {
     for (const l of listings) {
       const prod = productMap.get(l.productId);
       if (!prod) continue;
-      const hasVariants = (variantCountByListing.get(l.id) ?? 0) > 0;
+      const listingVariants = variantsByListing.get(l.id) ?? [];
+      const hasVariants = listingVariants.length > 0;
       const category = prod.categoryId ? tx.catMap.get(prod.categoryId) : undefined;
       const brand = prod.brandId ? tx.brdMap.get(prod.brandId) : undefined;
+
+      const variantItems: InventoryVariantItem[] = listingVariants.map((v) => {
+        const flavorName = v.flavorId ? (tx.flvMap.get(v.flavorId)?.name ?? null) : null;
+        const sizeName = v.sizeId ? (tx.szMap.get(v.sizeId)?.name ?? null) : null;
+        const variantName = [flavorName, sizeName].filter(Boolean).join(' · ') || `Variant #${v.id}`;
+        return {
+          variantId: v.id,
+          listingId: l.id,
+          flavorId: v.flavorId ?? null,
+          sizeId: v.sizeId ?? null,
+          variantName,
+          unit: sizeName ?? l.unit,
+          stock: v.quantity,
+          minStock: v.minStock ?? null,
+          maxStock: v.maxStock ?? null,
+          price: v.price,
+          stockStatus: this.computeVariantStockStatus(v.quantity, v.minStock ?? null),
+        };
+      });
+
+      const stockStatus = hasVariants
+        ? this.aggregateStockStatus(variantItems.map((v) => v.stockStatus))
+        : this.computeStockStatus(l.stock, l.minStock);
+
       items.push({
         listingId: l.id,
         productId: prod.id,
@@ -1157,13 +1202,14 @@ export class DatabaseStorage implements IStorage {
         unit: l.unit,
         price: l.price,
         inventoryValue: l.stock * l.price,
-        stockStatus: this.computeStockStatus(l.stock, l.minStock),
+        stockStatus,
         productStatus: prod.status,
         visibility: l.visibility,
         hasVariants,
         hasPacks: listingsWithPacks.has(l.id),
         onlyForPack: l.onlyForPack,
         onlyForMyProducts: l.onlyForMyProducts,
+        variants: variantItems,
         createdAt: l.createdAt,
         updatedAt: l.updatedAt,
       });
@@ -1271,10 +1317,83 @@ export class DatabaseStorage implements IStorage {
     return { listing: updated, history };
   }
 
-  async getListingStockHistory(listingId: number, supplierId: number): Promise<InventoryAdjustment[]> {
+  async getListingStockHistory(listingId: number, supplierId: number): Promise<InventoryAdjustmentWithVariant[]> {
     const listing = await this.getListingForSupplier(listingId, supplierId);
     if (!listing) throw new Error('Listing not found');
-    return db.select().from(inventoryAdjustments).where(eq(inventoryAdjustments.listingId, listingId)).orderBy(desc(inventoryAdjustments.createdAt));
+    const rows = await db.select().from(inventoryAdjustments).where(eq(inventoryAdjustments.listingId, listingId)).orderBy(desc(inventoryAdjustments.createdAt));
+    if (!rows.length) return [];
+    const tx = await buildTaxonomyCache();
+    return rows.map((r) => {
+      if (r.flavorId == null && r.sizeId == null) return { ...r, variantName: null };
+      const flavorName = r.flavorId ? (tx.flvMap.get(r.flavorId)?.name ?? null) : null;
+      const sizeName = r.sizeId ? (tx.szMap.get(r.sizeId)?.name ?? null) : null;
+      return { ...r, variantName: [flavorName, sizeName].filter(Boolean).join(' · ') || null };
+    });
+  }
+
+  /** Finds a variant + its listing, verifying the listing belongs to this supplier. */
+  private async getVariantForSupplier(variantId: number, supplierId: number) {
+    const [variant] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, variantId));
+    if (!variant) return undefined;
+    const listing = await this.getListingForSupplier(variant.listingId, supplierId);
+    if (!listing) return undefined;
+    return { variant, listing };
+  }
+
+  /** Recomputes and persists a listing's aggregate stock from the sum of its variants. */
+  private async recalcListingAggregateStock(listingId: number) {
+    const variants = await this.getVariantsByListingId(listingId);
+    const aggStock = variants.reduce((s, v) => s + v.quantity, 0);
+    await db.update(supplierProductListings).set({ stock: aggStock, updatedAt: new Date() }).where(eq(supplierProductListings.id, listingId));
+  }
+
+  /** Adjusts a single variant's stock (increase/decrease/set), enforcing that variant's own maxStock, and records history tagged to that variant. */
+  async adjustVariantStock(variantId: number, supplierId: number, userId: number | null, input: { type: 'INCREASE' | 'DECREASE' | 'SET'; quantity: number; reason: string; notes?: string }) {
+    const found = await this.getVariantForSupplier(variantId, supplierId);
+    if (!found) throw new Error('Variant not found');
+    const { variant } = found;
+
+    const previousStock = variant.quantity;
+    let newStock: number;
+    if (input.type === 'INCREASE') newStock = previousStock + input.quantity;
+    else if (input.type === 'DECREASE') newStock = previousStock - input.quantity;
+    else newStock = input.quantity;
+    if (newStock < 0) throw new Error('Stock cannot go below zero');
+    if (variant.maxStock != null && newStock > variant.maxStock) {
+      throw new Error(`Stock cannot exceed the maximum stock (${variant.maxStock}) configured for this variant`);
+    }
+
+    const [updatedVariant] = await db.update(supplierProductVariants)
+      .set({ quantity: newStock })
+      .where(eq(supplierProductVariants.id, variantId))
+      .returning();
+
+    await this.recalcListingAggregateStock(variant.listingId);
+
+    const [history] = await db.insert(inventoryAdjustments).values({
+      listingId: variant.listingId, variantId, flavorId: variant.flavorId ?? null, sizeId: variant.sizeId ?? null,
+      supplierId, userId,
+      adjustmentType: input.type,
+      previousStock, newStock,
+      difference: newStock - previousStock,
+      reason: input.reason,
+      notes: input.notes ?? null,
+    }).returning();
+
+    const [updatedListing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, variant.listingId));
+    const lowStockTriggered = variant.minStock != null && newStock <= variant.minStock;
+    return { variant: updatedVariant, listing: updatedListing, history, lowStockTriggered };
+  }
+
+  /** Updates a variant's min/max stock thresholds. Unit of measure is derived from size, not stored/editable here. */
+  async updateVariantInventoryFields(variantId: number, supplierId: number, updates: { minStock?: number | null; maxStock?: number | null }) {
+    const found = await this.getVariantForSupplier(variantId, supplierId);
+    if (!found) throw new Error('Variant not found');
+    const [updated] = await db.update(supplierProductVariants)
+      .set(updates)
+      .where(eq(supplierProductVariants.id, variantId))
+      .returning();
+    return updated;
   }
 
   async updateListingInventoryFields(listingId: number, supplierId: number, updates: { sku?: string | null; barcode?: string | null; minStock?: number; maxStock?: number | null; unit?: string; visibility?: 'VISIBLE' | 'HIDDEN' }) {
@@ -1305,6 +1424,7 @@ export class DatabaseStorage implements IStorage {
   async restockVariantFromOrderCancellation(variantId: number, quantity: number, reason: string) {
     const [variant] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, variantId));
     if (!variant) return;
+    const previousVariantStock = variant.quantity;
     await db.update(supplierProductVariants).set({ quantity: sql`${supplierProductVariants.quantity} + ${quantity}` }).where(eq(supplierProductVariants.id, variantId));
     const listingVariants = await this.getVariantsByListingId(variant.listingId);
     const aggStock = listingVariants.reduce((s, v) => s + v.quantity, 0);
@@ -1313,8 +1433,9 @@ export class DatabaseStorage implements IStorage {
     const previousStock = listing.stock;
     await db.update(supplierProductListings).set({ stock: aggStock, updatedAt: new Date() }).where(eq(supplierProductListings.id, variant.listingId));
     await db.insert(inventoryAdjustments).values({
-      listingId: variant.listingId, supplierId: listing.supplierId, userId: null,
-      adjustmentType: 'INCREASE', previousStock, newStock: aggStock, difference: aggStock - previousStock,
+      listingId: variant.listingId, variantId, flavorId: variant.flavorId ?? null, sizeId: variant.sizeId ?? null,
+      supplierId: listing.supplierId, userId: null,
+      adjustmentType: 'INCREASE', previousStock: previousVariantStock, newStock: previousVariantStock + quantity, difference: quantity,
       reason, notes: null,
     });
   }

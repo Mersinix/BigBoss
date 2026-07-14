@@ -8,11 +8,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { InventoryItem } from "@shared/schema";
+import type { InventoryItem, InventoryVariantItem } from "@shared/schema";
 
 const REASONS = ["Restock", "Damaged goods", "Manual recount", "Sample given out", "Correction", "Other"];
 
-export function AdjustStockDialog({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
+/**
+ * Adjusts stock for either the listing as a whole (non-variant products) or a single
+ * variant (pass `variant`). Both hit their own dedicated endpoint but share this UI.
+ */
+export function AdjustStockDialog({ item, variant, onClose }: { item: InventoryItem; variant?: InventoryVariantItem; onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [type, setType] = useState<"INCREASE" | "DECREASE" | "SET">("INCREASE");
@@ -20,8 +24,15 @@ export function AdjustStockDialog({ item, onClose }: { item: InventoryItem; onCl
   const [reason, setReason] = useState(REASONS[0]);
   const [notes, setNotes] = useState("");
 
+  const currentStock = variant ? variant.stock : item.stock;
+  const unit = variant ? variant.unit : item.unit;
+  const title = variant ? `Adjust Stock — ${item.productName} (${variant.variantName})` : `Adjust Stock — ${item.productName}`;
+  const endpoint = variant
+    ? `/api/supplier/inventory/${item.listingId}/variants/${variant.variantId}/stock`
+    : `/api/supplier/inventory/${item.listingId}/stock`;
+
   const mutation = useMutation({
-    mutationFn: () => apiRequest("PATCH", `/api/supplier/inventory/${item.listingId}/stock`, {
+    mutationFn: () => apiRequest("PATCH", endpoint, {
       type, quantity: Number(quantity), reason, notes: notes.trim() || undefined,
     }),
     onSuccess: () => {
@@ -33,19 +44,22 @@ export function AdjustStockDialog({ item, onClose }: { item: InventoryItem; onCl
   });
 
   const qty = Number(quantity) || 0;
-  const preview = type === "INCREASE" ? item.stock + qty : type === "DECREASE" ? Math.max(0, item.stock - qty) : qty;
+  const preview = type === "INCREASE" ? currentStock + qty : type === "DECREASE" ? Math.max(0, currentStock - qty) : qty;
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent data-testid="dialog-adjust-stock">
         <DialogHeader>
-          <DialogTitle>Adjust Stock — {item.productName}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex items-center justify-between text-sm bg-secondary/40 rounded-lg p-3">
             <span className="text-muted-foreground">Current stock</span>
-            <span className="font-semibold">{item.stock} {item.unit}</span>
+            <span className="font-semibold">{currentStock} {unit}</span>
           </div>
+          {variant?.maxStock != null && (
+            <p className="text-xs text-muted-foreground -mt-2">Maximum stock for this variant: {variant.maxStock} {unit}</p>
+          )}
 
           <div className="space-y-1.5">
             <Label>Adjustment type</Label>
@@ -81,8 +95,11 @@ export function AdjustStockDialog({ item, onClose }: { item: InventoryItem; onCl
 
           <div className="flex items-center justify-between text-sm bg-primary/5 rounded-lg p-3">
             <span className="text-muted-foreground">New stock will be</span>
-            <span className="font-semibold">{preview} {item.unit}</span>
+            <span className="font-semibold">{preview} {unit}</span>
           </div>
+          {variant?.maxStock != null && preview > variant.maxStock && (
+            <p className="text-xs text-destructive">This exceeds the variant's maximum stock ({variant.maxStock} {unit}) and will be rejected.</p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

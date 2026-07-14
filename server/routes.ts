@@ -12,7 +12,7 @@ import {
   insertCategorySchema, insertSubCategorySchema, insertFlavorSchema,
   insertSizeSchema, insertBrandSchema,
   type MarketplaceProduct,
-  supplierProductReviews, supplierStores, packs,
+  supplierProductReviews, supplierStores, packs, packItems as packItemsTable,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
@@ -1485,11 +1485,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     description: z.string().nullable().optional(),
     imageUrl: z.string().nullable().optional(),
     price: z.number().min(0),
-    quantityAvailable: z.number().min(0),
+    quantityAvailable: z.number().min(0).optional(), // ignored — pack stock is auto-computed from variant stock
     expirationDate: z.string().nullable().optional(),
     visibility: z.enum(['VISIBLE', 'HIDDEN']).optional(),
     items: z.array(packItemSchema).min(1),
   });
+
+  // Expiration date, if provided, must not be in the past
+  function validatePackExpiration(expirationDate: string | null | undefined): string | null {
+    if (!expirationDate) return null;
+    const d = new Date(expirationDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (d < today) return "Expiration date cannot be in the past";
+    return null;
+  }
 
   app.get('/api/supplier/packs', requireApprovedSupplier, async (req: any, res) => {
     try { res.json(await storage.getSupplierPacks(req.session.userId)); }
@@ -1503,12 +1513,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, item.listingId));
         if (!listing || listing.supplierId !== req.session.userId) return res.status(403).json({ message: 'One of the selected products is not yours' });
       }
+      const expirationError = validatePackExpiration(body.expirationDate);
+      if (expirationError) return res.status(400).json({ message: expirationError });
+      const itemsTotal = await storage.computePackItemsTotal(body.items);
+      const priceCents = Math.round(body.price * 100);
+      if (itemsTotal > 0 && priceCents >= itemsTotal) {
+        return res.status(400).json({ message: "Pack price must be lower than the total price of the included products" });
+      }
+      const autoQuantity = await storage.computeAutoPackQuantity(body.items);
       const pack = await storage.createPack(req.session.userId, {
         name: body.name,
         description: body.description ?? null,
         imageUrl: body.imageUrl ?? null,
-        price: Math.round(body.price * 100),
-        quantityAvailable: body.quantityAvailable,
+        price: priceCents,
+        quantityAvailable: autoQuantity,
         expirationDate: body.expirationDate ? new Date(body.expirationDate) : null,
         visibility: body.visibility ?? 'VISIBLE',
       }, body.items);
@@ -1530,12 +1548,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           if (!listing || listing.supplierId !== req.session.userId) return res.status(403).json({ message: 'One of the selected products is not yours' });
         }
       }
+      if (body.expirationDate !== undefined) {
+        const expirationError = validatePackExpiration(body.expirationDate);
+        if (expirationError) return res.status(400).json({ message: expirationError });
+      }
+      // Price validation: needs the item list — use the incoming items if provided,
+      // otherwise fall back to the pack's existing items.
+      let priceCheckItems: { listingId: number; variantId?: number | null; quantity: number }[] | undefined = body.items as any;
+      if (!priceCheckItems && body.price !== undefined) {
+        const existingItems = await db.select().from(packItemsTable).where(eq(packItemsTable.packId, packId));
+        priceCheckItems = existingItems.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity }));
+      }
+      const effectivePriceCents = body.price !== undefined ? Math.round(body.price * 100) : undefined;
+      if (priceCheckItems && effectivePriceCents !== undefined) {
+        const itemsTotal = await storage.computePackItemsTotal(priceCheckItems);
+        if (itemsTotal > 0 && effectivePriceCents >= itemsTotal) {
+          return res.status(400).json({ message: "Pack price must be lower than the total price of the included products" });
+        }
+      }
+      const autoQuantity = body.items ? await storage.computeAutoPackQuantity(body.items as any) : undefined;
       const updated = await storage.updatePack(packId, req.session.userId, {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.description !== undefined && { description: body.description }),
         ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl }),
         ...(body.price !== undefined && { price: Math.round(body.price * 100) }),
-        ...(body.quantityAvailable !== undefined && { quantityAvailable: body.quantityAvailable }),
+        ...(autoQuantity !== undefined && { quantityAvailable: autoQuantity }),
         ...(body.expirationDate !== undefined && { expirationDate: body.expirationDate ? new Date(body.expirationDate) : null }),
         ...(body.visibility !== undefined && { visibility: body.visibility }),
         ...(body.isArchived !== undefined && { isArchived: body.isArchived }),
@@ -1787,6 +1824,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(caller.role);
       if (!isOwner && !isAdmin) return res.status(403).json({ message: "Forbidden" });
       res.json(await storage.getReviewsBySupplier(supplierId));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Public supplier reviews — anyone can read SUPPLIER-type reviews for a given supplier
+  // (used by the Coffee Owner's Pack "Supplier Reviews" tab). This is intentionally
+  // separate from /api/reviews/supplier/:supplierId, which is restricted to the
+  // supplier's own dashboard / admins.
+  app.get("/api/reviews/supplier-public/:supplierId", async (req, res) => {
+    try {
+      const supplierId = parseInt(req.params.supplierId);
+      const reviews = await storage.getReviewsBySupplier(supplierId);
+      res.json(reviews.filter(r => (r as any).reviewType !== 'PRODUCT'));
     } catch { res.status(500).json({ message: "Error" }); }
   });
 

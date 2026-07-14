@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,12 +87,13 @@ type PackItemDraft = { listingId: number; variantId: number | null; quantity: nu
 
 // ── Pack Form Modal ───────────────────────────────────────────────────────────
 
-function PackFormModal({ open, onClose, editing, listings, preSelectedItems = [] }: {
+function PackFormModal({ open, onClose, editing, listings, preSelectedItems = [], onCreated }: {
   open: boolean;
   onClose: () => void;
   editing: PackDetail | null;
   listings: SupplierListingWithProduct[];
   preSelectedItems?: PackItemDraft[];
+  onCreated?: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -100,7 +101,6 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   const [description, setDescription] = useState(editing?.description ?? "");
   const [imageUrl, setImageUrl] = useState(editing?.imageUrl ?? "");
   const [price, setPrice] = useState(editing ? String(editing.price / 100) : "");
-  const [quantityAvailable, setQuantityAvailable] = useState(editing ? String(editing.quantityAvailable) : "1");
   const [expirationDate, setExpirationDate] = useState(editing?.expirationDate ? new Date(editing.expirationDate).toISOString().slice(0, 10) : "");
   const [items, setItems] = useState<PackItemDraft[]>(
     editing
@@ -146,19 +146,38 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     const subCategoryNames = new Set<string>();
     const brandNames = new Set<string>();
     let total = 0;
+    let autoQuantity = Infinity;
     const rows = items.map(it => {
       const listing = listings.find(l => l.id === it.listingId);
       if (!listing) return null;
       const variant = it.variantId ? (listing.variants ?? []).find(v => v.id === it.variantId) : null;
       const unitPrice = variant ? variant.price : listing.price;
+      const availableQty = variant ? variant.quantity : listing.stock;
       total += unitPrice * it.quantity;
+      if (it.quantity > 0) autoQuantity = Math.min(autoQuantity, Math.floor(availableQty / it.quantity));
       if (listing.product.categoryLabel) categoryNames.add(listing.product.categoryLabel.name);
       if (listing.product.subCategoryLabel) subCategoryNames.add(listing.product.subCategoryLabel.name);
       if (listing.product.brandLabel) brandNames.add(listing.product.brandLabel.name);
       return { ...it, productName: listing.product.name, flavorName: variant?.flavorName, sizeName: variant?.sizeName, unitPrice };
     }).filter(Boolean) as any[];
-    return { rows, categoryNames: Array.from(categoryNames), subCategoryNames: Array.from(subCategoryNames), brandNames: Array.from(brandNames), individualTotal: total };
+    return {
+      rows,
+      categoryNames: Array.from(categoryNames),
+      subCategoryNames: Array.from(subCategoryNames),
+      brandNames: Array.from(brandNames),
+      individualTotal: total,
+      autoQuantity: isFinite(autoQuantity) ? autoQuantity : 0,
+    };
   }, [items, listings]);
+
+  const priceCents = Math.round((parseFloat(price) || 0) * 100);
+  const priceError = preview.individualTotal > 0 && price.trim() !== "" && priceCents >= preview.individualTotal
+    ? "Pack price must be lower than the total price of the included products"
+    : null;
+
+  const expirationError = expirationDate && new Date(expirationDate) < new Date(new Date().toDateString())
+    ? "Expiration date cannot be in the past"
+    : null;
 
   const save = useMutation({
     mutationFn: () => {
@@ -167,7 +186,8 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
         description: description || null,
         imageUrl: imageUrl || null,
         price: parseFloat(price) || 0,
-        quantityAvailable: parseInt(quantityAvailable) || 0,
+        // quantityAvailable is intentionally omitted — the server auto-computes it
+        // from the selected variants' current stock.
         expirationDate: expirationDate || null,
         items: items.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity })),
       };
@@ -178,12 +198,13 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
       toast({ title: editing ? "Pack updated" : "Pack created" });
+      if (!editing) onCreated?.();
       onClose();
     },
     onError: (err: any) => toast({ title: err?.message ?? "Error saving pack", variant: "destructive" }),
   });
 
-  const canSave = name.trim().length > 0 && items.length >= 2 && parseFloat(price) >= 0 && parseInt(quantityAvailable) >= 0;
+  const canSave = name.trim().length > 0 && items.length >= 2 && parseFloat(price) >= 0 && !priceError && !expirationError;
   // items.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
 
   return (
@@ -208,15 +229,25 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
               <div>
                 <Label>Pack price</Label>
                 <Input type="number" min={0} step="0.01" value={price} onChange={e => setPrice(e.target.value)} data-testid="input-pack-price" />
+                {preview.individualTotal > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">Must be below {formatCurrency(preview.individualTotal)}</p>
+                )}
               </div>
               <div>
                 <Label>Packs available (stock)</Label>
-                <Input type="number" min={0} value={quantityAvailable} onChange={e => setQuantityAvailable(e.target.value)} data-testid="input-pack-quantity" />
+                <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm text-muted-foreground" data-testid="text-pack-auto-quantity">
+                  {items.length > 0 ? `${preview.autoQuantity} (auto)` : "—"}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant stock</p>
               </div>
             </div>
+            {priceError && (
+              <p className="text-xs text-destructive -mt-2">{priceError}</p>
+            )}
             <div>
               <Label>Expiration date (optional)</Label>
-              <Input type="date" value={expirationDate} onChange={e => setExpirationDate(e.target.value)} data-testid="input-pack-expiration" />
+              <Input type="date" min={new Date().toISOString().slice(0, 10)} value={expirationDate} onChange={e => setExpirationDate(e.target.value)} data-testid="input-pack-expiration" />
+              {expirationError && <p className="text-xs text-destructive mt-1">{expirationError}</p>}
             </div>
 
             <div>
@@ -435,10 +466,13 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
 
 // ── Pack Products Tab ─────────────────────────────────────────────────────────
 
-function PackProductsTab({ listings, onCreatePack }: {
+function PackProductsTab({ listings, onCreatePack, resetSignal }: {
   listings: SupplierListingWithProduct[];
   onCreatePack: (preSelected: PackItemDraft[]) => void;
+  resetSignal: number;
 }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("__all__");
   const [filterSubCategory, setFilterSubCategory] = useState("__all__");
@@ -446,6 +480,22 @@ function PackProductsTab({ listings, onCreatePack }: {
   const [filterFlavor, setFilterFlavor] = useState("__all__");
   const [filterSize, setFilterSize] = useState("__all__");
   const [selected, setSelected] = useState<PackItemDraft[]>([]);
+
+  // Clear the current selection whenever a Pack is successfully created,
+  // so the supplier can immediately start selecting for a new one.
+  useEffect(() => {
+    setSelected([]);
+  }, [resetSignal]);
+
+  const removeFromPack = useMutation({
+    mutationFn: (listingId: number) => apiRequest("PATCH", `/api/supplier/listings/${listingId}`, { onlyForPack: false, onlyForMyProducts: true }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
+      setSelected(prev => prev.filter(s => s.listingId !== (removeFromPack.variables as number)));
+      toast({ title: "Removed from Pack Products" });
+    },
+    onError: (err: any) => toast({ title: err?.message ?? "Error removing product", variant: "destructive" }),
+  });
 
   // Only pack-eligible listings (not onlyForMyProducts)
   const eligible = useMemo(() =>
@@ -621,6 +671,30 @@ function PackProductsTab({ listings, onCreatePack }: {
                       {(listing as any).onlyForPack && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-0">Pack only</Badge>}
                     </div>
                   </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive shrink-0"
+                        data-testid={`button-remove-pack-product-${listing.id}`}
+                      >
+                        Remove
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove from Pack Products?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          "{listing.product.name}" will no longer be available for new Packs. It stays in My Products, and any Packs already created that include it are not affected.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => removeFromPack.mutate(listing.id)}>Remove</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
                 <div className="space-y-1.5 pl-10">
                   {groups.map(g => {
@@ -791,10 +865,40 @@ export function PackTab() {
   const [preSelectedItems, setPreSelectedItems] = useState<PackItemDraft[]>([]);
   const [previewPackId, setPreviewPackId] = useState<number | null>(null);
   const [archivedSearch, setArchivedSearch] = useState("");
+  const [packCreateResetSignal, setPackCreateResetSignal] = useState(0);
+
+  const [packsSearch, setPacksSearch] = useState("");
+  const [packsFilterCategory, setPacksFilterCategory] = useState("__all__");
+  const [packsFilterSubCategory, setPacksFilterSubCategory] = useState("__all__");
+  const [packsFilterBrand, setPacksFilterBrand] = useState("__all__");
+  const [packsFilterFlavor, setPacksFilterFlavor] = useState("__all__");
+  const [packsFilterSize, setPacksFilterSize] = useState("__all__");
 
   // Expired packs automatically appear in "Old Packs" — not in "New Packs"
   const activePacks = packRows.filter(p => !p.isArchived && !p.isExpired);
   const archivedPacks = packRows.filter(p => p.isArchived || p.isExpired);
+
+  const packsCategories = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.categoryLabels.map(c => c.name)))).sort(), [activePacks]);
+  const packsSubCategories = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.subCategoryLabels.map(c => c.name)))).sort(), [activePacks]);
+  const packsBrands = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.brandLabels.map(c => c.name)))).sort(), [activePacks]);
+  const packsFlavors = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.items.map(i => i.flavorName).filter((n): n is string => !!n)))).sort(), [activePacks]);
+  const packsSizes = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.items.map(i => i.sizeName).filter((n): n is string => !!n)))).sort(), [activePacks]);
+
+  const filteredActivePacks = useMemo(() => {
+    let result = activePacks;
+    if (packsSearch.trim()) {
+      const q = packsSearch.toLowerCase();
+      result = result.filter(p => p.name.toLowerCase().includes(q));
+    }
+    if (packsFilterCategory !== "__all__") result = result.filter(p => p.categoryLabels.some(c => c.name === packsFilterCategory));
+    if (packsFilterSubCategory !== "__all__") result = result.filter(p => p.subCategoryLabels.some(c => c.name === packsFilterSubCategory));
+    if (packsFilterBrand !== "__all__") result = result.filter(p => p.brandLabels.some(c => c.name === packsFilterBrand));
+    if (packsFilterFlavor !== "__all__") result = result.filter(p => p.items.some(i => i.flavorName === packsFilterFlavor));
+    if (packsFilterSize !== "__all__") result = result.filter(p => p.items.some(i => i.sizeName === packsFilterSize));
+    return result;
+  }, [activePacks, packsSearch, packsFilterCategory, packsFilterSubCategory, packsFilterBrand, packsFilterFlavor, packsFilterSize]);
+
+  const packsHasActiveFilters = packsFilterCategory !== "__all__" || packsFilterSubCategory !== "__all__" || packsFilterBrand !== "__all__" || packsFilterFlavor !== "__all__" || packsFilterSize !== "__all__";
 
   // Always derive preview pack from live data to fix stale visibility/state
   const livePreviewPack = useMemo(() =>
@@ -879,7 +983,7 @@ export function PackTab() {
           <div className="text-sm text-muted-foreground mb-3">
             Select at least 2 variants, then click <strong>Create Pack</strong> to bundle them.
           </div>
-          <PackProductsTab listings={listings} onCreatePack={openCreate} />
+          <PackProductsTab listings={listings} onCreatePack={openCreate} resetSignal={packCreateResetSignal} />
         </TabsContent>
 
         {/* ── New Packs ───────────────────────────────────────────────────── */}
@@ -890,6 +994,84 @@ export function PackTab() {
               <Plus className="w-4 h-4 mr-1.5" />Create Pack
             </Button>
           </div>
+
+          {activePacks.length > 0 && (
+            <div className="space-y-2 mb-3">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="pl-8"
+                  placeholder="Search packs…"
+                  value={packsSearch}
+                  onChange={e => setPacksSearch(e.target.value)}
+                  data-testid="input-new-packs-search"
+                />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {packsCategories.length > 0 && (
+                  <Select value={packsFilterCategory} onValueChange={setPacksFilterCategory}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-category">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All categories</SelectItem>
+                      {packsCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {packsSubCategories.length > 0 && (
+                  <Select value={packsFilterSubCategory} onValueChange={setPacksFilterSubCategory}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-subcategory">
+                      <SelectValue placeholder="Sub Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All sub-categories</SelectItem>
+                      {packsSubCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {packsBrands.length > 0 && (
+                  <Select value={packsFilterBrand} onValueChange={setPacksFilterBrand}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-brand">
+                      <SelectValue placeholder="Brand" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All brands</SelectItem>
+                      {packsBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {packsFlavors.length > 0 && (
+                  <Select value={packsFilterFlavor} onValueChange={setPacksFilterFlavor}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-flavor">
+                      <SelectValue placeholder="Flavor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All flavors</SelectItem>
+                      {packsFlavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {packsSizes.length > 0 && (
+                  <Select value={packsFilterSize} onValueChange={setPacksFilterSize}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-size">
+                      <SelectValue placeholder="Size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All sizes</SelectItem>
+                      {packsSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {packsHasActiveFilters && (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs px-2 text-muted-foreground" onClick={() => { setPacksFilterCategory("__all__"); setPacksFilterSubCategory("__all__"); setPacksFilterBrand("__all__"); setPacksFilterFlavor("__all__"); setPacksFilterSize("__all__"); }}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           {activePacks.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-muted-foreground">
@@ -897,9 +1079,11 @@ export function PackTab() {
                 <p>No active packs yet. Select variants in the <strong>Pack Products</strong> tab to get started.</p>
               </CardContent>
             </Card>
+          ) : filteredActivePacks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No packs match your filters.</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {activePacks.map(pack => (
+              {filteredActivePacks.map(pack => (
                 <ActivePackCard
                   key={pack.id}
                   pack={pack}
@@ -956,6 +1140,7 @@ export function PackTab() {
           editing={editing}
           listings={listings}
           preSelectedItems={preSelectedItems}
+          onCreated={() => setPackCreateResetSignal(t => t + 1)}
         />
       )}
 

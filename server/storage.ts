@@ -109,6 +109,8 @@ export interface IStorage {
   // Packs
   getSupplierPacks(supplierId: number): Promise<PackDetail[]>;
   getPackDetail(id: number): Promise<PackDetail | undefined>;
+  computeAutoPackQuantity(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
+  computePackItemsTotal(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
   createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail>;
   updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail | undefined>;
   duplicatePack(id: number, supplierId: number): Promise<PackDetail | undefined>;
@@ -1259,6 +1261,40 @@ export class DatabaseStorage implements IStorage {
   async getAdminPacks(): Promise<PackDetail[]> {
     const rows = await db.select().from(packs).orderBy(desc(packs.createdAt));
     return this.buildPackDetails(rows);
+  }
+
+  async computeAutoPackQuantity(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number> {
+    if (!items.length) return 0;
+    let max = Infinity;
+    for (const it of items) {
+      let availableQty = 0;
+      if (it.variantId) {
+        const [variant] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, it.variantId));
+        availableQty = variant?.quantity ?? 0;
+      } else {
+        const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, it.listingId));
+        availableQty = listing?.stock ?? 0;
+      }
+      const buildable = it.quantity > 0 ? Math.floor(availableQty / it.quantity) : 0;
+      max = Math.min(max, buildable);
+    }
+    return isFinite(max) ? max : 0;
+  }
+
+  async computePackItemsTotal(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number> {
+    let total = 0;
+    for (const it of items) {
+      let unitPrice = 0;
+      if (it.variantId) {
+        const [variant] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, it.variantId));
+        unitPrice = variant?.price ?? 0;
+      } else {
+        const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, it.listingId));
+        unitPrice = listing?.price ?? 0;
+      }
+      total += unitPrice * it.quantity;
+    }
+    return total;
   }
 
   async getPackFavoritesByUser(userId: number): Promise<number[]> {

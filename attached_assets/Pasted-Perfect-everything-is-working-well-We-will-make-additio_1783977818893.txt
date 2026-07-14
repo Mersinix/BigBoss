@@ -1,0 +1,424 @@
+Perfect, everything is working well. We will make additional improvements to the existing Pack feature.
+
+Before making any changes, please review the current Pack implementation across:
+
+* Supplier Part
+* Coffee Owner Part
+* Pack creation/editing
+* Pack variants
+* Reviews
+* Stock synchronization
+
+The current Pack workflow is already working well, so do not redesign, refactor, or change existing logic unless required for the improvements below.
+
+Keep:
+
+* Existing design
+* Existing components
+* Existing APIs
+* Existing database structure
+* Existing synchronization between Supplier, Admin, and Coffee Owner
+
+Only modify the requested parts.
+
+# 1. Coffee Owner Part
+
+## Shop + Store → Pack Cards → Pack Details Modal
+
+The current Pack modal works well.
+
+We need three improvements.
+
+## A. Product Preview Inside Pack Modal
+
+Inside the Pack Details modal:
+
+Each Pack contains multiple products.
+
+Currently, when the Coffee Owner sees the products included in the Pack, clicking on a product does nothing.
+
+New behavior:
+
+When the Coffee Owner clicks on any product inside the Pack:
+
+* Open the Product Preview modal.
+* Show product information only.
+* No purchase action.
+* No editing.
+* No navigation away from the Pack modal.
+
+The Product Preview should only allow the Coffee Owner to see:
+
+* Product image
+* Product name
+* Category
+* SubCategory
+* Brand
+* Description
+* Available information already existing in Product Details
+
+Keep the Pack modal behavior unchanged.
+
+---
+
+## B. Supplier Reviews Inside Pack Reviews
+
+Inside the Pack Details modal there is already:
+
+* Pack Reviews ✅
+* Supplier Reviews ❌
+
+Pack Reviews are already correct.
+
+The problem:
+
+Supplier Reviews are currently waiting for the supplier to review the Coffee Owner.
+
+This is incorrect.
+
+Expected behavior:
+
+When a Coffee Owner opens Supplier Reviews from a Pack:
+
+The Coffee Owner should be able to review the supplier who owns this Pack.
+
+The review should contain:
+
+* Rating
+* Comment (optional)
+
+The review should be linked to:
+
+* Supplier account
+* Supplier owning the Pack
+
+Keep the existing Supplier Review system synchronization.
+
+---
+
+## C. Flavor Distribution
+
+Inside:
+
+"Choose your flavor distribution"
+
+The system already respects variants.
+
+Keep this behavior.
+
+New rule:
+
+Do not display flavors that have zero stock.
+
+Example:
+
+Current:
+
+FANTA 25cl
+
+3/3
+
+Bidha · Gajou (0 in stock)
+
+0
+
+Citron · Gajou (111 in stock)
+
+3
+
+Ananas · Gajou (111 in stock)
+
+0
+
+Expected:
+
+FANTA 25cl
+
+3/3
+
+Citron · Gajou (111 in stock)
+
+3
+
+Ananas · Gajou (111 in stock)
+
+0
+
+Any flavor with:
+
+Stock = 0
+
+must not appear in flavor distribution selection.
+
+The Coffee Owner should only see available flavors.
+
+---
+
+# 2. Supplier Part
+
+## Products → Pack → Pack Products
+
+## A. Remove Product From Pack Products
+
+Inside:
+
+Supplier → Products → Pack → Pack Products
+
+Each Pack Product should have an action:
+
+Remove
+
+The supplier can remove a product from available Pack Products.
+
+Add confirmation before removing if needed.
+
+Do not affect:
+
+* Existing Packs already created
+* My Products
+* Stock synchronization
+
+---
+
+## B. Reset Variant Selection After Creating Pack
+
+Current behavior:
+
+Supplier selects variants → Creates Pack.
+
+After creating the Pack:
+
+The selected variants remain selected.
+
+Expected behavior:
+
+After successful Pack creation:
+
+* Reset all selected variants.
+* Clear selection state.
+* Supplier can immediately select new variants and create another Pack.
+
+Do not reload or break the page.
+
+---
+
+# 3. Supplier → Products → My Products
+
+## Add Product To Pack
+
+Inside:
+
+Products → My Products → Edit Product
+
+Add:
+
+Availability restriction (optional)
+
+Option:
+
+☐ Add to Pack
+
+Behavior:
+
+If enabled:
+
+The product becomes available inside:
+
+Products → Pack → Pack Products
+
+If disabled:
+
+The product remains only in My Products.
+
+Keep existing product editing behavior.
+
+---
+
+# 4. Supplier → Products → Pack → New Packs
+
+## A. Add Search + Filter Bar
+
+Inside:
+
+Products → Pack → New Packs
+
+Add the same Filter Bar style already used in:
+
+Products → Pack → Pack Products
+
+Include:
+
+* Search
+* Category
+* SubCategory
+* Brand
+* Flavor
+* Size
+
+Keep synchronization with existing Pack data.
+
+---
+
+# 5. Pack Creation / Edit Modal Rules
+
+Inside:
+
+Create Pack / Edit Pack modal
+
+## A. Pack Price Validation
+
+The Pack price must never be:
+
+* Equal to total product prices
+* Higher than total product prices
+
+Example:
+
+Products total:
+
+$100
+
+Allowed:
+
+Pack price:
+$80
+
+Not allowed:
+
+Pack price:
+$100
+
+Pack price:
+$120
+
+Add validation before saving.
+
+---
+
+## B. Pack Available Stock Calculation
+
+Current:
+
+Pack stock is manually fixed.
+
+Expected:
+
+Pack stock must automatically respect the selected variants quantities.
+
+Example:
+
+Variant 1:
+
+UHT Whole Milk 6x1L
+
+(Cinnamon • Chocolate • Unflavored) · 6-Pack
+
+Price $20
+
+Stock: 198
+
+Pack quantity used: 2
+
+Variant 2:
+
+(Cinnamon) · 1L Carton
+
+Price $30
+
+Stock: 300
+
+Pack quantity used: 3
+
+Calculation:
+
+Variant 1:
+
+198 / 2 = 99 Packs
+
+Variant 2:
+
+300 / 3 = 100 Packs
+
+Final Pack stock:
+
+Minimum value:
+
+99
+
+The Pack available stock should always be synchronized with variant stock.
+
+If product stock changes:
+
+Pack available stock should update.
+
+---
+
+## C. Expiration Date Validation
+
+Expiration date is optional.
+
+If entered:
+
+It cannot be a past date.
+
+The supplier cannot save a Pack with an old expiration date.
+
+---
+
+# 6. Supplier → Products → Pack → New Packs → Pack Preview
+
+Inside Pack Preview:
+
+Actions exist:
+
+Edit ✅
+Hide ❌
+Duplicate ✅
+Archive ❌
+Delete ✅
+
+Fix:
+
+## Hide
+
+The Hide action must correctly:
+
+* Change Pack visibility
+* Remove Pack from Coffee Owner marketplace mapping
+* Keep Pack inside Supplier management
+
+## Archive
+
+The Archive action must:
+
+Move the Pack from:
+
+Products → Pack → New Packs
+
+to:
+
+Products → Pack → Old Packs
+
+The Pack should no longer appear in active Packs.
+
+The Pack data must remain available in Old Packs.
+
+---
+
+# Final Requirements
+
+Before finishing:
+
+Verify the complete workflow:
+
+Supplier creates Pack → Pack Products → Variant selection → Pack creation → Stock calculation → New Packs → Preview actions → Archive/Hide → Coffee Owner Shop/Store display → Product Preview → Reviews → Flavor distribution.
+
+Do not:
+
+* Change existing design
+* Remove existing features
+* Break synchronization
+* Duplicate existing systems
+* Modify unrelated parts of the project
+
+Reuse existing Pack logic wherever possible and keep the current architecture intact.

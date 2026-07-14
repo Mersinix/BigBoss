@@ -576,6 +576,8 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
 
   const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
   const [loaded, setLoaded] = useState(false);
+  const [onlyForPack, setOnlyForPack] = useState(!!(listing as any).onlyForPack);
+  const [onlyForMyProducts, setOnlyForMyProducts] = useState(!!(listing as any).onlyForMyProducts);
 
   useEffect(() => {
     if (!loaded && (existingVariants as any[]).length > 0) {
@@ -587,7 +589,9 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
   const save = useMutation({
     mutationFn: async () => {
       const entries = groupsToEntries(groups, availableFlavors, availableSizes);
-      await apiRequest("POST", `/api/supplier/listings/${listing.id}/variants`, {
+      await apiRequest("PATCH", `/api/supplier/listings/${listing.id}`, {
+        onlyForPack,
+        onlyForMyProducts,
         variants: entries.map(e => ({
           flavorId: e.flavorId,
           sizeId: e.sizeId,
@@ -597,7 +601,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
       });
     },
     onSuccess: () => { toast({ title: "Variants updated" }); onSuccess(); onClose(); },
-    onError: () => toast({ title: "Error updating", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Error updating", variant: "destructive" }),
   });
 
   return (
@@ -623,6 +627,39 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
               <Label className="mb-2 block">Manage variant groups (size + flavors + price + stock per flavor)</Label>
               <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
               <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Availability restriction (optional)</Label>
+              <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded"
+                  checked={onlyForPack}
+                  onChange={e => { setOnlyForPack(e.target.checked); if (e.target.checked) setOnlyForMyProducts(false); }}
+                  data-testid="checkbox-edit-only-for-pack"
+                />
+                <span className="text-sm">
+                  <span className="font-medium">Add to Pack</span>
+                  <span className="block text-xs text-muted-foreground">Product is only available inside Pack Products. Not shown in My Products.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded"
+                  checked={onlyForMyProducts}
+                  onChange={e => { setOnlyForMyProducts(e.target.checked); if (e.target.checked) setOnlyForPack(false); }}
+                  data-testid="checkbox-edit-only-for-my-products"
+                />
+                <span className="text-sm">
+                  <span className="font-medium">Only for My Products</span>
+                  <span className="block text-xs text-muted-foreground">Product is only available in My Products. Not shown in Pack Products.</span>
+                </span>
+              </label>
+              {!onlyForPack && !onlyForMyProducts && (
+                <p className="text-xs text-muted-foreground pl-1">No restriction selected — product will appear in both My Products and Pack Products.</p>
+              )}
             </div>
 
             <div className="flex gap-2 justify-end pt-2">

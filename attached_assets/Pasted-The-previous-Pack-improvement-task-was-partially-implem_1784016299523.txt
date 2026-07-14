@@ -1,0 +1,262 @@
+The previous Pack improvement task was partially implemented before reaching the limit.
+
+Please continue from the current state.
+
+Before making any changes, carefully review what is already implemented from the previous Pack prompt.
+
+Your goal is NOT to redo the work.
+
+Your goal is:
+
+1. Verify that every requested point from the previous Pack update is correctly implemented.
+2. Identify only missing, incomplete, or incorrectly implemented parts.
+3. Complete only the missing parts.
+4. If a requested part is already correctly implemented, leave it unchanged.
+
+Do not modify working functionality.
+
+Do not redesign anything.
+
+Do not change existing architecture, APIs, database structure, or UI design unless absolutely required.
+
+## Verification Checklist
+
+Please verify all these points:
+
+---
+
+# Coffee Owner Part
+
+## 1. Pack Details Modal → Product Preview
+
+Verify:
+
+* Clicking any product inside a Pack opens a Product Preview modal.
+* The preview only shows information.
+* No navigation.
+* No purchase action.
+* Existing Pack modal remains working.
+
+If missing, complete it.
+
+---
+
+## 2. Pack Reviews / Supplier Reviews
+
+Verify:
+
+Inside Pack Details modal:
+
+* Pack Reviews work correctly.
+* Supplier Reviews allow the Coffee Owner to review the supplier owning the Pack.
+* The review is not waiting for supplier action.
+* Rating + optional comment are saved correctly.
+* Supplier reviews remain synchronized with the existing Supplier Review system.
+
+If incomplete, fix only this part.
+
+---
+
+## 3. Flavor Distribution
+
+Verify:
+
+Flavor distribution respects Pack variants.
+
+Rules:
+
+* Flavors must stay linked to their variant.
+* Do not mix flavors between different sizes/variants.
+* Flavors with stock = 0 must not appear.
+
+Example:
+
+If:
+
+Small:
+Vanilla
+Caramel
+Unflavored
+
+Medium:
+Vanilla
+Caramel
+
+The Coffee Owner must see them separately.
+
+If a flavor has:
+
+0 stock
+
+Hide it from selection.
+
+---
+
+# Supplier Part
+
+## 4. Pack Products Page
+
+Verify:
+
+Supplier → Products → Pack → Pack Products
+
+Must have:
+
+* Product removal action.
+* Removing a product does not break existing Packs.
+* After creating a Pack:
+
+  * selected variants/products reset correctly.
+  * supplier can immediately create another Pack.
+
+---
+
+## 5. My Products → Edit Product
+
+Verify:
+
+Inside Edit Product:
+
+Availability restriction:
+
+"Add to Pack"
+
+exists and works.
+
+When enabled:
+
+Product becomes available in Pack Products.
+
+When disabled:
+
+Product remains only in My Products.
+
+---
+
+# Supplier → Pack → New Packs
+
+## 6. Filter Bar
+
+Verify:
+
+New Packs page contains the same Filter Bar system as Pack Products.
+
+Must include:
+
+* Search
+* Category
+* SubCategory
+* Brand
+* Flavor
+* Size
+
+Filters must work correctly with Pack data.
+
+---
+
+## 7. Pack Creation / Edit Validation
+
+Verify:
+
+### Pack Price
+
+The supplier cannot save a Pack when:
+
+Pack price >= total products price.
+
+### Stock
+
+Pack available stock is automatically calculated.
+
+Example:
+
+Variant 1:
+
+198 stock / quantity 2 = 99 packs
+
+Variant 2:
+
+300 stock / quantity 3 = 100 packs
+
+Final Pack stock:
+
+99
+
+Verify this synchronization continues when product stock changes.
+
+### Expiration Date
+
+Verify:
+
+A past expiration date cannot be saved.
+
+---
+
+# Pack Preview Actions
+
+Verify:
+
+Inside Pack Preview:
+
+Edit:
+
+* Works
+
+Hide:
+
+* Works
+* Removes Pack from Coffee Owner marketplace
+* Keeps Pack inside Supplier management
+
+Duplicate:
+
+* Works
+
+Archive:
+
+* Moves Pack from:
+
+New Packs
+
+to:
+
+Old Packs
+
+Delete:
+
+* Works with confirmation.
+
+---
+
+# Final Verification
+
+After checking everything:
+
+If everything is already correct:
+
+Do nothing.
+
+Do not make unnecessary changes.
+
+If something is incomplete:
+
+Implement only the missing parts.
+
+After finishing:
+
+Verify:
+
+Supplier creates Pack →
+Variant selection →
+Pack creation →
+Stock calculation →
+New Packs →
+Preview actions →
+Archive/Hide →
+Coffee Owner Shop/Store →
+Pack Details →
+Product Preview →
+Reviews →
+Flavor Distribution
+
+Everything must continue working without breaking existing features.

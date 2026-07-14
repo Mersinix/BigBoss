@@ -15,7 +15,7 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import type { PackDetail, SupplierProductReview, PackVariantOption } from "@shared/schema";
+import type { PackDetail, SupplierProductReview, PackVariantOption, ProductWithTaxonomy } from "@shared/schema";
 
 // ── Star rating UI ────────────────────────────────────────────────────────────
 
@@ -139,15 +139,35 @@ function PackReviewsTab({ packId }: { packId: number }) {
 // ── Supplier Reviews Tab ──────────────────────────────────────────────────────
 
 function SupplierReviewsTab({ supplierId, supplierName }: { supplierId: number; supplierName: string }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+
+  const canReview = user?.role === "CAFE_OWNER" && (user as any).status === "approved";
+
+  // Public endpoint — any visitor can read a supplier's reviews from inside a Pack.
+  // (Distinct from /api/reviews/supplier/:id, which is restricted to the supplier's own dashboard.)
   const { data: reviews = [], isLoading } = useQuery<SupplierProductReview[]>({
-    queryKey: ["/api/reviews/supplier", supplierId],
+    queryKey: ["/api/reviews/supplier-public", supplierId],
     queryFn: async () => {
-      const res = await fetch(`/api/reviews/supplier/${supplierId}`, { credentials: "include" });
-      if (!res.ok) return [];
+      const res = await fetch(`/api/reviews/supplier-public/${supplierId}`);
+      if (!res.ok) throw new Error("Failed");
       return res.json();
     },
     enabled: !!supplierId,
-    retry: false,
+  });
+
+  const submit = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/reviews", { reviewType: "SUPPLIER", supplierId, rating, comment: comment.trim() || undefined }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/reviews/supplier-public", supplierId] });
+      toast({ title: "Review submitted!" });
+      setRating(0);
+      setComment("");
+    },
+    onError: (err: any) => toast({ title: err?.message ?? "Error submitting review", variant: "destructive" }),
   });
 
   if (isLoading) return <div className="py-4 space-y-2"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div>;
@@ -168,6 +188,29 @@ function SupplierReviewsTab({ supplierId, supplierName }: { supplierId: number; 
           </div>
         </div>
       )}
+
+      {/* Submission form — Coffee Owner reviews the supplier who owns this pack */}
+      {canReview && (
+        <div className="border rounded-xl p-4 space-y-3 bg-gray-50">
+          <p className="text-sm font-medium text-gray-700">Review {supplierName}</p>
+          <StarRatingInput value={rating} onChange={setRating} />
+          <Textarea
+            placeholder="Share your experience with this supplier…"
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            className="resize-none text-sm"
+            rows={3}
+          />
+          <Button
+            size="sm"
+            onClick={() => submit.mutate()}
+            disabled={rating === 0 || submit.isPending}
+          >
+            {submit.isPending ? "Submitting…" : "Submit Review"}
+          </Button>
+        </div>
+      )}
+
       {reviews.length === 0 ? (
         <div className="py-6 text-center text-gray-400">
           <Star className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -258,6 +301,59 @@ function FlavorDistributionRow({ item, allocations, onChange }: {
   );
 }
 
+// ── Product Preview Modal (read-only, opened from inside a Pack) ─────────────
+// Shows only product information — no purchase, no editing, no navigation away
+// from the Pack modal. Reuses the public marketplace product endpoint.
+
+function ProductPreviewModal({ productId, onClose }: { productId: number | null; onClose: () => void }) {
+  const { data: product, isLoading } = useQuery<ProductWithTaxonomy>({
+    queryKey: ["/api/marketplace", productId],
+    queryFn: async () => {
+      const res = await fetch(`/api/marketplace/${productId}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: productId != null,
+  });
+
+  return (
+    <Dialog open={productId != null} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md w-[calc(100%-2rem)] max-h-[85vh] overflow-y-auto" data-testid="modal-pack-product-preview">
+        <VisuallyHidden>
+          <DialogTitle>Product Preview</DialogTitle>
+        </VisuallyHidden>
+        {isLoading || !product ? (
+          <div className="space-y-4 p-2">
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-6 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="aspect-[16/9] bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center">
+              {product.imageUrl
+                ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                : <Package className="w-12 h-12 text-gray-200" />
+              }
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-gray-900" data-testid="text-preview-product-name">{product.name}</h3>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {product.categoryLabel && <Badge variant="secondary" className="text-[10px]">{product.categoryLabel.name}</Badge>}
+                {product.subCategoryLabel && <Badge variant="outline" className="text-[10px]">{product.subCategoryLabel.name}</Badge>}
+                {product.brandLabel && <Badge className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">{product.brandLabel.name}</Badge>}
+              </div>
+            </div>
+            {product.description && (
+              <p className="text-sm text-gray-500">{product.description}</p>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
 export function PackQuickViewModal() {
@@ -265,6 +361,7 @@ export function PackQuickViewModal() {
   const close = usePackQuickView((s) => s.close);
   const [qty, setQty] = useState(1);
   const [activeTab, setActiveTab] = useState<"details" | "reviews">("details");
+  const [previewProductId, setPreviewProductId] = useState<number | null>(null);
   const { toast } = useToast();
   const addPackItem = useCart((s) => s.addPackItem);
   const faved = useFavorites((s) => (packId != null ? !!s.pack[packId] : false));
@@ -283,15 +380,18 @@ export function PackQuickViewModal() {
   // Flavor distribution state: per item, track allocations across available variants
   const [flavorSelections, setFlavorSelections] = useState<Record<number, FlavorAllocation[]>>({});
 
-  // Initialise flavor selections when pack loads or changes
+  // Initialise flavor selections when pack loads or changes.
+  // Flavors with zero stock are excluded — the Coffee Owner should only see
+  // and distribute quantities across flavors that are actually available.
   useEffect(() => {
     if (!pack) return;
     const initial: Record<number, FlavorAllocation[]> = {};
     for (const item of pack.items) {
-      if (item.listingVariants.length > 1) {
+      const inStockVariants = item.listingVariants.filter(v => v.availableQuantity > 0);
+      if (inStockVariants.length > 1) {
         // Find the pre-selected variant (if any) to seed with the item quantity
         const selectedVariant = item.variantId
-          ? item.listingVariants.find(v => v.variantId === item.variantId)
+          ? inStockVariants.find(v => v.variantId === item.variantId)
           : null;
 
         if (selectedVariant) {
@@ -300,7 +400,7 @@ export function PackQuickViewModal() {
           const remaining = item.quantity - onSelected;
           // Distribute the remaining among other variants in order
           let leftover = remaining;
-          const allocs: FlavorAllocation[] = item.listingVariants.map(v => {
+          const allocs: FlavorAllocation[] = inStockVariants.map(v => {
             if (v.variantId === selectedVariant.variantId) {
               return { variantId: v.variantId, flavorName: v.flavorName, sizeName: v.sizeName, quantity: onSelected, availableQty: v.availableQuantity };
             }
@@ -312,7 +412,7 @@ export function PackQuickViewModal() {
         } else {
           // No specific variant selected — distribute starting from first variant, clamped to stock
           let leftover = item.quantity;
-          const allocs: FlavorAllocation[] = item.listingVariants.map(v => {
+          const allocs: FlavorAllocation[] = inStockVariants.map(v => {
             const give = Math.min(leftover, v.availableQuantity);
             leftover -= give;
             return { variantId: v.variantId, flavorName: v.flavorName, sizeName: v.sizeName, quantity: give, availableQty: v.availableQuantity };
@@ -380,8 +480,8 @@ export function PackQuickViewModal() {
     close();
   };
 
-  // Check if any items have multiple variants available for distribution
-  const hasFlavorChoice = pack ? pack.items.some(i => i.listingVariants.length > 1) : false;
+  // Check if any items have multiple in-stock variants available for distribution
+  const hasFlavorChoice = pack ? pack.items.some(i => i.listingVariants.filter(v => v.availableQuantity > 0).length > 1) : false;
 
   return (
     <Dialog open={packId != null} onOpenChange={(open) => { if (!open) close(); }}>
@@ -471,7 +571,13 @@ export function PackQuickViewModal() {
                 {/* Included products */}
                 <div className="border border-gray-100 rounded-xl divide-y divide-gray-100">
                   {pack.items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 p-3">
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="flex items-center gap-3 p-3 w-full text-left hover:bg-gray-50 transition-colors"
+                      onClick={() => setPreviewProductId(item.productId)}
+                      data-testid={`button-pack-item-preview-${item.id}`}
+                    >
                       <div className="w-10 h-10 rounded-lg bg-gray-50 overflow-hidden shrink-0 flex items-center justify-center">
                         {item.productImageUrl
                           ? <img src={item.productImageUrl} className="w-full h-full object-cover" alt="" />
@@ -485,7 +591,7 @@ export function PackQuickViewModal() {
                         )}
                       </div>
                       <span className="text-xs font-semibold text-gray-500 shrink-0">×{item.quantity}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
 
@@ -495,14 +601,14 @@ export function PackQuickViewModal() {
                     <p className="text-sm font-semibold text-gray-800">Choose your flavor distribution</p>
                     <p className="text-xs text-gray-500">Distribute the quantities across available flavors for each product.</p>
                     {pack.items
-                      .filter(item => item.listingVariants.length > 1)
+                      .filter(item => item.listingVariants.filter(v => v.availableQuantity > 0).length > 1)
                       .map(item => {
                         const allocs = flavorSelections[item.id];
                         if (!allocs) return null;
                         return (
                           <FlavorDistributionRow
                             key={item.id}
-                            item={item}
+                            item={{ ...item, listingVariants: item.listingVariants.filter(v => v.availableQuantity > 0) }}
                             allocations={allocs}
                             onChange={newAllocs => setFlavorSelections(prev => ({ ...prev, [item.id]: newAllocs }))}
                           />
@@ -563,6 +669,7 @@ export function PackQuickViewModal() {
           </div>
         )}
       </DialogContent>
+      <ProductPreviewModal productId={previewProductId} onClose={() => setPreviewProductId(null)} />
     </Dialog>
   );
 }

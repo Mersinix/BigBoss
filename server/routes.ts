@@ -13,6 +13,8 @@ import {
   insertSizeSchema, insertBrandSchema,
   type MarketplaceProduct,
   supplierProductReviews, supplierStores, packs, packItems as packItemsTable,
+  supplierProductVariants,
+  type InventoryFilters, type InventorySort,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
@@ -637,6 +639,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(403).json({ message: 'Forbidden' });
       }
       const updated = await storage.updateOrderStatus(orderId, input.status, input.deliveryId);
+      if (order.status !== 'CANCELLED' && input.status === 'CANCELLED') {
+        broadcast("inventory_updated", { orderId });
+      }
       res.json(updated);
     } catch (err) {
       res.status(400).json({ message: "Invalid request" });
@@ -1472,6 +1477,137 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ message: "Removed" });
     } catch { res.status(500).json({ message: "Error" }); }
   });
+
+  // ── Supplier Inventory ────────────────────────────────────────────────────────
+
+  function parseInventoryFilters(q: any): InventoryFilters {
+    return {
+      search: q.search ? String(q.search) : undefined,
+      categoryId: q.categoryId ? parseInt(q.categoryId) : undefined,
+      brandId: q.brandId ? parseInt(q.brandId) : undefined,
+      status: q.status && ['ACTIVE', 'HIDDEN', 'DRAFT'].includes(q.status) ? q.status : undefined,
+      stockStatus: q.stockStatus && ['IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(q.stockStatus) ? q.stockStatus : undefined,
+      minPrice: q.minPrice ? Number(q.minPrice) : undefined,
+      maxPrice: q.maxPrice ? Number(q.maxPrice) : undefined,
+      hasPacks: q.hasPacks === 'true' ? true : q.hasPacks === 'false' ? false : undefined,
+      lowStockOnly: q.lowStockOnly === 'true' ? true : undefined,
+    };
+  }
+
+  const VALID_SORTS = ['name_asc', 'name_desc', 'stock_asc', 'stock_desc', 'price_asc', 'price_desc', 'updated_desc', 'created_desc'];
+
+  app.get("/api/supplier/inventory", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const filters = parseInventoryFilters(req.query);
+      const sort: InventorySort | undefined = VALID_SORTS.includes(req.query.sort as string) ? (req.query.sort as InventorySort) : undefined;
+      const page = req.query.page ? Math.max(1, parseInt(req.query.page as string)) : 1;
+      const pageSize = req.query.pageSize ? Math.min(200, Math.max(1, parseInt(req.query.pageSize as string))) : 50;
+      res.json(await storage.getSupplierInventory(user!.id, filters, sort, page, pageSize));
+    } catch (err) { console.error(err); res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/supplier/inventory/stats", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const filters = parseInventoryFilters(req.query);
+      const hasFilters = Object.values(filters).some((v) => v !== undefined);
+      res.json(await storage.getSupplierInventoryStats(user!.id, hasFilters ? filters : undefined));
+    } catch (err) { console.error(err); res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/supplier/inventory/export", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const filters = parseInventoryFilters(req.query);
+      const sort: InventorySort | undefined = VALID_SORTS.includes(req.query.sort as string) ? (req.query.sort as InventorySort) : undefined;
+      const { items } = await storage.getSupplierInventory(user!.id, filters, sort, 1, 100000);
+      const headers = ["Product", "SKU", "Category", "Brand", "Stock", "Min Stock", "Unit", "Price", "Inventory Value", "Status", "Visibility"];
+      const escapeCsv = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const rows = items.map((i) => [i.productName, i.sku ?? "", i.categoryName ?? "", i.brandName ?? "", i.stock, i.minStock, i.unit, (i.price / 100).toFixed(2), (i.inventoryValue / 100).toFixed(2), i.stockStatus, i.visibility].map(escapeCsv).join(","));
+      const csv = [headers.map(escapeCsv).join(","), ...rows].join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="inventory-export.csv"`);
+      res.send(csv);
+    } catch (err) { console.error(err); res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/supplier/inventory/:listingId/history", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const listingId = parseInt(req.params.listingId);
+      const history = await storage.getListingStockHistory(listingId, user!.id);
+      res.json(history);
+    } catch (err: any) { res.status(400).json({ message: err?.message ?? "Error" }); }
+  });
+
+  app.patch("/api/supplier/inventory/:listingId", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const listingId = parseInt(req.params.listingId);
+      const body = z.object({
+        sku: z.string().nullable().optional(),
+        barcode: z.string().nullable().optional(),
+        minStock: z.number().min(0).optional(),
+        maxStock: z.number().min(0).nullable().optional(),
+        unit: z.string().min(1).optional(),
+        visibility: z.enum(['VISIBLE', 'HIDDEN']).optional(),
+      }).parse(req.body);
+      const updated = await storage.updateListingInventoryFields(listingId, user!.id, body);
+      broadcast("inventory_updated", { supplierId: user!.id, listingId });
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else res.status(400).json({ message: err?.message ?? "Error" });
+    }
+  });
+
+  app.patch("/api/supplier/inventory/:listingId/stock", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const listingId = parseInt(req.params.listingId);
+      const body = z.object({
+        type: z.enum(['INCREASE', 'DECREASE', 'SET']),
+        quantity: z.number().min(0),
+        reason: z.string().min(1),
+        notes: z.string().optional(),
+      }).parse(req.body);
+      const result = await storage.adjustListingStock(listingId, user!.id, user!.id, body);
+      broadcast("inventory_updated", { supplierId: user!.id, listingId });
+      invalidateMarketplaceOnBroadcast();
+      res.json(result);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else res.status(400).json({ message: err?.message ?? "Error" });
+    }
+  });
+
+  app.post("/api/supplier/inventory/bulk", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const body = z.object({
+        action: z.enum(['hide', 'show', 'delete', 'setMinStock', 'stock']),
+        listingIds: z.array(z.number()).min(1),
+        minStock: z.number().min(0).optional(),
+        type: z.enum(['INCREASE', 'DECREASE', 'SET']).optional(),
+        quantity: z.number().min(0).optional(),
+        reason: z.string().optional(),
+      }).parse(req.body);
+      const result = await storage.bulkInventoryAction(user!.id, body.listingIds, body.action, { ...body, userId: user!.id });
+      broadcast("inventory_updated", { supplierId: user!.id });
+      invalidateMarketplaceOnBroadcast();
+      res.json(result);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else res.status(400).json({ message: err?.message ?? "Error" });
+    }
+  });
+
+  // Marketplace listens for "supplier_mapping_changed" to refresh; reuse that event so
+  // café-facing marketplace/product views also refresh after any inventory change.
+  function invalidateMarketplaceOnBroadcast() {
+    broadcast("supplier_mapping_changed", {});
+  }
 
   // ── Supplier Packs (bundle own listings into a sellable Pack) ────────────────
 

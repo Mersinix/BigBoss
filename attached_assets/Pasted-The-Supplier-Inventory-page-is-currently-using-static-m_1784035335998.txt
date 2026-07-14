@@ -1,0 +1,466 @@
+The Supplier > Inventory page is currently using static/mock data. I want you to completely transform it into a fully functional inventory management module synchronized with the real database and the existing Supplier Products system.
+
+Do not create fake data or duplicate business logic. Reuse the existing Product, Supplier Product, Pack, Order and Inventory architecture already implemented in the project.
+
+Main Goal
+
+Replace the static inventory page with a real inventory management dashboard for suppliers.
+
+Everything displayed must come from the database in real time.
+
+Synchronization
+
+Synchronize the Inventory page with:
+
+Supplier Products
+Product Variants (if available)
+Packs
+Orders
+Stock Quantity
+Reserved Quantity (if implemented)
+Auto Pack Quantity (already implemented if available)
+Product Status
+Product Visibility
+Flash Deals (if applicable)
+
+The inventory must automatically update after:
+
+New Order
+Order Cancellation
+Order Refund
+Stock Update
+Product Edit
+Product Creation
+Product Deletion
+Pack creation/edit
+Import operation
+
+No page refresh should be required.
+
+Dashboard Cards
+
+Replace the current fake statistics with real calculations.
+
+Show cards such as:
+
+Total Products
+Active Products
+Hidden Products
+In Stock
+Low Stock
+Out of Stock
+Total Units in Inventory
+Inventory Value
+(Stock × Selling Price)
+
+Optional:
+
+Reserved Stock
+Incoming Stock
+Average Stock Level
+Professional Filter Bar
+
+Add a complete filter toolbar.
+
+Search box
+
+Search by:
+
+Product Name
+SKU
+Barcode
+
+Filters
+
+Category
+
+Brand
+
+Supplier Category
+
+Status
+
+Active
+Hidden
+Draft
+
+Stock Status
+
+In Stock
+Low Stock
+Out of Stock
+
+Price Range
+
+Minimum Stock Warning
+
+Has Packs
+
+Has Flash Deal
+
+Sort
+
+Name A-Z
+Name Z-A
+Lowest Stock
+Highest Stock
+Lowest Price
+Highest Price
+Recently Updated
+Recently Created
+
+Button
+
+Clear Filters
+
+Inventory Table
+
+Replace the static table.
+
+Each row should contain:
+
+Product Image
+
+Product Name
+
+SKU
+
+Category
+
+Brand
+
+Current Stock
+
+Reserved Stock (if exists)
+
+Available Stock
+
+Minimum Stock
+
+Maximum Stock (if supported)
+
+Unit
+
+Selling Price
+
+Cost Price (if exists)
+
+Inventory Value
+
+Stock Status
+
+Visibility
+
+Last Updated
+
+Actions
+
+Stock Status
+
+Automatically calculate
+
+Green
+
+In Stock
+
+Orange
+
+Low Stock
+
+Red
+
+Out of Stock
+
+Gray
+
+Hidden
+
+Row Actions
+
+Each product should have actions:
+
+View Product
+
+Edit Product
+
+Quick Edit Stock
+
+Adjust Inventory
+
+Restock
+
+Stock History
+
+Duplicate Product
+
+Hide / Show Product
+
+Delete Product
+
+Quick Stock Update
+
+Supplier should be able to edit stock without opening the full edit page.
+
+For example
+
++10
+
++20
+
++50
+
+-10
+
+-20
+
+Custom Quantity
+
+Save
+
+The update should happen instantly.
+
+Inventory Adjustment Modal
+
+Professional modal.
+
+Fields
+
+Current Stock
+
+Adjustment Type
+
+Increase
+
+Decrease
+
+Set Exact Quantity
+
+Quantity
+
+Reason
+
+Examples
+
+New Purchase
+
+Manual Correction
+
+Damaged
+
+Expired
+
+Lost
+
+Returned
+
+Other
+
+Notes
+
+Save
+
+Cancel
+
+Every adjustment should be stored in history.
+
+Stock History
+
+Each product should have inventory history.
+
+Display
+
+Date
+
+User
+
+Action
+
+Previous Stock
+
+New Stock
+
+Difference
+
+Reason
+
+Notes
+
+Newest first.
+
+Low Stock Alerts
+
+Automatically detect products below minimum stock.
+
+Display warning badges.
+
+Allow supplier to filter only low stock items.
+
+Out of Stock
+
+Clearly highlight products with zero stock.
+
+Provide quick Restock button.
+
+Inventory Value
+
+Calculate
+
+Current Stock × Selling Price
+
+Display
+
+Per Product
+
+Grand Total
+
+Filtered Total
+
+Bulk Actions
+
+Allow selecting multiple products.
+
+Actions
+
+Update Stock
+
+Hide
+
+Show
+
+Delete
+
+Export
+
+Assign Category
+
+Change Minimum Stock
+
+Pagination
+
+Professional pagination.
+
+Allow
+
+25
+
+50
+
+100
+
+200
+
+Rows per page
+
+Export
+
+Allow exporting
+
+CSV
+
+Excel
+
+Include
+
+Product
+
+SKU
+
+Category
+
+Stock
+
+Price
+
+Inventory Value
+
+Status
+
+Responsive
+
+Desktop
+
+Tablet
+
+Mobile
+
+The table should adapt correctly.
+
+Performance
+
+Support large inventories.
+
+Implement
+
+Pagination
+
+Server-side filtering
+
+Server-side sorting
+
+Lazy loading
+
+Efficient database queries
+
+Avoid loading everything at once.
+
+Permissions
+
+Supplier must only see and manage their own products.
+
+No supplier should ever access another supplier's inventory.
+
+UI
+
+Use the existing design system.
+
+Keep everything consistent with:
+
+Supplier Dashboard
+
+Products
+
+Orders
+
+Packs
+
+Flash Deals
+
+Settings
+
+No new design language.
+
+Real-time Synchronization
+
+After any stock update, automatically refresh:
+
+Inventory
+
+Products
+
+Orders
+
+Packs
+
+Dashboard statistics
+
+Any component depending on stock
+
+without requiring page reload.
+
+Final Verification
+
+Before considering this task complete, verify that:
+
+No mock or hardcoded inventory data remains.
+All inventory values come from the database.
+All filters work correctly.
+Search works.
+Sorting works.
+Pagination works.
+Statistics are accurate.
+Inventory adjustments update the database correctly.
+Stock history is recorded.
+Low stock and out-of-stock statuses are automatically calculated.
+Bulk actions work.
+The page remains performant with thousands of products.
+The implementation follows the existing project architecture and does not duplicate business logic.

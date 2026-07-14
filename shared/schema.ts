@@ -8,6 +8,7 @@ export const userRoleEnum = pgEnum('user_role', [
   'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE'
 ]);
 export const orderStatusEnum = pgEnum('order_status', ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'IN_DELIVERY', 'DELIVERED', 'CANCELLED']);
+export const listingVisibilityEnum = pgEnum('listing_visibility', ['VISIBLE', 'HIDDEN']);
 export const userAccountStatusEnum = pgEnum('user_account_status', ['pending', 'approved', 'rejected']);
 export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA']);
 export const serviceStateEnum = pgEnum('service_state', ['VISIBLE', 'HIDDEN', 'COMING_SOON']);
@@ -76,6 +77,31 @@ export const supplierProductListings = pgTable("supplier_product_listings", {
   // When true, this listing's variants are only shown in "My Products" / standalone
   // marketplace — excluded from Pack product selection.
   onlyForMyProducts: boolean("only_for_my_products").notNull().default(false),
+  // ── Inventory management fields ──────────────────────────────────────────
+  sku: text("sku"),
+  barcode: text("barcode"),
+  minStock: integer("min_stock").notNull().default(10),
+  maxStock: integer("max_stock"),
+  unit: text("unit").notNull().default('unit'),
+  visibility: listingVisibilityEnum("visibility").notNull().default('VISIBLE'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Inventory adjustments — full audit history of every stock change a supplier makes
+// (quick +/- buttons, the adjustment modal, restocks). Order-driven stock changes are
+// also logged here so suppliers have one place to see "why did my stock change".
+export const inventoryAdjustments = pgTable("inventory_adjustments", {
+  id: serial("id").primaryKey(),
+  listingId: integer("listing_id").notNull(),
+  supplierId: integer("supplier_id").notNull(),
+  userId: integer("user_id"), // null for system-driven adjustments (order placed/cancelled)
+  adjustmentType: text("adjustment_type").notNull(), // 'INCREASE' | 'DECREASE' | 'SET'
+  previousStock: integer("previous_stock").notNull(),
+  newStock: integer("new_stock").notNull(),
+  difference: integer("difference").notNull(),
+  reason: text("reason").notNull(),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -388,6 +414,11 @@ export const supplierProductVariantsRelations = relations(supplierProductVariant
   listing: one(supplierProductListings, { fields: [supplierProductVariants.listingId], references: [supplierProductListings.id] }),
 }));
 
+export const inventoryAdjustmentsRelations = relations(inventoryAdjustments, ({ one }) => ({
+  listing: one(supplierProductListings, { fields: [inventoryAdjustments.listingId], references: [supplierProductListings.id] }),
+  user: one(users, { fields: [inventoryAdjustments.userId], references: [users.id] }),
+}));
+
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   cafe: one(users, { fields: [orders.cafeId], references: [users.id], relationName: 'cafeOrders' }),
   supplier: one(users, { fields: [orders.supplierId], references: [users.id], relationName: 'supplierOrders' }),
@@ -477,7 +508,8 @@ export const insertSubCategorySchema = createInsertSchema(subCategories).omit({ 
 export const insertFlavorSchema = createInsertSchema(flavors).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSizeSchema = createInsertSchema(sizes).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertSupplierProductListingSchema = createInsertSchema(supplierProductListings).omit({ id: true, createdAt: true });
+export const insertSupplierProductListingSchema = createInsertSchema(supplierProductListings).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertInventoryAdjustmentSchema = createInsertSchema(inventoryAdjustments).omit({ id: true, createdAt: true });
 export const insertFavoriteSchema = createInsertSchema(favorites).omit({ id: true, createdAt: true });
 export const insertPlatformServiceSchema = createInsertSchema(platformServices).omit({ id: true, updatedAt: true });
 export const insertSupplierStoreSchema = createInsertSchema(supplierStores).omit({ id: true, createdAt: true, updatedAt: true });
@@ -527,6 +559,9 @@ export type SupplierSubCategory = typeof supplierSubCategories.$inferSelect;
 
 export type SupplierProductListing = typeof supplierProductListings.$inferSelect;
 export type InsertSupplierProductListing = z.infer<typeof insertSupplierProductListingSchema>;
+
+export type InventoryAdjustment = typeof inventoryAdjustments.$inferSelect;
+export type InsertInventoryAdjustment = z.infer<typeof insertInventoryAdjustmentSchema>;
 
 export type Favorite = typeof favorites.$inferSelect;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
@@ -689,6 +724,75 @@ export type SupplierVariantWithLabels = SupplierProductVariant & {
   flavorName?: string | null;
   sizeName?: string | null;
 };
+
+// ── Inventory Types ──────────────────────────────────────────────────────────
+
+export type StockStatus = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+
+export type InventoryItem = {
+  listingId: number;
+  productId: number;
+  supplierId: number;
+  productName: string;
+  imageUrl: string | null;
+  sku: string | null;
+  barcode: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  brandId: number | null;
+  brandName: string | null;
+  stock: number;
+  minStock: number;
+  maxStock: number | null;
+  unit: string;
+  price: number; // selling price (TND, major unit)
+  inventoryValue: number; // stock * price
+  stockStatus: StockStatus;
+  productStatus: string; // 'ACTIVE' | 'PENDING' | ...
+  visibility: 'VISIBLE' | 'HIDDEN';
+  hasVariants: boolean;
+  hasPacks: boolean;
+  onlyForPack: boolean;
+  onlyForMyProducts: boolean;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+};
+
+export type InventoryListResult = {
+  items: InventoryItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type InventoryStats = {
+  totalProducts: number;
+  activeProducts: number;
+  hiddenProducts: number;
+  inStock: number;
+  lowStock: number;
+  outOfStock: number;
+  totalUnits: number;
+  inventoryValue: number;
+};
+
+export type InventoryFilters = {
+  search?: string;
+  categoryId?: number;
+  brandId?: number;
+  status?: 'ACTIVE' | 'HIDDEN' | 'DRAFT';
+  stockStatus?: StockStatus;
+  minPrice?: number;
+  maxPrice?: number;
+  hasPacks?: boolean;
+  lowStockOnly?: boolean;
+};
+
+export type InventorySort =
+  | 'name_asc' | 'name_desc'
+  | 'stock_asc' | 'stock_desc'
+  | 'price_asc' | 'price_desc'
+  | 'updated_desc' | 'created_desc';
 
 export type CategoryWithCount = Category & {
   subCategoryCount: number;

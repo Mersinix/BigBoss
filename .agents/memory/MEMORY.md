@@ -6,3 +6,5 @@
 - [Global quick-view modal pattern](quick-view-modal-pattern.md) — use a tiny zustand store + one modal instance in the shared layout when many unrelated components need to trigger the same modal.
 - [Vite 7 HMR on Replit](vite7-replit-hmr.md) — set hmr:false in Replit env; proxy strips sec-websocket-protocol header that Vite 7 requires.
 - [Pack feature schema decisions](pack-feature-schema.md) — onlyForMyProducts XOR onlyForPack enforced server-side; pack reviews reuse supplierProductReviews with reviewType='PACK' and packId; listingVariants on PackItemDetail for flavor distribution.
+- [Inventory module design](inventory-module.md) — stock lives on supplier_product_listings/variants (not products.stock); orders had no cancellation restock before this — now centralized in storage.updateOrderStatus.
+- [Variant aggregate-stock restock bug](variant-restock-bug.md) — when restoring stock after a SQL increment, re-read quantities fresh; don't add the delta again on top of the already-updated row or stock doubles.

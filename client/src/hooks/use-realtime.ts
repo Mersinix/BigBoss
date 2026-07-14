@@ -18,6 +18,13 @@ const STORE_EVENTS = ["store_updated", "store_approval_changed"];
 
 const PACK_EVENTS = ["pack_updated"];
 
+const INVENTORY_EVENTS = ["inventory_updated"];
+
+function invalidateInventoryQueries(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
+  qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
+}
+
 function invalidateStoreQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/store"] });
   qc.invalidateQueries({ queryKey: ["/api/admin/stores"] });
@@ -84,6 +91,9 @@ export function useRealtime() {
           }
           if (PACK_EVENTS.includes(event)) {
             invalidatePackQueries(qc);
+          }
+          if (INVENTORY_EVENTS.includes(event)) {
+            invalidateInventoryQueries(qc);
           }
           if (TAXONOMY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/categories"] });

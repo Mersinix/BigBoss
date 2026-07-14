@@ -4,7 +4,7 @@ import {
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
-  landingConfig, packs, packItems, packFavorites,
+  landingConfig, packs, packItems, packFavorites, inventoryAdjustments,
   type LandingConfig,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
@@ -28,6 +28,8 @@ import {
   type SupplierProductReview,
   type Pack, type PackItem, type PackFavorite, type PackDetail, type PackItemDetail, type TaxonomyLabel,
   type CreatePackOrderItem, type ResolvedPackOrderItem,
+  type InventoryItem, type InventoryListResult, type InventoryStats, type InventoryFilters, type InventorySort,
+  type InventoryAdjustment, type StockStatus,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
 
@@ -167,6 +169,15 @@ export interface IStorage {
   getLandingConfig(): Promise<LandingConfig>;
   updateLandingConfig(data: Partial<Omit<LandingConfig, "id" | "updatedAt">>): Promise<LandingConfig>;
   setServiceState(service: ServiceKey, state: ServiceState): Promise<ServiceStatesMap>;
+
+  // Inventory
+  getSupplierInventory(supplierId: number, filters?: InventoryFilters, sort?: InventorySort, page?: number, pageSize?: number): Promise<InventoryListResult>;
+  getSupplierInventoryStats(supplierId: number, filters?: InventoryFilters): Promise<InventoryStats>;
+  getListingForSupplier(listingId: number, supplierId: number): Promise<SupplierProductListing | undefined>;
+  adjustListingStock(listingId: number, supplierId: number, userId: number | null, input: { type: 'INCREASE' | 'DECREASE' | 'SET'; quantity: number; reason: string; notes?: string }): Promise<{ listing: SupplierProductListing; history: InventoryAdjustment }>;
+  getListingStockHistory(listingId: number, supplierId: number): Promise<InventoryAdjustment[]>;
+  updateListingInventoryFields(listingId: number, supplierId: number, updates: { sku?: string | null; barcode?: string | null; minStock?: number; maxStock?: number | null; unit?: string; visibility?: 'VISIBLE' | 'HIDDEN' }): Promise<SupplierProductListing>;
+  bulkInventoryAction(supplierId: number, listingIds: number[], action: 'hide' | 'show' | 'delete' | 'setMinStock' | 'stock', payload?: { minStock?: number; type?: 'INCREASE' | 'DECREASE' | 'SET'; quantity?: number; reason?: string; userId?: number | null }): Promise<{ updated: number }>;
 }
 
 // ── Taxonomy cache helper ─────────────────────────────────────────────────────
@@ -538,10 +549,49 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateOrderStatus(id: number, status: typeof orders.$inferSelect.status, deliveryId?: number) {
+    const [existing] = await db.select().from(orders).where(eq(orders.id, id));
     const updates: any = { status };
     if (deliveryId) updates.deliveryId = deliveryId;
     const [updated] = await db.update(orders).set(updates).where(eq(orders.id, id)).returning();
+
+    // Restock inventory when an order is cancelled (covers cancellation and refund flows,
+    // since this schema has no separate REFUNDED status — refunds are modeled as cancellations).
+    if (existing && existing.status !== 'CANCELLED' && status === 'CANCELLED') {
+      await this.restockOrderInventory(id);
+    }
     return updated;
+  }
+
+  /** Restores stock for every item in an order back to the suppliers' listings/variants. Used on order cancellation. */
+  private async restockOrderInventory(orderId: number) {
+    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+    for (const item of items) {
+      if (item.packId) {
+        await db.update(packs).set({ quantityAvailable: sql`${packs.quantityAvailable} + ${item.quantity}` }).where(eq(packs.id, item.packId));
+        continue;
+      }
+      if (!item.productId) continue;
+      // Find the listing this order item came from (best-effort: match by product; the order item
+      // doesn't store listingId directly, so we search the ordering supplier's listing for this product).
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      const supplierIdForItem = order?.supplierId ?? (await db.select().from(subOrders).where(eq(subOrders.orderId, orderId)))
+        .find(() => true)?.supplierId;
+      const candidateListings = supplierIdForItem
+        ? await db.select().from(supplierProductListings).where(and(eq(supplierProductListings.productId, item.productId), eq(supplierProductListings.supplierId, supplierIdForItem)))
+        : await db.select().from(supplierProductListings).where(eq(supplierProductListings.productId, item.productId));
+      const listing = candidateListings[0];
+      if (!listing) continue;
+
+      if (item.flavorId != null || item.sizeId != null) {
+        const variants = await this.getVariantsByListingId(listing.id);
+        const variant = variants.find((v) => (v.flavorId ?? null) === (item.flavorId ?? null) && (v.sizeId ?? null) === (item.sizeId ?? null));
+        if (variant) {
+          await this.restockVariantFromOrderCancellation(variant.id, item.quantity, `Order #${orderId} cancelled`);
+          continue;
+        }
+      }
+      await this.restockFromOrderCancellation(listing.id, item.quantity, `Order #${orderId} cancelled`);
+    }
   }
 
   // ── Marketplace ─────────────────────────────────────────────────────────────
@@ -1056,7 +1106,252 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSupplierListing(id: number) {
     await db.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, id));
+    await db.delete(inventoryAdjustments).where(eq(inventoryAdjustments.listingId, id));
     await db.delete(supplierProductListings).where(eq(supplierProductListings.id, id));
+  }
+
+  // ── Inventory ────────────────────────────────────────────────────────────────
+
+  private computeStockStatus(stock: number, minStock: number): StockStatus {
+    if (stock <= 0) return 'OUT_OF_STOCK';
+    if (stock < minStock) return 'LOW_STOCK';
+    return 'IN_STOCK';
+  }
+
+  /** Builds the full enriched inventory row set for a supplier (pre-filter/sort/paginate). */
+  private async buildInventoryItems(supplierId: number): Promise<InventoryItem[]> {
+    const listings = await db.select().from(supplierProductListings).where(eq(supplierProductListings.supplierId, supplierId));
+    if (!listings.length) return [];
+    const productIds = Array.from(new Set(listings.map((l) => l.productId)));
+    const prods = await db.select().from(products).where(inArray(products.id, productIds));
+    const productMap = new Map(prods.map((p) => [p.id, p]));
+    const allVariants = await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.listingId, listings.map((l) => l.id)));
+    const variantCountByListing = new Map<number, number>();
+    for (const v of allVariants) variantCountByListing.set(v.listingId, (variantCountByListing.get(v.listingId) ?? 0) + 1);
+    const packItemRows = await db.select().from(packItems).where(inArray(packItems.listingId, listings.map((l) => l.id)));
+    const listingsWithPacks = new Set(packItemRows.map((pi) => pi.listingId));
+    const tx = await buildTaxonomyCache();
+
+    const items: InventoryItem[] = [];
+    for (const l of listings) {
+      const prod = productMap.get(l.productId);
+      if (!prod) continue;
+      const hasVariants = (variantCountByListing.get(l.id) ?? 0) > 0;
+      const category = prod.categoryId ? tx.catMap.get(prod.categoryId) : undefined;
+      const brand = prod.brandId ? tx.brdMap.get(prod.brandId) : undefined;
+      items.push({
+        listingId: l.id,
+        productId: prod.id,
+        supplierId: l.supplierId,
+        productName: prod.name,
+        imageUrl: prod.imageUrl ?? null,
+        sku: l.sku ?? null,
+        barcode: l.barcode ?? null,
+        categoryId: prod.categoryId ?? null,
+        categoryName: category?.name ?? null,
+        brandId: prod.brandId ?? null,
+        brandName: brand?.name ?? null,
+        stock: l.stock,
+        minStock: l.minStock,
+        maxStock: l.maxStock ?? null,
+        unit: l.unit,
+        price: l.price,
+        inventoryValue: l.stock * l.price,
+        stockStatus: this.computeStockStatus(l.stock, l.minStock),
+        productStatus: prod.status,
+        visibility: l.visibility,
+        hasVariants,
+        hasPacks: listingsWithPacks.has(l.id),
+        onlyForPack: l.onlyForPack,
+        onlyForMyProducts: l.onlyForMyProducts,
+        createdAt: l.createdAt,
+        updatedAt: l.updatedAt,
+      });
+    }
+    return items;
+  }
+
+  private applyInventoryFilters(items: InventoryItem[], filters?: InventoryFilters): InventoryItem[] {
+    let result = items;
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      result = result.filter((i) =>
+        i.productName.toLowerCase().includes(q) ||
+        (i.sku ?? '').toLowerCase().includes(q) ||
+        (i.barcode ?? '').toLowerCase().includes(q)
+      );
+    }
+    if (filters?.categoryId) result = result.filter((i) => i.categoryId === filters.categoryId);
+    if (filters?.brandId) result = result.filter((i) => i.brandId === filters.brandId);
+    if (filters?.status === 'ACTIVE') result = result.filter((i) => i.visibility === 'VISIBLE' && i.productStatus !== 'PENDING');
+    if (filters?.status === 'HIDDEN') result = result.filter((i) => i.visibility === 'HIDDEN');
+    if (filters?.status === 'DRAFT') result = result.filter((i) => i.productStatus === 'PENDING');
+    if (filters?.stockStatus) result = result.filter((i) => i.stockStatus === filters.stockStatus);
+    if (filters?.lowStockOnly) result = result.filter((i) => i.stockStatus === 'LOW_STOCK');
+    if (filters?.minPrice !== undefined) result = result.filter((i) => i.price >= filters.minPrice!);
+    if (filters?.maxPrice !== undefined) result = result.filter((i) => i.price <= filters.maxPrice!);
+    if (filters?.hasPacks !== undefined) result = result.filter((i) => i.hasPacks === filters.hasPacks);
+    return result;
+  }
+
+  private sortInventoryItems(items: InventoryItem[], sort?: InventorySort): InventoryItem[] {
+    const arr = [...items];
+    switch (sort) {
+      case 'name_desc': return arr.sort((a, b) => b.productName.localeCompare(a.productName));
+      case 'stock_asc': return arr.sort((a, b) => a.stock - b.stock);
+      case 'stock_desc': return arr.sort((a, b) => b.stock - a.stock);
+      case 'price_asc': return arr.sort((a, b) => a.price - b.price);
+      case 'price_desc': return arr.sort((a, b) => b.price - a.price);
+      case 'updated_desc': return arr.sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0));
+      case 'created_desc': return arr.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+      case 'name_asc':
+      default: return arr.sort((a, b) => a.productName.localeCompare(b.productName));
+    }
+  }
+
+  async getSupplierInventory(supplierId: number, filters?: InventoryFilters, sort?: InventorySort, page = 1, pageSize = 50): Promise<InventoryListResult> {
+    const all = await this.buildInventoryItems(supplierId);
+    const filtered = this.applyInventoryFilters(all, filters);
+    const sorted = this.sortInventoryItems(filtered, sort);
+    const total = sorted.length;
+    const start = (page - 1) * pageSize;
+    const items = sorted.slice(start, start + pageSize);
+    return { items, total, page, pageSize };
+  }
+
+  async getSupplierInventoryStats(supplierId: number, filters?: InventoryFilters): Promise<InventoryStats> {
+    const all = await this.buildInventoryItems(supplierId);
+    const items = filters ? this.applyInventoryFilters(all, filters) : all;
+    return {
+      totalProducts: items.length,
+      activeProducts: items.filter((i) => i.visibility === 'VISIBLE' && i.productStatus !== 'PENDING').length,
+      hiddenProducts: items.filter((i) => i.visibility === 'HIDDEN').length,
+      inStock: items.filter((i) => i.stockStatus === 'IN_STOCK').length,
+      lowStock: items.filter((i) => i.stockStatus === 'LOW_STOCK').length,
+      outOfStock: items.filter((i) => i.stockStatus === 'OUT_OF_STOCK').length,
+      totalUnits: items.reduce((s, i) => s + i.stock, 0),
+      inventoryValue: items.reduce((s, i) => s + i.inventoryValue, 0),
+    };
+  }
+
+  async getListingForSupplier(listingId: number, supplierId: number) {
+    const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
+    if (!listing || listing.supplierId !== supplierId) return undefined;
+    return listing;
+  }
+
+  /** Adjusts a listing's aggregate stock, records history, and returns the updated listing. Only valid for listings without per-variant stock. */
+  async adjustListingStock(listingId: number, supplierId: number, userId: number | null, input: { type: 'INCREASE' | 'DECREASE' | 'SET'; quantity: number; reason: string; notes?: string }) {
+    const listing = await this.getListingForSupplier(listingId, supplierId);
+    if (!listing) throw new Error('Listing not found');
+    const variants = await this.getVariantsByListingId(listingId);
+    if (variants.length > 0) throw new Error('This product has variants — adjust stock per variant instead');
+
+    const previousStock = listing.stock;
+    let newStock: number;
+    if (input.type === 'INCREASE') newStock = previousStock + input.quantity;
+    else if (input.type === 'DECREASE') newStock = previousStock - input.quantity;
+    else newStock = input.quantity;
+    if (newStock < 0) throw new Error('Stock cannot go below zero');
+
+    const [updated] = await db.update(supplierProductListings)
+      .set({ stock: newStock, updatedAt: new Date() })
+      .where(eq(supplierProductListings.id, listingId))
+      .returning();
+
+    const [history] = await db.insert(inventoryAdjustments).values({
+      listingId, supplierId, userId,
+      adjustmentType: input.type,
+      previousStock, newStock,
+      difference: newStock - previousStock,
+      reason: input.reason,
+      notes: input.notes ?? null,
+    }).returning();
+
+    return { listing: updated, history };
+  }
+
+  async getListingStockHistory(listingId: number, supplierId: number): Promise<InventoryAdjustment[]> {
+    const listing = await this.getListingForSupplier(listingId, supplierId);
+    if (!listing) throw new Error('Listing not found');
+    return db.select().from(inventoryAdjustments).where(eq(inventoryAdjustments.listingId, listingId)).orderBy(desc(inventoryAdjustments.createdAt));
+  }
+
+  async updateListingInventoryFields(listingId: number, supplierId: number, updates: { sku?: string | null; barcode?: string | null; minStock?: number; maxStock?: number | null; unit?: string; visibility?: 'VISIBLE' | 'HIDDEN' }) {
+    const listing = await this.getListingForSupplier(listingId, supplierId);
+    if (!listing) throw new Error('Listing not found');
+    const [updated] = await db.update(supplierProductListings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(supplierProductListings.id, listingId))
+      .returning();
+    return updated;
+  }
+
+  /** System-driven stock restoration (order cancelled/refunded). No userId — shows as a system entry in history. */
+  async restockFromOrderCancellation(listingId: number, quantity: number, reason: string) {
+    const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
+    if (!listing) return;
+    const variants = await this.getVariantsByListingId(listingId);
+    const previousStock = listing.stock;
+    const newStock = previousStock + quantity;
+    await db.update(supplierProductListings).set({ stock: newStock, updatedAt: new Date() }).where(eq(supplierProductListings.id, listingId));
+    await db.insert(inventoryAdjustments).values({
+      listingId, supplierId: listing.supplierId, userId: null,
+      adjustmentType: 'INCREASE', previousStock, newStock, difference: newStock - previousStock,
+      reason, notes: null,
+    });
+  }
+
+  async restockVariantFromOrderCancellation(variantId: number, quantity: number, reason: string) {
+    const [variant] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, variantId));
+    if (!variant) return;
+    await db.update(supplierProductVariants).set({ quantity: sql`${supplierProductVariants.quantity} + ${quantity}` }).where(eq(supplierProductVariants.id, variantId));
+    const listingVariants = await this.getVariantsByListingId(variant.listingId);
+    const aggStock = listingVariants.reduce((s, v) => s + v.quantity, 0);
+    const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, variant.listingId));
+    if (!listing) return;
+    const previousStock = listing.stock;
+    await db.update(supplierProductListings).set({ stock: aggStock, updatedAt: new Date() }).where(eq(supplierProductListings.id, variant.listingId));
+    await db.insert(inventoryAdjustments).values({
+      listingId: variant.listingId, supplierId: listing.supplierId, userId: null,
+      adjustmentType: 'INCREASE', previousStock, newStock: aggStock, difference: aggStock - previousStock,
+      reason, notes: null,
+    });
+  }
+
+  async bulkInventoryAction(supplierId: number, listingIds: number[], action: 'hide' | 'show' | 'delete' | 'setMinStock' | 'stock', payload?: { minStock?: number; type?: 'INCREASE' | 'DECREASE' | 'SET'; quantity?: number; reason?: string; userId?: number | null }) {
+    const owned = await db.select().from(supplierProductListings).where(and(inArray(supplierProductListings.id, listingIds), eq(supplierProductListings.supplierId, supplierId)));
+    const ids = owned.map((l) => l.id);
+    if (!ids.length) return { updated: 0 };
+
+    if (action === 'hide') {
+      await db.update(supplierProductListings).set({ visibility: 'HIDDEN', updatedAt: new Date() }).where(inArray(supplierProductListings.id, ids));
+    } else if (action === 'show') {
+      await db.update(supplierProductListings).set({ visibility: 'VISIBLE', updatedAt: new Date() }).where(inArray(supplierProductListings.id, ids));
+    } else if (action === 'delete') {
+      await db.delete(supplierProductVariants).where(inArray(supplierProductVariants.listingId, ids));
+      await db.delete(inventoryAdjustments).where(inArray(inventoryAdjustments.listingId, ids));
+      await db.delete(supplierProductListings).where(inArray(supplierProductListings.id, ids));
+    } else if (action === 'setMinStock' && payload?.minStock !== undefined) {
+      await db.update(supplierProductListings).set({ minStock: payload.minStock, updatedAt: new Date() }).where(inArray(supplierProductListings.id, ids));
+    } else if (action === 'stock' && payload?.type && payload?.quantity !== undefined) {
+      for (const listing of owned) {
+        const variants = await this.getVariantsByListingId(listing.id);
+        if (variants.length > 0) continue; // skip variant-tracked listings in bulk stock updates
+        const previousStock = listing.stock;
+        let newStock: number;
+        if (payload.type === 'INCREASE') newStock = previousStock + payload.quantity;
+        else if (payload.type === 'DECREASE') newStock = Math.max(0, previousStock - payload.quantity);
+        else newStock = payload.quantity;
+        await db.update(supplierProductListings).set({ stock: newStock, updatedAt: new Date() }).where(eq(supplierProductListings.id, listing.id));
+        await db.insert(inventoryAdjustments).values({
+          listingId: listing.id, supplierId, userId: payload.userId ?? null,
+          adjustmentType: payload.type, previousStock, newStock, difference: newStock - previousStock,
+          reason: payload.reason ?? 'Bulk update', notes: null,
+        });
+      }
+    }
+    return { updated: ids.length };
   }
 
   // ── Packs ────────────────────────────────────────────────────────────────────

@@ -168,8 +168,8 @@ const PROVIDERS: Provider[] = [
     services: ["photo", "video", "branding"],
     portfolioImages: [
       "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&q=80",
-      "https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=400&q=80",
-      "https://images.unsplash.com/photo-1485808191679-5f86510bd9d4?w=400&q=80",
+      "https://img.magnific.com/premium-vector/coffee-retro-vintage-poster-premium-design-template_501824-42.jpg?w=400&q=80",
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTs9E2C8dLeLrFNYos4Hmp6nOkScceCO4TZTniFRfIINOnZb_OST7gSSLU&s=10?w=400&q=80",
     ],
     description:
       "Studio créatif spécialisé dans la photographie culinaire et la production vidéo pour cafés et restaurants. Nos visuels font la différence sur vos réseaux.",
@@ -178,7 +178,7 @@ const PROVIDERS: Provider[] = [
       { name: "Shooting Pro", priceInCents: 59900, features: ["Journée complète", "50 photos HD + vidéo", "Retouche avancée", "Livraison 48h"] },
       { name: "Branding Pack", priceInCents: 149900, features: ["Shooting complet", "Logo + charte graphique", "Kit réseaux sociaux", "Révisions illimitées"] },
     ],
-    website: "pixelgrain.tn",
+    website: "hook.tn",
   },
   {
     id: 3,
@@ -201,7 +201,7 @@ const PROVIDERS: Provider[] = [
       { name: "Site Vitrine", priceInCents: 89900, features: ["Design sur mesure", "Menu digital", "Formulaire réservation", "SEO de base"] },
       { name: "SEO + Site", priceInCents: 149900, features: ["Site complet", "SEO 6 mois", "Google My Business", "Suivi mensuel"] },
     ],
-    website: "karimdigital.tn",
+    website: "hook.tn",
   },
   {
     id: 4,
@@ -224,7 +224,7 @@ const PROVIDERS: Provider[] = [
       { name: "Social Pack", priceInCents: 69900, features: ["3 posts/sem", "Stories quotidiennes", "Ads 50 TND/mois inclus"] },
       { name: "Full Marketing", priceInCents: 139900, features: ["Branding complet", "Social media management", "Ads jusqu'à 200 TND", "Reporting BI-mensuel"] },
     ],
-    website: "visiomarketing.tn",
+    website: "hook.tn",
   },
   {
     id: 5,
@@ -247,7 +247,7 @@ const PROVIDERS: Provider[] = [
       { name: "Visual Identity", priceInCents: 59900, features: ["Logo complet", "Charte graphique", "Templates réseaux", "Carte de visite"] },
       { name: "Full Brand", priceInCents: 99900, features: ["Identité complète", "Shooting photo (1h)", "Kit digital", "Révisions illimitées"] },
     ],
-    website: "saracreations.tn",
+    website: "hook.tn",
   },
   {
     id: 6,
@@ -270,7 +270,7 @@ const PROVIDERS: Provider[] = [
       { name: "Boost Pro", priceInCents: 119900, features: ["Social media 6 mois", "Ads management", "2 vidéos/mois", "SEO local"] },
       { name: "Boost Max", priceInCents: 229900, features: ["Full 360° annuel", "Ads budget géré", "Production vidéo mensuelle", "Account manager"] },
     ],
-    website: "cafeboost.tn",
+    website: "hook.tn",
   },
 ];
 

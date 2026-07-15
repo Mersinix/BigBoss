@@ -531,8 +531,8 @@ export function PackQuickViewModal() {
                 ))}
               </div>
               <h2 className="font-bold text-xl text-gray-900" data-testid="text-pack-name">{pack.name}</h2>
-              <p className="text-sm text-gray-500 mt-0.5">{pack.supplierName}</p>
-              {pack.description && <p className="text-sm text-gray-500 mt-2">{pack.description}</p>}
+              {pack.description && <p className="text-sm text-gray-500 mt-0.5">{pack.description}</p>}
+              <p className="font-bold text-sm text-gray-500 mt-2">{pack.supplierName}</p>
             </div>
 
             {/* Price + stock + expiry */}

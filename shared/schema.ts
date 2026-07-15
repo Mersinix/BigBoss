@@ -382,6 +382,7 @@ export const packItems = pgTable("pack_items", {
   listingId: integer("listing_id").notNull(),
   variantId: integer("variant_id"),
   quantity: integer("quantity").notNull().default(1),
+  packVariantPrice: integer("pack_variant_price").notNull().default(0),
 });
 
 // Pack favorites — persisted per-user, mirrors store_favorites / favorites pattern.
@@ -618,6 +619,7 @@ export type PackItemDetail = {
   listingId: number;
   variantId: number | null;
   quantity: number;
+  packVariantPrice: number; // per-variant pack price set by supplier (cents; 0 if not set)
   productId: number;
   productName: string;
   productImageUrl: string | null;

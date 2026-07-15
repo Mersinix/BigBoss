@@ -423,10 +423,9 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
 
   const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
   const [onlyForPack, setOnlyForPack] = useState(false);
-  const [onlyForMyProducts, setOnlyForMyProducts] = useState(false);
 
   const add = useMutation({
-    mutationFn: async (opts: { forPack: boolean }) => {
+    mutationFn: async () => {
       const entries = groupsToEntries(groups, availableFlavors, availableSizes);
       const listingRes = await apiRequest("POST", "/api/supplier/listings", {
         productId: product.id,
@@ -435,8 +434,8 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
         availableFlavorIds: availableFlavors.map(f => f.id),
         availableSizeIds: availableSizes.map(s => s.id),
         availableBrandIds: product.brandId ? [product.brandId] : [],
-        onlyForPack: opts.forPack ? true : onlyForPack,
-        onlyForMyProducts: opts.forPack ? false : onlyForMyProducts,
+        onlyForPack: false,
+        onlyForMyProducts: !onlyForPack,
       });
       const listing = await listingRes.json();
       const listingId = listing.id;
@@ -448,8 +447,8 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
       }));
       await apiRequest("POST", `/api/supplier/listings/${listingId}/variants`, { variants });
     },
-    onSuccess: (_data, opts) => {
-      toast({ title: opts.forPack ? "Sent to your Pack workspace!" : "Added to your products!" });
+    onSuccess: () => {
+      toast({ title: "Added to your products!" });
       onSuccess();
       onClose();
     },
@@ -487,42 +486,30 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Availability restriction (optional)</Label>
+              <Label className="text-sm font-medium">Pack availability (optional)</Label>
               <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
                 <input
                   type="checkbox"
                   className="mt-0.5 rounded"
                   checked={onlyForPack}
-                  onChange={e => { setOnlyForPack(e.target.checked); if (e.target.checked) setOnlyForMyProducts(false); }}
+                  onChange={e => setOnlyForPack(e.target.checked)}
                   data-testid="checkbox-only-for-pack"
                 />
                 <span className="text-sm">
-                  <span className="font-medium">Only for Pack</span>
-                  <span className="block text-xs text-muted-foreground">Product is only available inside Pack Products. Not shown in My Products.</span>
+                  <span className="font-medium">Add to Pack</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {onlyForPack
+                      ? "Product will appear in both My Products and Pack Products."
+                      : "Product will only appear in My Products (not available in Packs)."}
+                  </span>
                 </span>
               </label>
-              <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 rounded"
-                  checked={onlyForMyProducts}
-                  onChange={e => { setOnlyForMyProducts(e.target.checked); if (e.target.checked) setOnlyForPack(false); }}
-                  data-testid="checkbox-only-for-my-products"
-                />
-                <span className="text-sm">
-                  <span className="font-medium">Only for My Products</span>
-                  <span className="block text-xs text-muted-foreground">Product is only available in My Products. Not shown in Pack Products.</span>
-                </span>
-              </label>
-              {!onlyForPack && !onlyForMyProducts && (
-                <p className="text-xs text-muted-foreground pl-1">No restriction selected — product will appear in both My Products and Pack Products.</p>
-              )}
             </div>
 
             <div className="flex flex-wrap gap-2 justify-end pt-2">
               <Button variant="outline" onClick={onClose}>Cancel</Button>
               <Button
-                onClick={() => add.mutate({ forPack: onlyForPack })}
+                onClick={() => add.mutate()}
                 disabled={add.isPending || !hasAnyPrice}
                 data-testid="button-confirm-add-listing"
               >
@@ -576,8 +563,8 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
 
   const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
   const [loaded, setLoaded] = useState(false);
-  const [onlyForPack, setOnlyForPack] = useState(!!(listing as any).onlyForPack);
-  const [onlyForMyProducts, setOnlyForMyProducts] = useState(!!(listing as any).onlyForMyProducts);
+  // "Add to Pack" = true whenever the listing is NOT restricted to My Products only
+  const [onlyForPack, setOnlyForPack] = useState(!(listing as any).onlyForMyProducts);
 
   useEffect(() => {
     if (!loaded && (existingVariants as any[]).length > 0) {
@@ -590,8 +577,8 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
     mutationFn: async () => {
       const entries = groupsToEntries(groups, availableFlavors, availableSizes);
       await apiRequest("PATCH", `/api/supplier/listings/${listing.id}`, {
-        onlyForPack,
-        onlyForMyProducts,
+        onlyForPack: false,
+        onlyForMyProducts: !onlyForPack,
         variants: entries.map(e => ({
           flavorId: e.flavorId,
           sizeId: e.sizeId,
@@ -630,36 +617,24 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Availability restriction (optional)</Label>
+              <Label className="text-sm font-medium">Pack availability (optional)</Label>
               <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
                 <input
                   type="checkbox"
                   className="mt-0.5 rounded"
                   checked={onlyForPack}
-                  onChange={e => { setOnlyForPack(e.target.checked); if (e.target.checked) setOnlyForMyProducts(false); }}
+                  onChange={e => setOnlyForPack(e.target.checked)}
                   data-testid="checkbox-edit-only-for-pack"
                 />
                 <span className="text-sm">
                   <span className="font-medium">Add to Pack</span>
-                  <span className="block text-xs text-muted-foreground">Product is only available inside Pack Products. Not shown in My Products.</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {onlyForPack
+                      ? "Product will appear in both My Products and Pack Products."
+                      : "Product will only appear in My Products (not available in Packs)."}
+                  </span>
                 </span>
               </label>
-              <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 rounded"
-                  checked={onlyForMyProducts}
-                  onChange={e => { setOnlyForMyProducts(e.target.checked); if (e.target.checked) setOnlyForPack(false); }}
-                  data-testid="checkbox-edit-only-for-my-products"
-                />
-                <span className="text-sm">
-                  <span className="font-medium">Only for My Products</span>
-                  <span className="block text-xs text-muted-foreground">Product is only available in My Products. Not shown in Pack Products.</span>
-                </span>
-              </label>
-              {!onlyForPack && !onlyForMyProducts && (
-                <p className="text-xs text-muted-foreground pl-1">No restriction selected — product will appear in both My Products and Pack Products.</p>
-              )}
             </div>
 
             <div className="flex gap-2 justify-end pt-2">

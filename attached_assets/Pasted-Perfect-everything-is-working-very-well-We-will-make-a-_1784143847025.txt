@@ -1,0 +1,329 @@
+Perfect, everything is working very well. We will make a few improvements to the existing Pack feature while keeping the current architecture, design, APIs, database structure, synchronization, and workflow intact.
+
+Before making any changes, please review the current Pack implementation across the Supplier, Coffee Owner, and Admin parts to understand the existing logic. Reuse the current implementation wherever possible and only modify the areas described below.
+
+**Do not redesign the UI.**
+**Do not change existing workflows unless explicitly requested below.**
+**Do not remove any existing functionality.**
+**Do not break synchronization between Supplier, Coffee Owner, and Admin.**
+**Do not modify unrelated parts of the project.**
+
+---
+
+# 1. Supplier Part
+
+## Products → "Admin Products" → "Add to My Products" modal
+
+and
+
+## Products → "My Products" → "Edit Pricing & Stock — Variant Builder" modal
+
+We need to simplify the availability logic.
+
+### Current behavior
+
+There are currently two options:
+
+* **Add to Pack**
+* **Only for My Products**
+
+Current logic:
+
+* **Add to Pack** → Product appears only inside Pack Products.
+* **Only for My Products** → Product appears only inside My Products.
+* **No option selected** → Product appears in both.
+
+---
+
+### New behavior
+
+Remove completely:
+
+* **Only for My Products**
+
+It should no longer exist anywhere.
+
+Replace the logic of **Add to Pack** with the following behavior:
+
+### If "Add to Pack" is checked
+
+The product is available in BOTH:
+
+* My Products
+* Pack Products
+
+### If "Add to Pack" is NOT checked
+
+The product is available ONLY in:
+
+* My Products
+
+This becomes the only availability option.
+
+Everything else inside the Variant Builder must remain unchanged.
+
+---
+
+# 2. Supplier → Products → Pack
+
+## Create Pack modal
+
+(Currently used from both Pack Products and New Packs)
+
+The Pack creation workflow is already working well.
+
+We only want to improve the pricing strategy.
+
+---
+
+## Current behavior
+
+The supplier selects variants.
+
+Then manually enters:
+
+* Pack Price
+
+---
+
+## New behavior
+
+Each selected variant already has:
+
+* Original price
+
+Keep that original price unchanged.
+
+For every selected variant inside the Pack creation/edit modal, allow the supplier to enter:
+
+**Pack Price for this variant**
+
+Example:
+
+Variant A
+
+Original Price:
+$30
+
+Pack Variant Price:
+$24
+
+Variant B
+
+Original Price:
+$20
+
+Pack Variant Price:
+$16
+
+The supplier enters a new Pack price for each selected variant.
+
+---
+
+## Pack Price
+
+The overall Pack Price should become automatic.
+
+It should always equal:
+
+Sum of all Pack Variant Prices × their selected quantities.
+
+The supplier should no longer manually calculate the Pack price.
+
+It should be automatically filled based on the selected variants and quantities.
+
+---
+
+## Existing validation
+
+Keep the existing validation:
+
+The Pack price must always remain lower than the total original value of the included variants.
+
+If the supplier enters Pack Variant Prices that produce a total Pack Price equal to or greater than the original total, validation should prevent saving until corrected.
+
+---
+
+## Coffee Owner
+
+Only the final Pack Price should continue to appear on:
+
+* Pack cards
+* Pack modal
+* Cart
+* Checkout
+
+The individual Pack Variant Prices are only for supplier configuration and should not be shown to Coffee Owners.
+
+---
+
+# 3. Coffee Owner Part
+
+## Shop
+
+and
+
+## Store
+
+→ Pack Details modal
+
+The Pack Details modal is already working correctly.
+
+We only need to improve quantity synchronization.
+
+---
+
+## Current behavior
+
+Example:
+
+Pack contains:
+
+FANTA
+
+×3
+
+BOGA
+
+×2
+
+BOGA
+
+×1
+
+If the Coffee Owner changes Pack quantity from:
+
+1
+
+to
+
+2
+
+Only the Pack price updates.
+
+The flavor distribution quantities remain unchanged.
+
+---
+
+## Expected behavior
+
+Flavor distribution must always follow the selected Pack quantity.
+
+Example:
+
+Pack quantity:
+
+2
+
+Then:
+
+Instead of:
+
+FANTA
+
+3 / 3
+
+It becomes:
+
+6 / 6
+
+Instead of:
+
+BOGA
+
+2 / 2
+
+It becomes:
+
+4 / 4
+
+Instead of:
+
+BOGA
+
+1 / 1
+
+It becomes:
+
+2 / 2
+
+Every flavor allocation must automatically scale using the selected Pack quantity.
+
+Example:
+
+Current:
+
+Citron
+
+3
+
+After Pack quantity becomes 2:
+
+Citron
+
+6
+
+Current:
+
+Bidha
+
+1
+
+After Pack quantity becomes 2:
+
+Bidha
+
+2
+
+Everything inside the flavor distribution must always represent:
+
+(Product quantity inside Pack) × (Selected Pack quantity)
+
+---
+
+## Stock validation
+
+Keep the existing stock validation.
+
+The multiplied quantities must still respect:
+
+* Variant stock
+* Flavor stock
+* Existing availability rules
+
+Do not allow quantities beyond available stock.
+
+---
+
+# Final Verification
+
+After implementing these changes, verify the complete workflow end-to-end.
+
+Supplier:
+
+* Add product
+* Edit Variant Builder
+* Add to Pack option
+* Pack Products
+* Create Pack
+* Edit Pack
+* Pack pricing
+* Pack stock
+
+Coffee Owner:
+
+* Shop
+* Store
+* Pack cards
+* Pack Details modal
+* Flavor distribution
+* Quantity selector
+* Add to cart
+* Cart
+* Checkout
+
+Ensure all synchronization remains correct across Supplier, Coffee Owner, and Admin.
+
+If a part is already working correctly, leave it unchanged.
+
+Only implement the improvements described above.

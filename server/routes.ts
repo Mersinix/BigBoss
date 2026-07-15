@@ -1662,6 +1662,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     listingId: z.number(),
     variantId: z.number().nullable().optional(),
     quantity: z.number().min(1),
+    packVariantPrice: z.number().min(0).optional(),
   });
   const packBodySchema = z.object({
     name: z.string().min(1),
@@ -1712,7 +1713,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         quantityAvailable: autoQuantity,
         expirationDate: body.expirationDate ? new Date(body.expirationDate) : null,
         visibility: body.visibility ?? 'VISIBLE',
-      }, body.items);
+      }, body.items.map(i => ({ ...i, packVariantPrice: i.packVariantPrice !== undefined ? Math.round(i.packVariantPrice * 100) : 0 })));
       broadcast('pack_updated', { packId: pack.id, supplierId: req.session.userId });
       res.status(201).json(pack);
     } catch (err) {
@@ -1759,7 +1760,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ...(body.expirationDate !== undefined && { expirationDate: body.expirationDate ? new Date(body.expirationDate) : null }),
         ...(body.visibility !== undefined && { visibility: body.visibility }),
         ...(body.isArchived !== undefined && { isArchived: body.isArchived }),
-      }, body.items as any);
+      }, body.items ? (body.items as any[]).map((i: any) => ({ ...i, packVariantPrice: i.packVariantPrice !== undefined ? Math.round(i.packVariantPrice * 100) : 0 })) : undefined);
       if (!updated) return res.status(404).json({ message: 'Not found' });
       broadcast('pack_updated', { packId, supplierId: req.session.userId });
       res.json(updated);

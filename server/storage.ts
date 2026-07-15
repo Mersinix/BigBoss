@@ -113,8 +113,8 @@ export interface IStorage {
   getPackDetail(id: number): Promise<PackDetail | undefined>;
   computeAutoPackQuantity(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
   computePackItemsTotal(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
-  createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail>;
-  updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail | undefined>;
+  createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail>;
+  updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined>;
   duplicatePack(id: number, supplierId: number): Promise<PackDetail | undefined>;
   deletePack(id: number): Promise<void>;
   getMarketplacePacks(filters?: { categoryId?: number; subCategoryId?: number; brandId?: number; flavorId?: number; sizeId?: number; supplierId?: number }): Promise<PackDetail[]>;
@@ -1557,6 +1557,7 @@ export class DatabaseStorage implements IStorage {
           listingId: it.listingId,
           variantId: it.variantId,
           quantity: it.quantity,
+          packVariantPrice: (it as any).packVariantPrice ?? 0,
           productId: product?.id ?? 0,
           productName: product?.name ?? "Unknown product",
           productImageUrl: product?.imageUrl ?? null,
@@ -1608,7 +1609,7 @@ export class DatabaseStorage implements IStorage {
     return detail;
   }
 
-  async createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail> {
+  async createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail> {
     const [pack] = await db.insert(packs).values({
       supplierId,
       name: data.name,
@@ -1620,20 +1621,20 @@ export class DatabaseStorage implements IStorage {
       visibility: data.visibility ?? 'VISIBLE',
     }).returning();
     if (items.length) {
-      await db.insert(packItems).values(items.map((i) => ({ packId: pack.id, listingId: i.listingId, variantId: i.variantId ?? null, quantity: i.quantity })));
+      await db.insert(packItems).values(items.map((i) => ({ packId: pack.id, listingId: i.listingId, variantId: i.variantId ?? null, quantity: i.quantity, packVariantPrice: i.packVariantPrice ?? 0 })));
     }
     const [detail] = await this.buildPackDetails([pack]);
     return detail;
   }
 
-  async updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<PackDetail | undefined> {
+  async updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined> {
     const [existing] = await db.select().from(packs).where(and(eq(packs.id, id), eq(packs.supplierId, supplierId)));
     if (!existing) return undefined;
     const [updated] = await db.update(packs).set({ ...data, updatedAt: new Date() } as any).where(eq(packs.id, id)).returning();
     if (items !== undefined) {
       await db.delete(packItems).where(eq(packItems.packId, id));
       if (items.length) {
-        await db.insert(packItems).values(items.map((i) => ({ packId: id, listingId: i.listingId, variantId: i.variantId ?? null, quantity: i.quantity })));
+        await db.insert(packItems).values(items.map((i) => ({ packId: id, listingId: i.listingId, variantId: i.variantId ?? null, quantity: i.quantity, packVariantPrice: i.packVariantPrice ?? 0 })));
       }
     }
     const [detail] = await this.buildPackDetails([updated]);
@@ -1652,7 +1653,7 @@ export class DatabaseStorage implements IStorage {
       quantityAvailable: existing.quantityAvailable,
       expirationDate: existing.expirationDate,
       visibility: existing.visibility === 'VISIBLE' ? 'HIDDEN' : existing.visibility,
-    }, existingItems.map((i) => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity })));
+    }, existingItems.map((i) => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity, packVariantPrice: (i as any).packVariantPrice ?? 0 })));
   }
 
   async deletePack(id: number): Promise<void> {

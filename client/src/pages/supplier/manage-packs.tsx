@@ -83,7 +83,7 @@ function usePacks() {
   return useQuery<PackDetail[]>({ queryKey: ["/api/supplier/packs"] });
 }
 
-type PackItemDraft = { listingId: number; variantId: number | null; quantity: number };
+type PackItemDraft = { listingId: number; variantId: number | null; quantity: number; packVariantPrice: string };
 
 // ── Pack Form Modal ───────────────────────────────────────────────────────────
 
@@ -100,11 +100,10 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
   const [imageUrl, setImageUrl] = useState(editing?.imageUrl ?? "");
-  const [price, setPrice] = useState(editing ? String(editing.price / 100) : "");
   const [expirationDate, setExpirationDate] = useState(editing?.expirationDate ? new Date(editing.expirationDate).toISOString().slice(0, 10) : "");
   const [items, setItems] = useState<PackItemDraft[]>(
     editing
-      ? editing.items.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity }))
+      ? editing.items.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity, packVariantPrice: i.packVariantPrice > 0 ? String(i.packVariantPrice / 100) : "" }))
       : preSelectedItems
   );
 
@@ -129,11 +128,13 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     return base;
   }, [listings, preSelectedListingIds]);
 
-  const toggleItem = (listingId: number, variantId: number | null) => {
+  const toggleItem = (listingId: number, variantId: number | null, defaultPrice: number) => {
     setItems(prev => {
       const exists = prev.find(i => i.listingId === listingId && i.variantId === variantId);
       if (exists) return prev.filter(i => !(i.listingId === listingId && i.variantId === variantId));
-      return [...prev, { listingId, variantId, quantity: 1 }];
+      // defaultPrice is the original variant price in cents; convert to dollars for the input
+      const packVariantPrice = defaultPrice > 0 ? String((defaultPrice / 100).toFixed(2)) : "";
+      return [...prev, { listingId, variantId, quantity: 1, packVariantPrice }];
     });
   };
 
@@ -141,11 +142,16 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     setItems(prev => prev.map(i => (i.listingId === listingId && i.variantId === variantId) ? { ...i, quantity: Math.max(1, quantity) } : i));
   };
 
+  const setPackVariantPrice = (listingId: number, variantId: number | null, packVariantPrice: string) => {
+    setItems(prev => prev.map(i => (i.listingId === listingId && i.variantId === variantId) ? { ...i, packVariantPrice } : i));
+  };
+
   const preview = useMemo(() => {
     const categoryNames = new Set<string>();
     const subCategoryNames = new Set<string>();
     const brandNames = new Set<string>();
-    let total = 0;
+    let individualTotal = 0;
+    let packTotal = 0;
     let autoQuantity = Infinity;
     const rows = items.map(it => {
       const listing = listings.find(l => l.id === it.listingId);
@@ -153,26 +159,30 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       const variant = it.variantId ? (listing.variants ?? []).find(v => v.id === it.variantId) : null;
       const unitPrice = variant ? variant.price : listing.price;
       const availableQty = variant ? variant.quantity : listing.stock;
-      total += unitPrice * it.quantity;
+      individualTotal += unitPrice * it.quantity;
+      const packVariantPriceCents = Math.round((parseFloat(it.packVariantPrice) || 0) * 100);
+      packTotal += packVariantPriceCents * it.quantity;
       if (it.quantity > 0) autoQuantity = Math.min(autoQuantity, Math.floor(availableQty / it.quantity));
       if (listing.product.categoryLabel) categoryNames.add(listing.product.categoryLabel.name);
       if (listing.product.subCategoryLabel) subCategoryNames.add(listing.product.subCategoryLabel.name);
       if (listing.product.brandLabel) brandNames.add(listing.product.brandLabel.name);
-      return { ...it, productName: listing.product.name, flavorName: variant?.flavorName, sizeName: variant?.sizeName, unitPrice };
+      return { ...it, productName: listing.product.name, flavorName: variant?.flavorName, sizeName: variant?.sizeName, unitPrice, packVariantPriceCents };
     }).filter(Boolean) as any[];
     return {
       rows,
       categoryNames: Array.from(categoryNames),
       subCategoryNames: Array.from(subCategoryNames),
       brandNames: Array.from(brandNames),
-      individualTotal: total,
+      individualTotal,
+      packTotal, // auto-computed total pack price in cents
       autoQuantity: isFinite(autoQuantity) ? autoQuantity : 0,
     };
   }, [items, listings]);
 
-  const priceCents = Math.round((parseFloat(price) || 0) * 100);
-  const priceError = preview.individualTotal > 0 && price.trim() !== "" && priceCents >= preview.individualTotal
-    ? "Pack price must be lower than the total price of the included products"
+  // Auto-computed pack price from per-variant pack prices
+  const autoPackPrice = preview.packTotal / 100; // in dollars
+  const priceError = preview.individualTotal > 0 && items.length > 0 && preview.packTotal >= preview.individualTotal
+    ? "Pack price must be lower than the total original price of the included products"
     : null;
 
   const expirationError = expirationDate && new Date(expirationDate) < new Date(new Date().toDateString())
@@ -185,11 +195,16 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
         name,
         description: description || null,
         imageUrl: imageUrl || null,
-        price: parseFloat(price) || 0,
+        price: autoPackPrice,
         // quantityAvailable is intentionally omitted — the server auto-computes it
         // from the selected variants' current stock.
         expirationDate: expirationDate || null,
-        items: items.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity })),
+        items: items.map(i => ({
+          listingId: i.listingId,
+          variantId: i.variantId,
+          quantity: i.quantity,
+          packVariantPrice: parseFloat(i.packVariantPrice) || 0,
+        })),
       };
       return editing
         ? apiRequest("PATCH", `/api/supplier/packs/${editing.id}`, body)
@@ -204,7 +219,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     onError: (err: any) => toast({ title: err?.message ?? "Error saving pack", variant: "destructive" }),
   });
 
-  const canSave = name.trim().length > 0 && items.length >= 2 && parseFloat(price) >= 0 && !priceError && !expirationError;
+  const canSave = name.trim().length > 0 && items.length >= 2 && autoPackPrice > 0 && !priceError && !expirationError;
   // items.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
 
   return (
@@ -227,11 +242,11 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Pack price</Label>
-                <Input type="number" min={0} step="0.01" value={price} onChange={e => setPrice(e.target.value)} data-testid="input-pack-price" />
-                {preview.individualTotal > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">Must be below {formatCurrency(preview.individualTotal)}</p>
-                )}
+                <Label>Pack price (auto)</Label>
+                <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm font-medium" data-testid="text-pack-auto-price">
+                  {items.length > 0 ? formatCurrency(preview.packTotal) : "—"}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant pack prices below</p>
               </div>
               <div>
                 <Label>Packs available (stock)</Label>
@@ -274,13 +289,34 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                           const checked = items.some(i => i.listingId === listing.id && i.variantId === g.representativeId);
                           const item = items.find(i => i.listingId === listing.id && i.variantId === g.representativeId);
                           return (
-                            <div key={g.key} className="flex items-center gap-2">
-                              <label className="flex items-center gap-2 flex-1 cursor-pointer">
-                                <input type="checkbox" checked={checked} onChange={() => toggleItem(listing.id, g.representativeId)} className="rounded" data-testid={`checkbox-pack-item-${listing.id}-${g.key}`} />
-                                <span className="text-xs text-muted-foreground">{variantGroupLabel(g)} — {formatCurrency(g.price)} · {g.totalStock} in stock</span>
-                              </label>
+                            <div key={g.key} className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 flex-1 cursor-pointer">
+                                  <input type="checkbox" checked={checked} onChange={() => toggleItem(listing.id, g.representativeId, g.price)} className="rounded" data-testid={`checkbox-pack-item-${listing.id}-${g.key}`} />
+                                  <span className="text-xs text-muted-foreground">
+                                    {variantGroupLabel(g)}
+                                    <span className="ml-1 text-gray-400">Original: {formatCurrency(g.price)}</span>
+                                    · {g.totalStock} in stock
+                                  </span>
+                                </label>
+                                {checked && (
+                                  <Input type="number" min={1} max={g.totalStock} value={item?.quantity ?? 1} onChange={e => setQty(listing.id, g.representativeId, parseInt(e.target.value) || 1)} className="w-16 h-7 text-xs" data-testid={`input-pack-item-qty-${listing.id}-${g.key}`} />
+                                )}
+                              </div>
                               {checked && (
-                                <Input type="number" min={1} max={g.totalStock} value={item?.quantity ?? 1} onChange={e => setQty(listing.id, g.representativeId, parseInt(e.target.value) || 1)} className="w-16 h-7 text-xs" data-testid={`input-pack-item-qty-${listing.id}-${g.key}`} />
+                                <div className="flex items-center gap-2 pl-5">
+                                  <span className="text-xs text-muted-foreground shrink-0">Pack price:</span>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    placeholder={String((g.price / 100).toFixed(2))}
+                                    value={item?.packVariantPrice ?? ""}
+                                    onChange={e => setPackVariantPrice(listing.id, g.representativeId, e.target.value)}
+                                    className="w-24 h-7 text-xs"
+                                    data-testid={`input-pack-variant-price-${listing.id}-${g.key}`}
+                                  />
+                                </div>
                               )}
                             </div>
                           );
@@ -313,8 +349,10 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                   <p className="text-sm text-muted-foreground">{description || "Description…"}</p>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-bold text-primary">{formatCurrency((parseFloat(price) || 0) * 100)}</span>
-                  {preview.individualTotal > 0 && <span className="text-sm text-muted-foreground line-through">{formatCurrency(preview.individualTotal)}</span>}
+                  <span className="text-xl font-bold text-primary">{formatCurrency(preview.packTotal)}</span>
+                  {preview.individualTotal > 0 && preview.packTotal > 0 && preview.packTotal < preview.individualTotal && (
+                    <span className="text-sm text-muted-foreground line-through">{formatCurrency(preview.individualTotal)}</span>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {preview.categoryNames.map(n => <Badge key={n} variant="secondary" className="text-xs">{n}</Badge>)}
@@ -532,7 +570,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
     setSelected(prev => {
       const exists = prev.find(i => i.listingId === listingId && i.variantId === variantId);
       if (exists) return prev.filter(i => !(i.listingId === listingId && i.variantId === variantId));
-      return [...prev, { listingId, variantId, quantity: 1 }];
+      return [...prev, { listingId, variantId, quantity: 1, packVariantPrice: "" }];
     });
   };
 

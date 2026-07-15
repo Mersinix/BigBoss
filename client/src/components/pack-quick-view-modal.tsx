@@ -380,26 +380,22 @@ export function PackQuickViewModal() {
   // Flavor distribution state: per item, track allocations across available variants
   const [flavorSelections, setFlavorSelections] = useState<Record<number, FlavorAllocation[]>>({});
 
-  // Initialise flavor selections when pack loads or changes.
-  // Flavors with zero stock are excluded — the Coffee Owner should only see
-  // and distribute quantities across flavors that are actually available.
-  useEffect(() => {
-    if (!pack) return;
-    const initial: Record<number, FlavorAllocation[]> = {};
-    for (const item of pack.items) {
+  // Build default allocations for a pack at a given packQty.
+  // Total quantity per item = item.quantity * packQty, distributed across in-stock variants.
+  function buildDefaultAllocations(p: typeof pack, packQty: number): Record<number, FlavorAllocation[]> {
+    if (!p) return {};
+    const result: Record<number, FlavorAllocation[]> = {};
+    for (const item of p.items) {
       const inStockVariants = item.listingVariants.filter(v => v.availableQuantity > 0);
       if (inStockVariants.length > 1) {
-        // Find the pre-selected variant (if any) to seed with the item quantity
+        const target = item.quantity * packQty;
         const selectedVariant = item.variantId
           ? inStockVariants.find(v => v.variantId === item.variantId)
           : null;
 
         if (selectedVariant) {
-          // Put as much as possible on the selected variant, clamped to its stock
-          const onSelected = Math.min(item.quantity, selectedVariant.availableQuantity);
-          const remaining = item.quantity - onSelected;
-          // Distribute the remaining among other variants in order
-          let leftover = remaining;
+          const onSelected = Math.min(target, selectedVariant.availableQuantity);
+          let leftover = target - onSelected;
           const allocs: FlavorAllocation[] = inStockVariants.map(v => {
             if (v.variantId === selectedVariant.variantId) {
               return { variantId: v.variantId, flavorName: v.flavorName, sizeName: v.sizeName, quantity: onSelected, availableQty: v.availableQuantity };
@@ -408,21 +404,28 @@ export function PackQuickViewModal() {
             leftover -= give;
             return { variantId: v.variantId, flavorName: v.flavorName, sizeName: v.sizeName, quantity: give, availableQty: v.availableQuantity };
           });
-          initial[item.id] = allocs;
+          result[item.id] = allocs;
         } else {
-          // No specific variant selected — distribute starting from first variant, clamped to stock
-          let leftover = item.quantity;
+          let leftover = target;
           const allocs: FlavorAllocation[] = inStockVariants.map(v => {
             const give = Math.min(leftover, v.availableQuantity);
             leftover -= give;
             return { variantId: v.variantId, flavorName: v.flavorName, sizeName: v.sizeName, quantity: give, availableQty: v.availableQuantity };
           });
-          initial[item.id] = allocs;
+          result[item.id] = allocs;
         }
       }
     }
-    setFlavorSelections(initial);
-  }, [pack?.id]);
+    return result;
+  }
+
+  // Re-initialise flavor selections whenever the pack or the quantity changes.
+  // Quantities always scale as item.quantity × packQty.
+  useEffect(() => {
+    if (!pack) return;
+    setFlavorSelections(buildDefaultAllocations(pack, qty));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pack?.id, qty]);
 
   useEffect(() => { setQty(1); setActiveTab("details"); }, [packId]);
 
@@ -430,18 +433,19 @@ export function PackQuickViewModal() {
   const maxQty = pack ? Math.min(pack.quantityAvailable, pack.maxBuildable) : 0;
 
   // Check that all flavor distributions are valid:
-  // - total allocated quantity must equal item.quantity
+  // - total allocated quantity must equal item.quantity * packQty
   // - each individual allocation must not exceed its variant's available stock
   const flavorSelectionsValid = useMemo(() => {
     if (!pack) return true;
     return pack.items.every(item => {
       const allocs = flavorSelections[item.id];
       if (!allocs) return true; // single variant — no distribution needed
-      const totalOk = allocs.reduce((s, a) => s + a.quantity, 0) === item.quantity;
+      const target = item.quantity * qty;
+      const totalOk = allocs.reduce((s, a) => s + a.quantity, 0) === target;
       const perVariantOk = allocs.every(a => a.quantity <= a.availableQty);
       return totalOk && perVariantOk;
     });
-  }, [pack, flavorSelections]);
+  }, [pack, flavorSelections, qty]);
 
   const handleAddToCart = () => {
     if (!pack) return;
@@ -608,7 +612,7 @@ export function PackQuickViewModal() {
                         return (
                           <FlavorDistributionRow
                             key={item.id}
-                            item={{ ...item, listingVariants: item.listingVariants.filter(v => v.availableQuantity > 0) }}
+                            item={{ ...item, quantity: item.quantity * qty, listingVariants: item.listingVariants.filter(v => v.availableQuantity > 0) }}
                             allocations={allocs}
                             onChange={newAllocs => setFlavorSelections(prev => ({ ...prev, [item.id]: newAllocs }))}
                           />

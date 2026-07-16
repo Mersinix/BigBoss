@@ -1,0 +1,865 @@
+I want to create a completely new Admin module called Prospecting.
+
+This module is one of the most important CRM features of the platform because it allows our sales team to discover potential customers and suppliers before they register.
+
+New Admin Menu
+
+Add a new sidebar item:
+
+Admin
+
+Dashboard
+Users
+Products
+Orders
+...
+Prospecting ⭐
+
+Only SUPER_ADMIN and ADMIN can access it.
+
+Objective
+
+The Prospecting module must allow the administrator to search businesses around a geographic location using Google Maps (Google Places API).
+
+The system must automatically collect prospects and store them in our database.
+
+Supported prospect types:
+
+Coffee Shop
+Coffee Roastery
+Coffee Supplier
+Water Supplier
+Juice Supplier
+Milk Supplier
+Pastry Supplier
+Bakery
+Packaging Supplier
+Printer
+Marketing Agency
+Delivery Company
+Barista Trainer
+Coffee Equipment Supplier
+Maintenance Company
+Cleaning Company
+Other
+
+The search keyword is configurable.
+
+Examples:
+
+coffee
+
+café
+
+coffee shop
+
+supplier water
+
+supplier juice
+
+printer
+
+marketing agency
+
+barista trainer
+
+etc.
+
+Search Panel
+
+Top search panel:
+
+Search Center
+
+Input
+
+Search Address
+
+Autocomplete using Google Places.
+
+Examples:
+
+"Tunis"
+
+"Nabeul"
+
+"Avenue Habib Bourguiba"
+
+etc.
+
+Radius
+
+Dropdown
+
+1 km
+
+2 km
+
+5 km
+
+10 km
+
+20 km
+
+30 km
+
+50 km
+
+100 km
+
+Keyword
+
+Text input
+
+Examples
+
+coffee
+
+café
+
+supplier water
+
+juice supplier
+
+printer
+
+marketing
+
+etc.
+
+Prospect Type
+
+Dropdown
+
+Auto Detect
+
+Coffee
+
+Supplier
+
+Printer
+
+Marketing
+
+Delivery
+
+Barista Trainer
+
+Other
+
+Minimum Rating
+
+Optional
+
+0
+
+2
+
+3
+
+4
+
+4.5
+
+Only businesses with phone
+
+Checkbox
+
+Only businesses with website
+
+Checkbox
+
+Include permanently closed
+
+Default false
+
+Search Button
+
+When clicked:
+
+Call Google Places API
+
+Search all pages
+
+Handle pagination
+
+Avoid duplicates
+
+Save results into database
+
+Display loading progress.
+
+Example
+
+Searching page 1...
+
+Searching page 2...
+
+Searching page 3...
+
+Completed.
+
+Prospect Database
+
+Create a Prospect table.
+
+Fields
+
+id
+
+googlePlaceId
+
+businessName
+
+businessType
+
+prospectType
+
+address
+
+latitude
+
+longitude
+
+phone
+
+website
+
+rating
+
+reviewCount
+
+openingHours
+
+status
+
+email
+
+facebook
+
+instagram
+
+linkedin
+
+distanceKm
+
+searchCenter
+
+searchRadius
+
+keyword
+
+city
+
+country
+
+postalCode
+
+notes
+
+assignedSales
+
+createdAt
+
+updatedAt
+
+lastContactDate
+
+nextFollowUpDate
+
+deletedAt
+
+Status
+
+New
+
+Not Contacted
+
+Called
+
+Interested
+
+Meeting Scheduled
+
+Waiting Reply
+
+Negotiation
+
+Converted
+
+Rejected
+
+Not Interested
+
+Duplicate
+
+Invalid
+
+Archived
+
+Prospect List
+
+Display a professional CRM table.
+
+Columns
+
+Checkbox
+
+Business Name
+
+Type
+
+Rating
+
+Reviews
+
+Phone
+
+Website
+
+Address
+
+Distance
+
+City
+
+Status
+
+Assigned To
+
+Created Date
+
+Actions
+
+Row Colors
+
+Green
+
+Converted
+
+Orange
+
+Waiting
+
+Blue
+
+Interested
+
+Gray
+
+Archived
+
+Red
+
+Rejected
+
+Row Actions
+
+View
+
+Edit
+
+Delete
+
+Duplicate
+
+Open Google Maps
+
+Call
+
+Copy Phone
+
+Copy Address
+
+Copy Website
+
+Open Website
+
+Mark as Called
+
+Create Follow-up
+
+Create Coffee Owner Account
+
+Create Supplier Account
+
+Convert to Existing User
+
+Archive
+
+Bulk Actions
+
+Bulk Delete
+
+Bulk Archive
+
+Bulk Export CSV
+
+Bulk Export Excel
+
+Bulk Assign Salesperson
+
+Bulk Change Status
+
+Bulk Mark Called
+
+Bulk Convert
+
+Prospect Details Drawer
+
+When clicking a prospect:
+
+Display all information.
+
+Sections
+
+General
+
+Contact
+
+Business
+
+Google Data
+
+Sales
+
+Notes
+
+Timeline
+
+Notes
+
+Allow unlimited notes.
+
+Example
+
+Visited today
+
+Owner interested
+
+Needs pricing
+
+Call next Tuesday
+
+Timeline
+
+Automatically record
+
+Created
+
+Edited
+
+Called
+
+Status changed
+
+Assigned
+
+Converted
+
+Deleted
+
+Exported
+
+Follow-up System
+
+Each prospect can have
+
+Reminder date
+
+Reminder hour
+
+Reminder notes
+
+Priority
+
+Low
+
+Medium
+
+High
+
+Urgent
+
+Dashboard widget
+
+Today's Follow-ups
+
+Overdue Follow-ups
+
+Upcoming Follow-ups
+
+Sales Assignment
+
+Assign prospect to
+
+Admin
+
+Sales Employee
+
+Manager
+
+Show owner avatar.
+
+Duplicate Detection
+
+Before inserting
+
+Compare
+
+Google Place ID
+
+Phone
+
+Website
+
+Business Name
+
+Address
+
+Prevent duplicates.
+
+Filters
+
+Status
+
+Prospect Type
+
+City
+
+Rating
+
+Distance
+
+Assigned User
+
+Has Website
+
+Has Phone
+
+Has Email
+
+Created Date
+
+Last Contact
+
+Keyword
+
+Radius
+
+Search
+
+Global search.
+
+Sorting
+
+Distance
+
+Rating
+
+Review Count
+
+Business Name
+
+Recently Added
+
+Recently Contacted
+
+Statistics Cards
+
+Top cards
+
+Total Prospects
+
+Coffee Shops
+
+Suppliers
+
+Converted
+
+Interested
+
+Called Today
+
+Follow-ups Today
+
+Average Rating
+
+Businesses with Website
+
+Businesses without Phone
+
+Interactive Map
+
+Split screen
+
+Left
+
+Table
+
+Right
+
+Google Map
+
+Each prospect appears as a marker.
+
+Marker colors based on status.
+
+Click marker
+
+Open prospect.
+
+Territory Coverage
+
+Display searched circles on the map.
+
+Avoid searching same area twice.
+
+Heat Map
+
+Optional
+
+Display high-density coffee areas.
+
+CSV Import
+
+Import manually.
+
+CSV Export
+
+Export selected
+
+Export filtered
+
+Export all
+
+Excel Export
+
+Include every field.
+
+Create Account
+
+Action
+
+Create Coffee Owner
+
+Automatically create
+
+User
+
+Business
+
+Location
+
+Phone
+
+Address
+
+Website
+
+Pre-fill registration.
+
+Action
+
+Create Supplier
+
+Same logic.
+
+AI Suggestions
+
+If OpenAI is available
+
+Generate
+
+Sales approach
+
+Email
+
+WhatsApp message
+
+Cold call script
+
+Potential business category
+
+Probability to convert
+
+Priority score
+
+Prospect Score
+
+Calculate score
+
+Has phone
+
++20
+
+Has website
+
++15
+
+Rating above 4.5
+
++20
+
+More than 100 reviews
+
++15
+
+Near our suppliers
+
++10
+
+Recently opened
+
++20
+
+Display
+
+A
+
+B
+
+C
+
+D
+
+Priority badge.
+
+Contact Tracking
+
+Store
+
+Calls
+
+Emails
+
+WhatsApp
+
+Meetings
+
+Result
+
+Duration
+
+Notes
+
+Nearby Existing Customers
+
+When opening a prospect
+
+Show
+
+Existing customers within
+
+1 km
+
+5 km
+
+10 km
+
+This helps sales visits.
+
+Route Planning
+
+Select multiple prospects.
+
+Generate optimal route.
+
+Useful for field sales.
+
+Security
+
+Admin only.
+
+Every modification logged.
+
+Soft delete.
+
+Audit trail.
+
+Database
+
+Create proper migrations.
+
+Indexes
+
+googlePlaceId
+
+status
+
+prospectType
+
+city
+
+phone
+
+rating
+
+assignedSales
+
+API
+
+REST endpoints
+
+GET /prospects
+
+POST /prospects/search
+
+POST /prospects
+
+PATCH /prospects/:id
+
+DELETE /prospects/:id
+
+POST /prospects/convert
+
+POST /prospects/export
+
+POST /prospects/import
+
+POST /prospects/followup
+
+POST /prospects/assign
+
+UI
+
+Follow the same design system already used in BigBossCoffee.
+
+Responsive.
+
+Dark mode compatible.
+
+Pagination.
+
+Virtualized table for thousands of rows.
+
+Loading states.
+
+Skeletons.
+
+Toast notifications.
+
+Confirmation dialogs.
+
+Keyboard shortcuts.
+
+Future-ready Architecture
+
+Design the Prospecting module as a generic CRM so it can later support:
+
+LinkedIn prospect imports
+Facebook business imports
+Yellow Pages imports
+Manual prospect creation
+Business card scanning (OCR)
+AI lead enrichment
+Automatic duplicate merging
+Sales pipeline/Kanban view
+Email campaign integration
+WhatsApp integration
+Territory management
+Multi-country support
+
+The code should be modular, scalable, and follow the existing BigBossCoffee architecture, using the same authentication, authorization, database conventions, UI components, and coding standards already used throughout the project.
+
+Important note: Google Maps data must be obtained through the official Google Places APIs and used in accordance with Google's Terms of Service. The implementation should avoid scraping Google Maps HTML pages directly, since that is generally prohibited by Google's terms.

@@ -1016,3 +1016,108 @@ export type BillingInfo = {
   postalCode?: string;
   city?: string;
 };
+
+// ── Prospecting Module ────────────────────────────────────────────────────────
+
+export const PROSPECT_STATUSES = [
+  'NEW', 'NOT_CONTACTED', 'CALLED', 'INTERESTED', 'MEETING_SCHEDULED',
+  'WAITING_REPLY', 'NEGOTIATION', 'CONVERTED', 'REJECTED', 'NOT_INTERESTED',
+  'DUPLICATE', 'INVALID', 'ARCHIVED',
+] as const;
+
+export const PROSPECT_TYPES = [
+  'COFFEE_SHOP', 'COFFEE_ROASTERY', 'COFFEE_SUPPLIER', 'WATER_SUPPLIER',
+  'JUICE_SUPPLIER', 'MILK_SUPPLIER', 'PASTRY_SUPPLIER', 'BAKERY',
+  'PACKAGING_SUPPLIER', 'PRINTER', 'MARKETING_AGENCY', 'DELIVERY_COMPANY',
+  'BARISTA_TRAINER', 'COFFEE_EQUIPMENT', 'MAINTENANCE_COMPANY',
+  'CLEANING_COMPANY', 'OTHER',
+] as const;
+
+export const prospects = pgTable("prospects", {
+  id: serial("id").primaryKey(),
+  googlePlaceId: text("google_place_id"),
+  businessName: text("business_name").notNull(),
+  businessType: text("business_type"),
+  prospectType: text("prospect_type"),
+  address: text("address"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
+  phone: text("phone"),
+  website: text("website"),
+  rating: text("rating"),
+  reviewCount: integer("review_count").default(0),
+  openingHours: jsonb("opening_hours"),
+  status: text("status").notNull().default('NEW'),
+  email: text("email"),
+  facebook: text("facebook"),
+  instagram: text("instagram"),
+  linkedin: text("linkedin"),
+  distanceKm: text("distance_km"),
+  searchCenter: text("search_center"),
+  searchRadius: text("search_radius"),
+  keyword: text("keyword"),
+  city: text("city"),
+  country: text("country").default('Tunisia'),
+  postalCode: text("postal_code"),
+  notes: jsonb("notes").default([]),
+  timeline: jsonb("timeline").default([]),
+  contacts: jsonb("contacts").default([]),
+  followUp: jsonb("follow_up"),
+  assignedTo: integer("assigned_to"),
+  prospectScore: integer("prospect_score").default(0),
+  aiSuggestions: jsonb("ai_suggestions"),
+  lastContactDate: timestamp("last_contact_date"),
+  nextFollowUpDate: timestamp("next_follow_up_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export type Prospect = typeof prospects.$inferSelect;
+export type InsertProspect = typeof prospects.$inferInsert;
+
+export type ProspectNote = {
+  id: string;
+  text: string;
+  createdAt: string;
+  createdByName?: string;
+};
+
+export type ProspectTimelineEvent = {
+  id: string;
+  event: string;
+  detail?: string;
+  createdAt: string;
+  userName?: string;
+};
+
+export type ProspectContact = {
+  id: string;
+  type: 'CALL' | 'EMAIL' | 'WHATSAPP' | 'MEETING';
+  result?: string;
+  duration?: number;
+  notes?: string;
+  createdAt: string;
+};
+
+export type ProspectFollowUp = {
+  date: string;
+  time?: string;
+  notes?: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+};
+
+export type ProspectStats = {
+  total: number;
+  byStatus: Record<string, number>;
+  byType: Record<string, number>;
+  withPhone: number;
+  withWebsite: number;
+  withEmail: number;
+  avgRating: number;
+  followUpsToday: number;
+  overdueFollowUps: number;
+  convertedCount: number;
+  calledToday: number;
+  interestedCount: number;
+};

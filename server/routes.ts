@@ -2157,6 +2157,258 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Prospecting (Admin CRM) ──────────────────────────────────────────────────
+
+  app.get('/api/admin/prospecting/stats', requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getProspectStats()); }
+    catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.get('/api/admin/prospecting', requireAdmin, async (req, res) => {
+    try {
+      const { search, status, prospectType, city, hasPhone, hasWebsite, hasEmail, page, limit, sortBy, sortOrder } = req.query as Record<string, string>;
+      const result = await storage.getProspects({
+        search, status, prospectType, city,
+        hasPhone: hasPhone === 'true' ? true : hasPhone === 'false' ? false : undefined,
+        hasWebsite: hasWebsite === 'true' ? true : hasWebsite === 'false' ? false : undefined,
+        hasEmail: hasEmail === 'true' ? true : undefined,
+        page: page ? parseInt(page) : 1,
+        limit: limit ? Math.min(parseInt(limit), 200) : 50,
+        sortBy, sortOrder,
+      });
+      res.json(result);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.post('/api/admin/prospecting/search', requireAdmin, async (req: any, res) => {
+    const MAPS_KEY = process.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!MAPS_KEY) return res.status(400).json({ message: 'Google Maps API key not configured' });
+
+    try {
+      const { address, radiusKm = 5, keyword = 'coffee', prospectType, minRating, onlyWithPhone, onlyWithWebsite } = req.body;
+      if (!address) return res.status(400).json({ message: 'address is required' });
+
+      // 1. Geocode address → lat/lng
+      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${MAPS_KEY}`;
+      const geoRes = await fetch(geoUrl);
+      const geoData = await geoRes.json() as any;
+      if (geoData.status !== 'OK' || !geoData.results?.[0]) {
+        return res.status(400).json({ message: `Geocoding failed: ${geoData.status}` });
+      }
+      const { lat, lng } = geoData.results[0].geometry.location;
+      const radiusMeters = parseFloat(String(radiusKm)) * 1000;
+
+      // 2. Call Nearby Search with pagination (up to 3 pages)
+      let places: any[] = [];
+      let nextPageToken: string | null = null;
+      const pages: string[] = [];
+
+      for (let page = 1; page <= 3; page++) {
+        let url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&keyword=${encodeURIComponent(keyword)}&key=${MAPS_KEY}`;
+        if (nextPageToken) url += `&pagetoken=${nextPageToken}`;
+
+        const searchRes = await fetch(url);
+        const data = await searchRes.json() as any;
+        pages.push(`Page ${page}: ${(data.results ?? []).length} results`);
+
+        if (data.results) places.push(...data.results);
+        nextPageToken = data.next_page_token ?? null;
+        if (!nextPageToken) break;
+        // Google requires 2-second delay before using next_page_token
+        if (page < 3) await new Promise(r => setTimeout(r, 2000));
+      }
+
+      // 3. Apply filters (minRating, onlyWithPhone)
+      if (minRating) places = places.filter((p: any) => (p.rating ?? 0) >= parseFloat(String(minRating)));
+
+      // 4. Get details (phone, website) and save each place
+      let saved = 0, skipped = 0;
+      const caller = await storage.getUser(req.session.userId);
+      const callerName = caller?.name ?? 'Admin';
+
+      for (const place of places) {
+        // Duplicate detection
+        const existing = await storage.findDuplicateProspect({ googlePlaceId: place.place_id });
+        if (existing) { skipped++; continue; }
+
+        // Fetch Place Details for phone + website
+        let phone: string | null = null, website: string | null = null;
+        try {
+          const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=formatted_phone_number,website,opening_hours&key=${MAPS_KEY}`;
+          const detailRes = await fetch(detailUrl);
+          const detail = await detailRes.json() as any;
+          phone = detail.result?.formatted_phone_number ?? null;
+          website = detail.result?.website ?? null;
+        } catch { /* ignore detail fetch errors */ }
+
+        if (onlyWithPhone && !phone) { skipped++; continue; }
+        if (onlyWithWebsite && !website) { skipped++; continue; }
+
+        // Calculate distance from search center
+        const placeLat = place.geometry?.location?.lat ?? 0;
+        const placeLng = place.geometry?.location?.lng ?? 0;
+        const distKm = Math.sqrt(Math.pow((placeLat - lat) * 111, 2) + Math.pow((placeLng - lng) * 111 * Math.cos((lat * Math.PI) / 180), 2));
+
+        // Extract city from vicinity or address_components
+        const city = place.vicinity?.split(',').pop()?.trim() ?? null;
+
+        // Prospect score
+        let score = 0;
+        if (phone) score += 20;
+        if (website) score += 15;
+        if ((place.rating ?? 0) >= 4.5) score += 20;
+        if ((place.user_ratings_total ?? 0) >= 100) score += 15;
+
+        await storage.createProspect({
+          googlePlaceId: place.place_id,
+          businessName: place.name,
+          businessType: (place.types ?? []).join(', '),
+          prospectType: prospectType ?? null,
+          address: place.vicinity ?? place.formatted_address ?? null,
+          latitude: String(placeLat),
+          longitude: String(placeLng),
+          phone,
+          website,
+          rating: place.rating != null ? String(place.rating) : null,
+          reviewCount: place.user_ratings_total ?? 0,
+          status: 'NEW',
+          distanceKm: distKm.toFixed(2),
+          searchCenter: address,
+          searchRadius: String(radiusKm),
+          keyword,
+          city,
+          country: 'Tunisia',
+          prospectScore: score,
+          notes: [],
+          timeline: [{
+            id: Date.now().toString(),
+            event: 'Created via Google Places search',
+            detail: `Search: "${keyword}" near ${address} (${radiusKm} km)`,
+            createdAt: new Date().toISOString(),
+            userName: callerName,
+          }],
+          contacts: [],
+        } as any);
+        saved++;
+      }
+
+      res.json({ saved, skipped, total: places.length, pages, searchCenter: `${lat},${lng}`, radiusKm });
+    } catch (err: any) {
+      console.error('[Prospecting search]', err);
+      res.status(500).json({ message: err?.message ?? 'Search failed' });
+    }
+  });
+
+  app.post('/api/admin/prospecting', requireAdmin, async (req: any, res) => {
+    try {
+      const caller = await storage.getUser(req.session.userId);
+      const data = req.body;
+      if (!data.businessName) return res.status(400).json({ message: 'businessName is required' });
+      const prospect = await storage.createProspect({
+        ...data,
+        timeline: [{
+          id: Date.now().toString(),
+          event: 'Prospect created manually',
+          createdAt: new Date().toISOString(),
+          userName: caller?.name ?? 'Admin',
+        }],
+      } as any);
+      res.status(201).json(prospect);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.get('/api/admin/prospecting/export', requireAdmin, async (req, res) => {
+    try {
+      const result = await storage.getProspects({ limit: 10000, page: 1 });
+      const headers = ['ID','Business Name','Type','Status','Phone','Website','Email','Address','City','Country','Rating','Reviews','Distance (km)','Score','Assigned To','Created At','Notes'];
+      const rows = result.prospects.map(p => [
+        p.id, p.businessName, p.prospectType ?? '', p.status, p.phone ?? '', p.website ?? '',
+        p.email ?? '', p.address ?? '', p.city ?? '', p.country ?? '', p.rating ?? '',
+        p.reviewCount ?? 0, p.distanceKm ?? '', p.prospectScore ?? 0, p.assignedTo ?? '',
+        p.createdAt ? new Date(p.createdAt).toISOString() : '',
+        ((p.notes as any[]) ?? []).map((n: any) => n.text).join(' | '),
+      ]);
+      const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="prospects.csv"');
+      res.send(csv);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.get('/api/admin/prospecting/:id', requireAdmin, async (req, res) => {
+    try {
+      const p = await storage.getProspect(parseInt(req.params.id));
+      if (!p) return res.status(404).json({ message: 'Not found' });
+      res.json(p);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.patch('/api/admin/prospecting/:id', requireAdmin, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getProspect(id);
+      if (!existing) return res.status(404).json({ message: 'Not found' });
+      const caller = await storage.getUser(req.session.userId);
+      const data = req.body;
+
+      // Auto-append timeline event on status change
+      let timeline = (existing.timeline as any[]) ?? [];
+      if (data.status && data.status !== existing.status) {
+        timeline = [...timeline, {
+          id: Date.now().toString(),
+          event: `Status changed: ${existing.status} → ${data.status}`,
+          createdAt: new Date().toISOString(),
+          userName: caller?.name ?? 'Admin',
+        }];
+        if (data.status === 'CALLED') data.lastContactDate = new Date().toISOString();
+      }
+      if (data.assignedTo && data.assignedTo !== existing.assignedTo) {
+        const assignee = await storage.getUser(Number(data.assignedTo));
+        timeline = [...timeline, {
+          id: (Date.now() + 1).toString(),
+          event: `Assigned to ${assignee?.name ?? 'user #' + data.assignedTo}`,
+          createdAt: new Date().toISOString(),
+          userName: caller?.name ?? 'Admin',
+        }];
+      }
+
+      const updated = await storage.updateProspect(id, { ...data, timeline } as any);
+      res.json(updated);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.delete('/api/admin/prospecting/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getProspect(id);
+      if (!existing) return res.status(404).json({ message: 'Not found' });
+      await storage.softDeleteProspect(id);
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.post('/api/admin/prospecting/bulk', requireAdmin, async (req: any, res) => {
+    try {
+      const { action, ids, data } = req.body;
+      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ message: 'ids required' });
+      const caller = await storage.getUser(req.session.userId);
+      if (action === 'delete') {
+        await storage.bulkSoftDeleteProspects(ids);
+      } else if (action === 'archive') {
+        await storage.bulkUpdateProspects(ids, { status: 'ARCHIVED' } as any);
+      } else if (action === 'status' && data?.status) {
+        await storage.bulkUpdateProspects(ids, { status: data.status } as any);
+      } else if (action === 'assign' && data?.assignedTo) {
+        await storage.bulkUpdateProspects(ids, { assignedTo: data.assignedTo } as any);
+      } else if (action === 'mark_called') {
+        await storage.bulkUpdateProspects(ids, { status: 'CALLED', lastContactDate: new Date() } as any);
+      } else {
+        return res.status(400).json({ message: 'Unknown action' });
+      }
+      res.json({ ok: true, affected: ids.length });
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
   return httpServer;
 }
 

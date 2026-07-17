@@ -1725,7 +1725,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch('/api/supplier/packs/:id', requireApprovedSupplier, async (req: any, res) => {
     try {
       const packId = parseInt(req.params.id);
-      const body = packBodySchema.partial({ items: true } as any).extend({ isArchived: z.boolean().optional() }).parse(req.body);
+      const body = packBodySchema.partial().extend({ isArchived: z.boolean().optional() }).parse(req.body);
       if (body.items) {
         for (const item of body.items) {
           const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, item.listingId));
@@ -2062,6 +2062,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             return res.status(400).json({ message: "Listing does not match this product" });
           }
         }
+        // One supplier review per cafe per supplier
+        const [existingSupplierReview] = await db.select().from(supplierProductReviews)
+          .where(and(
+            eq(supplierProductReviews.supplierId, Number(supplierId)),
+            eq(supplierProductReviews.cafeId, user.id),
+            eq(supplierProductReviews.reviewType, 'SUPPLIER')
+          ));
+        if (existingSupplierReview) return res.status(409).json({ message: "You have already reviewed this supplier" });
       }
       const review = await storage.createReview({
         supplierId: isProductReview ? null : Number(supplierId),
@@ -2101,6 +2109,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         rating: z.number().int().min(1).max(5),
         comment: z.string().optional(),
       }).parse(req.body);
+      // One review per cafe per pack
+      const [existingPackReview] = await db.select().from(supplierProductReviews)
+        .where(and(
+          eq((supplierProductReviews as any).packId, packId),
+          eq(supplierProductReviews.cafeId, user.id),
+          eq(supplierProductReviews.reviewType, 'PACK')
+        ));
+      if (existingPackReview) return res.status(409).json({ message: "You have already reviewed this pack" });
       const review = await storage.createPackReview({
         packId,
         supplierId: pack.supplierId,

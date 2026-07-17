@@ -219,7 +219,12 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     onError: (err: any) => toast({ title: err?.message ?? "Error saving pack", variant: "destructive" }),
   });
 
-  const canSave = name.trim().length > 0 && items.length >= 2 && autoPackPrice > 0 && !priceError && !expirationError;
+  // Every selected variant must have its pack variant price filled (> 0)
+  const missingPriceCount = items.filter(i => !(parseFloat(i.packVariantPrice) > 0)).length;
+  const variantPriceError = missingPriceCount > 0
+    ? `${missingPriceCount} selected variant${missingPriceCount > 1 ? "s are" : " is"} missing a Pack Variant Price`
+    : null;
+  const canSave = name.trim().length > 0 && items.length >= 2 && !variantPriceError && !priceError && !expirationError;
   // items.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
 
   return (
@@ -256,6 +261,9 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                 <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant stock</p>
               </div>
             </div>
+            {variantPriceError && (
+              <p className="text-xs text-destructive -mt-2">{variantPriceError}</p>
+            )}
             {priceError && (
               <p className="text-xs text-destructive -mt-2">{priceError}</p>
             )}
@@ -833,11 +841,12 @@ function ActivePackCard({ pack, onPreview }: {
 
 // ── Archived Pack Row ─────────────────────────────────────────────────────────
 
-function ArchivedPackRow({ pack, onToggleVisibility, onUnarchive, onDelete }: {
+function ArchivedPackRow({ pack, onToggleVisibility, onUnarchive, onDelete, onEdit }: {
   pack: PackDetail;
   onToggleVisibility: () => void;
   onUnarchive: () => void;
   onDelete: () => void;
+  onEdit: () => void;
 }) {
   return (
     <Card className="overflow-hidden opacity-75" data-testid={`card-pack-archived-${pack.id}`}>
@@ -855,6 +864,9 @@ function ArchivedPackRow({ pack, onToggleVisibility, onUnarchive, onDelete }: {
           </div>
         </div>
         <div className="flex gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+          <Button size="sm" variant="outline" onClick={onEdit} className="h-8 w-8 p-0" title="Edit">
+            <Pencil className="w-3.5 h-3.5" />
+          </Button>
           <Button size="sm" variant="outline" onClick={onToggleVisibility} className="h-8 w-8 p-0" title={pack.visibility === "VISIBLE" ? "Hide" : "Show"}>
             {pack.visibility === "VISIBLE" ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
           </Button>
@@ -1162,6 +1174,7 @@ export function PackTab() {
                     onToggleVisibility={() => toggleVisibility.mutate(pack)}
                     onUnarchive={() => archive.mutate(pack)}
                     onDelete={() => remove.mutate(pack.id)}
+                    onEdit={() => openEdit(pack)}
                   />
                 ))}
               </div>

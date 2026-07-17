@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -74,6 +74,17 @@ function PackReviewsTab({ packId }: { packId: number }) {
     enabled: !!packId,
   });
 
+  // Check if this user already submitted a review for this pack
+  const myReview = user ? reviews.find(r => r.cafeId === user.id) : undefined;
+
+  // Pre-fill form if editing existing review
+  useEffect(() => {
+    if (myReview) {
+      setRating(myReview.rating);
+      setComment(myReview.comment ?? "");
+    }
+  }, [myReview?.id]);
+
   const submit = useMutation({
     mutationFn: () => apiRequest("POST", `/api/reviews/pack/${packId}`, { rating, comment: comment.trim() || undefined }),
     onSuccess: () => {
@@ -90,8 +101,8 @@ function PackReviewsTab({ packId }: { packId: number }) {
 
   return (
     <div className="space-y-4">
-      {/* Submission form */}
-      {canReview && (
+      {/* Submission form — only show if user hasn't reviewed yet */}
+      {canReview && !myReview && (
         <div className="border rounded-xl p-4 space-y-3 bg-gray-50">
           <p className="text-sm font-medium text-gray-700">Leave a review</p>
           <StarRatingInput value={rating} onChange={setRating} />
@@ -109,6 +120,18 @@ function PackReviewsTab({ packId }: { packId: number }) {
           >
             {submit.isPending ? "Submitting…" : "Submit Review"}
           </Button>
+        </div>
+      )}
+
+      {/* Show user's own review with a note if they already reviewed */}
+      {canReview && myReview && (
+        <div className="border border-amber-200 rounded-xl p-4 space-y-1 bg-amber-50">
+          <p className="text-xs font-medium text-amber-700">Your review</p>
+          <div className="flex items-center justify-between">
+            <ReviewStars rating={myReview.rating} />
+          </div>
+          {myReview.comment && <p className="text-xs text-gray-600">{myReview.comment}</p>}
+          <p className="text-[10px] text-gray-400">{myReview.createdAt ? new Date(myReview.createdAt).toLocaleDateString() : ""}</p>
         </div>
       )}
 
@@ -130,6 +153,33 @@ function PackReviewsTab({ packId }: { packId: number }) {
               <p className="text-[10px] text-gray-400">{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ""}</p>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Supplier name + rating (shown in Pack Details header) ────────────────────
+
+function SupplierNameWithRating({ supplierId, supplierName }: { supplierId: number; supplierName: string }) {
+  const { data: reviews = [] } = useQuery<SupplierProductReview[]>({
+    queryKey: ["/api/reviews/supplier-public", supplierId],
+    queryFn: async () => {
+      const res = await fetch(`/api/reviews/supplier-public/${supplierId}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !!supplierId,
+  });
+  const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <p className="font-bold text-sm text-gray-500">{supplierName}</p>
+      {reviews.length > 0 && (
+        <div className="flex items-center gap-1">
+          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+          <span className="text-xs font-medium text-gray-600">{avgRating.toFixed(1)}</span>
+          <span className="text-[10px] text-gray-400">({reviews.length})</span>
         </div>
       )}
     </div>
@@ -158,6 +208,10 @@ function SupplierReviewsTab({ supplierId, supplierName }: { supplierId: number; 
     },
     enabled: !!supplierId,
   });
+
+  // Check if this user already reviewed this supplier
+  const myReview = user ? reviews.find(r => r.cafeId === user.id) : undefined;
+  const alreadyReviewed = !!myReview;
 
   const submit = useMutation({
     mutationFn: () => apiRequest("POST", "/api/reviews", { reviewType: "SUPPLIER", supplierId, rating, comment: comment.trim() || undefined }),
@@ -189,8 +243,8 @@ function SupplierReviewsTab({ supplierId, supplierName }: { supplierId: number; 
         </div>
       )}
 
-      {/* Submission form — Coffee Owner reviews the supplier who owns this pack */}
-      {canReview && (
+      {/* Submission form — only show if user hasn't reviewed this supplier yet */}
+      {canReview && !alreadyReviewed && (
         <div className="border rounded-xl p-4 space-y-3 bg-gray-50">
           <p className="text-sm font-medium text-gray-700">Review {supplierName}</p>
           <StarRatingInput value={rating} onChange={setRating} />
@@ -208,6 +262,16 @@ function SupplierReviewsTab({ supplierId, supplierName }: { supplierId: number; 
           >
             {submit.isPending ? "Submitting…" : "Submit Review"}
           </Button>
+        </div>
+      )}
+
+      {/* Show user's own review if they already reviewed */}
+      {canReview && alreadyReviewed && myReview && (
+        <div className="border border-amber-200 rounded-xl p-4 space-y-1 bg-amber-50">
+          <p className="text-xs font-medium text-amber-700">Your review of {supplierName}</p>
+          <ReviewStars rating={myReview.rating} />
+          {myReview.comment && <p className="text-xs text-gray-600">{myReview.comment}</p>}
+          <p className="text-[10px] text-gray-400">{myReview.createdAt ? new Date(myReview.createdAt).toLocaleDateString() : ""}</p>
         </div>
       )}
 
@@ -532,7 +596,7 @@ export function PackQuickViewModal() {
               </div>
               <h2 className="font-bold text-xl text-gray-900" data-testid="text-pack-name">{pack.name}</h2>
               {pack.description && <p className="text-sm text-gray-500 mt-0.5">{pack.description}</p>}
-              <p className="font-bold text-sm text-gray-500 mt-2">{pack.supplierName}</p>
+              <SupplierNameWithRating supplierId={pack.supplierId} supplierName={pack.supplierName} />
             </div>
 
             {/* Price + stock + expiry */}

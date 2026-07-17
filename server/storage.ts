@@ -1509,7 +1509,7 @@ export class DatabaseStorage implements IStorage {
     const productMap = new Map(prods.map((p) => [p.id, p]));
     const supplierIds = Array.from(new Set(rows.map((p) => p.supplierId)));
     const suppliers = supplierIds.length ? await db.select().from(users).where(inArray(users.id, supplierIds)) : [];
-    const supplierMap = new Map(suppliers.map((u) => [u.id, u.name]));
+    const supplierMap = new Map(suppliers.map((u) => [u.id, { name: u.name, lat: u.locationLat ?? null, lng: u.locationLng ?? null }]));
     const tx = await buildTaxonomyCache();
     const itemsByPack = new Map<number, typeof allItems>();
     for (const it of allItems) {
@@ -1588,9 +1588,12 @@ export class DatabaseStorage implements IStorage {
       const packRevs = reviewsByPack.get(pack.id) ?? [];
       const packReviewCount = packRevs.length;
       const packAvgRating = packReviewCount ? packRevs.reduce((s, r) => s + r.rating, 0) / packReviewCount : 0;
+      const supplierInfo = supplierMap.get(pack.supplierId);
       result.push({
         ...pack,
-        supplierName: supplierMap.get(pack.supplierId) ?? "",
+        supplierName: supplierInfo?.name ?? "",
+        supplierLat: supplierInfo?.lat ?? null,
+        supplierLng: supplierInfo?.lng ?? null,
         items: itemDetails,
         categoryIds: Array.from(categoryIds),
         subCategoryIds: Array.from(subCategoryIds),

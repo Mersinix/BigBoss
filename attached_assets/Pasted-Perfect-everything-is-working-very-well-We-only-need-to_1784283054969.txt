@@ -1,0 +1,295 @@
+Perfect, everything is working very well. We only need to make a few improvements to the existing Pack feature.
+
+Before making any changes, please review the current Pack implementation across the Supplier, Coffee Owner, and Admin parts to understand the current behavior and avoid duplicating existing functionality.
+
+Keep the existing architecture, APIs, database structure, synchronization, WebSocket behavior, UI components, and design intact.
+
+Do not redesign the application.
+Do not modify unrelated parts.
+Do not remove any existing functionality.
+Only implement the improvements described below.
+
+---
+
+# 1. Supplier Part
+
+## Products → Pack → Pack Products → Create Pack Modal
+
+The Pack creation modal is almost correct.
+
+Currently, when creating a Pack from the **Pack Products** section, the supplier can save the Pack even if some selected variants do not have a Pack Variant Price filled.
+
+This should behave exactly like the Create/Edit Pack modal already used from the **New Packs** section.
+
+### Expected behavior
+
+Every selected variant must have its Pack Variant Price completed before the Pack can be created.
+
+If at least one selected variant is missing its Pack Variant Price:
+
+* Do not allow Pack creation.
+* Display the same validation behavior already used in the New Packs Create/Edit modal.
+
+Use the exact same validation and user experience already implemented there.
+
+---
+
+# 2. Supplier Part
+
+## Products → Pack → Pack Products
+
+Currently, products cannot be removed from this page if they are already used inside an existing Pack.
+
+### Expected behavior
+
+Allow the supplier to remove products from the Pack Products list.
+
+However:
+
+* Existing Packs must never be modified.
+* Existing Packs must continue working normally.
+* Removing a product from Pack Products should only prevent it from being used in future Packs.
+* Previously created Packs must remain unchanged.
+
+---
+
+# 3. Supplier Part
+
+## Products → Pack → New Packs → Pack Preview
+
+The following actions currently exist:
+
+* Edit ✅
+* Hide ❌
+* Duplicate ✅
+* Archive ❌
+* Delete ✅
+
+Hide and Archive currently return:
+
+PATCH /api/supplier/packs/{id}
+
+400
+
+{"message":"Required"}
+
+### Expected behavior
+
+Fix both actions.
+
+### Hide
+
+Must correctly:
+
+* update the Pack visibility
+* hide the Pack from Coffee Owner pages
+* keep it available in Supplier management
+
+### Archive
+
+Must correctly:
+
+* archive the Pack
+* remove it from New Packs
+* move it to Old Packs
+
+The existing workflow should remain unchanged.
+
+---
+
+# 4. Supplier Part
+
+## Products → Pack → Old Packs
+
+Archived Packs are correctly displayed.
+
+We need to improve their management.
+
+### Edit
+
+When the supplier clicks an archived Pack:
+
+Open the same Edit Pack modal used everywhere else.
+
+The supplier should be able to:
+
+* update Pack information
+* save changes
+* continue using the same validation rules
+
+### Visibility
+
+Currently this action returns:
+
+PATCH /api/supplier/packs/{id}
+
+400
+
+{"message":"Required"}
+
+Fix this behavior.
+
+### Restore
+
+Currently Restore also returns:
+
+PATCH /api/supplier/packs/{id}
+
+400
+
+{"message":"Required"}
+
+Restore should:
+
+* move the Pack back to New Packs
+* preserve all Pack information
+* preserve stock synchronization
+* preserve reviews
+* preserve favorites
+
+---
+
+# 5. Coffee Owner Part
+
+## Shop
+
+and
+
+## Store
+
+→ Pack Cards
+
+Improve only the Pack cards while keeping the existing design language.
+
+### Expiration Date
+
+Move the expiration date badge onto the product image.
+
+Place it at the bottom-right corner of the image so it no longer conflicts with the Favorite icon.
+
+### Prices
+
+Display:
+
+* Original Pack Price (small with line-through)
+* Current Pack Price
+
+The current Pack Price remains the primary visible price.
+
+### Description
+
+Limit the description to a single line.
+
+Cards should keep a consistent height regardless of description length.
+
+### Distance
+
+Display the distance between:
+
+* Coffee Owner selected location
+* Supplier location
+
+using the same distance calculation already used elsewhere in the marketplace.
+
+### Card Layout
+
+Slightly increase the width of Pack cards.
+
+Improve spacing so the information is more balanced and easier to read.
+
+Keep the existing design style and responsiveness.
+
+---
+
+# 6. Coffee Owner Part
+
+## Pack Details → Reviews
+
+### Pack Reviews
+
+A Coffee Owner must only be able to review the same Pack once.
+
+If the Coffee Owner already reviewed that Pack:
+
+* do not allow creating another review
+* instead allow updating or editing the existing review if that functionality already exists
+* never create duplicate reviews from the same Coffee Owner for the same Pack
+
+---
+
+### Supplier Reviews
+
+The same rule applies.
+
+A Coffee Owner must only review a Supplier once.
+
+Supplier Reviews are related to the Supplier, not to individual Packs.
+
+Therefore:
+
+When opening Supplier Reviews from any Pack belonging to the same Supplier:
+
+* display the same Supplier review history
+* display all reviews already written for that Supplier
+* do not create separate review collections for each Pack
+
+The Coffee Owner should not be able to submit multiple Supplier reviews for the same Supplier.
+
+---
+
+### Supplier Rating
+
+Inside the Pack Details modal, next to the Supplier name, display the Supplier rating information.
+
+Show:
+
+* average rating
+* total number of Supplier reviews
+
+using the existing Supplier review system.
+
+This information should remain synchronized everywhere else in the application.
+
+---
+
+# Final Verification
+
+After implementing these improvements, verify the complete Pack workflow:
+
+Supplier:
+
+* Pack Products
+* Create Pack
+* Remove Pack Product
+* New Packs
+* Hide
+* Archive
+* Duplicate
+* Delete
+* Old Packs
+* Restore
+* Edit
+
+Coffee Owner:
+
+* Shop
+* Store
+* Pack cards
+* Pack Details
+* Reviews
+* Supplier Reviews
+* Favorite
+* Add to cart
+
+Confirm that:
+
+* synchronization remains intact
+* stock remains synchronized
+* Pack prices remain synchronized
+* reviews remain synchronized
+* archived Packs behave correctly
+* visibility works correctly
+* no existing functionality is broken
+
+If a part is already working correctly, leave it unchanged.
+Only implement the improvements described above.

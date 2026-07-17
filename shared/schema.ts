@@ -635,6 +635,8 @@ export type PackItemDetail = {
 
 export type PackDetail = Pack & {
   supplierName: string;
+  supplierLat: string | null;
+  supplierLng: string | null;
   items: PackItemDetail[];
   categoryIds: number[];
   subCategoryIds: number[];

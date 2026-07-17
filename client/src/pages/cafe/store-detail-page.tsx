@@ -146,17 +146,28 @@ function InfoModal({ open, onClose, openingHours, storeName }: {
 
 // ── Pack card (store context) ─────────────────────────────────────────────────
 
-function StorePackCard({ pack, hasCommercialAccess }: {
+function StorePackCard({ pack, hasCommercialAccess, supplierLat, supplierLng }: {
   pack: PackDetail;
   hasCommercialAccess: boolean;
+  supplierLat?: string | null;
+  supplierLng?: string | null;
 }) {
   const faved = useFavorites((s) => !!s.pack[pack.id]);
   const togglePack = useFavorites((s) => s.togglePack);
   const openPackQuickView = usePackQuickView((s) => s.open);
+  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
   const maxQty = Math.min(pack.quantityAvailable, pack.maxBuildable);
-  const isExpiringSoon = pack.expirationDate
-    ? (new Date(pack.expirationDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 7
-    : false;
+  const individualTotal = pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+
+  const distance = useMemo(() => {
+    const lat = supplierLat ?? (pack as any).supplierLat;
+    const lng = supplierLng ?? (pack as any).supplierLng;
+    if (!searchLocation || !lat || !lng) return null;
+    const latN = parseFloat(lat);
+    const lngN = parseFloat(lng);
+    if (Number.isNaN(latN) || Number.isNaN(lngN)) return null;
+    return calculateDistance(parseFloat(searchLocation.lat), parseFloat(searchLocation.lng), latN, lngN);
+  }, [supplierLat, supplierLng, (pack as any).supplierLat, (pack as any).supplierLng, searchLocation]);
 
   return (
     <div
@@ -170,16 +181,20 @@ function StorePackCard({ pack, hasCommercialAccess }: {
         ) : (
           <div className="w-full h-full flex items-center justify-center"><Layers className="w-10 h-10 text-amber-200" /></div>
         )}
-        <div className="absolute top-2 left-2 flex gap-1">
+        {/* Pack badge — top left */}
+        <div className="absolute top-2 left-2">
           <Badge className="bg-amber-500 text-white text-[10px] font-semibold shadow-sm border-0 px-2">
             <Layers className="w-3 h-3 mr-1 inline" />Pack
           </Badge>
-          {isExpiringSoon && pack.expirationDate && (
+        </div>
+        {/* Expiration badge — bottom right, no longer conflicts with favorite */}
+        {pack.expirationDate && (
+          <div className="absolute bottom-2 right-2">
             <Badge className="bg-orange-500 text-white text-[10px] font-semibold shadow-sm border-0 px-2">
               Exp. {new Date(pack.expirationDate).toLocaleDateString()}
             </Badge>
-          )}
-        </div>
+          </div>
+        )}
         {hasCommercialAccess && (
           <button
             className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
@@ -192,7 +207,7 @@ function StorePackCard({ pack, hasCommercialAccess }: {
       </div>
       <div className="p-3 flex-1 flex flex-col gap-1.5">
         <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-amber-600 transition-colors">{pack.name}</h3>
-        {pack.description && <p className="text-xs text-gray-500 line-clamp-2">{pack.description}</p>}
+        {pack.description && <p className="text-xs text-gray-500 line-clamp-1">{pack.description}</p>}
 
         {/* Brands */}
         {pack.brandLabels.length > 0 && (
@@ -213,7 +228,7 @@ function StorePackCard({ pack, hasCommercialAccess }: {
           </div>
         )}
 
-        {/* Review summary + stock */}
+        {/* Review summary + stock + distance */}
         <div className="flex items-center justify-between mt-0.5">
           {pack.packReviewCount > 0 ? (
             <div className="flex items-center gap-1">
@@ -222,12 +237,20 @@ function StorePackCard({ pack, hasCommercialAccess }: {
               <span className="text-[10px] text-gray-400">({pack.packReviewCount})</span>
             </div>
           ) : <span />}
-          <span className="text-[11px] text-gray-400">{maxQty} dispo.</span>
+          <div className="flex items-center gap-2 text-[10px] text-gray-400">
+            {distance != null && <span>{formatDistance(distance)}</span>}
+            <span>{maxQty} dispo.</span>
+          </div>
         </div>
 
         <div className="mt-auto pt-2 border-t border-gray-50">
           {hasCommercialAccess ? (
-            <p className="font-bold text-sm text-amber-600">{formatCurrency(pack.price)}</p>
+            <div className="flex items-baseline gap-2">
+              <p className="font-bold text-sm text-amber-600">{formatCurrency(pack.price)}</p>
+              {individualTotal > pack.price && (
+                <p className="text-xs text-gray-400 line-through">{formatCurrency(individualTotal)}</p>
+              )}
+            </div>
           ) : (
             <div className="flex items-center gap-1 text-[11px] text-amber-700 font-medium">
               <Lock className="w-3 h-3 shrink-0" />
@@ -278,7 +301,7 @@ function StorePacksSection({ packs, filters, hasCommercialAccess }: {
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
           {filtered.map((pack) => (
-            <div key={pack.id} className="shrink-0 w-44 sm:w-52">
+            <div key={pack.id} className="shrink-0 w-48 sm:w-56">
               <StorePackCard pack={pack} hasCommercialAccess={hasCommercialAccess} />
             </div>
           ))}

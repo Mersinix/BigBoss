@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag, Layers, Star
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag, Layers, Star, MapPin
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -73,13 +73,36 @@ function ProductCard({ product, hasCommercialAccess }: { product: MarketplacePro
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
   const openQuickView = useQuickView((s) => s.open);
+  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+
+  // Distance from search location to nearest supplier for this product
+  const distanceKm = useMemo(() => {
+    if (!searchLocation) return null;
+    const sLat = parseFloat(searchLocation.lat);
+    const sLng = parseFloat(searchLocation.lng);
+    if (Number.isNaN(sLat) || Number.isNaN(sLng)) return null;
+    let nearest: number | null = null;
+    for (const l of product.listings) {
+      if (!l.supplierLat || !l.supplierLng) continue;
+      const lat = parseFloat(l.supplierLat);
+      const lng = parseFloat(l.supplierLng);
+      if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
+      const d = calculateDistance(sLat, sLng, lat, lng);
+      if (nearest === null || d < nearest) nearest = d;
+    }
+    return nearest;
+  }, [searchLocation, product.listings]);
+
+  const storeLogoUrl = product.listings[0]?.storeLogoUrl ?? null;
+  const hasReviews = product.reviewCount > 0;
 
   return (
     <div
       data-testid={`card-product-${product.id}`}
-      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
+      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col cursor-pointer"
+      onClick={() => openQuickView(product.id)}
     >
-      <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden">
+      <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden shrink-0">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
@@ -90,6 +113,15 @@ function ProductCard({ product, hasCommercialAccess }: { product: MarketplacePro
             <Badge className="bg-white/90 text-gray-700 backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2">{product.category}</Badge>
           </div>
         )}
+        {/* Review overlay — bottom left of image */}
+        {hasCommercialAccess && hasReviews && (
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
+            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+            <span className="text-[10px] font-medium text-white">{product.avgRating.toFixed(1)}</span>
+            <span className="text-[10px] text-white/70">({product.reviewCount})</span>
+          </div>
+        )}
+        {/* Favorite button */}
         {hasCommercialAccess && (
           <button
             className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
@@ -108,6 +140,7 @@ function ProductCard({ product, hasCommercialAccess }: { product: MarketplacePro
             <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
           </button>
         )}
+        {/* Quick view button */}
         <button
           className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
@@ -119,17 +152,31 @@ function ProductCard({ product, hasCommercialAccess }: { product: MarketplacePro
           <Plus className="w-3.5 h-3.5 text-gray-500" />
         </button>
       </div>
-      <div className="p-3 flex-1 flex flex-col gap-2">
-        <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">{product.name}</h3>
-        {product.description && <p className="text-xs text-gray-400 line-clamp-1">{product.description}</p>}
-        <div className="mt-auto pt-2 border-t border-gray-50">
+      <div className="p-3 flex-1 flex flex-col gap-1.5">
+        {/* Product name — single line with truncation */}
+        <h3 className="font-bold text-sm leading-tight truncate group-hover:text-blue-600 transition-colors">{product.name}</h3>
+        {/* Supplier info: logo + count + distance */}
+        <div className="flex items-center gap-1.5">
+          <div className="w-4 h-4 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center shrink-0">
+            {storeLogoUrl ? (
+              <img src={storeLogoUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <Store className="w-2.5 h-2.5 text-gray-400" />
+            )}
+          </div>
+          <span className="text-[11px] text-gray-400">{product.supplierCount}</span>
+          {distanceKm !== null && (
+            <span className="text-[11px] text-gray-400 flex items-center gap-0.5 ml-auto">
+              <MapPin className="w-2.5 h-2.5 shrink-0" />{formatDistance(distanceKm)}
+            </span>
+          )}
+        </div>
+        {/* Price section — close to supplier info, no large gap */}
+        <div className="mt-auto pt-1.5 border-t border-gray-50">
           {hasCommercialAccess ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-gray-400">From</p>
-                <p className="font-bold text-sm text-blue-600">{product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}</p>
-              </div>
-              <div className="flex items-center gap-1 text-[11px] text-gray-400"><Store className="w-3 h-3" /><span>{product.supplierCount}</span></div>
+            <div>
+              <p className="text-[10px] text-gray-400">From</p>
+              <p className="font-bold text-sm text-blue-600">{product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}</p>
             </div>
           ) : (
             <div className="space-y-1.5">

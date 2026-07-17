@@ -905,6 +905,7 @@ export type MarketplaceListing = {
   supplierName: string;
   supplierLat: string | null;
   supplierLng: string | null;
+  storeLogoUrl: string | null;
   variants: MarketplaceVariant[];
   totalStock: number;
   minPrice: number;
@@ -915,6 +916,8 @@ export type MarketplaceProduct = ProductWithTaxonomy & {
   bestPrice: number;
   totalStock: number;
   supplierCount: number;
+  avgRating: number;
+  reviewCount: number;
 };
 
 // ── Sub-Order Rich Type ───────────────────────────────────────────────────────

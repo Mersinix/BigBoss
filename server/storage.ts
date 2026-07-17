@@ -619,6 +619,23 @@ export class DatabaseStorage implements IStorage {
     const frozenSet = new Set(frozenMappings.map((f) => `${f.supplierId}:${f.categoryId}`));
     const tx = await buildTaxonomyCache();
 
+    // Build supplier store logo map (supplierId → logoUrl)
+    const allStores = await db.select({ supplierId: supplierStores.supplierId, logoUrl: supplierStores.logoUrl }).from(supplierStores);
+    const storeLogoMap = new Map(allStores.map((s) => [s.supplierId, s.logoUrl]));
+
+    // Build product review stats map (productId → { sum, count })
+    const allProductReviews = await db.select({ productId: supplierProductReviews.productId, rating: supplierProductReviews.rating })
+      .from(supplierProductReviews)
+      .where(eq(supplierProductReviews.reviewType, 'PRODUCT'));
+    const reviewStatsByProduct = new Map<number, { sum: number; count: number }>();
+    for (const r of allProductReviews) {
+      if (!r.productId) continue;
+      if (!reviewStatsByProduct.has(r.productId)) reviewStatsByProduct.set(r.productId, { sum: 0, count: 0 });
+      const s = reviewStatsByProduct.get(r.productId)!;
+      s.sum += r.rating;
+      s.count += 1;
+    }
+
     const supplierMap = new Map(allUsers.map((u) => [u.id, { name: u.name, lat: u.locationLat, lng: u.locationLng }]));
     const productMap = new Map(allProducts.map((p) => [p.id, p]));
     const variantsByListing = new Map<number, typeof allVariants>();
@@ -662,13 +679,16 @@ export class DatabaseStorage implements IStorage {
           const totalStock = variants.length ? variants.reduce((s, v) => s + v.quantity, 0) : (l.stock > 0 && l.price > 0 ? l.stock : 0);
           const minPrice = variants.length ? Math.min(...variants.map((v) => v.price)) : (l.price > 0 ? l.price : 0);
           const sup = supplierMap.get(l.supplierId);
-          return { id: l.id, supplierId: l.supplierId, supplierName: sup?.name ?? "", supplierLat: sup?.lat ?? null, supplierLng: sup?.lng ?? null, variants, totalStock, minPrice };
+          return { id: l.id, supplierId: l.supplierId, supplierName: sup?.name ?? "", supplierLat: sup?.lat ?? null, supplierLng: sup?.lng ?? null, storeLogoUrl: storeLogoMap.get(l.supplierId) ?? null, variants, totalStock, minPrice };
         })
         .filter((l) => l.totalStock > 0 && l.minPrice > 0);
       if (!marketListings.length) continue;
       const bestPrice = Math.min(...marketListings.map((l) => l.minPrice));
       const totalStock = marketListings.reduce((s, l) => s + l.totalStock, 0);
-      result.push({ ...enrichProduct(prod, tx), listings: marketListings, bestPrice, totalStock, supplierCount: marketListings.length });
+      const reviewStats = reviewStatsByProduct.get(prod.id);
+      const avgRating = reviewStats ? reviewStats.sum / reviewStats.count : 0;
+      const reviewCount = reviewStats?.count ?? 0;
+      result.push({ ...enrichProduct(prod, tx), listings: marketListings, bestPrice, totalStock, supplierCount: marketListings.length, avgRating, reviewCount });
     }
     return result;
   }

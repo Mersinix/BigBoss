@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Package, Store, Minus, Plus, ShoppingCart, CheckCircle2,
-  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X,
+  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useCart } from "@/hooks/use-cart";
@@ -70,14 +70,15 @@ function VariantRow({ variant, listing, product }: { variant: MarketplaceVariant
     toast({ title: "Added to cart", description: `${product.name}${variant.flavorName ? ` – ${variant.flavorName}` : ""}${variant.sizeName ? ` (${variant.sizeName})` : ""} × ${qty}` });
   };
 
-  const label = [variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "Default";
+  const baseLabel = [variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "Default";
+  // Show stock count inline in the label
+  const label = outOfStock ? baseLabel : `${baseLabel} · ${variant.quantity} in stock`;
 
   return (
     <div className="flex items-center justify-between gap-4 py-3 border-b border-border/40 last:border-0">
       <div className="flex-1 min-w-0">
         <span className="text-sm font-medium">{label}</span>
         {outOfStock && <span className="ml-2 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md">Out of stock</span>}
-        {!outOfStock && variant.quantity <= 20 && <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">Only {variant.quantity} left</span>}
       </div>
       <div className="font-bold text-base shrink-0">{formatCurrency(variant.price)}</div>
       {!outOfStock && (
@@ -107,40 +108,36 @@ function SupplierSection({
   reviewStats?: { avgRating: number; total: number };
   distanceKm?: number;
 }) {
-  const prices = visibleVariants.map(v => v.price);
-  const minPrice = prices.length ? Math.min(...prices) : 0;
-  const maxPrice = prices.length ? Math.max(...prices) : 0;
-  const totalStock = visibleVariants.reduce((sum, v) => sum + v.quantity, 0);
-
   return (
     <div className="rounded-2xl border border-border/50 overflow-hidden shadow-sm">
-      <div className="bg-secondary/30 px-5 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center"><Store className="w-5 h-5 text-primary" /></div>
-          <div>
-            <p className="font-semibold">{listing.supplierName}</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-xs text-muted-foreground">
-                {visibleVariants.length} variant{visibleVariants.length !== 1 ? "s" : ""}{" · "}
-                {prices.length === 0 ? "—" : prices.length === 1 || minPrice === maxPrice ? formatCurrency(minPrice) : `${formatCurrency(minPrice)} – ${formatCurrency(maxPrice)}`}
-              </p>
-              {distanceKm !== undefined && (
-                <span className="text-xs text-muted-foreground flex items-center gap-0.5">
-                  <MapPin className="w-3 h-3 shrink-0" />{distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`}
-                </span>
-              )}
-              {reviewStats && reviewStats.total > 0 && (
-                <div className="flex items-center gap-1">
-                  <Stars rating={reviewStats.avgRating} size="xs" />
-                  <span className="text-xs text-muted-foreground">({reviewStats.total})</span>
-                </div>
-              )}
-            </div>
+      <div className="bg-secondary/30 px-5 py-4 flex items-center gap-3">
+        {/* Supplier store logo or fallback icon */}
+        <div className="w-9 h-9 rounded-xl overflow-hidden bg-primary/10 flex items-center justify-center shrink-0">
+          {listing.storeLogoUrl ? (
+            <img src={listing.storeLogoUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <Store className="w-5 h-5 text-primary" />
+          )}
+        </div>
+        <div>
+          <p className="font-semibold">{listing.supplierName}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-xs text-muted-foreground">
+              {visibleVariants.length} variant{visibleVariants.length !== 1 ? "s" : ""}
+            </p>
+            {distanceKm !== undefined && (
+              <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                <MapPin className="w-3 h-3 shrink-0" />{distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`}
+              </span>
+            )}
+            {reviewStats && reviewStats.total > 0 && (
+              <div className="flex items-center gap-1">
+                <Stars rating={reviewStats.avgRating} size="xs" />
+                <span className="text-xs text-muted-foreground">({reviewStats.total})</span>
+              </div>
+            )}
           </div>
         </div>
-        <Badge variant="outline" className={totalStock > 0 ? "border-emerald-200 text-emerald-700 bg-emerald-50" : "border-red-200 text-red-600"}>
-          {totalStock > 0 ? `${totalStock} in stock` : "Out of stock"}
-        </Badge>
       </div>
       <div className="px-5">
         {visibleVariants.map((v, idx) => (
@@ -195,16 +192,18 @@ function FilterBadges<T extends { id: number; name: string }>({
   items,
   selected,
   onSelect,
+  showLabel = true,
 }: {
   label: string;
   items: T[];
   selected: number | null;
   onSelect: (id: number | null) => void;
+  showLabel?: boolean;
 }) {
   if (items.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-semibold text-muted-foreground shrink-0">{label}:</span>
+      {showLabel && <span className="text-xs font-semibold text-muted-foreground shrink-0">{label}:</span>}
       <button
         onClick={() => onSelect(null)}
         className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
@@ -251,6 +250,7 @@ export function ProductDetailContent({
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const [supplierSort, setSupplierSort] = useState<'nearest' | 'cheapest' | null>(null);
 
   // ── Zoom via ref — no state re-render on mouse move ──────────────────────
   const mainImgRef = useRef<HTMLImageElement>(null);
@@ -401,16 +401,22 @@ export function ProductDetailContent({
         return true;
       })
       .sort((a, b) => {
-        if (!locationFilter) return 0;
-        const distA = a.listing.supplierLat && a.listing.supplierLng
-          ? haversineKm(locationFilter.lat, locationFilter.lng, parseFloat(a.listing.supplierLat), parseFloat(a.listing.supplierLng))
-          : Infinity;
-        const distB = b.listing.supplierLat && b.listing.supplierLng
-          ? haversineKm(locationFilter.lat, locationFilter.lng, parseFloat(b.listing.supplierLat), parseFloat(b.listing.supplierLng))
-          : Infinity;
-        return distA - distB;
+        if (supplierSort === 'cheapest') {
+          return a.listing.minPrice - b.listing.minPrice;
+        }
+        if (supplierSort === 'nearest' || locationFilter) {
+          if (!refLocation) return 0;
+          const distA = a.listing.supplierLat && a.listing.supplierLng
+            ? haversineKm(refLocation.lat, refLocation.lng, parseFloat(a.listing.supplierLat), parseFloat(a.listing.supplierLng))
+            : Infinity;
+          const distB = b.listing.supplierLat && b.listing.supplierLng
+            ? haversineKm(refLocation.lat, refLocation.lng, parseFloat(b.listing.supplierLat), parseFloat(b.listing.supplierLng))
+            : Infinity;
+          return distA - distB;
+        }
+        return 0;
       });
-  }, [product, selectedFlavorId, selectedSizeId, locationFilter]);
+  }, [product, selectedFlavorId, selectedSizeId, locationFilter, supplierSort, refLocation]);
 
   const handleLocationConfirm = (loc: PickedLocation) => {
     setLocationFilter({
@@ -522,26 +528,6 @@ export function ProductDetailContent({
             </div>
           )}
 
-          {/* Flavor filter badges — synchronized */}
-          {hasCommercial && allFlavors.length > 0 && (
-            <FilterBadges
-              label="Flavors"
-              items={availableFlavors}
-              selected={selectedFlavorId}
-              onSelect={handleFlavorSelect}
-            />
-          )}
-
-          {/* Size filter badges — synchronized */}
-          {hasCommercial && allSizes.length > 0 && (
-            <FilterBadges
-              label="Sizes"
-              items={availableSizes}
-              selected={selectedSizeId}
-              onSelect={handleSizeSelect}
-            />
-          )}
-
           {/* Price + Supplier count — only for approved */}
           {hasCommercial ? (
             <div className="flex items-center gap-4 pt-2">
@@ -561,13 +547,35 @@ export function ProductDetailContent({
               <span>Price available for approved coffee shop owners</span>
             </div>
           )}
+
+          {/* Flavor filter badges — moved below price, no label text */}
+          {hasCommercial && allFlavors.length > 0 && (
+            <FilterBadges
+              label="Flavors"
+              items={availableFlavors}
+              selected={selectedFlavorId}
+              onSelect={handleFlavorSelect}
+              showLabel={false}
+            />
+          )}
+
+          {/* Size filter badges — moved below price, no label text */}
+          {hasCommercial && allSizes.length > 0 && (
+            <FilterBadges
+              label="Sizes"
+              items={availableSizes}
+              selected={selectedSizeId}
+              onSelect={handleSizeSelect}
+              showLabel={false}
+            />
+          )}
         </div>
       </div>
 
       {/* Supplier Listings — only for approved */}
       {hasCommercial ? (
         <div className="space-y-3">
-          {/* Toolbar: location filter + write review */}
+          {/* Toolbar: location filter + sort badges + write review */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-semibold text-lg">Available from Suppliers</h2>
             <div className="flex items-center gap-2 flex-wrap">
@@ -586,6 +594,32 @@ export function ProductDetailContent({
                   <MapPin className="w-3.5 h-3.5" /> Filter by location
                 </Button>
               )}
+              {/* Nearest sort badge — only when a reference location is available */}
+              {refLocation && (
+                <button
+                  type="button"
+                  onClick={() => setSupplierSort(supplierSort === 'nearest' ? null : 'nearest')}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    supplierSort === 'nearest'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                  }`}
+                >
+                  <Navigation className="w-3 h-3" /> Nearest
+                </button>
+              )}
+              {/* Cheapest sort badge */}
+              <button
+                type="button"
+                onClick={() => setSupplierSort(supplierSort === 'cheapest' ? null : 'cheapest')}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  supplierSort === 'cheapest'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                }`}
+              >
+                <Tag className="w-3 h-3" /> Cheapest
+              </button>
               {/* Write review button */}
               {isCafeOwner && product.listings.length > 0 && (
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setReviewModalOpen(true)}>

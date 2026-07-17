@@ -1,0 +1,280 @@
+The current Product marketplace functionality is working correctly. I want to improve the Coffee Owner experience only in the areas described below.
+
+Before making any changes:
+
+Review the existing Product Card and Product Details Modal implementation.
+Verify current synchronization between:
+Admin Products
+Supplier Products
+Supplier Stores
+Coffee Owner Shop
+Reviews system
+Location system
+Do not redesign the application.
+Do not change existing logic that is already working.
+Do not remove any existing functionality.
+Keep the current design language and responsive behavior.
+Only modify the requested parts.
+Reuse existing components and synchronization wherever possible.
+1. Coffee Owner → Shop → Product Cards Improvements
+
+Currently:
+
+Product Details Modal opens only when clicking the "+" button.
+
+Keep this behavior but add a new one:
+
+Product Card Click Behavior
+
+The complete product card should now be clickable.
+
+When the Coffee Owner clicks anywhere on the product card:
+
+Open the existing Product Details Modal.
+Keep the "+" button working as it is.
+Do not redirect to any Product Details page.
+
+The modal should remain the only way to view product details.
+
+Product Card Layout Improvements
+
+Improve the mapped product cards while keeping the same design style.
+
+Product Card Height
+
+All product cards must have the same height.
+
+Product name:
+
+Display only one line.
+If the name is too long:
+Show "..."
+Do not increase card height.
+
+Description:
+
+Remove the description from product cards.
+Supplier Information
+
+Currently:
+
+"From supplier"
+
+Remove this text.
+
+Keep only:
+
+Supplier icon/logo.
+Number of suppliers.
+
+Replace the supplier icon with:
+
+Supplier Store logo picture when available.
+Distance Information
+
+Add supplier distance information.
+
+Display:
+
+Distance in KM between:
+Coffee Owner selected location from Location Modal
+OR default Coffee Owner location
+
+and:
+
+Supplier Store location.
+
+Example:
+
+📍 5 km
+
+The distance must update when the Coffee Owner changes location from the location modal.
+
+Product Card Price Layout
+
+Remove the large empty space between:
+
+Product information
+Price
+
+The price section should be closer and better aligned.
+
+Product Reviews On Card
+
+Add Product Review information on the product image:
+
+Position:
+
+Bottom left corner of product picture.
+
+Display:
+
+Average rating
+Number of reviews
+
+Keep the same style used elsewhere.
+
+2. Coffee Owner → Product Details Modal Improvements
+
+Keep the existing Product Details Modal.
+
+Only adjust the layout and information.
+
+Size and Flavor Badges Position
+
+Currently:
+
+Sizes and Flavors appear too early.
+
+Move them under:
+
+Starting from:
+
+$13.00
+
+Suppliers
+
+2/3 visible
+
+After this section:
+
+Display:
+
+Available Size badges
+Available Flavor badges
+
+Remove the text labels:
+
+Do not show:
+
+"Sizes:"
+"Flavors:"
+
+Only show the badges.
+
+3. Supplier Filtering Badges
+
+Next to:
+
+Filter by location button
+Write a Review button
+
+Add two filter badges:
+
+Nearest
+
+When clicked:
+
+Sort/filter suppliers by nearest distance.
+
+Based on:
+
+Coffee Owner selected location
+Or default location.
+Cheapest
+
+When clicked:
+
+Sort/filter suppliers by cheapest available product price.
+
+Keep existing filters working.
+
+4. Supplier Variant Information
+
+Currently:
+
+Supplier cards show:
+
+Total quantity of all variants
+
+Remove this information.
+
+Do not show total accumulated stock.
+
+Instead:
+
+Show stock information directly on each variant.
+
+Example:
+
+Before:
+
+Coconut
+250g Bag
+
+After:
+
+Coconut · 250g Bag · 344 in stock
+
+The stock must correspond to that exact variant.
+
+5. Supplier Card Improvements Inside Product Modal
+
+For every supplier:
+
+Replace supplier icon with:
+
+Supplier Store logo picture.
+
+Under supplier name keep:
+
+Number of variants
+Distance in KM
+Supplier Review information
+
+Remove:
+
+Price information under supplier name.
+
+The price should only appear on variants.
+
+6. Product Reviews System Improvements
+
+Inside Product Details Modal → Review Modal:
+
+Prevent Duplicate Reviews
+
+A Coffee Owner can only review the same product once.
+
+Rules:
+
+One review per user per product.
+If the Coffee Owner already reviewed:
+Allow update/edit only if the existing system supports it.
+Do not create duplicates.
+Product Reviews Display
+
+Inside the Product Review modal:
+
+Show:
+
+All Coffee Owner comments
+Ratings
+Dates
+
+So Coffee Owners can see existing product reviews.
+
+General Requirements
+
+After implementation verify:
+
+Product cards still synchronize correctly with supplier products.
+Supplier filtering still works.
+Location filtering still works.
+Distance calculation remains correct.
+Reviews remain synchronized.
+Product Details Modal remains responsive on:
+Desktop
+Tablet
+Mobile
+
+Do not modify unrelated modules.
+
+Do not change:
+
+Supplier logic
+Admin logic
+Pack system
+Store system
+
+Only improve the Coffee Owner Product experience described above.

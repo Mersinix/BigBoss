@@ -16,7 +16,7 @@ import {
   supplierProductVariants,
   type InventoryFilters, type InventorySort,
 } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 
 declare module "express-session" {
   interface SessionData { userId: number; }
@@ -2023,6 +2023,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
+  // Product review list — returns individual PRODUCT-type reviews for a product
+  app.get("/api/reviews/product/:productId/list", async (req, res) => {
+    try {
+      if (!req.session.userId) return res.status(401).json({ message: "Unauthorized" });
+      const productId = parseInt(req.params.productId);
+      const rows = await db.select().from(supplierProductReviews)
+        .where(and(
+          eq(supplierProductReviews.productId, productId),
+          eq(supplierProductReviews.reviewType, 'PRODUCT')
+        ))
+        .orderBy(desc(supplierProductReviews.createdAt));
+      res.json(rows);
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   // Product review stats — available to approved cafe owners/admins/suppliers
   app.get("/api/reviews/product/:productId", async (req, res) => {
     try {
@@ -2044,6 +2059,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "rating (1-5) is required" });
       }
       const isProductReview = reviewType === 'PRODUCT';
+      if (isProductReview) {
+        if (!productId) return res.status(400).json({ message: "productId is required for product reviews" });
+        const [existingProductReview] = await db.select().from(supplierProductReviews)
+          .where(and(
+            eq(supplierProductReviews.productId, Number(productId)),
+            eq(supplierProductReviews.cafeId, user.id),
+            eq(supplierProductReviews.reviewType, 'PRODUCT')
+          ));
+        if (existingProductReview) return res.status(409).json({ message: "You have already reviewed this product" });
+      }
       if (!isProductReview) {
         // Supplier review — supplierId required
         if (!supplierId) return res.status(400).json({ message: "supplierId is required for supplier reviews" });

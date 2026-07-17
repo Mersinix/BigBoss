@@ -55,5 +55,7 @@ migrations/      Drizzle migration files
 ## Setup notes
 
 - Ran `npm install` and `npm run db:push` to provision the Helium DB schema; the seed script auto-creates default users/products on server start.
+- DB connection uses `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` env vars (Replit Helium); `server/db.ts` prefers these over `DATABASE_URL` when `PGHOST` is not localhost.
+- Verified app starts cleanly on port 5000 with seed data; `Start application` workflow runs `npm run dev`.
 
 ## User preferences

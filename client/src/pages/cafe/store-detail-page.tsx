@@ -311,22 +311,55 @@ function StorePacksSection({ packs, filters, hasCommercialAccess }: {
   );
 }
 
+// ── Supplier logo strip (single-store context) ────────────────────────────────
+
+function SingleStoreLogoStrip({ logoUrl, name }: { logoUrl: string | null; name: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <div className="w-4 h-4 rounded-full overflow-hidden bg-gray-100 border border-white flex items-center justify-center shrink-0">
+        {logoUrl ? (
+          <img src={logoUrl} alt={name} className="w-full h-full object-cover" />
+        ) : (
+          <Store className="w-2.5 h-2.5 text-gray-400" />
+        )}
+      </div>
+      <span className="text-[11px] text-gray-400">1</span>
+    </div>
+  );
+}
+
 // ── Product card (store context) ──────────────────────────────────────────────
 
-function StoreProductCard({ product, hasCommercialAccess }: {
-  product: ProductWithTaxonomy & { bestPrice?: number };
+type StoreProduct = ProductWithTaxonomy & { bestPrice?: number; avgRating?: number; reviewCount?: number };
+
+function StoreProductCard({
+  product,
+  hasCommercialAccess,
+  storeLogoUrl,
+  storeName,
+  distanceKm,
+}: {
+  product: StoreProduct;
   hasCommercialAccess: boolean;
+  storeLogoUrl: string | null;
+  storeName: string;
+  distanceKm: number | null;
 }) {
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
   const openQuickView = useQuickView((s) => s.open);
 
+  const avgRating = product.avgRating ?? 0;
+  const reviewCount = product.reviewCount ?? 0;
+  const hasReviews = hasCommercialAccess && reviewCount > 0;
+
   return (
     <div
       data-testid={`card-product-${product.id}`}
-      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
+      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col cursor-pointer"
+      onClick={() => openQuickView(product.id)}
     >
-      <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden">
+      <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden shrink-0">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
@@ -337,6 +370,15 @@ function StoreProductCard({ product, hasCommercialAccess }: {
             <Badge className="bg-white/90 text-gray-700 backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2">{product.categoryLabel.name}</Badge>
           </div>
         )}
+        {/* Review overlay — bottom left of image */}
+        {hasReviews && (
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
+            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+            <span className="text-[10px] font-medium text-white">{avgRating.toFixed(1)}</span>
+            <span className="text-[10px] text-white/70">({reviewCount})</span>
+          </div>
+        )}
+        {/* Favorite button */}
         {hasCommercialAccess && (
           <button
             className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
@@ -346,7 +388,7 @@ function StoreProductCard({ product, hasCommercialAccess }: {
                 id: product.id,
                 name: product.name,
                 supplier: product.categoryLabel?.name ?? "",
-                price: (product as any).bestPrice ?? 0,
+                price: product.bestPrice ?? 0,
                 image: product.imageUrl ?? "",
               });
             }}
@@ -355,6 +397,7 @@ function StoreProductCard({ product, hasCommercialAccess }: {
             <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
           </button>
         )}
+        {/* Quick-view button */}
         <button
           className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
@@ -366,12 +409,25 @@ function StoreProductCard({ product, hasCommercialAccess }: {
           <Plus className="w-3.5 h-3.5 text-gray-500" />
         </button>
       </div>
-      <div className="p-3 flex-1 flex flex-col gap-2">
-        <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">{product.name}</h3>
-        {product.description && <p className="text-xs text-gray-400 line-clamp-1">{product.description}</p>}
-        <div className="mt-auto pt-2 border-t border-gray-50">
+      <div className="p-3 flex-1 flex flex-col gap-1.5">
+        {/* Product name — 1 line with truncation */}
+        <h3 className="font-bold text-sm leading-tight truncate group-hover:text-blue-600 transition-colors">{product.name}</h3>
+        {/* Supplier logo + distance */}
+        <div className="flex items-center gap-1.5">
+          <SingleStoreLogoStrip logoUrl={storeLogoUrl} name={storeName} />
+          {distanceKm !== null && (
+            <span className="text-[11px] text-gray-400 flex items-center gap-0.5 ml-auto">
+              <MapPin className="w-2.5 h-2.5 shrink-0" />{formatDistance(distanceKm)}
+            </span>
+          )}
+        </div>
+        {/* Price — close to supplier info */}
+        <div className="mt-auto pt-1.5 border-t border-gray-50">
           {hasCommercialAccess ? (
-            <p className="font-bold text-sm text-blue-600">{(product as any).bestPrice != null ? formatCurrency((product as any).bestPrice) : "—"}</p>
+            <div>
+              <p className="text-[10px] text-gray-400">From</p>
+              <p className="font-bold text-sm text-blue-600">{product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}</p>
+            </div>
           ) : (
             <div className="space-y-1.5">
               <div className="flex items-center gap-1 text-[11px] text-blue-700 font-medium">
@@ -662,8 +718,11 @@ export default function StoreDetailPage() {
             {filtered.map((product) => (
               <StoreProductCard
                 key={product.id}
-                product={product}
+                product={product as StoreProduct}
                 hasCommercialAccess={hasCommercialAccess}
+                storeLogoUrl={store.logoUrl ?? null}
+                storeName={store.name}
+                distanceKm={distance}
               />
             ))}
           </div>

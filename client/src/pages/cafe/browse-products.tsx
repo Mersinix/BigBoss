@@ -67,6 +67,40 @@ function CategoryStrip({
   );
 }
 
+// ── Supplier Logo Strip ───────────────────────────────────────────────────────
+
+const MAX_LOGOS = 3;
+
+function SupplierLogoStrip({ listings, count }: { listings: { supplierId: number; storeLogoUrl: string | null }[]; count: number }) {
+  const withLogos = listings.filter((l) => l.storeLogoUrl);
+  const shown = withLogos.slice(0, MAX_LOGOS);
+  const overflow = count - MAX_LOGOS;
+  return (
+    <div className="flex items-center gap-1">
+      <div className="flex items-center">
+        {shown.length > 0 ? (
+          shown.map((l, i) => (
+            <div
+              key={l.supplierId}
+              className="w-4 h-4 rounded-full overflow-hidden bg-gray-100 border border-white flex items-center justify-center shrink-0"
+              style={{ marginLeft: i > 0 ? -4 : 0 }}
+            >
+              <img src={l.storeLogoUrl!} alt="" className="w-full h-full object-cover" />
+            </div>
+          ))
+        ) : (
+          <div className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+            <Store className="w-2.5 h-2.5 text-gray-400" />
+          </div>
+        )}
+      </div>
+      <span className="text-[11px] text-gray-400">
+        {overflow > 0 ? `+${overflow}` : ""} {count}
+      </span>
+    </div>
+  );
+}
+
 // ── Product Card ──────────────────────────────────────────────────────────────
 
 function ProductCard({ product, hasCommercialAccess }: { product: MarketplaceProduct; hasCommercialAccess: boolean }) {
@@ -93,7 +127,6 @@ function ProductCard({ product, hasCommercialAccess }: { product: MarketplacePro
     return nearest;
   }, [searchLocation, product.listings]);
 
-  const storeLogoUrl = product.listings[0]?.storeLogoUrl ?? null;
   const hasReviews = product.reviewCount > 0;
 
   return (
@@ -155,16 +188,9 @@ function ProductCard({ product, hasCommercialAccess }: { product: MarketplacePro
       <div className="p-3 flex-1 flex flex-col gap-1.5">
         {/* Product name — single line with truncation */}
         <h3 className="font-bold text-sm leading-tight truncate group-hover:text-blue-600 transition-colors">{product.name}</h3>
-        {/* Supplier info: logo + count + distance */}
+        {/* Supplier info: multi-logo strip + count + distance */}
         <div className="flex items-center gap-1.5">
-          <div className="w-4 h-4 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center shrink-0">
-            {storeLogoUrl ? (
-              <img src={storeLogoUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <Store className="w-2.5 h-2.5 text-gray-400" />
-            )}
-          </div>
-          <span className="text-[11px] text-gray-400">{product.supplierCount}</span>
+          <SupplierLogoStrip listings={product.listings} count={product.supplierCount} />
           {distanceKm !== null && (
             <span className="text-[11px] text-gray-400 flex items-center gap-0.5 ml-auto">
               <MapPin className="w-2.5 h-2.5 shrink-0" />{formatDistance(distanceKm)}

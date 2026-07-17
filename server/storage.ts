@@ -2032,12 +2032,33 @@ export class DatabaseStorage implements IStorage {
     const avgRating = reviewCount ? reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount : 0;
     if (!activeListings.length) return { ...card, products: [], avgRating, reviewCount };
     const productIds = activeListings.map((l) => l.productId);
-    const prods = await db.select().from(products).where(inArray(products.id, productIds));
+    const [prods, productReviewRows] = await Promise.all([
+      db.select().from(products).where(inArray(products.id, productIds)),
+      db.select().from(supplierProductReviews).where(
+        and(
+          inArray(supplierProductReviews.productId as any, productIds),
+          eq(supplierProductReviews.reviewType as any, 'PRODUCT')
+        )
+      ),
+    ]);
     const listingByProduct = new Map(activeListings.map((l) => [l.productId, l]));
+    const productReviewStats = new Map<number, { sum: number; count: number }>();
+    for (const r of productReviewRows) {
+      if (!r.productId) continue;
+      const s = productReviewStats.get(r.productId) ?? { sum: 0, count: 0 };
+      s.sum += r.rating; s.count += 1;
+      productReviewStats.set(r.productId, s);
+    }
     const tx = await buildTaxonomyCache();
     const enriched = prods.map((p) => {
       const listing = listingByProduct.get(p.id)!;
-      return { ...enrichProduct(p, tx), price: listing.price, bestPrice: listing.price, totalStock: listing.stock } as unknown as ProductWithTaxonomy;
+      const stats = productReviewStats.get(p.id);
+      return {
+        ...enrichProduct(p, tx),
+        price: listing.price, bestPrice: listing.price, totalStock: listing.stock,
+        avgRating: stats ? stats.sum / stats.count : 0,
+        reviewCount: stats?.count ?? 0,
+      } as unknown as ProductWithTaxonomy;
     });
     return { ...card, products: enriched, avgRating, reviewCount };
   }

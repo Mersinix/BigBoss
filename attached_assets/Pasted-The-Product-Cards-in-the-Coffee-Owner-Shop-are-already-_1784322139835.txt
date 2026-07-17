@@ -1,0 +1,216 @@
+The Product Cards in the Coffee Owner Shop are already improved and working correctly.
+
+Now I want to apply the exact same Product Card behavior and design improvements to the products mapped inside each Supplier Store page.
+
+Before making any changes:
+
+Review the current Store Product Cards implementation.
+Compare it with the already updated Shop Product Cards.
+Reuse the same components, behavior, and styling where possible.
+Keep synchronization intact between:
+Shop Products
+Store Products
+Supplier Products
+Supplier Store information
+Reviews system
+Location system
+
+Do not redesign anything.
+Do not change existing Store logic.
+Do not remove existing functionality.
+Only apply the same Product Card improvements already implemented in the Shop.
+
+Coffee Owner → Store Page → Product Cards Improvements
+1. Product Card Click Behavior
+
+Currently:
+
+Product Details Modal opens only from the "+" button.
+
+Keep the "+" button behavior.
+
+Add the same behavior as Shop:
+
+The complete product card should become clickable.
+
+When the Coffee Owner clicks anywhere on the product card:
+
+Open the existing Product Details Modal.
+Keep the "+" button working.
+Do not redirect to any Product Details page.
+The Product Details Modal remains the only way to view product information.
+2. Product Card Layout Improvements
+
+Apply the same Product Card layout as the Shop.
+
+Product Card Height
+
+All Store Product Cards must have the same height.
+
+Product name:
+
+Display only one line.
+If the name is too long:
+Show "..."
+Do not increase the card height.
+Description
+
+Remove the product description from Store Product Cards.
+
+Keep only the important information.
+
+3. Supplier Information
+
+Update the supplier information display for both:
+
+Coffee Owner → Shop Product Cards
+Coffee Owner → Store Product Cards
+
+Currently:
+
+Remove:
+
+"From supplier"
+
+Do not display this text.
+
+Supplier Logos Display
+
+Instead of showing only one supplier logo:
+
+The card should display multiple supplier store logos when the product is available from multiple suppliers.
+
+Rules:
+
+Display all available supplier store logos.
+Replace the old supplier icon with the real Supplier Store logo/image.
+If multiple suppliers exist:
+Show multiple supplier logos.
+Keep the same logo size and design.
+Display them horizontally.
+Maximum display width should take only around half of the available line width.
+Do not allow logos to push or break the card layout.
+Keep the product card height unchanged.
+
+Example:
+
+[Store Logo 1] [Store Logo 2] [Store Logo 3]     3 suppliers
+
+If there are more suppliers than can fit:
+
+Keep the layout clean.
+Continue showing the supplier count.
+Supplier Count
+
+Keep:
+
+Number of suppliers.
+
+Display it next to the supplier logos.
+
+Example:
+
+[Logo] [Logo] [Logo]   +5 suppliers
+
+The supplier count must remain synchronized with the real number of available suppliers for that product.
+
+Synchronization Requirements
+
+This supplier logo section must be synchronized with:
+
+Supplier Store visibility.
+Available supplier products.
+Product filters.
+Location filtering.
+
+Only display supplier stores that are currently valid suppliers for this product.
+
+Additional requirement:
+
+Apply this same supplier logo behavior to:
+
+Coffee Owner → Shop Product Cards
+Coffee Owner → Store Product Cards
+
+The Shop Product Cards were expected to have this behavior but currently only show one supplier. Update both areas to support multiple supplier store logos with the same design and synchronization.
+
+4. Distance Information
+
+Add supplier distance information exactly like Shop Product Cards.
+
+Display:
+
+Distance between:
+
+Coffee Owner selected location from Location Modal
+OR default Coffee Owner location
+
+and:
+
+Supplier Store location.
+
+Example:
+
+📍 5 km
+
+The distance must update automatically when the Coffee Owner changes the search location.
+
+5. Product Price Layout
+
+Improve spacing.
+
+Remove the large empty space between:
+
+Product information section
+Price section
+
+The price should be closer and better aligned.
+
+Keep the current pricing logic.
+
+6. Product Reviews Information On Card
+
+Add Product Review information on the product picture.
+
+Position:
+
+Bottom left corner of the product image.
+
+Display:
+
+Average rating
+Number of reviews
+
+Use the same style already implemented on Shop Product Cards.
+
+Final Verification
+
+After implementation verify:
+
+Store Product Cards have the same behavior as Shop Product Cards.
+Clicking anywhere on the card opens the Product Details Modal.
+"+" button still works.
+No old Product Details page navigation exists.
+Store products still respect:
+Category filters
+SubCategory filters
+Brand filters
+Flavor filters
+Size filters
+Location filtering
+Supplier logo mapping still works.
+Distance calculation remains synchronized.
+Reviews remain synchronized.
+Responsive behavior works correctly:
+Desktop
+Tablet
+Mobile
+
+Do not modify:
+
+Pack system
+Supplier Store management
+Admin modules
+Existing Product Details Modal logic
+
+Only replicate the already implemented Shop Product Card improvements into Store Product Cards.

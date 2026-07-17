@@ -1079,8 +1079,24 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-6 text-center text-xs text-gray-500">
-            © 2026 BigBossCoffee. Tous droits réservés. · <a href="#" className="hover:text-gray-300">Confidentialité</a> · <a href="#" className="hover:text-gray-300">CGU</a>
-          </div>
+  © 2026 BigBossCoffee. Tous droits réservés. ·{" "}
+  <a href="#" className="hover:text-gray-300">
+    Confidentialité
+  </a>{" "}
+  ·{" "}
+  <a href="#" className="hover:text-gray-300">
+    CGU
+  </a>{" "}
+  · Réalisé par{" "}
+  <a
+    href="https://hook.tn"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="font-medium hover:text-gray-300 transition-colors"
+  >
+    HOOK Ai AGENCY
+  </a>
+</div>
         </div>
       </footer>
 

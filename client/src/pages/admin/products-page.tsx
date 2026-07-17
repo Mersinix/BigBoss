@@ -1052,10 +1052,250 @@ function SupplierProductsSection({
 
 // ── Admin Packs Section ───────────────────────────────────────────────────────
 
-function AdminPacksSection() {
+// ── Pack status badge ─────────────────────────────────────────────────────────
+
+function PackStatusBadge({ pack }: { pack: any }) {
+  if (pack.isArchived) return <Badge className="text-xs border-0 bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400">Archived</Badge>;
+  if (pack.isExpired) return <Badge className="text-xs border-0 bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400">Expired</Badge>;
+  if (pack.visibility === "HIDDEN") return <Badge className="text-xs border-0 bg-secondary text-muted-foreground">Hidden</Badge>;
+  if (pack.isAvailable) return <Badge className="text-xs border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">Available</Badge>;
+  return <Badge className="text-xs border-0 bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">Out of Stock</Badge>;
+}
+
+// ── Admin Pack Preview Modal ──────────────────────────────────────────────────
+
+function AdminPackPreviewModal({
+  pack,
+  onClose,
+  onToggleVisibility,
+  onDelete,
+  isPending,
+}: {
+  pack: any;
+  onClose: () => void;
+  onToggleVisibility: () => void;
+  onDelete: () => void;
+  isPending: boolean;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const individualTotal = (pack.items ?? []).reduce((s: number, i: any) => s + (i.unitPrice ?? 0) * (i.quantity ?? 1), 0);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-amber-500" />
+            Pack Preview
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          {/* Hero image */}
+          <div className="relative aspect-[16/9] bg-secondary rounded-xl overflow-hidden">
+            {pack.imageUrl ? (
+              <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Layers className="w-16 h-16 text-muted-foreground opacity-20" />
+              </div>
+            )}
+            {/* Expiry badge */}
+            {pack.expirationDate && (
+              <div className="absolute bottom-3 right-3">
+                <Badge className="bg-orange-500 text-white border-0 text-xs">
+                  Exp. {new Date(pack.expirationDate).toLocaleDateString()}
+                </Badge>
+              </div>
+            )}
+          </div>
+
+          {/* Header info */}
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1 flex-1 min-w-0">
+                <h2 className="font-bold text-xl leading-tight">{pack.name}</h2>
+                {pack.description && <p className="text-sm text-muted-foreground">{pack.description}</p>}
+                <p className="text-sm text-muted-foreground font-medium">{pack.supplierName ?? "—"}</p>
+              </div>
+              <PackStatusBadge pack={pack} />
+            </div>
+
+            {/* Taxonomy badges */}
+            <div className="flex flex-wrap gap-1.5">
+              {(pack.categoryLabels ?? []).map((c: any) => (
+                <Badge key={c.id} variant="secondary" className="text-xs">{c.name}</Badge>
+              ))}
+              {(pack.subCategoryLabels ?? []).map((c: any) => (
+                <Badge key={c.id} variant="outline" className="text-xs">{c.name}</Badge>
+              ))}
+              {(pack.brandLabels ?? []).map((b: any) => (
+                <Badge key={b.id} className="text-xs bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400 border-0">{b.name}</Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Price + stock row */}
+          <div className="flex flex-wrap gap-4 p-3 bg-secondary/40 rounded-lg">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Pack Price</p>
+              <p className="font-bold text-lg text-amber-600">
+                {pack.price != null ? `${(pack.price / 100).toFixed(2)} TND` : "—"}
+              </p>
+              {individualTotal > (pack.price ?? 0) && (
+                <p className="text-xs text-muted-foreground line-through">
+                  {(individualTotal / 100).toFixed(2)} TND (individual)
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Max Buildable</p>
+              <p className="font-semibold">{pack.maxBuildable ?? 0}</p>
+            </div>
+            {pack.packReviewCount > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Rating</p>
+                <p className="font-semibold">{pack.packAvgRating?.toFixed(1)} <span className="text-xs text-muted-foreground font-normal">({pack.packReviewCount} reviews)</span></p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Visibility</p>
+              <p className="font-semibold text-sm">{pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}</p>
+            </div>
+          </div>
+
+          {/* Items list */}
+          {(pack.items ?? []).length > 0 && (
+            <div>
+              <p className="text-sm font-semibold mb-2">{(pack.items ?? []).length} items included</p>
+              <div className="rounded-lg border overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-secondary/30">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-xs">Product</TableHead>
+                      <TableHead className="text-xs">Variant</TableHead>
+                      <TableHead className="text-xs text-right">Qty</TableHead>
+                      <TableHead className="text-xs text-right">Unit Price</TableHead>
+                      <TableHead className="text-xs text-right">Pack Price</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(pack.items ?? []).map((item: any) => (
+                      <TableRow key={item.id} className="hover:bg-secondary/20">
+                        <TableCell className="py-2">
+                          <div className="flex items-center gap-2">
+                            {item.productImageUrl ? (
+                              <img src={item.productImageUrl} alt="" className="w-8 h-8 rounded object-cover border border-border/50 shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center shrink-0">
+                                <Package className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            <p className="text-xs font-medium line-clamp-2">{item.productName}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <div className="flex flex-wrap gap-1">
+                            {item.flavorName && <Badge className="text-[10px] px-1 py-0 bg-pink-100 text-pink-700 border-0">{item.flavorName}</Badge>}
+                            {item.sizeName && <Badge className="text-[10px] px-1 py-0 bg-amber-100 text-amber-700 border-0">{item.sizeName}</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2 text-right text-xs">×{item.quantity}</TableCell>
+                        <TableCell className="py-2 text-right text-xs text-muted-foreground">
+                          {item.unitPrice != null ? `${(item.unitPrice / 100).toFixed(2)}` : "—"}
+                        </TableCell>
+                        <TableCell className="py-2 text-right text-xs font-medium">
+                          {item.packVariantPrice != null ? `${(item.packVariantPrice / 100).toFixed(2)} TND` : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {/* Admin actions */}
+          <div className="flex items-center justify-between pt-2 border-t gap-3 flex-wrap">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onToggleVisibility}
+                disabled={isPending}
+                data-testid={`button-modal-toggle-visibility-pack-${pack.id}`}
+              >
+                {pack.visibility === "VISIBLE" ? (
+                  <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Hide Pack</>
+                ) : (
+                  <><Eye className="w-3.5 h-3.5 mr-1.5" />Show Pack</>
+                )}
+              </Button>
+            </div>
+            {!confirmDelete ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => setConfirmDelete(true)}
+                data-testid={`button-modal-delete-pack-${pack.id}`}
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete Pack
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Are you sure?</span>
+                <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={onDelete}
+                  disabled={isPending}
+                  data-testid="button-modal-confirm-delete-pack"
+                >
+                  {isPending ? "Deleting…" : "Delete"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Pack Filters type ─────────────────────────────────────────────────────────
+
+type PackFilters = {
+  search: string;
+  categoryId: string;
+  subCategoryId: string;
+  brandId: string;
+  flavorId: string;
+  sizeId: string;
+  status: string; // "" | "available" | "unavailable" | "hidden" | "archived" | "expired"
+};
+
+const EMPTY_PACK_FILTERS: PackFilters = {
+  search: "", categoryId: "", subCategoryId: "", brandId: "", flavorId: "", sizeId: "", status: "",
+};
+
+// ── Admin Packs Section ───────────────────────────────────────────────────────
+
+function AdminPacksSection({
+  cats, subs, flavs, szs, brnds,
+}: {
+  cats: CategoryWithCount[];
+  subs: SubCategoryWithDetails[];
+  flavs: FlavorWithCount[];
+  szs: SizeWithCount[];
+  brnds: BrandWithCount[];
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
+  const [packFilters, setPackFilters] = useState<PackFilters>(EMPTY_PACK_FILTERS);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [previewPack, setPreviewPack] = useState<any | null>(null);
   const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
 
   const { data: packs = [], isLoading } = useQuery<any[]>({
@@ -1070,10 +1310,14 @@ function AdminPacksSection() {
   const patchMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Record<string, any> }) =>
       apiRequest("PATCH", `/api/admin/packs/${id}`, data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["/api/admin/packs"] });
       qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
       toast({ title: "Pack updated" });
+      // Refresh the pack in preview if it's open
+      if (previewPack?.id === variables.id) {
+        setPreviewPack((prev: any) => prev ? { ...prev, ...variables.data } : prev);
+      }
     },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
@@ -1085,15 +1329,96 @@ function AdminPacksSection() {
       qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
       toast({ title: "Pack deleted" });
       setDeleting(null);
+      setPreviewPack(null);
     },
     onError: () => toast({ title: "Error deleting pack", variant: "destructive" }),
   });
 
+  // ── Dynamic filter dropdowns ──────────────────────────────────────────────
+
+  const filteredSubsPack = useMemo(() =>
+    packFilters.categoryId ? subs.filter(s => String(s.categoryId) === packFilters.categoryId) : subs,
+    [packFilters.categoryId, subs]
+  );
+
+  const filterTaxPack = <T extends { subCategoryIds?: number[] | null }>(items: T[]): T[] => {
+    const subId = packFilters.subCategoryId ? parseInt(packFilters.subCategoryId) : null;
+    const catSubIds = subs.filter(s => String(s.categoryId) === packFilters.categoryId).map(s => s.id);
+    if (subId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).includes(subId));
+    } else if (packFilters.categoryId) {
+      const withSubs = items.filter(i => (i.subCategoryIds ?? []).length > 0);
+      if (withSubs.length > 0) return items.filter(i => (i.subCategoryIds ?? []).some((sid: number) => catSubIds.includes(sid)));
+    }
+    return items;
+  };
+
+  const filteredFlavsPack = useMemo(() => filterTaxPack(flavs), [flavs, packFilters.categoryId, packFilters.subCategoryId, subs]);
+  const filteredSzsPack = useMemo(() => filterTaxPack(szs), [szs, packFilters.categoryId, packFilters.subCategoryId, subs]);
+  const filteredBrndsPack = useMemo(() => filterTaxPack(brnds), [brnds, packFilters.categoryId, packFilters.subCategoryId, subs]);
+
+  const setPackFilter = (key: keyof PackFilters, value: string) => {
+    setPackFilters(prev => {
+      const next = { ...prev, [key]: value };
+      if (key === "categoryId") { next.subCategoryId = ""; next.flavorId = ""; next.sizeId = ""; next.brandId = ""; }
+      if (key === "subCategoryId") { next.flavorId = ""; next.sizeId = ""; next.brandId = ""; }
+      return next;
+    });
+  };
+
+  const hasActivePackFilters = Object.values(packFilters).some(v => v !== "");
+
+  // ── Client-side filtering ─────────────────────────────────────────────────
+
   const displayed = useMemo(() => {
-    if (!search.trim()) return packs;
-    const q = search.toLowerCase();
-    return packs.filter((p: any) => p.name.toLowerCase().includes(q) || (p.supplierName ?? "").toLowerCase().includes(q));
-  }, [packs, search]);
+    let list = packs as any[];
+    if (packFilters.search.trim()) {
+      const q = packFilters.search.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.supplierName ?? "").toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q));
+    }
+    if (packFilters.categoryId) {
+      const cid = parseInt(packFilters.categoryId);
+      list = list.filter(p => (p.categoryIds ?? []).includes(cid));
+    }
+    if (packFilters.subCategoryId) {
+      const sid = parseInt(packFilters.subCategoryId);
+      list = list.filter(p => (p.subCategoryIds ?? []).includes(sid));
+    }
+    if (packFilters.brandId) {
+      const bid = parseInt(packFilters.brandId);
+      list = list.filter(p => (p.brandIds ?? []).includes(bid));
+    }
+    if (packFilters.flavorId) {
+      const fid = parseInt(packFilters.flavorId);
+      list = list.filter(p => (p.items ?? []).some((i: any) => i.flavorId === fid));
+    }
+    if (packFilters.sizeId) {
+      const sid = parseInt(packFilters.sizeId);
+      list = list.filter(p => (p.items ?? []).some((i: any) => i.sizeId === sid));
+    }
+    if (packFilters.status) {
+      if (packFilters.status === "available") list = list.filter(p => p.isAvailable);
+      else if (packFilters.status === "unavailable") list = list.filter(p => !p.isAvailable && !p.isArchived && !p.isExpired && p.visibility === "VISIBLE");
+      else if (packFilters.status === "hidden") list = list.filter(p => p.visibility === "HIDDEN");
+      else if (packFilters.status === "archived") list = list.filter(p => p.isArchived);
+      else if (packFilters.status === "expired") list = list.filter(p => p.isExpired);
+    }
+    return list;
+  }, [packs, packFilters]);
+
+  const toggleVisibility = (pack: any) => {
+    const newVisibility = pack.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE";
+    patchMutation.mutate({ id: pack.id, data: { visibility: newVisibility } });
+    // Optimistically update preview
+    if (previewPack?.id === pack.id) setPreviewPack((prev: any) => prev ? { ...prev, visibility: newVisibility } : prev);
+  };
+
+  const openPreview = (pack: any) => {
+    // Always use the latest data from the query
+    const latest = packs.find((p: any) => p.id === pack.id) ?? pack;
+    setPreviewPack(latest);
+  };
 
   return (
     <div className="space-y-4">
@@ -1109,34 +1434,208 @@ function AdminPacksSection() {
             {packs.filter((p: any) => !p.isAvailable).length} unavailable
           </span>
         </div>
+        <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {packs.filter((p: any) => p.isArchived).length} archived ·{" "}
+            {packs.filter((p: any) => p.isExpired && !p.isArchived).length} expired
+          </span>
+        </div>
       </div>
 
-      {/* Search */}
-      <Card className="border shadow-none">
-        <CardContent className="p-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Search packs or suppliers…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-pack-search"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Filter bar + view toggle */}
+      <div className="flex items-start gap-3">
+        <Card className="border shadow-none flex-1">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search packs or suppliers…"
+                  value={packFilters.search}
+                  onChange={e => setPackFilter("search", e.target.value)}
+                  data-testid="input-pack-search"
+                />
+              </div>
 
-      {/* Table */}
+              {/* Category */}
+              <div className="min-w-[150px]">
+                <Select value={packFilters.categoryId} onValueChange={v => setPackFilter("categoryId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-pack-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Categories</SelectItem>
+                    {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sub-category */}
+              <div className="min-w-[150px]">
+                <Select value={packFilters.subCategoryId} onValueChange={v => setPackFilter("subCategoryId", v === "__all__" ? "" : v)} disabled={!packFilters.categoryId}>
+                  <SelectTrigger data-testid="select-pack-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Sub-categories</SelectItem>
+                    {filteredSubsPack.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Brand */}
+              <div className="min-w-[130px]">
+                <Select value={packFilters.brandId} onValueChange={v => setPackFilter("brandId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-pack-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Brands</SelectItem>
+                    {filteredBrndsPack.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Flavor */}
+              <div className="min-w-[130px]">
+                <Select value={packFilters.flavorId} onValueChange={v => setPackFilter("flavorId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-pack-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Flavors</SelectItem>
+                    {filteredFlavsPack.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Size */}
+              <div className="min-w-[130px]">
+                <Select value={packFilters.sizeId} onValueChange={v => setPackFilter("sizeId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-pack-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Sizes</SelectItem>
+                    {filteredSzsPack.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Status */}
+              <div className="min-w-[130px]">
+                <Select value={packFilters.status} onValueChange={v => setPackFilter("status", v === "__all__" ? "" : v)}>
+                  <SelectTrigger data-testid="select-pack-filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Statuses</SelectItem>
+                    <SelectItem value="available">Available</SelectItem>
+                    <SelectItem value="unavailable">Out of Stock</SelectItem>
+                    <SelectItem value="hidden">Hidden</SelectItem>
+                    <SelectItem value="archived">Archived</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Clear */}
+              {hasActivePackFilters && (
+                <Button variant="ghost" size="sm" onClick={() => setPackFilters(EMPTY_PACK_FILTERS)} className="text-muted-foreground">
+                  <X className="w-4 h-4 mr-1" />Clear
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Grid / List toggle */}
+        <div className="flex gap-1 border rounded-lg p-0.5 self-start mt-0">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            data-testid="toggle-pack-view-list"
+            title="List view"
+          >
+            <LayoutList className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            data-testid="toggle-pack-view-grid"
+            title="Grid view"
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
       {isLoading ? (
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 bg-secondary/30 rounded-lg animate-pulse" />)}</div>
       ) : displayed.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Layers className="w-12 h-12 text-muted-foreground opacity-40 mb-4" />
-          <p className="font-semibold">{search ? "No packs match your search" : "No packs found"}</p>
-          <p className="text-sm text-muted-foreground mt-1">Suppliers can create packs from their Pack tab.</p>
+          <p className="font-semibold">{hasActivePackFilters ? "No packs match your filters" : "No packs found"}</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {hasActivePackFilters ? "Try adjusting your filters." : "Suppliers can create packs from their Pack tab."}
+          </p>
+        </div>
+      ) : viewMode === 'grid' ? (
+        /* ── Grid ──────────────────────────────────────────────────────────── */
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {displayed.map((pack: any) => (
+            <div
+              key={pack.id}
+              className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer"
+              data-testid={`card-pack-${pack.id}`}
+              onClick={() => openPreview(pack)}
+            >
+              <div className="relative aspect-square bg-amber-50 flex items-center justify-center overflow-hidden">
+                {pack.imageUrl ? (
+                  <img src={pack.imageUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <Layers className="w-8 h-8 text-amber-300" />
+                )}
+                {/* Visibility badge */}
+                {pack.visibility === "HIDDEN" && (
+                  <div className="absolute top-1.5 right-1.5">
+                    <Badge className="text-[10px] px-1.5 py-0 bg-secondary text-muted-foreground border-0">Hidden</Badge>
+                  </div>
+                )}
+              </div>
+              <div className="p-2.5 space-y-1.5">
+                <p className="font-medium text-sm line-clamp-2 leading-tight">{pack.name}</p>
+                <p className="text-xs text-muted-foreground line-clamp-1">{pack.supplierName ?? "—"}</p>
+                <div className="flex flex-wrap gap-1">
+                  {(pack.categoryLabels ?? []).slice(0, 2).map((c: any) => (
+                    <Badge key={c.id} variant="secondary" className="text-[10px] px-1.5 py-0">{c.name}</Badge>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  <PackStatusBadge pack={pack} />
+                  <span className="text-xs font-medium text-amber-600">
+                    {pack.price != null ? `${(pack.price / 100).toFixed(2)}` : "—"}
+                  </span>
+                </div>
+                {/* Quick actions */}
+                <div className="flex gap-1 pt-0.5" onClick={e => e.stopPropagation()}>
+                  <Button
+                    size="sm" variant="ghost"
+                    className="h-7 px-2 text-xs flex-1"
+                    title={pack.visibility === "VISIBLE" ? "Hide" : "Show"}
+                    onClick={() => toggleVisibility(pack)}
+                    disabled={patchMutation.isPending}
+                    data-testid={`button-toggle-visibility-pack-${pack.id}`}
+                  >
+                    {pack.visibility === "VISIBLE" ? <EyeOff className="w-3 h-3 mr-1" /> : <Eye className="w-3 h-3 mr-1" />}
+                    {pack.visibility === "VISIBLE" ? "Hide" : "Show"}
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost"
+                    className="h-7 px-2 text-destructive hover:text-destructive"
+                    onClick={() => setDeleting({ id: pack.id, name: pack.name })}
+                    data-testid={`button-delete-pack-${pack.id}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
+        /* ── List ──────────────────────────────────────────────────────────── */
         <div className="rounded-lg border overflow-hidden">
           <Table>
             <TableHeader className="bg-secondary/30">
@@ -1153,7 +1652,12 @@ function AdminPacksSection() {
             </TableHeader>
             <TableBody>
               {displayed.map((pack: any) => (
-                <TableRow key={pack.id} data-testid={`row-pack-${pack.id}`} className="hover:bg-secondary/20">
+                <TableRow
+                  key={pack.id}
+                  data-testid={`row-pack-${pack.id}`}
+                  className="hover:bg-secondary/20 cursor-pointer"
+                  onClick={() => openPreview(pack)}
+                >
                   <TableCell className="p-3">
                     {pack.imageUrl ? (
                       <img src={pack.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
@@ -1184,31 +1688,22 @@ function AdminPacksSection() {
                     {pack.price != null ? `${(pack.price / 100).toFixed(2)} TND` : "—"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {pack.quantityAvailable ?? 0}
+                    {pack.maxBuildable ?? 0}
                   </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={`text-xs border-0 ${pack.isAvailable ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}
-                    >
-                      {pack.isAvailable ? "Available" : "Unavailable"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell><PackStatusBadge pack={pack} /></TableCell>
+                  <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
+                        size="icon" variant="ghost" className="h-8 w-8"
                         title={pack.visibility === "VISIBLE" ? "Hide pack" : "Show pack"}
-                        onClick={() => patchMutation.mutate({ id: pack.id, data: { visibility: pack.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE" } })}
+                        onClick={() => toggleVisibility(pack)}
                         disabled={patchMutation.isPending}
                         data-testid={`button-toggle-visibility-pack-${pack.id}`}
                       >
                         {pack.visibility === "VISIBLE" ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />}
                       </Button>
                       <Button
-                        size="icon"
-                        variant="ghost"
+                        size="icon" variant="ghost"
                         className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => setDeleting({ id: pack.id, name: pack.name })}
                         data-testid={`button-delete-pack-${pack.id}`}
@@ -1224,6 +1719,18 @@ function AdminPacksSection() {
         </div>
       )}
 
+      {/* Pack Preview Modal */}
+      {previewPack && (
+        <AdminPackPreviewModal
+          pack={packs.find((p: any) => p.id === previewPack.id) ?? previewPack}
+          onClose={() => setPreviewPack(null)}
+          onToggleVisibility={() => toggleVisibility(packs.find((p: any) => p.id === previewPack.id) ?? previewPack)}
+          onDelete={() => deleteMutation.mutate(previewPack.id)}
+          isPending={patchMutation.isPending || deleteMutation.isPending}
+        />
+      )}
+
+      {/* Standalone delete confirm (from quick-action buttons) */}
       {deleting && (
         <DeleteConfirm
           open
@@ -1403,7 +1910,7 @@ export default function AdminProductsPage() {
 
       {section === 'supplier' && <SupplierProductsSection cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} />}
 
-      {section === 'packs' && <AdminPacksSection />}
+      {section === 'packs' && <AdminPacksSection cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} />}
 
       {section === 'catalog' && <>
       {/* Stats strip */}

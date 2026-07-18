@@ -2014,6 +2014,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/marketplace/promotions?listingIds=1,2,3 — badge info for product cards
+  // Must be defined BEFORE /api/marketplace/:productId to avoid the wildcard shadowing it
+  app.get('/api/marketplace/promotions', async (req: any, res) => {
+    try {
+      const rawIds = req.query.listingIds as string;
+      if (!rawIds) return res.json([]);
+      const listingIds = rawIds.split(',').map(Number).filter(Boolean);
+      const cafeId = req.session?.userId ? (await storage.getUser(req.session.userId))?.id : undefined;
+      const badges = await storage.getPromotionsForListings(listingIds, cafeId);
+      res.json(badges);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
   app.get("/api/marketplace/:productId", async (req, res) => {
     try {
       const product = await storage.getMarketplaceProduct(parseInt(req.params.productId));
@@ -2482,6 +2495,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: 'Error fetching promotion stats' }); }
   });
 
+  // GET /api/promotions/my-listings — supplier's listings for promotion assignment UI
+  app.get('/api/promotions/my-listings', requireSupplier, async (req: any, res) => {
+    try {
+      const listings = await storage.getSupplierListings(req.supplier.id);
+      res.json(
+        listings
+          .filter(l => !l.onlyForPack)
+          .map(l => ({
+            listingId: l.id,
+            productId: l.product.id,
+            productName: l.product.name,
+            imageUrl: l.product.imageUrl,
+            category: l.product.category,
+            categoryId: l.product.categoryId,
+            price: l.price,
+            stock: l.stock,
+          }))
+      );
+    } catch { res.status(500).json({ message: 'Error fetching listings' }); }
+  });
+
+  // GET /api/promotions/my-categories — supplier's categories for promotion assignment UI
+  app.get('/api/promotions/my-categories', requireSupplier, async (req: any, res) => {
+    try {
+      const [listings, allCategories] = await Promise.all([
+        storage.getSupplierListings(req.supplier.id),
+        storage.getCategories(),
+      ]);
+      // Build a name→id lookup from the categories table
+      const catNameToId = new Map(allCategories.map(c => [c.name.toLowerCase(), c.id]));
+
+      const catMap = new Map<number, { id: number; name: string; productCount: number }>();
+      for (const l of listings.filter(l => !l.onlyForPack)) {
+        const catName = l.product.category;
+        // Use categoryId from product FK, or resolve by name from the categories table
+        const catId = l.product.categoryId ?? catNameToId.get(catName?.toLowerCase() ?? '') ?? null;
+        if (catId && catName) {
+          const ex = catMap.get(catId);
+          if (ex) ex.productCount++;
+          else catMap.set(catId, { id: catId, name: catName, productCount: 1 });
+        }
+      }
+      res.json(Array.from(catMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
+    } catch { res.status(500).json({ message: 'Error fetching categories' }); }
+  });
+
   // GET /api/promotions/:id — single promotion
   app.get('/api/promotions/:id', requireSupplier, async (req: any, res) => {
     try {
@@ -2596,18 +2655,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       res.status(500).json({ message: err?.message ?? 'Error evaluating promotions' });
     }
-  });
-
-  // GET /api/marketplace/promotions?listingIds=1,2,3 — badge info for product cards
-  app.get('/api/marketplace/promotions', async (req: any, res) => {
-    try {
-      const rawIds = req.query.listingIds as string;
-      if (!rawIds) return res.json([]);
-      const listingIds = rawIds.split(',').map(Number).filter(Boolean);
-      const cafeId = req.session?.userId ? (await storage.getUser(req.session.userId))?.id : undefined;
-      const badges = await storage.getPromotionsForListings(listingIds, cafeId);
-      res.json(badges);
-    } catch { res.status(500).json({ message: 'Error' }); }
   });
 
   // GET /api/supplier/:supplierId/promotions — public active promotions for a supplier store page

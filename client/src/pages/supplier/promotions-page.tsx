@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tag, Plus, Calendar, Search, MoreHorizontal, Copy, Pause, Play,
-  Trash2, Eye, BarChart3, TrendingUp, Users, Zap, Gift, Truck,
-  Percent, DollarSign, ShoppingBag, Star, Filter, ChevronDown,
-  Check, X, Edit2, AlertCircle, Clock,
+  Trash2, Zap, Gift, Truck,
+  Percent, DollarSign, ShoppingBag, Star, Users, TrendingUp,
+  Check, Edit2, Package, BarChart3, Settings2, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/format";
@@ -355,8 +355,9 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
           </SelectContent>
         </Select>
         {form.targetType !== 'ALL' && (
-          <p className="text-xs text-muted-foreground mt-1">
-            You can configure specific {form.targetType === 'PRODUCTS' ? 'products' : 'categories'} after saving this promotion.
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <Settings2 className="w-3 h-3 shrink-0" />
+            After saving, use the <strong>Manage Assignments</strong> button on the promotion card to assign specific {form.targetType === 'PRODUCTS' ? 'products' : 'categories'}.
           </p>
         )}
       </div>
@@ -384,21 +385,293 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
   );
 }
 
+// ── Listing item type (returned by /api/promotions/my-listings) ───────────────
+
+type ListingItem = {
+  listingId: number;
+  productId: number;
+  productName: string;
+  imageUrl: string | null;
+  category: string;
+  categoryId: number | null;
+  price: number;
+  stock: number;
+};
+
+type CategoryItem = {
+  id: number;
+  name: string;
+  productCount: number;
+};
+
+// ── Promotion Assignment Dialog ───────────────────────────────────────────────
+
+function PromotionAssignmentDialog({
+  promo,
+  onClose,
+  onSaved,
+}: {
+  promo: Promotion;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const isProducts = promo.targetType === 'PRODUCTS';
+  const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("__all__");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => {
+    const existing = isProducts
+      ? (promo.targetListingIds ?? [])
+      : (promo.targetCategoryIds ?? []);
+    return new Set(existing);
+  });
+  const [saving, setSaving] = useState(false);
+
+  const { data: listings = [], isLoading: loadingListings } = useQuery<ListingItem[]>({
+    queryKey: ["/api/promotions/my-listings"],
+    queryFn: () => fetchJSON("/api/promotions/my-listings"),
+    enabled: isProducts,
+  });
+
+  const { data: categories = [], isLoading: loadingCategories } = useQuery<CategoryItem[]>({
+    queryKey: ["/api/promotions/my-categories"],
+    queryFn: () => fetchJSON("/api/promotions/my-categories"),
+    enabled: !isProducts,
+  });
+
+  // Unique categories from listings for filter dropdown
+  const categoryOptions = useMemo(() => {
+    if (!isProducts) return [];
+    const map = new Map<string, string>();
+    listings.forEach(l => { if (l.category) map.set(l.category, l.category); });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [listings, isProducts]);
+
+  const filteredListings = useMemo(() => {
+    let list = listings;
+    if (search.trim()) list = list.filter(l => l.productName.toLowerCase().includes(search.toLowerCase()));
+    if (filterCategory !== "__all__") list = list.filter(l => l.category === filterCategory);
+    return list;
+  }, [listings, search, filterCategory]);
+
+  const filteredCategories = useMemo(() => {
+    if (!search.trim()) return categories;
+    return categories.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  }, [categories, search]);
+
+  const toggleId = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (isProducts) setSelectedIds(new Set(filteredListings.map(l => l.listingId)));
+    else setSelectedIds(new Set(filteredCategories.map(c => c.id)));
+  };
+
+  const deselectAll = () => setSelectedIds(new Set());
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = isProducts
+        ? { targetListingIds: Array.from(selectedIds) }
+        : { targetCategoryIds: Array.from(selectedIds) };
+      await fetchJSON(`${apiBase}/${promo.id}`, { method: "PUT", body: JSON.stringify({ ...promo, ...payload, startDate: promo.startDate ? new Date(promo.startDate).toISOString() : null, endDate: promo.endDate ? new Date(promo.endDate).toISOString() : null }) });
+      toast({ title: "Assignments saved", description: `${selectedIds.size} ${isProducts ? "product" : "categor"}${selectedIds.size === 1 ? (isProducts ? "" : "y") : (isProducts ? "s" : "ies")} assigned.` });
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Error saving", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isLoading = isProducts ? loadingListings : loadingCategories;
+  const totalItems = isProducts ? listings.length : categories.length;
+  const assignedCount = selectedIds.size;
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings2 className="w-5 h-5 text-amber-600" />
+            Manage {isProducts ? "Product" : "Category"} Assignments
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            <strong>{promo.name}</strong> — select which {isProducts ? "products" : "categories"} this promotion applies to.
+          </p>
+        </DialogHeader>
+
+        {/* Summary bar */}
+        <div className="flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm">
+          <span className="text-amber-800 font-medium">
+            {assignedCount} of {totalItems} {isProducts ? "products" : "categories"} assigned
+          </span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={selectAll}>Select all visible</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={deselectAll}>Deselect all</Button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              className="pl-8 h-8 text-sm"
+              placeholder={isProducts ? "Search products…" : "Search categories…"}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          {isProducts && categoryOptions.length > 0 && (
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="h-8 text-sm w-40">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All categories</SelectItem>
+                {categoryOptions.map(([val, label]) => (
+                  <SelectItem key={val} value={val}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Item list */}
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-1 pr-1">
+          {isLoading ? (
+            <div className="space-y-2 py-2">
+              {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 rounded-lg bg-secondary/40 animate-pulse" />)}
+            </div>
+          ) : isProducts ? (
+            filteredListings.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <Package className="w-10 h-10 mb-2 opacity-30" />
+                <p className="text-sm">No products found</p>
+              </div>
+            ) : (
+              filteredListings.map(listing => {
+                const checked = selectedIds.has(listing.listingId);
+                return (
+                  <div
+                    key={listing.listingId}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors border ${checked ? "bg-amber-50 border-amber-200" : "border-transparent hover:bg-secondary/40"}`}
+                    onClick={() => toggleId(listing.listingId)}
+                  >
+                    <Checkbox checked={checked} onCheckedChange={() => toggleId(listing.listingId)} className="shrink-0" onClick={e => e.stopPropagation()} />
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0">
+                      {listing.imageUrl ? (
+                        <img src={listing.imageUrl} alt={listing.productName} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package className="w-4 h-4 text-gray-300" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{listing.productName}</p>
+                      <p className="text-xs text-muted-foreground">{listing.category}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold">{formatCurrency(listing.price)}</p>
+                      <p className={`text-xs ${listing.stock === 0 ? "text-destructive" : listing.stock < 10 ? "text-yellow-600" : "text-muted-foreground"}`}>
+                        {listing.stock === 0 ? "Out of stock" : `${listing.stock} in stock`}
+                      </p>
+                    </div>
+                    {checked && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
+                  </div>
+                );
+              })
+            )
+          ) : (
+            filteredCategories.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <Tag className="w-10 h-10 mb-2 opacity-30" />
+                <p className="text-sm">No categories found</p>
+              </div>
+            ) : (
+              filteredCategories.map(cat => {
+                const checked = selectedIds.has(cat.id);
+                return (
+                  <div
+                    key={cat.id}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors border ${checked ? "bg-amber-50 border-amber-200" : "border-transparent hover:bg-secondary/40"}`}
+                    onClick={() => toggleId(cat.id)}
+                  >
+                    <Checkbox checked={checked} onCheckedChange={() => toggleId(cat.id)} className="shrink-0" onClick={e => e.stopPropagation()} />
+                    <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+                      <Tag className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm">{cat.name}</p>
+                      <p className="text-xs text-muted-foreground">{cat.productCount} product{cat.productCount !== 1 ? "s" : ""} in this category</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Badge variant="secondary" className="text-xs">{cat.productCount} products</Badge>
+                    </div>
+                    {checked && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
+                  </div>
+                );
+              })
+            )
+          )}
+        </div>
+
+        {/* Footer */}
+        {isProducts && (
+          <p className="text-xs text-muted-foreground bg-secondary/30 rounded-lg p-2.5">
+            Only currently assigned products receive the promotion. New products you add later will need to be manually assigned.
+          </p>
+        )}
+        {!isProducts && (
+          <p className="text-xs text-muted-foreground bg-secondary/30 rounded-lg p-2.5">
+            All products in assigned categories receive the promotion automatically, including new products you add to these categories later.
+          </p>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : `Save Assignments (${assignedCount})`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Promotion Card ──────────────────────────────────────────────────────────
 
 function PromotionCard({
-  promo, onEdit, onDuplicate, onDelete, onStatusChange,
+  promo, onEdit, onDuplicate, onDelete, onStatusChange, onManageAssignments,
 }: {
   promo: Promotion;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onStatusChange: (s: PromotionStatus) => void;
+  onManageAssignments: () => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const effectiveStatus = getEffectiveStatus(promo);
   const remaining = promo.maxUses != null ? promo.maxUses - promo.usageCount : null;
   const icon = TYPE_ICONS[promo.type];
+
+  const targetBadgeLabel =
+    promo.targetType === 'PRODUCTS'
+      ? `${(promo.targetListingIds ?? []).length} product${(promo.targetListingIds ?? []).length !== 1 ? "s" : ""} assigned`
+      : promo.targetType === 'CATEGORIES'
+      ? `${(promo.targetCategoryIds ?? []).length} categor${(promo.targetCategoryIds ?? []).length !== 1 ? "ies" : "y"} assigned`
+      : null;
 
   return (
     <Card className="rounded-2xl border-border/60 shadow-sm hover:shadow-md transition-shadow">
@@ -419,6 +692,16 @@ function PromotionCard({
                 </Badge>
                 {promo.stackable && (
                   <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">Stackable</Badge>
+                )}
+                {promo.targetType !== 'ALL' && (
+                  <Badge
+                    variant="outline"
+                    className={`text-xs cursor-pointer hover:bg-amber-50 ${(promo.targetListingIds ?? []).length === 0 && (promo.targetCategoryIds ?? []).length === 0 ? "text-destructive border-destructive/30" : "text-amber-700 border-amber-300"}`}
+                    onClick={onManageAssignments}
+                  >
+                    <Settings2 className="w-3 h-3 mr-1" />
+                    {targetBadgeLabel ?? (promo.targetType === 'PRODUCTS' ? "No products assigned" : "No categories assigned")}
+                  </Badge>
                 )}
               </div>
               <p className="text-sm text-amber-600 font-semibold">{discountLabel(promo)}</p>
@@ -442,6 +725,11 @@ function PromotionCard({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {promo.targetType !== 'ALL' && (
+              <Button size="sm" variant="outline" onClick={onManageAssignments} className="h-8 px-2 text-xs gap-1 text-amber-700 border-amber-300 hover:bg-amber-50">
+                <Settings2 className="w-3 h-3" /> Manage
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={onEdit} className="h-8 w-8 p-0"><Edit2 className="w-3.5 h-3.5" /></Button>
             <div className="relative">
               <Button size="sm" variant="ghost" onClick={() => setShowMenu(!showMenu)} className="h-8 w-8 p-0"><MoreHorizontal className="w-4 h-4" /></Button>
@@ -490,6 +778,7 @@ export default function PromotionsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Promotion | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Promotion | null>(null);
+  const [assigningPromo, setAssigningPromo] = useState<Promotion | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
   // Data
@@ -504,11 +793,24 @@ export default function PromotionsPage() {
   });
 
   // Mutations
-  const invalidate = () => { qc.invalidateQueries({ queryKey: ["/api/promotions"] }); };
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["/api/promotions"] });
+    // Also invalidate marketplace promotion badges so they reflect changes
+    qc.invalidateQueries({ queryKey: ["/api/marketplace/promotions"] });
+  };
 
   const createMut = useMutation({
     mutationFn: (data: any) => fetchJSON(apiBase, { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ["/api/promotions/stats"] }); setFormOpen(false); toast({ title: "Promotion created" }); },
+    onSuccess: (newPromo: Promotion) => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["/api/promotions/stats"] });
+      setFormOpen(false);
+      toast({ title: "Promotion created" });
+      // If targeting specific products/categories, immediately open assignment dialog
+      if (newPromo.targetType !== 'ALL') {
+        setTimeout(() => setAssigningPromo(newPromo), 150);
+      }
+    },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -654,6 +956,7 @@ export default function PromotionsPage() {
               onDuplicate={() => dupMut.mutate(p.id)}
               onDelete={() => setDeleteTarget(p)}
               onStatusChange={s => statusMut.mutate({ id: p.id, status: s })}
+              onManageAssignments={() => setAssigningPromo(p)}
             />
           ))}
         </div>
@@ -674,6 +977,15 @@ export default function PromotionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Assignment Dialog */}
+      {assigningPromo && assigningPromo.targetType !== 'ALL' && (
+        <PromotionAssignmentDialog
+          promo={assigningPromo}
+          onClose={() => setAssigningPromo(null)}
+          onSaved={() => { invalidate(); }}
+        />
+      )}
 
       {/* Delete Confirm */}
       <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>

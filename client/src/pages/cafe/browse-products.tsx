@@ -125,9 +125,25 @@ function ProductCard({ product, hasCommercialAccess, promotions }: { product: Ma
   const openQuickView = useQuickView((s) => s.open);
   const searchLocation = useSearchLocationStore((s) => s.searchLocation);
 
-  // Best promo for this product (highest value, or first)
+  // Best promo for this product — pick highest-priority (highest discountValue for % types, or first)
   const listingIds = product.listings.map(l => l.id);
-  const promoForProduct = promotions.find(p => listingIds.includes(p.listingId));
+  const promoForProduct = useMemo(() => {
+    const matches = promotions.filter(p => listingIds.includes(p.listingId));
+    if (!matches.length) return null;
+    // Pick % discount with highest value, otherwise first
+    const pct = matches.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
+    if (pct.length) return pct.reduce((best, p) => p.discountValue > best.discountValue ? p : best, pct[0]);
+    return matches[0];
+  }, [promotions, listingIds.join(',')]);
+
+  // For percentage-type promotions, compute the discounted best price
+  const promoDiscountedPrice = useMemo(() => {
+    if (!promoForProduct || product.bestPrice == null) return null;
+    if (['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(promoForProduct.type)) {
+      return Math.max(0, Math.round(product.bestPrice * (1 - promoForProduct.discountValue / 10000)));
+    }
+    return null;
+  }, [promoForProduct, product.bestPrice]);
 
   // Distance from search location to nearest supplier for this product
   const distanceKm = useMemo(() => {
@@ -164,14 +180,6 @@ function ProductCard({ product, hasCommercialAccess, promotions }: { product: Ma
         {product.category && (
           <div className="absolute top-2 left-2">
             <Badge className="bg-white/90 text-gray-700 backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2">{product.category}</Badge>
-          </div>
-        )}
-        {/* Promotion badge */}
-        {promoForProduct && (
-          <div className="absolute top-2 right-2">
-            <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-              <Zap className="w-2.5 h-2.5" />{promoForProduct.label}
-            </span>
           </div>
         )}
         {/* Review overlay — bottom left of image */}
@@ -229,8 +237,21 @@ function ProductCard({ product, hasCommercialAccess, promotions }: { product: Ma
         <div className="mt-auto pt-1.5 border-t border-gray-50">
           {hasCommercialAccess ? (
             <div>
+              {/* Promotion badge — shown here to avoid overlap with the favorite button in the image */}
+              {promoForProduct && (
+                <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5">
+                  <Zap className="w-2.5 h-2.5" />{promoForProduct.label}
+                </span>
+              )}
               <p className="text-[10px] text-gray-400">From</p>
-              <p className="font-bold text-sm text-blue-600">{product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}</p>
+              {promoDiscountedPrice != null ? (
+                <div className="flex items-baseline gap-1.5">
+                  <p className="font-bold text-sm text-blue-600">{formatCurrency(promoDiscountedPrice)}</p>
+                  <p className="text-[10px] text-gray-400 line-through">{formatCurrency(product.bestPrice)}</p>
+                </div>
+              ) : (
+                <p className="font-bold text-sm text-blue-600">{product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}</p>
+              )}
             </div>
           ) : (
             <div className="space-y-1.5">

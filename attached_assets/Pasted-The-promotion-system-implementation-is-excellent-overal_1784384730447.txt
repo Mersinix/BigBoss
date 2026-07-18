@@ -1,0 +1,250 @@
+The promotion system implementation is excellent overall. I would like to make a few improvements and complete some unfinished functionality. Please **extend the existing implementation** instead of replacing it.
+
+> **Important Context**
+>
+> Before making any changes, please review the existing implementation in the Git history.
+>
+> The complete promotion system implementation can be found in the commit:
+>
+> **"Add product filtering and improve cart/promotions UI across cafe and supplier pages"**
+>
+> The original implementation requirements are also included in that same commit inside the file:
+>
+> **"Pasted-Implement-a-complete-B2B-Promotion-Management-module-fo_1784377794308.txt"**
+>
+> Please use both the commit and that prompt as the reference for the existing architecture and implementation. Extend the current system instead of redesigning or replacing it.
+
+---
+
+# 1. Complete "Specific Products" and "Specific Categories" Assignment
+
+Currently, in the Create/Edit Promotion modal, there are three options under **Applies To**:
+
+* All my products ✅ (works correctly)
+* Specific products
+* Specific categories
+
+For the last two options, the modal displays:
+
+> "You can configure specific products after saving this promotion."
+
+or
+
+> "You can configure specific categories after saving this promotion."
+
+However, after saving the promotion there is currently **no interface** where the supplier can actually configure those assignments.
+
+This feature needs to be completed.
+
+---
+
+## Promotion Details Page
+
+After a promotion is created, the supplier should be able to open its details (or edit page) and manage assignments.
+
+Create two new management sections.
+
+---
+
+## Products Assignment
+
+If the promotion applies to **Specific Products**, provide a complete product assignment interface.
+
+The supplier should be able to:
+
+* Browse only **their own supplier products**
+* Search products
+* Filter by category
+* Select multiple products
+* Select all
+* Unselect all
+* Remove products
+* Add products later
+* See how many products are currently assigned
+
+Each assigned product should display:
+
+* Product image
+* Product name
+* Category
+* Current selling price
+* Current stock
+* Promotion status
+
+Changes should save without requiring recreation of the promotion.
+
+---
+
+## Categories Assignment
+
+If the promotion applies to **Specific Categories**, provide a category assignment interface.
+
+The supplier should be able to:
+
+* View only categories containing their own products
+* Search categories
+* Select multiple categories
+* Remove categories
+* See number of assigned products inside each category
+
+When a category is assigned:
+
+All current products inside that category automatically receive the promotion.
+
+Future products added by the supplier into the same category should automatically inherit the promotion while it remains active.
+
+---
+
+## Database
+
+Create proper relationships instead of storing comma-separated IDs.
+
+Example:
+
+PromotionProducts
+
+* promotionId
+* supplierProductId
+
+PromotionCategories
+
+* promotionId
+* categoryId
+
+Use existing project architecture if equivalent mapping tables already exist.
+
+---
+
+# 2. Product Card Promotion Badges
+
+According to the previous implementation summary:
+
+> Amber promotion badges (⚡ 20% OFF) should appear on marketplace product cards.
+
+Currently, I cannot see them in:
+
+client/src/pages/cafe/browse-products.tsx
+
+Please investigate and fix the issue.
+
+---
+
+## Expected Behaviour
+
+Whenever a marketplace product has an active promotion, its product card should automatically display a promotion badge.
+
+Examples:
+
+⚡ 20% OFF
+
+🔥 Buy 10 Get 1
+
+🚚 Free Shipping
+
+🎁 Free Gift
+
+💰 Save 50 DT
+
+The badge should be visible directly in the product grid before opening the product.
+
+---
+
+## Badge Resolution
+
+The badge logic must correctly support all promotion scopes:
+
+### Applies To
+
+* All my products
+* Specific products
+* Specific categories
+
+For every product card, determine whether an active promotion applies.
+
+The badge should appear regardless of how the promotion was assigned.
+
+---
+
+## Priority
+
+If multiple promotions apply to the same product:
+
+Display only the highest-priority promotion badge according to the existing promotion engine rules.
+
+Do not display multiple badges unless the current UI already supports it elegantly.
+
+---
+
+## Product Card Information
+
+When a promotion exists, the card should display:
+
+* Promotion badge
+* Original price (strikethrough when applicable)
+* Discounted price
+* Small "Promotion" indicator
+
+Only if the promotion type affects price.
+
+For non-price promotions (Free Gift, Free Shipping, Buy X Get Y), display only the appropriate promotional badge.
+
+---
+
+# 3. Verify Marketplace Integration
+
+Please audit the complete marketplace flow to ensure promotions are correctly resolved in every place they should appear.
+
+Verify:
+
+* Marketplace product grid
+* Product details page
+* Supplier public store
+* Shopping cart
+* Checkout
+* Order creation
+
+The same promotion evaluation engine should be used everywhere to avoid inconsistent results.
+
+There should be a single source of truth for promotion resolution.
+
+---
+
+# 4. Testing
+
+Please test all three "Applies To" modes:
+
+### All my products
+
+Product cards should display badges.
+
+Cart should calculate discounts correctly.
+
+Orders should store promotion snapshots.
+
+---
+
+### Specific products
+
+Assign products.
+
+Verify only assigned products receive the promotion.
+
+Verify badges appear only on assigned products.
+
+---
+
+### Specific categories
+
+Assign categories.
+
+Verify every product in those categories receives the promotion.
+
+Verify newly added products in those categories automatically receive the promotion while the promotion remains active.
+
+Verify badges appear correctly.
+
+---
+
+# Final Goal
+
+The promotion module should feel completely finished, with suppliers able to create promotions, assign them to products or categories after creation, and have those promotions consistently reflected throughout the marketplace, including product cards, product details, cart, checkout, and orders, using the existing centralized promotion engine.

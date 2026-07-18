@@ -69,7 +69,7 @@ function CategoryStrip({
 
 // ── Supplier Logo Strip ───────────────────────────────────────────────────────
 
-const MAX_LOGOS = 3;
+const MAX_LOGOS = 5;
 
 function SupplierLogoStrip({ listings, count }: { listings: { supplierId: number; storeLogoUrl: string | null }[]; count: number }) {
   const withLogos = listings.filter((l) => l.storeLogoUrl);
@@ -95,7 +95,7 @@ function SupplierLogoStrip({ listings, count }: { listings: { supplierId: number
         )}
       </div>
       <span className="text-[11px] text-gray-400">
-        {overflow > 0 ? `+${overflow}` : ""} {count}
+         {overflow > 0 ? `+${overflow}` : ""} 
       </span>
     </div>
   );

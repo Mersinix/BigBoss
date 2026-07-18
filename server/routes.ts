@@ -614,12 +614,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ...deliveryAddress,
         placeId: deliveryAddress.placeId ?? "",
       } : undefined;
-      const order = await storage.createOrder(req.session.userId!, validatedItems, {
+
+      // ── Server-side promotion evaluation ──────────────────────────────────
+      const cafeId = req.session.userId!;
+      const itemsBySupplier = new Map<number, import('./promotions-engine').PromoCartItem[]>();
+      for (const item of validatedItems) {
+        if (!itemsBySupplier.has(item.supplierId)) itemsBySupplier.set(item.supplierId, []);
+        itemsBySupplier.get(item.supplierId)!.push({
+          listingId: item.listingId,
+          productId: item.productId,
+          categoryId: null, // resolved from product below if needed
+          supplierId: item.supplierId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        });
+      }
+      const promoEval = validatedItems.length > 0
+        ? await storage.evaluateCartPromotions(itemsBySupplier, cafeId)
+        : { bySupplier: [], totalOriginal: 0, totalDiscount: 0, totalFinal: 0 };
+
+      const order = await storage.createOrder(cafeId, validatedItems, {
         deliveryAddress: normalizedDelivery,
         courierInstructions,
         packItems: validatedPackItems,
+        promotionResults: promoEval.bySupplier,
       });
-      res.status(201).json(order);
+
+      // Record promotion usage for each applied promotion
+      for (const result of promoEval.bySupplier) {
+        if (result.promotionId && result.discountAmount > 0) {
+          await storage.recordPromotionUsage(result.promotionId, cafeId, order.id, result.discountAmount);
+        }
+      }
+
+      res.status(201).json({ ...order, promotionSavings: promoEval.totalDiscount });
     } catch (err: any) {
       if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
       else if (err?.message) res.status(400).json({ message: err.message });
@@ -2425,6 +2453,177 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!existing) return res.status(404).json({ message: 'Not found' });
       await storage.softDeleteProspect(id);
       res.json({ ok: true });
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Promotions (Supplier) ──────────────────────────────────────────────────
+
+  const requireSupplier = async (req: any, res: any, next: any) => {
+    if (!req.session.userId) return res.status(401).json({ message: 'Unauthorized' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'SUPPLIER') return res.status(403).json({ message: 'Forbidden' });
+    (req as any).supplier = user;
+    next();
+  };
+
+  // GET /api/promotions — supplier's own promotions list
+  app.get('/api/promotions', requireSupplier, async (req: any, res) => {
+    try {
+      const promos = await storage.getPromotions(req.supplier.id);
+      res.json(promos);
+    } catch { res.status(500).json({ message: 'Error fetching promotions' }); }
+  });
+
+  // GET /api/promotions/stats — supplier dashboard stats
+  app.get('/api/promotions/stats', requireSupplier, async (req: any, res) => {
+    try {
+      const stats = await storage.getPromotionStats(req.supplier.id);
+      res.json(stats);
+    } catch { res.status(500).json({ message: 'Error fetching promotion stats' }); }
+  });
+
+  // GET /api/promotions/:id — single promotion
+  app.get('/api/promotions/:id', requireSupplier, async (req: any, res) => {
+    try {
+      const promo = await storage.getPromotion(parseInt(req.params.id), req.supplier.id);
+      if (!promo) return res.status(404).json({ message: 'Not found' });
+      res.json(promo);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // GET /api/promotions/:id/usage — usage history
+  app.get('/api/promotions/:id/usage', requireSupplier, async (req: any, res) => {
+    try {
+      const promo = await storage.getPromotion(parseInt(req.params.id), req.supplier.id);
+      if (!promo) return res.status(404).json({ message: 'Not found' });
+      const usage = await storage.getPromotionUsage(promo.id);
+      res.json(usage);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // POST /api/promotions — create
+  app.post('/api/promotions', requireSupplier, async (req: any, res) => {
+    try {
+      const body = req.body;
+      const promo = await storage.createPromotion({
+        ...body,
+        supplierId: req.supplier.id,
+        startDate: body.startDate ? new Date(body.startDate) : null,
+        endDate: body.endDate ? new Date(body.endDate) : null,
+      });
+      res.status(201).json(promo);
+    } catch (err: any) {
+      res.status(400).json({ message: err?.message ?? 'Error creating promotion' });
+    }
+  });
+
+  // PUT /api/promotions/:id — update
+  app.put('/api/promotions/:id', requireSupplier, async (req: any, res) => {
+    try {
+      const body = req.body;
+      const updated = await storage.updatePromotion(parseInt(req.params.id), req.supplier.id, {
+        ...body,
+        startDate: body.startDate ? new Date(body.startDate) : null,
+        endDate: body.endDate ? new Date(body.endDate) : null,
+      });
+      if (!updated) return res.status(404).json({ message: 'Not found' });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err?.message ?? 'Error updating promotion' });
+    }
+  });
+
+  // PATCH /api/promotions/:id/status — quick status change
+  app.patch('/api/promotions/:id/status', requireSupplier, async (req: any, res) => {
+    try {
+      const { status } = req.body;
+      if (!['ACTIVE', 'PAUSED', 'SCHEDULED', 'EXPIRED'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status' });
+      }
+      const updated = await storage.updatePromotion(parseInt(req.params.id), req.supplier.id, { status });
+      if (!updated) return res.status(404).json({ message: 'Not found' });
+      res.json(updated);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // POST /api/promotions/:id/duplicate — duplicate
+  app.post('/api/promotions/:id/duplicate', requireSupplier, async (req: any, res) => {
+    try {
+      const dup = await storage.duplicatePromotion(parseInt(req.params.id), req.supplier.id);
+      if (!dup) return res.status(404).json({ message: 'Not found' });
+      res.status(201).json(dup);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // DELETE /api/promotions/:id — delete
+  app.delete('/api/promotions/:id', requireSupplier, async (req: any, res) => {
+    try {
+      await storage.deletePromotion(parseInt(req.params.id), req.supplier.id);
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Promotions (Cafe / Marketplace) ──────────────────────────────────────────
+
+  // POST /api/promotions/evaluate — evaluate cart and return discount info
+  app.post('/api/promotions/evaluate', requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== 'CAFE_OWNER') return res.status(403).json({ message: 'Forbidden' });
+
+      const { items } = req.body as {
+        items: { listingId: number; productId: number; categoryId?: number | null; supplierId: number; quantity: number; unitPrice: number }[];
+      };
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.json({ bySupplier: [], totalOriginal: 0, totalDiscount: 0, totalFinal: 0 });
+      }
+
+      const itemsBySupplier = new Map<number, import('./promotions-engine').PromoCartItem[]>();
+      for (const item of items) {
+        if (!itemsBySupplier.has(item.supplierId)) itemsBySupplier.set(item.supplierId, []);
+        itemsBySupplier.get(item.supplierId)!.push({
+          listingId: item.listingId,
+          productId: item.productId,
+          categoryId: item.categoryId ?? null,
+          supplierId: item.supplierId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        });
+      }
+
+      const result = await storage.evaluateCartPromotions(itemsBySupplier, user.id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message ?? 'Error evaluating promotions' });
+    }
+  });
+
+  // GET /api/marketplace/promotions?listingIds=1,2,3 — badge info for product cards
+  app.get('/api/marketplace/promotions', async (req: any, res) => {
+    try {
+      const rawIds = req.query.listingIds as string;
+      if (!rawIds) return res.json([]);
+      const listingIds = rawIds.split(',').map(Number).filter(Boolean);
+      const cafeId = req.session?.userId ? (await storage.getUser(req.session.userId))?.id : undefined;
+      const badges = await storage.getPromotionsForListings(listingIds, cafeId);
+      res.json(badges);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // GET /api/supplier/:supplierId/promotions — public active promotions for a supplier store page
+  app.get('/api/supplier/:supplierId/promotions', async (req: any, res) => {
+    try {
+      const supplierId = parseInt(req.params.supplierId);
+      const cafeId = req.session?.userId ? req.session.userId : undefined;
+      const promos = await storage.getActivePromotionsForSupplier(supplierId, cafeId);
+      // Return only public-safe fields
+      res.json(promos.map(p => ({
+        id: p.id, name: p.name, description: p.description, type: p.type,
+        discountValue: p.discountValue, buyQuantity: p.buyQuantity, getQuantity: p.getQuantity,
+        tiers: p.tiers, giftInfo: p.giftInfo, freeShippingMinAmount: p.freeShippingMinAmount,
+        minimumOrderValue: p.minimumOrderValue, minimumQuantity: p.minimumQuantity,
+        endDate: p.endDate, targetType: p.targetType,
+      })));
     } catch { res.status(500).json({ message: 'Error' }); }
   });
 

@@ -1,11 +1,14 @@
 import { db } from "./db";
-import { isNull, isNotNull, or, like } from "drizzle-orm";
+import { isNull, isNotNull, or, like, gte, lte } from "drizzle-orm";
+import { evaluateCartPromotions as engineEvaluate } from "./promotions-engine";
+import type { PromoCartItem } from "./promotions-engine";
 import {
   users, products, orders, orderItems, subOrders, supplierProductVariants,
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
   landingConfig, packs, packItems, packFavorites, inventoryAdjustments, prospects,
+  promotions, promotionUsage,
   type LandingConfig, type Prospect, type InsertProspect, type ProspectStats,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
@@ -61,7 +64,7 @@ export interface IStorage {
   getOrder(id: number): Promise<OrderWithDetails | undefined>;
   resolveOrderItems(items: CreateOrderItemInput[]): Promise<CreateOrderItem[]>;
   resolvePackOrderItems(items: CreatePackOrderItem[]): Promise<ResolvedPackOrderItem[]>;
-  createOrder(cafeId: number, cartItems: CreateOrderItem[], opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[] }): Promise<Order>;
+  createOrder(cafeId: number, cartItems: CreateOrderItem[], opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[]; promotionResults?: import("@shared/schema").SupplierPromotionResult[] }): Promise<Order>;
   canUserAccessOrder(userId: number, userRole: string, orderId: number): Promise<boolean>;
   updateOrderStatus(id: number, status: typeof orders.$inferSelect.status, deliveryId?: number): Promise<Order>;
 
@@ -192,6 +195,26 @@ export interface IStorage {
   bulkSoftDeleteProspects(ids: number[]): Promise<void>;
   getProspectStats(): Promise<ProspectStats>;
   findDuplicateProspect(data: { googlePlaceId?: string; phone?: string }): Promise<Prospect | null>;
+
+  // Promotions
+  getPromotions(supplierId: number): Promise<import("@shared/schema").Promotion[]>;
+  getPromotion(id: number, supplierId?: number): Promise<import("@shared/schema").Promotion | undefined>;
+  createPromotion(data: import("@shared/schema").InsertPromotion): Promise<import("@shared/schema").Promotion>;
+  updatePromotion(id: number, supplierId: number, updates: Partial<import("@shared/schema").InsertPromotion>): Promise<import("@shared/schema").Promotion | undefined>;
+  deletePromotion(id: number, supplierId: number): Promise<void>;
+  duplicatePromotion(id: number, supplierId: number): Promise<import("@shared/schema").Promotion | undefined>;
+  getPromotionStats(supplierId: number): Promise<{ active: number; paused: number; scheduled: number; expired: number; totalUses: number; totalRevenue: number; totalDiscount: number }>;
+  getPromotionUsage(promotionId: number): Promise<import("@shared/schema").PromotionUsage[]>;
+  // Active promotions for a supplier visible to a specific cafe (or all if null)
+  getActivePromotionsForSupplier(supplierId: number, cafeId?: number): Promise<import("@shared/schema").Promotion[]>;
+  // All active promotions across all suppliers for listed listing IDs (for marketplace badges)
+  getPromotionsForListings(listingIds: number[], cafeId?: number): Promise<import("@shared/schema").ListingPromotion[]>;
+  // Evaluate cart promotions server-side (wraps the engine)
+  evaluateCartPromotions(itemsBySupplier: Map<number, import("./promotions-engine").PromoCartItem[]>, cafeId: number): Promise<import("@shared/schema").CartPromotionEvaluation>;
+  // Record usage after an order is created
+  recordPromotionUsage(promotionId: number, cafeId: number, orderId: number, discountAmount: number): Promise<void>;
+  // Get order count for a cafe from a supplier (for first-order promos)
+  getCafeOrderCountForSupplier(cafeId: number, supplierId: number): Promise<number>;
 }
 
 // ── Taxonomy cache helper ─────────────────────────────────────────────────────
@@ -488,11 +511,18 @@ export class DatabaseStorage implements IStorage {
   async createOrder(
     cafeId: number,
     cartItems: CreateOrderItem[],
-    opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[] },
+    opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[]; promotionResults?: import("@shared/schema").SupplierPromotionResult[] },
   ): Promise<Order> {
     const packOrderItems = opts?.packItems ?? [];
-    const totalAmount = cartItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+    const promoResults = opts?.promotionResults ?? [];
+    // Build a discount map by supplierId for fast lookup
+    const discountBySupplierId = new Map<number, import("@shared/schema").SupplierPromotionResult>();
+    for (const r of promoResults) discountBySupplierId.set(r.supplierId, r);
+
+    const rawTotal = cartItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
       + packOrderItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+    const totalDiscount = promoResults.reduce((s, r) => s + r.discountAmount, 0);
+    const totalAmount = Math.max(0, rawTotal - totalDiscount);
     const supplierIds = Array.from(new Set([...cartItems.map((i) => i.supplierId), ...packOrderItems.map((i) => i.supplierId)]));
     const primarySupplierId = supplierIds.length === 1 ? supplierIds[0] : null;
 
@@ -536,27 +566,40 @@ export class DatabaseStorage implements IStorage {
         .where(eq(packs.id, item.packId));
     }
 
-    if (supplierIds.length > 1) {
-      for (const sid of supplierIds) {
+    // Always create sub-orders (even for single supplier) to store promotion snapshots
+    const allSupplierIds = [...supplierIds]; // already built above
+    if (allSupplierIds.length > 0) {
+      for (const sid of allSupplierIds) {
         const supplierItems = cartItems.filter((i) => i.supplierId === sid);
         const supplierPackItems = packOrderItems.filter((i) => i.supplierId === sid);
-        const subtotal = supplierItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+        const rawSubtotal = supplierItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
           + supplierPackItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+        const promoResult = discountBySupplierId.get(sid);
+        const discountAmount = promoResult?.discountAmount ?? 0;
+        const subtotal = Math.max(0, rawSubtotal - discountAmount);
         const supplierName = supplierItems[0]?.supplierName ?? supplierPackItems[0]?.supplierName ?? 'Unknown';
-        const [so] = await db.insert(subOrders).values({ orderId: order.id, supplierId: sid, supplierName, subtotal }).returning();
+        const subOrderData: any = {
+          orderId: order.id,
+          supplierId: sid,
+          supplierName,
+          subtotal,
+          discountAmount,
+          freeShipping: promoResult?.freeShipping ?? false,
+          giftInfo: promoResult?.giftInfo ?? null,
+        };
+        if (promoResult?.promotionId) {
+          subOrderData.promotionId = promoResult.promotionId;
+          subOrderData.promotionName = promoResult.promotionName;
+          subOrderData.promotionType = promoResult.promotionType;
+          subOrderData.originalSubtotal = rawSubtotal;
+        }
+        const [so] = await db.insert(subOrders).values(subOrderData).returning();
         for (const item of supplierItems) {
           await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, productId: item.productId, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity, flavorId: item.flavorId ?? null, sizeId: item.sizeId ?? null });
         }
         for (const item of supplierPackItems) {
           await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, packId: item.packId, packName: item.packName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity });
         }
-      }
-    } else {
-      for (const item of cartItems) {
-        await db.insert(orderItems).values({ orderId: order.id, productId: item.productId, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity, flavorId: item.flavorId ?? null, sizeId: item.sizeId ?? null });
-      }
-      for (const item of packOrderItems) {
-        await db.insert(orderItems).values({ orderId: order.id, packId: item.packId, packName: item.packName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity });
       }
     }
     return order;
@@ -2312,6 +2355,239 @@ export class DatabaseStorage implements IStorage {
       if (row) return row;
     }
     return null;
+  }
+
+  // ── Promotions ──────────────────────────────────────────────────────────────
+
+  async getPromotions(supplierId: number): Promise<import("@shared/schema").Promotion[]> {
+    return db.select().from(promotions)
+      .where(eq(promotions.supplierId, supplierId))
+      .orderBy(desc(promotions.priority), desc(promotions.createdAt));
+  }
+
+  async getPromotion(id: number, supplierId?: number): Promise<import("@shared/schema").Promotion | undefined> {
+    const conds = [eq(promotions.id, id)];
+    if (supplierId != null) conds.push(eq(promotions.supplierId, supplierId));
+    const [row] = await db.select().from(promotions).where(and(...conds));
+    return row;
+  }
+
+  async createPromotion(data: import("@shared/schema").InsertPromotion): Promise<import("@shared/schema").Promotion> {
+    const [row] = await db.insert(promotions).values(data as any).returning();
+    return row;
+  }
+
+  async updatePromotion(id: number, supplierId: number, updates: Partial<import("@shared/schema").InsertPromotion>): Promise<import("@shared/schema").Promotion | undefined> {
+    const [row] = await db.update(promotions)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(and(eq(promotions.id, id), eq(promotions.supplierId, supplierId)))
+      .returning();
+    return row;
+  }
+
+  async deletePromotion(id: number, supplierId: number): Promise<void> {
+    await db.delete(promotions).where(and(eq(promotions.id, id), eq(promotions.supplierId, supplierId)));
+  }
+
+  async duplicatePromotion(id: number, supplierId: number): Promise<import("@shared/schema").Promotion | undefined> {
+    const [orig] = await db.select().from(promotions).where(and(eq(promotions.id, id), eq(promotions.supplierId, supplierId)));
+    if (!orig) return undefined;
+    const { id: _id, createdAt: _ca, updatedAt: _ua, usageCount: _uc, ...rest } = orig;
+    const [dup] = await db.insert(promotions).values({
+      ...rest,
+      name: `${orig.name} (Copy)`,
+      status: 'PAUSED',
+      usageCount: 0,
+    } as any).returning();
+    return dup;
+  }
+
+  async getPromotionStats(supplierId: number): Promise<{ active: number; paused: number; scheduled: number; expired: number; totalUses: number; totalRevenue: number; totalDiscount: number }> {
+    const all = await db.select().from(promotions).where(eq(promotions.supplierId, supplierId));
+    const now = new Date();
+    let active = 0, paused = 0, scheduled = 0, expired = 0, totalUses = 0;
+    for (const p of all) {
+      totalUses += p.usageCount;
+      if (p.status === 'PAUSED') { paused++; continue; }
+      if (p.endDate && p.endDate < now) { expired++; continue; }
+      if (p.startDate && p.startDate > now) { scheduled++; continue; }
+      if (p.status === 'ACTIVE') active++;
+      else if (p.status === 'SCHEDULED') scheduled++;
+      else if (p.status === 'EXPIRED') expired++;
+    }
+    const usageRows = await db.select().from(promotionUsage).where(
+      inArray(promotionUsage.promotionId, all.map(p => p.id).filter(Boolean))
+    );
+    const totalDiscount = usageRows.reduce((s, r) => s + r.discountAmount, 0);
+    // Revenue: sum of order totals that used a promotion from this supplier
+    const orderIds = Array.from(new Set(usageRows.map(r => r.orderId)));
+    let totalRevenue = 0;
+    if (orderIds.length > 0) {
+      const orderRows = await db.select().from(orders).where(inArray(orders.id, orderIds));
+      totalRevenue = orderRows.reduce((s, o) => s + o.totalAmount, 0);
+    }
+    return { active, paused, scheduled, expired, totalUses, totalRevenue, totalDiscount };
+  }
+
+  async getPromotionUsage(promotionId: number): Promise<import("@shared/schema").PromotionUsage[]> {
+    return db.select().from(promotionUsage)
+      .where(eq(promotionUsage.promotionId, promotionId))
+      .orderBy(desc(promotionUsage.createdAt));
+  }
+
+  async getActivePromotionsForSupplier(supplierId: number, cafeId?: number): Promise<import("@shared/schema").Promotion[]> {
+    const now = new Date();
+    const rows = await db.select().from(promotions).where(and(
+      eq(promotions.supplierId, supplierId),
+      eq(promotions.status, 'ACTIVE'),
+    ));
+    return rows.filter(p => {
+      if (p.startDate && p.startDate > now) return false;
+      if (p.endDate && p.endDate < now) return false;
+      if (p.maxUses != null && p.usageCount >= p.maxUses) return false;
+      if (cafeId != null && p.eligibleCafeIds && p.eligibleCafeIds.length > 0) {
+        return p.eligibleCafeIds.includes(cafeId);
+      }
+      return true;
+    });
+  }
+
+  async getPromotionsForListings(listingIds: number[], cafeId?: number): Promise<import("@shared/schema").ListingPromotion[]> {
+    if (listingIds.length === 0) return [];
+    // Get all supplier IDs for these listings
+    const listingRows = await db.select().from(supplierProductListings)
+      .where(inArray(supplierProductListings.id, listingIds));
+    const supplierIds = Array.from(new Set(listingRows.map(l => l.supplierId)));
+    if (supplierIds.length === 0) return [];
+
+    const now = new Date();
+    const promoRows = await db.select().from(promotions).where(and(
+      inArray(promotions.supplierId, supplierIds),
+      eq(promotions.status, 'ACTIVE'),
+    ));
+    const active = promoRows.filter(p => {
+      if (p.startDate && p.startDate > now) return false;
+      if (p.endDate && p.endDate < now) return false;
+      if (p.maxUses != null && p.usageCount >= p.maxUses) return false;
+      if (cafeId != null && p.eligibleCafeIds && p.eligibleCafeIds.length > 0) {
+        return p.eligibleCafeIds.includes(cafeId);
+      }
+      return true;
+    });
+
+    const result: import("@shared/schema").ListingPromotion[] = [];
+    const supplierListings = new Map<number, number[]>(); // supplierId → listingIds
+    for (const l of listingRows) {
+      if (!supplierListings.has(l.supplierId)) supplierListings.set(l.supplierId, []);
+      supplierListings.get(l.supplierId)!.push(l.id);
+    }
+
+    for (const p of active) {
+      const supplierListingIds = supplierListings.get(p.supplierId) ?? [];
+      let applicableListings: number[] = [];
+      if (p.targetType === 'ALL') {
+        applicableListings = supplierListingIds.filter(id => listingIds.includes(id));
+      } else if (p.targetType === 'PRODUCTS' && p.targetListingIds) {
+        applicableListings = p.targetListingIds.filter(id => listingIds.includes(id));
+      } else if (p.targetType === 'CATEGORIES' && p.targetCategoryIds) {
+        // Resolve by looking at the product's categoryId
+        const prodMap = new Map(listingRows.map(l => [l.id, l.productId]));
+        const prods = await db.select().from(products).where(inArray(products.id, listingRows.map(l => l.productId)));
+        const catSet = new Set(p.targetCategoryIds);
+        for (const l of listingRows) {
+          const prod = prods.find(pr => pr.id === l.productId);
+          if (prod?.categoryId != null && catSet.has(prod.categoryId) && listingIds.includes(l.id)) {
+            applicableListings.push(l.id);
+          }
+        }
+      }
+      for (const listingId of applicableListings) {
+        result.push({
+          listingId,
+          promotionId: p.id,
+          type: p.type,
+          label: this._promoLabel(p),
+          endDate: p.endDate,
+          discountValue: p.discountValue,
+        });
+      }
+    }
+    return result;
+  }
+
+  private _promoLabel(p: import("@shared/schema").Promotion): string {
+    switch (p.type) {
+      case 'PERCENTAGE':
+      case 'CATEGORY_DISCOUNT': return `${p.discountValue / 100}% OFF`;
+      case 'FIXED_AMOUNT':
+      case 'MIN_ORDER_AMOUNT': return `${(p.discountValue / 1000).toFixed(3)} DT OFF`;
+      case 'BUY_X_GET_Y': return `Buy ${p.buyQuantity} Get ${p.getQuantity}`;
+      case 'QUANTITY_TIER': return 'Tier Pricing';
+      case 'FREE_SHIPPING': return 'Free Shipping';
+      case 'GIFT': return 'Free Gift';
+      case 'MIN_QUANTITY': return `${p.discountValue / 100}% on ${p.minimumQuantity}+`;
+      case 'FIRST_ORDER': return `${p.discountValue / 100}% First Order`;
+      default: return p.name;
+    }
+  }
+
+  async evaluateCartPromotions(
+    itemsBySupplier: Map<number, PromoCartItem[]>,
+    cafeId: number,
+  ): Promise<import("@shared/schema").CartPromotionEvaluation> {
+    const supplierIds = Array.from(itemsBySupplier.keys());
+    if (supplierIds.length === 0) {
+      return { bySupplier: [], totalOriginal: 0, totalDiscount: 0, totalFinal: 0 };
+    }
+
+    // Load active promotions for all suppliers
+    const promotionsBySupplier = new Map<number, import("@shared/schema").Promotion[]>();
+    await Promise.all(supplierIds.map(async (sid) => {
+      const promos = await this.getActivePromotionsForSupplier(sid, cafeId);
+      promotionsBySupplier.set(sid, promos);
+    }));
+
+    // Load per-cafe usage counts for rate-limiting
+    const allPromoIds = Array.from(promotionsBySupplier.values()).flat().map((p: import("@shared/schema").Promotion) => p.id);
+    const usageByPromo = new Map<number, number>();
+    if (allPromoIds.length > 0) {
+      const usages = await db.select().from(promotionUsage).where(and(
+        inArray(promotionUsage.promotionId, allPromoIds),
+        eq(promotionUsage.cafeId, cafeId),
+      ));
+      for (const u of usages) {
+        usageByPromo.set(u.promotionId, (usageByPromo.get(u.promotionId) ?? 0) + 1);
+      }
+    }
+
+    // Load order counts per supplier for first-order promotions
+    const cafeOrderCountBySupplier = new Map<number, number>();
+    await Promise.all(supplierIds.map(async (sid) => {
+      const count = await this.getCafeOrderCountForSupplier(cafeId, sid);
+      cafeOrderCountBySupplier.set(sid, count);
+    }));
+
+    return engineEvaluate(itemsBySupplier, promotionsBySupplier, usageByPromo, cafeOrderCountBySupplier, cafeId);
+  }
+
+  async recordPromotionUsage(promotionId: number, cafeId: number, orderId: number, discountAmount: number): Promise<void> {
+    await db.insert(promotionUsage).values({ promotionId, cafeId, orderId, discountAmount });
+    await db.update(promotions)
+      .set({ usageCount: sql`${promotions.usageCount} + 1` })
+      .where(eq(promotions.id, promotionId));
+  }
+
+  async getCafeOrderCountForSupplier(cafeId: number, supplierId: number): Promise<number> {
+    // Count sub-orders this cafe has placed with this supplier
+    const rows = await db.select().from(subOrders).where(eq(subOrders.supplierId, supplierId));
+    // Filter by cafeId via orders join
+    const orderIds = rows.map(r => r.orderId);
+    if (orderIds.length === 0) return 0;
+    const cafeOrders = await db.select().from(orders).where(and(
+      inArray(orders.id, orderIds),
+      eq(orders.cafeId, cafeId),
+    ));
+    return cafeOrders.length;
   }
 }
 

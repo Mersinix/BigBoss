@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useCart } from "@/hooks/use-cart";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
+import { usePromotionEvaluation } from "@/hooks/use-promotion-evaluation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
-  Clock, Package, MapPin, CheckCircle, Layers
+  Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -49,12 +50,14 @@ export default function CartPage() {
     ? savedAccountAddress
     : customDeliveryAddress;
 
+  const { evaluation: promoEval } = usePromotionEvaluation();
+
   const totalShop = getTotal();
   const totalPrint = getPrintTotal();
   const totalPack = getPackTotal();
   const hasShop = items.length > 0 || packItems.length > 0;
   const hasPrint = printItems.length > 0;
-  const grandTotal = totalShop + totalPack + totalPrint;
+  const grandTotal = totalShop + totalPack + totalPrint - promoEval.totalDiscount;
 
   const handleDeliveryConfirm = (loc: PickedLocation) => {
     setCustomDeliveryAddress(pickedToGeoLocation(loc));
@@ -406,10 +409,29 @@ export default function CartPage() {
                 <div className="space-y-2 text-sm border-t border-border/40 pt-4">
                   {supplierEntries.map(([sid, group]) => {
                     const t = group.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+                    const promoResult = promoEval.bySupplier.find(r => r.supplierId === Number(sid));
                     return (
-                      <div key={sid} className="flex justify-between text-muted-foreground">
-                        <span className="truncate mr-2">{group.supplierName}</span>
-                        <span>{formatCurrency(t)}</span>
+                      <div key={sid}>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span className="truncate mr-2">{group.supplierName}</span>
+                          <span>{formatCurrency(t)}</span>
+                        </div>
+                        {promoResult && promoResult.discountAmount > 0 && (
+                          <div className="flex justify-between text-green-600 text-xs mt-0.5">
+                            <span className="flex items-center gap-1"><Tag className="w-3 h-3" />{promoResult.promotionName ?? 'Promotion'}</span>
+                            <span>−{formatCurrency(promoResult.discountAmount)}</span>
+                          </div>
+                        )}
+                        {promoResult?.freeShipping && (
+                          <div className="flex items-center gap-1 text-green-600 text-xs mt-0.5">
+                            <Truck className="w-3 h-3" /> Free shipping applied
+                          </div>
+                        )}
+                        {promoResult?.giftInfo && (
+                          <div className="flex items-center gap-1 text-purple-600 text-xs mt-0.5">
+                            <Gift className="w-3 h-3" /> {(promoResult.giftInfo as any).description ?? 'Free gift'} included
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -419,9 +441,15 @@ export default function CartPage() {
                       <span>{formatCurrency(totalPack)}</span>
                     </div>
                   )}
+                  {promoEval.totalDiscount > 0 && (
+                    <div className="flex justify-between text-green-700 font-medium border-t border-green-100 pt-2">
+                      <span>Promotion savings</span>
+                      <span>−{formatCurrency(promoEval.totalDiscount)}</span>
+                    </div>
+                  )}
                   <div className="border-t border-border pt-3 flex justify-between items-center font-bold">
                     <span>Total SHOP</span>
-                    <span className="text-xl text-primary">{formatCurrency(totalShop + totalPack)}</span>
+                    <span className="text-xl text-primary">{formatCurrency(Math.max(0, totalShop + totalPack - promoEval.totalDiscount))}</span>
                   </div>
                 </div>
                 <Button onClick={handleCheckout} disabled={createOrder.isPending} className="w-full shadow-lg shadow-primary/25" data-testid="button-place-order">

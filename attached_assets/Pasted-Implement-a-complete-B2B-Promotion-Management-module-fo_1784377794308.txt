@@ -1,0 +1,505 @@
+Implement a complete B2B Promotion Management module for BigBossCoffee.
+
+This feature must be supplier-driven and integrated across the entire marketplace (Supplier → Coffee Owner → Cart → Checkout → Orders). The system must be production-ready, scalable, and fully synchronized with the existing architecture.
+
+## General Rules
+
+* Every Supplier manages only their own promotions.
+* Coffee Owners automatically receive eligible promotions.
+* Promotions are applied automatically. No promo codes are required.
+* Promotions must never affect other suppliers.
+* If multiple suppliers sell the same admin product, each supplier's promotions are independent.
+* Promotions must work correctly with the current marketplace logic, supplier products, packs, categories, cart, checkout, taxes, and order history.
+* Existing functionality must not be broken.
+
+---
+
+# Supplier Dashboard
+
+The **Promotions** module already exists. **Do not recreate or replace it.** Instead, extend and upgrade the existing implementation while preserving the current UI, routing, permissions, and functionality wherever possible.
+
+Current module already includes:
+
+* Promotion statistics (Active, Expired, Total Uses)
+* Promotion cards/list
+* Create Promotion
+* Edit Promotion
+* Activate / Deactivate Promotion
+* Basic promotion information
+
+Use the existing module as the foundation and transform it into a complete promotion management system.
+
+## Enhance the Existing Promotions List
+
+Keep all current functionality and add the following capabilities:
+
+Display for each promotion:
+
+* Promotion Name
+* Promotion Type
+* Status
+* Start Date
+* End Date
+* Priority
+* Usage Count
+* Remaining Usage (if limited)
+* Products or Categories affected
+* Eligible Coffee Owners (All or Selected Customers)
+* Stackable / Non-Stackable
+* Active / Scheduled / Expired / Paused
+* Last Updated
+* Created By (if applicable)
+
+Actions:
+
+* View Details
+* Edit
+* Duplicate
+* Pause
+* Resume
+* Activate
+* Deactivate
+* Delete
+
+Bulk Actions:
+
+* Activate Selected
+* Deactivate Selected
+* Pause Selected
+* Delete Selected
+* Export Selected
+
+Include:
+
+* Search
+* Advanced Filters
+* Pagination
+* Sorting
+* Status Filters
+* Promotion Type Filters
+* Date Range Filters
+* Supplier Product Filters
+* Category Filters
+
+Support multiple display modes:
+
+* Card View (existing, enhanced)
+* Table View
+
+Each promotion should have a detailed page showing:
+
+* Complete promotion configuration
+* Eligible products
+* Eligible categories
+* Eligible Coffee Owners
+* Usage analytics
+* Revenue generated
+* Orders using this promotion
+* Conversion rate
+* Timeline (created, updated, activated, expired)
+* Audit history of changes (if an audit system already exists in the project)
+
+Preserve the existing visual style and design language so the upgraded module feels like a natural evolution of the current BigBossCoffee interface rather than a newly added feature.
+
+
+---
+
+# Create Promotion
+
+Create a complete form supporting these promotion types:
+
+## Percentage Discount
+
+Example:
+
+20% off
+
+---
+
+## Fixed Amount Discount
+
+Example:
+
+10 DT off
+
+---
+
+## Buy X Get Y
+
+Examples:
+
+Buy 10 Get 1 Free
+
+Buy 5 Get 2 Free
+
+---
+
+## Quantity Pricing (Tier Pricing)
+
+Examples:
+
+1-9 → 50 DT
+
+10-49 → 47 DT
+
+50+ → 44 DT
+
+The system must automatically select the correct tier.
+
+---
+
+## Category Discount
+
+Apply a discount to all products inside selected categories.
+
+---
+
+## Product Discount
+
+Apply to one or multiple supplier products.
+
+---
+
+## Free Shipping
+
+Example:
+
+Free shipping above 300 DT.
+
+---
+
+## Gift Promotion
+
+Examples:
+
+Receive:
+
+* Free cups
+* Sugar
+* Accessories
+* Samples
+
+after reaching a minimum order amount or quantity.
+
+---
+
+## Minimum Order Amount
+
+Example:
+
+Spend 500 DT
+
+Get 50 DT discount.
+
+---
+
+## Minimum Quantity
+
+Example:
+
+Buy at least 20 items.
+
+Receive 15% off.
+
+---
+
+## Customer Specific Promotion
+
+Supplier can select specific Coffee Owners who are eligible.
+
+Other Coffee Owners must never see these promotions.
+
+---
+
+## First Order Promotion
+
+Example:
+
+10% discount on first order.
+
+---
+
+## Limited Usage Promotion
+
+Example:
+
+Only first 100 orders.
+
+---
+
+## Date Based Promotion
+
+Start Date
+
+End Date
+
+Automatic activation/deactivation.
+
+---
+
+## Recurring Promotion
+
+Support:
+
+* Every Monday
+* Weekends
+* Monthly
+* Seasonal promotions
+
+---
+
+# Promotion Configuration
+
+Support:
+
+Promotion Name
+
+Description
+
+Internal Notes
+
+Priority
+
+Status
+
+Start Date
+
+End Date
+
+Timezone support
+
+Maximum Uses
+
+Maximum Uses Per Customer
+
+Minimum Order Value
+
+Minimum Quantity
+
+Maximum Discount
+
+Combine With Other Promotions (Yes/No)
+
+Stackable (Yes/No)
+
+Active
+
+Paused
+
+Expired
+
+Scheduled
+
+---
+
+# Marketplace Integration
+
+Coffee Owners must automatically see promotions.
+
+Product cards should display:
+
+Original Price
+
+Discounted Price
+
+Discount Badge
+
+Promotion Badge
+
+Promotion End Date
+
+Countdown when appropriate
+
+Examples:
+
+20% OFF
+
+Buy 10 Get 1
+
+Free Shipping
+
+Best Deal
+
+Limited Time
+
+---
+
+# Product Detail Page
+
+Display:
+
+Promotion information
+
+Conditions
+
+Remaining time
+
+Minimum quantity
+
+Gift information
+
+Tier pricing table when applicable
+
+---
+
+# Cart
+
+Automatically evaluate promotions every time:
+
+* item added
+* quantity changed
+* supplier changed
+* cart refreshed
+
+Display:
+
+Original subtotal
+
+Promotion savings
+
+Free gifts
+
+Shipping discount
+
+Final total
+
+The user must clearly understand every discount.
+
+---
+
+# Checkout
+
+Recalculate everything on the server.
+
+Never trust frontend calculations.
+
+---
+
+# Orders
+
+Store promotion snapshots.
+
+Every order must permanently save:
+
+Original Price
+
+Discount Amount
+
+Promotion Type
+
+Promotion Name
+
+Promotion ID
+
+Final Price
+
+Gift Information
+
+Shipping Discount
+
+The order must remain historically accurate even if the promotion is edited or deleted later.
+
+---
+
+# Business Rules
+
+Promotions must never cross suppliers.
+
+Each supplier controls only their own promotions.
+
+Priority rules must be respected.
+
+Expired promotions stop automatically.
+
+Scheduled promotions activate automatically.
+
+Inactive promotions are ignored.
+
+Stacking rules must be respected.
+
+The promotion engine should always choose the best valid promotion according to the configured rules.
+
+---
+
+# Notifications
+
+Supplier receives notifications when:
+
+* Promotion expires soon
+* Promotion reached usage limit
+* Promotion performs well
+* Promotion ends
+
+---
+
+# Analytics
+
+Create a dashboard showing:
+
+Total Promotions
+
+Active Promotions
+
+Revenue Generated
+
+Orders Using Promotions
+
+Average Discount
+
+Conversion Rate
+
+Most Successful Promotion
+
+Top Discounted Products
+
+Top Coffee Owners using promotions
+
+---
+
+# Performance
+
+Promotion evaluation must be optimized.
+
+Avoid unnecessary database queries.
+
+Avoid duplicate calculations.
+
+Promotion engine should be reusable and centralized.
+
+---
+
+# Security
+
+Coffee Owners cannot modify promotions.
+
+Suppliers cannot access other suppliers' promotions.
+
+Admin can view all promotions if existing permissions allow.
+
+---
+
+# UI/UX
+
+Use the existing design system.
+
+Responsive on desktop, tablet, and mobile.
+
+Modern cards and tables.
+
+Status badges.
+
+Confirmation dialogs before deletion.
+
+Loading states.
+
+Empty states.
+
+Error handling.
+
+---
+
+# Final Requirement
+
+Before finishing, analyze the current BigBossCoffee architecture and integrate the promotion system with the existing models, APIs, authentication, marketplace flow, supplier products, categories, packs, cart, checkout, and orders instead of creating isolated code.
+
+The implementation should feel like a native part of the project, maintainable, extensible, and ready for future features such as coupon codes, loyalty programs, cashback, seasonal campaigns, and AI-based promotion recommendations.

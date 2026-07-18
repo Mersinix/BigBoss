@@ -147,6 +147,14 @@ export const subOrders = pgTable("sub_orders", {
   supplierName: text("supplier_name").notNull().default(''),
   subtotal: integer("subtotal").notNull().default(0),
   status: text("status").notNull().default('PENDING'),
+  // Promotion snapshot — stored at order time so history is accurate even if promo changes
+  promotionId: integer("promotion_id"),
+  promotionName: text("promotion_name"),
+  promotionType: text("promotion_type"),
+  originalSubtotal: integer("original_subtotal"),
+  discountAmount: integer("discount_amount").notNull().default(0),
+  freeShipping: boolean("free_shipping").notNull().default(false),
+  giftInfo: jsonb("gift_info"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -393,6 +401,76 @@ export const packFavorites = pgTable("pack_favorites", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ── Promotions ───────────────────────────────────────────────────────────────
+
+export const promotionTypeEnum = pgEnum('promotion_type', [
+  'PERCENTAGE',        // % off total or specific products/categories
+  'FIXED_AMOUNT',      // fixed DT off
+  'BUY_X_GET_Y',       // buy X get Y free
+  'QUANTITY_TIER',     // tier pricing (price per unit drops at volume)
+  'CATEGORY_DISCOUNT', // % or fixed off specific categories
+  'FREE_SHIPPING',     // free shipping above optional min amount
+  'GIFT',              // free gift item after min order
+  'MIN_ORDER_AMOUNT',  // spend X get Y off
+  'MIN_QUANTITY',      // buy X+ items get discount
+  'FIRST_ORDER',       // discount on first order from this supplier
+]);
+
+export const promotionStatusEnum = pgEnum('promotion_status', [
+  'ACTIVE', 'PAUSED', 'SCHEDULED', 'EXPIRED',
+]);
+
+export const promotionTargetTypeEnum = pgEnum('promotion_target_type', [
+  'ALL',        // all supplier products
+  'PRODUCTS',   // specific supplier_product_listings
+  'CATEGORIES', // specific product categories
+]);
+
+export const promotions = pgTable("promotions", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  internalNotes: text("internal_notes"),
+  type: promotionTypeEnum("type").notNull(),
+  status: promotionStatusEnum("status").notNull().default('ACTIVE'),
+  priority: integer("priority").notNull().default(0),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  maxUses: integer("max_uses"),
+  maxUsesPerCustomer: integer("max_uses_per_customer"),
+  usageCount: integer("usage_count").notNull().default(0),
+  minimumOrderValue: integer("minimum_order_value"),   // cents
+  minimumQuantity: integer("minimum_quantity"),
+  maximumDiscount: integer("maximum_discount"),        // cents cap for % discounts
+  stackable: boolean("stackable").notNull().default(false),
+  // Discount parameters (semantics depend on type)
+  discountValue: integer("discount_value").notNull().default(0), // basis points (for %) or cents (for fixed)
+  buyQuantity: integer("buy_quantity"),    // BUY_X_GET_Y: X
+  getQuantity: integer("get_quantity"),    // BUY_X_GET_Y: Y
+  tiers: jsonb("tiers"),                  // QUANTITY_TIER: [{minQty, maxQty?, pricePerUnit}]
+  giftInfo: jsonb("gift_info"),           // GIFT: {description, quantity}
+  freeShippingMinAmount: integer("free_shipping_min_amount"), // cents, 0 = always free
+  // Targeting
+  targetType: promotionTargetTypeEnum("target_type").notNull().default('ALL'),
+  targetListingIds: integer("target_listing_ids").array(),
+  targetCategoryIds: integer("target_category_ids").array(),
+  // Eligibility
+  eligibleCafeIds: integer("eligible_cafe_ids").array(), // null = all approved cafes
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Per-order usage tracking for promotions (enforces maxUses / maxUsesPerCustomer)
+export const promotionUsage = pgTable("promotion_usage", {
+  id: serial("id").primaryKey(),
+  promotionId: integer("promotion_id").notNull(),
+  cafeId: integer("cafe_id").notNull(),
+  orderId: integer("order_id").notNull(),
+  discountAmount: integer("discount_amount").notNull().default(0), // cents
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ── Relations ────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -505,6 +583,16 @@ export const supplierProductReviewsRelations = relations(supplierProductReviews,
   cafe: one(users, { fields: [supplierProductReviews.cafeId], references: [users.id] }),
 }));
 
+export const promotionsRelations = relations(promotions, ({ one, many }) => ({
+  supplier: one(users, { fields: [promotions.supplierId], references: [users.id] }),
+  usage: many(promotionUsage),
+}));
+
+export const promotionUsageRelations = relations(promotionUsage, ({ one }) => ({
+  promotion: one(promotions, { fields: [promotionUsage.promotionId], references: [promotions.id] }),
+  cafe: one(users, { fields: [promotionUsage.cafeId], references: [users.id] }),
+}));
+
 // ── Insert Schemas ───────────────────────────────────────────────────────────
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -529,6 +617,9 @@ export const insertSupplierProductReviewSchema = createInsertSchema(supplierProd
 export const insertPackSchema = createInsertSchema(packs).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPackItemSchema = createInsertSchema(packItems).omit({ id: true });
 export const insertPackFavoriteSchema = createInsertSchema(packFavorites).omit({ id: true, createdAt: true });
+
+export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
+export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -601,6 +692,56 @@ export type InsertPackItem = z.infer<typeof insertPackItemSchema>;
 
 export type PackFavorite = typeof packFavorites.$inferSelect;
 export type InsertPackFavorite = z.infer<typeof insertPackFavoriteSchema>;
+
+export type Promotion = typeof promotions.$inferSelect;
+export type InsertPromotion = z.infer<typeof insertPromotionSchema>;
+export type PromotionUsage = typeof promotionUsage.$inferSelect;
+export type InsertPromotionUsage = z.infer<typeof insertPromotionUsageSchema>;
+
+export type PromotionType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'BUY_X_GET_Y' | 'QUANTITY_TIER' | 'CATEGORY_DISCOUNT' | 'FREE_SHIPPING' | 'GIFT' | 'MIN_ORDER_AMOUNT' | 'MIN_QUANTITY' | 'FIRST_ORDER';
+export type PromotionStatus = 'ACTIVE' | 'PAUSED' | 'SCHEDULED' | 'EXPIRED';
+export type PromotionTargetType = 'ALL' | 'PRODUCTS' | 'CATEGORIES';
+
+export type QuantityTier = { minQty: number; maxQty?: number; pricePerUnit: number };
+export type GiftInfo = { description: string; quantity: number };
+
+export type PromotionWithStats = Promotion & {
+  totalRevenue: number;     // cents — revenue from orders using this promo
+  ordersCount: number;
+  avgDiscount: number;      // cents
+};
+
+// Result of server-side promotion evaluation for one supplier's cart group
+export type SupplierPromotionResult = {
+  supplierId: number;
+  promotionId: number | null;
+  promotionName: string | null;
+  promotionType: string | null;
+  originalSubtotal: number;   // cents
+  discountAmount: number;     // cents
+  finalSubtotal: number;      // cents
+  freeShipping: boolean;
+  giftInfo: GiftInfo | null;
+  appliedTierPrice: number | null; // per-unit price after tier, if applicable
+};
+
+// Full cart evaluation result returned to the client
+export type CartPromotionEvaluation = {
+  bySupplier: SupplierPromotionResult[];
+  totalOriginal: number;
+  totalDiscount: number;
+  totalFinal: number;
+};
+
+// Lightweight badge info for product cards in the marketplace
+export type ListingPromotion = {
+  listingId: number;
+  promotionId: number;
+  type: PromotionType;
+  label: string;         // e.g. "20% OFF"
+  endDate: Date | null;
+  discountValue: number; // basis points or cents depending on type
+};
 
 // ── Pack Rich Types ───────────────────────────────────────────────────────────
 

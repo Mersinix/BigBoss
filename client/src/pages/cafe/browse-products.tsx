@@ -10,8 +10,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag, Layers, Star, MapPin
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag, Layers, Star, MapPin, Zap
 } from "lucide-react";
+import type { ListingPromotion } from "@shared/schema";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
@@ -103,11 +104,30 @@ function SupplierLogoStrip({ listings, count }: { listings: { supplierId: number
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 
-function ProductCard({ product, hasCommercialAccess }: { product: MarketplaceProduct; hasCommercialAccess: boolean }) {
+function useListingPromotions(listingIds: number[]) {
+  const { data } = useQuery<ListingPromotion[]>({
+    queryKey: ["/api/marketplace/promotions", listingIds.sort().join(",")],
+    queryFn: async () => {
+      if (!listingIds.length) return [];
+      const res = await fetch(`/api/marketplace/promotions?listingIds=${listingIds.join(",")}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: listingIds.length > 0,
+    staleTime: 60_000,
+  });
+  return data ?? [];
+}
+
+function ProductCard({ product, hasCommercialAccess, promotions }: { product: MarketplaceProduct; hasCommercialAccess: boolean; promotions: ListingPromotion[] }) {
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
   const openQuickView = useQuickView((s) => s.open);
   const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+
+  // Best promo for this product (highest value, or first)
+  const listingIds = product.listings.map(l => l.id);
+  const promoForProduct = promotions.find(p => listingIds.includes(p.listingId));
 
   // Distance from search location to nearest supplier for this product
   const distanceKm = useMemo(() => {
@@ -144,6 +164,14 @@ function ProductCard({ product, hasCommercialAccess }: { product: MarketplacePro
         {product.category && (
           <div className="absolute top-2 left-2">
             <Badge className="bg-white/90 text-gray-700 backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2">{product.category}</Badge>
+          </div>
+        )}
+        {/* Promotion badge */}
+        {promoForProduct && (
+          <div className="absolute top-2 right-2">
+            <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+              <Zap className="w-2.5 h-2.5" />{promoForProduct.label}
+            </span>
           </div>
         )}
         {/* Review overlay — bottom left of image */}
@@ -682,6 +710,10 @@ export default function BrowseProducts() {
     staleTime: 30000,
   });
 
+  // Collect all listing IDs from products to fetch promotion badges
+  const allListingIds = useMemo(() => allProducts.flatMap(p => p.listings.map(l => l.id)), [allProducts]);
+  const listingPromotions = useListingPromotions(allListingIds);
+
   const { data: categories = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
 
   const { data: stores = [] } = useQuery<StoreCard[]>({
@@ -859,6 +891,7 @@ export default function BrowseProducts() {
                 key={product.id}
                 product={product}
                 hasCommercialAccess={hasCommercialAccess}
+                promotions={listingPromotions}
               />
             ))}
           </div>

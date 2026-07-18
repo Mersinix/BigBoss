@@ -2576,14 +2576,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // PUT /api/promotions/:id — update
+  // PATCH /api/promotions/:id/targets — update only targetListingIds / targetCategoryIds
+  // Dedicated lightweight endpoint so assignment saves never touch unrelated fields
+  app.patch('/api/promotions/:id/targets', requireSupplier, async (req: any, res) => {
+    try {
+      const { targetListingIds, targetCategoryIds } = req.body;
+      const updates: Record<string, any> = {};
+      if (Array.isArray(targetListingIds)) updates.targetListingIds = targetListingIds.map(Number);
+      if (Array.isArray(targetCategoryIds)) updates.targetCategoryIds = targetCategoryIds.map(Number);
+      if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'No target fields provided' });
+      const updated = await storage.updatePromotion(parseInt(req.params.id), req.supplier.id, updates);
+      if (!updated) return res.status(404).json({ message: 'Not found' });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err?.message ?? 'Error updating targets' });
+    }
+  });
+
+  // PUT /api/promotions/:id — update full promotion details
   app.put('/api/promotions/:id', requireSupplier, async (req: any, res) => {
     try {
       const body = req.body;
+      // Strip server-managed / read-only fields so Drizzle never tries to cast them
+      const { id: _id, supplierId: _s, usageCount: _u, createdAt: _ca, updatedAt: _ua, ...safeBody } = body;
       const updated = await storage.updatePromotion(parseInt(req.params.id), req.supplier.id, {
-        ...body,
-        startDate: body.startDate ? new Date(body.startDate) : null,
-        endDate: body.endDate ? new Date(body.endDate) : null,
+        ...safeBody,
+        startDate: safeBody.startDate ? new Date(safeBody.startDate) : null,
+        endDate: safeBody.endDate ? new Date(safeBody.endDate) : null,
       });
       if (!updated) return res.status(404).json({ message: 'Not found' });
       res.json(updated);

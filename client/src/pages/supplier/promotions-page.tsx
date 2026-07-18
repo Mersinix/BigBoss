@@ -478,11 +478,17 @@ function PromotionAssignmentDialog({
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Use the dedicated targets PATCH endpoint — only touches the two array fields,
+      // never serialises dates or other promotion fields, so no toISOString() risk.
       const payload = isProducts
         ? { targetListingIds: Array.from(selectedIds) }
         : { targetCategoryIds: Array.from(selectedIds) };
-      await fetchJSON(`${apiBase}/${promo.id}`, { method: "PUT", body: JSON.stringify({ ...promo, ...payload, startDate: promo.startDate ? new Date(promo.startDate).toISOString() : null, endDate: promo.endDate ? new Date(promo.endDate).toISOString() : null }) });
-      toast({ title: "Assignments saved", description: `${selectedIds.size} ${isProducts ? "product" : "categor"}${selectedIds.size === 1 ? (isProducts ? "" : "y") : (isProducts ? "s" : "ies")} assigned.` });
+      await fetchJSON(`${apiBase}/${promo.id}/targets`, { method: "PATCH", body: JSON.stringify(payload) });
+      const count = selectedIds.size;
+      const noun = isProducts
+        ? `${count} product${count !== 1 ? "s" : ""}`
+        : `${count} categor${count !== 1 ? "ies" : "y"}`;
+      toast({ title: "Assignments saved", description: `${noun} assigned to this promotion.` });
       onSaved();
       onClose();
     } catch (e: any) {

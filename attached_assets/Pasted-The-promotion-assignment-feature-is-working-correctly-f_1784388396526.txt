@@ -1,0 +1,186 @@
+The promotion assignment feature is working correctly from a UI perspective, but there is one backend issue that prevents saving the assignments.
+
+## Issue
+
+When clicking **Save Assignments** from either:
+
+* **Manage Product Assignments**
+* **Manage Category Assignments**
+
+the request fails with:
+
+```text
+PUT /api/promotions/3
+400
+{"message":"value.toISOString is not a function"}
+```
+
+Examples:
+
+### Product Assignment
+
+Manage Product Assignments
+
+↓
+
+Save Assignments
+
+↓
+
+400
+
+```text
+value.toISOString is not a function
+```
+
+---
+
+### Category Assignment
+
+Manage Category Assignments
+
+↓
+
+Save Assignments
+
+↓
+
+400
+
+```text
+value.toISOString is not a function
+```
+
+---
+
+# What to Investigate
+
+Investigation + Fix Required
+
+Please trace the entire request flow for the PUT endpoint responsible for updating promotions, identify the root cause of the error, and then implement the required fix.
+
+Do not stop at analysis. After identifying the problem, modify the necessary files, test the fix, and verify that the assignment saving flow works correctly.
+
+Check:
+
+* client request payload
+* request validation
+* route handler
+* storage layer
+* promotion update logic
+* ORM/database update
+
+The error strongly suggests that somewhere during the update process a value is being treated as a JavaScript `Date`, but is actually a string, number, array, or another object.
+
+The assignment dialog itself only updates:
+
+* `targetListingIds`
+* `targetCategoryIds`
+
+It should **not require or modify unrelated date fields**.
+
+Please identify exactly which field is causing:
+
+```ts
+value.toISOString()
+```
+
+to be called on a non-Date value.
+
+---
+
+# Preserve Existing Data
+
+When saving assignments, the update should preserve every existing promotion property:
+
+* name
+* description
+* type
+* discount value
+* appliesTo
+* startDate
+* endDate
+* status
+* priority
+* usage limits
+* etc.
+
+Only these fields should change:
+
+* targetListingIds
+* targetCategoryIds
+
+Nothing else should be modified.
+
+---
+
+# Verify Date Handling
+
+Review every date field involved in promotion updates.
+
+If the database expects Date objects, safely convert incoming ISO strings before persistence.
+
+If values are already stored correctly, avoid unnecessary conversion.
+
+Do not blindly call:
+
+```ts
+value.toISOString()
+```
+
+without first verifying the value is actually a Date instance.
+
+---
+
+# Regression Check
+
+After fixing the issue, verify all update scenarios still work correctly:
+
+* Edit promotion details
+* Pause / Resume
+* Activate / Deactivate
+* Duplicate
+* Product assignment
+* Category assignment
+
+---
+
+# Final Validation
+
+Please test the following scenarios:
+
+## Product Assignment
+
+Create a promotion.
+
+Assign one or more products.
+
+Click **Save Assignments**.
+
+Expected:
+
+* Request returns **200 OK**
+* Assignments are saved
+* Refreshing the page shows the assignments still selected
+* Marketplace badges update correctly
+
+---
+
+## Category Assignment
+
+Create a category-based promotion.
+
+Assign one or more categories.
+
+Click **Save Assignments**.
+
+Expected:
+
+* Request returns **200 OK**
+* Assignments persist after refresh
+* Every product in assigned categories receives the promotion
+* Newly added products in those categories automatically inherit the promotion
+
+---
+
+Please identify the root cause, implement the permanent fix, and verify the complete flow works correctly. Do not only report the issue. Make the necessary code changes and test them. The goal is to fix the underlying serialization/update logic so the promotion update endpoint correctly supports assignment updates without breaking any existing promotion functionality.

@@ -321,7 +321,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <div className={`flex flex-col h-full ${bg}`}>
+    <div className={`flex flex-col h-full overflow-hidden ${bg}`}>
 
       {/* ── Fixed header ── */}
       <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
@@ -407,8 +407,8 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* ── Scrollable content ── */}
-      <div className="flex-1 overflow-y-auto px-5 pb-8" style={{ WebkitOverflowScrolling: "touch" }}>
-
+      {/* <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-8" style={{ WebkitOverflowScrolling: "touch" }}> */}
+       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600" style={{ WebkitOverflowScrolling: "touch" }}>
         {/* SHOP — Products */}
         {activeService === "SHOP" && shopTab === "products" && (
           shopItems.length === 0 ? renderEmpty() : (

@@ -1,0 +1,256 @@
+Task: Apply the existing Favorites modal design system to the Product Details modal only, and improve its internal layout and scrolling behavior.
+
+Before making any changes:
+- Analyze the current Product Details modal implementation completely.
+- Compare it with the already implemented Favorites modal design.
+- Understand the current structure, interactions, state management, and synchronization.
+
+Important rules:
+- Do NOT change any functionality.
+- Do NOT modify business logic.
+- Do NOT change product data loading.
+- Do NOT change supplier logic.
+- Do NOT change pricing, variants, cart behavior, favorite behavior, review behavior, filtering behavior, or any existing interactions.
+- This task is ONLY about design, layout, user experience, scrolling, and visual consistency.
+- Do NOT refactor unrelated code.
+- Do NOT remove any existing components or information.
+- Keep everything that is not related to this modal exactly as it is.
+- Verify all existing synchronization and interactions continue working before and after the changes.
+
+---
+
+# Goal
+
+Make the Product Details modal use the same design language as the Favorites modal.
+
+The Product Details modal should feel like part of the same premium application design system.
+
+Apply the same:
+
+- iPhone / Apple-inspired modal style.
+- Dark mode default appearance.
+- Light mode support.
+- Colors.
+- Rounded corners.
+- Border radius.
+- Shadows.
+- Typography.
+- Spacing system.
+- Smooth transitions.
+- Premium clean appearance.
+
+Do not redesign other parts of the application.
+
+---
+
+# Product Details Modal Structure
+
+The modal should be reorganized visually while keeping all existing information and functionality.
+
+## Initial Product Information Area
+
+When the modal opens, display at the top:
+
+- Product images.
+- Product category information:
+  - Coffee Beans
+  - Ground Coffee
+  - Nespresso
+- Product name.
+- Product description.
+- Starting price.
+- Suppliers information.
+
+Example information:
+
+Coffee Beans  
+Ground Coffee  
+Nespresso  
+
+Lavazza Qualità Rossa Ground 500g
+
+Balanced medium roast, perfect for espresso machines
+
+Starting from
+
+$12.00
+
+Suppliers
+
+2/3 visible
+
+Important:
+- Keep all this information.
+- Do not remove any existing content.
+
+---
+
+# Dynamic Fixed Header Behavior
+
+Initially:
+- Show the product information normally at the top of the modal.
+
+When the coffee owner scrolls:
+- A fixed header should appear smoothly.
+- The header should stay visible while scrolling.
+- The fixed header should contain only the product information.
+- Do NOT include product images inside the fixed header.
+- Keep the scrolling experience similar to the Favorites modal.
+
+The user should always know which product they are viewing.
+
+---
+
+# Flavor and Size Switchers
+
+Move the flavor and size selectors below the product information area.
+
+These sections:
+
+Flavor:
+- All
+- Coconut
+- Caramel
+
+Size:
+- All
+- 500g Bag
+- 1kg Bag
+- Espresso Shot
+- 6-Pack
+- 250g Bag
+
+Design:
+
+Use the exact same switcher style as the Favorites modal:
+
+- Same shape.
+- Same spacing.
+- Same active/inactive states.
+- Same colors.
+- Same dark/light behavior.
+- Same premium feeling.
+
+---
+
+# Filters Section
+
+Place this section below the flavor and size switchers:
+
+- Filter by location
+- Nearest
+- Cheapest
+- Write a Review
+
+Use the same visual style:
+
+- Clean buttons/cards.
+- Rounded design.
+- Consistent spacing.
+- Same modal design language.
+
+---
+
+# Scrollable Content Area
+
+The following part should be scrollable inside the modal body:
+
+- Available From Suppliers.
+- Supplier cards.
+- Supplier variants.
+- Stock information.
+- Prices.
+- Quantity selectors.
+- Add buttons.
+
+Example:
+
+Café Ellouze
+
+2 variants
+
+7.3 km
+
+Coconut · 500g Bag · 122 in stock
+
+$12.00
+
+1
+
+Add
+
+
+Café Bondin
+
+10 variants
+
+...
+
+The coffee owner must be able to scroll through all suppliers and variants.
+
+Requirements:
+- No content should overflow outside the modal.
+- The modal stays within the viewport.
+- The header remains fixed.
+- Only the body content scrolls.
+- The last supplier/product variant must always be reachable.
+
+---
+
+# Dark / Light Mode
+
+Add the same modal-level theme behavior used in Favorites:
+
+- Dark mode is the default.
+- Allow switching to light mode from this modal.
+- Theme switching affects only this modal.
+- Do not modify the global application theme behavior.
+
+Use the same theme icon style as Favorites.
+
+---
+
+# Responsive Design
+
+Ensure the Product Details modal works perfectly on:
+
+- Web.
+- Tablet.
+- Mobile.
+
+Verify:
+
+- Modal size.
+- Product images.
+- Fixed header behavior.
+- Switchers.
+- Supplier cards.
+- Buttons.
+- Scrolling.
+- Touch interactions.
+- Overflow handling.
+
+No layout breaking.
+
+---
+
+# Final Verification
+
+Before completing:
+
+Confirm that:
+
+- Product details functionality is unchanged.
+- Product loading works exactly as before.
+- Supplier comparison works exactly as before.
+- Cart actions still work.
+- Add buttons still work.
+- Favorite actions still work.
+- Reviews still work.
+- Filters still work.
+- Existing synchronization remains unchanged.
+- No other pages/components were affected.
+
+Only update the Product Details modal design, layout, and user experience.
+
+Do not touch anything else.

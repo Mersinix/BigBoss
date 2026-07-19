@@ -1,0 +1,351 @@
+Task: Apply the existing Favorites modal design system and Coffee Owner marketplace design system to the Coffee Owner Pack Details modal only.
+
+Important context:
+- This task is specifically for the **Coffee Owner Pack Details modal** opened from the marketplace/shop experience.
+- Do not confuse it with Admin, Supplier, or any other pack-related modal.
+- The goal is only to update the visual design, layout, scrolling, and user experience.
+- Do not modify functionality.
+
+Before making any changes:
+- Analyze the current Coffee Owner Pack Details modal completely.
+- Compare it with:
+  - The already implemented Favorites modal design.
+  - The updated Coffee Owner /products page design system.
+  - The updated Product Details modal design system.
+- Understand all existing sections, interactions, states, and synchronization.
+
+---
+
+# Important Rules
+
+- Do NOT change any functionality.
+- Do NOT modify pack data loading.
+- Do NOT modify product mapping inside packs.
+- Do NOT modify supplier/store information.
+- Do NOT modify pricing.
+- Do NOT modify stock logic.
+- Do NOT modify expiration logic.
+- Do NOT modify flavor distribution logic.
+- Do NOT modify quantity selectors.
+- Do NOT modify cart behavior.
+- Do NOT modify favorites behavior.
+- Do NOT modify reviews behavior.
+- Do NOT modify any backend logic.
+- Do NOT refactor unrelated code.
+- Do NOT remove any existing components or information.
+- Keep everything that is not related to the design exactly as it is.
+- Verify all existing synchronization and interactions continue working before and after the changes.
+
+This task is ONLY about:
+- Design.
+- Layout.
+- Responsiveness.
+- Visual consistency.
+- User experience.
+
+---
+
+# Goal
+
+Make the Coffee Owner Pack Details modal use the same premium design language as:
+
+- Favorites modal.
+- Coffee Owner /products page.
+- Coffee Owner Product Details modal.
+
+The Pack Details modal should feel like part of the same BigBossCoffee design system.
+
+Apply the same:
+
+- iPhone / Apple-inspired modal style.
+- Dark mode default appearance.
+- Light mode support.
+- Colors.
+- Rounded corners.
+- Border radius.
+- Shadows.
+- Typography style.
+- Spacing system.
+- Smooth transitions.
+- Premium clean appearance.
+
+---
+
+# Pack Initial Information Area
+
+When the Pack modal opens, display the pack information clearly at the top.
+
+Keep all existing information:
+
+Example:
+
+Pack
+
+Nespresso
+
+Lavazza
+
+Coffee Beans
+
+Pack Ellouze Pro MAX
+
+Pack Everyday
+
+Café Ellouze
+
+Rating:
+4.6
+(7)
+
+$36.00
+
+$46.00
+
+53 disponibles
+
+Expires 09/08/2026
+
+Important:
+
+- Do not remove any information.
+- Improve only the visual presentation.
+- Use the same hierarchy and spacing style as the Product Details modal.
+
+---
+
+# Dynamic Fixed Header Behavior
+
+Apply the same scrolling behavior as the Product Details modal.
+
+Initially:
+
+- Show the complete pack information normally at the top.
+
+When the Coffee Owner scrolls:
+
+- A fixed header should appear smoothly.
+- The header should stay visible while scrolling.
+- Product/pack images should NOT be inside the fixed header if they exist.
+- The fixed header should contain:
+
+First:
+- Pack title.
+
+Under the title:
+- Pack categories/tags information.
+
+Example:
+
+Pack Ellouze Pro MAX
+
+Pack
+
+Nespresso
+
+Lavazza
+
+Coffee Beans
+
+Requirements:
+
+- Keep the same behavior as the Product Details modal.
+- The user should always know which pack they are viewing.
+- No overlapping or duplicated headers.
+
+---
+
+# Sticky Tabs Section
+
+The following section should become sticky when it reaches the bottom of the fixed header:
+
+- Pack Details
+- Reviews
+
+Requirements:
+
+1. Initially, the tabs appear normally below the pack information.
+2. While scrolling, they stop when reaching the fixed header.
+3. They remain fixed underneath the header.
+4. The content below continues scrolling.
+5. Smooth return behavior when scrolling back up.
+
+Keep the same style language as Favorites modal switchers:
+
+- Rounded design.
+- Active/inactive states.
+- Premium spacing.
+- Dark/light support.
+
+---
+
+# Pack Details Content Design
+
+Keep all existing information:
+
+Example:
+
+Lavazza Qualità Rossa Ground 500g
+
+Coconut · 500g Bag
+
+×2
+
+
+Robusta Dark Roast Beans 1kg
+
+Vanilla · 1kg Bag
+
+×2
+
+Improve only the UI:
+
+- Premium cards.
+- Better spacing.
+- Clear hierarchy.
+- Rounded containers.
+- Better separation between products.
+- Same design style as product cards from /products page.
+
+Do not change:
+- Product mapping.
+- Quantities.
+- Pack composition.
+
+---
+
+# Flavor Distribution Section
+
+Keep the existing functionality:
+
+"Choose your flavor distribution"
+
+"Distribute the quantities across available flavors for each product."
+
+Example:
+
+Lavazza Qualità Rossa Ground 500g
+
+2/2
+
+Coconut · 500g Bag
+(122 in stock)
+
+2
+
+Caramel · 500g Bag
+(122 in stock)
+
+0
+
+
+Robusta Dark Roast Beans 1kg
+
+2/2
+
+Vanilla · 1kg Bag
+(111 in stock)
+
+2
+
+Coconut · 1kg Bag
+(106 in stock)
+
+0
+
+Improve only the design:
+
+- Same premium card style.
+- Better spacing.
+- Better quantity selector presentation.
+- Better mobile readability.
+- Same dark/light behavior.
+
+Do not change:
+- Distribution logic.
+- Quantity rules.
+- Stock validation.
+- Available flavors.
+
+---
+
+# Add To Cart Section
+
+Keep the existing button functionality:
+
+Example:
+
+Ajouter au panier · $36.00
+
+Improve only the design:
+
+- Same premium Apple-inspired button style.
+- Rounded button.
+- Better spacing.
+- Responsive behavior.
+- Fixed placement if needed for better mobile UX.
+
+Do not change:
+- Cart logic.
+- Price calculation.
+- Button behavior.
+
+---
+
+# Responsive Design
+
+Ensure the Pack Details modal works perfectly on:
+
+- Web.
+- Tablet.
+- Mobile.
+
+Verify:
+
+- Header behavior.
+- Sticky tabs.
+- Pack information.
+- Product sections.
+- Flavor distribution.
+- Quantity selectors.
+- Add to cart button.
+- Scrolling.
+- Touch interactions.
+
+No layout breaking.
+
+---
+
+# Dark / Light Mode
+
+Apply the same modal theme behavior:
+
+- Dark mode as default.
+- Light mode available.
+- Same theme icon style as Favorites modal.
+- Theme applies only to this modal.
+- Do not modify global theme behavior.
+
+---
+
+# Final Verification
+
+Before completing:
+
+Verify:
+
+- Pack modal opens correctly.
+- Pack information remains unchanged.
+- Pack products remain correctly mapped.
+- Flavor distribution works exactly as before.
+- Quantity selection works exactly as before.
+- Stock validation works exactly as before.
+- Add to cart works exactly as before.
+- Reviews work exactly as before.
+- Favorites work exactly as before.
+- Product details navigation remains unchanged.
+- No synchronization issues are introduced.
+- No other pages/components are affected.
+
+Only update the Coffee Owner Pack Details modal design and user experience.
+
+Do not touch anything else.

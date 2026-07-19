@@ -1,0 +1,234 @@
+Task: Apply the existing Favorites modal design system to the Coffee Owner Principal Navbar only.
+
+Important context:
+- This task is specifically for the **main/global Navbar used by the Coffee Owner side**.
+- Do not confuse it with:
+  - /products page design.
+  - Store page design.
+  - Admin navbar.
+  - Supplier navbar.
+  - Any page-specific header.
+
+Before making any changes:
+- Search and identify the existing principal Navbar component used across the Coffee Owner experience.
+- Do not assume the file/location.
+- Find the component containing these existing elements:
+
+BigBossCoffee
+
+Tunis
+
+Search products…
+
+Suppliers
+
+3
+
+C
+
+Central Perk
+
+And the service switcher:
+
+SHOP
+
+PRINT
+
+BARISTA
+
+MARKETING
+
+Use the existing implementation as the source of truth.
+
+---
+
+# Goal
+
+Apply the same design language already created for:
+
+- Favorites modal.
+- Coffee Owner /products page.
+- Coffee Owner Store page.
+- Coffee Owner modals.
+
+The principal Navbar should become part of the same premium BigBossCoffee design system.
+
+---
+
+# Important Rules
+
+- Do NOT change any functionality.
+- Do NOT change authentication.
+- Do NOT change user/profile logic.
+- Do NOT change location logic.
+- Do NOT change search functionality.
+- Do NOT change supplier information logic.
+- Do NOT change navigation behavior.
+- Do NOT change routes.
+- Do NOT change permissions.
+- Do NOT modify backend logic.
+- Do NOT remove any existing information.
+- Do NOT refactor unrelated code.
+
+This task is ONLY about:
+- Visual design.
+- Layout.
+- Responsiveness.
+- User experience.
+- Design consistency.
+
+---
+
+# Design Requirements
+
+Apply the same:
+
+- iPhone / Apple-inspired style.
+- Dark mode default appearance.
+- Light mode support.
+- Colors.
+- Rounded corners.
+- Border radius.
+- Shadows.
+- Typography style.
+- Spacing system.
+- Smooth transitions.
+- Premium clean appearance.
+
+Keep the same visual identity as the Favorites modal.
+
+---
+
+# Navbar Main Information Area
+
+Keep all existing elements:
+
+- BigBossCoffee branding.
+- Current location (example: Tunis).
+- Search products input.
+- Suppliers information/count.
+- User avatar/initial.
+- User/store name.
+
+Improve only the UI:
+
+- Better spacing.
+- Better alignment.
+- Premium rounded containers.
+- Cleaner hierarchy.
+- Smooth animations.
+- Responsive behavior.
+
+Do not remove or change any existing data.
+
+---
+
+# Search Bar Design
+
+Keep the existing search functionality:
+
+Search products…
+
+Improve only the design:
+
+- Same Apple-style rounded search field.
+- Better spacing.
+- Premium appearance.
+- Smooth focus state.
+- Responsive on:
+  - Web.
+  - Tablet.
+  - Mobile.
+
+Do not change:
+- Search logic.
+- Search results.
+- Filtering behavior.
+
+---
+
+# Service Switcher Design
+
+The following section is the main service switcher:
+
+SHOP
+
+PRINT
+
+BARISTA
+
+MARKETING
+
+Keep the exact functionality.
+
+Improve only the design:
+
+- Apply the same switcher style used in Favorites modal.
+- Premium rounded segmented control.
+- Better active/inactive states.
+- Smooth transitions.
+- Clear selected service indicator.
+- Same dark/light behavior.
+- Responsive behavior.
+
+Do not change:
+- Routes.
+- Permissions.
+- Service logic.
+- Existing navigation behavior.
+
+---
+
+# Responsive Design
+
+Ensure the principal Navbar works perfectly on:
+
+- Desktop.
+- Tablet.
+- Mobile.
+
+Verify:
+
+- Branding layout.
+- Search bar behavior.
+- Supplier information.
+- User section.
+- Service switcher.
+- Touch interactions.
+- Horizontal scrolling if needed.
+- No overflow.
+- No broken layouts.
+
+---
+
+# Dark / Light Mode
+
+Apply the same theme behavior used in the Favorites modal:
+
+- Dark mode as default.
+- Light mode available.
+- Same theme icon style.
+- Do not modify global application theme behavior.
+
+---
+
+# Final Verification
+
+Before completing:
+
+Verify:
+
+- The correct principal Coffee Owner Navbar was updated.
+- BigBossCoffee branding remains unchanged.
+- Location remains unchanged.
+- Search works exactly as before.
+- Supplier information remains correct.
+- User/profile behavior remains unchanged.
+- SHOP / PRINT / BARISTA / MARKETING switcher works exactly as before.
+- All routes continue working.
+- Responsive behavior works on all devices.
+- No other components/pages are affected.
+
+Only update the design of the Coffee Owner Principal Navbar.
+
+Do not touch anything else.

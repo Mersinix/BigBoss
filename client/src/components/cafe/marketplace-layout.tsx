@@ -36,6 +36,30 @@ import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard } from 
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
+// ── Theme tokens helper ───────────────────────────────────────────────────────
+
+function useTheme(isDark: boolean) {
+  const dk = isDark;
+  return {
+    dk,
+    pageBg:           dk ? "bg-gray-900"                          : "bg-gray-50",
+    cardBg:           dk ? "bg-gray-800 border-gray-700/60"       : "bg-white border-gray-100",
+    textPrimary:      dk ? "text-white"                           : "text-gray-900",
+    textMuted:        dk ? "text-gray-400"                        : "text-gray-500",
+    textPrice:        dk ? "text-blue-400"                        : "text-blue-600",
+    switcherBg:       dk ? "bg-gray-800"                          : "bg-gray-100",
+    switcherActive:   dk ? "bg-gray-700 text-white shadow-sm"     : "bg-white text-blue-600 shadow-sm",
+    switcherInactive: dk ? "text-gray-400 hover:text-gray-200"    : "text-gray-500 hover:text-gray-700",
+    stripBg:          dk ? "bg-gray-900/95 border-gray-800"       : "bg-white border-gray-100",
+    filterBg:         dk ? "bg-gray-900/95 border-gray-800"       : "bg-white border-gray-100",
+    selectTrigger:    dk ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
+    divider:          dk ? "border-gray-800"                      : "border-gray-100",
+    skeletonBg:       dk ? "bg-gray-800"                          : "bg-gray-100",
+    imgBg:            dk ? "bg-gray-700"                          : "bg-gray-50",
+    toggleBtn:        dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/90 hover:bg-white text-gray-600 shadow-sm",
+  };
+}
+
 // ── Access helper ─────────────────────────────────────────────────────────────
 
 function computeAccess(user: any) {
@@ -874,6 +898,9 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
     toast({ title: "📍 Zone de recherche mise à jour", description: formatLocationLabel(loc.address) });
   };
 
+  const [isDark, setIsDark] = useState(true);
+  const t = useTheme(isDark);
+
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileTab, setProfileTab] = useState<"orders" | "dashboard" | "settings">("orders");
   const [favOpen, setFavOpen] = useState(false);
@@ -895,17 +922,18 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className={`min-h-screen flex flex-col transition-colors duration-200 ${t.pageBg}`}>
       {/* ── Top Navbar ── */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+      <header className={`sticky top-0 z-50 border-b shadow-sm transition-colors duration-200 ${isDark ? "bg-gray-900/95 border-gray-800 backdrop-blur-md" : "bg-white/95 border-gray-100 backdrop-blur-md"}`}>
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">
+
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0 mr-1">
-            <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-amber-500 rounded-xl flex items-center justify-center shadow-md shadow-amber-500/30">
               <Coffee className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-base text-gray-900 hidden md:block">
-              BigBoss<span className="text-amber-500">Coffee</span>
+            <span className={`font-bold text-base hidden md:block ${isDark ? "text-white" : "text-gray-900"}`}>
+              BigBoss<span className="text-amber-400">Coffee</span>
             </span>
           </Link>
 
@@ -913,21 +941,29 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
           {showSearchLocation && (
             <button
               onClick={handleLocationButtonClick}
-              className="flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-amber-600 transition-colors border border-gray-200 rounded-full px-2.5 py-1.5 shrink-0 max-w-[160px]"
+              className={`flex items-center gap-1.5 text-xs font-medium transition-all border rounded-2xl px-3 py-1.5 shrink-0 max-w-[160px] ${
+                isDark
+                  ? "bg-gray-800 border-gray-700 text-gray-300 hover:border-amber-600 hover:text-amber-400"
+                  : "bg-gray-50 border-gray-200 text-gray-600 hover:text-amber-600 hover:border-amber-300"
+              }`}
               data-testid="button-marketplace-location"
             >
-              <MapPin className="w-3 h-3 text-amber-500 shrink-0" />
+              <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
               <span className="hidden sm:block truncate">{locationLabel}</span>
-              <ChevronDown className="w-3 h-3 shrink-0" />
+              <ChevronDown className={`w-3 h-3 shrink-0 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
             </button>
           )}
 
           {/* Search */}
           <form onSubmit={handleSearch} className="flex-1 max-w-md hidden sm:block">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
               <Input
-                className="pl-8 h-9 bg-gray-50 border-gray-200 text-sm focus:bg-white"
+                className={`pl-9 h-9 rounded-2xl text-sm transition-colors ${
+                  isDark
+                    ? "bg-gray-800 border-gray-700 text-gray-200 placeholder:text-gray-500 focus:bg-gray-700 focus:border-gray-600"
+                    : "bg-gray-50 border-gray-200 text-gray-900 focus:bg-white"
+                }`}
                 placeholder="Search products…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -938,12 +974,30 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex-1" />
 
+          {/* Sun / Moon toggle */}
+          <button
+            onClick={() => setIsDark((d) => !d)}
+            aria-label="Toggle theme"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
+              isDark ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"
+            }`}
+          >
+            {isDark
+              ? <Sun className="w-4 h-4 text-amber-400" />
+              : <Moon className="w-4 h-4 text-gray-500" />
+            }
+          </button>
+
           {/* ── Authenticated Nav ── */}
           {user ? (
             <div className="flex items-center gap-1">
               {/* Pending notice */}
               {isPending && (
-                <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1.5">
+                <div className={`hidden sm:flex items-center gap-1.5 text-xs font-medium rounded-full px-3 py-1.5 ${
+                  isDark
+                    ? "text-amber-300 bg-amber-900/40 border border-amber-800/50"
+                    : "text-yellow-700 bg-yellow-50 border border-yellow-200"
+                }`}>
                   <AlertTriangle className="w-3.5 h-3.5" />
                   <span>Awaiting approval</span>
                 </div>
@@ -953,7 +1007,11 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
               {hasCommercial && (
                 <button
                   onClick={() => setSuppliersOpen(true)}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700 hidden sm:flex items-center gap-1.5 text-xs font-medium"
+                  className={`p-2 rounded-xl transition-colors hidden sm:flex items-center gap-1.5 text-xs font-medium ${
+                    isDark
+                      ? "text-gray-400 hover:text-white hover:bg-gray-800"
+                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  }`}
                   data-testid="button-suppliers"
                 >
                   <Store className="w-4 h-4" />
@@ -965,7 +1023,11 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
               {hasCommercial && (
                 <button
                   onClick={() => setFavOpen(true)}
-                  className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700"
+                  className={`relative p-2 rounded-xl transition-colors ${
+                    isDark
+                      ? "text-gray-400 hover:text-white hover:bg-gray-800"
+                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  }`}
                   data-testid="button-favorites"
                 >
                   <Heart className="w-4 h-4" />
@@ -979,10 +1041,18 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
               {/* Cart — approved/admin only */}
               {hasCommercial && (
-                <Link href="/cart" className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700" data-testid="link-cart">
+                <Link
+                  href="/cart"
+                  className={`relative p-2 rounded-xl transition-colors ${
+                    isDark
+                      ? "text-gray-400 hover:text-white hover:bg-gray-800"
+                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  }`}
+                  data-testid="link-cart"
+                >
                   <ShoppingBag className="w-4 h-4" />
                   {cartCount > 0 && (
-                    <span className="absolute top-0.5 right-0.5 flex items-center justify-center w-4 h-4 text-[9px] font-bold text-white bg-blue-600 rounded-full">
+                    <span className="absolute top-0.5 right-0.5 flex items-center justify-center w-4 h-4 text-[9px] font-bold text-white bg-blue-500 rounded-full">
                       {cartCount}
                     </span>
                   )}
@@ -992,22 +1062,26 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
               {/* Profile */}
               <button
                 onClick={() => { setProfileTab("orders"); setProfileOpen(true); }}
-                className="flex items-center gap-2 ml-1 px-3 py-1.5 rounded-full border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all"
+                className={`flex items-center gap-2 ml-1 px-3 py-1.5 rounded-2xl border transition-all ${
+                  isDark
+                    ? "bg-gray-800 border-gray-700 hover:bg-gray-700 hover:border-gray-600"
+                    : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                }`}
                 data-testid="button-profile"
               >
                 <Avatar className="w-6 h-6">
-                  <AvatarFallback className="bg-blue-100 text-blue-700 text-xs font-bold">
+                  <AvatarFallback className={`text-xs font-bold ${isDark ? "bg-gray-700 text-amber-400" : "bg-blue-100 text-blue-700"}`}>
                     {user.name?.charAt(0)?.toUpperCase() ?? "U"}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-sm font-medium text-gray-700 hidden md:block">{user.name}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden md:block" />
+                <span className={`text-sm font-medium hidden md:block ${isDark ? "text-gray-200" : "text-gray-700"}`}>{user.name}</span>
+                <ChevronDown className={`w-3.5 h-3.5 hidden md:block ${isDark ? "text-gray-500" : "text-gray-400"}`} />
               </button>
             </div>
           ) : (
             /* ── Visitor Nav ── */
             <Link href="/login">
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 shadow-sm">
+              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-5 shadow-md shadow-amber-500/20">
                 Connexion
               </Button>
             </Link>
@@ -1016,9 +1090,12 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── Service Switcher Strip ── */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+      <div className={`border-b transition-colors duration-200 ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-100"}`}>
+        <div className="max-w-7xl mx-auto px-4 py-2">
+          <div
+            className={`flex gap-1 rounded-2xl p-1 overflow-x-auto ${isDark ? "bg-gray-800" : "bg-gray-100"}`}
+            style={{ scrollbarWidth: "none" }}
+          >
             {[
               { id: "shop", label: "SHOP", icon: ShoppingBag, href: "/products", service: null },
               { id: "print", label: "PRINT", icon: Printer, href: "/print", service: "PRINTING" as const },
@@ -1030,10 +1107,14 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
                 <Link key={svc.id} href={svc.href}>
                   <button
                     data-testid={`nav-service-${svc.id}`}
-                    className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 transition-all shrink-0 ${
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl transition-all shrink-0 ${
                       isActive
-                        ? "border-amber-500 text-amber-500"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                        ? isDark
+                          ? "bg-gray-700 text-white shadow-sm"
+                          : "bg-white text-amber-600 shadow-sm"
+                        : isDark
+                          ? "text-gray-400 hover:text-gray-200"
+                          : "text-gray-500 hover:text-gray-700"
                     }`}
                   >
                     <svc.icon className="w-3.5 h-3.5" />

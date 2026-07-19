@@ -552,7 +552,7 @@ export function ProductDetailContent({
     );
     if (!isModal) return skeleton;
     return (
-      <div className={`flex flex-col h-full ${bg}`}>
+      <div className={`flex-1 min-h-0 flex flex-col ${bg}`}>
         <ModalHeader />
         <div className="flex-1 min-h-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
           {skeleton}
@@ -572,7 +572,7 @@ export function ProductDetailContent({
     );
     if (!isModal) return errContent;
     return (
-      <div className={`flex flex-col h-full ${bg}`}>
+      <div className={`flex-1 min-h-0 flex flex-col ${bg}`}>
         <ModalHeader />
         <div className="flex-1 min-h-0 overflow-y-auto">{errContent}</div>
       </div>
@@ -820,7 +820,7 @@ export function ProductDetailContent({
   // ── Modal layout ──────────────────────────────────────────────────────────
   if (isModal) {
     return (
-      <div className={`flex flex-col h-full ${bg}`}>
+      <div className={`flex-1 min-h-0 flex flex-col ${bg}`}>
 
         {/* Fixed header: X | product name (scrolled in) | theme toggle */}
         <ModalHeader />

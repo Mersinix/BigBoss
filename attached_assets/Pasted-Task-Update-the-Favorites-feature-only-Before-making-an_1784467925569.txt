@@ -1,0 +1,269 @@
+Task: Update the Favorites feature only.
+
+Before making any change, analyze the existing Favorites implementation completely (frontend, backend, database, state management, routing, modals, synchronization, responsive behavior, favorites persistence, and existing interactions).
+
+Do not start modifying anything until you fully understand how the current Favorites system works.
+
+Important Rules
+Do NOT refactor unrelated code.
+Do NOT modify features that are already working.
+Do NOT change the design of any page or component that is not mentioned below.
+Do NOT remove any existing functionality.
+Preserve backward compatibility with all existing favorite features.
+Verify all existing synchronization before making changes.
+Ensure there are no regressions.
+After implementation, verify that every existing favorite still works exactly as before.
+1. Update the Favorites Modal Structure
+
+Currently the Navbar Favorite icon opens the Favorites modal.
+
+Keep this behavior.
+
+Inside the modal, keep the existing top-level switcher:
+
+Shop
+Print
+Marketing
+Barista
+
+For Barista, keep the existing internal switcher:
+
+Barista Academy
+Marketplace Baristas
+
+Do not modify how Barista currently works except ensuring it continues working.
+
+2. Split the Shop section
+
+Inside Shop, add a second switcher containing:
+
+Products
+Packs
+Stores
+
+This switcher should appear only when Shop is selected.
+
+Products
+
+This is the existing Favorites implementation.
+
+Use the existing database mapping:
+
+favorites
+
+Everything that currently works must continue working.
+
+No regression.
+
+Packs
+
+Create a new Favorites section for Packs.
+
+Database mapping name:
+
+pack_favorites
+
+When a coffee owner clicks a Pack:
+
+Open the Pack modal.
+When the Pack modal closes,
+return to the Favorites modal still open.
+Do NOT close the Favorites modal.
+
+The user should be able to continue browsing favorite packs immediately.
+
+Stores
+
+Create a new Favorites section for Stores.
+
+Database mapping name:
+
+store_favorites
+
+When the coffee owner clicks a Store card:
+
+Close the Favorites modal.
+Redirect directly to the selected Store page.
+3. Product Modal Behavior
+
+Currently:
+
+Favorite Modal
+
+↓
+
+Product clicked
+
+↓
+
+Product modal opens
+
+↓
+
+Closing the product modal also closes Favorites.
+
+This must change.
+
+New behavior:
+
+Favorite Modal
+
+↓
+
+Product clicked
+
+↓
+
+Product modal opens
+
+↓
+
+Close Product modal
+
+↓
+
+Favorites modal is still open.
+
+The coffee owner should be able to continue selecting products without reopening Favorites.
+
+4. Pack Modal Behavior
+
+Apply the exact same behavior for Packs.
+
+Favorites
+
+↓
+
+Pack clicked
+
+↓
+
+Pack modal opens
+
+↓
+
+Close Pack modal
+
+↓
+
+Favorites remains open.
+
+5. Modal Design Refresh
+
+Modernize only the Favorites modal.
+
+The visual style should feel similar to the clean, smooth Apple/iPhone design language.
+
+Do NOT redesign the rest of the application.
+
+The modal should include:
+
+Rounded corners with a slightly larger border radius.
+Smooth spacing.
+Clean typography.
+Elegant shadows.
+Premium appearance.
+Native-feeling transitions.
+Polished scrolling experience.
+
+Do not make the design flashy.
+
+Keep it consistent with the rest of the application.
+
+6. Fixed Header
+
+Create a proper modal header.
+
+Centered title:
+
+My Favorites
+
+Below the title:
+
+Display the switchers.
+
+While scrolling:
+
+Keep the header fixed.
+Keep the switchers fixed.
+Only the Favorites content should scroll.
+7. Theme Toggle
+
+Inside the Favorites modal only,
+
+add a Theme icon allowing the coffee owner to switch between:
+
+Dark Mode (default)
+Light Mode
+
+Requirements:
+
+Dark mode is the default every time the modal opens.
+Switching themes affects only this modal.
+The rest of the application must remain unchanged.
+Use an elegant icon suitable for theme switching.
+8. Responsive Design
+
+The Favorites modal must work perfectly on:
+
+Desktop
+Tablet
+Mobile
+
+Verify:
+
+Scrolling
+Spacing
+Fixed header
+Switchers
+Cards
+Touch interactions
+Modal sizing
+Overflow behavior
+
+No clipping.
+
+No layout breaking.
+
+9. Existing Features
+
+Ensure all existing Favorites functionality continues working exactly as before, including every module that already supports Favorites.
+
+Do not modify unrelated modules or behaviors.
+
+10. Synchronization
+
+Before considering the task complete, verify that all synchronization works correctly:
+
+Existing Product favorites.
+New Pack favorites.
+New Store favorites.
+Favorite counts.
+Favorite status.
+Add/remove favorite actions.
+Modal interactions.
+Routing.
+Data loading.
+State persistence.
+Refresh behavior.
+Navigation between modules.
+
+Ensure everything stays synchronized across the application without introducing regressions.
+
+Acceptance Criteria
+
+Shop contains a second switcher: Products / Packs / Stores.
+Products continue using the existing favorites mapping.
+Packs use pack_favorites.
+Stores use store_favorites.
+Closing a Product modal returns to the still-open Favorites modal.
+Closing a Pack modal returns to the still-open Favorites modal.
+Clicking a Store redirects to the Store page and closes the Favorites modal.
+Favorites modal has a modern Apple-inspired appearance with rounded corners and a premium feel.
+Header remains fixed while scrolling.
+Title "My Favorites" is centered.
+Switchers remain fixed below the header.
+Theme toggle is available inside the modal only, with Dark Mode as the default.
+The modal is fully responsive across desktop, tablet, and mobile.
+All existing Favorites functionality remains intact with no regressions.
+Verify all synchronization before marking the implementation complete.

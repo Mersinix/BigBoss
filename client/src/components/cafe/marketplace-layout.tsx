@@ -23,15 +23,16 @@ import {
   Search, LogOut, Settings, LayoutDashboard, Store, Send,
   Star, Package, Trash2, CheckCircle, Clock, Box, Truck,
   AlertCircle, DollarSign, ClipboardList, Phone, Globe, MapPinIcon, AlertTriangle,
-  Printer, Megaphone, User, GraduationCap
+  Printer, Megaphone, User, GraduationCap, Sun, Moon, X,
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates } from "@/hooks/use-service-states";
 import { useQuickView } from "@/hooks/use-quick-view";
+import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
-import type { CategoryWithCount, ShopFavoriteItem } from "@shared/schema";
+import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
@@ -245,6 +246,8 @@ function SuppliersPanel() {
 
 type FavService = "SHOP" | "PRINT" | "BARISTA" | "MARKETING";
 type BaristaSubTab = "academy" | "marketplace";
+type ShopSubTab = "products" | "packs" | "stores";
+
 const FAV_SERVICES: FavService[] = ["SHOP", "PRINT", "BARISTA", "MARKETING"];
 const FAV_SERVICE_TO_KEY: Record<FavService, "PRINTING" | "BARISTA" | "MARKETING" | null> = {
   SHOP: null,
@@ -253,25 +256,55 @@ const FAV_SERVICE_TO_KEY: Record<FavService, "PRINTING" | "BARISTA" | "MARKETING
   MARKETING: "MARKETING",
 };
 
-function FavoritesPanel({ onNavigate }: { onNavigate?: () => void }) {
+function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const [, navigate] = useLocation();
   const { states: serviceStates } = useServiceStates();
+  const [isDark, setIsDark] = useState(true);
+  const [activeService, setActiveService] = useState<FavService>("SHOP");
+  const [shopTab, setShopTab] = useState<ShopSubTab>("products");
+  const [baristaTab, setBaristaTab] = useState<BaristaSubTab>("academy");
+
+  const {
+    shop, print, academy, baristaMarket, marketing, pack,
+    removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removePack,
+  } = useFavorites();
+  const { stores, toggleStore: toggleStoreFav } = useStoreFavorites();
+
+  const openQuickView = useQuickView((s) => s.open);
+  const openPackQuickView = usePackQuickView((s) => s.open);
+
+  // Fetch pack details for favorited packs
+  const packFavIds = Object.keys(pack).map(Number);
+  const { data: allPacks = [] } = useQuery<PackDetail[]>({
+    queryKey: ["/api/marketplace/packs"],
+    enabled: packFavIds.length > 0,
+  });
+  const favPacks = allPacks.filter((p) => !!pack[p.id]);
+
+  // Fetch store details for favorited stores
+  const storeFavIds = Object.keys(stores).map(Number);
+  const { data: allStores = [] } = useQuery<StoreCard[]>({
+    queryKey: ["/api/stores"],
+    enabled: storeFavIds.length > 0,
+  });
+  const favStores = allStores.filter((s) => !!stores[s.id]);
+
   const visibleFavServices = FAV_SERVICES.filter((s) => {
     const key = FAV_SERVICE_TO_KEY[s];
     return !key || serviceStates[key] !== "HIDDEN";
   });
-  const [activeService, setActiveService] = useState<FavService>("SHOP");
-  const [baristaTab, setBaristaTab] = useState<BaristaSubTab>("academy");
-  const {
-    shop, print, academy, baristaMarket, marketing,
-    removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing,
-  } = useFavorites();
 
-  const openQuickView = useQuickView((s) => s.open);
-  const goToProduct = (id: number) => {
-    openQuickView(id);
-    onNavigate?.();
-  };
+  const dk = isDark;
+  const bg = dk ? "bg-gray-900" : "bg-white";
+  const textPrimary = dk ? "text-white" : "text-gray-900";
+  const textMuted = dk ? "text-gray-400" : "text-gray-500";
+  const cardBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100";
+  const switcherBg = dk ? "bg-gray-800" : "bg-gray-100";
+  const switcherActive = dk ? "bg-gray-700 text-white shadow-sm" : "bg-white text-blue-600 shadow-sm";
+  const switcherInactive = dk ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700";
+  const subSwitcherBg = dk ? "bg-gray-800/60 border-gray-700/60" : "bg-gray-50 border-gray-100";
+  const dividerColor = dk ? "bg-gray-800" : "bg-gray-100";
+  const skeletonBg = dk ? "bg-gray-800" : "bg-gray-100";
 
   const shopItems = Object.values(shop);
   const printItems = Object.values(print);
@@ -280,216 +313,352 @@ function FavoritesPanel({ onNavigate }: { onNavigate?: () => void }) {
   const marketingItems = Object.values(marketing);
 
   const renderEmpty = () => (
-    <div className="text-center py-12 text-muted-foreground">
-      <Heart className="w-10 h-10 mx-auto mb-3 opacity-30" />
-      <p className="font-medium">No favorites yet</p>
-      <p className="text-xs mt-1 opacity-60">Heart items to save them here</p>
+    <div className={`text-center py-16 ${textMuted}`}>
+      <Heart className="w-10 h-10 mx-auto mb-3 opacity-20" />
+      <p className={`font-medium text-sm ${textPrimary}`}>No favorites yet</p>
+      <p className="text-xs mt-1.5 opacity-50">Heart items to save them here</p>
     </div>
   );
 
   return (
-    <div className="space-y-4">
-      {/* Service switcher */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-        {visibleFavServices.map((s) => (
-          <button
-            key={s}
-            data-testid={`tab-fav-${s.toLowerCase()}`}
-            onClick={() => setActiveService(s)}
-            className={`flex-1 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${activeService === s ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
+    <div className={`flex flex-col h-full ${bg}`}>
 
-      {/* BARISTA secondary switcher */}
-      {activeService === "BARISTA" && (
-        <div className="flex gap-1 bg-gray-50 rounded-xl p-1 border border-gray-100">
-          {(["academy", "marketplace"] as BaristaSubTab[]).map((sub) => (
+      {/* ── Fixed header ── */}
+      <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+
+        {/* Title row */}
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>My Favorites</h2>
+          <button
+            onClick={() => setIsDark((d) => !d)}
+            aria-label="Toggle theme"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
+          >
+            {dk
+              ? <Sun className="w-4 h-4 text-amber-400" />
+              : <Moon className="w-4 h-4 text-gray-500" />
+            }
+          </button>
+        </div>
+
+        {/* Service switcher */}
+        <div className={`flex gap-1 rounded-2xl p-1 ${switcherBg}`}>
+          {visibleFavServices.map((s) => (
             <button
-              key={sub}
-              data-testid={`tab-fav-barista-${sub}`}
-              onClick={() => setBaristaTab(sub)}
-              className={`flex-1 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${baristaTab === sub ? "bg-white shadow-sm text-green-600" : "text-gray-500 hover:text-gray-700"}`}
+              key={s}
+              data-testid={`tab-fav-${s.toLowerCase()}`}
+              onClick={() => setActiveService(s)}
+              className={`flex-1 py-2 text-[11px] font-semibold rounded-xl transition-all ${activeService === s ? switcherActive : switcherInactive}`}
             >
-              {sub === "academy" ? "Barista Academy" : "Marketplace Baristas"}
+              {s}
             </button>
           ))}
         </div>
-      )}
 
-      {/* SHOP */}
-      {activeService === "SHOP" && (
-        shopItems.length === 0 ? renderEmpty() : (
-          <div className="grid grid-cols-2 gap-3">
-            {shopItems.map((item) => (
-              <div
-                key={item.id}
-                className="group border border-border rounded-xl overflow-hidden cursor-pointer hover:shadow-sm transition-shadow"
-                onClick={() => goToProduct(item.id)}
-                data-testid={`card-fav-shop-${item.id}`}
+        {/* SHOP sub-switcher */}
+        {activeService === "SHOP" && (
+          <div className={`flex gap-1 rounded-2xl p-1 mt-2.5 border ${subSwitcherBg}`}>
+            {(["products", "packs", "stores"] as ShopSubTab[]).map((tab) => (
+              <button
+                key={tab}
+                data-testid={`tab-fav-shop-${tab}`}
+                onClick={() => setShopTab(tab)}
+                className={`flex-1 py-1.5 text-[11px] font-semibold rounded-xl transition-all ${
+                  shopTab === tab
+                    ? dk ? "bg-gray-700 text-amber-400 shadow-sm" : "bg-white text-amber-600 shadow-sm"
+                    : switcherInactive
+                }`}
               >
-                <div className="relative h-28">
-                  {item.image ? (
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gray-50 flex items-center justify-center"><Package className="w-8 h-8 text-gray-200" /></div>
-                  )}
-                  <button
-                    className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => { e.stopPropagation(); removeShop(item.id); }}
-                    data-testid={`button-fav-remove-shop-${item.id}`}
-                  >
-                    <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                  </button>
-                </div>
-                <div className="p-3">
-                  <p className="font-semibold text-sm leading-tight line-clamp-1">{item.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.supplier}</p>
-                  <p className="text-sm font-bold text-blue-600 mt-1">{formatCurrency(item.price)}</p>
-                </div>
-              </div>
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
             ))}
           </div>
-        )
-      )}
+        )}
 
-      {/* PRINT */}
-      {activeService === "PRINT" && (
-        printItems.length === 0 ? renderEmpty() : (
-          <div className="grid grid-cols-2 gap-3">
-            {printItems.map((item) => (
-              <div key={item.id} className="group border border-border rounded-xl overflow-hidden">
-                <div className="relative h-28">
-                  {item.image ? (
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gray-50 flex items-center justify-center"><Printer className="w-8 h-8 text-gray-200" /></div>
-                  )}
-                  <button
-                    className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => removePrint(item.id)}
-                    data-testid={`button-fav-remove-print-${item.id}`}
-                  >
-                    <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                  </button>
-                </div>
-                <div className="p-3">
-                  <p className="font-semibold text-sm leading-tight line-clamp-1">{item.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.brand}</p>
-                  <p className="text-sm font-bold text-blue-600 mt-1">
-                    {formatCurrency(item.price)}<span className="text-[10px] text-gray-400 font-normal">/{item.priceUnit}</span>
-                  </p>
-                </div>
-              </div>
+        {/* BARISTA sub-switcher */}
+        {activeService === "BARISTA" && (
+          <div className={`flex gap-1 rounded-2xl p-1 mt-2.5 border ${subSwitcherBg}`}>
+            {(["academy", "marketplace"] as BaristaSubTab[]).map((sub) => (
+              <button
+                key={sub}
+                data-testid={`tab-fav-barista-${sub}`}
+                onClick={() => setBaristaTab(sub)}
+                className={`flex-1 py-1.5 text-[11px] font-semibold rounded-xl transition-all ${
+                  baristaTab === sub
+                    ? dk ? "bg-gray-700 text-green-400 shadow-sm" : "bg-white text-green-600 shadow-sm"
+                    : switcherInactive
+                }`}
+              >
+                {sub === "academy" ? "Barista Academy" : "Marketplace Baristas"}
+              </button>
             ))}
           </div>
-        )
-      )}
+        )}
 
-      {/* BARISTA — Academy */}
-      {activeService === "BARISTA" && baristaTab === "academy" && (
-        academyItems.length === 0 ? renderEmpty() : (
-          <div className="grid grid-cols-2 gap-3">
-            {academyItems.map((item) => (
-              <div key={item.id} className="group border border-border rounded-xl overflow-hidden">
-                <div className="h-16 bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center relative">
-                  <GraduationCap className="w-6 h-6 text-white opacity-80" />
-                  <button
-                    className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => removeAcademy(item.id)}
-                    data-testid={`button-fav-remove-academy-${item.id}`}
-                  >
-                    <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                  </button>
-                </div>
-                <div className="p-3">
-                  <p className="font-semibold text-sm leading-tight line-clamp-1">{item.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.provider}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[11px] text-amber-500 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
-                    <span className="text-[10px] text-gray-400">{item.duration}</span>
-                  </div>
-                  <p className="text-sm font-bold text-green-600 mt-1">{(item.price / 100).toFixed(0)} TND</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      )}
+        {/* Divider */}
+        <div className={`mt-4 h-px ${dividerColor}`} />
+      </div>
 
-      {/* BARISTA — Marketplace */}
-      {activeService === "BARISTA" && baristaTab === "marketplace" && (
-        baristaItems.length === 0 ? renderEmpty() : (
-          <div className="space-y-2">
-            {baristaItems.map((item) => (
-              <div key={item.id} className="group flex items-center gap-3 border border-border rounded-xl p-3">
-                <Avatar className="w-9 h-9 shrink-0">
-                  <AvatarFallback className="bg-green-100 text-green-700 font-bold text-xs">{item.initials}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-semibold text-sm truncate">{item.name}</p>
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.available ? "bg-green-500" : "bg-gray-300"}`} />
-                  </div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <MapPinIcon className="w-2.5 h-2.5" />{item.location}
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {item.skills.slice(0, 2).map((sk) => (
-                      <span key={sk} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{sk}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[11px] text-amber-500 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
-                  <button
-                    className="p-1 rounded-lg hover:bg-rose-50 transition-colors"
-                    onClick={() => removeBaristaMarket(item.id)}
-                    data-testid={`button-fav-remove-barista-${item.id}`}
-                  >
-                    <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      )}
+      {/* ── Scrollable content ── */}
+      <div className="flex-1 overflow-y-auto px-5 pb-8" style={{ WebkitOverflowScrolling: "touch" }}>
 
-      {/* MARKETING */}
-      {activeService === "MARKETING" && (
-        marketingItems.length === 0 ? renderEmpty() : (
-          <div className="grid grid-cols-2 gap-3">
-            {marketingItems.map((item) => (
-              <div key={item.id} className="group border border-border rounded-xl overflow-hidden">
-                <div className="h-16 grid grid-cols-3 gap-0.5 overflow-hidden">
-                  {item.portfolioImages.slice(0, 3).map((img, i) => (
-                    <div key={i} className="relative overflow-hidden bg-gray-100">
-                      <img src={img} alt="" className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                </div>
-                <div className="p-3">
-                  <div className="flex items-start justify-between gap-1">
-                    <p className="font-semibold text-sm leading-tight line-clamp-1 flex-1">{item.name}</p>
+        {/* SHOP — Products */}
+        {activeService === "SHOP" && shopTab === "products" && (
+          shopItems.length === 0 ? renderEmpty() : (
+            <div className="grid grid-cols-2 gap-3">
+              {shopItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`group border rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-shadow ${cardBg}`}
+                  onClick={() => openQuickView(item.id)}
+                  data-testid={`card-fav-shop-${item.id}`}
+                >
+                  <div className="relative h-28">
+                    {item.image
+                      ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      : <div className={`w-full h-full ${dk ? "bg-gray-700" : "bg-gray-50"} flex items-center justify-center`}><Package className="w-8 h-8 text-gray-400 opacity-30" /></div>
+                    }
                     <button
-                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
-                      onClick={() => removeMarketing(item.id)}
-                      data-testid={`button-fav-remove-marketing-${item.id}`}
+                      className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => { e.stopPropagation(); removeShop(item.id); }}
+                      data-testid={`button-fav-remove-shop-${item.id}`}
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                     </button>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.type}</p>
-                  <span className="text-[11px] text-amber-500 mt-1 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                  <div className="p-3">
+                    <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{item.name}</p>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.supplier}</p>
+                    <p className={`text-sm font-bold mt-1 ${dk ? "text-blue-400" : "text-blue-600"}`}>{formatCurrency(item.price)}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )
-      )}
+              ))}
+            </div>
+          )
+        )}
+
+        {/* SHOP — Packs */}
+        {activeService === "SHOP" && shopTab === "packs" && (
+          packFavIds.length === 0 ? renderEmpty() : favPacks.length === 0 ? (
+            <div className="grid grid-cols-2 gap-3">
+              {packFavIds.map((id) => <div key={id} className={`h-36 rounded-2xl animate-pulse ${skeletonBg}`} />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {favPacks.map((p) => (
+                <div
+                  key={p.id}
+                  className={`group border rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-shadow ${cardBg}`}
+                  onClick={() => openPackQuickView(p.id)}
+                  data-testid={`card-fav-pack-${p.id}`}
+                >
+                  <div className="relative h-28">
+                    {p.imageUrl
+                      ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                      : <div className={`w-full h-full ${dk ? "bg-gray-700" : "bg-gray-50"} flex items-center justify-center`}><Box className="w-8 h-8 text-gray-400 opacity-30" /></div>
+                    }
+                    <button
+                      className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => { e.stopPropagation(); removePack(p.id); }}
+                      data-testid={`button-fav-remove-pack-${p.id}`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
+                  <div className="p-3">
+                    <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{p.name}</p>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>{p.supplierName}</p>
+                    <p className={`text-sm font-bold mt-1 ${dk ? "text-amber-400" : "text-amber-600"}`}>{formatCurrency(p.price)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* SHOP — Stores */}
+        {activeService === "SHOP" && shopTab === "stores" && (
+          storeFavIds.length === 0 ? renderEmpty() : favStores.length === 0 ? (
+            <div className="space-y-2.5">
+              {storeFavIds.map((id) => <div key={id} className={`h-16 rounded-2xl animate-pulse ${skeletonBg}`} />)}
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {favStores.map((st) => (
+                <div
+                  key={st.id}
+                  className={`group flex items-center gap-3 border rounded-2xl p-3 cursor-pointer hover:shadow-lg transition-shadow ${cardBg}`}
+                  onClick={() => { navigate(`/stores/${st.id}`); onClose(); }}
+                  data-testid={`card-fav-store-${st.id}`}
+                >
+                  <div className={`w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center shrink-0 ${dk ? "bg-gray-700" : "bg-gray-100"}`}>
+                    {st.logoUrl
+                      ? <img src={st.logoUrl} alt={st.name} className="w-full h-full object-cover" />
+                      : <Store className="w-5 h-5 text-gray-400" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-semibold text-sm truncate ${textPrimary}`}>{st.name}</p>
+                    {(st as any).productCount != null && (
+                      <p className={`text-xs mt-0.5 ${textMuted}`}>{(st as any).productCount} products</p>
+                    )}
+                  </div>
+                  <button
+                    className="p-1.5 rounded-xl hover:bg-rose-500/10 transition-colors shrink-0"
+                    onClick={(e) => { e.stopPropagation(); toggleStoreFav(st.id); }}
+                    data-testid={`button-fav-remove-store-${st.id}`}
+                  >
+                    <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* PRINT */}
+        {activeService === "PRINT" && (
+          printItems.length === 0 ? renderEmpty() : (
+            <div className="grid grid-cols-2 gap-3">
+              {printItems.map((item) => (
+                <div key={item.id} className={`group border rounded-2xl overflow-hidden ${cardBg}`}>
+                  <div className="relative h-28">
+                    {item.image
+                      ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      : <div className={`w-full h-full ${dk ? "bg-gray-700" : "bg-gray-50"} flex items-center justify-center`}><Printer className="w-8 h-8 text-gray-400 opacity-30" /></div>
+                    }
+                    <button
+                      className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => removePrint(item.id)}
+                      data-testid={`button-fav-remove-print-${item.id}`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
+                  <div className="p-3">
+                    <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{item.name}</p>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.brand}</p>
+                    <p className={`text-sm font-bold mt-1 ${dk ? "text-blue-400" : "text-blue-600"}`}>
+                      {formatCurrency(item.price)}<span className={`text-[10px] font-normal ${textMuted}`}>/{item.priceUnit}</span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* BARISTA — Academy */}
+        {activeService === "BARISTA" && baristaTab === "academy" && (
+          academyItems.length === 0 ? renderEmpty() : (
+            <div className="grid grid-cols-2 gap-3">
+              {academyItems.map((item) => (
+                <div key={item.id} className={`group border rounded-2xl overflow-hidden ${cardBg}`}>
+                  <div className="h-16 bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center relative">
+                    <GraduationCap className="w-6 h-6 text-white opacity-80" />
+                    <button
+                      className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => removeAcademy(item.id)}
+                      data-testid={`button-fav-remove-academy-${item.id}`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
+                  <div className="p-3">
+                    <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{item.title}</p>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.provider}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                      <span className={`text-[10px] ${textMuted}`}>{item.duration}</span>
+                    </div>
+                    <p className="text-sm font-bold text-green-400 mt-1">{(item.price / 100).toFixed(0)} TND</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* BARISTA — Marketplace */}
+        {activeService === "BARISTA" && baristaTab === "marketplace" && (
+          baristaItems.length === 0 ? renderEmpty() : (
+            <div className="space-y-2">
+              {baristaItems.map((item) => (
+                <div key={item.id} className={`group flex items-center gap-3 border rounded-2xl p-3 ${cardBg}`}>
+                  <Avatar className="w-9 h-9 shrink-0">
+                    <AvatarFallback className={`${dk ? "bg-green-900 text-green-300" : "bg-green-100 text-green-700"} font-bold text-xs`}>{item.initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.available ? "bg-green-400" : "bg-gray-500"}`} />
+                    </div>
+                    <p className={`text-xs flex items-center gap-1 mt-0.5 ${textMuted}`}>
+                      <MapPinIcon className="w-2.5 h-2.5" />{item.location}
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {item.skills.slice(0, 2).map((sk) => (
+                        <span key={sk} className={`text-[10px] px-1.5 py-0.5 rounded-full ${dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{sk}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                    <button
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      onClick={() => removeBaristaMarket(item.id)}
+                      data-testid={`button-fav-remove-barista-${item.id}`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* MARKETING */}
+        {activeService === "MARKETING" && (
+          marketingItems.length === 0 ? renderEmpty() : (
+            <div className="grid grid-cols-2 gap-3">
+              {marketingItems.map((item) => (
+                <div key={item.id} className={`group border rounded-2xl overflow-hidden ${cardBg}`}>
+                  <div className="h-16 grid grid-cols-3 gap-0.5 overflow-hidden">
+                    {item.portfolioImages.slice(0, 3).map((img, i) => (
+                      <div key={i} className={`relative overflow-hidden ${dk ? "bg-gray-700" : "bg-gray-100"}`}>
+                        <img src={img} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="p-3">
+                    <div className="flex items-start justify-between gap-1">
+                      <p className={`font-semibold text-sm leading-tight line-clamp-1 flex-1 ${textPrimary}`}>{item.name}</p>
+                      <button
+                        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                        onClick={() => removeMarketing(item.id)}
+                        data-testid={`button-fav-remove-marketing-${item.id}`}
+                      >
+                        <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                      </button>
+                    </div>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.type}</p>
+                    <span className="text-[11px] text-amber-400 mt-1 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+      </div>
     </div>
   );
 }
@@ -945,11 +1114,8 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
       {/* ── Favorites Modal ── */}
       {user && hasCommercial && (
         <Dialog open={favOpen} onOpenChange={setFavOpen}>
-          <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2"><Heart className="w-5 h-5 text-rose-500 fill-rose-500" /><h2 className="font-bold text-lg">My Favorites</h2></div>
-              <FavoritesPanel onNavigate={() => setFavOpen(false)} />
-            </div>
+          <DialogContent className="sm:max-w-md h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+            <FavoritesPanel onClose={() => setFavOpen(false)} />
           </DialogContent>
         </Dialog>
       )}

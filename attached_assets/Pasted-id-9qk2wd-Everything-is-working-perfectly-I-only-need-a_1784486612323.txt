@@ -1,0 +1,185 @@
+id="9qk2wd"
+
+Everything is working perfectly. I only need a few final UI improvements in the **Coffee Owner side Product Details modal**.
+
+Important context:
+- This task is specifically about the **Product Details modal used by Coffee Owners** in the marketplace/shop experience.
+- Do not confuse it with any Admin, Supplier, or other product modal.
+- Only update the Coffee Owner Product Details modal.
+
+Current behavior:
+- The scrolling works correctly.
+- The dynamic header appears as expected.
+- The modal design and responsiveness are working correctly.
+
+Please apply only the changes described below.
+
+---
+
+# Required Improvement 1: Dynamic Fixed Header Content
+
+Current behavior:
+
+The Coffee Owner Product Details modal initially displays:
+
+- Product images.
+- Product category information:
+  - Coffee Beans
+  - Ground Coffee
+  - Nespresso
+- Product name.
+- Product description.
+- Starting price.
+- Suppliers information.
+
+Example:
+
+Coffee Beans  
+Ground Coffee  
+Nespresso  
+
+Lavazza Qualità Rossa Ground 500g
+
+Balanced medium roast, perfect for espresso machines
+
+Starting from
+
+$12.00
+
+Suppliers
+
+2/3 visible
+
+This part is already working correctly.
+
+---
+
+## Fix the Dynamic Fixed Header
+
+Current issue:
+
+When the Coffee Owner scrolls, the dynamic fixed header appears, but currently it only contains the Product title.
+
+Required change:
+
+When the fixed header appears, it should contain:
+
+First:
+- Product title.
+
+Under the title:
+- Product category information:
+  - Coffee Beans
+  - Ground Coffee
+  - Nespresso
+
+Example fixed header:
+
+Lavazza Qualità Rossa Ground 500g
+
+Coffee Beans  
+Ground Coffee  
+Nespresso  
+
+Requirements:
+
+- Keep product images excluded from the fixed header.
+- Keep the same smooth transition behavior.
+- Keep the same design style as the Favorites modal.
+- Do not remove any existing information.
+- The Coffee Owner should always know which product they are viewing.
+- Keep the fixed header clean and readable.
+
+---
+
+# Required Improvement 2: Sticky Filters Section
+
+When the Coffee Owner scrolls, the following section should become sticky once it reaches the bottom of the fixed header:
+
+- Flavor selector
+  - All
+  - Chocolate
+  - Coconut
+- Size selector
+  - All
+  - 250g Bag
+- Available from Suppliers
+- Filter by location
+- Nearest
+- Cheapest
+
+Desired behavior:
+
+1. Initially, this section appears in its normal position below the product information.
+2. As the Coffee Owner scrolls and this section reaches the fixed header, it should stop scrolling and remain fixed directly underneath the header.
+3. The supplier cards and the rest of the content should continue scrolling underneath this sticky section.
+4. When the Coffee Owner scrolls back to the top, this section should return smoothly to its original position.
+5. The sticky behavior should work seamlessly together with the existing dynamic header without overlapping, flickering, or creating duplicate elements.
+
+---
+
+# Required Improvement 3: Mobile Layout for Product Variants
+
+The current product variant layout is good on desktop and tablet, so do not change it.
+
+However, on mobile only, each product variant row should be reorganized into two lines for better readability.
+
+Current mobile layout:
+
+Vanilla · 1kg Bag · 1000 in stock      $122.00   1   Add
+
+Desired mobile layout:
+
+Line 1:
+Vanilla · 1kg Bag · 1000 in stock
+
+Line 2:
+$122.00      1      Add
+
+Apply this same layout to every product variant.
+
+Requirements:
+
+- This change must apply only on mobile.
+- Keep the current desktop and tablet layouts exactly as they are.
+- Preserve all existing functionality.
+- Quantity selectors must continue working exactly as before.
+- Add buttons must continue working exactly as before.
+- Keep the same spacing, typography, colors, and Apple/iPhone-inspired design.
+- Ensure the second line is well aligned and responsive on different mobile screen sizes.
+
+---
+
+# Important Rules
+
+- Do NOT change any functionality.
+- Do NOT modify filtering logic.
+- Do NOT modify supplier logic.
+- Do NOT modify reviews.
+- Do NOT modify cart behavior.
+- Do NOT modify favorites behavior.
+- Do NOT modify pricing or stock logic.
+- Do NOT remove any existing components or information.
+- Do NOT change unrelated pages or components.
+- Do NOT refactor unrelated code.
+
+Only apply the UI improvements described above to the Coffee Owner Product Details modal.
+
+---
+
+# Final Verification
+
+Before completing:
+
+Verify:
+
+- The dynamic fixed header contains:
+  1. Product title on top.
+  2. Product category information underneath.
+- Product images stay only in the initial product section and never appear in the fixed header.
+- Sticky filters section works correctly with the dynamic header.
+- Supplier list scrolling remains smooth.
+- Mobile product variants display correctly in two lines.
+- Desktop and tablet layouts remain unchanged.
+- Cart, favorites, suppliers, filters, reviews, and all existing interactions continue working exactly as before.
+- No regressions or synchronization issues are introduced.

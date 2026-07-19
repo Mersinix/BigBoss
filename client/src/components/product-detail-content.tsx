@@ -88,29 +88,65 @@ function VariantRow({
   const stepText    = isDark ? "text-gray-200"        : "";
 
   return (
-    <div className={`flex items-center justify-between gap-4 py-3 border-b ${borderCls} last:border-0`}>
-      <div className="flex-1 min-w-0">
-        <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
-        {outOfStock && <span className="ml-2 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md">Out of stock</span>}
-      </div>
-      <div className={`font-bold text-base shrink-0 ${priceCls}`}>{formatCurrency(variant.price)}</div>
-      {!outOfStock && (
-        <div className="flex items-center gap-2 shrink-0">
-          <div className={`flex items-center border ${stepBorder} rounded-lg overflow-hidden`}>
-            <button className={`px-2 py-1.5 ${stepHover} transition-colors ${stepText}`} onClick={() => setQty(q => Math.max(1, q - 1))}><Minus className="w-3 h-3" /></button>
-            <span className={`px-3 text-sm font-medium w-8 text-center ${stepText}`}>{qty}</span>
-            <button className={`px-2 py-1.5 ${stepHover} transition-colors ${stepText}`} onClick={() => setQty(q => Math.min(variant.quantity, q + 1))}><Plus className="w-3 h-3" /></button>
-          </div>
-          <Button
-            size="sm"
-            onClick={handleAdd}
-            className={`gap-1.5 ${inCart > 0 ? "bg-emerald-500 hover:bg-emerald-600" : ""}`}
-            data-testid={`button-add-variant-${listing.id}-${variant.flavorId ?? 0}-${variant.sizeId ?? 0}`}
-          >
-            {inCart > 0 ? <><CheckCircle2 className="w-3.5 h-3.5" />{inCart} in cart</> : <><ShoppingCart className="w-3.5 h-3.5" />Add</>}
-          </Button>
+    <div className={`py-3 border-b ${borderCls} last:border-0`}>
+      {/* Desktop / tablet: single-row layout (sm and up) */}
+      <div className="hidden sm:flex items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
+          {outOfStock && <span className="ml-2 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md">Out of stock</span>}
         </div>
-      )}
+        <div className={`font-bold text-base shrink-0 ${priceCls}`}>{formatCurrency(variant.price)}</div>
+        {!outOfStock && (
+          <div className="flex items-center gap-2 shrink-0">
+            <div className={`flex items-center border ${stepBorder} rounded-lg overflow-hidden`}>
+              <button className={`px-2 py-1.5 ${stepHover} transition-colors ${stepText}`} onClick={() => setQty(q => Math.max(1, q - 1))}><Minus className="w-3 h-3" /></button>
+              <span className={`px-3 text-sm font-medium w-8 text-center ${stepText}`}>{qty}</span>
+              <button className={`px-2 py-1.5 ${stepHover} transition-colors ${stepText}`} onClick={() => setQty(q => Math.min(variant.quantity, q + 1))}><Plus className="w-3 h-3" /></button>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleAdd}
+              className={`gap-1.5 ${inCart > 0 ? "bg-emerald-500 hover:bg-emerald-600" : ""}`}
+              data-testid={`button-add-variant-${listing.id}-${variant.flavorId ?? 0}-${variant.sizeId ?? 0}`}
+            >
+              {inCart > 0 ? <><CheckCircle2 className="w-3.5 h-3.5" />{inCart} in cart</> : <><ShoppingCart className="w-3.5 h-3.5" />Add</>}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile: two-line layout */}
+      <div className="flex flex-col gap-2 sm:hidden">
+        {/* Line 1: label */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
+          {outOfStock && <span className="text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md shrink-0">Out of stock</span>}
+        </div>
+        {/* Line 2: price + qty + add */}
+        {!outOfStock && (
+          <div className="flex items-center justify-between gap-2">
+            <div className={`font-bold text-base ${priceCls}`}>{formatCurrency(variant.price)}</div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className={`flex items-center border ${stepBorder} rounded-lg overflow-hidden`}>
+                <button className={`px-2 py-1.5 ${stepHover} transition-colors ${stepText}`} onClick={() => setQty(q => Math.max(1, q - 1))}><Minus className="w-3 h-3" /></button>
+                <span className={`px-3 text-sm font-medium w-8 text-center ${stepText}`}>{qty}</span>
+                <button className={`px-2 py-1.5 ${stepHover} transition-colors ${stepText}`} onClick={() => setQty(q => Math.min(variant.quantity, q + 1))}><Plus className="w-3 h-3" /></button>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleAdd}
+                className={`gap-1.5 ${inCart > 0 ? "bg-emerald-500 hover:bg-emerald-600" : ""}`}
+                data-testid={`button-add-variant-${listing.id}-${variant.flavorId ?? 0}-${variant.sizeId ?? 0}`}
+              >
+                {inCart > 0 ? <><CheckCircle2 className="w-3.5 h-3.5" />{inCart} in cart</> : <><ShoppingCart className="w-3.5 h-3.5" />Add</>}
+              </Button>
+            </div>
+          </div>
+        )}
+        {outOfStock && (
+          <div className={`font-bold text-base ${priceCls}`}>{formatCurrency(variant.price)}</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -518,9 +554,22 @@ export function ProductDetailContent({
         >
           <X className="w-4 h-4" />
         </button>
-        {/* Product name fades in when scrolled */}
+        {/* Product name + categories fade in when scrolled */}
         <div className={`flex-1 px-2 transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>
           <p className={`text-[13px] font-semibold truncate text-center ${textPrimary}`}>{product?.name ?? ""}</p>
+          {product && (product.category || product.subCategoryLabel || product.brandLabel) && (
+            <div className="flex items-center justify-center gap-1 flex-wrap mt-0.5">
+              {product.category && (
+                <span className={`text-[10px] ${textMuted}`}>{product.category}</span>
+              )}
+              {product.subCategoryLabel && (
+                <><span className={`text-[10px] opacity-40 ${textMuted}`}>·</span><span className={`text-[10px] ${textMuted}`}>{product.subCategoryLabel.name}</span></>
+              )}
+              {product.brandLabel && (
+                <><span className={`text-[10px] opacity-40 ${textMuted}`}>·</span><span className={`text-[10px] ${textMuted}`}>{product.brandLabel.name}</span></>
+              )}
+            </div>
+          )}
         </div>
         <button
           onClick={() => setIsDark((d) => !d)}
@@ -819,10 +868,14 @@ export function ProductDetailContent({
 
   // ── Modal layout ──────────────────────────────────────────────────────────
   if (isModal) {
+    const stickyBg      = dk ? "bg-gray-900"  : "bg-white";
+    const stickyBorder  = dk ? "border-gray-800" : "border-gray-100";
+    const hasFilters    = hasCommercial && (allFlavors.length > 0 || allSizes.length > 0);
+
     return (
       <div className={`flex-1 min-h-0 flex flex-col ${bg}`}>
 
-        {/* Fixed header: X | product name (scrolled in) | theme toggle */}
+        {/* Fixed header: X | product name + categories (scrolled in) | theme toggle */}
         <ModalHeader />
 
         {/* Scrollable body */}
@@ -831,21 +884,67 @@ export function ProductDetailContent({
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 80)}
           style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
-          <div className="px-5 py-5 space-y-5">
-
-
-            {/* Product header: images + info */}
+          {/* ── Product header: images + info (always scrolls) ── */}
+          <div className="px-5 pt-5 pb-4">
             <div className="flex flex-col sm:flex-row gap-6">
               {imageGallery}
               {productInfo}
             </div>
+          </div>
 
-            {/* Flavor / size switchers — Favorites style, placed below product info */}
-            {modalFilterSwitchers}
+          {/* ── Sticky filters block ── */}
+          {hasCommercial && (
+            <div
+              className={`sticky top-0 z-10 ${stickyBg} border-b ${stickyBorder} px-5 pt-3 pb-3 space-y-3`}
+            >
+              {/* Flavor / size switchers */}
+              {hasFilters && (
+                <div className="space-y-2">
+                  {allFlavors.length > 0 && (
+                    <FilterBadges label="Flavors" items={availableFlavors} selected={selectedFlavorId} onSelect={handleFlavorSelect} showLabel={false} isDark={isDark} isModal />
+                  )}
+                  {allSizes.length > 0 && (
+                    <FilterBadges label="Sizes" items={availableSizes} selected={selectedSizeId} onSelect={handleSizeSelect} showLabel={false} isDark={isDark} isModal />
+                  )}
+                </div>
+              )}
+              {/* Supplier toolbar */}
+              {supplierToolbar}
+            </div>
+          )}
 
-            {/* Supplier section */}
-            {supplierListings}
-
+          {/* ── Supplier cards (scroll underneath sticky) ── */}
+          <div className="px-5 pt-3 pb-5">
+            {hasCommercial ? (
+              <div className="space-y-3">
+                {filteredListings.length === 0 ? (
+                  <div className={`rounded-2xl border p-12 text-center ${dk ? "border-gray-700/60 text-gray-400" : "border-gray-100 text-gray-500"}`}>
+                    {product.listings.length === 0
+                      ? "No supplier listings available for this product."
+                      : "No suppliers match the current filters. Try adjusting your flavor, size, or location filters."}
+                  </div>
+                ) : (
+                  filteredListings.map(({ listing, variants }) => {
+                    const distanceKm = refLocation && listing.supplierLat && listing.supplierLng
+                      ? haversineKm(refLocation.lat, refLocation.lng, parseFloat(listing.supplierLat), parseFloat(listing.supplierLng))
+                      : undefined;
+                    return (
+                      <SupplierSection
+                        key={listing.id}
+                        listing={listing}
+                        product={product}
+                        visibleVariants={variants}
+                        reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
+                        distanceKm={distanceKm}
+                        isDark={isModal && isDark}
+                      />
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <CommercialGate isPending={isPending} />
+            )}
           </div>
 
           {auxModals}

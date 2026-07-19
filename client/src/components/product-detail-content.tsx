@@ -833,21 +833,6 @@ export function ProductDetailContent({
         >
           <div className="px-5 py-5 space-y-5">
 
-            {/* Cart shortcut */}
-            {hasCommercial && cartCount > 0 && (
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`gap-2 ${tbOutline}`}
-                  onClick={() => navigate("/cart")}
-                  data-testid="button-view-cart"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  {cartCount} item{cartCount !== 1 ? "s" : ""} in cart
-                </Button>
-              </div>
-            )}
 
             {/* Product header: images + info */}
             <div className="flex flex-col sm:flex-row gap-6">

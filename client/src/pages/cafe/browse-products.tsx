@@ -3,14 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useSearch, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation, Plus, ShoppingBag, Users, Tag, Layers, Star, MapPin, Zap
+  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation,
+  Plus, ShoppingBag, Layers, Star, MapPin, Zap, Sun, Moon,
 } from "lucide-react";
 import type { ListingPromotion } from "@shared/schema";
 import { formatCurrency } from "@/lib/format";
@@ -31,36 +31,82 @@ function useCommercialAccess() {
   return user.role === 'CAFE_OWNER' && (user as any).status === 'approved';
 }
 
+// ── Theme tokens helper ───────────────────────────────────────────────────────
+
+function useTheme(isDark: boolean) {
+  const dk = isDark;
+  return {
+    dk,
+    pageBg:           dk ? "bg-gray-900"                          : "bg-gray-50",
+    cardBg:           dk ? "bg-gray-800 border-gray-700/60"       : "bg-white border-gray-100",
+    textPrimary:      dk ? "text-white"                           : "text-gray-900",
+    textMuted:        dk ? "text-gray-400"                        : "text-gray-500",
+    textPrice:        dk ? "text-blue-400"                        : "text-blue-600",
+    switcherBg:       dk ? "bg-gray-800"                          : "bg-gray-100",
+    switcherActive:   dk ? "bg-gray-700 text-white shadow-sm"     : "bg-white text-blue-600 shadow-sm",
+    switcherInactive: dk ? "text-gray-400 hover:text-gray-200"    : "text-gray-500 hover:text-gray-700",
+    stripBg:          dk ? "bg-gray-900/95 border-gray-800"       : "bg-white border-gray-100",
+    filterBg:         dk ? "bg-gray-900/95 border-gray-800"       : "bg-white border-gray-100",
+    selectTrigger:    dk ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
+    divider:          dk ? "border-gray-800"                      : "border-gray-100",
+    sectionBtn:       dk ? "text-blue-400 hover:text-blue-300 hover:bg-gray-800" : "text-blue-600 hover:text-blue-700 hover:bg-blue-50",
+    sectionBtnPack:   dk ? "text-amber-400 hover:text-amber-300 hover:bg-gray-800" : "text-amber-600 hover:text-amber-700 hover:bg-amber-50",
+    skeletonBg:       dk ? "bg-gray-800" : "bg-gray-100",
+    imgBg:            dk ? "bg-gray-700" : "bg-gray-50",
+    storeLogo:        dk ? "bg-gray-700 border-gray-800" : "bg-white border-white",
+    toggleBtn:        dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/90 hover:bg-white text-gray-600 shadow-sm",
+    packBadge:        dk ? "bg-amber-500/90 text-white" : "bg-amber-500 text-white",
+    imageOverlay:     dk ? "bg-gray-800" : "bg-gray-50",
+    priceBorder:      dk ? "border-gray-700" : "border-gray-100",
+    emptyIcon:        dk ? "text-gray-700" : "text-gray-200",
+    emptyText:        dk ? "text-gray-400" : "text-gray-700",
+    emptySubText:     dk ? "text-gray-600" : "text-gray-400",
+  };
+}
+
 // ── Category Strip ────────────────────────────────────────────────────────────
 
 function CategoryStrip({
-  categories,
-  selected,
-  onSelect,
-  visibleCategoryIds,
+  categories, selected, onSelect, visibleCategoryIds, isDark,
 }: {
   categories: CategoryWithCount[];
   selected: string;
   onSelect: (id: string) => void;
   visibleCategoryIds: Set<number>;
+  isDark: boolean;
 }) {
-  // Only show categories that have at least one visible marketplace product
-  // (accounts for frozen supplier categories, out-of-stock listings, etc.)
+  const t = useTheme(isDark);
   const active = categories.filter((c) => visibleCategoryIds.has(c.id));
   if (!active.length) return null;
   return (
-    <div className="bg-white border-b border-gray-100">
+    <div className={`border-b ${t.stripBg}`}>
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex gap-1 overflow-x-auto py-3" style={{ scrollbarWidth: "none" }}>
-          <button onClick={() => onSelect("")} className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === "" ? "bg-blue-600 text-white shadow-sm" : "hover:bg-gray-100 text-gray-600"}`} data-testid="button-cat-all">
-            <span className="text-lg">🛍️</span>
-            <span className="text-[11px] font-semibold leading-tight">All</span>
-          </button>
-          {active.map((cat) => (
-            <button key={cat.id} onClick={() => onSelect(selected === String(cat.id) ? "" : String(cat.id))} className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === String(cat.id) ? "bg-blue-600 text-white shadow-sm" : "hover:bg-gray-100 text-gray-600"}`} data-testid={`button-cat-${cat.id}`}>
-              <span className="text-lg">{cat.icon || "📦"}</span>
-              <span className="text-[11px] font-semibold leading-tight line-clamp-1 max-w-[60px]">{cat.name}</span>
+        <div
+          className="flex gap-1.5 overflow-x-auto py-3"
+          style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+        >
+          {/* Pill wrapper — Favorites-style */}
+          <div className={`flex gap-1 rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+            <button
+              onClick={() => onSelect("")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${selected === "" ? t.switcherActive : t.switcherInactive}`}
+              data-testid="button-cat-all"
+            >
+              <span className="text-base leading-none">🛍️</span>
+              <span>All</span>
             </button>
+          </div>
+          {active.map((cat) => (
+            <div key={cat.id} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+              <button
+                onClick={() => onSelect(selected === String(cat.id) ? "" : String(cat.id))}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selected === String(cat.id) ? t.switcherActive : t.switcherInactive}`}
+                data-testid={`button-cat-${cat.id}`}
+              >
+                <span className="text-base leading-none">{cat.icon || "📦"}</span>
+                <span className="max-w-[72px] truncate">{cat.name}</span>
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -72,7 +118,14 @@ function CategoryStrip({
 
 const MAX_LOGOS = 5;
 
-function SupplierLogoStrip({ listings, count }: { listings: { supplierId: number; storeLogoUrl: string | null }[]; count: number }) {
+function SupplierLogoStrip({
+  listings, count, isDark,
+}: {
+  listings: { supplierId: number; storeLogoUrl: string | null }[];
+  count: number;
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
   const withLogos = listings.filter((l) => l.storeLogoUrl);
   const shown = withLogos.slice(0, MAX_LOGOS);
   const overflow = count - MAX_LOGOS;
@@ -83,26 +136,26 @@ function SupplierLogoStrip({ listings, count }: { listings: { supplierId: number
           shown.map((l, i) => (
             <div
               key={l.supplierId}
-              className="w-4 h-4 rounded-full overflow-hidden bg-gray-100 border border-white flex items-center justify-center shrink-0"
+              className={`w-4 h-4 rounded-full overflow-hidden border flex items-center justify-center shrink-0 ${t.storeLogo}`}
               style={{ marginLeft: i > 0 ? -4 : 0 }}
             >
               <img src={l.storeLogoUrl!} alt="" className="w-full h-full object-cover" />
             </div>
           ))
         ) : (
-          <div className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-            <Store className="w-2.5 h-2.5 text-gray-400" />
+          <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${t.imgBg}`}>
+            <Store className={`w-2.5 h-2.5 ${t.textMuted}`} />
           </div>
         )}
       </div>
-      <span className="text-[11px] text-gray-400">
-         {overflow > 0 ? `+${overflow}` : ""} 
+      <span className={`text-[11px] ${t.textMuted}`}>
+        {overflow > 0 ? `+${overflow}` : ""}
       </span>
     </div>
   );
 }
 
-// ── Product Card ──────────────────────────────────────────────────────────────
+// ── Listing promotions hook ───────────────────────────────────────────────────
 
 function useListingPromotions(listingIds: number[]) {
   const { data } = useQuery<ListingPromotion[]>({
@@ -119,24 +172,32 @@ function useListingPromotions(listingIds: number[]) {
   return data ?? [];
 }
 
-function ProductCard({ product, hasCommercialAccess, promotions }: { product: MarketplaceProduct; hasCommercialAccess: boolean; promotions: ListingPromotion[] }) {
+// ── Product Card ──────────────────────────────────────────────────────────────
+
+function ProductCard({
+  product, hasCommercialAccess, promotions, isDark,
+}: {
+  product: MarketplaceProduct;
+  hasCommercialAccess: boolean;
+  promotions: ListingPromotion[];
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
   const openQuickView = useQuickView((s) => s.open);
   const searchLocation = useSearchLocationStore((s) => s.searchLocation);
 
-  // Best promo for this product — pick highest-priority (highest discountValue for % types, or first)
   const listingIds = product.listings.map(l => l.id);
+
   const promoForProduct = useMemo(() => {
     const matches = promotions.filter(p => listingIds.includes(p.listingId));
     if (!matches.length) return null;
-    // Pick % discount with highest value, otherwise first
     const pct = matches.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
     if (pct.length) return pct.reduce((best, p) => p.discountValue > best.discountValue ? p : best, pct[0]);
     return matches[0];
   }, [promotions, listingIds.join(',')]);
 
-  // For percentage-type promotions, compute the discounted best price
   const promoDiscountedPrice = useMemo(() => {
     if (!promoForProduct || product.bestPrice == null) return null;
     if (['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(promoForProduct.type)) {
@@ -145,7 +206,6 @@ function ProductCard({ product, hasCommercialAccess, promotions }: { product: Ma
     return null;
   }, [promoForProduct, product.bestPrice]);
 
-  // Distance from search location to nearest supplier for this product
   const distanceKm = useMemo(() => {
     if (!searchLocation) return null;
     const sLat = parseFloat(searchLocation.lat);
@@ -168,21 +228,31 @@ function ProductCard({ product, hasCommercialAccess, promotions }: { product: Ma
   return (
     <div
       data-testid={`card-product-${product.id}`}
-      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col cursor-pointer"
+      className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
       onClick={() => openQuickView(product.id)}
     >
-      <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden shrink-0">
+      {/* Image */}
+      <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.imageOverlay}`}>
         {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"><Package className="w-10 h-10 text-gray-200" /></div>
-        )}
-        {product.category && (
-          <div className="absolute top-2 left-2">
-            <Badge className="bg-white/90 text-gray-700 backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2">{product.category}</Badge>
+          <div className="w-full h-full flex items-center justify-center">
+            <Package className={`w-10 h-10 ${t.emptyIcon}`} />
           </div>
         )}
-        {/* Review overlay — bottom left of image */}
+        {/* Category badge */}
+        {product.category && (
+          <div className="absolute top-2 left-2">
+            <Badge className="bg-black/50 text-white backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2">
+              {product.category}
+            </Badge>
+          </div>
+        )}
+        {/* Review overlay */}
         {hasCommercialAccess && hasReviews && (
           <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
             <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
@@ -193,7 +263,7 @@ function ProductCard({ product, hasCommercialAccess, promotions }: { product: Ma
         {/* Favorite button */}
         {hasCommercialAccess && (
           <button
-            className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+            className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
             onClick={(e) => {
               e.stopPropagation();
               toggleShop({
@@ -206,61 +276,66 @@ function ProductCard({ product, hasCommercialAccess, promotions }: { product: Ma
             }}
             data-testid={`button-fav-${product.id}`}
           >
-            <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+            <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
           </button>
         )}
         {/* Quick view button */}
         <button
-          className="absolute bottom-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
-          onClick={(e) => {
-            e.stopPropagation();
-            openQuickView(product.id);
-          }}
+          className="absolute bottom-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          onClick={(e) => { e.stopPropagation(); openQuickView(product.id); }}
           data-testid={`button-quick-view-${product.id}`}
         >
-          <Plus className="w-3.5 h-3.5 text-gray-500" />
+          <Plus className="w-3.5 h-3.5 text-white/80" />
         </button>
       </div>
+
+      {/* Body */}
       <div className="p-3 flex-1 flex flex-col gap-1.5">
-        {/* Product name — single line with truncation */}
-        <h3 className="font-bold text-sm leading-tight truncate group-hover:text-blue-600 transition-colors">{product.name}</h3>
-        {/* Supplier info: multi-logo strip + count + distance */}
+        <h3 className={`font-bold text-sm leading-tight truncate transition-colors group-hover:${t.dk ? "text-blue-400" : "text-blue-600"} ${t.textPrimary}`}>
+          {product.name}
+        </h3>
         <div className="flex items-center gap-1.5">
-          <SupplierLogoStrip listings={product.listings} count={product.supplierCount} />
+          <SupplierLogoStrip listings={product.listings} count={product.supplierCount} isDark={isDark} />
           {distanceKm !== null && (
-            <span className="text-[11px] text-gray-400 flex items-center gap-0.5 ml-auto">
+            <span className={`text-[11px] flex items-center gap-0.5 ml-auto ${t.textMuted}`}>
               <MapPin className="w-2.5 h-2.5 shrink-0" />{formatDistance(distanceKm)}
             </span>
           )}
         </div>
-        {/* Price section — close to supplier info, no large gap */}
-        <div className="mt-auto pt-1.5 border-t border-gray-50">
+
+        <div className={`mt-auto pt-1.5 border-t ${t.priceBorder}`}>
           {hasCommercialAccess ? (
             <div>
-              {/* Promotion badge — shown here to avoid overlap with the favorite button in the image */}
               {promoForProduct && (
                 <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5">
                   <Zap className="w-2.5 h-2.5" />{promoForProduct.label}
                 </span>
               )}
-              <p className="text-[10px] text-gray-400">From</p>
+              <p className={`text-[10px] ${t.textMuted}`}>From</p>
               {promoDiscountedPrice != null ? (
                 <div className="flex items-baseline gap-1.5">
-                  <p className="font-bold text-sm text-blue-600">{formatCurrency(promoDiscountedPrice)}</p>
-                  <p className="text-[10px] text-gray-400 line-through">{formatCurrency(product.bestPrice)}</p>
+                  <p className={`font-bold text-sm ${t.textPrice}`}>{formatCurrency(promoDiscountedPrice)}</p>
+                  <p className={`text-[10px] line-through ${t.textMuted}`}>{formatCurrency(product.bestPrice)}</p>
                 </div>
               ) : (
-                <p className="font-bold text-sm text-blue-600">{product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}</p>
+                <p className={`font-bold text-sm ${t.textPrice}`}>
+                  {product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}
+                </p>
               )}
             </div>
           ) : (
             <div className="space-y-1.5">
-              <div className="flex items-center gap-1 text-[11px] text-blue-700 font-medium">
+              <div className={`flex items-center gap-1 text-[11px] font-medium ${t.dk ? "text-amber-400" : "text-blue-700"}`}>
                 <Lock className="w-3 h-3 shrink-0" />
                 <span>Price for approved owners</span>
               </div>
               <Link href="/login" onClick={(e) => e.stopPropagation()}>
-                <Button size="sm" variant="outline" className="h-6 text-[11px] w-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400 px-2" data-testid={`button-login-price-${product.id}`}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`h-6 text-[11px] w-full px-2 ${t.dk ? "border-gray-700 text-gray-300 hover:bg-gray-700" : "border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400"}`}
+                  data-testid={`button-login-price-${product.id}`}
+                >
                   Connexion to view prices
                 </Button>
               </Link>
@@ -274,13 +349,17 @@ function ProductCard({ product, hasCommercialAccess, promotions }: { product: Ma
 
 // ── Store Card ────────────────────────────────────────────────────────────────
 
-function StoreCardTile({ store, onClick, searchLat, searchLng, hasSearchLocation }: {
+function StoreCardTile({
+  store, onClick, searchLat, searchLng, hasSearchLocation, isDark,
+}: {
   store: StoreCard;
   onClick: () => void;
   searchLat: number | null;
   searchLng: number | null;
   hasSearchLocation: boolean;
+  isDark: boolean;
 }) {
+  const t = useTheme(isDark);
   const faved = useStoreFavorites((s) => !!s.stores[store.id]);
   const toggleStore = useStoreFavorites((s) => s.toggleStore);
 
@@ -295,44 +374,58 @@ function StoreCardTile({ store, onClick, searchLat, searchLng, hasSearchLocation
   return (
     <div
       data-testid={`card-store-${store.id}`}
-      className="group cursor-pointer bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
+      className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
       onClick={onClick}
     >
-      <div className="relative aspect-[16/9] bg-gray-50 overflow-hidden">
+      {/* Cover image */}
+      <div className={`relative aspect-[16/9] overflow-hidden ${t.imageOverlay}`}>
         {store.coverUrl ? (
-          <img src={store.coverUrl} alt={store.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img
+            src={store.coverUrl}
+            alt={store.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"><Store className="w-10 h-10 text-gray-200" /></div>
+          <div className="w-full h-full flex items-center justify-center">
+            <Store className={`w-10 h-10 ${t.emptyIcon}`} />
+          </div>
         )}
         {!store.isOpen && (
           <div className="absolute top-2 left-2">
-            <Badge className="bg-gray-900/80 text-white border-0 text-[10px] font-semibold shadow-sm">Closed</Badge>
+            <Badge className="bg-black/70 text-white border-0 text-[10px] font-semibold shadow-sm">Closed</Badge>
           </div>
         )}
         <button
-          className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleStore(store.id);
-          }}
+          className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          onClick={(e) => { e.stopPropagation(); toggleStore(store.id); }}
           data-testid={`button-fav-store-${store.id}`}
         >
-          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
         </button>
       </div>
+
+      {/* Body */}
       <div className="p-3 flex gap-3 relative z-20">
-        <div className="w-11 h-11 rounded-full border-2 border-white -mt-8 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
+        {/* Logo — overlapping cover */}
+        <div className={`w-11 h-11 rounded-xl border-2 -mt-8 overflow-hidden shrink-0 flex items-center justify-center ${t.dk ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
           {store.logoUrl ? (
             <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
           ) : (
-            <Store className="w-4 h-4 text-gray-300" />
+            <Store className={`w-4 h-4 ${t.textMuted}`} />
           )}
         </div>
         <div className="flex-1 min-w-0 pt-1">
-          <h3 className="font-bold text-sm leading-tight truncate group-hover:text-blue-600 transition-colors">{store.name}</h3>
-          {store.description && <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{store.description}</p>}
-          <div className="flex items-center gap-3 text-[11px] text-amber-600 mt-1.5">
-            <span className="flex items-center gap-1"><Package className="w-3 h-3" />{store.productCount} product{store.productCount !== 1 ? "s" : ""}</span>
+          <h3 className={`font-bold text-sm leading-tight truncate ${t.textPrimary}`}>
+            {store.name}
+          </h3>
+          {store.description && (
+            <p className={`text-xs line-clamp-1 mt-0.5 ${t.textMuted}`}>{store.description}</p>
+          )}
+          <div className={`flex items-center gap-3 text-[11px] mt-1.5 ${t.dk ? "text-amber-400" : "text-amber-600"}`}>
+            <span className="flex items-center gap-1">
+              <Package className="w-3 h-3" />
+              {store.productCount} product{store.productCount !== 1 ? "s" : ""}
+            </span>
             {distance != null && <span>{formatDistance(distance)}</span>}
           </div>
         </div>
@@ -341,7 +434,9 @@ function StoreCardTile({ store, onClick, searchLat, searchLng, hasSearchLocation
   );
 }
 
-function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searchLng, hasSearchLocation }: {
+function StoresSection({
+  stores, categoryId, filters, onSelect, searchLat, searchLng, hasSearchLocation, isDark,
+}: {
   stores: StoreCard[];
   categoryId: string;
   filters: FilterState;
@@ -349,12 +444,13 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
   searchLat: number | null;
   searchLng: number | null;
   hasSearchLocation: boolean;
+  isDark: boolean;
 }) {
+  const t = useTheme(isDark);
   const [expanded, setExpanded] = useState(false);
   const INITIAL_LIMIT = 5;
 
   const filteredStores = useMemo(() => {
-    // Extra safety: never show stores with no products (server already does this)
     let list = stores.filter((s) => s.productCount > 0);
     if (categoryId) list = list.filter((s) => s.categoryIds.includes(Number(categoryId)));
     if (filters.subCategoryId) list = list.filter((s) => s.subCategoryIds.includes(Number(filters.subCategoryId)));
@@ -368,17 +464,18 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
 
   return (
     <div className="mb-8">
-      {/* Title row with See More / Show Less inline */}
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="font-bold text-lg text-gray-900">Marques populaires</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{filteredStores.length} store{filteredStores.length !== 1 ? "s" : ""}</p>
+          <h2 className={`font-bold text-lg ${t.textPrimary}`}>Marques populaires</h2>
+          <p className={`text-xs mt-0.5 ${t.textMuted}`}>
+            {filteredStores.length} store{filteredStores.length !== 1 ? "s" : ""}
+          </p>
         </div>
         {showToggle && (
           <Button
             variant="ghost"
             size="sm"
-            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 text-xs font-semibold h-8 px-3"
+            className={`text-xs font-semibold h-8 px-3 ${t.sectionBtn}`}
             onClick={() => setExpanded((e) => !e)}
             data-testid="button-toggle-stores"
           >
@@ -388,7 +485,6 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
       </div>
 
       {expanded ? (
-        /* Expanded grid — shows all stores */
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {filteredStores.map((store) => (
             <StoreCardTile
@@ -398,11 +494,11 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
               searchLat={searchLat}
               searchLng={searchLng}
               hasSearchLocation={hasSearchLocation}
+              isDark={isDark}
             />
           ))}
         </div>
       ) : (
-        /* Collapsed carousel — horizontal scroll */
         <div
           className="flex gap-3 overflow-x-auto pb-2"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}
@@ -415,6 +511,7 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
                 searchLat={searchLat}
                 searchLng={searchLng}
                 hasSearchLocation={hasSearchLocation}
+                isDark={isDark}
               />
             </div>
           ))}
@@ -426,18 +523,26 @@ function StoresSection({ stores, categoryId, filters, onSelect, searchLat, searc
 
 // ── Pack Card ─────────────────────────────────────────────────────────────────
 
-function StarRating({ rating, count }: { rating: number; count: number }) {
+function StarRating({ rating, count, isDark }: { rating: number; count: number; isDark: boolean }) {
+  const t = useTheme(isDark);
   if (!count) return null;
   return (
     <div className="flex items-center gap-1">
       <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-      <span className="text-[11px] font-medium text-gray-700">{rating.toFixed(1)}</span>
-      <span className="text-[10px] text-gray-400">({count})</span>
+      <span className={`text-[11px] font-medium ${t.textPrimary}`}>{rating.toFixed(1)}</span>
+      <span className={`text-[10px] ${t.textMuted}`}>({count})</span>
     </div>
   );
 }
 
-function PackCardTile({ pack, hasCommercialAccess }: { pack: PackDetail; hasCommercialAccess: boolean }) {
+function PackCardTile({
+  pack, hasCommercialAccess, isDark,
+}: {
+  pack: PackDetail;
+  hasCommercialAccess: boolean;
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.pack[pack.id]);
   const togglePack = useFavorites((s) => s.togglePack);
   const openPackQuickView = usePackQuickView((s) => s.open);
@@ -457,48 +562,71 @@ function PackCardTile({ pack, hasCommercialAccess }: { pack: PackDetail; hasComm
   return (
     <div
       data-testid={`card-pack-${pack.id}`}
-      className="group bg-white rounded-2xl border border-amber-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col cursor-pointer"
+      className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.dk ? "bg-gray-800 border-amber-900/40" : "bg-white border-amber-100"}`}
       onClick={() => openPackQuickView(pack.id)}
     >
-      <div className="relative aspect-[4/3] bg-amber-50 overflow-hidden">
+      {/* Image */}
+      <div className={`relative aspect-[4/3] overflow-hidden ${t.dk ? "bg-amber-900/20" : "bg-amber-50"}`}>
         {pack.imageUrl ? (
-          <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img
+            src={pack.imageUrl}
+            alt={pack.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"><Layers className="w-10 h-10 text-amber-200" /></div>
+          <div className="w-full h-full flex items-center justify-center">
+            <Layers className={`w-10 h-10 ${t.dk ? "text-amber-800/60" : "text-amber-200"}`} />
+          </div>
         )}
-        {/* Pack badge — top left */}
+        {/* Pack badge */}
         <div className="absolute top-2 left-2">
-          <Badge className="bg-amber-500 text-white text-[10px] font-semibold shadow-sm border-0 px-2"><Layers className="w-3 h-3 mr-1 inline" />Pack</Badge>
+          <Badge className="bg-amber-500/90 text-white text-[10px] font-semibold shadow-sm border-0 px-2 backdrop-blur-sm">
+            <Layers className="w-3 h-3 mr-1 inline" />Pack
+          </Badge>
         </div>
-        {/* Expiration badge — bottom right, no longer conflicts with favorite */}
+        {/* Expiration badge */}
         {pack.expirationDate && (
           <div className="absolute bottom-2 right-2">
-            <Badge className="bg-orange-500 text-white text-[10px] font-semibold shadow-sm border-0 px-2">
+            <Badge className="bg-orange-500/90 text-white text-[10px] font-semibold shadow-sm border-0 px-2 backdrop-blur-sm">
               Exp. {new Date(pack.expirationDate).toLocaleDateString()}
             </Badge>
           </div>
         )}
+        {/* Favorite button */}
         {hasCommercialAccess && (
           <button
-            className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+            className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
             onClick={(e) => { e.stopPropagation(); togglePack(pack.id); }}
             data-testid={`button-fav-pack-${pack.id}`}
           >
-            <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+            <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
           </button>
         )}
       </div>
+
+      {/* Body */}
       <div className="p-3 flex-1 flex flex-col gap-1.5">
-        <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-amber-600 transition-colors">{pack.name}</h3>
-        {pack.description && <p className="text-xs text-gray-500 line-clamp-1">{pack.description}</p>}
+        <h3 className={`font-bold text-sm leading-tight line-clamp-2 transition-colors ${t.dk ? "text-white group-hover:text-amber-400" : "text-gray-900 group-hover:text-amber-600"}`}>
+          {pack.name}
+        </h3>
+        {pack.description && (
+          <p className={`text-xs line-clamp-1 ${t.textMuted}`}>{pack.description}</p>
+        )}
 
         {/* Brands */}
         {pack.brandLabels.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {pack.brandLabels.slice(0, 2).map(b => (
-              <Badge key={b.id} className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 px-1.5 py-0">{b.name}</Badge>
+              <Badge
+                key={b.id}
+                className={`text-[10px] px-1.5 py-0 border ${t.dk ? "bg-amber-900/40 text-amber-400 border-amber-800/60" : "bg-amber-50 text-amber-700 border-amber-200"}`}
+              >
+                {b.name}
+              </Badge>
             ))}
-            {pack.brandLabels.length > 2 && <span className="text-[10px] text-gray-400">+{pack.brandLabels.length - 2}</span>}
+            {pack.brandLabels.length > 2 && (
+              <span className={`text-[10px] ${t.textMuted}`}>+{pack.brandLabels.length - 2}</span>
+            )}
           </div>
         )}
 
@@ -506,29 +634,36 @@ function PackCardTile({ pack, hasCommercialAccess }: { pack: PackDetail; hasComm
         {pack.categoryLabels.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {pack.categoryLabels.slice(0, 2).map(c => (
-              <Badge key={c.id} variant="secondary" className="text-[10px] px-1.5 py-0">{c.name}</Badge>
+              <Badge
+                key={c.id}
+                className={`text-[10px] px-1.5 py-0 border ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"}`}
+              >
+                {c.name}
+              </Badge>
             ))}
           </div>
         )}
 
         <div className="flex items-center justify-between mt-0.5">
-          <StarRating rating={pack.packAvgRating} count={pack.packReviewCount} />
-          <div className="flex items-center gap-2 text-[10px] text-gray-400">
+          <StarRating rating={pack.packAvgRating} count={pack.packReviewCount} isDark={isDark} />
+          <div className={`flex items-center gap-2 text-[10px] ${t.textMuted}`}>
             {distance != null && <span>{formatDistance(distance)}</span>}
             <span>{maxQty} dispo.</span>
           </div>
         </div>
 
-        <div className="mt-auto pt-2 border-t border-gray-50">
+        <div className={`mt-auto pt-2 border-t ${t.priceBorder}`}>
           {hasCommercialAccess ? (
             <div className="flex items-baseline gap-2">
-              <p className="font-bold text-sm text-amber-600">{formatCurrency(pack.price)}</p>
+              <p className={`font-bold text-sm ${t.dk ? "text-amber-400" : "text-amber-600"}`}>
+                {formatCurrency(pack.price)}
+              </p>
               {individualTotal > pack.price && (
-                <p className="text-xs text-gray-400 line-through">{formatCurrency(individualTotal)}</p>
+                <p className={`text-xs line-through ${t.textMuted}`}>{formatCurrency(individualTotal)}</p>
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-1 text-[11px] text-amber-700 font-medium">
+            <div className={`flex items-center gap-1 text-[11px] font-medium ${t.dk ? "text-amber-400" : "text-amber-700"}`}>
               <Lock className="w-3 h-3 shrink-0" />
               <span>Price for approved owners</span>
             </div>
@@ -539,11 +674,15 @@ function PackCardTile({ pack, hasCommercialAccess }: { pack: PackDetail; hasComm
   );
 }
 
-function PacksSection({ packs, categoryId, filters }: {
+function PacksSection({
+  packs, categoryId, filters, isDark,
+}: {
   packs: PackDetail[];
   categoryId: string;
   filters: FilterState;
+  isDark: boolean;
 }) {
+  const t = useTheme(isDark);
   const [expanded, setExpanded] = useState(false);
   const hasCommercialAccess = useCommercialAccess();
   const INITIAL_LIMIT = 5;
@@ -563,24 +702,39 @@ function PacksSection({ packs, categoryId, filters }: {
     <div className="mb-8">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="font-bold text-lg text-gray-900 flex items-center gap-1.5"><Layers className="w-4 h-4 text-amber-500" />Packs</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{filteredPacks.length} pack{filteredPacks.length !== 1 ? "s" : ""}</p>
+          <h2 className={`font-bold text-lg flex items-center gap-1.5 ${t.textPrimary}`}>
+            <Layers className={`w-4 h-4 ${t.dk ? "text-amber-400" : "text-amber-500"}`} />Packs
+          </h2>
+          <p className={`text-xs mt-0.5 ${t.textMuted}`}>
+            {filteredPacks.length} pack{filteredPacks.length !== 1 ? "s" : ""}
+          </p>
         </div>
         {showToggle && (
-          <Button variant="ghost" size="sm" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 text-xs font-semibold h-8 px-3" onClick={() => setExpanded((e) => !e)} data-testid="button-toggle-packs">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`text-xs font-semibold h-8 px-3 ${t.sectionBtnPack}`}
+            onClick={() => setExpanded((e) => !e)}
+            data-testid="button-toggle-packs"
+          >
             {expanded ? "Show Less" : `See More (${filteredPacks.length - INITIAL_LIMIT}+)`}
           </Button>
         )}
       </div>
       {expanded ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {filteredPacks.map((pack) => <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} />)}
+          {filteredPacks.map((pack) => (
+            <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
+          ))}
         </div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
+        <div
+          className="flex gap-3 overflow-x-auto pb-2"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}
+        >
           {filteredPacks.map((pack) => (
             <div key={pack.id} className="shrink-0 w-48 sm:w-56">
-              <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} />
+              <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
             </div>
           ))}
         </div>
@@ -594,24 +748,18 @@ function PacksSection({ packs, categoryId, filters }: {
 interface FilterState { subCategoryId: string; brandId: string; flavorId: string; sizeId: string; sortBy: string; }
 
 function FilterBar({
-  categoryProducts,
-  filters,
-  onChange,
-  onReset,
-  hasSearchLocation,
+  categoryProducts, filters, onChange, onReset, hasSearchLocation, isDark,
 }: {
-  // Products scoped only to the selected category (not to other active filters).
-  // This keeps option lists stable — selecting Brand=X won't remove Brand=Y from the dropdown.
   categoryProducts: MarketplaceProduct[];
   filters: FilterState;
   onChange: (key: keyof FilterState, val: string) => void;
   onReset: () => void;
   hasSearchLocation: boolean;
+  isDark: boolean;
 }) {
+  const t = useTheme(isDark);
   const hasActive = Object.values(filters).some(Boolean);
 
-  // Compute options from category-scoped products so that picking one filter
-  // value never collapses the other options in that same filter.
   const subCategories = useMemo(() => {
     const map = new Map<string, string>();
     categoryProducts.forEach((p) => {
@@ -651,45 +799,79 @@ function FilterBar({
   }, [categoryProducts]);
 
   if (!subCategories.length && !brands.length && !flavors.length && !sizes.length) return null;
+
   return (
-    <div className="bg-white border-b border-gray-100 py-2 px-4">
+    <div className={`border-b ${t.filterBg} py-2 px-4`}>
       <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
-        <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+        <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
         {subCategories.length > 0 && (
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[120px]"><SelectValue placeholder="Sub-Category" /></SelectTrigger>
-            <SelectContent><SelectItem value="__all__">All Sub-Categories</SelectItem>{subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>)}</SelectContent>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
+              <SelectValue placeholder="Sub-Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Sub-Categories</SelectItem>
+              {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>)}
+            </SelectContent>
           </Select>
         )}
         {brands.length > 0 && (
           <Select value={filters.brandId || "__all__"} onValueChange={(v) => onChange("brandId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[100px]"><SelectValue placeholder="Brand" /></SelectTrigger>
-            <SelectContent><SelectItem value="__all__">All Brands</SelectItem>{brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+              <SelectValue placeholder="Brand" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Brands</SelectItem>
+              {brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
           </Select>
         )}
         {flavors.length > 0 && (
           <Select value={filters.flavorId || "__all__"} onValueChange={(v) => onChange("flavorId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[100px]"><SelectValue placeholder="Flavor" /></SelectTrigger>
-            <SelectContent><SelectItem value="__all__">All Flavors</SelectItem>{flavors.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}</SelectContent>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+              <SelectValue placeholder="Flavor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Flavors</SelectItem>
+              {flavors.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+            </SelectContent>
           </Select>
         )}
         {sizes.length > 0 && (
           <Select value={filters.sizeId || "__all__"} onValueChange={(v) => onChange("sizeId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[100px]"><SelectValue placeholder="Size" /></SelectTrigger>
-            <SelectContent><SelectItem value="__all__">All Sizes</SelectItem>{sizes.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+              <SelectValue placeholder="Size" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Sizes</SelectItem>
+              {sizes.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
           </Select>
         )}
         <Select value={filters.sortBy || "recommended"} onValueChange={(v) => onChange("sortBy", v === "recommended" ? "" : v)}>
-          <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[120px]"><SelectValue placeholder="Sort by" /></SelectTrigger>
+          <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="recommended">Recommended</SelectItem>
             <SelectItem value="price_asc">Price: Low to High</SelectItem>
             <SelectItem value="price_desc">Price: High to Low</SelectItem>
             <SelectItem value="suppliers">Most Suppliers</SelectItem>
-            {hasSearchLocation && <SelectItem value="nearest"><span className="flex items-center gap-1"><Navigation className="w-3 h-3 inline" /> Nearest First</span></SelectItem>}
+            {hasSearchLocation && (
+              <SelectItem value="nearest">
+                <span className="flex items-center gap-1"><Navigation className="w-3 h-3 inline" /> Nearest First</span>
+              </SelectItem>
+            )}
           </SelectContent>
         </Select>
-        {hasActive && <button onClick={onReset} className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors ml-1"><RotateCcw className="w-3 h-3" /> Reset</button>}
+        {hasActive && (
+          <button
+            onClick={onReset}
+            className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
+          >
+            <RotateCcw className="w-3 h-3" /> Reset
+          </button>
+        )}
       </div>
     </div>
   );
@@ -705,6 +887,10 @@ export default function BrowseProducts() {
   const searchLat = searchLocation?.lat ? parseFloat(searchLocation.lat) : null;
   const searchLng = searchLocation?.lng ? parseFloat(searchLocation.lng) : null;
   const hasSearchLocation = searchLat !== null && searchLng !== null && !Number.isNaN(searchLat) && !Number.isNaN(searchLng);
+
+  // ── Dark / light mode (dark by default — matches Favorites modal) ──────────
+  const [isDark, setIsDark] = useState(true);
+  const t = useTheme(isDark);
 
   const urlParams = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
   const initialSearch = urlParams.get("q") ?? "";
@@ -731,7 +917,6 @@ export default function BrowseProducts() {
     staleTime: 30000,
   });
 
-  // Collect all listing IDs from products to fetch promotion badges
   const allListingIds = useMemo(() => allProducts.flatMap(p => p.listings.map(l => l.id)), [allProducts]);
   const listingPromotions = useListingPromotions(allListingIds);
 
@@ -757,27 +942,13 @@ export default function BrowseProducts() {
     staleTime: 30000,
   });
 
-  // Derive which category IDs currently have at least one visible marketplace
-  // product OR active pack. This accounts for frozen supplier categories,
-  // out-of-stock listings, and "Only for Pack" products whose category should
-  // still appear whenever a Pack in that category is available.
   const visibleCategoryIds = useMemo(() => {
     const ids = new Set<number>();
-    allProducts.forEach((p) => {
-      if (p.categoryId != null) ids.add(p.categoryId);
-    });
-    // Also include categories that have available packs, so "Only for Pack"
-    // products don't cause their category to disappear from the strip.
-    packs.forEach((p) => {
-      p.categoryIds.forEach((id) => ids.add(id));
-    });
+    allProducts.forEach((p) => { if (p.categoryId != null) ids.add(p.categoryId); });
+    packs.forEach((p) => { p.categoryIds.forEach((id) => ids.add(id)); });
     return ids;
   }, [allProducts, packs]);
 
-  // Products scoped to the selected category (and text search) but NOT filtered
-  // by brand/subcategory/flavor/size. These are used to build the filter option
-  // lists so that selecting one filter value never removes other options from
-  // that same filter.
   const categoryFiltered = useMemo(() => {
     let list = allProducts;
     if (search.trim()) {
@@ -788,7 +959,6 @@ export default function BrowseProducts() {
     return list;
   }, [allProducts, search, categoryId]);
 
-  // Fully filtered product list used for the product grid.
   const filtered = useMemo(() => {
     let list = categoryFiltered;
     if (filters.subCategoryId) list = list.filter((p) => String(p.subCategoryId) === filters.subCategoryId);
@@ -825,29 +995,58 @@ export default function BrowseProducts() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
+
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-12 pb-16 px-4 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600" />
-        <div className="absolute inset-0 bg-black/10" />
+      <section className="relative pt-10 pb-12 px-4 overflow-hidden">
+        {/* Background — dark: subtle amber glow | light: amber gradient */}
+        {t.dk ? (
+          <>
+            <div className="absolute inset-0 bg-gray-900" />
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-900/25 via-gray-900 to-gray-900" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+          </>
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600" />
+            <div className="absolute inset-0 bg-black/10" />
+          </>
+        )}
+
+        {/* Dark / light toggle — top right */}
+        <div className="relative flex justify-end mb-4">
+          <button
+            onClick={() => setIsDark((d) => !d)}
+            aria-label="Toggle theme"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+          >
+            {t.dk
+              ? <Sun className="w-4 h-4" />
+              : <Moon className="w-4 h-4" />
+            }
+          </button>
+        </div>
+
         <div className="relative max-w-3xl mx-auto text-center">
-          <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-            <ShoppingBag className="w-10 h-10 text-white" />
+          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
+            <ShoppingBag className={`w-8 h-8 ${t.dk ? "text-amber-400" : "text-white"}`} />
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-            BigBoss <span className="text-amber-200">SHOP</span>
+          <h1 className={`text-3xl md:text-4xl font-extrabold mb-2 ${t.dk ? "text-white" : "text-white"}`}>
+            BigBoss <span className={t.dk ? "text-amber-400" : "text-amber-200"}>SHOP</span>
           </h1>
-          <p className="text-amber-100 text-lg mb-2 max-w-xl mx-auto">
+          <p className={`text-base mb-0 max-w-xl mx-auto ${t.dk ? "text-gray-400" : "text-amber-100"}`}>
             Commandez vos produits professionnels directement auprès de fournisseurs vérifiés.
           </p>
         </div>
       </section>
 
+      {/* ── Sticky: Category strip + Filter bar ──────────────────────────── */}
       <div className="sticky top-14 z-30">
         <CategoryStrip
           categories={categories}
           selected={categoryId}
           visibleCategoryIds={visibleCategoryIds}
+          isDark={isDark}
           onSelect={(id) => {
             setCategoryId(id);
             resetFilters();
@@ -857,17 +1056,20 @@ export default function BrowseProducts() {
             navigate(`/products${params.toString() ? "?" + params.toString() : ""}`);
           }}
         />
-
         <FilterBar
           categoryProducts={categoryFiltered}
           filters={filters}
           onChange={updateFilter}
           onReset={resetFilters}
           hasSearchLocation={hasSearchLocation}
+          isDark={isDark}
         />
       </div>
 
+      {/* ── Main content ─────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 py-6">
+
+        {/* Stores */}
         {!search.trim() && (
           <StoresSection
             stores={stores}
@@ -877,33 +1079,59 @@ export default function BrowseProducts() {
             searchLat={searchLat}
             searchLng={searchLng}
             hasSearchLocation={hasSearchLocation}
+            isDark={isDark}
           />
         )}
 
+        {/* Packs */}
         {!search.trim() && (
-          <PacksSection packs={packs} categoryId={categoryId} filters={filters} />
+          <PacksSection packs={packs} categoryId={categoryId} filters={filters} isDark={isDark} />
         )}
 
+        {/* Products header */}
         <div className="flex items-center justify-between mb-4">
           <div>
             {categoryId ? (
-              <h1 className="font-bold text-lg text-gray-900">{categories.find((c) => String(c.id) === categoryId)?.name ?? "Products"}</h1>
+              <h1 className={`font-bold text-lg ${t.textPrimary}`}>
+                {categories.find((c) => String(c.id) === categoryId)?.name ?? "Products"}
+              </h1>
             ) : (
-              <h1 className="font-bold text-lg text-gray-900">All Products</h1>
+              <h1 className={`font-bold text-lg ${t.textPrimary}`}>All Products</h1>
             )}
-            {!isLoading && <p className="text-sm text-gray-400 mt-0.5">{filtered.length} product{filtered.length !== 1 ? "s" : ""} available</p>}
+            {!isLoading && (
+              <p className={`text-sm mt-0.5 ${t.textMuted}`}>
+                {filtered.length} product{filtered.length !== 1 ? "s" : ""} available
+              </p>
+            )}
           </div>
         </div>
 
+        {/* Product grid */}
         {isLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {[...Array(10)].map((_, i) => <Skeleton key={i} className="h-56 rounded-2xl" />)}
+            {[...Array(10)].map((_, i) => (
+              <div key={i} className={`h-56 rounded-2xl animate-pulse ${t.skeletonBg}`} />
+            ))}
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-            <Package className="w-14 h-14 text-gray-200" />
-            <div><p className="font-semibold text-gray-700">No products found</p><p className="text-sm text-gray-400 mt-1">{activeFilterCount > 0 ? "Try adjusting your filters." : "Suppliers haven't listed any products yet."}</p></div>
-            {activeFilterCount > 0 && <Button size="sm" variant="outline" onClick={() => { setSearch(""); setCategoryId(""); resetFilters(); navigate("/products"); }}>Clear all filters</Button>}
+            <Package className={`w-14 h-14 ${t.emptyIcon}`} />
+            <div>
+              <p className={`font-semibold ${t.emptyText}`}>No products found</p>
+              <p className={`text-sm mt-1 ${t.emptySubText}`}>
+                {activeFilterCount > 0 ? "Try adjusting your filters." : "Suppliers haven't listed any products yet."}
+              </p>
+            </div>
+            {activeFilterCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className={t.dk ? "border-gray-700 text-gray-300 hover:bg-gray-800" : ""}
+                onClick={() => { setSearch(""); setCategoryId(""); resetFilters(); navigate("/products"); }}
+              >
+                Clear all filters
+              </Button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -913,6 +1141,7 @@ export default function BrowseProducts() {
                 product={product}
                 hasCommercialAccess={hasCommercialAccess}
                 promotions={listingPromotions}
+                isDark={isDark}
               />
             ))}
           </div>

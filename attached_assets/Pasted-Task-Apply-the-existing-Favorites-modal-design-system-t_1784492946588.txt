@@ -1,0 +1,381 @@
+Task: Apply the existing Favorites modal design system to the Coffee Owner /products page only.
+
+Important context:
+- This task is specifically for the **Coffee Owner marketplace Products page (/products)**.
+- Do not confuse it with Admin, Supplier, or any other product-related pages.
+- The goal is only to update the visual design and user experience of this page.
+- Do not modify functionality.
+
+Before making any changes:
+- Analyze the current Coffee Owner /products page completely.
+- Compare its current design with the already implemented Favorites modal design system.
+- Understand all existing sections, interactions, states, and synchronization.
+
+---
+
+# Important Rules
+
+- Do NOT change any functionality.
+- Do NOT modify product loading.
+- Do NOT modify pack loading.
+- Do NOT modify supplier data.
+- Do NOT modify store data.
+- Do NOT modify search behavior.
+- Do NOT modify categories.
+- Do NOT modify filters.
+- Do NOT modify brands, flavors, sizes, or sorting.
+- Do NOT modify product cards behavior.
+- Do NOT modify pack cards behavior.
+- Do NOT modify store navigation.
+- Do NOT modify favorites behavior.
+- Do NOT modify cart behavior.
+- Do NOT modify any backend logic.
+- Do NOT refactor unrelated code.
+- Do NOT remove any existing components or information.
+- Keep everything that is not related to the design exactly as it is.
+- Verify all existing synchronization and interactions continue working before and after the changes.
+
+This task is ONLY about:
+- Design.
+- Layout.
+- Responsiveness.
+- Visual consistency.
+- User experience.
+
+---
+
+# Goal
+
+Make the Coffee Owner /products page use the same design language as the Favorites modal.
+
+The page should feel like part of the same premium BigBossCoffee design system.
+
+Apply the same:
+
+- iPhone / Apple-inspired style.
+- Dark mode default appearance.
+- Light mode support.
+- Colors.
+- Rounded corners.
+- Border radius.
+- Shadows.
+- Typography style.
+- Spacing system.
+- Smooth transitions.
+- Premium clean appearance.
+
+Keep the same visual identity as the Favorites modal.
+
+---
+
+# Page Header Design
+
+Update the top area of the Products page visually.
+
+Keep all existing information:
+
+- BigBossCoffee logo/name.
+- Location.
+- Search bar.
+- Suppliers information.
+- User navigation.
+
+Improve only the design:
+
+- More premium Apple-style layout.
+- Better spacing.
+- Rounded elements.
+- Smooth appearance.
+- Responsive behavior.
+
+Do not remove any existing item.
+
+---
+
+# Navigation / Modules
+
+Keep the existing navigation:
+
+- SHOP
+- PRINT
+- BARISTA
+- MARKETING
+
+Only update the visual style:
+
+- Same premium style as Favorites.
+- Same spacing.
+- Same rounded design.
+- Same dark/light consistency.
+
+Do not change routing or behavior.
+
+---
+
+# Categories Section
+
+Keep all existing categories and their existing mapped icons:
+
+- All
+- Coffee Beans
+- Boisson
+- Jeux
+- CHICHA
+- Higyene
+- Dairy & Alternatives
+- BeIN
+- Equipment & Supplies
+- DECO
+- Syrups & Flavors
+- Snacks & Food
+
+Important:
+- Keep the existing category icons exactly as they are mapped today.
+- Do NOT remove, replace, or change the category icons.
+- The icons must remain associated with their correct categories.
+
+Improve only the UI:
+
+- Apply the same clean switcher/card style inspired by the Favorites modal.
+- Keep the existing icons inside the new switcher/card design.
+- Preserve the icon + category name relationship.
+- Improve spacing, alignment, active/inactive states, and visual hierarchy.
+- Use the same premium Apple/iPhone-inspired design language.
+- Make the category switcher responsive with smooth horizontal scrolling on mobile.
+- Ensure the dark/light mode design applies correctly.
+
+Do not change:
+- Category mapping.
+- Category IDs.
+- Category logic.
+- Category filtering behavior.
+- Existing icons.
+
+---
+
+# Filters Section
+
+Keep all existing filters:
+
+- All Sub-Categories.
+- All Brands.
+- All Flavors.
+- All Sizes.
+- Recommended.
+
+Update only the design:
+
+- Same style language as Favorites modal.
+- Rounded controls.
+- Better spacing.
+- Dark/light support.
+- Mobile friendly.
+
+Do not change filtering behavior.
+
+---
+
+# Stores Section
+
+Keep the existing Stores section.
+
+Example:
+
+PANDA HOOKAH
+
+Ooredoo
+
+BONDIN Store
+
+Café Ellouze
+
+ALLO De L'EAU
+
+Boncafe
+
+Al-Khalil Coffee
+
+Keep all existing information:
+
+- Store logo/image.
+- Store name.
+- Description.
+- Product count.
+- Categories.
+
+Improve only the visual design:
+
+- Apple-inspired cards.
+- Rounded corners.
+- Better spacing.
+- Premium shadows.
+- Responsive layout.
+- Better image/logo presentation.
+
+Do not change:
+- Store data.
+- Store navigation.
+- Product mapping.
+
+---
+
+# Packs Section
+
+Keep the existing Packs section.
+
+This section contains:
+
+- Pack count.
+- Pack cards.
+- Pack information.
+- Pack pricing.
+- Availability.
+- Categories.
+- Products included.
+- Ratings if available.
+
+Example:
+
+CHICHA W GAZOUZA Pack
+
+Coca-Cola GIFT Pack
+
+PACK ESSIFF
+
+Summer Gifts
+
+Milkbasket Gift
+
+Pack Ellouze Pro MAX
+
+Hookah Panda Pack
+
+Keep all existing information.
+
+Improve only the visual design:
+
+- Use the same Apple/iPhone-inspired card design as Favorites modal.
+- Rounded premium cards.
+- Better spacing.
+- Better hierarchy between:
+  - Pack image.
+  - Pack title.
+  - Expiration date.
+  - Included products.
+  - Category.
+  - Stock.
+  - Rating.
+  - Old price.
+  - Discounted price.
+- Smooth hover/touch interactions.
+- Dark/light mode support.
+- Responsive layout.
+
+Do not change:
+- Pack data.
+- Pack pricing.
+- Pack navigation.
+- Pack favorite behavior.
+- Pack purchasing behavior.
+
+---
+
+# Product Cards Design
+
+Keep all existing product information:
+
+Example:
+
+Illy Classico Arabica Beans 500g
+
+Coffee Beans
+
+Rating.
+
+Free Shipping.
+
+From $3.00
+
+Improve only the design:
+
+- Same card style as Favorites modal.
+- Premium rounded cards.
+- Better typography hierarchy.
+- Better spacing.
+- Dark/light support.
+- Smooth interactions.
+
+Do not change:
+
+- Product data.
+- Pricing.
+- Supplier mapping.
+- Product details behavior.
+- Favorite actions.
+
+---
+
+# Responsive Design
+
+Ensure the Coffee Owner /products page works perfectly on:
+
+- Web.
+- Tablet.
+- Mobile.
+
+Verify:
+
+- Header layout.
+- Search bar.
+- Categories scrolling.
+- Filters.
+- Stores cards.
+- Packs cards.
+- Product cards.
+- Touch interactions.
+- Product details modal opening.
+- Pack details opening.
+- Navigation.
+
+No layout breaking.
+
+---
+
+# Dark / Light Mode
+
+Add the same visual theme behavior used in the Favorites modal:
+
+- Dark mode as default.
+- Allow switching to light mode.
+- Keep the same icon style.
+- Do not modify the global application theme behavior.
+
+The theme adaptation should apply correctly to this page.
+
+---
+
+# Final Verification
+
+Before completing:
+
+Verify:
+
+- Product listing works exactly as before.
+- Pack listing works exactly as before.
+- Store listing works exactly as before.
+- Search works exactly as before.
+- Categories work exactly as before.
+- Filters work exactly as before.
+- Product cards work exactly as before.
+- Pack cards work exactly as before.
+- Store cards work exactly as before.
+- Product details modal opens correctly.
+- Pack details modal opens correctly.
+- Favorite actions still work.
+- Supplier mapping remains unchanged.
+- No synchronization issues are introduced.
+- No other pages/components are affected.
+
+Only update the design of the Coffee Owner /products page.
+
+Do not touch anything else.

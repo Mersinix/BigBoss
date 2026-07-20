@@ -12,7 +12,7 @@ import {
 import {
   Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock,
   ChevronLeft, MapPin, Plus, Info, Star, Music, Zap, Clock, Layers,
-  Sun, Moon,
+  Sun, Moon, X,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -138,42 +138,119 @@ function InfoModal({ open, onClose, openingHours, storeName }: {
   storeName: string;
 }) {
   const todayKey = DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1].key;
+  const [isDark, setIsDark] = useState(true);
+
+  const dk = isDark;
+  const bg          = dk ? "bg-gray-900"                    : "bg-white";
+  const textPrimary = dk ? "text-white"                     : "text-gray-900";
+  const textMuted   = dk ? "text-gray-400"                  : "text-gray-500";
+  const divider     = dk ? "bg-gray-800"                    : "bg-gray-100";
+  const rowBg       = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
+  const rowToday    = dk ? "bg-amber-500/15 border-amber-500/30" : "bg-amber-50 border-amber-200";
+  const timeColor   = dk ? "text-gray-300"                  : "text-gray-700";
+  const closedColor = dk ? "text-red-400"                   : "text-red-500";
+  const iconBtn     = dk
+    ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white"
+    : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800";
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-primary" />
-            {storeName} — Opening Hours
-          </DialogTitle>
-        </DialogHeader>
-        {openingHours ? (
-          <div className="space-y-2 mt-1">
-            {DAYS.map(({ key, label }) => {
-              const day = openingHours[key];
-              const isToday = key === todayKey;
-              return (
-                <div
-                  key={key}
-                  className={`flex items-center justify-between rounded-lg px-3 py-2 ${isToday ? "bg-primary/10 font-semibold" : "bg-muted/40"}`}
-                >
-                  <span className={`text-sm ${isToday ? "text-primary" : "text-foreground"}`}>
-                    {label}{isToday && <span className="ml-1.5 text-[10px] font-normal bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">Today</span>}
-                  </span>
-                  {day?.closed ? (
-                    <span className="text-sm text-red-500">Closed</span>
-                  ) : day ? (
-                    <span className="text-sm">{day.open} – {day.close}</span>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
-                  )}
-                </div>
-              );
-            })}
+      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+        <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
+
+          {/* ── Fixed header ── */}
+          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+            {/* Title row */}
+            <div className="flex items-center justify-between mb-4">
+              {/* Close */}
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Centered title */}
+              <div className="flex flex-col items-center gap-0.5">
+                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>
+                  {storeName}
+                </span>
+                <span className={`text-[11px] font-medium ${textMuted}`}>Opening Hours</span>
+              </div>
+
+              {/* Dark / light toggle */}
+              <button
+                onClick={() => setIsDark((d) => !d)}
+                aria-label="Toggle theme"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                {dk
+                  ? <Sun className="w-4 h-4 text-amber-400" />
+                  : <Moon className="w-4 h-4 text-gray-500" />
+                }
+              </button>
+            </div>
+
+            {/* Divider */}
+            <div className={`h-px w-full ${divider}`} />
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground py-4 text-center">Opening hours not configured by this store.</p>
-        )}
+
+          {/* ── Scrollable content ── */}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-5 pb-6
+              [&::-webkit-scrollbar]:w-1
+              [&::-webkit-scrollbar-track]:bg-transparent
+              [&::-webkit-scrollbar-thumb]:rounded-full
+              [&::-webkit-scrollbar-thumb]:bg-gray-700
+              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {openingHours ? (
+              <div className="space-y-2 pb-2">
+                {DAYS.map(({ key, label }) => {
+                  const day = openingHours[key];
+                  const isToday = key === todayKey;
+                  return (
+                    <div
+                      key={key}
+                      className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}
+                    >
+                      {/* Day label + Today badge */}
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-amber-400" : "text-amber-600") : textPrimary}`}>
+                          {label}
+                        </span>
+                        {isToday && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-amber-500/30 text-amber-300" : "bg-amber-100 text-amber-700"}`}>
+                            Today
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Time or Closed */}
+                      {day?.closed ? (
+                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
+                      ) : day ? (
+                        <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-amber-300" : "text-amber-700") : timeColor}`}>
+                          {day.open}&thinsp;–&thinsp;{day.close}
+                        </span>
+                      ) : (
+                        <span className={`text-[12px] ${textMuted}`}>—</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={`text-center py-12 ${textMuted}`}>
+                <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className={`text-sm font-medium ${textPrimary}`}>No schedule set</p>
+                <p className="text-xs mt-1 opacity-50">This store hasn't configured opening hours yet.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

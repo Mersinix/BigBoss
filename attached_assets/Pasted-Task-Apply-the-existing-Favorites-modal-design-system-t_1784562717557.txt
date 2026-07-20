@@ -1,0 +1,215 @@
+Task: Apply the existing Favorites modal design system to the Coffee Owner Store Opening Hours modal only.
+
+Important context:
+- This task is specifically for the **Store Opening Hours modal** used on the Coffee Owner side.
+- Do not confuse it with the Product Details modal, Pack Details modal, Favorites modal, Store page, or any Admin/Supplier modal.
+- Before making any changes, locate the existing Store Opening Hours modal implementation.
+
+Example content:
+
+PANDA HOOKAH — Opening Hours
+
+Monday (Today)
+09:00 – 18:00
+
+Tuesday
+09:00 – 18:00
+
+Wednesday
+09:00 – 18:00
+
+Thursday
+09:00 – 18:00
+
+Friday
+09:00 – 18:00
+
+Saturday
+09:00 – 14:00
+
+Sunday
+Closed
+
+---
+
+# Important Rules
+
+- Do NOT change any functionality.
+- Do NOT change opening hours logic.
+- Do NOT change business status calculations.
+- Do NOT change timezone handling.
+- Do NOT change "Today" detection.
+- Do NOT change store data.
+- Do NOT change backend logic.
+- Do NOT refactor unrelated code.
+- Do NOT remove any existing information.
+- Keep everything that is not related to the design exactly as it is.
+- Verify all existing synchronization and interactions continue working before and after the changes.
+
+This task is ONLY about:
+- Design.
+- Layout.
+- Responsiveness.
+- Visual consistency.
+- User experience.
+
+---
+
+# Goal
+
+Apply the same design language already implemented in the Favorites modal.
+
+The Store Opening Hours modal should feel like part of the same premium BigBossCoffee design system.
+
+Apply the same:
+
+- iPhone / Apple-inspired modal style.
+- Dark mode default appearance.
+- Light mode support.
+- Colors.
+- Rounded corners.
+- Border radius.
+- Shadows.
+- Typography style.
+- Spacing system.
+- Smooth transitions.
+- Premium clean appearance.
+
+---
+
+# Modal Header
+
+Redesign the modal header using the same style as the Favorites modal.
+
+Keep:
+
+- Store name.
+- "Opening Hours" title.
+
+Center the title cleanly.
+
+Add the same:
+
+- Rounded modal corners.
+- Premium spacing.
+- Fixed header while scrolling (if the content exceeds the modal height).
+- Dark/Light mode toggle using the same behavior as the Favorites modal.
+
+Do not change any functionality.
+
+---
+
+# Opening Hours List
+
+Keep all existing information:
+
+- Monday through Sunday.
+- Opening hours.
+- Closed status.
+- "Today" indicator.
+
+Improve only the UI:
+
+- Better spacing between days.
+- Premium rounded list items/cards.
+- Better typography hierarchy.
+- Better visual separation.
+- Consistent alignment.
+- Apple-inspired appearance.
+
+---
+
+# Today Highlight
+
+Keep the existing "Today" logic.
+
+Improve only the visual design:
+
+- Make today's row stand out using the same design language as the Favorites modal.
+- Keep it elegant and subtle.
+- Do not modify the underlying logic.
+
+---
+
+# Closed Day Design
+
+Keep the existing "Closed" behavior.
+
+Improve only the visual presentation:
+
+- Clear but elegant styling.
+- Same typography hierarchy.
+- Same premium appearance.
+
+Do not change any logic.
+
+---
+
+# Scrolling Behavior
+
+Use the same scrolling behavior as the Favorites modal.
+
+Requirements:
+
+- Modal remains fixed inside the viewport.
+- Header remains fixed.
+- Opening hours list scrolls inside the modal when necessary.
+- No content should overflow outside the modal.
+- Smooth scrolling on desktop, tablet, and mobile.
+
+---
+
+# Responsive Design
+
+Ensure the modal works perfectly on:
+
+- Desktop.
+- Tablet.
+- Mobile.
+
+Verify:
+
+- Modal size.
+- Header.
+- Opening hours list.
+- Touch scrolling.
+- Typography.
+- Spacing.
+- Overflow handling.
+
+No layout breaking.
+
+---
+
+# Dark / Light Mode
+
+Add the same modal-level theme behavior used in the Favorites modal.
+
+Requirements:
+
+- Dark mode by default.
+- Same light mode behavior.
+- Same toggle icon.
+- Theme affects only this modal.
+- Do not modify the application's global theme behavior.
+
+---
+
+# Final Verification
+
+Before completing:
+
+Verify:
+
+- Store name displays correctly.
+- Opening hours remain unchanged.
+- "Today" indicator still works.
+- Closed days still display correctly.
+- All existing functionality remains unchanged.
+- Responsive behavior works correctly.
+- No synchronization issues are introduced.
+- No other pages or components are affected.
+
+Only update the design of the Coffee Owner Store Opening Hours modal.
+
+Do not touch anything else.

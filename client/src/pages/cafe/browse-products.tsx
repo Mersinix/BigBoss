@@ -809,9 +809,9 @@ function FilterBar({
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
               <SelectValue placeholder="Sub-Category" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Sub-Categories</SelectItem>
-              {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>)}
+            <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Sub-Categories</SelectItem>
+              {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{sc.name}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
@@ -820,9 +820,9 @@ function FilterBar({
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
               <SelectValue placeholder="Brand" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Brands</SelectItem>
-              {brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Brands</SelectItem>
+              {brands.map((b) => <SelectItem key={b.id} value={b.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
@@ -831,9 +831,9 @@ function FilterBar({
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
               <SelectValue placeholder="Flavor" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Flavors</SelectItem>
-              {flavors.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+            <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Flavors</SelectItem>
+              {flavors.map((f) => <SelectItem key={f.id} value={f.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
@@ -842,9 +842,9 @@ function FilterBar({
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
               <SelectValue placeholder="Size" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All Sizes</SelectItem>
-              {sizes.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Sizes</SelectItem>
+              {sizes.map((s) => <SelectItem key={s.id} value={s.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
@@ -852,13 +852,13 @@ function FilterBar({
           <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="recommended">Recommended</SelectItem>
-            <SelectItem value="price_asc">Price: Low to High</SelectItem>
-            <SelectItem value="price_desc">Price: High to Low</SelectItem>
-            <SelectItem value="suppliers">Most Suppliers</SelectItem>
+          <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+            <SelectItem value="recommended" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Recommended</SelectItem>
+            <SelectItem value="price_asc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Price: Low to High</SelectItem>
+            <SelectItem value="price_desc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Price: High to Low</SelectItem>
+            <SelectItem value="suppliers" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Most Suppliers</SelectItem>
             {hasSearchLocation && (
-              <SelectItem value="nearest">
+              <SelectItem value="nearest" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>
                 <span className="flex items-center gap-1"><Navigation className="w-3 h-3 inline" /> Nearest First</span>
               </SelectItem>
             )}

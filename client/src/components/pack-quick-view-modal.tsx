@@ -429,6 +429,8 @@ function FlavorDistributionRow({ item, allocations, onChange, isDark }: {
 // ── Product Preview Modal (read-only, opened from inside a Pack) ─────────────
 
 function ProductPreviewModal({ productId, onClose }: { productId: number | null; onClose: () => void }) {
+  const [isDark, setIsDark] = useState(true);
+
   const { data: product, isLoading } = useQuery<ProductWithTaxonomy>({
     queryKey: ["/api/marketplace", productId],
     queryFn: async () => {
@@ -439,39 +441,108 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
     enabled: productId != null,
   });
 
+  const dk = isDark;
+  const bg          = dk ? "bg-gray-900"                    : "bg-white";
+  const textPrimary = dk ? "text-white"                     : "text-gray-900";
+  const textMuted   = dk ? "text-gray-400"                  : "text-gray-500";
+  const imgBg       = dk ? "bg-gray-800"                    : "bg-gray-50";
+  const divider     = dk ? "bg-gray-800"                    : "bg-gray-100";
+  const iconBtn     = dk
+    ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white"
+    : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800";
+
   return (
     <Dialog open={productId != null} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-md w-[calc(100%-2rem)] max-h-[85vh] overflow-y-auto" data-testid="modal-pack-product-preview">
-        <VisuallyHidden>
-          <DialogTitle>Product Preview</DialogTitle>
-        </VisuallyHidden>
-        {isLoading || !product ? (
-          <div className="space-y-4 p-2">
-            <Skeleton className="h-40 w-full rounded-xl" />
-            <Skeleton className="h-6 w-2/3" />
-            <Skeleton className="h-4 w-1/2" />
+      <DialogContent
+        className="max-w-md w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        data-testid="modal-pack-product-preview"
+      >
+        <VisuallyHidden><DialogTitle>Product Preview</DialogTitle></VisuallyHidden>
+
+        <div className={`flex flex-col max-h-[85vh] overflow-hidden transition-colors duration-200 ${bg}`}>
+
+          {/* ── Fixed header ── */}
+          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>Product Preview</span>
+
+              <button
+                onClick={() => setIsDark((d) => !d)}
+                aria-label="Toggle theme"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+              </button>
+            </div>
+            <div className={`h-px w-full ${divider}`} />
           </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="aspect-[16/9] bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center">
-              {product.imageUrl
-                ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-                : <Package className="w-12 h-12 text-gray-200" />
-              }
-            </div>
-            <div>
-              <h3 className="font-bold text-lg text-gray-900" data-testid="text-preview-product-name">{product.name}</h3>
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {product.categoryLabel && <Badge variant="secondary" className="text-[10px]">{product.categoryLabel.name}</Badge>}
-                {product.subCategoryLabel && <Badge variant="outline" className="text-[10px]">{product.subCategoryLabel.name}</Badge>}
-                {product.brandLabel && <Badge className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">{product.brandLabel.name}</Badge>}
+
+          {/* ── Scrollable content ── */}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-5 pb-6
+              [&::-webkit-scrollbar]:w-1
+              [&::-webkit-scrollbar-track]:bg-transparent
+              [&::-webkit-scrollbar-thumb]:rounded-full
+              [&::-webkit-scrollbar-thumb]:bg-gray-700
+              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {isLoading || !product ? (
+              <div className="space-y-4 py-2">
+                <Skeleton className={`h-44 w-full rounded-2xl ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
+                <Skeleton className={`h-5 w-2/3 ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
+                <Skeleton className={`h-4 w-1/2 ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
               </div>
-            </div>
-            {product.description && (
-              <p className="text-sm text-gray-500">{product.description}</p>
+            ) : (
+              <div className="space-y-4">
+                {/* Product image */}
+                <div className={`aspect-video rounded-2xl overflow-hidden flex items-center justify-center ${imgBg}`}>
+                  {product.imageUrl
+                    ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                    : <Package className={`w-12 h-12 ${dk ? "text-gray-600" : "text-gray-200"}`} />
+                  }
+                </div>
+
+                {/* Name + badges */}
+                <div>
+                  <h3 className={`font-bold text-[17px] leading-snug ${textPrimary}`} data-testid="text-preview-product-name">
+                    {product.name}
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5 mt-2.5">
+                    {product.categoryLabel && (
+                      <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-xl border ${dk ? "bg-gray-800 border-gray-700 text-gray-300" : "bg-gray-100 border-gray-200 text-gray-600"}`}>
+                        {product.categoryLabel.name}
+                      </span>
+                    )}
+                    {product.subCategoryLabel && (
+                      <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-xl border ${dk ? "bg-gray-800 border-gray-700/60 text-gray-400" : "bg-white border-gray-200 text-gray-500"}`}>
+                        {product.subCategoryLabel.name}
+                      </span>
+                    )}
+                    {product.brandLabel && (
+                      <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-xl border ${dk ? "bg-amber-500/15 border-amber-500/30 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                        {product.brandLabel.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Description */}
+                {product.description && (
+                  <p className={`text-sm leading-relaxed ${textMuted}`}>{product.description}</p>
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -1,0 +1,352 @@
+Task: Apply the existing Favorites modal design system to the Coffee Owner side only for the UI components listed below.
+
+Important context:
+- This task applies ONLY to the Coffee Owner experience.
+- Do NOT modify the Admin side.
+- Do NOT modify the Supplier side.
+- Do NOT modify the Delivery side.
+- Do NOT modify any business logic.
+- The goal is ONLY to make these modals and picklists use the same premium design language as the Favorites modal.
+
+Before making any changes:
+
+- Analyze each existing modal/component.
+- Compare it with the Favorites modal that has already been implemented.
+- Reuse the same visual language and UX patterns wherever appropriate.
+- Verify that all existing synchronization and interactions continue working before and after the changes.
+
+---
+
+# Global Design Rules
+
+Apply the same design system already implemented for:
+
+- Favorites Modal
+- Product Details Modal
+- Pack Details Modal
+- /products page
+- Store page
+- Principal Navbar
+
+Use the same:
+
+- Apple / iPhone-inspired design.
+- Dark mode by default.
+- Light mode support.
+- Same modal style.
+- Same rounded corners.
+- Same border radius.
+- Same spacing.
+- Same typography.
+- Same shadows.
+- Same transitions.
+- Same premium appearance.
+- Same responsive behavior.
+
+Do NOT redesign them differently.
+Everything should feel like one unified design system.
+
+---
+
+# 1. Pack Modal → Included Product Preview Modal
+
+From:
+
+Pack Details
+
+↓
+
+Included Products
+
+↓
+
+Click any included product
+
+↓
+
+Product Preview modal
+
+Example:
+
+Product Preview
+
+FANTA 25cl
+
+Boisson
+
+Gazouz
+
+Fanta
+
+Fanta
+
+Apply the Favorites modal design system.
+
+Requirements:
+
+- Same modal style.
+- Same rounded design.
+- Same header.
+- Same dark/light mode.
+- Same scrolling behavior.
+- Same spacing.
+- Same typography.
+- Responsive on web/tablet/mobile.
+
+Do NOT change:
+
+- Product information.
+- Product loading.
+- Product navigation.
+- Product preview logic.
+
+---
+
+# 2. Product Details Modal
+
+Apply the same design system to the remaining secondary modals opened from Product Details.
+
+## A. Location Modal
+
+Example:
+
+"Où voulez-vous rechercher ?"
+
+Step 1
+
+Current location
+
+Share current location
+
+Step 2
+
+Selected address
+
+Search radius
+
+Confirm
+
+Apply:
+
+- Same Apple-style modal.
+- Same header.
+- Same dark/light mode.
+- Same scrolling behavior.
+- Same rounded design.
+- Same premium spacing.
+
+Do NOT change:
+
+- Maps.
+- Location logic.
+- Radius selection.
+- Confirmation logic.
+
+---
+
+## B. Review Modal
+
+Example:
+
+Write a Review
+
+Product Review
+
+Supplier Review
+
+Supplier selector
+
+Rating
+
+Comment
+
+Submit Review
+
+Apply:
+
+- Same Favorites modal design.
+- Same switcher style.
+- Same inputs.
+- Same typography.
+- Same spacing.
+- Same responsive behavior.
+
+Do NOT change:
+
+- Reviews logic.
+- Ratings.
+- Supplier selection.
+- Submission.
+- Existing reviews.
+
+---
+
+# 3. Login / Register Modal
+
+Apply the same Favorites modal design system.
+
+Includes:
+
+Login
+
+Register
+
+Account type
+
+Cafe registration
+
+Inputs
+
+Buttons
+
+Tabs
+
+Requirements:
+
+- Same Apple-inspired appearance.
+- Same rounded design.
+- Same dark/light mode.
+- Same switcher style for:
+  - Login
+  - Register
+- Same responsive layout.
+- Same premium spacing.
+
+Do NOT change:
+
+- Authentication.
+- Registration.
+- Validation.
+- Account creation.
+- Approval flow.
+
+---
+
+# 4. SHOP Cart Modal / Drawer
+
+Apply the same design language.
+
+Includes:
+
+Products
+
+Pack items
+
+Delivery address
+
+Address selector
+
+Courier instructions
+
+Totals
+
+Checkout
+
+Clear cart
+
+Requirements:
+
+- Same premium cards.
+- Same typography.
+- Same Apple-inspired layout.
+- Same rounded sections.
+- Same buttons.
+- Same dark/light mode.
+- Same spacing.
+- Same responsive behavior.
+
+Do NOT change:
+
+- Cart logic.
+- Checkout.
+- Quantity selectors.
+- Address logic.
+- Price calculations.
+- Pack calculations.
+
+---
+
+# 5. Filter Picklists
+
+Apply the same design system to every filter dropdown/picklist used on:
+
+- /products page
+- Store page
+
+Including:
+
+- Sub Category
+- Brand
+- Flavor
+- Size
+- Recommended
+
+Apply:
+
+- Same Favorites modal design language.
+- Same rounded popup/dropdown.
+- Same Apple-inspired appearance.
+- Same typography.
+- Same spacing.
+- Same hover states.
+- Same selected states.
+- Same dark/light mode.
+- Same responsive behavior.
+
+Do NOT change:
+
+- Filtering logic.
+- Search logic.
+- Selected values.
+- Existing options.
+- Backend behavior.
+
+---
+
+# General Requirements
+
+Every modal should now share the same experience:
+
+- Same opening animation.
+- Same closing animation.
+- Same rounded corners.
+- Same spacing.
+- Same header style.
+- Same typography.
+- Same dark/light theme behavior.
+- Same responsive layout.
+- Same scrolling behavior.
+- Same premium Apple-inspired appearance.
+
+Do not create a different design for each modal.
+
+Everything should look like it belongs to the same BigBossCoffee design system.
+
+---
+
+# Final Verification
+
+Before completing:
+
+Verify that:
+
+- No functionality changed.
+- No business logic changed.
+- Authentication still works.
+- Reviews still work.
+- Maps still work.
+- Cart still works.
+- Checkout still works.
+- Product preview still works.
+- Pack preview still works.
+- Filters still work.
+- Product Detail modal still works.
+- Pack Detail modal still works.
+- Favorites still work.
+- Navigation still works.
+- No synchronization issues were introduced.
+- No other pages or components were modified.
+
+Only update the UI/UX of the listed Coffee Owner modals and filter picklists.
+
+Do not touch anything else.

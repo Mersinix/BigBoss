@@ -931,9 +931,9 @@ export default function StoreDetailPage() {
                     <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
                       <SelectValue placeholder="Sub-Category" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All Sub-Categories</SelectItem>
-                      {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>)}
+                    <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                      <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Sub-Categories</SelectItem>
+                      {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{sc.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -942,9 +942,9 @@ export default function StoreDetailPage() {
                     <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
                       <SelectValue placeholder="Brand" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All Brands</SelectItem>
-                      {brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                      <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Brands</SelectItem>
+                      {brands.map((b) => <SelectItem key={b.id} value={b.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{b.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}

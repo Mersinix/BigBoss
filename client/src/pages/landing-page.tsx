@@ -11,12 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
   ShoppingBag, Printer, Coffee, Megaphone, MapPin,
   ChevronDown, Instagram, Facebook, Mail,
   Phone, ArrowRight, CheckCircle, Building2, Truck, GraduationCap, Users, ChevronRight,
-  ChevronLeft, Clock, Globe, Moon, Sun
+  ChevronLeft, Clock, Globe, Moon, Sun, X
 } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import type { CategoryWithCount, LandingConfig, HeroSlide } from "@shared/schema";
@@ -1105,146 +1106,265 @@ export default function LandingPage() {
         onClose={handleAuthLocationClose} onConfirm={handleAuthLocationConfirm} />
 
       {/* ── Auth modal ── */}
-      <Dialog open={authModalOpen} onOpenChange={(open) => { if (!open) { setRegistrationDone(false); setLoginPendingState(false); } setAuthModalOpen(open); }}>
-        <DialogContent className="sm:max-w-md w-full rounded-3xl p-0 overflow-hidden max-h-[95vh] flex flex-col">
-          <div className="overflow-y-auto flex-1">
-            <div className="p-6 sm:p-8">
-              {registrationDone ? (
-                <div className="flex flex-col items-center text-center gap-5 py-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-400 flex items-center justify-center"><Clock className="w-8 h-8 text-amber-500" /></div>
-                  <div className="space-y-2">
-                    <h2 className="font-bold text-xl text-foreground">Compte créé avec succès !</h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">Votre compte est en <strong>attente d'approbation</strong> par un administrateur. L'accès sera disponible dès validation.</p>
-                  </div>
-                  <Button className="w-full rounded-xl py-5 text-base" data-testid="button-registration-done-close"
-                    onClick={() => { setRegistrationDone(false); setAuthModalOpen(false); }}>Compris</Button>
-                </div>
-              ) : loginPendingState ? (
-                <div className="flex flex-col items-center text-center gap-5 py-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-400 flex items-center justify-center"><Clock className="w-8 h-8 text-amber-500" /></div>
-                  <div className="space-y-2">
-                    <h2 className="font-bold text-xl text-foreground">Compte en attente</h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">Votre compte est en <strong>attente d'approbation</strong>. Vous serez notifié dès validation.</p>
-                  </div>
-                  <Button className="w-full rounded-xl py-5 text-base" data-testid="button-login-pending-close"
-                    onClick={() => { setLoginPendingState(false); setAuthModalOpen(false); fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => { queryClient.setQueryData(["/api/auth/me"], null); }); }}>
-                    Compris
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="bg-primary p-2 rounded-xl text-white shrink-0"><Coffee className="w-5 h-5" /></div>
-                    <div>
-                      <h2 className="font-bold text-xl text-foreground leading-tight">Bienvenue</h2>
-                      <p className="text-sm text-muted-foreground">Connectez-vous ou créez un compte pour démarrer.</p>
+      {(() => {
+        const dk = isDark;
+        const modalBg   = dk ? "bg-gray-900"                    : "bg-white";
+        const textPri   = dk ? "text-white"                     : "text-gray-900";
+        const textMut   = dk ? "text-gray-400"                  : "text-gray-500";
+        const divider   = dk ? "bg-gray-800"                    : "bg-gray-100";
+        const iconBtn   = dk
+          ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white"
+          : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800";
+        const swBg      = dk ? "bg-gray-800"                    : "bg-gray-100";
+        const swActive  = dk ? "bg-gray-700 text-white shadow-sm"   : "bg-white text-amber-600 shadow-sm";
+        const swInact   = dk ? "text-gray-400 hover:text-gray-200"  : "text-gray-500 hover:text-gray-700";
+        const inputCls  = dk
+          ? "rounded-xl px-4 py-5 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus-visible:border-amber-500 focus-visible:ring-amber-500/20"
+          : "rounded-xl px-4 py-5 bg-gray-50 border-gray-200";
+        const labelCls  = dk ? "text-gray-300" : "";
+        const formDark  = dk
+          ? "[&_input]:bg-gray-800 [&_input]:border-gray-700 [&_input]:text-white [&_input]:placeholder:text-gray-500 [&_label]:text-gray-300 [&_textarea]:bg-gray-800 [&_textarea]:border-gray-700 [&_textarea]:text-white"
+          : "";
+        return (
+          <Dialog open={authModalOpen} onOpenChange={(open) => { if (!open) { setRegistrationDone(false); setLoginPendingState(false); } setAuthModalOpen(open); }}>
+            <DialogContent className="sm:max-w-md w-full p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden max-h-[95vh]">
+              <VisuallyHidden><DialogTitle>Bienvenue sur BigBossCoffee</DialogTitle></VisuallyHidden>
+              <div className={`flex flex-col max-h-[95vh] overflow-hidden transition-colors duration-200 ${modalBg}`}>
+
+                {/* Fixed header */}
+                <div className={`shrink-0 px-5 pt-5 pb-4 ${modalBg}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <button
+                      type="button"
+                      onClick={() => { setRegistrationDone(false); setLoginPendingState(false); setAuthModalOpen(false); }}
+                      aria-label="Close"
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <div className="bg-amber-500 p-1.5 rounded-xl shrink-0"><Coffee className="w-3.5 h-3.5 text-white" /></div>
+                      <span className={`text-[13px] font-semibold ${textPri}`}>BigBossCoffee</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsDark((d) => !d)}
+                      aria-label="Toggle theme"
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+                    >
+                      {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+                    </button>
                   </div>
-                  <Tabs value={authTab} onValueChange={(v) => setAuthTab(v as "login" | "register")} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 mb-5 p-1 bg-secondary/50 rounded-xl">
-                      <TabsTrigger value="login" className="rounded-lg py-2" data-testid="tab-login">Connexion</TabsTrigger>
-                      <TabsTrigger value="register" className="rounded-lg py-2" data-testid="tab-register">Inscription</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="login" className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                      <form onSubmit={loginForm.handleSubmit(handleModalLogin)} className="space-y-4">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="login-email">Email ou téléphone</Label>
-                          <Input id="login-email" placeholder="email@exemple.com ou +216…" data-testid="input-login-email" className="rounded-xl px-4 py-5 bg-secondary/30 border-border/50" {...loginForm.register("email")} />
-                          {loginForm.formState.errors.email && <p className="text-xs text-destructive">{loginForm.formState.errors.email.message}</p>}
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="login-password">Mot de passe</Label>
-                          <Input id="login-password" type="password" placeholder="••••••••" data-testid="input-login-password" className="rounded-xl px-4 py-5 bg-secondary/30 border-border/50" {...loginForm.register("password")} />
-                          {loginForm.formState.errors.password && <p className="text-xs text-destructive">{loginForm.formState.errors.password.message}</p>}
-                        </div>
-                        <Button type="submit" data-testid="button-login" disabled={isDoingLogin} className="w-full rounded-xl py-5 text-base shadow-lg shadow-primary/25 mt-2">
-                          {isDoingLogin ? "Connexion..." : <span className="flex items-center gap-2">Se connecter <ArrowRight className="w-4 h-4" /></span>}
-                        </Button>
-                      </form>
-                      <p className="text-center text-sm text-muted-foreground pt-2">Pas encore de compte ?{" "}
-                        <button className="text-primary font-medium hover:underline" onClick={() => setAuthTab("register")}>S'inscrire</button>
-                      </p>
-                      <div className="flex justify-center pt-1">
-                        <button type="button" data-testid="button-back-from-login" onClick={() => setAuthModalOpen(false)}
-                          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                          <ChevronLeft className="w-4 h-4" /> Retour
-                        </button>
+                  <div className={`h-px w-full ${divider}`} />
+                </div>
+
+                {/* Scrollable content */}
+                <div
+                  className="overflow-y-auto flex-1 px-5 pb-6
+                    [&::-webkit-scrollbar]:w-1
+                    [&::-webkit-scrollbar-track]:bg-transparent
+                    [&::-webkit-scrollbar-thumb]:rounded-full
+                    [&::-webkit-scrollbar-thumb]:bg-gray-700"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  {registrationDone ? (
+                    <div className="flex flex-col items-center text-center gap-5 py-8">
+                      <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dk ? "bg-amber-500/15" : "bg-amber-50"}`}>
+                        <Clock className="w-8 h-8 text-amber-500" />
                       </div>
-                    </TabsContent>
-                    <TabsContent value="register" className="animate-in fade-in slide-in-from-left-4 duration-300">
-                      <button type="button" data-testid="button-back-from-register" onClick={() => setAuthTab("login")}
-                        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
-                        <ChevronLeft className="w-4 h-4" /> Retour à la connexion
-                      </button>
-                      <div className="mb-4">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-widest mb-2 block">Type de compte</Label>
-                        <button type="button" data-testid="button-select-role" onClick={() => setRoleSubModalOpen(true)}
-                          className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${roleConfig.bg} ${roleConfig.border} hover:shadow-sm`}>
-                          <div className={`w-9 h-9 ${roleConfig.iconBg} rounded-lg flex items-center justify-center shrink-0`}>
-                            <roleConfig.icon className="w-4 h-4 text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm text-gray-900">{roleConfig.label}</p>
-                            <p className="text-xs text-gray-500 truncate">{roleConfig.desc}</p>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                        </button>
-                        <Badge variant="outline" className="mt-2 text-xs border-amber-200 text-amber-700 bg-amber-50">En attente d'approbation</Badge>
+                      <div className="space-y-2">
+                        <h2 className={`font-bold text-xl ${textPri}`}>Compte créé avec succès !</h2>
+                        <p className={`text-sm leading-relaxed max-w-xs mx-auto ${textMut}`}>Votre compte est en <strong className={dk ? "text-gray-200" : "text-gray-700"}>attente d'approbation</strong> par un administrateur. L'accès sera disponible dès validation.</p>
                       </div>
-                      {selectedRole === "CAFE_OWNER"          && <CafeForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                      {selectedRole === "SUPPLIER"            && <SupplierForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                      {selectedRole === "DELIVERY_COMPANY"    && <DeliveryForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                      {selectedRole === "PRINTER"             && <PrinterForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                      {selectedRole === "MARKETING"           && <MarketingForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                      {selectedRole === "BARISTA_ACADEMY"     && <BaristaAcademyForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                      {selectedRole === "BARISTA_MARKETPLACE" && <BaristaMarketplaceForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                      <p className="text-center text-sm text-muted-foreground pt-3">Déjà un compte ?{" "}
-                        <button className="text-primary font-medium hover:underline" onClick={() => setAuthTab("login")}>Se connecter</button>
-                      </p>
-                    </TabsContent>
-                  </Tabs>
-                </>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+                      <button
+                        type="button"
+                        className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-lg shadow-amber-500/20"
+                        data-testid="button-registration-done-close"
+                        onClick={() => { setRegistrationDone(false); setAuthModalOpen(false); }}
+                      >Compris</button>
+                    </div>
+                  ) : loginPendingState ? (
+                    <div className="flex flex-col items-center text-center gap-5 py-8">
+                      <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dk ? "bg-amber-500/15" : "bg-amber-50"}`}>
+                        <Clock className="w-8 h-8 text-amber-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <h2 className={`font-bold text-xl ${textPri}`}>Compte en attente</h2>
+                        <p className={`text-sm leading-relaxed max-w-xs mx-auto ${textMut}`}>Votre compte est en <strong className={dk ? "text-gray-200" : "text-gray-700"}>attente d'approbation</strong>. Vous serez notifié dès validation.</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-lg shadow-amber-500/20"
+                        data-testid="button-login-pending-close"
+                        onClick={() => { setLoginPendingState(false); setAuthModalOpen(false); fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => { queryClient.setQueryData(["/api/auth/me"], null); }); }}
+                      >Compris</button>
+                    </div>
+                  ) : (
+                    <div className="pt-2">
+                      {/* Tab switcher — pill style */}
+                      <div className={`flex gap-1 rounded-2xl p-1 mb-5 ${swBg}`}>
+                        <button
+                          type="button"
+                          data-testid="tab-login"
+                          onClick={() => setAuthTab("login")}
+                          className={`flex-1 py-2 text-[12px] font-semibold rounded-xl transition-all ${authTab === "login" ? swActive : swInact}`}
+                        >Connexion</button>
+                        <button
+                          type="button"
+                          data-testid="tab-register"
+                          onClick={() => setAuthTab("register")}
+                          className={`flex-1 py-2 text-[12px] font-semibold rounded-xl transition-all ${authTab === "register" ? swActive : swInact}`}
+                        >Inscription</button>
+                      </div>
+
+                      {/* LOGIN */}
+                      {authTab === "login" && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                          <form onSubmit={loginForm.handleSubmit(handleModalLogin)} className="space-y-4">
+                            <div className="space-y-1.5">
+                              <label htmlFor="login-email" className={`text-xs font-semibold ${labelCls || "text-gray-700"}`}>Email ou téléphone</label>
+                              <Input id="login-email" placeholder="email@exemple.com ou +216…" data-testid="input-login-email" className={inputCls} {...loginForm.register("email")} />
+                              {loginForm.formState.errors.email && <p className="text-xs text-red-500">{loginForm.formState.errors.email.message}</p>}
+                            </div>
+                            <div className="space-y-1.5">
+                              <label htmlFor="login-password" className={`text-xs font-semibold ${labelCls || "text-gray-700"}`}>Mot de passe</label>
+                              <Input id="login-password" type="password" placeholder="••••••••" data-testid="input-login-password" className={inputCls} {...loginForm.register("password")} />
+                              {loginForm.formState.errors.password && <p className="text-xs text-red-500">{loginForm.formState.errors.password.message}</p>}
+                            </div>
+                            <button
+                              type="submit"
+                              data-testid="button-login"
+                              disabled={isDoingLogin}
+                              className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white transition-all shadow-lg shadow-amber-500/20 mt-2"
+                            >
+                              {isDoingLogin ? "Connexion..." : <span className="flex items-center justify-center gap-2">Se connecter <ArrowRight className="w-4 h-4" /></span>}
+                            </button>
+                          </form>
+                          <p className={`text-center text-sm pt-1 ${textMut}`}>Pas encore de compte ?{" "}
+                            <button className="text-amber-500 font-medium hover:underline" onClick={() => setAuthTab("register")}>S'inscrire</button>
+                          </p>
+                          <div className="flex justify-center">
+                            <button type="button" data-testid="button-back-from-login" onClick={() => setAuthModalOpen(false)}
+                              className={`flex items-center gap-1 text-sm transition-colors ${textMut} hover:${textPri}`}>
+                              <ChevronLeft className="w-4 h-4" /> Retour
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* REGISTER */}
+                      {authTab === "register" && (
+                        <div className="animate-in fade-in slide-in-from-left-4 duration-300">
+                          <button type="button" data-testid="button-back-from-register" onClick={() => setAuthTab("login")}
+                            className={`flex items-center gap-1 text-sm transition-colors mb-4 ${textMut}`}>
+                            <ChevronLeft className="w-4 h-4" /> Retour à la connexion
+                          </button>
+                          <div className="mb-4">
+                            <p className={`text-[10px] font-semibold uppercase tracking-widest mb-2 ${textMut}`}>Type de compte</p>
+                            <button type="button" data-testid="button-select-role" onClick={() => setRoleSubModalOpen(true)}
+                              className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all text-left ${dk ? "border-gray-700 hover:border-gray-600 bg-gray-800" : `${roleConfig.bg} ${roleConfig.border} hover:shadow-sm`}`}>
+                              <div className={`w-9 h-9 ${roleConfig.iconBg} rounded-xl flex items-center justify-center shrink-0`}>
+                                <roleConfig.icon className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-semibold text-sm ${textPri}`}>{roleConfig.label}</p>
+                                <p className={`text-xs truncate ${textMut}`}>{roleConfig.desc}</p>
+                              </div>
+                              <ChevronRight className={`w-4 h-4 shrink-0 ${textMut}`} />
+                            </button>
+                            <span className="mt-2 inline-flex text-[10px] font-semibold px-2.5 py-1 rounded-full border border-amber-500/30 text-amber-500 bg-amber-500/10">
+                              En attente d'approbation
+                            </span>
+                          </div>
+                          <div className={formDark}>
+                            {selectedRole === "CAFE_OWNER"          && <CafeForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                            {selectedRole === "SUPPLIER"            && <SupplierForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                            {selectedRole === "DELIVERY_COMPANY"    && <DeliveryForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                            {selectedRole === "PRINTER"             && <PrinterForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                            {selectedRole === "MARKETING"           && <MarketingForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                            {selectedRole === "BARISTA_ACADEMY"     && <BaristaAcademyForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                            {selectedRole === "BARISTA_MARKETPLACE" && <BaristaMarketplaceForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                          </div>
+                          <p className={`text-center text-sm pt-3 ${textMut}`}>Déjà un compte ?{" "}
+                            <button className="text-amber-500 font-medium hover:underline" onClick={() => setAuthTab("login")}>Se connecter</button>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* ── Role selection sub-modal ── */}
-      <Dialog open={roleSubModalOpen} onOpenChange={setRoleSubModalOpen}>
-        <DialogContent className="sm:max-w-lg rounded-3xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
-          <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-5 text-white">
-            <div className="flex items-center gap-3">
-              <button type="button" data-testid="button-back-role-modal" onClick={() => setRoleSubModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors shrink-0">
-                <ChevronLeft className="w-4 h-4 text-white" />
-              </button>
-              <div>
-                <DialogTitle className="text-lg font-bold text-white leading-tight">Choisissez votre type de compte</DialogTitle>
-                <p className="text-amber-100 text-sm mt-0.5">Sélectionnez le profil qui correspond à votre activité.</p>
+      {(() => {
+        const dk = isDark;
+        const modalBg  = dk ? "bg-gray-900" : "bg-white";
+        const textPri  = dk ? "text-white"  : "text-gray-900";
+        const textMut  = dk ? "text-gray-400" : "text-gray-500";
+        return (
+          <Dialog open={roleSubModalOpen} onOpenChange={setRoleSubModalOpen}>
+            <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden max-h-[90vh]">
+              <div className={`flex flex-col max-h-[90vh] overflow-hidden ${modalBg}`}>
+                {/* Amber gradient header */}
+                <div className="bg-gradient-to-br from-amber-500 to-amber-600 px-5 pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      data-testid="button-back-role-modal"
+                      onClick={() => setRoleSubModalOpen(false)}
+                      className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors shrink-0"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-white" />
+                    </button>
+                    <div>
+                      <DialogTitle className="text-[15px] font-bold text-white leading-tight">Choisissez votre type de compte</DialogTitle>
+                      <p className="text-amber-100 text-[12px] mt-0.5">Sélectionnez le profil qui correspond à votre activité.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scrollable role cards */}
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto px-5 py-4 pb-6
+                    [&::-webkit-scrollbar]:w-1
+                    [&::-webkit-scrollbar-track]:bg-transparent
+                    [&::-webkit-scrollbar-thumb]:rounded-full
+                    [&::-webkit-scrollbar-thumb]:bg-gray-700"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <div className="flex flex-col gap-2.5">
+                    {filteredRoles.map((role) => (
+                      <button
+                        key={role.id}
+                        data-testid={`role-card-${role.id}`}
+                        onClick={() => { setSelectedRole(role.id); setRoleSubModalOpen(false); }}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left w-full group ${
+                          dk
+                            ? `border-gray-700 hover:border-gray-600 hover:bg-gray-800/80 ${selectedRole === role.id ? "border-amber-500/60 bg-amber-500/10" : "bg-gray-800"}`
+                            : `${role.bg} ${role.border} ${role.hover} hover:shadow-md ${selectedRole === role.id ? "ring-2 ring-primary ring-offset-1" : ""}`
+                        }`}
+                      >
+                        <div className={`w-11 h-11 ${role.iconBg} rounded-xl flex items-center justify-center shrink-0`}>
+                          <role.icon className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-bold text-sm ${textPri}`}>{role.label}</p>
+                          <p className={`text-xs leading-relaxed mt-0.5 ${textMut}`}>{role.desc}</p>
+                        </div>
+                        <ArrowRight className={`w-4 h-4 shrink-0 transition-colors ${dk ? "text-gray-600 group-hover:text-amber-400" : "text-gray-400 group-hover:text-primary"}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="p-5 overflow-y-auto flex-1">
-            <div className="flex flex-col gap-3">
-              {filteredRoles.map((role) => (
-                <button key={role.id} data-testid={`role-card-${role.id}`}
-                  onClick={() => { setSelectedRole(role.id); setRoleSubModalOpen(false); }}
-                  className={`flex items-center gap-4 p-4 rounded-2xl border-2 ${role.bg} ${role.border} ${role.hover} transition-all hover:shadow-md text-left w-full group ${selectedRole === role.id ? "ring-2 ring-primary ring-offset-1" : ""}`}>
-                  <div className={`w-11 h-11 ${role.iconBg} rounded-xl flex items-center justify-center shrink-0`}>
-                    <role.icon className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-900 text-sm">{role.label}</p>
-                    <p className="text-xs text-gray-500 leading-relaxed mt-0.5">{role.desc}</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-400 shrink-0 group-hover:text-primary transition-colors" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }

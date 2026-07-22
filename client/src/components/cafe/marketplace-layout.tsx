@@ -948,7 +948,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
                 <div key={i} className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
                     m.from === "me"
-                      ? "bg-blue-600 text-white rounded-br-sm"
+                      ? "bg-amber-600 text-white rounded-br-sm"
                       : `${chatBubbleBg} rounded-bl-sm`
                   }`}>
                     {m.text}
@@ -1037,7 +1037,7 @@ function DraggableChatButton({ onClick, isDark }: { onClick: () => void; isDark:
       style={{ left: pos.x, top: pos.y, touchAction: "none" }}
       className={`fixed z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-shadow select-none cursor-grab active:cursor-grabbing ${
         isDark
-          ? "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-blue-500/30 hover:shadow-blue-500/50"
+          ? "bg-gradient-to-br from-yellow-400 to-yellow-700 text-white shadow-amber-500/30 hover:shadow-amber-500/50"
           : "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-blue-400/30 hover:shadow-blue-500/50"
       }`}
       data-testid="button-chat-float"

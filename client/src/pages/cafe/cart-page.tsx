@@ -172,13 +172,13 @@ export default function CartPage() {
 
   return (
     <div className={`min-h-screen transition-colors duration-200 ${pageBg}`}>
-      <div className="max-w-5xl mx-auto space-y-6 p-6">
+      <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6 p-4 sm:p-6">
 
         {/* ── Page header ── */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className={`text-2xl font-bold tracking-tight ${textPrimary}`}>Votre panier</h1>
-            <p className={`mt-1 ${textMuted}`}>
+            <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${textPrimary}`}>Votre panier</h1>
+            <p className={`mt-1 text-sm ${textMuted}`}>
               {items.length + packItems.length + printItems.length} article{items.length + packItems.length + printItems.length !== 1 ? "s" : ""}
               {hasShop && hasPrint ? " · SHOP + PRINT" : hasShop ? " · SHOP" : " · PRINT"}
             </p>
@@ -187,13 +187,13 @@ export default function CartPage() {
           <button
             onClick={() => setIsDark((d) => !d)}
             aria-label="Toggle theme"
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${toggleBtn}`}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 ${toggleBtn}`}
           >
             {dk ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
           <div className="lg:col-span-2 space-y-4">
 
             {/* ── SHOP Items ── */}
@@ -219,8 +219,8 @@ export default function CartPage() {
                         {group.items.map((item) => {
                           const variantLabel = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
                           return (
-                            <div key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`} className="flex gap-3 p-4" data-testid={`cart-item-${item.listingId}`}>
-                              <div className={`w-16 h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
+                            <div key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`} className="flex gap-3 p-3 sm:p-4" data-testid={`cart-item-${item.listingId}`}>
+                              <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
                                 {item.productImageUrl ? (
                                   <img src={item.productImageUrl} className="w-full h-full object-cover" alt="" />
                                 ) : (
@@ -229,17 +229,17 @@ export default function CartPage() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className={`font-medium text-sm truncate ${textPrimary}`}>{item.productName}</p>
-                                {variantLabel && <p className={`text-xs ${textMuted}`}>{variantLabel}</p>}
+                                {variantLabel && <p className={`text-xs truncate ${textMuted}`}>{variantLabel}</p>}
                                 <p className={`text-xs ${textMuted}`}>{formatCurrency(item.unitPrice)} chacun</p>
-                                <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <div className={`flex items-center border rounded-xl overflow-hidden ${borderClr}`}>
                                     <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, Math.max(1, item.quantity - 1))} data-testid={`button-decrease-${item.listingId}`}><Minus className={`w-3 h-3 ${textMuted}`} /></button>
-                                    <span className={`px-3 text-sm font-medium w-8 text-center ${textPrimary}`}>{item.quantity}</span>
+                                    <span className={`px-2 sm:px-3 text-sm font-medium w-7 sm:w-8 text-center ${textPrimary}`}>{item.quantity}</span>
                                     <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, item.quantity + 1)} data-testid={`button-increase-${item.listingId}`}><Plus className={`w-3 h-3 ${textMuted}`} /></button>
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex flex-col items-end gap-2 shrink-0">
+                              <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
                                 <p className={`font-bold text-sm ${textPrimary}`}>{formatCurrency(item.unitPrice * item.quantity)}</p>
                                 <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removeItem(item.listingId, item.flavorId, item.sizeId)} data-testid={`button-remove-${item.listingId}`}><Trash2 className="w-4 h-4" /></button>
                               </div>
@@ -253,16 +253,16 @@ export default function CartPage() {
 
                 {packItems.map((pack) => (
                   <div key={`pack-${pack.packId}`} className={`border rounded-2xl overflow-hidden shadow-sm ${dk ? "bg-gray-800 border-amber-500/25" : "bg-white border-amber-100"}`} data-testid={`cart-pack-${pack.packId}`}>
-                    <div className={`px-4 py-3 border-b flex items-center justify-between ${dk ? "bg-amber-500/10 border-amber-500/25" : "bg-amber-50 border-amber-100"}`}>
-                      <div className="flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-amber-500" />
-                        <span className={`font-semibold text-sm ${dk ? "text-amber-400" : "text-amber-700"}`}>{pack.supplierName} · Pack</span>
+                    <div className={`px-3 sm:px-4 py-3 border-b flex items-center justify-between gap-2 ${dk ? "bg-amber-500/10 border-amber-500/25" : "bg-amber-50 border-amber-100"}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Layers className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span className={`font-semibold text-sm truncate ${dk ? "text-amber-400" : "text-amber-700"}`}>{pack.supplierName} · Pack</span>
                       </div>
-                      <span className={`text-sm font-medium ${dk ? "text-amber-400" : "text-amber-700"}`}>{formatCurrency(pack.unitPrice * pack.quantity)}</span>
+                      <span className={`text-sm font-medium shrink-0 ${dk ? "text-amber-400" : "text-amber-700"}`}>{formatCurrency(pack.unitPrice * pack.quantity)}</span>
                     </div>
-                    <div className="p-4">
+                    <div className="p-3 sm:p-4">
                       <div className="flex gap-3">
-                        <div className={`w-16 h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
+                        <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
                           {pack.packImageUrl ? (
                             <img src={pack.packImageUrl} className="w-full h-full object-cover" alt="" />
                           ) : (
@@ -280,12 +280,12 @@ export default function CartPage() {
                           <div className="flex items-center gap-2 mt-2">
                             <div className={`flex items-center border rounded-xl overflow-hidden ${borderClr}`}>
                               <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updatePackQuantity(pack.packId, Math.max(1, pack.quantity - 1))} data-testid={`button-decrease-pack-${pack.packId}`}><Minus className={`w-3 h-3 ${textMuted}`} /></button>
-                              <span className={`px-3 text-sm font-medium w-8 text-center ${textPrimary}`}>{pack.quantity}</span>
+                              <span className={`px-2 sm:px-3 text-sm font-medium w-7 sm:w-8 text-center ${textPrimary}`}>{pack.quantity}</span>
                               <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updatePackQuantity(pack.packId, pack.quantity + 1)} data-testid={`button-increase-pack-${pack.packId}`}><Plus className={`w-3 h-3 ${textMuted}`} /></button>
                             </div>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
                           <p className={`font-bold text-sm ${textPrimary}`}>{formatCurrency(pack.unitPrice * pack.quantity)}</p>
                           <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePackItem(pack.packId)} data-testid={`button-remove-pack-${pack.packId}`}><Trash2 className="w-4 h-4" /></button>
                         </div>
@@ -309,16 +309,16 @@ export default function CartPage() {
                   const sizeEntries = Object.entries(item.sizeMatrix).filter(([, qty]) => qty > 0);
                   return (
                     <div key={item.id} className={`border rounded-2xl overflow-hidden shadow-sm ${dk ? "bg-gray-800 border-blue-500/25" : "bg-white border-blue-100"}`} data-testid={`cart-print-item-${item.id}`}>
-                      <div className={`px-4 py-3 border-b flex items-center justify-between ${dk ? "bg-blue-500/10 border-blue-500/25" : "bg-blue-50 border-blue-100"}`}>
-                        <div className="flex items-center gap-2">
-                          <Printer className={`w-4 h-4 ${dk ? "text-blue-400" : "text-blue-600"}`} />
-                          <span className={`font-semibold text-sm ${dk ? "text-blue-400" : "text-blue-700"}`}>{item.brandName}</span>
+                      <div className={`px-3 sm:px-4 py-3 border-b flex items-center justify-between gap-2 ${dk ? "bg-blue-500/10 border-blue-500/25" : "bg-blue-50 border-blue-100"}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Printer className={`w-4 h-4 shrink-0 ${dk ? "text-blue-400" : "text-blue-600"}`} />
+                          <span className={`font-semibold text-sm truncate ${dk ? "text-blue-400" : "text-blue-700"}`}>{item.brandName}</span>
                         </div>
-                        <span className={`text-sm font-medium ${dk ? "text-blue-400" : "text-blue-700"}`}>{formatCurrency(item.unitPrice * item.totalQuantity)}</span>
+                        <span className={`text-sm font-medium shrink-0 ${dk ? "text-blue-400" : "text-blue-700"}`}>{formatCurrency(item.unitPrice * item.totalQuantity)}</span>
                       </div>
-                      <div className="p-4">
+                      <div className="p-3 sm:p-4">
                         <div className="flex gap-3">
-                          <div className={`w-16 h-16 rounded-xl overflow-hidden shrink-0 border ${dk ? "bg-gray-700 border-gray-700" : "bg-white border-gray-100"}`}>
+                          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 border ${dk ? "bg-gray-700 border-gray-700" : "bg-white border-gray-100"}`}>
                             {item.uploadedFileDataUrl && !isPdf ? (
                               <img src={item.uploadedFileDataUrl} className="w-full h-full object-cover" alt="Design" />
                             ) : item.printProductImage ? (
@@ -330,21 +330,21 @@ export default function CartPage() {
                             )}
                           </div>
                           <div className="flex-1 min-w-0 space-y-1">
-                            <p className={`font-semibold text-sm ${textPrimary}`}>{item.printProductName}</p>
+                            <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.printProductName}</p>
                             {item.uploadedFileName && (
                               <p className={`text-xs truncate ${dk ? "text-blue-400" : "text-blue-600"}`}>📎 {item.uploadedFileName}</p>
                             )}
                             <div className="flex flex-wrap gap-1.5 mt-1">
                               {item.primaryColor && (
                                 <div className={`flex items-center gap-1 text-xs ${textMuted}`}>
-                                  <div className="w-3 h-3 rounded-full border border-gray-400/30" style={{ backgroundColor: item.primaryColor }} />
-                                  <span>Couleur 1</span>
+                                  <div className="w-3 h-3 rounded-full border border-gray-400/30 shrink-0" style={{ backgroundColor: item.primaryColor }} />
+                                  <span>C1</span>
                                 </div>
                               )}
                               {item.secondaryColor && (
                                 <div className={`flex items-center gap-1 text-xs ${textMuted}`}>
-                                  <div className="w-3 h-3 rounded-full border border-gray-400/30" style={{ backgroundColor: item.secondaryColor }} />
-                                  <span>Couleur 2</span>
+                                  <div className="w-3 h-3 rounded-full border border-gray-400/30 shrink-0" style={{ backgroundColor: item.secondaryColor }} />
+                                  <span>C2</span>
                                 </div>
                               )}
                               {item.material && (
@@ -362,12 +362,12 @@ export default function CartPage() {
                                 ))}
                               </div>
                             )}
-                            <div className={`flex items-center gap-3 text-xs mt-1 ${textMuted}`}>
+                            <div className={`flex items-center gap-2 flex-wrap text-xs mt-1 ${textMuted}`}>
                               <span>{item.totalQuantity} {item.priceUnit}(s)</span>
                               <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{item.deliveryTime}</span>
                             </div>
                           </div>
-                          <div className="flex flex-col items-end gap-2 shrink-0">
+                          <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
                             <p className={`font-bold text-sm ${textPrimary}`}>{formatCurrency(item.unitPrice * item.totalQuantity)}</p>
                             <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePrintItem(item.id)} data-testid={`button-remove-print-${item.id}`}>
                               <Trash2 className="w-4 h-4" />
@@ -390,8 +390,8 @@ export default function CartPage() {
           {/* ── Order Summary ── */}
           <div className="lg:col-span-1 space-y-4">
             {hasShop && (
-              <div className={`border rounded-2xl shadow-sm sticky top-24 ${cardBg}`}>
-                <div className="p-5 space-y-4">
+              <div className={`border rounded-2xl shadow-sm lg:sticky lg:top-24 ${cardBg}`}>
+                <div className="p-4 sm:p-5 space-y-4">
                   <h3 className={`font-bold text-lg flex items-center gap-2 ${textPrimary}`}>
                     <ShoppingBag className="w-4 h-4 text-amber-500" /> Commande SHOP
                   </h3>

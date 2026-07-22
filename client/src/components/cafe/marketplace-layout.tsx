@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
@@ -120,116 +120,211 @@ const fakeSuppliers = [
   { id: 3, name: "Arabica Direct", location: "Sousse", rating: 4.5, orders: 6, tags: ["Direct Trade", "Arabica"], phone: "+216 73 456 003", website: "www.arabicadirect.tn" },
 ];
 
-// ── Orders Panel ──────────────────────────────────────────────────────────────
+// ── Account Panel (premium dark/light — mirrors FavoritesPanel design) ────────
 
-function OrdersPanel() {
-  const { data: orders = [], isLoading } = useOrders();
+function AccountPanel({ user, onClose, onLogout }: { user: any; onClose: () => void; onLogout: () => void }) {
+  const [isDark, setIsDark] = useState(true);
+  const [activeTab, setActiveTab] = useState<"orders" | "dashboard" | "settings">("orders");
+  const { data: orders = [], isLoading: ordersLoading } = useOrders();
+  const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
+  const [notifs, setNotifs] = useState({ orderUpdates: true, promotions: false, newSuppliers: true });
+
+  const dk = isDark;
+  const bg = dk ? "bg-gray-900" : "bg-white";
+  const textPrimary = dk ? "text-white" : "text-gray-900";
+  const textMuted = dk ? "text-gray-400" : "text-gray-500";
+  const cardBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100";
+  const switcherBg = dk ? "bg-gray-800" : "bg-gray-100";
+  const switcherActive = dk ? "bg-gray-700 text-white shadow-sm" : "bg-white text-blue-600 shadow-sm";
+  const switcherInactive = dk ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700";
+  const dividerColor = dk ? "bg-gray-800" : "bg-gray-100";
+  const inputCls = dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 rounded-xl" : "border-gray-200 rounded-xl";
+  const borderClr = dk ? "border-gray-700/60" : "border-gray-100";
+
+  // Orders
   const sorted = [...(orders as any[])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  if (isLoading) return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>;
-  if (!sorted.length) return (
-    <div className="text-center py-16 text-muted-foreground">
-      <ShoppingBag className="w-10 h-10 mx-auto mb-3 opacity-30" />
-      <p className="font-medium">No orders yet</p>
-    </div>
-  );
-  return (
-    <div className="space-y-3">
-      {sorted.map((order: any) => {
-        const meta = statusMeta[order.status] ?? statusMeta.PENDING;
-        const Icon = meta.icon;
-        return (
-          <div key={order.id} className="border border-border rounded-xl p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-sm font-bold">#{String(order.id).padStart(6, "0")}</span>
-              <Badge variant="outline" className={`${meta.color} border text-xs`}><Icon className="w-3 h-3 mr-1" />{meta.label}</Badge>
-            </div>
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>{order.createdAt ? formatDate(order.createdAt) : "—"}</span>
-              <span className="font-semibold text-foreground">{formatCurrency(order.totalAmount)}</span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
-// ── Dashboard Panel ───────────────────────────────────────────────────────────
-
-function DashboardPanel() {
-  const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
-  if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>;
-  const total = orders.length; const delivered = orders.filter((o) => o.status === "DELIVERED").length;
-  const inProgress = orders.filter((o) => ["PENDING", "CONFIRMED", "PREPARING"].includes(o.status)).length;
-  const spent = orders.filter((o) => o.status !== "CANCELLED").reduce((s, o) => s + (o.totalAmount || 0), 0);
+  // Dashboard
+  const total = allOrders.length;
+  const delivered = allOrders.filter((o) => o.status === "DELIVERED").length;
+  const inProgress = allOrders.filter((o) => ["PENDING", "CONFIRMED", "PREPARING"].includes(o.status)).length;
+  const spent = allOrders.filter((o) => o.status !== "CANCELLED").reduce((s, o) => s + (o.totalAmount || 0), 0);
   const kpis = [
-    { label: "Total Orders", value: total, icon: ShoppingBag, color: "text-foreground" },
-    { label: "In Progress", value: inProgress, icon: Clock, color: "text-amber-500" },
-    { label: "Delivered", value: delivered, icon: CheckCircle, color: "text-green-500" },
-    { label: "Spent", value: `TND ${(spent / 100).toFixed(0)}`, icon: DollarSign, color: "text-primary" },
+    { label: "Total Orders", value: total, icon: ShoppingBag, color: dk ? "text-white" : "text-gray-900" },
+    { label: "In Progress", value: inProgress, icon: Clock, color: "text-amber-400" },
+    { label: "Delivered", value: delivered, icon: CheckCircle, color: "text-green-400" },
+    { label: "Spent", value: `TND ${(spent / 100).toFixed(0)}`, icon: DollarSign, color: "text-blue-400" },
   ];
   const statusCounts: Record<string, number> = {};
-  orders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1; });
+  allOrders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1; });
   const maxCount = Math.max(...Object.values(statusCounts), 1);
+
+  const tabs = [
+    { key: "orders" as const, label: "Orders", icon: ClipboardList },
+    { key: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
+    { key: "settings" as const, label: "Settings", icon: Settings },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3">
-        {kpis.map((k) => (
-          <div key={k.label} className="border border-border rounded-xl p-4">
-            <div className="flex items-center justify-between mb-1"><p className="text-xs text-muted-foreground">{k.label}</p><k.icon className={`w-4 h-4 ${k.color}`} /></div>
-            <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
+    <div className={`flex flex-col h-full overflow-hidden ${bg}`}>
+      {/* ── Fixed header ── */}
+      <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+        {/* Title row */}
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>My Account</h2>
+          <button
+            onClick={() => setIsDark((d) => !d)}
+            aria-label="Toggle theme"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
+          >
+            {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+          </button>
+        </div>
+
+        {/* User identity strip */}
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border mb-4 ${cardBg}`}>
+          <Avatar className="w-10 h-10 shrink-0">
+            <AvatarFallback className={`font-bold text-sm ${dk ? "bg-gray-700 text-amber-400" : "bg-blue-100 text-blue-700"}`}>
+              {user?.name?.charAt(0)?.toUpperCase() ?? "U"}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className={`font-semibold text-sm truncate ${textPrimary}`}>{user?.name}</p>
+            <p className={`text-xs truncate ${textMuted}`}>{user?.email}</p>
           </div>
-        ))}
-      </div>
-      <div>
-        <p className="font-semibold text-sm mb-3">Order Status Breakdown</p>
-        <div className="space-y-2.5">
-          {Object.entries(statusCounts).map(([status, count]) => (
-            <div key={status} className="space-y-1">
-              <div className="flex justify-between text-xs text-muted-foreground"><span>{status.replace("_", " ")}</span><span>{count}</span></div>
-              <Progress value={(count / maxCount) * 100} className="h-1.5" />
-            </div>
+          {user?.status && (
+            <span className={`text-[10px] font-semibold px-2 py-1 rounded-xl shrink-0 ${
+              user.status === 'approved' ? (dk ? "bg-green-900/50 text-green-400" : "bg-green-50 text-green-600")
+              : user.status === 'pending' ? (dk ? "bg-yellow-900/50 text-yellow-400" : "bg-yellow-50 text-yellow-700")
+              : (dk ? "bg-red-900/50 text-red-400" : "bg-red-50 text-red-600")
+            }`}>
+              {user.status === 'approved' ? '✓ Approved' : user.status === 'pending' ? '⏳ Pending' : '✗ Rejected'}
+            </span>
+          )}
+        </div>
+
+        {/* Tab switcher */}
+        <div className={`flex gap-1 rounded-2xl p-1 ${switcherBg}`}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 text-[11px] font-semibold rounded-xl transition-all ${activeTab === tab.key ? switcherActive : switcherInactive}`}
+            >
+              <tab.icon className="w-3 h-3" />{tab.label}
+            </button>
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
 
-// ── Settings Panel ────────────────────────────────────────────────────────────
+        <div className={`mt-4 h-px ${dividerColor}`} />
+      </div>
 
-function SettingsPanel({ user }: { user: any }) {
-  const [notifs, setNotifs] = useState({ orderUpdates: true, promotions: false, newSuppliers: true });
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 p-4 bg-secondary/40 rounded-xl">
-        <Avatar className="w-12 h-12 border-2 border-blue-200">
-          <AvatarFallback className="bg-blue-100 text-blue-700 font-bold text-lg">{user?.name?.charAt(0)?.toUpperCase() ?? "U"}</AvatarFallback>
-        </Avatar>
-        <div>
-          <p className="font-semibold">{user?.name}</p>
-          <p className="text-xs text-muted-foreground">{user?.email}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{user?.status && <span className={`inline-flex items-center gap-1 font-medium ${user.status === 'approved' ? 'text-green-600' : user.status === 'pending' ? 'text-yellow-600' : 'text-red-600'}`}>{user.status === 'pending' ? '⏳ Awaiting approval' : user.status === 'approved' ? '✓ Approved' : '✗ Rejected'}</span>}</p>
-        </div>
-      </div>
-      <div>
-        <p className="font-semibold text-sm mb-3 flex items-center gap-2"><User className="w-4 h-4" /> Profile</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5"><Label className="text-xs">Full Name</Label><Input defaultValue={user?.name} className="h-9" /></div>
-          <div className="space-y-1.5"><Label className="text-xs">Email</Label><Input defaultValue={user?.email} className="h-9" /></div>
-        </div>
-      </div>
-      <Separator />
-      <div>
-        <p className="font-semibold text-sm mb-3">Notifications</p>
-        <div className="space-y-3">
-          {[{ key: "orderUpdates", label: "Order Updates" }, { key: "promotions", label: "Promotions" }, { key: "newSuppliers", label: "New Suppliers" }].map((n) => (
-            <div key={n.key} className="flex items-center justify-between">
-              <span className="text-sm">{n.label}</span>
-              <Switch checked={notifs[n.key as keyof typeof notifs]} onCheckedChange={(v) => setNotifs((p) => ({ ...p, [n.key]: v }))} />
+      {/* ── Scrollable content ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full">
+
+        {/* ORDERS */}
+        {activeTab === "orders" && (
+          ordersLoading
+            ? <div className="space-y-3 pt-2">{[...Array(3)].map((_, i) => <div key={i} className={`h-20 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}</div>
+            : !sorted.length
+              ? <div className={`text-center py-16 ${textMuted}`}><ShoppingBag className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className={`font-medium text-sm ${textPrimary}`}>No orders yet</p></div>
+              : <div className="space-y-3 pt-2">
+                  {sorted.map((order: any) => {
+                    const meta = statusMeta[order.status] ?? statusMeta.PENDING;
+                    const Icon = meta.icon;
+                    return (
+                      <div key={order.id} className={`border rounded-2xl p-4 space-y-2 ${cardBg}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`font-mono text-sm font-bold ${textPrimary}`}>#{String(order.id).padStart(6, "0")}</span>
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}><Icon className="w-3 h-3" />{meta.label}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs ${textMuted}`}>{order.createdAt ? formatDate(order.createdAt) : "—"}</span>
+                          <span className={`text-sm font-bold ${dk ? "text-amber-400" : "text-amber-600"}`}>{formatCurrency(order.totalAmount)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+        )}
+
+        {/* DASHBOARD */}
+        {activeTab === "dashboard" && (
+          dashLoading
+            ? <div className="space-y-3 pt-2">{[...Array(4)].map((_, i) => <div key={i} className={`h-20 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}</div>
+            : <div className="space-y-5 pt-2">
+                <div className="grid grid-cols-2 gap-3">
+                  {kpis.map((k) => (
+                    <div key={k.label} className={`border rounded-2xl p-4 ${cardBg}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className={`text-xs ${textMuted}`}>{k.label}</p>
+                        <k.icon className={`w-4 h-4 ${k.color}`} />
+                      </div>
+                      <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
+                    </div>
+                  ))}
+                </div>
+                {Object.keys(statusCounts).length > 0 && (
+                  <div className={`border rounded-2xl p-4 ${cardBg}`}>
+                    <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>Order Status Breakdown</p>
+                    <div className="space-y-2.5">
+                      {Object.entries(statusCounts).map(([status, count]) => (
+                        <div key={status} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className={textMuted}>{status.replace("_", " ")}</span>
+                            <span className={textPrimary}>{count}</span>
+                          </div>
+                          <Progress value={(count / maxCount) * 100} className="h-1.5" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+        )}
+
+        {/* SETTINGS */}
+        {activeTab === "settings" && (
+          <div className="space-y-4 pt-2">
+            <div className={`border rounded-2xl p-4 ${cardBg}`}>
+              <p className={`font-semibold text-sm mb-3 flex items-center gap-2 ${textPrimary}`}><User className="w-4 h-4" /> Profile</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className={`text-xs ${textMuted}`}>Full Name</Label>
+                  <Input defaultValue={user?.name} className={`h-9 ${inputCls}`} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className={`text-xs ${textMuted}`}>Email</Label>
+                  <Input defaultValue={user?.email} className={`h-9 ${inputCls}`} />
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
+            <div className={`border rounded-2xl p-4 ${cardBg}`}>
+              <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>Notifications</p>
+              <div className="space-y-3">
+                {[{ key: "orderUpdates", label: "Order Updates" }, { key: "promotions", label: "Promotions" }, { key: "newSuppliers", label: "New Suppliers" }].map((n) => (
+                  <div key={n.key} className={`flex items-center justify-between py-1 border-b last:border-0 ${borderClr}`}>
+                    <span className={`text-sm ${textPrimary}`}>{n.label}</span>
+                    <Switch checked={notifs[n.key as keyof typeof notifs]} onCheckedChange={(v) => setNotifs((p) => ({ ...p, [n.key]: v }))} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={onLogout}
+              className={`w-full flex items-center justify-center gap-2 text-sm font-medium py-3 rounded-2xl border transition-colors ${dk ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-red-200 text-red-500 hover:bg-red-50"}`}
+            >
+              <LogOut className="w-4 h-4" /> Log out
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -696,24 +791,41 @@ const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "BARISTA" | "MARKETING" 
   MARKETING: "MARKETING",
 };
 
-function ChatPanel() {
+// ── Messages Panel (premium dark/light — mirrors FavoritesPanel design) ───────
+
+function MessagesPanel({ onClose }: { onClose: () => void }) {
   const { states: serviceStates } = useServiceStates();
   const visibleServicesList = SERVICES_LIST.filter((s) => {
     const key = SERVICE_ID_TO_KEY[s];
     return !key || serviceStates[key] !== "HIDDEN";
   });
+
+  const [isDark, setIsDark] = useState(true);
   const [service, setService] = useState<ServiceId>("SHOP");
   const [threads, setThreads] = useState<Thread[]>(fakeThreads);
   const [active, setActive] = useState<Thread | null>(null);
   const [view, setView] = useState<"list" | "chat">("list");
   const [input, setInput] = useState("");
 
+  const dk = isDark;
+  const bg = dk ? "bg-gray-900" : "bg-white";
+  const textPrimary = dk ? "text-white" : "text-gray-900";
+  const textMuted = dk ? "text-gray-400" : "text-gray-500";
+  const cardBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100";
+  const switcherBg = dk ? "bg-gray-800" : "bg-gray-100";
+  const switcherActive = dk ? "bg-gray-700 text-white shadow-sm" : "bg-white text-blue-600 shadow-sm";
+  const switcherInactive = dk ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700";
+  const dividerColor = dk ? "bg-gray-800" : "bg-gray-100";
+  const hoverRow = dk ? "hover:bg-gray-800/70" : "hover:bg-gray-50";
+  const borderRow = dk ? "border-gray-700/40" : "border-gray-100";
+  const chatBubbleBg = dk ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-900";
+  const inputCls = dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 rounded-2xl" : "border-gray-200 rounded-2xl";
+
   const filtered = threads.filter((t) => t.service === service);
 
   const openConversation = (t: Thread) => {
     setActive(t);
     setView("chat");
-    // Mark as read
     setThreads((prev) => prev.map((th) => th.id === t.id ? { ...th, unread: 0 } : th));
   };
 
@@ -728,108 +840,214 @@ function ChatPanel() {
   };
 
   return (
-    <div className="h-[480px] flex flex-col gap-3">
-      {/* Service switcher — same pill style as Profile tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
-        {visibleServicesList.map((s) => (
+    <div className={`flex flex-col h-full overflow-hidden ${bg}`}>
+      {/* ── Fixed header ── */}
+      <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+        {/* Title row */}
+        <div className="flex items-center justify-between mb-5">
           <button
-            key={s}
-            data-testid={`tab-messages-${s.toLowerCase()}`}
-            onClick={() => { setService(s); setView("list"); setActive(null); }}
-            className={`flex-1 py-1.5 text-[11px] font-semibold rounded-lg transition-all ${service === s ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}
+            onClick={onClose}
+            aria-label="Close"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
           >
-            {s}
+            <X className="w-4 h-4" />
           </button>
-        ))}
+          <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>Messages</h2>
+          <button
+            onClick={() => setIsDark((d) => !d)}
+            aria-label="Toggle theme"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
+          >
+            {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+          </button>
+        </div>
+
+        {/* Service switcher */}
+        <div className={`flex gap-1 rounded-2xl p-1 ${switcherBg}`}>
+          {visibleServicesList.map((s) => (
+            <button
+              key={s}
+              data-testid={`tab-messages-${s.toLowerCase()}`}
+              onClick={() => { setService(s); setView("list"); setActive(null); }}
+              className={`flex-1 py-2 text-[11px] font-semibold rounded-xl transition-all ${service === s ? switcherActive : switcherInactive}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        <div className={`mt-4 h-px ${dividerColor}`} />
       </div>
 
-      {/* List view */}
-      {view === "list" && (
-        <div className="flex-1 overflow-y-auto border border-border rounded-xl">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-              <MessageCircle className="w-10 h-10 text-gray-200 mb-3" />
-              <p className="text-sm font-medium text-gray-500">No conversations yet</p>
-              <p className="text-xs text-gray-400 mt-1">for {service}</p>
-            </div>
-          ) : (
-            filtered.map((t) => (
-              <button
-                key={t.id}
-                data-testid={`button-thread-${t.id}`}
-                onClick={() => openConversation(t)}
-                className="w-full flex items-start gap-3 p-3 text-left hover:bg-secondary/60 transition-colors border-b border-border/30 last:border-0"
-              >
-                <Avatar className="w-9 h-9 shrink-0">
-                  <AvatarFallback className="text-xs bg-blue-100 text-blue-700 font-bold">{t.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-sm font-semibold truncate">{t.name}</span>
-                    <span className="text-[10px] text-muted-foreground shrink-0">{t.time}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">{t.lastMessage}</p>
-                </div>
-                {t.unread > 0 && (
-                  <span className="shrink-0 bg-blue-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center mt-0.5">
-                    {t.unread}
-                  </span>
-                )}
-              </button>
-            ))
-          )}
-        </div>
-      )}
+      {/* ── Scrollable content ── */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-5 pb-5">
 
-      {/* Chat view */}
-      {view === "chat" && active && (
-        <div className="flex-1 flex flex-col border border-border rounded-xl overflow-hidden">
-          {/* Header with back button + name + service badge */}
-          <div className="flex items-center gap-2 p-3 border-b border-border/50 bg-secondary/20 shrink-0">
-            <button
-              onClick={goBack}
-              data-testid="button-chat-back"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <Avatar className="w-7 h-7">
-              <AvatarFallback className="text-xs bg-blue-100 text-blue-700 font-bold">{active.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0 flex items-center gap-2">
-              <span className="font-semibold text-sm truncate">{active.name}</span>
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${SERVICE_BADGE[active.service]}`}>
-                {active.service}
-              </span>
+        {/* List view */}
+        {view === "list" && (
+          <div className={`flex-1 overflow-y-auto rounded-2xl border [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full ${cardBg}`}>
+            {filtered.length === 0 ? (
+              <div className={`flex flex-col items-center justify-center h-full py-16 ${textMuted}`}>
+                <MessageCircle className="w-10 h-10 mb-3 opacity-20" />
+                <p className={`text-sm font-medium ${textPrimary}`}>No conversations yet</p>
+                <p className={`text-xs mt-1 opacity-50`}>for {service}</p>
+              </div>
+            ) : (
+              filtered.map((t) => (
+                <button
+                  key={t.id}
+                  data-testid={`button-thread-${t.id}`}
+                  onClick={() => openConversation(t)}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b last:border-0 ${hoverRow} ${borderRow}`}
+                >
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 font-bold text-sm ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                    {t.name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className={`text-sm font-semibold truncate ${textPrimary}`}>{t.name}</span>
+                      <span className={`text-[10px] shrink-0 ${textMuted}`}>{t.time}</span>
+                    </div>
+                    <p className={`text-xs truncate ${textMuted}`}>{t.lastMessage}</p>
+                  </div>
+                  {t.unread > 0 && (
+                    <span className="shrink-0 bg-blue-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {t.unread}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Chat view */}
+        {view === "chat" && active && (
+          <div className={`flex-1 flex flex-col border rounded-2xl overflow-hidden ${cardBg}`}>
+            {/* Header */}
+            <div className={`flex items-center gap-2.5 px-4 py-3 border-b shrink-0 ${dk ? "border-gray-700/60" : "border-gray-100"}`}>
+              <button
+                onClick={goBack}
+                data-testid="button-chat-back"
+                className={`w-7 h-7 rounded-xl flex items-center justify-center transition-colors shrink-0 ${dk ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                {active.name.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0 flex items-center gap-2">
+                <span className={`font-semibold text-sm truncate ${textPrimary}`}>{active.name}</span>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg shrink-0 ${SERVICE_BADGE[active.service]}`}>
+                  {active.service}
+                </span>
+              </div>
+            </div>
+            {/* Messages */}
+            <div className={`flex-1 overflow-y-auto p-4 space-y-2.5 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full`}>
+              {active.messages.map((m, i) => (
+                <div key={i} className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                    m.from === "me"
+                      ? "bg-blue-600 text-white rounded-br-sm"
+                      : `${chatBubbleBg} rounded-bl-sm`
+                  }`}>
+                    {m.text}
+                    <span className={`block text-[10px] mt-1 opacity-60 ${m.from === "me" ? "text-right" : ""}`}>{m.time}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Input */}
+            <div className={`p-3 border-t flex gap-2 shrink-0 ${dk ? "border-gray-700/60" : "border-gray-100"}`}>
+              <Input
+                className={`flex-1 h-9 text-sm ${inputCls}`}
+                placeholder="Message…"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && send()}
+                data-testid="input-message"
+              />
+              <button
+                onClick={send}
+                data-testid="button-send-message"
+                className="w-9 h-9 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center transition-colors shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {active.messages.map((m, i) => (
-              <div key={i} className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${m.from === "me" ? "bg-blue-600 text-white rounded-br-sm" : "bg-secondary text-foreground rounded-bl-sm"}`}>
-                  {m.text}
-                </div>
-              </div>
-            ))}
-          </div>
-          {/* Input */}
-          <div className="p-3 border-t border-border/50 flex gap-2 shrink-0">
-            <Input
-              className="flex-1 h-8 text-sm"
-              placeholder="Message…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send()}
-              data-testid="input-message"
-            />
-            <Button size="sm" className="h-8 w-8 p-0 bg-blue-600 hover:bg-blue-700" onClick={send} data-testid="button-send-message">
-              <Send className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
+  );
+}
+
+// ── Draggable Chat Button ─────────────────────────────────────────────────────
+
+function DraggableChatButton({ onClick, isDark }: { onClick: () => void; isDark: boolean }) {
+  const MARGIN = 16;
+  const BTN = 56;
+
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+  const startPtr = useRef({ x: 0, y: 0 });
+  const startPos = useRef({ x: 0, y: 0 });
+  const moved = useRef(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  // Initialise to bottom-right
+  useEffect(() => {
+    const x = window.innerWidth - BTN - MARGIN;
+    const y = window.innerHeight - BTN - MARGIN;
+    setPos({ x, y });
+  }, []);
+
+  const clamp = (x: number, y: number) => ({
+    x: Math.max(MARGIN, Math.min(x, window.innerWidth - BTN - MARGIN)),
+    y: Math.max(MARGIN, Math.min(y, window.innerHeight - BTN - MARGIN)),
+  });
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    dragging.current = true;
+    moved.current = false;
+    startPtr.current = { x: e.clientX, y: e.clientY };
+    startPos.current = pos ?? { x: window.innerWidth - BTN - MARGIN, y: window.innerHeight - BTN - MARGIN };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    const dx = e.clientX - startPtr.current.x;
+    const dy = e.clientY - startPtr.current.y;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved.current = true;
+    setPos(clamp(startPos.current.x + dx, startPos.current.y + dy));
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    dragging.current = false;
+    if (!moved.current) onClick();
+  };
+
+  if (!pos) return null;
+
+  return (
+    <button
+      ref={btnRef}
+      style={{ left: pos.x, top: pos.y, touchAction: "none" }}
+      className={`fixed z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-shadow select-none cursor-grab active:cursor-grabbing ${
+        isDark
+          ? "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-blue-500/30 hover:shadow-blue-500/50"
+          : "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-blue-400/30 hover:shadow-blue-500/50"
+      }`}
+      data-testid="button-chat-float"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      aria-label="Open messages"
+    >
+      <MessageCircle className="w-6 h-6" />
+    </button>
   );
 }
 
@@ -902,7 +1120,6 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const t = useTheme(isDark);
 
   const [profileOpen, setProfileOpen] = useState(false);
-  const [profileTab, setProfileTab] = useState<"orders" | "dashboard" | "settings">("orders");
   const [favOpen, setFavOpen] = useState(false);
   const [suppliersOpen, setSuppliersOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -1061,7 +1278,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
               {/* Profile */}
               <button
-                onClick={() => { setProfileTab("orders"); setProfileOpen(true); }}
+                onClick={() => { setProfileOpen(true); }}
                 className={`flex items-center gap-2 ml-1 px-3 py-1.5 rounded-2xl border transition-all ${
                   isDark
                     ? "bg-gray-800 border-gray-700 hover:bg-gray-700 hover:border-gray-600"
@@ -1140,15 +1357,9 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
       {/* ── Page Content ── */}
       <main className="flex-1">{children}</main>
 
-      {/* ── Floating Chat Button — authenticated only ── */}
+      {/* ── Floating Chat Button — authenticated only, draggable ── */}
       {user && hasCommercial && (
-        <button
-          onClick={() => setChatOpen(true)}
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-xl hover:shadow-2xl flex items-center justify-center transition-all hover:-translate-y-0.5"
-          data-testid="button-chat-float"
-        >
-          <MessageCircle className="w-6 h-6" />
-        </button>
+        <DraggableChatButton onClick={() => setChatOpen(true)} isDark={isDark} />
       )}
 
       {showSearchLocation && (
@@ -1165,28 +1376,12 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
       {/* ── Profile Modal ── */}
       {user && (
         <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between"><h2 className="font-bold text-lg">My Account</h2></div>
-              <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-                {([
-                  { key: "orders", label: "Orders", icon: ClipboardList },
-                  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-                  { key: "settings", label: "Settings", icon: Settings },
-                ] as const).map((tab) => (
-                  <button key={tab.key} onClick={() => setProfileTab(tab.key)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${profileTab === tab.key ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700"}`}>
-                    <tab.icon className="w-3.5 h-3.5" />{tab.label}
-                  </button>
-                ))}
-              </div>
-              {profileTab === "orders" && <OrdersPanel />}
-              {profileTab === "dashboard" && <DashboardPanel />}
-              {profileTab === "settings" && <SettingsPanel user={user} />}
-              <Separator />
-              <button onClick={() => { logout(); setProfileOpen(false); }} className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80 transition-colors w-full">
-                <LogOut className="w-4 h-4" /> Log out
-              </button>
-            </div>
+          <DialogContent className="sm:max-w-md h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+            <AccountPanel
+              user={user}
+              onClose={() => setProfileOpen(false)}
+              onLogout={() => { logout(); setProfileOpen(false); }}
+            />
           </DialogContent>
         </Dialog>
       )}
@@ -1215,11 +1410,8 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
       {/* ── Chat Modal ── */}
       {user && hasCommercial && (
         <Dialog open={chatOpen} onOpenChange={setChatOpen}>
-          <DialogContent className="sm:max-w-xl max-h-[80vh] overflow-y-auto">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2"><MessageCircle className="w-5 h-5 text-amber-500" /><h2 className="font-bold text-lg">Messages</h2></div>
-              <ChatPanel />
-            </div>
+          <DialogContent className="sm:max-w-md h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+            <MessagesPanel onClose={() => setChatOpen(false)} />
           </DialogContent>
         </Dialog>
       )}

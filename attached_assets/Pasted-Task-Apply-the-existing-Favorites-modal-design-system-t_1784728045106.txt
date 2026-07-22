@@ -1,0 +1,318 @@
+Task: Apply the existing Favorites modal design system to the Coffee Owner side only for the UI components listed below.
+
+Important context:
+- This task applies ONLY to the Coffee Owner experience.
+- Do NOT modify the Admin side.
+- Do NOT modify the Supplier side.
+- Do NOT modify the Delivery side.
+- Do NOT modify any business logic.
+- The goal is ONLY to update the visual design and user experience of the listed modals and UI components.
+
+Before making any changes:
+
+- Analyze the existing implementation of each modal/component.
+- Compare them with the Favorites modal that has already been implemented.
+- Reuse the same visual language and UX patterns.
+- Verify all existing synchronization and interactions continue working before and after the changes.
+
+---
+
+# Global Design Rules
+
+Apply the same design system already implemented for:
+
+- Favorites Modal
+- Product Details Modal
+- Pack Details Modal
+- /products page
+- Store page
+- Principal Navbar
+
+Use the same:
+
+- Apple / iPhone-inspired design.
+- Dark mode by default.
+- Light mode support.
+- Rounded modal style.
+- Rounded corners.
+- Border radius.
+- Premium spacing.
+- Typography.
+- Shadows.
+- Smooth transitions.
+- Premium clean appearance.
+- Responsive behavior.
+
+Everything should look like one unified BigBossCoffee design system.
+
+Do NOT redesign them differently.
+
+---
+
+# 1. "My Account" Modal
+
+Apply the Favorites modal design system to the entire **My Account** modal.
+
+This includes all sections:
+
+- Orders
+- Dashboard
+- Settings
+
+Requirements:
+
+- Same premium Apple-inspired modal.
+- Same header style.
+- Same rounded design.
+- Same spacing.
+- Same typography.
+- Same dark/light mode.
+- Same responsive behavior.
+- Same scrolling behavior.
+- Same switcher/tab style used in the Favorites modal for:
+  - Orders
+  - Dashboard
+  - Settings
+
+Do NOT change:
+
+- User information.
+- Orders.
+- Dashboard data.
+- Settings functionality.
+- Logout.
+- Account logic.
+- Navigation.
+
+Only improve the UI/UX.
+
+---
+
+# 2. Messages Modal
+
+Apply the Favorites modal design system to the Messages modal.
+
+Example:
+
+Messages
+
+SHOP
+
+PRINT
+
+BARISTA
+
+MARKETING
+
+Premium Beans Co
+
+Oat & Grain Supply
+
+TunRoast
+
+Requirements:
+
+- Same premium modal style.
+- Same Apple-inspired appearance.
+- Same rounded design.
+- Same header.
+- Same typography.
+- Same spacing.
+- Same scrolling behavior.
+- Same responsive behavior.
+
+Apply the Favorites modal switcher style to:
+
+- SHOP
+- PRINT
+- BARISTA
+- MARKETING
+
+Improve only the conversation list UI:
+
+- Better message cards.
+- Better unread badge presentation.
+- Better avatar presentation.
+- Better timestamps.
+- Better spacing.
+- Better hierarchy.
+- Smooth interactions.
+
+Do NOT change:
+
+- Messaging logic.
+- Conversation loading.
+- Notifications.
+- Read/unread behavior.
+- Message synchronization.
+- Navigation.
+
+Only improve the UI.
+
+---
+
+# 3. ChatBot Floating Button
+
+Update the ChatBot floating button using the same design language.
+
+Requirements:
+
+Apply:
+
+- Same Apple-inspired appearance.
+- Same colors as the Favorites modal.
+- Same rounded style.
+- Same shadows.
+- Same premium animations.
+- Same dark/light mode support.
+
+New behavior:
+
+The Coffee Owner should be able to:
+
+- Press and hold the ChatBot floating button.
+- Drag it anywhere on the visible screen.
+- Release it to leave it at the new position.
+
+Requirements:
+
+- Smooth dragging.
+- Responsive on desktop.
+- Responsive on tablet.
+- Responsive on mobile.
+- Do not interfere with scrolling.
+- Keep the button inside the visible screen boundaries.
+- Preserve the selected position while the current page remains open.
+
+Do NOT change:
+
+- ChatBot functionality.
+- AI logic.
+- Messages.
+- Existing actions.
+- Opening/closing behavior.
+
+Only improve:
+
+- Visual design.
+- User experience.
+- Floating movement.
+
+---
+
+# 4. SHOP Cart Modal / Drawer (Mobile Responsiveness Fix)
+
+The SHOP cart is already working perfectly.
+
+Current status:
+
+- Functionality is correct.
+- Design is correct.
+- Layout is good on desktop and tablet.
+
+Only one issue remains:
+
+On mobile devices, some UI components overflow outside the cart container or are not aligned correctly, making the layout feel cramped.
+
+This task is ONLY to improve the mobile responsiveness.
+
+Do NOT redesign the cart.
+
+Keep the current visual design exactly as it is.
+
+Requirements:
+
+- Fix every overflow issue on mobile.
+- Ensure no component extends outside the cart container.
+- Keep all buttons fully visible.
+- Keep product cards properly aligned.
+- Keep quantity selectors properly aligned.
+- Keep prices properly aligned.
+- Keep the delivery address section responsive.
+- Keep the courier instructions textarea responsive.
+- Keep the totals section aligned.
+- Keep the checkout and clear cart buttons fully visible.
+- Maintain comfortable spacing between all elements.
+- Ensure smooth vertical scrolling when necessary.
+- Verify the layout across different mobile screen sizes.
+
+Do NOT change:
+
+- Cart functionality.
+- Checkout flow.
+- Quantity selector behavior.
+- Price calculations.
+- Delivery address logic.
+- Map selection.
+- Courier instructions.
+- Product information.
+- Pack information.
+- Any business logic.
+
+This is strictly a responsive layout improvement for mobile devices while preserving the existing design and functionality.
+
+---
+
+# Responsive Design
+
+Ensure every updated component works perfectly on:
+
+- Desktop.
+- Tablet.
+- Mobile.
+
+Verify:
+
+- Modal size.
+- Header.
+- Scrolling.
+- Touch interactions.
+- Buttons.
+- Tabs.
+- Overflow handling.
+- Dragging behavior for the ChatBot button.
+
+No layout breaking.
+
+---
+
+# Dark / Light Mode
+
+Apply the same theme behavior used in the Favorites modal.
+
+Requirements:
+
+- Dark mode by default.
+- Light mode available.
+- Same theme icon style.
+- Theme affects only the corresponding modal or floating button appearance.
+- Do not modify the application's global theme behavior.
+
+---
+
+# Final Verification
+
+Before completing, verify:
+
+- My Account modal works exactly as before.
+- Orders still work.
+- Dashboard still work.
+- Settings still work.
+- Messages modal works exactly as before.
+- Conversations still load correctly.
+- Unread badges still update correctly.
+- SHOP / PRINT / BARISTA / MARKETING tabs still work.
+- ChatBot opens exactly as before.
+- ChatBot can be dragged smoothly.
+- ChatBot never leaves the visible screen.
+- SHOP cart remains visually identical except for improved mobile responsiveness.
+- No mobile overflow remains inside the cart.
+- Cart functionality is unchanged.
+- Checkout still works.
+- No synchronization issues are introduced.
+- No business logic is changed.
+- No other pages or components are affected.
+
+Only update the UI/UX of these Coffee Owner components.
+
+Do not touch anything else.

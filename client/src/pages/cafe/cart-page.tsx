@@ -171,8 +171,8 @@ export default function CartPage() {
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 ${pageBg}`}>
-      <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6 p-4 sm:p-6">
+    <div className={`min-h-screen overflow-x-hidden transition-colors duration-200 ${pageBg}`}>
+      <div className="w-full max-w-5xl mx-auto space-y-4 sm:space-y-6 p-4 sm:p-6">
 
         {/* ── Page header ── */}
         <div className="flex items-start justify-between">
@@ -193,8 +193,8 @@ export default function CartPage() {
           </button>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
-          <div className="lg:col-span-2 space-y-4">
+        <div className="grid lg:grid-cols-3 gap-4 sm:gap-6 w-full">
+          <div className="lg:col-span-2 space-y-4 min-w-0">
 
             {/* ── SHOP Items ── */}
             {hasShop && (
@@ -208,12 +208,12 @@ export default function CartPage() {
                   const supplierTotal = group.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
                   return (
                     <div key={supplierId} className={`border rounded-2xl overflow-hidden shadow-sm ${cardBg}`}>
-                      <div className={`px-4 py-3 border-b flex items-center justify-between ${cardHdr}`}>
-                        <div className="flex items-center gap-2">
-                          <Store className="w-4 h-4 text-amber-500" />
-                          <span className={`font-semibold text-sm ${textPrimary}`}>{group.supplierName}</span>
+                      <div className={`px-3 sm:px-4 py-3 border-b flex items-center justify-between gap-2 ${cardHdr}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Store className="w-4 h-4 text-amber-500 shrink-0" />
+                          <span className={`font-semibold text-sm truncate ${textPrimary}`}>{group.supplierName}</span>
                         </div>
-                        <span className={`text-sm font-medium ${textPrimary}`}>{formatCurrency(supplierTotal)}</span>
+                        <span className={`text-sm font-medium shrink-0 ${textPrimary}`}>{formatCurrency(supplierTotal)}</span>
                       </div>
                       <div className={`divide-y ${divideClr}`}>
                         {group.items.map((item) => {
@@ -388,7 +388,7 @@ export default function CartPage() {
           </div>
 
           {/* ── Order Summary ── */}
-          <div className="lg:col-span-1 space-y-4">
+          <div className="lg:col-span-1 space-y-4 min-w-0">
             {hasShop && (
               <div className={`border rounded-2xl shadow-sm lg:sticky lg:top-24 ${cardBg}`}>
                 <div className="p-4 sm:p-5 space-y-4">
@@ -519,7 +519,7 @@ export default function CartPage() {
 
             {hasPrint && (
               <div className={`border rounded-2xl shadow-sm ${dk ? "bg-gray-800 border-blue-500/25" : "bg-white border-blue-100"}`}>
-                <div className="p-5 space-y-4">
+                <div className="p-4 sm:p-5 space-y-4">
                   <h3 className={`font-bold text-lg flex items-center gap-2 ${dk ? "text-blue-400" : "text-blue-700"}`}>
                     <Printer className="w-4 h-4" /> Commande PRINT
                   </h3>

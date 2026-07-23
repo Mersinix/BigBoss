@@ -64,6 +64,11 @@ const CONTENT_OPTIONS: {
   icon: React.ReactNode;
 }[] = [
   {
+    type: "ALL",
+    label: "All",
+    description: "Everything",
+    icon: <SlidersHorizontal className="w-6 h-6" />,
+  },{
     type: "PRODUCTS",
     label: "Products",
     description: "All products",
@@ -80,13 +85,7 @@ const CONTENT_OPTIONS: {
     label: "Packs",
     description: "Bundle deals",
     icon: <Layers className="w-6 h-6" />,
-  },
-  {
-    type: "ALL",
-    label: "All",
-    description: "Everything",
-    icon: <SlidersHorizontal className="w-6 h-6" />,
-  },
+  }
 ];
 
 // ── Main component ────────────────────────────────────────────────────────────

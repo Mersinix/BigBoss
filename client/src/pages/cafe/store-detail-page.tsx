@@ -786,7 +786,7 @@ export default function StoreDetailPage() {
           <ChevronLeft className="w-4.5 h-4.5 text-white" />
         </button>
 
-        {/* Top-right cluster: Dark/Light toggle + Favorite */}
+        {/* Top-right cluster: Dark/Light toggle + Flash + Favorite */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
           <button
             onClick={() => setIsDark((d) => !d)}
@@ -798,6 +798,16 @@ export default function StoreDetailPage() {
               : <Moon className="w-4 h-4 text-white" />
             }
           </button>
+          {(products.length > 0 || storePacks.length > 0) && (
+            <button
+              className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+              onClick={() => setFlashOpen(true)}
+              data-testid="button-flash-mode"
+              title="Flash Mode — browse products"
+            >
+              <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+            </button>
+          )}
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => toggleStore(store.id)}
@@ -806,18 +816,6 @@ export default function StoreDetailPage() {
             <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
           </button>
         </div>
-
-        {/* Flash button — bottom left */}
-        {products.length > 0 && (
-          <button
-            className="absolute bottom-4 left-4 w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform z-10"
-            onClick={() => setFlashOpen(true)}
-            data-testid="button-flash-mode"
-            title="Flash Mode — browse products"
-          >
-            <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-          </button>
-        )}
 
         {/* Reviews + Info — bottom right */}
         <div className="absolute bottom-4 right-4 flex items-center gap-2 z-10">
@@ -1033,6 +1031,7 @@ export default function StoreDetailPage() {
         open={flashOpen}
         onClose={() => setFlashOpen(false)}
         products={products as any[]}
+        packs={storePacks}
         storeName={store.name}
       />
     </div>

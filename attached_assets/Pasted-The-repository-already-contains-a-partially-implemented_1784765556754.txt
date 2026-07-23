@@ -1,0 +1,89 @@
+The repository already contains a partially implemented version of the Flash improvements from the prompt:
+
+Pasted-The-current-Flash-feature-is-working-correctly-and-I-wo_1784747910851.txt
+
+The previous Replit account stopped because it reached its quota. The partial work has already been committed to GitHub under the commit named:
+
+Flash mode Commit
+
+I have already pulled this commit into this project.
+
+Your task
+
+Do not restart the feature from scratch.
+
+Instead:
+
+Read and understand the original prompt:
+Pasted-The-current-Flash-feature-is-working-correctly-and-I-wo_1784747910851.txt
+Scan the current codebase and the changes already included in the Flash mode Commit.
+Compare the implementation against every requirement of the original prompt.
+Determine which parts are:
+already fully implemented,
+partially implemented,
+or still missing.
+Immediately continue implementing only the missing or incomplete parts.
+
+Do not generate an audit report.
+
+Do not list completed tasks unless they require correction.
+
+Do not reimplement functionality that is already correct.
+
+Only finish what remains.
+
+While implementing
+Preserve the current architecture.
+Preserve the current UI design.
+Preserve responsive behavior.
+Reuse existing components whenever possible.
+Do not duplicate logic.
+Do not introduce regressions.
+Keep synchronization intact between:
+Admin
+Supplier
+Coffee Owner
+Products
+Packs
+Promotions
+Favorites
+Categories
+Reviews
+Store visibility
+Product visibility
+Location filtering
+
+Before changing any file, verify whether the requested functionality is already implemented.
+
+If it is already correct, leave it untouched.
+
+If it is incomplete, finish it.
+
+If it is broken, fix only that part.
+
+Final verification
+
+Before considering the work finished, verify the complete Flash workflow end-to-end against the original prompt, including:
+
+Product multi-image cycling.
+Single-click image switching.
+Automatic transition from the last image to the next product.
+Double-click favorite behavior.
+Next button behavior.
+Flash filter icon.
+Step 1 (Products / Promotions / Packs / All).
+Step 2 (Categories + ALL + multi-selection).
+Filtering synchronization.
+Products.
+Promotions.
+Packs.
+Combined "All" mode.
+Flash icon position on the Store cover.
+Responsive behavior.
+Existing Store functionality.
+Existing Product functionality.
+Existing Pack functionality.
+
+If everything is already implemented correctly, do nothing.
+
+Otherwise, complete only the remaining work until the original prompt is fully implemented.

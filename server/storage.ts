@@ -2075,7 +2075,8 @@ export class DatabaseStorage implements IStorage {
     const avgRating = reviewCount ? reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount : 0;
     if (!activeListings.length) return { ...card, products: [], avgRating, reviewCount };
     const productIds = activeListings.map((l) => l.productId);
-    const [prods, productReviewRows] = await Promise.all([
+    const listingIds = activeListings.map((l) => l.id);
+    const [prods, productReviewRows, promoListings] = await Promise.all([
       db.select().from(products).where(inArray(products.id, productIds)),
       db.select().from(supplierProductReviews).where(
         and(
@@ -2083,7 +2084,9 @@ export class DatabaseStorage implements IStorage {
           eq(supplierProductReviews.reviewType as any, 'PRODUCT')
         )
       ),
+      this.getPromotionsForListings(listingIds),
     ]);
+    const promoListingSet = new Set(promoListings.map((p) => p.listingId));
     const listingByProduct = new Map(activeListings.map((l) => [l.productId, l]));
     const productReviewStats = new Map<number, { sum: number; count: number }>();
     for (const r of productReviewRows) {
@@ -2100,6 +2103,7 @@ export class DatabaseStorage implements IStorage {
         ...enrichProduct(p, tx),
         price: listing.price, bestPrice: listing.price, totalStock: listing.stock,
         listingId: listing.id,
+        hasPromo: promoListingSet.has(listing.id),
         avgRating: stats ? stats.sum / stats.count : 0,
         reviewCount: stats?.count ?? 0,
       } as unknown as ProductWithTaxonomy;

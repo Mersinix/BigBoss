@@ -1011,7 +1011,7 @@ export default function BrowseProducts() {
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-10 pb-12 px-4 overflow-hidden">
+      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
         {/* Background — dark: subtle amber glow | light: amber gradient */}
         {t.dk ? (
           <>
@@ -1027,7 +1027,18 @@ export default function BrowseProducts() {
         )}
 
         {/* Top-right controls: Flash + Dark/Light toggle */}
-        <div className="relative flex justify-end items-center gap-2 mb-4">
+        <div className="relative flex justify-end items-center gap-2 mb-9">
+          
+          <button
+            onClick={() => setIsDark((d) => !d)}
+            aria-label="Toggle theme"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+          >
+            {t.dk
+              ? <Sun className="w-4 h-4" />
+              : <Moon className="w-4 h-4" />
+            }
+          </button>
           {(allProducts.length > 0 || packs.length > 0) && (
             <button
               onClick={() => setFlashOpen(true)}
@@ -1039,16 +1050,6 @@ export default function BrowseProducts() {
               <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
             </button>
           )}
-          <button
-            onClick={() => setIsDark((d) => !d)}
-            aria-label="Toggle theme"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
-          >
-            {t.dk
-              ? <Sun className="w-4 h-4" />
-              : <Moon className="w-4 h-4" />
-            }
-          </button>
         </div>
 
         <div className="relative max-w-3xl mx-auto text-center">

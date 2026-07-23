@@ -758,7 +758,7 @@ export function PackQuickViewModal() {
         {/* ── Scrollable body ─────────────────────────────────────────────── */}
         <div
           ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto"
+          className="flex-1 min-h-0 overflow-y-auto px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 90)}
           style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >

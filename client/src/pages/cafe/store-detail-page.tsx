@@ -798,6 +798,14 @@ export default function StoreDetailPage() {
               : <Moon className="w-4 h-4 text-white" />
             }
           </button>
+          
+          <button
+            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+            onClick={() => toggleStore(store.id)}
+            data-testid="button-fav-store"
+          >
+            <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
+          </button>
           {(products.length > 0 || storePacks.length > 0) && (
             <button
               className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
@@ -808,13 +816,6 @@ export default function StoreDetailPage() {
               <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
             </button>
           )}
-          <button
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
-            onClick={() => toggleStore(store.id)}
-            data-testid="button-fav-store"
-          >
-            <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
-          </button>
         </div>
 
         {/* Reviews + Info — bottom right */}
@@ -855,7 +856,7 @@ export default function StoreDetailPage() {
               <Store className={`w-7 h-7 ${t.textMuted}`} />
             )}
           </div>
-          <div className="relative top-2 min-w-0 flex-1">
+          <div className="relative top-4 min-w-0 flex-1">
             <h1
               className={`font-extrabold text-xl leading-tight truncate ${t.textPrimary}`}
               data-testid="text-store-name"
@@ -880,8 +881,12 @@ export default function StoreDetailPage() {
           </div>
         </div>
         {store.description && (
-          <p className={`text-sm mt-3 text-center line-clamp-2 ${t.textMuted}`}>{store.description}</p>
-        )}
+  <p
+    className={`text-sm mt-6 ml-20 line-clamp-1 break-words ${t.textMuted}`}
+  >
+    {store.description}
+  </p>
+)}
       </div>
 
       {/* ── Category + Filter bar — sticky ──────────────────────────────── */}

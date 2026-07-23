@@ -2099,6 +2099,7 @@ export class DatabaseStorage implements IStorage {
       return {
         ...enrichProduct(p, tx),
         price: listing.price, bestPrice: listing.price, totalStock: listing.stock,
+        listingId: listing.id,
         avgRating: stats ? stats.sum / stats.count : 0,
         reviewCount: stats?.count ?? 0,
       } as unknown as ProductWithTaxonomy;

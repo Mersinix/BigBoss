@@ -1,0 +1,221 @@
+The current Flash feature is working correctly and I would like to improve it without changing its existing architecture, synchronization, or design language.
+
+Before making any changes:
+
+Review the current Flash implementation used in the Store page.
+Review how Products, Packs, Promotions, Favorites, Categories, and Store data are currently synchronized.
+Reuse existing components wherever possible.
+Keep all existing functionality unless explicitly modified below.
+Do not redesign the application.
+Do not change existing APIs unless absolutely necessary.
+Do not break synchronization between Admin, Supplier, and Coffee Owner.
+Keep everything fully responsive (Desktop / Tablet / Mobile).
+1. Improve Product Navigation Inside the Flash Modal
+
+Keep the current Flash modal and its behavior.
+
+Improve the navigation experience.
+
+Product Images
+
+A product can now have multiple images.
+
+Inside the Flash modal:
+
+Display the first product image initially.
+If the Coffee Owner performs a single click on the image:
+Switch to the next image of the current product.
+Continue cycling through all images.
+If the current image is the last image of that product:
+Automatically move to the first image of the next product.
+Continue this behavior seamlessly while browsing.
+Favorite
+
+Keep the current behavior:
+
+Double-click on the image adds/removes the product from Favorites.
+
+This already works correctly and should remain unchanged.
+
+Next Button
+
+Keep the existing Next button.
+
+When pressed:
+
+Move directly to the next item in the current Flash list.
+2. Add Flash Filter Selector
+
+Inside the Flash modal, add a new icon positioned:
+
+Above the existing Favorite icon.
+Keep the same design language as the other floating action icons.
+
+When the Coffee Owner clicks this icon:
+
+Open a dark semi-transparent modal that slides from the top.
+
+Keep the animation and style consistent with the rest of the application.
+
+Step 1 — Content Type
+
+The first step asks the Coffee Owner to choose what to browse.
+
+Display four cards using the same visual style as the account-type selection modal.
+
+Use two cards per row.
+
+Options:
+
+Products
+Promotions
+Packs
+All
+
+Reuse the existing card design and interactions.
+
+Step 2 — Category Selection
+
+After selecting the content type:
+
+Display the mapped Categories.
+
+Also include:
+
+ALL
+
+The Coffee Owner can select:
+
+ALL
+One category
+Multiple categories
+
+Only categories currently available inside the selected Store should be displayed.
+
+Do not show categories with no matching content.
+
+3. Flash Filtering Rules
+
+Apply the selected filters to the Flash content.
+
+Products
+
+If the Coffee Owner selects:
+
+Products
+
+Only display Products from the current Store.
+
+Include:
+
+Products with promotions.
+Products without promotions.
+
+Only products belonging to the selected categories.
+
+Promotions
+
+If the Coffee Owner selects:
+
+Promotions
+
+Display only Products that currently have an active promotion.
+
+Only products belonging to the selected categories.
+
+Packs
+
+If the Coffee Owner selects:
+
+Packs
+
+Display only Packs belonging to the selected categories.
+
+Only Packs available in the current Store.
+
+All
+
+If the Coffee Owner selects:
+
+All
+
+Display together:
+
+Products with promotion.
+Products without promotion.
+Packs.
+
+Only items belonging to the selected categories.
+
+The browsing order should feel natural and continuous.
+
+4. Flash Synchronization
+
+The Flash content must always stay synchronized with:
+
+Store visibility.
+Product visibility.
+Pack visibility.
+Promotion visibility.
+Category filters.
+Product filters.
+Existing Store logic.
+
+Never display:
+
+Hidden Products.
+Hidden Packs.
+Hidden Promotions.
+Archived content.
+Out-of-stock content already excluded by current business rules.
+
+Reuse existing filtering logic wherever possible.
+
+5. Flash Button Position
+
+Move the Flash icon.
+
+Currently it is displayed outside the Store cover.
+
+Instead:
+
+Place it directly on the Store cover image.
+
+Position:
+
+Top-right corner.
+Next to the existing Favorite button.
+
+Use the same floating icon style already used throughout the application.
+
+Do not modify the Favorite button behavior.
+
+Final Verification
+
+After implementation verify the entire Flash workflow:
+
+Products with multiple images cycle correctly.
+Single click changes images.
+Last image automatically advances to the next product.
+Double click still toggles Favorite.
+Next button still works.
+Filter modal opens correctly.
+Step 1 (Products / Promotions / Packs / All) works.
+Step 2 category filtering works.
+Flash content is synchronized with Store data.
+Products, Promotions, and Packs respect the selected categories.
+Hidden or unavailable content never appears.
+Flash icon displays correctly on the Store cover.
+Responsive behavior remains correct on Desktop, Tablet, and Mobile.
+
+Do not modify any unrelated modules.
+
+Do not change:
+
+Pack workflow.
+Product Details Modal.
+Store Details page.
+Supplier functionality.
+Admin functionality.
+
+Only implement the Flash improvements described above while preserving the existing architecture, synchronization, design, and user experience.

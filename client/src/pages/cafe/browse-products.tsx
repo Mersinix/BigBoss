@@ -21,6 +21,7 @@ import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail } from "@shared/schema";
+import { FlashMode } from "@/components/flash-mode";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
@@ -892,6 +893,8 @@ export default function BrowseProducts() {
   const [isDark, setIsDark] = useState(true);
   const t = useTheme(isDark);
 
+  const [flashOpen, setFlashOpen] = useState(false);
+
   const urlParams = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
   const initialSearch = urlParams.get("q") ?? "";
   const initialCategory = urlParams.get("categoryId") ?? "";
@@ -982,6 +985,16 @@ export default function BrowseProducts() {
     return list;
   }, [categoryFiltered, filters, hasSearchLocation, searchLat, searchLng]);
 
+  // ── Flash products — all marketplace products with hasPromo derived from promotions ──
+  const flashProducts = useMemo(() => {
+    const promoListingIds = new Set(listingPromotions.map((lp) => lp.listingId));
+    return allProducts.map((p) => ({
+      ...p,
+      hasPromo: p.listings.some((l) => promoListingIds.has(l.id)),
+      bestPrice: p.bestPrice ?? 0,
+    }));
+  }, [allProducts, listingPromotions]);
+
   const updateFilter = (key: keyof FilterState, val: string) => setFilters((p) => ({ ...p, [key]: val }));
   const resetFilters = () => setFilters({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" });
   const activeFilterCount = Object.values(filters).filter(Boolean).length + (search ? 1 : 0) + (categoryId ? 1 : 0);
@@ -1013,8 +1026,19 @@ export default function BrowseProducts() {
           </>
         )}
 
-        {/* Dark / light toggle — top right */}
-        <div className="relative flex justify-end mb-4">
+        {/* Top-right controls: Flash + Dark/Light toggle */}
+        <div className="relative flex justify-end items-center gap-2 mb-4">
+          {(allProducts.length > 0 || packs.length > 0) && (
+            <button
+              onClick={() => setFlashOpen(true)}
+              aria-label="Flash Mode"
+              data-testid="button-flash-mode"
+              title="Flash Mode — browse products"
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700" : "bg-white/20 hover:bg-white/30"}`}
+            >
+              <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+            </button>
+          )}
           <button
             onClick={() => setIsDark((d) => !d)}
             aria-label="Toggle theme"
@@ -1147,6 +1171,15 @@ export default function BrowseProducts() {
           </div>
         )}
       </div>
+
+      {/* ── Flash mode ─────────────────────────────────────────────────────── */}
+      <FlashMode
+        open={flashOpen}
+        onClose={() => setFlashOpen(false)}
+        products={flashProducts as any[]}
+        packs={packs}
+        storeName="BigBoss SHOP"
+      />
     </div>
   );
 }

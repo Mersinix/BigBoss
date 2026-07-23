@@ -1,0 +1,194 @@
+The Flash feature implemented for the Store page is now the reference implementation and is working correctly.
+
+I now want to bring the exact same Flash experience to the Coffee Owner Shop (/products).
+
+Before making any changes:
+
+Review the existing Flash implementation on the Store page.
+Reuse the same components, logic, animations, and synchronization wherever possible.
+Do not create a separate Flash system if the existing one can be reused.
+Keep the design language identical.
+Do not redesign anything.
+Do not change any existing Store Flash behavior.
+Do not modify any existing APIs unless absolutely necessary.
+Keep everything fully responsive (Desktop / Tablet / Mobile).
+1. Add Flash Mode to Coffee Owner → Shop (/products)
+
+Add the same Flash feature that already exists on the Store page.
+
+The Shop Flash should provide exactly the same user experience, including:
+
+Full-screen Flash browsing.
+Multiple product image support.
+Single-click to switch images.
+Automatic transition to the next item after the last image.
+Double-click to add/remove Favorites.
+Next button behavior.
+Same animations.
+Same overlay.
+Same controls.
+Same interactions.
+
+The Shop Flash should feel identical to the Store Flash.
+
+2. Flash Button Position
+
+Add the Flash icon to the Shop page.
+
+Position it:
+
+On the Hero image.
+Top-right corner.
+Next to the existing Dark/Light Mode button.
+
+Use the same floating icon style already used throughout the application.
+
+The placement should be consistent with the Store page implementation.
+
+3. Flash Filter Modal
+
+Reuse the exact same filter modal already implemented for the Store Flash.
+
+Keep the same two-step flow.
+
+Step 1
+
+Content Type:
+
+Products
+Promotions
+Packs
+All
+
+Use the same card layout and interactions.
+
+Step 2
+
+Display Categories.
+
+Include:
+
+ALL
+
+Allow:
+
+ALL
+Single category
+Multiple categories
+
+Reuse the same selection behavior.
+
+4. Shop Filtering Rules
+
+Unlike the Store Flash, this Flash works across the entire Shop.
+
+Apply the selected filters globally.
+
+Products
+
+Display all available products matching the selected categories.
+
+Include:
+
+Products with promotions.
+Products without promotions.
+Promotions
+
+Display only products that currently have active promotions.
+
+Respect the selected categories.
+
+Packs
+
+Display all available Packs matching the selected categories.
+
+All
+
+Display together:
+
+Products with promotions.
+Products without promotions.
+Packs.
+
+Respect the selected categories.
+
+The browsing order should feel natural and continuous.
+
+5. Synchronization
+
+The Shop Flash must stay synchronized with:
+
+Category filters.
+Product visibility.
+Pack visibility.
+Promotion visibility.
+Supplier visibility.
+Store visibility.
+Existing Shop filters.
+Existing marketplace synchronization.
+
+Never display:
+
+Hidden products.
+Hidden packs.
+Hidden promotions.
+Archived content.
+Items already excluded by current marketplace rules.
+
+Reuse the existing marketplace filtering logic.
+
+6. Behavior Consistency
+
+The Shop Flash should behave exactly like the Store Flash.
+
+That includes:
+
+Product image cycling.
+Favorite handling.
+Pack browsing.
+Promotion browsing.
+Navigation.
+Animations.
+Touch interactions.
+Desktop interactions.
+Mobile interactions.
+
+There should be no visible difference between the Store Flash and the Shop Flash other than the data source.
+
+Final Verification
+
+Before finishing, verify the complete Shop Flash workflow:
+
+Flash icon appears on the Hero image.
+Positioned at the top-right next to the Dark/Light toggle.
+Flash opens correctly.
+Multi-image products work correctly.
+Single click changes images.
+Last image automatically advances to the next item.
+Double click still toggles Favorites.
+Next button works.
+Filter modal opens correctly.
+Step 1 (Products / Promotions / Packs / All) works.
+Step 2 (Categories + ALL + multi-selection) works.
+Products filter correctly.
+Promotions filter correctly.
+Packs filter correctly.
+"All" mode mixes content correctly.
+Favorites remain synchronized.
+Packs remain synchronized.
+Promotions remain synchronized.
+Categories remain synchronized.
+Responsive behavior works correctly on Desktop, Tablet, and Mobile.
+
+Do not modify any unrelated modules.
+
+Do not change:
+
+Store Flash.
+Product Details Modal.
+Pack workflow.
+Reviews.
+Supplier functionality.
+Admin functionality.
+
+Only extend the existing Flash system so that the Coffee Owner Shop (/products) offers the same Flash experience already available on the Store page, while preserving the current architecture, synchronization, design, and user experience.

@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import {
   Store, Package, ShoppingCart, LayoutDashboard,
   ClipboardList, Truck, Users, LogOut, Coffee,
@@ -25,12 +26,13 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
+type NavItem = { title: string; url: string; icon: ComponentType<{ className?: string }> };
 type NavGroup = {
   label: string;
-  items: { title: string; url: string; icon: ComponentType<{ className?: string }> }[];
+  items: NavItem[];
 };
 
-function NavLink({ item }: { item: { title: string; url: string; icon: ComponentType<{ className?: string }> } }) {
+function NavLink({ item, badge }: { item: NavItem; badge?: number }) {
   const [location] = useLocation();
   const search = useSearch();
   const fullPath = `${location}${search}`;
@@ -50,15 +52,43 @@ function NavLink({ item }: { item: { title: string; url: string; icon: Component
       >
         <Link href={item.url} className="flex items-center gap-3">
           <item.icon className="w-4 h-4" />
-          <span className="font-medium text-sm">{item.title}</span>
+          <span className="font-medium text-sm flex-1">{item.title}</span>
+          {badge != null && badge > 0 && (
+            <span className="bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
 }
 
+const MESSAGES_URLS = new Set(["/admin/messages", "/cafe/messages", "/supplier/messages", "/delivery/messages"]);
+
 export function AppSidebar() {
   const { user, logout } = useAuth();
+
+  const hasMessages = user && MESSAGES_URLS.has(
+    user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? "/admin/messages"
+    : user.role === "CAFE_OWNER" ? "/cafe/messages"
+    : user.role === "SUPPLIER" ? "/supplier/messages"
+    : (user.role === "DELIVERY_COMPANY" || user.role === "DRIVER") ? "/delivery/messages"
+    : ""
+  );
+
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/messages/unread-count"],
+    queryFn: async () => {
+      const r = await fetch("/api/messages/unread-count", { credentials: "include" });
+      if (!r.ok) return { count: 0 };
+      return r.json();
+    },
+    enabled: !!hasMessages,
+    refetchInterval: 60000,
+  });
+
+  const unreadCount = unreadData?.count ?? 0;
 
   if (!user) return null;
 
@@ -395,7 +425,11 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu className="space-y-0.5">
                 {group.items.map((item) => (
-                  <NavLink key={item.title} item={item} />
+                  <NavLink
+                    key={item.title}
+                    item={item}
+                    badge={item.title === "Messages" ? unreadCount : undefined}
+                  />
                 ))}
               </SidebarMenu>
             </SidebarGroupContent>

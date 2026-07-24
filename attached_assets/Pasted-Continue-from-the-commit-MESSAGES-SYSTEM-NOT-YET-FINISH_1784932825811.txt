@@ -1,0 +1,175 @@
+Continue from the commit:
+
+**`MESSAGES SYSTEM NOT YET FINISHED`**
+
+Do not restart or rewrite the feature from scratch.
+
+First, inspect the current implementation in this commit and determine what has already been completed and what remains incomplete. Then continue the implementation directly from the current state.
+
+Do **not** generate a report, summary, or analysis. Execute the remaining work immediately.
+
+## Objectives
+
+Complete the SHOP Messages system exactly as previously requested while preserving all existing functionality and design.
+
+### Important Rules
+
+* Do NOT redesign any existing pages.
+* Do NOT remove any existing functionality.
+* Do NOT modify PRINT, BARISTA, or MARKETING messages.
+* Do NOT change unrelated modules.
+* Preserve backward compatibility.
+* Continue from the existing implementation instead of replacing it.
+
+---
+
+## Verify the Current Implementation
+
+Before adding anything new:
+
+* Verify every backend component.
+* Verify every frontend page.
+* Verify database models.
+* Verify WebSocket / realtime implementation.
+* Verify permissions.
+* Verify storage methods.
+* Verify API endpoints.
+* Verify routing.
+* Verify role access.
+* Verify sidebar integration.
+* Verify conversation visibility rules.
+* Verify synchronization logic.
+
+If any part is incomplete, broken, duplicated, or inconsistent, fix it before continuing.
+
+Do not leave partial implementations.
+
+---
+
+## Complete Any Missing Features
+
+Ensure every requested feature is fully implemented, including:
+
+* Coffee Owner ↔ Supplier conversations
+* Coffee Owner ↔ Delivery conversations
+* Coffee Owner ↔ Admin conversations
+* Admin messaging center
+* Supplier Messages page
+* Delivery Messages page
+* Admin Messages page
+* Broadcast/system messaging
+* Conversation visibility management
+* Hidden chats
+* Restoring hidden chats
+* Conversation ordering
+* Unread counters
+* Read status
+* Delivered status
+* Latest message preview
+* Timestamps
+* Conversation persistence
+* Authorization rules
+* Search (if previously requested)
+* Any remaining missing synchronization logic
+
+Anything that was partially implemented must be completed.
+
+---
+
+## Real-Time Synchronization
+
+This is extremely important.
+
+Verify that the messaging system is truly real-time.
+
+When any user sends a message:
+
+* it must immediately be saved in the database,
+* all participants must instantly receive the new message,
+* conversation previews must update immediately,
+* unread counters must update immediately,
+* timestamps must refresh immediately,
+* conversation ordering must refresh immediately,
+* the open conversation must update immediately without refreshing the page.
+
+Test all messaging combinations:
+
+* Coffee Owner → Supplier
+* Supplier → Coffee Owner
+* Coffee Owner → Delivery
+* Delivery → Coffee Owner
+* Coffee Owner → Admin
+* Admin → Coffee Owner
+* Supplier → Admin
+* Admin → Supplier
+* Delivery → Admin
+* Admin → Delivery
+* Broadcast messages
+
+Ensure every participant receives updates instantly.
+
+If any update requires refreshing the page, it is not complete.
+
+---
+
+## Database Synchronization
+
+Verify that every message:
+
+* is stored correctly,
+* is never duplicated,
+* is never lost,
+* is correctly linked to its conversation,
+* persists after logout/login,
+* reloads correctly after reopening the application.
+
+Conversation history must always remain consistent.
+
+---
+
+## Security
+
+Verify that:
+
+* users cannot access unauthorized conversations,
+* hidden conversations remain inaccessible,
+* broadcast visibility rules work correctly,
+* role restrictions are enforced,
+* no user can retrieve another user's messages.
+
+---
+
+## Final Validation
+
+Before finishing, execute a complete end-to-end verification of the entire SHOP messaging system.
+
+Test every role:
+
+* Admin
+* Supplier
+* Coffee Owner
+* Delivery
+
+Verify:
+
+* real-time synchronization,
+* database persistence,
+* authorization,
+* hidden chats,
+* restored chats,
+* broadcast messages,
+* unread counters,
+* latest message,
+* timestamps,
+* conversation ordering,
+* role visibility,
+* sidebar integration,
+* navigation,
+* API endpoints,
+* WebSocket connections,
+* reconnection behavior,
+* error handling.
+
+Fix every issue found during validation.
+
+Only consider the task complete once the entire SHOP messaging system is fully functional, fully synchronized in real time, backed by the database, and all requested features work correctly without breaking any other part of the BigBossCoffee project.

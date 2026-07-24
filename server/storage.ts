@@ -2977,7 +2977,12 @@ export class DatabaseStorage implements IStorage {
 
     return convRows.map(conv => {
       const participants = allParticipants.filter(r => r.cp.conversationId === conv.id)
-        .map(r => ({ id: r.u.id, name: r.u.name, role: r.u.role }));
+        .map(r => ({
+          id: r.u.id,
+          name: r.u.name,
+          role: r.u.role,
+          hiddenAt: r.cp.hiddenAt ? r.cp.hiddenAt.toISOString() : null,
+        }));
       const lastMsg = lastMsgs.find(m => m.conversationId === conv.id);
       return {
         id: conv.id,

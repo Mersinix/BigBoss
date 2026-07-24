@@ -141,28 +141,57 @@ function AllConversationsTab() {
     <div className="divide-y">
       {allConvs.map(conv => {
         const displayName = (conv.title ?? conv.otherParticipants.map(p => p.name).join(", ")) || "Unknown";
+        const hiddenParticipants = conv.otherParticipants.filter(p => p.hiddenAt);
+        const allHidden = conv.otherParticipants.length > 0 && hiddenParticipants.length === conv.otherParticipants.length;
+        const someHidden = hiddenParticipants.length > 0 && !allHidden;
         return (
           <div key={conv.id} className="flex items-start gap-3 p-4 hover:bg-secondary/20">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">{displayName}</span>
                 <Badge variant="outline" className="text-[10px]">{conv.type}</Badge>
+                {allHidden && (
+                  <Badge className="text-[10px] border-0 bg-gray-100 text-gray-500">
+                    <EyeOff className="w-2.5 h-2.5 mr-1" />Hidden
+                  </Badge>
+                )}
+                {someHidden && (
+                  <Badge className="text-[10px] border-0 bg-yellow-100 text-yellow-700">
+                    <EyeOff className="w-2.5 h-2.5 mr-1" />Partially hidden
+                  </Badge>
+                )}
                 {conv.lastMessage ? (
                   <span className="text-xs text-muted-foreground truncate max-w-[200px]">{conv.lastMessage.content}</span>
                 ) : null}
               </div>
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {conv.otherParticipants.map(p => (
-                  <Badge key={p.id} className={`text-[10px] border-0 ${ROLE_COLOR[p.role] ?? "bg-gray-100 text-gray-700"}`}>{p.name}</Badge>
+                  <Badge
+                    key={p.id}
+                    className={`text-[10px] border-0 ${p.hiddenAt ? "bg-gray-100 text-gray-400 line-through" : (ROLE_COLOR[p.role] ?? "bg-gray-100 text-gray-700")}`}
+                    title={p.hiddenAt ? `Hidden since ${new Date(p.hiddenAt).toLocaleDateString()}` : undefined}
+                  >
+                    {p.name}
+                    {p.hiddenAt && <EyeOff className="w-2.5 h-2.5 ml-1 inline" />}
+                  </Badge>
                 ))}
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => visibilityMutation.mutate({ convId: conv.id, targetUserId: null, hidden: true })} title="Hide for all participants" data-testid={`button-hide-conv-${conv.id}`}>
-                <EyeOff className="w-3 h-3 mr-1" />Hide all
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => visibilityMutation.mutate({ convId: conv.id, targetUserId: null, hidden: false })} title="Show for all participants" data-testid={`button-show-conv-${conv.id}`}>
-                <Eye className="w-3 h-3 mr-1" />Show all
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => visibilityMutation.mutate({ convId: conv.id, targetUserId: null, hidden: !allHidden })}
+                title={allHidden ? "Restore visibility for all participants" : "Hide for all participants"}
+                data-testid={`button-toggle-conv-${conv.id}`}
+                disabled={visibilityMutation.isPending}
+              >
+                {allHidden ? (
+                  <><Eye className="w-3 h-3 mr-1" />Restore all</>
+                ) : (
+                  <><EyeOff className="w-3 h-3 mr-1" />Hide all</>
+                )}
               </Button>
             </div>
           </div>

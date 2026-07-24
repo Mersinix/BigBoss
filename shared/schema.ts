@@ -1337,7 +1337,7 @@ export type ConversationSummary = {
   lastMessage: { content: string; senderId: number; senderName: string; createdAt: string } | null;
   unreadCount: number;
   /** Everyone in the conversation except the requesting user */
-  otherParticipants: { id: number; name: string; role: string }[];
+  otherParticipants: { id: number; name: string; role: string; hiddenAt?: string | null }[];
 };
 
 export type ConversationDetail = ConversationSummary & {

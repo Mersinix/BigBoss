@@ -5,11 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Send, Search, ChevronLeft, MessageCircle, Loader2 } from "lucide-react";
+import { Send, Search, ChevronLeft, MessageCircle, Loader2, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { ConversationSummary, ConversationMessageRow } from "@shared/schema";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type { ConversationSummary, ConversationMessageRow, EligibleContact } from "@shared/schema";
 
 type ServiceId = "SHOP" | "PRINT" | "BARISTA" | "MARKETING";
 type ThreadMessage = { from: "me" | "them"; text: string; time: string };
@@ -54,6 +60,18 @@ function formatRelativeTime(iso: string) {
   return days === 1 ? "Yesterday" : `${days}d ago`;
 }
 
+// Role label helpers for contact picker
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Admin", SUPER_ADMIN: "Admin",
+  SUPPLIER: "Supplier", DELIVERY_COMPANY: "Delivery", DRIVER: "Driver",
+  CAFE_OWNER: "Café",
+};
+const ROLE_DOT: Record<string, string> = {
+  ADMIN: "bg-red-500", SUPER_ADMIN: "bg-red-500",
+  SUPPLIER: "bg-amber-500", DELIVERY_COMPANY: "bg-green-500", DRIVER: "bg-green-500",
+  CAFE_OWNER: "bg-blue-400",
+};
+
 // ── SHOP tab (real data) ──────────────────────────────────────────────────────
 
 function ShopTab({ userId }: { userId: number }) {
@@ -63,6 +81,8 @@ function ShopTab({ userId }: { userId: number }) {
   const [view, setView] = useState<"list" | "chat">("list");
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
+  const [newConvOpen, setNewConvOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
 
   const { data: conversations = [], isLoading: convsLoading } = useQuery<ConversationSummary[]>({
     queryKey: ["/api/messages/conversations"],
@@ -72,6 +92,15 @@ function ShopTab({ userId }: { userId: number }) {
       return r.json();
     },
     refetchInterval: 30000,
+  });
+
+  const { data: contacts = [] } = useQuery<EligibleContact[]>({
+    queryKey: ["/api/messages/eligible-contacts"],
+    queryFn: async () => {
+      const r = await fetch("/api/messages/eligible-contacts", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
   });
 
   const activeConv = conversations.find(c => c.id === activeConvId) ?? null;
@@ -103,6 +132,19 @@ function ShopTab({ userId }: { userId: number }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] }),
   });
 
+  const newConvMutation = useMutation({
+    mutationFn: (targetUserId: number) =>
+      apiRequest("POST", "/api/messages/conversations", { targetUserId }),
+    onSuccess: (data: any) => {
+      setActiveConvId(data.conversation.id);
+      setView("chat");
+      setNewConvOpen(false);
+      setContactSearch("");
+      qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+    },
+    onError: (err: any) => toast({ title: "Cannot start conversation", description: err?.message, variant: "destructive" }),
+  });
+
   const openConv = (id: number) => {
     setActiveConvId(id);
     setView("chat");
@@ -111,17 +153,64 @@ function ShopTab({ userId }: { userId: number }) {
   };
 
   const filtered = conversations.filter(c => {
-    const name = c.otherParticipants.map(p => p.name).join(", ");
+    const name = c.title ?? c.otherParticipants.map(p => p.name).join(", ");
     return name.toLowerCase().includes(search.toLowerCase());
   });
 
+  const filteredContacts = contacts.filter(c =>
+    c.name.toLowerCase().includes(contactSearch.toLowerCase())
+  );
+
   return (
     <>
+      {/* New Conversation Dialog */}
+      <Dialog open={newConvOpen} onOpenChange={o => { setNewConvOpen(o); if (!o) setContactSearch(""); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>New Conversation</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="Search contacts…"
+              value={contactSearch}
+              onChange={e => setContactSearch(e.target.value)}
+              data-testid="input-search-contacts"
+            />
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              {filteredContacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No contacts available yet. Place an order to unlock suppliers.
+                </p>
+              ) : (
+                filteredContacts.map(c => (
+                  <button
+                    key={c.id}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-secondary/70 text-left transition-colors"
+                    onClick={() => newConvMutation.mutate(c.id)}
+                    disabled={newConvMutation.isPending}
+                    data-testid={`button-contact-${c.id}`}
+                  >
+                    <Avatar className="w-8 h-8">
+                      <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">
+                        {c.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="flex-1 text-sm font-medium truncate">{c.name}</span>
+                    <span className={`w-2 h-2 rounded-full ${ROLE_DOT[c.role] ?? "bg-gray-400"}`} />
+                    <Badge variant="outline" className="text-[10px] shrink-0">
+                      {ROLE_LABEL[c.role] ?? c.role}
+                    </Badge>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* List view */}
       {view === "list" && (
         <>
-          <div className="p-3 border-b border-border/50 shrink-0">
-            <div className="relative">
+          <div className="p-3 border-b border-border/50 shrink-0 flex gap-2">
+            <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
                 className="pl-8 h-8 text-sm"
@@ -131,6 +220,16 @@ function ShopTab({ userId }: { userId: number }) {
                 data-testid="input-search-messages"
               />
             </div>
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 shrink-0"
+              onClick={() => setNewConvOpen(true)}
+              data-testid="button-new-conversation"
+              title="New conversation"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
           </div>
           <div className="flex-1 overflow-y-auto">
             {convsLoading ? (

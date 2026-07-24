@@ -11,14 +11,11 @@ const CATALOG_EVENTS = [
 ];
 
 const TAXONOMY_EVENTS = ["taxonomy_updated"];
-
 const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
-
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
-
 const PACK_EVENTS = ["pack_updated"];
-
 const INVENTORY_EVENTS = ["inventory_updated"];
+const MESSAGING_EVENTS = ["new_message", "conversation_updated"];
 
 function invalidateInventoryQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
@@ -35,7 +32,6 @@ function invalidatePackQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
   qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
   qc.invalidateQueries({ queryKey: ["/api/admin/packs"] });
-  // Also invalidate store-specific pack queries (any /api/stores/.../packs key)
   qc.invalidateQueries({ predicate: (q) => {
     const key = q.queryKey as string[];
     return Array.isArray(key) && key[0] === "/api/stores" && key[2] === "packs";
@@ -50,7 +46,12 @@ function invalidateSupplierMappingQueries(qc: QueryClient) {
   invalidateMarketplace(qc);
 }
 
-export function useRealtime() {
+function invalidateMessagingQueries(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+  qc.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
+}
+
+export function useRealtime(userId?: number) {
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -64,9 +65,14 @@ export function useRealtime() {
       if (!alive) return;
       ws = new WebSocket(url);
 
+      ws.onopen = () => {
+        // Register this connection with the server so we receive targeted messages
+        if (userId) ws.send(JSON.stringify({ event: "user_register", userId }));
+      };
+
       ws.onmessage = (e) => {
         try {
-          const { event } = JSON.parse(e.data);
+          const { event, data } = JSON.parse(e.data);
           if (CATALOG_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/supplier/catalog-suggestions"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/catalog-suggestions"] });
@@ -105,6 +111,13 @@ export function useRealtime() {
             qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
             invalidateMarketplace(qc);
           }
+          if (MESSAGING_EVENTS.includes(event)) {
+            invalidateMessagingQueries(qc);
+            // Invalidate the specific conversation's messages too
+            if (data?.conversationId) {
+              qc.invalidateQueries({ queryKey: ["/api/messages/conversations", data.conversationId, "messages"] });
+            }
+          }
         } catch {}
       };
 
@@ -124,5 +137,5 @@ export function useRealtime() {
       clearTimeout(reconnectTimer);
       ws?.close();
     };
-  }, [qc]);
+  }, [qc, userId]);
 }

@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { broadcast } from "./ws";
+import { broadcast, broadcastToUsers } from "./ws";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
@@ -2777,6 +2777,148 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       res.json({ ok: true, affected: ids.length });
     } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Messaging routes ──────────────────────────────────────────────────────
+
+  /** GET /api/messages/conversations — list all visible conversations for the current user */
+  app.get("/api/messages/conversations", requireAuth, async (req: any, res) => {
+    try {
+      const conversations = await storage.getConversationsForUser(req.user.id);
+      res.json(conversations);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** POST /api/messages/conversations — find or create a direct conversation */
+  app.post("/api/messages/conversations", requireAuth, async (req: any, res) => {
+    const { targetUserId } = req.body;
+    if (!targetUserId || typeof targetUserId !== "number") {
+      return res.status(400).json({ message: "targetUserId is required" });
+    }
+    try {
+      // Authorization: verify eligibility
+      const isAdmin = req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN";
+      if (!isAdmin) {
+        const eligible = await storage.getEligibleContacts(req.user.id);
+        if (!eligible.some(c => c.id === targetUserId)) {
+          return res.status(403).json({ message: "You are not authorized to message this user" });
+        }
+      }
+      const { conversation, isNew } = await storage.findOrCreateDirectConversation(req.user.id, targetUserId);
+      res.json({ conversation, isNew });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** GET /api/messages/conversations/:id/messages — paginated messages */
+  app.get("/api/messages/conversations/:id/messages", requireAuth, async (req: any, res) => {
+    const convId = parseInt(req.params.id);
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = Math.min(parseInt(req.query.pageSize as string) || 50, 200);
+    try {
+      const authorized = await storage.isParticipant(convId, req.user.id);
+      if (!authorized) return res.status(403).json({ message: "Not authorized" });
+      const { msgs, total } = await storage.getConversationMessages(convId, page, pageSize);
+      res.json({ messages: msgs, total, page, pageSize });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** POST /api/messages/conversations/:id/messages — send a message */
+  app.post("/api/messages/conversations/:id/messages", requireAuth, async (req: any, res) => {
+    const convId = parseInt(req.params.id);
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ message: "content is required" });
+    try {
+      const authorized = await storage.isParticipant(convId, req.user.id);
+      if (!authorized) return res.status(403).json({ message: "Not authorized" });
+      const msg = await storage.sendMessage(convId, req.user.id, content.trim());
+      // Notify all participants via WebSocket
+      const participantIds = await storage.getConversationParticipantIds(convId);
+      broadcastToUsers(participantIds, "new_message", { conversationId: convId, message: msg });
+      res.json(msg);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** PATCH /api/messages/conversations/:id/read — mark conversation as read */
+  app.patch("/api/messages/conversations/:id/read", requireAuth, async (req: any, res) => {
+    const convId = parseInt(req.params.id);
+    try {
+      await storage.markConversationRead(convId, req.user.id);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** GET /api/messages/eligible-contacts — users I can start a conversation with */
+  app.get("/api/messages/eligible-contacts", requireAuth, async (req: any, res) => {
+    try {
+      const contacts = await storage.getEligibleContacts(req.user.id);
+      res.json(contacts);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** GET /api/messages/unread-count — unread badge count */
+  app.get("/api/messages/unread-count", requireAuth, async (req: any, res) => {
+    try {
+      const count = await storage.getUnreadMessageCount(req.user.id);
+      res.json({ count });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** POST /api/messages/broadcast — admin creates a broadcast conversation */
+  app.post("/api/messages/broadcast", requireAdmin, async (req: any, res) => {
+    const { title, targetUserIds, content } = req.body;
+    if (!title || !Array.isArray(targetUserIds) || targetUserIds.length === 0) {
+      return res.status(400).json({ message: "title and targetUserIds are required" });
+    }
+    try {
+      const conv = await storage.createBroadcastConversation(req.user.id, title, targetUserIds);
+      if (content?.trim()) {
+        const msg = await storage.sendMessage(conv.id, req.user.id, content.trim());
+        broadcastToUsers(targetUserIds, "new_message", { conversationId: conv.id, message: msg });
+      }
+      res.json({ conversation: conv });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** PATCH /api/messages/conversations/:id/visibility — admin hide/show a conversation */
+  app.patch("/api/messages/conversations/:id/visibility", requireAdmin, async (req: any, res) => {
+    const convId = parseInt(req.params.id);
+    const { targetUserId, hidden } = req.body;
+    if (typeof hidden !== "boolean") return res.status(400).json({ message: "hidden (boolean) is required" });
+    try {
+      await storage.setConversationVisibility(convId, targetUserId ?? null, hidden, req.user.id);
+      // Notify affected user(s)
+      const affectedIds = targetUserId ? [targetUserId] : await storage.getConversationParticipantIds(convId);
+      broadcastToUsers(affectedIds, "conversation_updated", { conversationId: convId });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** GET /api/messages/admin/all — admin: all conversations with participant summaries */
+  app.get("/api/messages/admin/all", requireAdmin, async (_req, res) => {
+    try {
+      const conversations = await storage.adminGetAllConversations();
+      res.json(conversations);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   return httpServer;

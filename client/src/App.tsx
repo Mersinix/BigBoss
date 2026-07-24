@@ -35,6 +35,9 @@ import PrintDetailPage from "@/pages/print-detail-page";
 import BaristaPage from "@/pages/barista-page";
 import MarketingPage from "@/pages/marketing-page";
 import MessagesPage from "@/pages/cafe/messages-page";
+import SupplierMessagesPage from "@/pages/supplier/messages-page";
+import AdminMessagesPage from "@/pages/admin/messages-page";
+import DeliveryMessagesPage from "@/pages/delivery/messages-page";
 import CafeSettingsPage from "@/pages/cafe/settings-page";
 
 // New role dashboards
@@ -234,6 +237,9 @@ function Router() {
       <Route path="/supplier/help">
         {() => (<DashboardLayout><ProtectedRoute component={HelpCenterPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
+      <Route path="/supplier/messages">
+        {() => (<DashboardLayout><ProtectedRoute component={SupplierMessagesPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
+      </Route>
 
       {/* ── Printer routes ── */}
       <Route path="/printer/:rest*">
@@ -370,6 +376,14 @@ function Router() {
       </Route>
       <Route path="/admin/reviews">
         {() => (<DashboardLayout><ProtectedRoute component={AdminReviewsPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      <Route path="/admin/messages">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminMessagesPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+
+      {/* ── Delivery / Driver routes ── */}
+      <Route path="/delivery/messages">
+        {() => (<DashboardLayout><ProtectedRoute component={DeliveryMessagesPage} allowedRoles={["DELIVERY_COMPANY", "DRIVER"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       <Route component={NotFound} />

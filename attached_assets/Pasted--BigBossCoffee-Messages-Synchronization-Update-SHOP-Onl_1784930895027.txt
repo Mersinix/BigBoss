@@ -1,0 +1,407 @@
+# BigBossCoffee – Messages Synchronization Update (SHOP Only)
+
+## Objective
+
+Upgrade the existing **SHOP Messages** module into a fully synchronized real-time messaging system between **Coffee Owners, Suppliers, Delivery, and Admin**, while preserving the current UI and all existing features.
+
+**Important:**
+
+* Do NOT redesign the existing Coffee Owner Messages page.
+* Do NOT remove any existing components.
+* Do NOT modify PRINT, BARISTA or MARKETING messages. Leave them exactly as they are. We will update them later.
+* Keep all existing layouts, colors, spacing, navigation and design unless a change is explicitly required below.
+* Before implementing, analyze the existing messaging flow and verify that every synchronization path works correctly. Avoid introducing regressions anywhere else in the project.
+
+---
+
+# Scope
+
+Only implement the synchronization of:
+
+* SHOP Messages
+
+Do NOT change:
+
+* PRINT
+* BARISTA
+* MARKETING
+
+Those sections must continue working exactly as they do today.
+
+---
+
+# Coffee Owner Messages
+
+Keep the existing Messages page and existing switcher exactly as it is.
+
+The SHOP tab should now display real conversations with actual users instead of static/demo data.
+
+Replace every placeholder conversation with synchronized conversations coming from:
+
+* Suppliers
+* Admin
+* Delivery
+
+The existing chat interface must remain visually unchanged.
+
+---
+
+# Conversation Visibility Rules
+
+## Supplier Conversations
+
+A Coffee Owner should only see Suppliers with whom they have at least one order.
+
+If no order relationship exists:
+
+* the Supplier must not appear.
+
+---
+
+## Delivery Conversations
+
+A Coffee Owner should only see Delivery companies (or Delivery users) involved in one of their orders.
+
+If there is no delivery relationship:
+
+* they must not appear.
+
+---
+
+## Admin Conversations
+
+The Admin conversation should always be available unless intentionally hidden by the Admin.
+
+---
+
+# Conversation Identification
+
+Without changing the design, visually distinguish conversations.
+
+Use:
+
+* Admin
+
+  * red indication
+
+* Supplier
+
+  * coffee color indication
+
+* Delivery
+
+  * green indication
+
+Do not redesign the conversation list.
+
+Only add the appropriate visual indication.
+
+---
+
+# New Messages Module
+
+Create a new **Messages** tab for:
+
+* Admin
+* Supplier
+* Delivery
+
+Do not change the design language used across the application.
+
+Each role should have a professional messaging interface consistent with the existing application.
+
+---
+
+# Supplier Messages
+
+Suppliers should be able to:
+
+* view conversations with Coffee Owners that have orders with them
+
+* send messages
+
+* receive messages
+
+* see synchronized history
+
+Suppliers must never see conversations unrelated to them.
+
+---
+
+# Delivery Messages
+
+Delivery users should be able to:
+
+* communicate with Coffee Owners involved in their deliveries
+
+* communicate with Admin
+
+* receive synchronized messages
+
+Only conversations related to deliveries assigned to them should appear.
+
+---
+
+# Admin Messages
+
+Admin should have a centralized messaging center.
+
+The Admin must be able to communicate with:
+
+* Coffee Owners
+* Suppliers
+* Delivery
+
+Admin should also be able to create system conversations.
+
+---
+
+# Broadcast Messages
+
+Admin can send a message to:
+
+* one Coffee Owner
+
+* multiple Coffee Owners
+
+* all Coffee Owners
+
+* one Supplier
+
+* multiple Suppliers
+
+* all Suppliers
+
+* one Delivery
+
+* multiple Delivery users
+
+* all Delivery users
+
+* any combination of users
+
+* every user in the platform
+
+This will be used for announcements, maintenance notifications, promotions and system messages.
+
+---
+
+# Chat Visibility Management
+
+Admin must be able to control chat visibility.
+
+Without deleting conversations, Admin can hide or show chats for:
+
+* all Coffee Owners
+
+* a specific Coffee Owner
+
+* all Suppliers
+
+* a specific Supplier
+
+* all Delivery users
+
+* a specific Delivery user
+
+* any individual user
+
+* any role
+
+Examples:
+
+Hide Admin chat for every Supplier.
+
+Hide Admin chat for one Coffee Owner.
+
+Hide Delivery conversations for one user.
+
+Hide a broadcast conversation.
+
+Show it again later.
+
+Hidden chats should simply disappear from the user's interface until enabled again.
+
+Conversation history must remain preserved.
+
+---
+
+# Synchronization
+
+All SHOP conversations must remain synchronized.
+
+When any participant sends a message:
+
+every participant involved should immediately see the updated conversation.
+
+Synchronization should include:
+
+* conversation list
+
+* latest message
+
+* unread counters
+
+* timestamps
+
+* message history
+
+* delivery status
+
+No duplicate conversations should ever be created.
+
+No duplicate messages should appear.
+
+---
+
+# Existing Conversation List
+
+Keep the current conversation cards.
+
+Only replace demo data with real synchronized data.
+
+Current behavior like:
+
+* last message preview
+
+* unread badge
+
+* timestamps
+
+must continue working using real data.
+
+---
+
+# Message History
+
+Conversation history must persist.
+
+Opening a conversation should always load the complete synchronized history available to that user.
+
+---
+
+# Professional Messaging Features
+
+Add professional messaging capabilities while respecting the existing UI.
+
+Include features such as:
+
+* unread message counters
+
+* read status
+
+* delivered status
+
+* typing indicator (if supported by the current architecture)
+
+* conversation ordering by latest activity
+
+* automatic latest message preview
+
+* timestamps
+
+* conversation search
+
+* message search inside a conversation
+
+* message pagination for long histories
+
+* empty state when no conversations exist
+
+* attachment-ready architecture for future upgrades (without implementing future modules)
+
+* support for future notification integration
+
+---
+
+# Security
+
+Ensure users can only access conversations they are authorized to see.
+
+Users must never be able to:
+
+* open another user's conversation
+
+* access hidden conversations
+
+* retrieve unauthorized message history
+
+* send messages to unauthorized users
+
+---
+
+# Performance
+
+Conversation loading should remain efficient.
+
+Unread counts and latest messages should stay synchronized without affecting the rest of the application.
+
+---
+
+# Backward Compatibility
+
+Do NOT modify unrelated modules.
+
+Do NOT change:
+
+* Orders
+
+* Products
+
+* Promotions
+
+* Inventory
+
+* Dashboard
+
+* Authentication
+
+* Navigation
+
+* Permissions unrelated to messaging
+
+* Existing layouts
+
+* Existing design
+
+Everything outside the SHOP messaging synchronization must continue functioning exactly as before.
+
+---
+
+# Final Validation
+
+Before considering the work complete, thoroughly verify:
+
+* Coffee Owner ↔ Supplier synchronization
+
+* Coffee Owner ↔ Delivery synchronization
+
+* Coffee Owner ↔ Admin synchronization
+
+* Admin broadcast messaging
+
+* Role-based visibility
+
+* Hidden chats
+
+* Restored chats
+
+* Unread counters
+
+* Latest message updates
+
+* Conversation ordering
+
+* Timestamp updates
+
+* History persistence
+
+* Authorization rules
+
+* No duplicate conversations
+
+* No duplicate messages
+
+* No broken existing functionality
+
+Only finalize once every messaging flow is fully synchronized and the rest of the BigBossCoffee platform continues working exactly as before.

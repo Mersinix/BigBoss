@@ -478,6 +478,36 @@ export const promotionUsage = pgTable("promotion_usage", {
 
 // ── Relations ────────────────────────────────────────────────────────────────
 
+// ── Messaging ────────────────────────────────────────────────────────────────
+
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  title: text("title"), // null for direct conversations; set for broadcasts
+  type: text("type").notNull().default('DIRECT'), // 'DIRECT' | 'BROADCAST'
+  service: text("service").notNull().default('SHOP'), // 'SHOP' only for now
+  createdByUserId: integer("created_by_user_id").notNull(),
+  lastMessageAt: timestamp("last_message_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const conversationParticipants = pgTable("conversation_participants", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull(),
+  userId: integer("user_id").notNull(),
+  lastReadAt: timestamp("last_read_at"), // null = never read
+  hiddenAt: timestamp("hidden_at"), // null = visible; non-null = admin-hidden
+  hiddenByUserId: integer("hidden_by_user_id"), // which admin hid this
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull(),
+  senderId: integer("sender_id").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const usersRelations = relations(users, ({ many }) => ({
   supplierProducts: many(products, { relationName: 'supplierProducts' }),
   cafeOrders: many(orders, { relationName: 'cafeOrders' }),
@@ -598,6 +628,22 @@ export const promotionUsageRelations = relations(promotionUsage, ({ one }) => ({
   cafe: one(users, { fields: [promotionUsage.cafeId], references: [users.id] }),
 }));
 
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  createdBy: one(users, { fields: [conversations.createdByUserId], references: [users.id] }),
+  participants: many(conversationParticipants),
+  messages: many(messages),
+}));
+
+export const conversationParticipantsRelations = relations(conversationParticipants, ({ one }) => ({
+  conversation: one(conversations, { fields: [conversationParticipants.conversationId], references: [conversations.id] }),
+  user: one(users, { fields: [conversationParticipants.userId], references: [users.id] }),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
+  sender: one(users, { fields: [messages.senderId], references: [users.id] }),
+}));
+
 // ── Insert Schemas ───────────────────────────────────────────────────────────
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -625,6 +671,9 @@ export const insertPackFavoriteSchema = createInsertSchema(packFavorites).omit({
 
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });
+
+export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, lastMessageAt: true });
+export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1272,3 +1321,38 @@ export type ProspectStats = {
   calledToday: number;
   interestedCount: number;
 };
+
+// ── Messaging types ──────────────────────────────────────────────────────────
+
+export type Conversation = typeof conversations.$inferSelect;
+export type ConversationParticipant = typeof conversationParticipants.$inferSelect;
+export type ChatMessage = typeof messages.$inferSelect;
+
+export type ConversationSummary = {
+  id: number;
+  type: string; // 'DIRECT' | 'BROADCAST'
+  title: string | null;
+  service: string;
+  lastMessageAt: string;
+  lastMessage: { content: string; senderId: number; senderName: string; createdAt: string } | null;
+  unreadCount: number;
+  /** Everyone in the conversation except the requesting user */
+  otherParticipants: { id: number; name: string; role: string }[];
+};
+
+export type ConversationDetail = ConversationSummary & {
+  allParticipants: { id: number; name: string; role: string }[];
+};
+
+export type ConversationMessageRow = {
+  id: number;
+  conversationId: number;
+  senderId: number;
+  senderName: string;
+  senderRole: string;
+  content: string;
+  createdAt: string;
+};
+
+export type EligibleContact = { id: number; name: string; role: string };
+

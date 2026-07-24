@@ -112,6 +112,7 @@ export function AppSidebar() {
             { title: "Analytics", url: "/admin/analytics", icon: BarChart2 },
             { title: "Notifications", url: "/admin/notifications", icon: Bell },
             { title: "Earnings", url: "/admin/earnings", icon: TrendingUp },
+            { title: "Messages", url: "/admin/messages", icon: MessageCircle },
           ],
         },
       ];
@@ -221,6 +222,7 @@ export function AppSidebar() {
           label: "SUPPORT",
           items: [
             { title: "Help Center", url: "/supplier/help", icon: HelpCircle },
+            { title: "Messages", url: "/supplier/messages", icon: MessageCircle },
           ],
         },
       ];
@@ -233,6 +235,7 @@ export function AppSidebar() {
           items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
             { title: "Active Deliveries", url: "/orders", icon: Truck },
+            { title: "Messages", url: "/delivery/messages", icon: MessageCircle },
           ],
         },
       ];

@@ -9,7 +9,9 @@ import {
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
   landingConfig, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   promotions, promotionUsage,
+  conversations, conversationParticipants, messages,
   type LandingConfig, type Prospect, type InsertProspect, type ProspectStats,
+  type ConversationSummary, type ConversationDetail, type ConversationMessageRow, type EligibleContact,
   type InsertUser, type User,
   type InsertProduct, type Product, type ProductWithSupplier, type ProductWithTaxonomy,
   type InsertOrder, type Order, type OrderWithDetails,
@@ -2721,6 +2723,295 @@ export class DatabaseStorage implements IStorage {
       eq(orders.cafeId, cafeId),
     ));
     return cafeOrders.length;
+  }
+
+  // ── Messaging ──────────────────────────────────────────────────────────────
+
+  /** Return all non-hidden conversations for a user, ordered by most recent activity. */
+  async getConversationsForUser(userId: number): Promise<ConversationSummary[]> {
+    const participants = await db.select().from(conversationParticipants)
+      .where(and(eq(conversationParticipants.userId, userId), isNull(conversationParticipants.hiddenAt)));
+    if (participants.length === 0) return [];
+
+    const convIds = participants.map(p => p.conversationId);
+    const convRows = await db.select().from(conversations).where(inArray(conversations.id, convIds))
+      .orderBy(desc(conversations.lastMessageAt));
+
+    // Fetch all participants for all conversations in one query
+    const allParticipants = await db.select({ cp: conversationParticipants, u: users })
+      .from(conversationParticipants)
+      .innerJoin(users, eq(conversationParticipants.userId, users.id))
+      .where(inArray(conversationParticipants.conversationId, convIds));
+
+    // Fetch last message per conversation
+    const lastMsgs = await db.select().from(messages).where(inArray(messages.conversationId, convIds))
+      .orderBy(desc(messages.createdAt));
+
+    const userMap = new Map<number, { name: string; role: string }>();
+    for (const row of allParticipants) userMap.set(row.u.id, { name: row.u.name, role: row.u.role });
+
+    const myParticipantMap = new Map(participants.map(p => [p.conversationId, p]));
+
+    return convRows.map(conv => {
+      const myParticipant = myParticipantMap.get(conv.id)!;
+      const others = allParticipants
+        .filter(r => r.cp.conversationId === conv.id && r.cp.userId !== userId)
+        .map(r => ({ id: r.u.id, name: r.u.name, role: r.u.role }));
+
+      // Unread: messages after lastReadAt (or all if never read)
+      const myLastRead = myParticipant.lastReadAt;
+      const unreadCount = lastMsgs.filter(m => {
+        if (m.conversationId !== conv.id) return false;
+        if (m.senderId === userId) return false; // own messages never count as unread
+        return !myLastRead || m.createdAt! > myLastRead;
+      }).length;
+
+      const lastMsg = lastMsgs.find(m => m.conversationId === conv.id);
+
+      return {
+        id: conv.id,
+        type: conv.type,
+        title: conv.title,
+        service: conv.service,
+        lastMessageAt: (conv.lastMessageAt ?? conv.createdAt)!.toISOString(),
+        lastMessage: lastMsg ? {
+          content: lastMsg.content,
+          senderId: lastMsg.senderId,
+          senderName: userMap.get(lastMsg.senderId)?.name ?? 'Unknown',
+          createdAt: lastMsg.createdAt!.toISOString(),
+        } : null,
+        unreadCount,
+        otherParticipants: others,
+      } satisfies ConversationSummary;
+    });
+  }
+
+  /** Find an existing DIRECT conversation between two users, or create one. */
+  async findOrCreateDirectConversation(userId1: number, userId2: number): Promise<{ conversation: typeof conversations.$inferSelect; isNew: boolean }> {
+    // Find conversations where both users are participants
+    const p1 = await db.select({ conversationId: conversationParticipants.conversationId })
+      .from(conversationParticipants).where(eq(conversationParticipants.userId, userId1));
+    const p2 = await db.select({ conversationId: conversationParticipants.conversationId })
+      .from(conversationParticipants).where(eq(conversationParticipants.userId, userId2));
+
+    const ids1 = new Set(p1.map(r => r.conversationId));
+    const sharedIds = p2.filter(r => ids1.has(r.conversationId)).map(r => r.conversationId);
+
+    if (sharedIds.length > 0) {
+      const directConvs = await db.select().from(conversations)
+        .where(and(inArray(conversations.id, sharedIds), eq(conversations.type, 'DIRECT')));
+      if (directConvs.length > 0) {
+        return { conversation: directConvs[0], isNew: false };
+      }
+    }
+
+    // Create new direct conversation
+    const [conv] = await db.insert(conversations).values({
+      type: 'DIRECT',
+      service: 'SHOP',
+      createdByUserId: userId1,
+    }).returning();
+
+    await db.insert(conversationParticipants).values([
+      { conversationId: conv.id, userId: userId1 },
+      { conversationId: conv.id, userId: userId2 },
+    ]);
+
+    return { conversation: conv, isNew: true };
+  }
+
+  /** Check if userId is a non-hidden participant of conversationId. */
+  async isParticipant(conversationId: number, userId: number): Promise<boolean> {
+    const [row] = await db.select().from(conversationParticipants)
+      .where(and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.userId, userId),
+        isNull(conversationParticipants.hiddenAt),
+      ));
+    return !!row;
+  }
+
+  async getConversationParticipantIds(conversationId: number): Promise<number[]> {
+    const rows = await db.select({ userId: conversationParticipants.userId })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.conversationId, conversationId));
+    return rows.map(r => r.userId);
+  }
+
+  /** Get paginated messages for a conversation. Newest first for pagination, but return in asc order. */
+  async getConversationMessages(conversationId: number, page: number, pageSize: number): Promise<{ msgs: ConversationMessageRow[]; total: number }> {
+    const total = await db.select({ count: sql<number>`count(*)::int` }).from(messages)
+      .where(eq(messages.conversationId, conversationId));
+
+    const rows = await db.select({ m: messages, u: users })
+      .from(messages)
+      .innerJoin(users, eq(messages.senderId, users.id))
+      .where(eq(messages.conversationId, conversationId))
+      .orderBy(desc(messages.createdAt))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+
+    // Return in chronological order
+    const msgs: ConversationMessageRow[] = rows.reverse().map(r => ({
+      id: r.m.id,
+      conversationId: r.m.conversationId,
+      senderId: r.m.senderId,
+      senderName: r.u.name,
+      senderRole: r.u.role,
+      content: r.m.content,
+      createdAt: r.m.createdAt!.toISOString(),
+    }));
+    return { msgs, total: total[0]?.count ?? 0 };
+  }
+
+  /** Persist a message and update conversation lastMessageAt. Returns the inserted message enriched with sender info. */
+  async sendMessage(conversationId: number, senderId: number, content: string): Promise<ConversationMessageRow> {
+    const [sender] = await db.select().from(users).where(eq(users.id, senderId));
+    const [msg] = await db.insert(messages).values({ conversationId, senderId, content }).returning();
+    await db.update(conversations).set({ lastMessageAt: msg.createdAt }).where(eq(conversations.id, conversationId));
+    return {
+      id: msg.id,
+      conversationId: msg.conversationId,
+      senderId: msg.senderId,
+      senderName: sender?.name ?? 'Unknown',
+      senderRole: sender?.role ?? 'CAFE_OWNER',
+      content: msg.content,
+      createdAt: msg.createdAt!.toISOString(),
+    };
+  }
+
+  /** Mark all messages in a conversation as read for a user. */
+  async markConversationRead(conversationId: number, userId: number): Promise<void> {
+    await db.update(conversationParticipants)
+      .set({ lastReadAt: new Date() })
+      .where(and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.userId, userId),
+      ));
+  }
+
+  /** Admin: create a broadcast conversation to multiple users. */
+  async createBroadcastConversation(adminId: number, title: string, targetUserIds: number[]): Promise<typeof conversations.$inferSelect> {
+    const [conv] = await db.insert(conversations).values({
+      title,
+      type: 'BROADCAST',
+      service: 'SHOP',
+      createdByUserId: adminId,
+    }).returning();
+
+    const allParticipants = Array.from(new Set([adminId, ...targetUserIds]));
+    await db.insert(conversationParticipants).values(
+      allParticipants.map(uid => ({ conversationId: conv.id, userId: uid }))
+    );
+
+    return conv;
+  }
+
+  /** Return users a given user is allowed to start a conversation with based on order relationships. */
+  async getEligibleContacts(userId: number): Promise<EligibleContact[]> {
+    const [me] = await db.select().from(users).where(eq(users.id, userId));
+    if (!me) return [];
+
+    const isAdmin = me.role === 'ADMIN' || me.role === 'SUPER_ADMIN';
+    if (isAdmin) {
+      // Admin can message everyone
+      const all = await db.select().from(users).where(ne(users.id, userId));
+      return all.map(u => ({ id: u.id, name: u.name, role: u.role }));
+    }
+
+    const contactUserIds = new Set<number>();
+
+    if (me.role === 'CAFE_OWNER') {
+      // Can message suppliers from orders + admin users
+      const cafeOrders = await db.select().from(orders).where(eq(orders.cafeId, userId));
+      for (const o of cafeOrders) {
+        if (o.supplierId) contactUserIds.add(o.supplierId);
+      }
+    } else if (me.role === 'SUPPLIER') {
+      // Can message cafe owners from orders
+      const supplierOrders = await db.select().from(orders).where(eq(orders.supplierId, userId));
+      for (const o of supplierOrders) contactUserIds.add(o.cafeId);
+    } else if (me.role === 'DELIVERY_COMPANY' || me.role === 'DRIVER') {
+      // Can message cafe owners from deliveries
+      const delivOrders = await db.select().from(orders).where(eq(orders.deliveryId, userId));
+      for (const o of delivOrders) contactUserIds.add(o.cafeId);
+    }
+
+    // Everyone can message admin users
+    const admins = await db.select().from(users)
+      .where(or(eq(users.role, 'ADMIN' as any), eq(users.role, 'SUPER_ADMIN' as any)));
+    for (const a of admins) contactUserIds.add(a.id);
+
+    if (contactUserIds.size === 0) return [];
+    const contacts = await db.select().from(users).where(inArray(users.id, Array.from(contactUserIds)));
+    return contacts.map(u => ({ id: u.id, name: u.name, role: u.role }));
+  }
+
+  /** Admin: hide or show a conversation for a specific user (or for all current participants if targetUserId is null). */
+  async setConversationVisibility(conversationId: number, targetUserId: number | null, hidden: boolean, adminId: number): Promise<void> {
+    const condition = targetUserId
+      ? and(eq(conversationParticipants.conversationId, conversationId), eq(conversationParticipants.userId, targetUserId))
+      : eq(conversationParticipants.conversationId, conversationId);
+
+    await db.update(conversationParticipants)
+      .set({ hiddenAt: hidden ? new Date() : null, hiddenByUserId: hidden ? adminId : null })
+      .where(condition!);
+  }
+
+  /** Admin: list all conversations with a summary of participants. */
+  async adminGetAllConversations(): Promise<ConversationSummary[]> {
+    const convRows = await db.select().from(conversations).orderBy(desc(conversations.lastMessageAt));
+    if (convRows.length === 0) return [];
+
+    const allParticipants = await db.select({ cp: conversationParticipants, u: users })
+      .from(conversationParticipants)
+      .innerJoin(users, eq(conversationParticipants.userId, users.id))
+      .where(inArray(conversationParticipants.conversationId, convRows.map(c => c.id)));
+
+    const lastMsgs = await db.select().from(messages)
+      .where(inArray(messages.conversationId, convRows.map(c => c.id)))
+      .orderBy(desc(messages.createdAt));
+
+    const userMap = new Map<number, { name: string; role: string }>();
+    for (const row of allParticipants) userMap.set(row.u.id, { name: row.u.name, role: row.u.role });
+
+    return convRows.map(conv => {
+      const participants = allParticipants.filter(r => r.cp.conversationId === conv.id)
+        .map(r => ({ id: r.u.id, name: r.u.name, role: r.u.role }));
+      const lastMsg = lastMsgs.find(m => m.conversationId === conv.id);
+      return {
+        id: conv.id,
+        type: conv.type,
+        title: conv.title,
+        service: conv.service,
+        lastMessageAt: (conv.lastMessageAt ?? conv.createdAt)!.toISOString(),
+        lastMessage: lastMsg ? {
+          content: lastMsg.content,
+          senderId: lastMsg.senderId,
+          senderName: userMap.get(lastMsg.senderId)?.name ?? 'Unknown',
+          createdAt: lastMsg.createdAt!.toISOString(),
+        } : null,
+        unreadCount: 0,
+        otherParticipants: participants,
+      } satisfies ConversationSummary;
+    });
+  }
+
+  async getUnreadMessageCount(userId: number): Promise<number> {
+    const participants = await db.select().from(conversationParticipants)
+      .where(and(eq(conversationParticipants.userId, userId), isNull(conversationParticipants.hiddenAt)));
+    if (participants.length === 0) return 0;
+
+    const convIds = participants.map(p => p.conversationId);
+    const allMessages = await db.select().from(messages).where(inArray(messages.conversationId, convIds));
+
+    return allMessages.filter(m => {
+      if (m.senderId === userId) return false;
+      const myParticipant = participants.find(p => p.conversationId === m.conversationId);
+      if (!myParticipant) return false;
+      const lastRead = myParticipant.lastReadAt;
+      return !lastRead || m.createdAt! > lastRead;
+    }).length;
   }
 }
 

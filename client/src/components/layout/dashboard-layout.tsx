@@ -9,7 +9,7 @@ import { useRealtime } from "@/hooks/use-realtime";
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { items } = useCart();
-  useRealtime();
+  useRealtime(user?.id);
 
   if (!user) return <>{children}</>;
 

@@ -2922,25 +2922,46 @@ export class DatabaseStorage implements IStorage {
     const contactUserIds = new Set<number>();
 
     if (me.role === 'CAFE_OWNER') {
-      // Can message suppliers from orders + admin users
+      // Can message suppliers from orders
       const cafeOrders = await db.select().from(orders).where(eq(orders.cafeId, userId));
       for (const o of cafeOrders) {
         if (o.supplierId) contactUserIds.add(o.supplierId);
+      }
+      // Also add delivery users from orders
+      for (const o of cafeOrders) {
+        if (o.deliveryId) contactUserIds.add(o.deliveryId);
+      }
+      // If no order relationships yet, show all approved suppliers
+      if (contactUserIds.size === 0) {
+        const allSuppliers = await db.select().from(users)
+          .where(and(eq(users.role, 'SUPPLIER' as any), eq(users.status, 'approved')));
+        for (const s of allSuppliers) contactUserIds.add(s.id);
       }
     } else if (me.role === 'SUPPLIER') {
       // Can message cafe owners from orders
       const supplierOrders = await db.select().from(orders).where(eq(orders.supplierId, userId));
       for (const o of supplierOrders) contactUserIds.add(o.cafeId);
+      // Always show all approved cafe owners (so new suppliers can message without prior orders)
+      const allCafes = await db.select().from(users)
+        .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
+      for (const c of allCafes) contactUserIds.add(c.id);
     } else if (me.role === 'DELIVERY_COMPANY' || me.role === 'DRIVER') {
       // Can message cafe owners from deliveries
       const delivOrders = await db.select().from(orders).where(eq(orders.deliveryId, userId));
       for (const o of delivOrders) contactUserIds.add(o.cafeId);
+      // Also show all approved cafe owners
+      const allCafes = await db.select().from(users)
+        .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
+      for (const c of allCafes) contactUserIds.add(c.id);
     }
 
     // Everyone can message admin users
     const admins = await db.select().from(users)
       .where(or(eq(users.role, 'ADMIN' as any), eq(users.role, 'SUPER_ADMIN' as any)));
     for (const a of admins) contactUserIds.add(a.id);
+
+    // Remove self from contact list
+    contactUserIds.delete(userId);
 
     if (contactUserIds.size === 0) return [];
     const contacts = await db.select().from(users).where(inArray(users.id, Array.from(contactUserIds)));

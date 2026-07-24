@@ -1,0 +1,180 @@
+The SHOP messaging system is not yet fully connected to real data. Complete the implementation by replacing the remaining placeholder/demo logic with the real synchronized messaging system.
+
+## Continue from the current implementation
+
+Do **not** restart or redesign anything.
+
+Work from the current codebase and fix only the remaining issues.
+
+Do **not** modify PRINT, BARISTA or MARKETING messages. Those modules should continue using their current placeholder data until we implement them later.
+
+---
+
+# 1. Coffee Owner SHOP Messages
+
+The SHOP tab is still using fake data.
+
+In `marketplace-layout.tsx`, remove the dependency on the `fakeThreads` array **only for SHOP messages**.
+
+PRINT, BARISTA and MARKETING can continue using the existing fake data exactly as they are.
+
+The SHOP tab must now load real conversations from the database.
+
+No placeholder supplier should appear anymore.
+
+No fake messages should appear anymore.
+
+Everything displayed in SHOP must come from the real messaging system.
+
+Keep the existing UI exactly the same.
+
+Do not redesign the page.
+
+---
+
+# 2. Supplier Messages
+
+The Supplier Messages page currently has no available users.
+
+Fix it.
+
+A supplier should automatically see every Coffee Owner that has at least one order with that supplier.
+
+Those Coffee Owners should appear in the conversation list.
+
+The supplier must be able to:
+
+* open the conversation
+* send messages
+* receive messages
+* continue previous conversations
+* start messaging eligible Coffee Owners if no conversation exists yet
+
+The list must be generated from real relationships, not hardcoded data.
+
+---
+
+# 3. Admin Messages
+
+The Admin Messages page currently has no users available.
+
+Fix it.
+
+The Admin must automatically be able to see:
+
+* Coffee Owners
+* Suppliers
+* Delivery users
+
+The Admin must be able to start a conversation with any eligible user even if no previous messages exist.
+
+The Admin should also continue existing conversations normally.
+
+---
+
+# 4. Conversation Creation
+
+If two eligible users have never exchanged messages before:
+
+Creating the first message should automatically create the conversation.
+
+No manual setup should ever be required.
+
+---
+
+# 5. Coffee Owner Conversation List
+
+The Coffee Owner should automatically see:
+
+* Suppliers that they have orders with
+* Delivery companies/users related to their orders
+* Admin (when enabled)
+
+No unrelated suppliers should appear.
+
+No unrelated delivery users should appear.
+
+Conversation eligibility must be generated from real marketplace relationships.
+
+---
+
+# 6. Real Data Only
+
+Verify that every SHOP conversation is generated from:
+
+* database users
+* database orders
+* database conversations
+* database messages
+
+No SHOP conversation should rely on:
+
+* fakeThreads
+* mock arrays
+* hardcoded names
+* placeholder messages
+* demo users
+
+---
+
+# 7. Synchronization
+
+Verify again that:
+
+When any participant sends a message:
+
+* it is immediately stored in the database
+* every participant instantly receives it
+* unread counters update
+* latest message preview updates
+* timestamps update
+* conversation ordering updates
+* open chats update without refreshing
+
+Test every direction:
+
+* Coffee Owner → Supplier
+* Supplier → Coffee Owner
+* Coffee Owner → Admin
+* Admin → Coffee Owner
+* Coffee Owner → Delivery
+* Delivery → Coffee Owner
+* Admin → Supplier
+* Supplier → Admin
+* Admin → Delivery
+* Delivery → Admin
+
+Fix any synchronization issue found.
+
+---
+
+# 8. Backward Compatibility
+
+Do not modify:
+
+* existing layouts
+* existing styling
+* existing navigation
+* PRINT messages
+* BARISTA messages
+* MARKETING messages
+
+Only replace the SHOP messaging source with the real synchronized system.
+
+---
+
+# 9. Final Validation
+
+Before finishing, verify that:
+
+* there are no remaining fake SHOP messages,
+* there are no remaining fake SHOP conversations,
+* Admin can immediately message users,
+* Suppliers can immediately message eligible Coffee Owners,
+* Coffee Owners see only eligible Suppliers and Delivery users,
+* new conversations are automatically created when the first message is sent,
+* all SHOP conversations are fully synchronized with the database,
+* all SHOP messages are delivered in real time without requiring a page refresh,
+* no existing functionality outside the SHOP messaging module has been broken.
+
+Do not stop at investigation. Execute the fixes immediately, validate the complete flow end-to-end, and only finish once the SHOP messaging system is fully connected to real marketplace data and functioning correctly.

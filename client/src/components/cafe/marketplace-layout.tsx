@@ -3,7 +3,8 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { useOrders } from "@/hooks/use-orders";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,7 @@ import {
   Search, LogOut, Settings, LayoutDashboard, Store, Send,
   Star, Package, Trash2, CheckCircle, Clock, Box, Truck,
   AlertCircle, DollarSign, ClipboardList, Phone, Globe, MapPinIcon, AlertTriangle,
-  Printer, Megaphone, User, GraduationCap, Sun, Moon, X,
+  Printer, Megaphone, User, GraduationCap, Sun, Moon, X, Plus, Loader2,
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
@@ -32,7 +33,7 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
-import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard } from "@shared/schema";
+import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
@@ -794,6 +795,9 @@ const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "BARISTA" | "MARKETING" 
 // ── Messages Panel (premium dark/light — mirrors FavoritesPanel design) ───────
 
 function MessagesPanel({ onClose }: { onClose: () => void }) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const { states: serviceStates } = useServiceStates();
   const visibleServicesList = SERVICES_LIST.filter((s) => {
     const key = SERVICE_ID_TO_KEY[s];
@@ -802,11 +806,22 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
 
   const [isDark, setIsDark] = useState(true);
   const [service, setService] = useState<ServiceId>("SHOP");
+  const [view, setView] = useState<"list" | "chat">("list");
+
+  // ── SHOP real data state ──────────────────────────────────────────────────
+  const [shopConvId, setShopConvId] = useState<number | null>(null);
+  const [shopInput, setShopInput] = useState("");
+  const [newConvOpen, setNewConvOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
+  const [shopSearch, setShopSearch] = useState("");
+  const shopMsgsBottomRef = useRef<HTMLDivElement>(null);
+
+  // ── Non-SHOP fake data state ──────────────────────────────────────────────
   const [threads, setThreads] = useState<Thread[]>(fakeThreads);
   const [active, setActive] = useState<Thread | null>(null);
-  const [view, setView] = useState<"list" | "chat">("list");
-  const [input, setInput] = useState("");
+  const [staticInput, setStaticInput] = useState("");
 
+  // ── Theme tokens ──────────────────────────────────────────────────────────
   const dk = isDark;
   const bg = dk ? "bg-gray-900" : "bg-white";
   const textPrimary = dk ? "text-white" : "text-gray-900";
@@ -821,7 +836,107 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
   const chatBubbleBg = dk ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-900";
   const inputCls = dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 rounded-2xl" : "border-gray-200 rounded-2xl";
 
-  const filtered = threads.filter((t) => t.service === service);
+  // ── SHOP queries ──────────────────────────────────────────────────────────
+  const { data: shopConversations = [], isLoading: shopConvsLoading } = useQuery<ConversationSummary[]>({
+    queryKey: ["/api/messages/conversations"],
+    queryFn: async () => {
+      const r = await fetch("/api/messages/conversations", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    refetchInterval: 30000,
+    enabled: service === "SHOP",
+  });
+
+  const { data: shopContacts = [] } = useQuery<EligibleContact[]>({
+    queryKey: ["/api/messages/eligible-contacts"],
+    queryFn: async () => {
+      const r = await fetch("/api/messages/eligible-contacts", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    enabled: service === "SHOP",
+  });
+
+  const shopActiveConv = shopConversations.find(c => c.id === shopConvId) ?? null;
+
+  const { data: shopMsgsData, isLoading: shopMsgsLoading } = useQuery<{ messages: ConversationMessageRow[] }>({
+    queryKey: ["/api/messages/conversations", shopConvId, "messages"],
+    queryFn: async () => {
+      const r = await fetch(`/api/messages/conversations/${shopConvId}/messages?pageSize=100`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    enabled: !!shopConvId,
+    refetchInterval: shopConvId ? 10000 : false,
+  });
+
+  useEffect(() => {
+    if (service === "SHOP" && view === "chat") {
+      shopMsgsBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [shopMsgsData?.messages.length, service, view]);
+
+  // ── SHOP mutations ────────────────────────────────────────────────────────
+  const sendShopMutation = useMutation({
+    mutationFn: (content: string) =>
+      apiRequest("POST", `/api/messages/conversations/${shopConvId}/messages`, { content }),
+    onSuccess: () => {
+      setShopInput("");
+      qc.invalidateQueries({ queryKey: ["/api/messages/conversations", shopConvId, "messages"] });
+      qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+    },
+    onError: (err: any) => toast({ title: "Failed to send", description: err?.message, variant: "destructive" }),
+  });
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("PATCH", `/api/messages/conversations/${id}/read`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] }),
+  });
+
+  const newConvMutation = useMutation({
+    mutationFn: (targetUserId: number) =>
+      apiRequest("POST", "/api/messages/conversations", { targetUserId }),
+    onSuccess: (data: any) => {
+      setShopConvId(data.conversation.id);
+      setView("chat");
+      setNewConvOpen(false);
+      setContactSearch("");
+      qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+    },
+    onError: (err: any) => toast({ title: "Cannot start conversation", description: err?.message, variant: "destructive" }),
+  });
+
+  // ── SHOP helpers ──────────────────────────────────────────────────────────
+  const openShopConv = (id: number) => {
+    setShopConvId(id);
+    setView("chat");
+    setShopSearch("");
+    markReadMutation.mutate(id);
+  };
+
+  const filteredShopConvs = shopConversations.filter(c => {
+    const name = c.title ?? c.otherParticipants.map(p => p.name).join(", ");
+    return name.toLowerCase().includes(shopSearch.toLowerCase());
+  });
+
+  const filteredContacts = shopContacts.filter(c =>
+    c.name.toLowerCase().includes(contactSearch.toLowerCase())
+  );
+
+  function formatRelTime(iso: string) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return days === 1 ? "Yesterday" : `${days}d ago`;
+  }
+
+  // ── Non-SHOP helpers ──────────────────────────────────────────────────────
+  const filteredFake = threads.filter((t) => t.service === service);
 
   const openConversation = (t: Thread) => {
     setActive(t);
@@ -829,14 +944,18 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
     setThreads((prev) => prev.map((th) => th.id === t.id ? { ...th, unread: 0 } : th));
   };
 
-  const goBack = () => { setView("list"); };
-
-  const send = () => {
-    if (!input.trim() || !active) return;
-    const msg: ThreadMessage = { from: "me", text: input.trim(), time: "Now" };
-    setThreads((prev) => prev.map((t) => t.id === active.id ? { ...t, messages: [...t.messages, msg], lastMessage: input.trim() } : t));
+  const sendStatic = () => {
+    if (!staticInput.trim() || !active) return;
+    const msg: ThreadMessage = { from: "me", text: staticInput.trim(), time: "Now" };
+    setThreads((prev) => prev.map((t) => t.id === active.id ? { ...t, messages: [...t.messages, msg], lastMessage: staticInput.trim() } : t));
     setActive((a) => a ? { ...a, messages: [...a.messages, msg] } : a);
-    setInput("");
+    setStaticInput("");
+  };
+
+  const switchService = (s: ServiceId) => {
+    setService(s);
+    setView("list");
+    setActive(null);
   };
 
   return (
@@ -868,7 +987,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
             <button
               key={s}
               data-testid={`tab-messages-${s.toLowerCase()}`}
-              onClick={() => { setService(s); setView("list"); setActive(null); }}
+              onClick={() => switchService(s)}
               className={`flex-1 py-2 text-[11px] font-semibold rounded-xl transition-all ${service === s ? switcherActive : switcherInactive}`}
             >
               {s}
@@ -882,100 +1001,279 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
       {/* ── Scrollable content ── */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-5 pb-5">
 
-        {/* List view */}
-        {view === "list" && (
-          <div className={`flex-1 overflow-y-auto rounded-2xl border [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full ${cardBg}`}>
-            {filtered.length === 0 ? (
-              <div className={`flex flex-col items-center justify-center h-full py-16 ${textMuted}`}>
-                <MessageCircle className="w-10 h-10 mb-3 opacity-20" />
-                <p className={`text-sm font-medium ${textPrimary}`}>No conversations yet</p>
-                <p className={`text-xs mt-1 opacity-50`}>for {service}</p>
-              </div>
-            ) : (
-              filtered.map((t) => (
-                <button
-                  key={t.id}
-                  data-testid={`button-thread-${t.id}`}
-                  onClick={() => openConversation(t)}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b last:border-0 ${hoverRow} ${borderRow}`}
-                >
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 font-bold text-sm ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
-                    {t.name.charAt(0)}
+        {service === "SHOP" ? (
+          <>
+            {/* ── SHOP list view (real data) ── */}
+            {view === "list" && (
+              <div className={`flex-1 overflow-hidden flex flex-col rounded-2xl border ${cardBg}`}>
+                {/* Search bar + new conv button */}
+                <div className={`flex items-center gap-2 px-3 py-2.5 border-b shrink-0 ${dk ? "border-gray-700/40" : "border-gray-100"}`}>
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
+                    <input
+                      className={`w-full pl-7 pr-2 h-7 text-xs rounded-xl outline-none ${dk ? "bg-gray-700/60 text-white placeholder:text-gray-500 focus:bg-gray-700" : "bg-gray-100 text-gray-900 placeholder:text-gray-400 focus:bg-gray-200"}`}
+                      placeholder="Search conversations…"
+                      value={shopSearch}
+                      onChange={e => setShopSearch(e.target.value)}
+                    />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className={`text-sm font-semibold truncate ${textPrimary}`}>{t.name}</span>
-                      <span className={`text-[10px] shrink-0 ${textMuted}`}>{t.time}</span>
+                  <button
+                    onClick={() => setNewConvOpen(true)}
+                    title="New conversation"
+                    className={`w-7 h-7 rounded-xl flex items-center justify-center transition-colors shrink-0 ${dk ? "bg-blue-600/20 hover:bg-blue-600/30 text-blue-400" : "bg-blue-100 hover:bg-blue-200 text-blue-600"}`}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full">
+                  {shopConvsLoading ? (
+                    <div className="p-3 space-y-2">
+                      {[1,2,3].map(i => <div key={i} className={`h-12 rounded-xl animate-pulse ${dk ? "bg-gray-700/50" : "bg-gray-100"}`} />)}
                     </div>
-                    <p className={`text-xs truncate ${textMuted}`}>{t.lastMessage}</p>
-                  </div>
-                  {t.unread > 0 && (
-                    <span className="shrink-0 bg-blue-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                      {t.unread}
-                    </span>
+                  ) : filteredShopConvs.length === 0 ? (
+                    <div className={`flex flex-col items-center justify-center h-full py-16 ${textMuted}`}>
+                      <MessageCircle className="w-10 h-10 mb-3 opacity-20" />
+                      <p className={`text-sm font-medium ${textPrimary}`}>No conversations yet</p>
+                      <p className="text-xs mt-1 opacity-50">Tap + to start a new chat</p>
+                    </div>
+                  ) : (
+                    filteredShopConvs.map((conv) => {
+                      const name = conv.title ?? conv.otherParticipants.map(p => p.name).join(", ") || "Unknown";
+                      return (
+                        <button
+                          key={conv.id}
+                          data-testid={`button-thread-${conv.id}`}
+                          onClick={() => openShopConv(conv.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b last:border-0 ${hoverRow} ${borderRow}`}
+                        >
+                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 font-bold text-sm ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                            {name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                              <span className={`text-sm font-semibold truncate ${textPrimary}`}>{name}</span>
+                              <span className={`text-[10px] shrink-0 ${textMuted}`}>{formatRelTime(conv.lastMessageAt)}</span>
+                            </div>
+                            <p className={`text-xs truncate ${textMuted}`}>{conv.lastMessage?.content ?? "No messages yet"}</p>
+                          </div>
+                          {conv.unreadCount > 0 && (
+                            <span className="shrink-0 bg-blue-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                              {conv.unreadCount > 9 ? "9+" : conv.unreadCount}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
                   )}
-                </button>
-              ))
+                </div>
+              </div>
             )}
-          </div>
-        )}
 
-        {/* Chat view */}
-        {view === "chat" && active && (
-          <div className={`flex-1 flex flex-col border rounded-2xl overflow-hidden ${cardBg}`}>
-            {/* Header */}
-            <div className={`flex items-center gap-2.5 px-4 py-3 border-b shrink-0 ${dk ? "border-gray-700/60" : "border-gray-100"}`}>
-              <button
-                onClick={goBack}
-                data-testid="button-chat-back"
-                className={`w-7 h-7 rounded-xl flex items-center justify-center transition-colors shrink-0 ${dk ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
-                {active.name.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0 flex items-center gap-2">
-                <span className={`font-semibold text-sm truncate ${textPrimary}`}>{active.name}</span>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg shrink-0 ${SERVICE_BADGE[active.service]}`}>
-                  {active.service}
-                </span>
-              </div>
-            </div>
-            {/* Messages */}
-            <div className={`flex-1 overflow-y-auto p-4 space-y-2.5 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full`}>
-              {active.messages.map((m, i) => (
-                <div key={i} className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    m.from === "me"
-                      ? "bg-amber-600 text-white rounded-br-sm"
-                      : `${chatBubbleBg} rounded-bl-sm`
-                  }`}>
-                    {m.text}
-                    <span className={`block text-[10px] mt-1 opacity-60 ${m.from === "me" ? "text-right" : ""}`}>{m.time}</span>
+            {/* ── SHOP chat view (real data) ── */}
+            {view === "chat" && shopActiveConv && (
+              <div className={`flex-1 flex flex-col border rounded-2xl overflow-hidden ${cardBg}`}>
+                {/* Header */}
+                <div className={`flex items-center gap-2.5 px-4 py-3 border-b shrink-0 ${dk ? "border-gray-700/60" : "border-gray-100"}`}>
+                  <button
+                    onClick={() => setView("list")}
+                    data-testid="button-chat-back"
+                    className={`w-7 h-7 rounded-xl flex items-center justify-center transition-colors shrink-0 ${dk ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                    {(shopActiveConv.title ?? shopActiveConv.otherParticipants[0]?.name ?? "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <span className={`font-semibold text-sm truncate ${textPrimary}`}>
+                      {shopActiveConv.title ?? shopActiveConv.otherParticipants.map(p => p.name).join(", ") || "Unknown"}
+                    </span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg shrink-0 ${SERVICE_BADGE["SHOP"]}`}>SHOP</span>
                   </div>
                 </div>
-              ))}
-            </div>
-            {/* Input */}
-            <div className={`p-3 border-t flex gap-2 shrink-0 ${dk ? "border-gray-700/60" : "border-gray-100"}`}>
-              <Input
-                className={`flex-1 h-9 text-sm ${inputCls}`}
-                placeholder="Message…"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && send()}
-                data-testid="input-message"
-              />
-              <button
-                onClick={send}
-                data-testid="button-send-message"
-                className="w-9 h-9 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center transition-colors shrink-0"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-2.5 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full">
+                  {shopMsgsLoading ? (
+                    <div className="flex justify-center pt-8">
+                      <Loader2 className={`w-5 h-5 animate-spin ${textMuted}`} />
+                    </div>
+                  ) : (shopMsgsData?.messages ?? []).length === 0 ? (
+                    <div className={`flex items-center justify-center h-full ${textMuted}`}>
+                      <p className="text-sm">No messages yet. Say hello!</p>
+                    </div>
+                  ) : (
+                    (shopMsgsData?.messages ?? []).map((m) => {
+                      const isOwn = m.senderId === user?.id;
+                      return (
+                        <div key={m.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                            isOwn ? "bg-amber-600 text-white rounded-br-sm" : `${chatBubbleBg} rounded-bl-sm`
+                          }`}>
+                            {!isOwn && shopActiveConv.type === "BROADCAST" && (
+                              <p className="text-[10px] font-semibold mb-1 opacity-70">{m.senderName}</p>
+                            )}
+                            {m.content}
+                            <span className={`block text-[10px] mt-1 opacity-60 ${isOwn ? "text-right" : ""}`}>
+                              {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={shopMsgsBottomRef} />
+                </div>
+                {/* Input */}
+                <div className={`p-3 border-t flex gap-2 shrink-0 ${dk ? "border-gray-700/60" : "border-gray-100"}`}>
+                  <Input
+                    className={`flex-1 h-9 text-sm ${inputCls}`}
+                    placeholder="Message…"
+                    value={shopInput}
+                    onChange={(e) => setShopInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (shopInput.trim()) sendShopMutation.mutate(shopInput.trim()); } }}
+                    disabled={sendShopMutation.isPending}
+                    data-testid="input-message"
+                  />
+                  <button
+                    onClick={() => { if (shopInput.trim()) sendShopMutation.mutate(shopInput.trim()); }}
+                    disabled={!shopInput.trim() || sendShopMutation.isPending}
+                    data-testid="button-send-message"
+                    className="w-9 h-9 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white flex items-center justify-center transition-colors shrink-0"
+                  >
+                    {sendShopMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── New conversation dialog ── */}
+            <Dialog open={newConvOpen} onOpenChange={o => { setNewConvOpen(o); if (!o) setContactSearch(""); }}>
+              <DialogContent className={dk ? "bg-gray-900 border-gray-700 text-white" : ""}>
+                <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>New Conversation</p>
+                <Input
+                  className={`mb-3 ${inputCls}`}
+                  placeholder="Search contacts…"
+                  value={contactSearch}
+                  onChange={e => setContactSearch(e.target.value)}
+                />
+                <div className="max-h-56 overflow-y-auto space-y-1">
+                  {filteredContacts.length === 0 ? (
+                    <p className={`text-xs py-4 text-center ${textMuted}`}>No contacts available</p>
+                  ) : (
+                    filteredContacts.map(c => (
+                      <button
+                        key={c.id}
+                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-colors ${hoverRow}`}
+                        onClick={() => newConvMutation.mutate(c.id)}
+                        disabled={newConvMutation.isPending}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                          {c.name.charAt(0)}
+                        </div>
+                        <span className={`flex-1 text-sm font-medium truncate ${textPrimary}`}>{c.name}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-lg ${dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>
+                          {c.role.replace(/_/g, " ").toLowerCase().replace(/^\w/, ch => ch.toUpperCase())}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
+        ) : (
+          <>
+            {/* ── Non-SHOP list view (fake data) ── */}
+            {view === "list" && (
+              <div className={`flex-1 overflow-y-auto rounded-2xl border [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full ${cardBg}`}>
+                {filteredFake.length === 0 ? (
+                  <div className={`flex flex-col items-center justify-center h-full py-16 ${textMuted}`}>
+                    <MessageCircle className="w-10 h-10 mb-3 opacity-20" />
+                    <p className={`text-sm font-medium ${textPrimary}`}>No conversations yet</p>
+                    <p className={`text-xs mt-1 opacity-50`}>for {service}</p>
+                  </div>
+                ) : (
+                  filteredFake.map((t) => (
+                    <button
+                      key={t.id}
+                      data-testid={`button-thread-${t.id}`}
+                      onClick={() => openConversation(t)}
+                      className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors border-b last:border-0 ${hoverRow} ${borderRow}`}
+                    >
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 font-bold text-sm ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                        {t.name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
+                          <span className={`text-sm font-semibold truncate ${textPrimary}`}>{t.name}</span>
+                          <span className={`text-[10px] shrink-0 ${textMuted}`}>{t.time}</span>
+                        </div>
+                        <p className={`text-xs truncate ${textMuted}`}>{t.lastMessage}</p>
+                      </div>
+                      {t.unread > 0 && (
+                        <span className="shrink-0 bg-blue-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                          {t.unread}
+                        </span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* ── Non-SHOP chat view (fake data) ── */}
+            {view === "chat" && active && (
+              <div className={`flex-1 flex flex-col border rounded-2xl overflow-hidden ${cardBg}`}>
+                <div className={`flex items-center gap-2.5 px-4 py-3 border-b shrink-0 ${dk ? "border-gray-700/60" : "border-gray-100"}`}>
+                  <button
+                    onClick={() => { setView("list"); }}
+                    data-testid="button-chat-back"
+                    className={`w-7 h-7 rounded-xl flex items-center justify-center transition-colors shrink-0 ${dk ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${dk ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                    {active.name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <span className={`font-semibold text-sm truncate ${textPrimary}`}>{active.name}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg shrink-0 ${SERVICE_BADGE[active.service]}`}>
+                      {active.service}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-2.5 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full">
+                  {active.messages.map((m, i) => (
+                    <div key={i} className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        m.from === "me" ? "bg-amber-600 text-white rounded-br-sm" : `${chatBubbleBg} rounded-bl-sm`
+                      }`}>
+                        {m.text}
+                        <span className={`block text-[10px] mt-1 opacity-60 ${m.from === "me" ? "text-right" : ""}`}>{m.time}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className={`p-3 border-t flex gap-2 shrink-0 ${dk ? "border-gray-700/60" : "border-gray-100"}`}>
+                  <Input
+                    className={`flex-1 h-9 text-sm ${inputCls}`}
+                    placeholder="Message…"
+                    value={staticInput}
+                    onChange={(e) => setStaticInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendStatic()}
+                    data-testid="input-message"
+                  />
+                  <button
+                    onClick={sendStatic}
+                    data-testid="button-send-message"
+                    className="w-9 h-9 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center transition-colors shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

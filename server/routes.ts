@@ -480,7 +480,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (req.body.flavorIds !== undefined) updates.flavorIds = Array.isArray(req.body.flavorIds) ? req.body.flavorIds.map(Number) : null;
       if (req.body.sizeIds !== undefined) updates.sizeIds = Array.isArray(req.body.sizeIds) ? req.body.sizeIds.map(Number) : null;
       if (req.body.imageUrls !== undefined) updates.imageUrls = Array.isArray(req.body.imageUrls) ? req.body.imageUrls.filter((u: string) => u?.trim()) : null;
-      res.json(await storage.updateProduct(parseInt(req.params.id), updates));
+      if (req.body.status !== undefined) {
+        const ALLOWED_STATUSES = ['ACTIVE', 'INACTIVE', 'PENDING', 'FREEZE'];
+        if (!ALLOWED_STATUSES.includes(req.body.status)) return res.status(400).json({ message: "Invalid status" });
+        updates.status = req.body.status;
+      }
+      const product = await storage.updateProduct(parseInt(req.params.id), updates);
+      // Broadcast marketplace update so clients reflect the new status immediately
+      broadcast("inventory_updated", { productId: parseInt(req.params.id) });
+      res.json(product);
     } catch (err) {
       res.status(400).json({ message: "Invalid" });
     }
@@ -2100,24 +2108,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "rating (1-5) is required" });
       }
       const isProductReview = reviewType === 'PRODUCT';
-      if (isProductReview) {
-        if (!productId) return res.status(400).json({ message: "productId is required for product reviews" });
-        const [existingProductReview] = await db.select().from(supplierProductReviews)
-          .where(and(
-            eq(supplierProductReviews.productId, Number(productId)),
-            eq(supplierProductReviews.cafeId, user.id),
-            eq(supplierProductReviews.reviewType, 'PRODUCT')
-          ));
-        if (existingProductReview) return res.status(409).json({ message: "You have already reviewed this product" });
+      if (isProductReview && !productId) {
+        return res.status(400).json({ message: "productId is required for product reviews" });
       }
       if (!isProductReview) {
-        // Supplier review — supplierId required
         if (!supplierId) return res.status(400).json({ message: "supplierId is required for supplier reviews" });
         const targetSupplier = await storage.getUser(Number(supplierId));
         if (!targetSupplier || targetSupplier.role !== 'SUPPLIER') {
           return res.status(400).json({ message: "Invalid supplier" });
         }
-        // If listingId provided, verify it belongs to supplierId and productId
         if (listingId) {
           const [listing] = await db.select().from(supplierProductListings)
             .where(eq(supplierProductListings.id, Number(listingId)));
@@ -2128,16 +2127,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             return res.status(400).json({ message: "Listing does not match this product" });
           }
         }
-        // One supplier review per cafe per supplier
-        const [existingSupplierReview] = await db.select().from(supplierProductReviews)
-          .where(and(
-            eq(supplierProductReviews.supplierId, Number(supplierId)),
-            eq(supplierProductReviews.cafeId, user.id),
-            eq(supplierProductReviews.reviewType, 'SUPPLIER')
-          ));
-        if (existingSupplierReview) return res.status(409).json({ message: "You have already reviewed this supplier" });
       }
-      const review = await storage.createReview({
+      // Upsert: update existing review if one exists (allows editing)
+      const { review, isUpdate } = await storage.upsertReview({
         supplierId: isProductReview ? null : Number(supplierId),
         reviewType: isProductReview ? 'PRODUCT' : 'SUPPLIER',
         cafeId: user.id,
@@ -2149,7 +2141,79 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cafeOwnerName: user.name,
         productName: productName ?? null,
       });
-      res.status(201).json(review);
+      res.status(isUpdate ? 200 : 201).json(review);
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Report a review (supplier only)
+  app.post("/api/reviews/:id/report", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== 'SUPPLIER') return res.status(403).json({ message: "Only suppliers can report reviews" });
+      const reviewId = parseInt(req.params.id);
+      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
+      await storage.reportReview(reviewId, reason);
+      res.json({ message: "Review reported" });
+    } catch (err) {
+      if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
+      else res.status(500).json({ message: "Error" });
+    }
+  });
+
+  // Admin: get all reviews
+  app.get("/api/admin/reviews", requireAdmin, async (req, res) => {
+    try {
+      const { reviewType } = req.query as Record<string, string>;
+      const reviews = await storage.getAllReviews({ reviewType });
+      res.json(reviews);
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Admin: delete a review
+  app.delete("/api/admin/reviews/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteReview(parseInt(req.params.id));
+      res.json({ message: "Deleted" });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Admin: resolve a reported review
+  app.patch("/api/admin/reviews/:id/resolve", requireAdmin, async (req, res) => {
+    try {
+      await storage.resolveReviewReport(parseInt(req.params.id));
+      res.json({ message: "Resolved" });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Supplier: get product reviews for own listings
+  app.get("/api/supplier/reviews/products", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      res.json(await storage.getProductReviewsBySupplier(user!.id));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Supplier: get supplier-type reviews
+  app.get("/api/supplier/reviews/supplier", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      res.json(await storage.getSupplierTypeReviews(user!.id));
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Cafe owner: get own existing review for a product
+  app.get("/api/reviews/my/product/:productId", requireAuth, async (req, res) => {
+    try {
+      const review = await storage.getExistingProductReview(parseInt(req.params.productId), req.session.userId!);
+      res.json(review ?? null);
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  // Cafe owner: get own existing review for a supplier
+  app.get("/api/reviews/my/supplier/:supplierId", requireAuth, async (req, res) => {
+    try {
+      const review = await storage.getExistingSupplierReview(parseInt(req.params.supplierId), req.session.userId!);
+      res.json(review ?? null);
     } catch { res.status(500).json({ message: "Error" }); }
   });
 

@@ -1,0 +1,277 @@
+The current Product workflow is working very well. Before making any changes, please review the existing implementation and reuse the current architecture, APIs, synchronization, components, database structure, WebSocket events, permissions, and design.
+
+Do not redesign any page, remove any existing functionality, or modify unrelated parts of the application.
+
+Verify that all synchronization between Admin, Supplier, and Coffee Owner remains intact before applying any changes.
+
+1. Admin Part → Products → Product Management
+
+The Product Management page already displays all products with their current status (Active, Inactive, etc.).
+
+Product Status Editing
+
+When the Admin clicks Edit on any product:
+
+The existing Edit modal should allow changing the Product Status.
+Display the status as a picklist using the existing available product statuses.
+Saving the modal should update the product status everywhere in the system.
+Freeze synchronization
+
+If the Admin changes a product status to Freeze:
+
+That product must immediately inherit the same status everywhere.
+Suppliers must see the frozen status on that product.
+Frozen products must not be visible to Coffee Owners anywhere they are normally mapped.
+Any existing synchronization rules must continue working correctly.
+
+Do not change any other Product Management behavior.
+
+2. Supplier Part → Products
+
+This applies to both existing Variant Builder modals:
+
+Admin Products → Add to My Products — Variant Builder
+My Products → Edit Pricing & Stock — Variant Builder
+
+Everything currently works well.
+
+The only required improvement is preventing duplicate variants.
+
+Variant Validation
+
+Currently the supplier can accidentally create duplicate variants such as:
+
+Variant 1
+
+Size: 6-Pack
+Flavor: Cinnamon
+Price: 6
+
+Variant 2
+
+Size: 6-Pack
+Flavor: Cinnamon
+Price: 1.2
+
+This must no longer be possible.
+
+Required behavior
+
+The available Size and Flavor selections must always stay synchronized.
+
+Example:
+
+If Variant Group 1 contains:
+
+Size:
+
+6-Pack
+
+Flavors:
+
+Cinnamon
+
+Then when creating another Variant Group:
+
+If the supplier chooses 6-Pack again,
+
+only the remaining unused flavors should be available.
+
+Example:
+
+Remaining:
+
+Chocolate
+Vanilla
+
+Cinnamon must no longer appear because it already belongs to another variant.
+
+If all flavors are already used
+
+Example:
+
+Variant Group 1
+
+Size:
+
+6-Pack
+
+Flavors:
+
+Cinnamon
+Vanilla
+Chocolate
+
+Then every flavor for 6-Pack has already been assigned.
+
+Therefore:
+
+When creating another Variant Group,
+
+the Size picker should no longer display:
+
+6-Pack
+
+because there are no remaining available flavors for that size.
+
+The supplier must never be able to create duplicate combinations of:
+
+Size
+Flavor
+
+regardless of price or stock.
+
+Everything else inside the Variant Builder must remain unchanged.
+
+3. Coffee Owner → Product Details Modal
+
+The Product Details modal is already working correctly.
+
+Only improve the following parts.
+
+Product Gallery
+
+Products can now have multiple pictures.
+
+Currently:
+
+thumbnails wrap onto multiple rows.
+
+Instead:
+
+display every thumbnail in a single horizontal row
+show the first thumbnails immediately
+allow horizontal scrolling to access additional images
+keep the current main image behavior
+keep zoom behavior
+keep responsiveness
+
+Do not change any other gallery functionality.
+
+4. Product Reviews & Supplier Reviews
+
+The existing Review modal already contains:
+
+Product Reviews
+Supplier Reviews
+
+Keep this structure.
+
+Improve the synchronization.
+
+Product Reviews
+
+A Coffee Owner may submit:
+
+only one review for each Product.
+
+If the same Coffee Owner opens the review modal again:
+
+allow editing the existing review
+or replacing it
+
+but never create duplicate Product Reviews for the same Product.
+
+Supplier Reviews
+
+Supplier Reviews are completely independent.
+
+The Coffee Owner should:
+
+select one available supplier from the existing supplier picker,
+
+then:
+
+submit one review for that supplier.
+
+A Coffee Owner may only have one Supplier Review per supplier.
+
+Editing or replacing is allowed.
+
+Duplicates are not.
+
+Supplier Reviews must remain completely independent from Product Reviews.
+
+The two review systems must never interfere with each other.
+
+5. Supplier → Reviews Tab
+
+The existing Reviews page should now be split using a switcher.
+
+Create two sections:
+
+Product Reviews
+Supplier Reviews
+
+Keep the existing design language.
+
+Product Reviews
+
+Display all reviews received for the supplier's products.
+
+Add a filter bar including:
+
+Category
+Sub Category
+
+so suppliers can easily filter reviews for specific products.
+
+Supplier Reviews
+
+Display reviews written directly about the supplier.
+
+Keep the current behavior.
+
+Reporting inappropriate reviews
+
+Suppliers must not be able to delete reviews.
+
+Instead,
+
+allow suppliers to mark/report inappropriate reviews.
+
+The report should be visible to Admin.
+
+6. Admin → Reviews
+
+Create the same Reviews section for Admin.
+
+Reuse the existing review components wherever possible.
+
+Split it into:
+
+Product Reviews
+Supplier Reviews
+
+Admin should see all review information across the platform.
+
+Unlike suppliers,
+
+only Admin may:
+
+Delete reviews
+Resolve reported reviews
+Review supplier reports before deciding whether to remove a review
+
+Do not change review permissions.
+
+Synchronization Requirements
+
+Before making changes:
+
+Review the current Product, Variant, and Review implementations.
+Reuse existing APIs and components wherever possible.
+Keep database integrity intact.
+Preserve all WebSocket and real-time synchronization.
+Keep all current filtering, permissions, review calculations, ratings, and statistics working correctly.
+Ensure Product Reviews and Supplier Reviews remain completely independent.
+Ensure Admin, Supplier, and Coffee Owner always see synchronized information.
+Verify the complete workflow end-to-end after implementation.
+
+Do not redesign the UI.
+
+Do not modify unrelated features.
+
+Do not remove existing functionality.
+
+Only implement the changes described above while preserving the current behavior everywhere else.

@@ -214,9 +214,55 @@ function VariantGroupBuilder({
   const update = (id: string, patch: Partial<VariantGroup>) => onChange(groups.map(g => g.id === id ? { ...g, ...patch } : g));
   const remove = (id: string) => onChange(groups.filter(g => g.id !== id));
 
+  // Build a map of sizeId → Set<flavorId> for all OTHER groups (used combinations)
+  const getUsedFlavorsForSize = (excludeGroupId: string, sizeId: string): Set<number> => {
+    const used = new Set<number>();
+    for (const g of groups) {
+      if (g.id === excludeGroupId) continue;
+      if (g.sizeId === sizeId) {
+        g.flavorIds.forEach(f => used.add(f));
+      }
+    }
+    return used;
+  };
+
+  // A size is available for a group if it still has at least one flavor not used by another group with the same size
+  // (or if there are no flavors at all, any size can be used once)
+  const getAvailableSizes = (excludeGroupId: string, currentSizeId: string): { id: number; name: string }[] => {
+    if (flavors.length === 0) return sizes; // No flavor concept → no size restriction
+    return sizes.filter(s => {
+      if (String(s.id) === currentSizeId) return true; // Always keep the currently selected size
+      const usedFlavors = getUsedFlavorsForSize(excludeGroupId, String(s.id));
+      return usedFlavors.size < flavors.length; // At least one flavor still free
+    });
+  };
+
+  const getAvailableFlavors = (excludeGroupId: string, sizeId: string, currentFlavorIds: number[]): { id: number; name: string }[] => {
+    if (!sizeId) return flavors; // No size selected → no restriction
+    const usedFlavors = getUsedFlavorsForSize(excludeGroupId, sizeId);
+    return flavors.filter(f => !usedFlavors.has(f.id) || currentFlavorIds.includes(f.id));
+  };
+
+  // Check if we can still add a new group (at least one size/flavor combo is free)
+  const canAddMore = useMemo(() => {
+    if (flavors.length === 0 && sizes.length === 0) return groups.length === 0;
+    if (sizes.length === 0) {
+      // No sizes — just track flavors globally
+      const usedFlavors = new Set(groups.flatMap(g => g.flavorIds));
+      return usedFlavors.size < flavors.length || flavors.length === 0;
+    }
+    // Check if any size still has an available flavor
+    return sizes.some(s => {
+      const usedFlavors = getUsedFlavorsForSize("__new__", String(s.id));
+      return usedFlavors.size < flavors.length;
+    });
+  }, [groups, sizes, flavors]);
+
   return (
     <div className="space-y-3">
       {groups.map((g, idx) => {
+        const availableSizes = getAvailableSizes(g.id, g.sizeId);
+        const availableFlavors = getAvailableFlavors(g.id, g.sizeId, g.flavorIds);
         const selectedFlavors = flavors.filter(f => g.flavorIds.includes(f.id));
         const hasFlavors = selectedFlavors.length > 0;
         return (
@@ -230,11 +276,22 @@ function VariantGroupBuilder({
             {sizes.length > 0 && (
               <div className="space-y-1">
                 <Label className="text-xs">Size</Label>
-                <Select value={g.sizeId || "__none__"} onValueChange={v => update(g.id, { sizeId: v === "__none__" ? "" : v })}>
+                <Select
+                  value={g.sizeId || "__none__"}
+                  onValueChange={v => {
+                    const newSizeId = v === "__none__" ? "" : v;
+                    // Clear flavors that are no longer available for the new size
+                    const stillAvailable = getAvailableFlavors(g.id, newSizeId, []);
+                    const filteredFlavorIds = g.flavorIds.filter(fid => stillAvailable.some(f => f.id === fid));
+                    const newStocks: Record<string, string> = {};
+                    filteredFlavorIds.forEach(fid => { newStocks[String(fid)] = g.flavorStocks[String(fid)] ?? ""; });
+                    update(g.id, { sizeId: newSizeId, flavorIds: filteredFlavorIds, flavorStocks: newStocks });
+                  }}
+                >
                   <SelectTrigger className="h-9"><SelectValue placeholder="Select size (optional)" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Any / no size</SelectItem>
-                    {sizes.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                    {availableSizes.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -242,7 +299,7 @@ function VariantGroupBuilder({
             {flavors.length > 0 && (
               <MultiSelectList
                 label="Flavors (multi-select)"
-                items={flavors}
+                items={availableFlavors}
                 selected={g.flavorIds}
                 onChange={ids => {
                   const newStocks = { ...g.flavorStocks };
@@ -281,9 +338,12 @@ function VariantGroupBuilder({
           </div>
         );
       })}
-      <Button type="button" variant="outline" size="sm" onClick={addGroup} className="w-full">
+      <Button type="button" variant="outline" size="sm" onClick={addGroup} disabled={!canAddMore} className="w-full">
         <Plus className="w-4 h-4 mr-1" />Add variant group
       </Button>
+      {!canAddMore && (
+        <p className="text-xs text-muted-foreground text-center">All size/flavor combinations are already assigned.</p>
+      )}
     </div>
   );
 }

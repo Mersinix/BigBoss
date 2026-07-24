@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, Loader2, CheckCircle, Package, Store, AlertCircle, X, Sun, Moon } from "lucide-react";
+import { Star, Loader2, CheckCircle, Package, Store, AlertCircle, X, Sun, Moon, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import type { MarketplaceListing, MarketplaceProduct } from "@shared/schema";
@@ -90,7 +90,7 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
   const selectContent = dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : "";
   const selectItem    = dk ? "text-gray-200 focus:bg-gray-700 focus:text-white data-[highlighted]:bg-gray-700" : "";
 
-  // Fetch existing product reviews for display + duplicate check
+  // Fetch existing product reviews for display
   const { data: existingReviews = [] } = useQuery<any[]>({
     queryKey: ["/api/reviews/product", product.id, "list"],
     queryFn: async () => {
@@ -101,9 +101,69 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
     enabled: open,
   });
 
-  const alreadyReviewedProduct = user
-    ? existingReviews.some((r) => r.cafeId === user.id)
-    : false;
+  // Fetch user's own product review (for pre-filling)
+  const { data: myProductReview } = useQuery<any>({
+    queryKey: ["/api/reviews/my/product", product.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/reviews/my/product/${product.id}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: open && !!user,
+  });
+
+  // Fetch user's own supplier review for selected supplier
+  const { data: mySupplierReview } = useQuery<any>({
+    queryKey: ["/api/reviews/my/supplier", supplierId],
+    queryFn: async () => {
+      if (!supplierId) return null;
+      const res = await fetch(`/api/reviews/my/supplier/${supplierId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: open && !!supplierId && activeTab === "SUPPLIER",
+  });
+
+  // Pre-populate form when existing review is found
+  useEffect(() => {
+    if (activeTab === "PRODUCT" && myProductReview) {
+      setRating(myProductReview.rating ?? 0);
+      setComment(myProductReview.comment ?? "");
+    }
+  }, [myProductReview, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "SUPPLIER" && mySupplierReview) {
+      setRating(mySupplierReview.rating ?? 0);
+      setComment(mySupplierReview.comment ?? "");
+    } else if (activeTab === "SUPPLIER" && !mySupplierReview) {
+      setRating(0);
+      setComment("");
+    }
+  }, [mySupplierReview, activeTab, supplierId]);
+
+  // Reset rating/comment when switching tabs (unless pre-populating)
+  useEffect(() => {
+    if (activeTab === "PRODUCT") {
+      if (myProductReview) {
+        setRating(myProductReview.rating ?? 0);
+        setComment(myProductReview.comment ?? "");
+      } else {
+        setRating(0);
+        setComment("");
+      }
+    } else {
+      // Supplier tab — will be populated when supplierId is set
+      if (!supplierId) {
+        setRating(0);
+        setComment("");
+      }
+    }
+  }, [activeTab]);
+
+  const isEditingProduct = activeTab === "PRODUCT" && !!myProductReview;
+  const isEditingSupplier = activeTab === "SUPPLIER" && !!mySupplierReview;
+  const isEditing = isEditingProduct || isEditingSupplier;
 
   const mutation = useMutation({
     mutationFn: async (type: ReviewType) => {
@@ -131,21 +191,15 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
       setSubmitted(true);
       queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", product.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", product.id, "list"] });
-      toast({ title: "Review submitted", description: "Your review has been saved." });
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/my/product", product.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/my/supplier", supplierId] });
+      toast({ title: isEditing ? "Review updated" : "Review submitted", description: "Your review has been saved." });
       setTimeout(() => {
         handleClose();
       }, 1500);
     },
     onError: (err: Error) => {
-      if (err.message.includes("already reviewed")) {
-        toast({
-          title: "Already reviewed",
-          description: "You have already submitted a review for this product.",
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Error", description: err.message, variant: "destructive" });
-      }
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
 
@@ -184,7 +238,9 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
 
               {/* Centered title */}
               <div className="flex flex-col items-center gap-0.5">
-                <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>Write a Review</span>
+                <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>
+                  {isEditing ? "Edit Your Review" : "Write a Review"}
+                </span>
                 <span className={`text-[11px] font-medium ${textMuted}`}>{product.name}</span>
               </div>
 
@@ -198,7 +254,7 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
               </button>
             </div>
 
-            {/* Tab switcher — pill style matching Favorites */}
+            {/* Tab switcher — pill style */}
             <div className={`flex gap-1 rounded-2xl p-1 ${switcherBg}`}>
               <button
                 type="button"
@@ -236,21 +292,21 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dk ? "bg-emerald-500/15" : "bg-emerald-50"}`}>
                   <CheckCircle className="w-8 h-8 text-emerald-500" />
                 </div>
-                <p className={`font-semibold ${textPrimary}`}>Review submitted!</p>
+                <p className={`font-semibold ${textPrimary}`}>{isEditing ? "Review updated!" : "Review submitted!"}</p>
                 <p className={`text-sm ${textMuted}`}>Thank you for your feedback.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-5 py-1">
-                {/* Already reviewed notice — product tab only */}
-                {activeTab === "PRODUCT" && alreadyReviewedProduct && (
-                  <div className={`flex items-center gap-2 border rounded-2xl px-4 py-3 text-sm ${dk ? "bg-amber-500/10 border-amber-500/30 text-amber-300" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
-                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
-                    <span className="text-[13px]">You have already reviewed this product. Your review appears below.</span>
+                {/* Edit mode notice */}
+                {isEditing && (
+                  <div className={`flex items-center gap-2 border rounded-2xl px-4 py-3 text-sm ${dk ? "bg-blue-500/10 border-blue-500/30 text-blue-300" : "bg-blue-50 border-blue-200 text-blue-800"}`}>
+                    <Pencil className="w-4 h-4 shrink-0 text-blue-500" />
+                    <span className="text-[13px]">You already have a review — editing it below.</span>
                   </div>
                 )}
 
                 {/* Context hint for product review */}
-                {activeTab === "PRODUCT" && !alreadyReviewedProduct && (
+                {activeTab === "PRODUCT" && !isEditingProduct && (
                   <p className={`text-xs rounded-2xl px-4 py-3 border ${dk ? "text-gray-400 bg-gray-800/60 border-gray-700/40" : "text-gray-500 bg-gray-50 border-gray-100"}`}>
                     Your review is about the product itself — quality, description accuracy, etc.
                   </p>
@@ -275,46 +331,40 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                   </div>
                 )}
 
-                {/* Star rating — hide if already reviewed product */}
-                {!(activeTab === "PRODUCT" && alreadyReviewedProduct) && (
-                  <>
-                    <div className="space-y-2">
-                      <label className={labelCls}>Rating *</label>
-                      <StarPicker value={rating} onChange={setRating} />
-                      {rating > 0 && (
-                        <p className={`text-xs ${textMuted}`}>{ratingLabel}</p>
-                      )}
-                    </div>
+                {/* Star rating */}
+                <div className="space-y-2">
+                  <label className={labelCls}>Rating *</label>
+                  <StarPicker value={rating} onChange={setRating} />
+                  {rating > 0 && (
+                    <p className={`text-xs ${textMuted}`}>{ratingLabel}</p>
+                  )}
+                </div>
 
-                    <div className="space-y-1.5">
-                      <label className={labelCls}>Comment (optional)</label>
-                      <Textarea
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
-                        placeholder={
-                          activeTab === "PRODUCT"
-                            ? "Share your experience with this product…"
-                            : "Share your experience with this supplier…"
-                        }
-                        className={`${inputCls} resize-none`}
-                        rows={3}
-                      />
-                    </div>
+                <div className="space-y-1.5">
+                  <label className={labelCls}>Comment (optional)</label>
+                  <Textarea
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder={
+                      activeTab === "PRODUCT"
+                        ? "Share your experience with this product…"
+                        : "Share your experience with this supplier…"
+                    }
+                    className={`${inputCls} resize-none`}
+                    rows={3}
+                  />
+                </div>
 
-                    <button
-                      type="button"
-                      onClick={() => mutation.mutate(activeTab)}
-                      disabled={!canSubmit || mutation.isPending}
-                      className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 text-sm font-semibold transition-all shadow-lg shadow-amber-500/20 active:scale-[0.98]"
-                    >
-                      {mutation.isPending ? (
-                        <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</span>
-                      ) : (
-                        "Submit Review"
-                      )}
-                    </button>
-                  </>
-                )}
+                <button
+                  type="button"
+                  onClick={() => mutation.mutate(activeTab)}
+                  disabled={!canSubmit || mutation.isPending}
+                  className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 text-sm font-semibold transition-all shadow-lg shadow-amber-500/20 active:scale-[0.98]"
+                >
+                  {mutation.isPending ? (
+                    <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving…</span>
+                  ) : isEditing ? "Update Review" : "Submit Review"}
+                </button>
 
                 {/* Existing product reviews — shown on Product tab */}
                 {activeTab === "PRODUCT" && existingReviews.length > 0 && (

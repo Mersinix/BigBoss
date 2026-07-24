@@ -39,9 +39,17 @@ type ProductForm = {
   flavorIds: number[];
   sizeIds: number[];
   brandId: string;
+  status: string;
 };
 
-const EMPTY_FORM: ProductForm = { name: "", description: "", imageUrl: "", additionalImageUrls: [], categoryId: "", subCategoryId: "", flavorIds: [], sizeIds: [], brandId: "" };
+const EMPTY_FORM: ProductForm = { name: "", description: "", imageUrl: "", additionalImageUrls: [], categoryId: "", subCategoryId: "", flavorIds: [], sizeIds: [], brandId: "", status: "ACTIVE" };
+
+const PRODUCT_STATUSES = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "INACTIVE", label: "Inactive" },
+  { value: "PENDING", label: "Pending" },
+  { value: "FREEZE", label: "Freeze" },
+];
 
 // ── Delete Confirm ───────────────────────────────────────────────────────────
 
@@ -191,6 +199,7 @@ function ProductFormModal({
         flavorIds,
         sizeIds,
         brandId: editing.brandId ? String(editing.brandId) : "",
+        status: (editing as any).status ?? "ACTIVE",
       };
     }
     return EMPTY_FORM;
@@ -272,6 +281,7 @@ function ProductFormModal({
       flavorIds: form.flavorIds.length > 0 ? form.flavorIds : null,
       sizeIds: form.sizeIds.length > 0 ? form.sizeIds : null,
       category: cats.find(c => String(c.id) === form.categoryId)?.name ?? "",
+      status: form.status,
     });
   };
 
@@ -394,6 +404,26 @@ function ProductFormModal({
             </Select>
           </div>
 
+          {/* Status (admin only, shown when editing) */}
+          {editing && (
+            <div className="space-y-1.5">
+              <Label>Product Status</Label>
+              <Select value={form.status} onValueChange={v => setField("status", v)}>
+                <SelectTrigger data-testid="select-prod-status"><SelectValue placeholder="Select status…" /></SelectTrigger>
+                <SelectContent>
+                  {PRODUCT_STATUSES.map(s => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.status === "FREEZE" && (
+                <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+                  Frozen products are hidden from Coffee Owners across the entire marketplace.
+                </p>
+              )}
+            </div>
+          )}
+
           {(form.categoryId || form.subCategoryId) && (
             <p className="text-xs text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
               Flavor and Size options are filtered by sub-category assignment. Select a sub-category to narrow results further.
@@ -481,6 +511,7 @@ function SupplierProductEditModal({
       flavorIds,
       sizeIds,
       brandId: product.brandId ? String(product.brandId) : "",
+      status: product.status ?? "ACTIVE",
     };
   });
 

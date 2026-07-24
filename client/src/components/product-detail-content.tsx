@@ -652,7 +652,7 @@ export function ProductDetailContent({
         )}
       </div>
       {allImages.length > 1 && (
-        <div className="flex gap-2 flex-wrap sm:w-56">
+        <div className="flex flex-row gap-2 overflow-x-auto sm:w-56 pb-1 [&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-400/40">
           {allImages.map((url, idx) => (
             <button
               key={idx}

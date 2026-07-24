@@ -58,6 +58,7 @@ import NotificationsPage from "@/pages/admin/notifications-page";
 import EarningsPage from "@/pages/admin/earnings-page";
 import SystemManagementPage from "@/pages/admin/system-management-page";
 import ProspectingPage from "@/pages/admin/prospecting-page";
+import AdminReviewsPage from "@/pages/admin/reviews-page";
 import ComingSoonPage from "@/pages/coming-soon-page";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -366,6 +367,9 @@ function Router() {
       </Route>
       <Route path="/admin/prospecting">
         {() => (<DashboardLayout><ProtectedRoute component={ProspectingPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      <Route path="/admin/reviews">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminReviewsPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
 
       <Route component={NotFound} />

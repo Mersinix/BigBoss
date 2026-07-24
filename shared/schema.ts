@@ -351,6 +351,11 @@ export const supplierProductReviews = pgTable("supplier_product_reviews", {
   cafeOwnerName: text("cafe_owner_name").notNull().default(''),
   productName: text("product_name"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  // Reporting
+  reportedAt: timestamp("reported_at"),
+  reportReason: text("report_reason"),
+  resolvedAt: timestamp("resolved_at"),
 });
 
 // Store favorites — persisted per-user store favorites (separate from product favorites)

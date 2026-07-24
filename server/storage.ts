@@ -687,7 +687,7 @@ export class DatabaseStorage implements IStorage {
       variantsByListing.get(v.listingId)!.push(v);
     }
 
-    let prods = allProducts;
+    let prods = allProducts.filter((p) => p.status !== 'FREEZE');
     if (filters?.categoryId) prods = prods.filter((p) => p.categoryId === filters.categoryId);
     if (filters?.subCategoryId) prods = prods.filter((p) => p.subCategoryId === filters.subCategoryId);
     if (filters?.search) {
@@ -2158,10 +2158,138 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
+  async upsertReview(data: {
+    supplierId?: number | null;
+    reviewType: string;
+    cafeId: number;
+    productId?: number | null;
+    listingId?: number | null;
+    rating: number;
+    comment?: string | null;
+    cafeName: string;
+    cafeOwnerName: string;
+    productName?: string | null;
+  }): Promise<{ review: SupplierProductReview; isUpdate: boolean }> {
+    // Find existing review for this cafe/product or cafe/supplier
+    let existing: SupplierProductReview | undefined;
+    if (data.reviewType === 'PRODUCT' && data.productId) {
+      const [row] = await db.select().from(supplierProductReviews)
+        .where(and(
+          eq(supplierProductReviews.productId, data.productId),
+          eq(supplierProductReviews.cafeId, data.cafeId),
+          eq(supplierProductReviews.reviewType, 'PRODUCT')
+        ));
+      existing = row;
+    } else if (data.reviewType === 'SUPPLIER' && data.supplierId) {
+      const [row] = await db.select().from(supplierProductReviews)
+        .where(and(
+          eq(supplierProductReviews.supplierId, data.supplierId),
+          eq(supplierProductReviews.cafeId, data.cafeId),
+          eq(supplierProductReviews.reviewType, 'SUPPLIER')
+        ));
+      existing = row;
+    }
+
+    if (existing) {
+      const [updated] = await db.update(supplierProductReviews)
+        .set({ rating: data.rating, comment: data.comment ?? null, updatedAt: new Date() } as any)
+        .where(eq(supplierProductReviews.id, existing.id))
+        .returning();
+      return { review: updated, isUpdate: true };
+    }
+
+    const [row] = await db.insert(supplierProductReviews).values({
+      supplierId: data.supplierId ?? null,
+      reviewType: data.reviewType,
+      cafeId: data.cafeId,
+      productId: data.productId ?? null,
+      listingId: data.listingId ?? null,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.cafeName,
+      cafeOwnerName: data.cafeOwnerName,
+      productName: data.productName ?? null,
+    } as any).returning();
+    return { review: row, isUpdate: false };
+  }
+
   async getReviewsBySupplier(supplierId: number): Promise<SupplierProductReview[]> {
     return db.select().from(supplierProductReviews)
       .where(eq(supplierProductReviews.supplierId, supplierId))
       .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getProductReviewsBySupplier(supplierId: number): Promise<SupplierProductReview[]> {
+    // Product reviews for products this supplier has a listing for
+    const listings = await db.select({ productId: supplierProductListings.productId })
+      .from(supplierProductListings)
+      .where(eq(supplierProductListings.supplierId, supplierId));
+    const productIds = listings.map((l) => l.productId);
+    if (!productIds.length) return [];
+    return db.select().from(supplierProductReviews)
+      .where(and(
+        inArray(supplierProductReviews.productId, productIds),
+        eq(supplierProductReviews.reviewType, 'PRODUCT')
+      ))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getSupplierTypeReviews(supplierId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.supplierId, supplierId),
+        eq(supplierProductReviews.reviewType, 'SUPPLIER')
+      ))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async reportReview(reviewId: number, reason: string): Promise<void> {
+    await db.update(supplierProductReviews)
+      .set({ reportedAt: new Date(), reportReason: reason } as any)
+      .where(eq(supplierProductReviews.id, reviewId));
+  }
+
+  async resolveReviewReport(reviewId: number): Promise<void> {
+    await db.update(supplierProductReviews)
+      .set({ resolvedAt: new Date() } as any)
+      .where(eq(supplierProductReviews.id, reviewId));
+  }
+
+  async deleteReview(reviewId: number): Promise<void> {
+    await db.delete(supplierProductReviews).where(eq(supplierProductReviews.id, reviewId));
+  }
+
+  async getAllReviews(filters?: { reviewType?: string; reported?: boolean }): Promise<SupplierProductReview[]> {
+    let query = db.select().from(supplierProductReviews);
+    const conditions: any[] = [];
+    if (filters?.reviewType) conditions.push(eq(supplierProductReviews.reviewType, filters.reviewType));
+    if (filters?.reported) conditions.push(sql`${supplierProductReviews.reportedAt} IS NOT NULL`);
+    if (conditions.length) {
+      return db.select().from(supplierProductReviews)
+        .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+        .orderBy(desc(supplierProductReviews.createdAt));
+    }
+    return db.select().from(supplierProductReviews).orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getExistingProductReview(productId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
+    const [row] = await db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.productId, productId),
+        eq(supplierProductReviews.cafeId, cafeId),
+        eq(supplierProductReviews.reviewType, 'PRODUCT')
+      ));
+    return row;
+  }
+
+  async getExistingSupplierReview(supplierId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
+    const [row] = await db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.supplierId, supplierId),
+        eq(supplierProductReviews.cafeId, cafeId),
+        eq(supplierProductReviews.reviewType, 'SUPPLIER')
+      ));
+    return row;
   }
 
   async getReviewStatsByProduct(productId: number): Promise<{

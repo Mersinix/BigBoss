@@ -101,6 +101,12 @@ export function AppSidebar() {
           ],
         },
         {
+          label: "REVIEWS",
+          items: [
+            { title: "Reviews", url: "/admin/reviews", icon: Star },
+          ],
+        },
+        {
           label: "ACCOUNT",
           items: [
             { title: "Analytics", url: "/admin/analytics", icon: BarChart2 },

@@ -1,0 +1,158 @@
+Before making any changes:
+
+Read the commit SHOPPING CART PART ONE.
+Read the commit SHOPPING CART PART TWO.
+Open and read the original specification file:
+
+Pasted-The-current-ordering-workflow-is-working-well-Before-ma_1785017962667.txt
+
+Those two commits already contain part of the implementation. Your job is not to restart from scratch.
+
+What I want you to do
+Read the original specification completely.
+Scan every change already implemented in both commits.
+Compare the current implementation against the specification.
+Detect everything that is already finished.
+Detect everything that is still missing, incomplete, partially implemented, or broken.
+Execute only the missing work.
+If something was already implemented correctly, leave it untouched.
+If something is partially implemented, complete it instead of replacing it.
+Do not duplicate logic, components, routes, queries, database fields, WebSocket events, or APIs.
+
+Do not produce an audit report.
+
+Do not stop after analysis.
+
+After verifying the current state, immediately continue implementing everything that is still missing until the original specification is fully completed.
+
+While implementing
+
+Keep the existing architecture exactly as it is.
+
+Do not redesign anything.
+
+Do not rename existing APIs unless absolutely necessary.
+
+Reuse existing components.
+
+Preserve:
+
+existing UI
+routing
+database integrity
+realtime synchronization
+permissions
+validations
+WebSocket events
+existing hooks
+existing business logic
+
+Do not introduce duplicate implementations.
+
+Pay special attention to unfinished work
+
+Verify that all of these are completely finished:
+
+Checkout flow
+Order confirmation modal is fully rendered and actually used.
+Review/edit/remove items before confirmation works correctly.
+Duplicate order submissions are prevented.
+Scheduled orders work correctly.
+Priority selection works correctly.
+Confirmation flow behaves correctly.
+Order architecture
+
+Verify the complete synchronization between:
+
+Order
+SubOrder
+OrderItem
+Supplier
+Delivery
+
+Each supplier must receive only its own SubOrder.
+
+Every SubOrder must remain synchronized with its parent Order.
+
+Products, Packs, quantities, prices, selected variants, flavor selections, supplier information, timestamps, scheduling, priorities, delivery information, and realtime updates must remain fully synchronized.
+
+Coffee Owner
+
+Verify that:
+
+Orders are available from My Account → Orders.
+The old Order History page is no longer the primary workflow.
+Clicking an order opens the Order Details modal.
+Order Details displays complete information.
+Reorder works correctly.
+Scheduled orders work.
+Order status updates in realtime.
+Supplier
+
+Verify that the Supplier order area is fully synchronized with the new architecture:
+
+Orders
+Order Requests
+Returns
+
+Each supplier must only see:
+
+its own SubOrders
+its own products
+its own packs
+
+Never products belonging to another supplier.
+
+Realtime synchronization must work without page refresh.
+
+Delivery synchronization
+
+Verify that delivery supports the SubOrder architecture.
+
+Different delivery companies or drivers must be able to manage different SubOrders belonging to the same parent Order without breaking synchronization.
+
+Database
+
+Verify that all schema changes required by the implementation actually exist in the database.
+
+If any columns, tables, indexes, or relations expected by the code are missing, synchronize the database with the schema properly.
+
+There should be no runtime errors caused by schema drift.
+
+Realtime
+
+Verify all realtime invalidation.
+
+Coffee Owner
+
+Supplier
+
+Admin
+
+Delivery
+
+must immediately receive updates without refresh.
+
+Final verification
+
+Before considering the work finished:
+
+verify the complete ordering workflow end-to-end
+verify checkout
+verify confirmation modal
+verify Order → SubOrder synchronization
+verify delivery synchronization
+verify supplier synchronization
+verify realtime updates
+verify scheduling
+verify reorder
+verify priorities
+verify database integrity
+verify there are no TypeScript errors
+verify there are no runtime errors
+verify there are no broken routes
+verify there are no duplicate implementations
+
+If everything from the original specification is already implemented correctly, make no unnecessary changes.
+
+Otherwise, complete only the remaining missing pieces until the original specification is fully implemented.

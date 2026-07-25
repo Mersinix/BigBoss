@@ -593,6 +593,19 @@ export default function CartPage() {
           initialDetails={customDeliveryAddress?.details ?? savedAccountAddress?.details}
         />
       </div>
+
+      {/* ── Order Confirmation Modal ──────────────────────────────────────────── */}
+      <OrderConfirmationModal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        items={items}
+        packItems={packItems}
+        deliveryAddress={activeDeliveryAddress}
+        courierInstructions={courierInstructions}
+        promoEval={promoEval}
+        isSubmitting={createOrder.isPending}
+        onConfirm={handleConfirmOrder}
+      />
     </div>
   );
 }

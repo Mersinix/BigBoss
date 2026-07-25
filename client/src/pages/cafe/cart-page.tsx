@@ -141,7 +141,7 @@ export default function CartPage() {
         setCourierInstructions("");
         setCustomDeliveryAddress(null);
         setConfirmOpen(false);
-        setLocation("/cafe/settings?tab=orders");
+        setLocation("/cafe/orders");
       },
       onError: (error) => {
         toast({ title: "Erreur", description: error.message, variant: "destructive" });

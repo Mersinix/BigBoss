@@ -1,0 +1,34 @@
+The repository already contains a partial implementation of the Order Strategy work.
+
+Before writing any code, please review the existing implementation so we continue from the current state instead of duplicating work.
+
+Inside the repository you will find:
+
+Commit: SHOPPING CART PART ONE
+Original specification: Pasted-The-current-ordering-workflow-is-working-well-Before-ma_1785017962667.txt
+What I want you to do
+Read the original prompt (Pasted-The-current-ordering-workflow-is-working-well-Before-ma_1785017962667.txt) completely.
+Scan every file that was modified in the SHOPPING CART PART ONE commit.
+Compare the current implementation against the original prompt.
+Determine which requested features are:
+already fully implemented,
+partially implemented,
+not implemented.
+Do not generate an audit or status report.
+Immediately continue implementing only the missing or incomplete parts.
+Do not rewrite or replace code that is already working correctly.
+Reuse the current architecture, APIs, database models, WebSocket events, components, permissions, and design.
+Keep all synchronization between Coffee Owner, Supplier, Delivery, and Admin fully consistent.
+When everything from the original prompt has been completed, verify the entire workflow end-to-end and fix any remaining synchronization issues you discover during verification.
+Important requirements
+Do not redesign the UI.
+Do not modify unrelated features.
+Do not remove existing functionality.
+Do not duplicate code or create alternative implementations of features that already exist.
+Preserve database integrity.
+Preserve API compatibility whenever possible.
+Preserve all real-time/WebSocket synchronization.
+Preserve responsive behavior.
+Keep the current design language unchanged.
+
+Your objective is to use the existing work in SHOPPING CART PART ONE as the baseline, identify what is still missing from the original specification, implement those missing parts, verify the complete Order/SubOrder workflow, and finish the implementation without introducing regressions.

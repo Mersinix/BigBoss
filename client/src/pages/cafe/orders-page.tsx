@@ -9,6 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Box, Truck, CheckCircle2, AlertCircle, Clock, CalendarIcon, X } from "lucide-react";
 import { format, isSameDay, parseISO } from "date-fns";
+import OrderDetailsModal from "@/components/cafe/order-details-modal";
+import type { OrderWithDetails } from "@shared/schema";
 
 
 const statusMeta: Record<string, { label: string; color: string; icon: any }> = {
@@ -25,6 +27,7 @@ export default function CafeOrdersPage() {
   const { data: apiOrders = [], isLoading } = useOrders();
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [calOpen, setCalOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
 
   const merged = [...apiOrders].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -101,8 +104,15 @@ export default function CafeOrdersPage() {
           {filtered.map((order: any) => {
             const meta = statusMeta[order.status] || { label: order.status, color: "bg-gray-100 text-gray-800", icon: Box };
             const Icon = meta.icon;
+            const supplierNames = (order.subOrders ?? []).map((s: any) => s.supplierName).filter(Boolean);
+            const itemCount = (order.subOrders ?? []).reduce((n: number, s: any) => n + (s.items?.length ?? 0), 0) || (order.items?.length ?? 0);
             return (
-              <Card key={order.id} className="rounded-2xl border-border/50 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+              <Card
+                key={order.id}
+                className="rounded-2xl border-border/50 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => setSelectedOrder(order as OrderWithDetails)}
+                data-testid={`order-card-${order.id}`}
+              >
                 <div className="bg-secondary/30 px-5 py-3.5 border-b border-border/50 flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-6 flex-wrap">
                     <div>
@@ -113,9 +123,20 @@ export default function CafeOrdersPage() {
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</p>
                       <p className="text-sm mt-0.5 text-muted-foreground">{formatDate(order.createdAt)}</p>
                     </div>
+                    {supplierNames.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fournisseurs</p>
+                        <p className="text-sm mt-0.5 font-medium">{supplierNames.join(", ")}</p>
+                      </div>
+                    ) : order.supplier?.name ? (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Supplier</p>
+                        <p className="text-sm mt-0.5 font-medium">{order.supplier.name}</p>
+                      </div>
+                    ) : null}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Supplier</p>
-                      <p className="text-sm mt-0.5 font-medium">{order.supplier?.name}</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Articles</p>
+                      <p className="text-sm mt-0.5 text-muted-foreground">{itemCount} article{itemCount !== 1 ? "s" : ""}</p>
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total</p>
@@ -126,49 +147,20 @@ export default function CafeOrdersPage() {
                     <Icon className="w-3.5 h-3.5" /> {meta.label}
                   </Badge>
                 </div>
-                <CardContent className="p-5">
-                  {order.subOrders && order.subOrders.length > 0 ? (
-                    <div className="space-y-4">
-                      {order.subOrders.map((sub: any) => (
-                        <div key={sub.id} className="space-y-1.5">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{sub.supplierName}</p>
-                          {(sub.items || []).map((item: any, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between text-sm">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-muted-foreground text-xs w-6">{item.quantity}×</span>
-                                <span className="font-medium">{item.product?.name}</span>
-                                {(item.flavorName || item.sizeName) && (
-                                  <span className="text-xs text-muted-foreground">{[item.flavorName, item.sizeName].filter(Boolean).join(" · ")}</span>
-                                )}
-                              </div>
-                              <span className="text-muted-foreground">{formatCurrency((item.unitPrice ?? item.totalPrice) * (item.unitPrice ? item.quantity : 1))}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {(order.items || []).map((item: any, idx: number) => (
-                        <div key={idx} className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-muted-foreground text-xs w-6">{item.quantity}×</span>
-                            <span className="font-medium">{item.product?.name}</span>
-                            {item.product?.category && (
-                              <Badge variant="secondary" className="text-[10px] py-0">{item.product.category}</Badge>
-                            )}
-                          </div>
-                          <span className="text-muted-foreground">{formatCurrency(item.unitPrice * item.quantity)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">Cliquez pour voir les détails →</p>
                 </CardContent>
               </Card>
             );
           })}
         </div>
       )}
+
+      <OrderDetailsModal
+        open={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        order={selectedOrder}
+      />
     </div>
   );
 }

@@ -34,7 +34,8 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
-import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact } from "@shared/schema";
+import OrderDetailsModal from "@/components/cafe/order-details-modal";
+import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
@@ -127,6 +128,7 @@ function AccountPanel({ user, onClose, onLogout }: { user: any; onClose: () => v
   const [activeTab, setActiveTab] = useState<"orders" | "dashboard" | "settings">("orders");
   const { data: orders = [], isLoading: ordersLoading } = useOrders();
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
+  const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
   const [notifs, setNotifs] = useState({ orderUpdates: true, promotions: false, newSuppliers: true });
 
   const dk = isDark;
@@ -239,21 +241,36 @@ function AccountPanel({ user, onClose, onLogout }: { user: any; onClose: () => v
                   {sorted.map((order: any) => {
                     const meta = statusMeta[order.status] ?? statusMeta.PENDING;
                     const Icon = meta.icon;
+                    const supplierNames = (order.subOrders ?? []).map((s: any) => s.supplierName).filter(Boolean);
                     return (
-                      <div key={order.id} className={`border rounded-2xl p-4 space-y-2 ${cardBg}`}>
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => setDetailOrder(order as OrderWithDetails)}
+                        className={`w-full text-left border rounded-2xl p-4 space-y-2 transition-all hover:shadow-md active:scale-[0.99] ${cardBg} ${dk ? "hover:border-gray-600" : "hover:border-gray-200"}`}
+                      >
                         <div className="flex items-center justify-between">
                           <span className={`font-mono text-sm font-bold ${textPrimary}`}>#{String(order.id).padStart(6, "0")}</span>
                           <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}><Icon className="w-3 h-3" />{meta.label}</span>
                         </div>
+                        {supplierNames.length > 0 && (
+                          <p className={`text-xs truncate ${textMuted}`}>{supplierNames.join(" · ")}</p>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className={`text-xs ${textMuted}`}>{order.createdAt ? formatDate(order.createdAt) : "—"}</span>
                           <span className={`text-sm font-bold ${dk ? "text-amber-400" : "text-amber-600"}`}>{formatCurrency(order.totalAmount)}</span>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
         )}
+        {/* Order Details Modal — rendered inside AccountPanel so it sits above the panel dialog */}
+        <OrderDetailsModal
+          open={!!detailOrder}
+          onClose={() => setDetailOrder(null)}
+          order={detailOrder}
+        />
 
         {/* DASHBOARD */}
         {activeTab === "dashboard" && (

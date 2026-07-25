@@ -1,0 +1,76 @@
+The new Order/SubOrder architecture is already implemented and working well overall. I only want to fix one synchronization issue. Please do not modify any other part of the ordering system.
+
+Problem
+
+When a Coffee Owner places a mixed order containing products and/or packs from multiple suppliers, the parent Order is correctly created.
+
+Example:
+
+Supplier 1 (Café Ellouze)
+Nespresso Original Capsules x10 ×1
+Subtotal: $20.00
+Supplier 2 (Café Bondin)
+Nespresso Original Capsules x10 ×2
+CHICHA W GAZOUZA ×1
+Subtotal: $86.00
+Parent Order Total: $106.00
+
+The Coffee Owner correctly sees the grouped order.
+
+Current Issue
+
+On the supplier side, every supplier receives the complete parent order, including products belonging to other suppliers.
+
+For example, Café Ellouze currently sees:
+
+Nespresso ×1
+Nespresso ×2
+CHICHA W GAZOUZA
+
+which is incorrect.
+
+Expected Behavior
+
+Each supplier must only receive and manage their own SubOrder.
+
+Using the example above:
+
+Supplier Café Ellouze should see only:
+
+Nespresso Original Capsules x10 ×1
+Subtotal: $20.00
+
+Supplier Café Bondin should see only:
+
+Nespresso Original Capsules x10 ×2
+CHICHA W GAZOUZA ×1
+Subtotal: $86.00
+
+Nothing else.
+
+Requirements
+
+Only fix the synchronization between Orders, SubOrders, and the Supplier order views.
+
+Verify that:
+
+Supplier Orders page only loads that supplier's SubOrders.
+Supplier Order Requests only contains that supplier's SubOrders.
+Supplier Returns remain linked only to that supplier's SubOrders.
+Packs are associated with the correct supplier.
+Standalone products are associated with the correct supplier.
+Quantities, prices, subtotals, and statuses are calculated from the supplier's own SubOrder only.
+The parent Order remains unchanged for the Coffee Owner.
+Admin continues to see the complete parent Order.
+Delivery synchronization continues to work with SubOrders.
+WebSocket/realtime synchronization continues working correctly.
+Existing APIs, UI, and design remain unchanged.
+Important
+
+Do not redesign anything.
+
+Do not change the Order architecture.
+
+Do not modify unrelated functionality.
+
+Only fix the supplier-side data isolation so that every supplier sees and manages only the SubOrder that belongs to them, while all other roles (Coffee Owner, Admin, Delivery) continue working exactly as they do today.

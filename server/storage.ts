@@ -404,13 +404,28 @@ export class DatabaseStorage implements IStorage {
       const cafe = userMap.get(order.cafeId);
       const supplier = order.supplierId ? userMap.get(order.supplierId) : null;
       const delivery = order.deliveryId ? userMap.get(order.deliveryId) : null;
-      const items = allItems
-        .filter((i) => i.orderId === order.id)
-        .map((i) => ({ ...i, product: (i.productId != null ? productMap.get(i.productId) : undefined) ?? {} as Product }));
-      const orderSubOrders = allSubOrders.filter((so) => so.orderId === order.id).map((so) => ({
+
+      // Build all subOrders for this order, each with its own scoped items
+      let orderSubOrders = allSubOrders.filter((so) => so.orderId === order.id).map((so) => ({
         ...so,
         items: allItems.filter((i) => i.subOrderId === so.id).map((i) => ({ ...i, product: (i.productId != null ? productMap.get(i.productId) : undefined) ?? {} as Product })),
       }));
+
+      // When filtering by supplierId, restrict subOrders to only that supplier's own.
+      // This prevents one supplier from seeing another supplier's items or sub-totals.
+      if (filters?.supplierId) {
+        orderSubOrders = orderSubOrders.filter((so) => so.supplierId === filters.supplierId);
+      }
+
+      // Top-level items: scoped to this supplier's subOrders when supplierId filter is active;
+      // full order items for cafe owners, admins, and delivery users.
+      const supplierSubOrderIds = filters?.supplierId
+        ? new Set(orderSubOrders.map((so) => so.id))
+        : null;
+      const items = allItems
+        .filter((i) => i.orderId === order.id && (supplierSubOrderIds == null || (i.subOrderId != null && supplierSubOrderIds.has(i.subOrderId))))
+        .map((i) => ({ ...i, product: (i.productId != null ? productMap.get(i.productId) : undefined) ?? {} as Product }));
+
       return {
         ...order,
         cafe: { id: order.cafeId, name: cafe?.name ?? "Unknown" },

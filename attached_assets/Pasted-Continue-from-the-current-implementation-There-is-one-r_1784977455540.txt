@@ -1,0 +1,141 @@
+Continue from the current implementation.
+
+There is one remaining bug in the **SHOP Messages** module.
+
+Do **not** redesign anything, do **not** change the UI, and do **not** modify unrelated functionality.
+
+## Bug
+
+When a user clicks **"New Conversation"**, selects an eligible user, and tries to start a conversation, the request fails.
+
+The popup displays:
+
+> **Cannot start a conversation**
+>
+> **Cannot read properties of undefined (reading 'id')**
+
+The eligible contacts endpoint successfully returns users, for example:
+
+```text
+GET /api/messages/eligible-contacts
+
+[
+  { "id": 1, "name": "Super Admin", "role": "SUPER_ADMIN" },
+  { "id": 8, "name": "Boncafe", "role": "SUPPLIER" }
+]
+```
+
+So the problem is **not** that eligible contacts are missing.
+
+The problem occurs while creating or opening the conversation after the user is selected.
+
+---
+
+## Important
+
+This is **not only a Coffee Owner issue**.
+
+Verify and fix the exact same flow for **every role** that can start a new conversation:
+
+* Coffee Owner
+* Admin
+* Supplier
+* Delivery
+
+Any role that uses **"New Conversation"** must be able to create or open conversations without errors.
+
+There should be one common, robust implementation used consistently across all messaging interfaces.
+
+---
+
+## What to do
+
+Trace the complete flow from:
+
+* loading eligible contacts,
+* selecting a contact,
+* creating or retrieving the conversation,
+* opening the conversation,
+* updating the UI.
+
+Find the exact source of the undefined object instead of adding temporary workarounds.
+
+Fix the root cause.
+
+---
+
+## Conversation Creation
+
+After selecting an eligible contact:
+
+* if a conversation already exists, open it immediately;
+* if it does not exist, create it automatically and open it immediately.
+
+This must happen without errors for **every role**.
+
+---
+
+## UI Refresh
+
+Currently users must manually refresh the page before the new conversation appears.
+
+This should never be necessary.
+
+After a conversation is created:
+
+* it must immediately appear in the conversation list,
+* it must automatically become the selected conversation,
+* the chat window must open,
+* the user must be able to send the first message immediately,
+* no page refresh should ever be required.
+
+This behavior must work identically for:
+
+* Coffee Owner
+* Admin
+* Supplier
+* Delivery
+
+---
+
+## Synchronization
+
+Verify that after creating a new conversation:
+
+* both participants immediately see the conversation,
+* both participants can exchange messages instantly,
+* the conversation list updates automatically,
+* unread counters update correctly,
+* latest message previews update,
+* timestamps update,
+* everything is synchronized in real time.
+
+---
+
+## Validation
+
+Test both situations:
+
+* opening an existing conversation;
+* creating a brand-new conversation.
+
+Verify all supported messaging flows, including:
+
+* Coffee Owner ↔ Supplier
+* Coffee Owner ↔ Admin
+* Coffee Owner ↔ Delivery
+* Supplier ↔ Admin
+* Delivery ↔ Admin
+* Any other supported role combinations in the SHOP messaging system.
+
+Ensure every role can:
+
+* create a new conversation,
+* open existing conversations,
+* immediately send the first message,
+* receive messages in real time,
+* continue conversations without refreshing the page.
+
+Fix every occurrence of the issue. Do not stop after fixing only the Coffee Owner flow.
+
+Only finish once the "New Conversation" feature works seamlessly across the entire SHOP messaging system, with no "Cannot read properties of undefined (reading 'id')" errors and no manual page refresh required.

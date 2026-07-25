@@ -2811,6 +2811,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       }
       const { conversation, isNew } = await storage.findOrCreateDirectConversation(userId, targetUserId);
+      // Notify both participants immediately so the other side sees the conversation appear in real time
+      broadcastToUsers([userId, targetUserId], "conversation_updated", { conversationId: conversation.id });
       res.json({ conversation, isNew });
     } catch (err: any) {
       res.status(500).json({ message: err.message });

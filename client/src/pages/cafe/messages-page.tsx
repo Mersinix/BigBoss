@@ -133,13 +133,17 @@ function ShopTab({ userId }: { userId: number }) {
   });
 
   const newConvMutation = useMutation({
-    mutationFn: (targetUserId: number) =>
-      apiRequest("POST", "/api/messages/conversations", { targetUserId }),
-    onSuccess: (data: any) => {
-      setActiveConvId(data.conversation.id);
+    mutationFn: async (targetUserId: number) => {
+      const res = await apiRequest("POST", "/api/messages/conversations", { targetUserId });
+      return res.json() as Promise<{ conversation: { id: number }; isNew: boolean }>;
+    },
+    onSuccess: (data) => {
+      const convId = data.conversation.id;
+      setActiveConvId(convId);
       setView("chat");
       setNewConvOpen(false);
       setContactSearch("");
+      // Refetch immediately so the new conversation appears in the list
       qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
     },
     onError: (err: any) => toast({ title: "Cannot start conversation", description: err?.message, variant: "destructive" }),

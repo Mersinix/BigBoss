@@ -5,6 +5,23 @@ import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 
 export type MultiOrderRequest = CreateOrderRequest;
 
+export type ReorderData = {
+  items: {
+    listingId: number;
+    productId: number;
+    supplierId: number;
+    supplierName: string;
+    flavorId: number | null;
+    sizeId: number | null;
+    flavorName: string | null;
+    sizeName: string | null;
+    quantity: number;
+    unitPrice: number;
+  }[];
+  packItems: { packId: number; supplierId: number; quantity: number }[];
+  unavailable: { name: string; reason: string }[];
+};
+
 export function useOrders() {
   return useQuery<OrderWithDetails[]>({
     queryKey: [api.orders.list.path],
@@ -40,7 +57,10 @@ export function useCreateOrder() {
         body: JSON.stringify(data),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to create order");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Failed to create order" }));
+        throw new Error(err.message ?? "Failed to create order");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -67,5 +87,36 @@ export function useUpdateOrderStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
     },
+  });
+}
+
+export function useUpdateSubOrderStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ subOrderId, status }: { subOrderId: number; status: string }) => {
+      const res = await fetch(`/api/suborders/${subOrderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update sub-order status");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
+    },
+  });
+}
+
+export function useReorder(orderId: number | null) {
+  return useQuery<ReorderData>({
+    queryKey: ["/api/orders/reorder", orderId],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders/${orderId}/reorder`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to prepare reorder");
+      return res.json();
+    },
+    enabled: false, // triggered manually
   });
 }

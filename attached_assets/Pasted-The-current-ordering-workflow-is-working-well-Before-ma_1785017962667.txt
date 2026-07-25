@@ -1,0 +1,384 @@
+The current ordering workflow is working well. Before making any changes, please review the complete existing Order implementation and reuse the current architecture, APIs, database relationships, WebSocket synchronization, permissions, and UI components wherever possible.
+
+Do not redesign the application, remove existing functionality, or modify unrelated parts of the project.
+
+Verify the complete Order workflow before implementing anything so that all synchronization between Coffee Owner, Supplier, Delivery, and Admin remains consistent.
+
+1. Coffee Owner → Cart → Order Confirmation
+
+The current cart works correctly.
+
+Before the order is submitted, add one additional confirmation step.
+
+When the Coffee Owner clicks "Passer commande", do not immediately create the order.
+
+Instead, open a "Récapitulatif" (Order Summary) confirmation modal.
+
+The modal should allow the Coffee Owner to:
+
+review the complete order
+review every supplier section
+review Packs and Products
+review delivery address
+review delivery instructions
+review totals
+review shipping information
+confirm the order
+
+Inside this modal the Coffee Owner should also be able to:
+
+remove individual products
+remove Packs
+adjust quantities where applicable
+close/cancel the confirmation without creating the order
+
+Only after clicking the final confirmation button should the Order actually be created.
+
+The existing cart behavior should remain unchanged outside of this additional confirmation step.
+
+2. Coffee Owner → Order History
+
+The current standalone Order History page uses an old design.
+
+Remove this standalone experience and integrate it into the existing modern UI.
+
+Move the entire Order History experience into:
+
+My Account → Orders
+
+Reuse the current design language already used inside the My Account modal.
+
+Keep all existing order data.
+
+Orders Tab
+
+The Orders tab should display the list of orders exactly as today but using the modern interface.
+
+When the Coffee Owner clicks any order,
+
+do not navigate away.
+
+Instead,
+
+open an Order Details modal.
+
+Order Details Modal
+
+The modal should display all information related to the selected order, including:
+
+Order number
+Order status
+Date & time
+Delivery address
+Delivery instructions
+Scheduled delivery information (if applicable)
+Priority
+Total amount
+
+It should also clearly separate every Supplier involved in the order.
+
+Each Supplier section should display:
+
+Supplier name
+Products
+Packs
+Quantities
+Prices
+Current SubOrder status
+Delivery information when available
+
+The goal is for the Coffee Owner to understand exactly how one order has been split between suppliers.
+
+3. Professional Order / SubOrder Strategy
+
+Products inside one cart may come from multiple suppliers.
+
+The ordering system should behave professionally.
+
+Implement a synchronized Order structure where:
+
+One Order may contain multiple SubOrders.
+
+Example:
+
+Order #100
+
+contains:
+
+SubOrder A
+
+Supplier A
+
+Product 1
+Product 2
+Pack 1
+
+SubOrder B
+
+Supplier B
+
+Product 3
+Pack 2
+
+Each SubOrder must remain synchronized with its Supplier.
+
+All Order information should stay linked correctly.
+
+This includes (but is not limited to):
+
+Products
+Packs
+Variants
+Selected flavors
+Quantities
+Prices
+Supplier
+Creation time
+Delivery information
+Status history
+Tracking information
+
+Everything should remain fully synchronized.
+
+4. Delivery Synchronization
+
+Since one Order may contain multiple Suppliers,
+
+the Delivery workflow must also stay synchronized.
+
+The system should support multiple deliveries for one Order whenever necessary.
+
+Each Delivery should correspond to the correct SubOrder.
+
+Each Supplier should only see:
+
+their own SubOrder
+their own Products
+their own Packs
+their own customer instructions
+their own delivery status
+
+They must never see another supplier's items.
+
+Delivery users should receive only the SubOrders assigned to them.
+
+All statuses should stay synchronized in real time.
+
+5. Order Scheduling
+
+Allow the Coffee Owner to choose:
+
+Immediate order
+Scheduled order
+
+For scheduled orders,
+
+allow the Coffee Owner to choose:
+
+delivery date
+delivery time
+
+This scheduling information should remain synchronized across:
+
+Coffee Owner
+Supplier
+Delivery
+Admin
+6. Order Priority
+
+Allow the Coffee Owner to select the urgency of the order before confirming.
+
+Example priorities:
+
+Normal
+High Priority
+Urgent
+
+This priority should remain visible everywhere the order is displayed, including:
+
+Coffee Owner
+Supplier
+Delivery
+Admin
+7. Reorder
+
+The Coffee Owner should be able to reuse previous Orders.
+
+Inside the Order Details modal,
+
+provide the ability to:
+
+Reorder
+
+When using Reorder,
+
+the system should rebuild the cart from the previous order while validating the current marketplace state.
+
+It should automatically respect:
+
+current product availability
+current Pack availability
+current stock
+current prices
+hidden products
+archived products
+unavailable variants
+
+If something is no longer available,
+
+the Coffee Owner should clearly see which items require attention before confirming the new order.
+
+8. Duplicate Order Protection
+
+Prevent accidental duplicate submissions.
+
+The Coffee Owner must never be able to create the exact same order twice by mistake because of:
+
+double-clicking
+multiple taps
+page latency
+slow network
+refreshes
+
+The order submission flow should include appropriate safeguards so that only one order is created for a single confirmation action.
+
+The user should always receive clear feedback about the order status.
+
+9. Supplier → Orders Synchronization
+
+The Supplier already has the following sections:
+
+Orders
+Order Requests
+Returns
+
+Synchronize these sections with the new Order/SubOrder strategy.
+
+Before making any changes, review the existing Supplier Order workflow and reuse the current architecture and synchronization wherever possible.
+
+Do not redesign these pages.
+
+Do not remove any existing functionality.
+
+Only adapt them to work correctly with the new Order structure.
+
+Supplier → Orders
+
+The Supplier must no longer work with the global Order directly.
+
+Instead, the Supplier should only see their own SubOrders.
+
+Each Supplier Order should contain only:
+
+Products belonging to that supplier
+Packs belonging to that supplier
+Selected variants
+Selected flavor distributions
+Quantities
+Prices
+Customer delivery instructions
+Delivery address
+Scheduled delivery information
+Priority
+Payment information already available
+Creation date & time
+Current status
+
+The Supplier must never see another supplier's products.
+
+Supplier → Order Requests
+
+Synchronize Order Requests with the SubOrder strategy.
+
+Each request must correspond only to the Supplier's own SubOrder.
+
+Any action performed by the Supplier must affect only that SubOrder while remaining synchronized with the parent Order.
+
+The Coffee Owner must receive real-time updates whenever changes occur.
+
+Supplier → Returns
+
+Synchronize Returns using the same Order/SubOrder architecture.
+
+If one Order contains multiple Suppliers,
+
+each Supplier must only manage returns related to:
+
+their own Products
+their own Packs
+their own SubOrders
+
+Returns must remain synchronized with:
+
+Coffee Owner
+Supplier
+Delivery
+Admin
+Supplier Status Synchronization
+
+Any status update performed by the Supplier should update only that Supplier's SubOrder.
+
+The parent Order should automatically reflect the combined progress of all SubOrders without breaking the existing workflow.
+
+Keep the current status lifecycle but synchronize it with the new architecture.
+
+10. Real-Time Synchronization
+
+Verify the complete synchronization of the Order workflow.
+
+Changes should propagate in real time without requiring page refreshes.
+
+This includes:
+
+Order creation
+SubOrder creation
+Supplier updates
+Delivery updates
+Status changes
+Scheduled orders
+Priority changes
+Reorders
+Order History
+Cart synchronization
+Order Requests
+Returns
+Delivery assignments
+Notifications
+Stock synchronization
+
+Everything should stay synchronized across Coffee Owner, Supplier, Delivery, and Admin.
+
+General Requirements
+
+Before implementing:
+
+Review the complete current Order workflow.
+Review the existing Supplier Orders, Order Requests, and Returns implementation before modifying them.
+Reuse existing APIs, components, permissions, and synchronization wherever possible.
+Preserve database integrity.
+Preserve WebSocket and real-time synchronization.
+Keep Admin, Supplier, Coffee Owner, and Delivery fully synchronized.
+Ensure the Order → SubOrder → Order Item hierarchy is robust, scalable, and professionally organized.
+Ensure every Product, Pack, Variant, Flavor selection, Supplier, Delivery assignment, and status remains correctly linked throughout the entire order lifecycle.
+Verify the complete workflow end-to-end after implementation, including:
+Cart
+Order confirmation
+Order creation
+SubOrder creation
+Supplier Orders
+Order Requests
+Returns
+Delivery assignment
+Scheduled orders
+Priority
+Reorder
+Order History
+Real-time updates
+
+Do not redesign the UI.
+
+Do not modify unrelated features.
+
+Do not remove existing functionality.
+
+Only implement the changes described above while keeping the rest of the application exactly as it is.

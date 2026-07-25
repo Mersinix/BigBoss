@@ -510,10 +510,95 @@ export class DatabaseStorage implements IStorage {
     return resolved;
   }
 
+  async updateSubOrderStatus(subOrderId: number, status: string): Promise<SubOrder> {
+    const [updated] = await db.update(subOrders).set({ status }).where(eq(subOrders.id, subOrderId)).returning();
+    if (!updated) throw new Error('SubOrder not found');
+    return updated;
+  }
+
+  /**
+   * Validate a previous order's items against the current marketplace state.
+   * Returns which items can be re-added as-is, which need attention, and resolved pack items.
+   */
+  async getReorderData(orderId: number, cafeId: number): Promise<{
+    items: import("@shared/schema").CreateOrderItem[];
+    packItems: import("@shared/schema").CreatePackOrderItem[];
+    unavailable: { name: string; reason: string }[];
+  }> {
+    const order = await this.getOrder(orderId);
+    if (!order || order.cafeId !== cafeId) throw new Error('Order not found');
+
+    const items: import("@shared/schema").CreateOrderItem[] = [];
+    const packItems: import("@shared/schema").CreatePackOrderItem[] = [];
+    const unavailable: { name: string; reason: string }[] = [];
+
+    for (const item of order.items) {
+      if (item.packId) {
+        const [pack] = await db.select().from(packs).where(eq(packs.id, item.packId));
+        if (!pack || pack.isArchived || pack.visibility !== 'VISIBLE') {
+          unavailable.push({ name: item.packName ?? `Pack #${item.packId}`, reason: 'Pack no longer available' });
+          continue;
+        }
+        const [detail] = await this.buildPackDetails([pack]);
+        const available = Math.min(pack.quantityAvailable, detail?.maxBuildable ?? 0);
+        if (available < item.quantity) {
+          unavailable.push({ name: pack.name, reason: available === 0 ? 'Out of stock' : `Only ${available} available` });
+          continue;
+        }
+        packItems.push({ packId: pack.id, supplierId: pack.supplierId, quantity: item.quantity });
+        continue;
+      }
+
+      if (!item.productId) continue;
+      // Find listing: use stored listingId or look up by productId+supplierId from subOrder
+      const subOrder = (order.subOrders ?? []).find(so => so.items.some(i => i.id === item.id));
+      const supplierId = subOrder?.supplierId;
+      let listingId: number | null = (item as any).listingId ?? null;
+      if (!listingId && supplierId) {
+        const [listing] = await db.select().from(supplierProductListings)
+          .where(and(eq(supplierProductListings.productId, item.productId), eq(supplierProductListings.supplierId, supplierId)));
+        listingId = listing?.id ?? null;
+      }
+      if (!listingId) { unavailable.push({ name: item.product?.name ?? `Product #${item.productId}`, reason: 'No longer offered by supplier' }); continue; }
+
+      const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
+      if (!listing || listing.visibility !== 'VISIBLE') { unavailable.push({ name: item.product?.name ?? '', reason: 'No longer available' }); continue; }
+
+      const [product] = await db.select().from(products).where(eq(products.id, item.productId));
+      if (!product?.isAdminProduct || product.status !== 'ACTIVE') { unavailable.push({ name: product?.name ?? '', reason: 'Product no longer available' }); continue; }
+
+      const [supplier] = await db.select().from(users).where(eq(users.id, listing.supplierId));
+      const variants = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
+
+      if (variants.length > 0) {
+        const variant = variants.find(v => (v.flavorId ?? null) === (item.flavorId ?? null) && (v.sizeId ?? null) === (item.sizeId ?? null));
+        if (!variant) { unavailable.push({ name: product.name, reason: 'Selected variant no longer available' }); continue; }
+        if (variant.quantity < item.quantity) {
+          if (variant.quantity === 0) { unavailable.push({ name: product.name, reason: 'Out of stock' }); continue; }
+          unavailable.push({ name: product.name, reason: `Only ${variant.quantity} available` });
+          // Add with reduced quantity
+          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, flavorName: (item as any).flavorName, sizeName: (item as any).sizeName, quantity: variant.quantity, unitPrice: variant.price });
+          continue;
+        }
+        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, flavorName: (item as any).flavorName, sizeName: (item as any).sizeName, quantity: item.quantity, unitPrice: variant.price });
+      } else {
+        if (listing.stock < item.quantity) {
+          if (listing.stock === 0) { unavailable.push({ name: product.name, reason: 'Out of stock' }); continue; }
+          unavailable.push({ name: product.name, reason: `Only ${listing.stock} available` });
+          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, quantity: listing.stock, unitPrice: listing.price });
+          continue;
+        }
+        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, quantity: item.quantity, unitPrice: listing.price });
+      }
+    }
+
+    return { items, packItems, unavailable };
+  }
+
   async createOrder(
     cafeId: number,
     cartItems: CreateOrderItem[],
-    opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[]; promotionResults?: import("@shared/schema").SupplierPromotionResult[] },
+    opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[]; promotionResults?: import("@shared/schema").SupplierPromotionResult[]; priority?: string; scheduledAt?: Date },
   ): Promise<Order> {
     const packOrderItems = opts?.packItems ?? [];
     const promoResults = opts?.promotionResults ?? [];
@@ -535,6 +620,8 @@ export class DatabaseStorage implements IStorage {
       totalAmount,
       deliveryAddress: opts?.deliveryAddress ?? null,
       courierInstructions: opts?.courierInstructions?.trim() || null,
+      priority: (opts?.priority ?? 'NORMAL') as any,
+      scheduledAt: opts?.scheduledAt ?? null,
     }).returning();
 
     for (const item of cartItems) {
@@ -597,7 +684,7 @@ export class DatabaseStorage implements IStorage {
         }
         const [so] = await db.insert(subOrders).values(subOrderData).returning();
         for (const item of supplierItems) {
-          await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, productId: item.productId, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity, flavorId: item.flavorId ?? null, sizeId: item.sizeId ?? null });
+          await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, productId: item.productId, listingId: item.listingId, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity, flavorId: item.flavorId ?? null, sizeId: item.sizeId ?? null });
         }
         for (const item of supplierPackItems) {
           await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, packId: item.packId, packName: item.packName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity });

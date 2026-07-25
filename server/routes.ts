@@ -12,7 +12,7 @@ import {
   insertCategorySchema, insertSubCategorySchema, insertFlavorSchema,
   insertSizeSchema, insertBrandSchema,
   type MarketplaceProduct,
-  supplierProductReviews, supplierStores, packs, packItems as packItemsTable,
+  supplierProductReviews, supplierStores, packs, packItems as packItemsTable, subOrders,
   supplierProductVariants,
   type InventoryFilters, type InventorySort,
 } from "@shared/schema";
@@ -591,7 +591,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }).optional(),
       }).optional();
 
-      const { items, packItems, deliveryAddress, courierInstructions } = z.object({
+      const { items, packItems, deliveryAddress, courierInstructions, priority, scheduledAt } = z.object({
         items: z.array(z.object({
           listingId: z.number(),
           productId: z.number(),
@@ -611,6 +611,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         })).optional(),
         deliveryAddress: deliveryAddressSchema,
         courierInstructions: z.string().max(500).optional(),
+        priority: z.enum(['NORMAL', 'HIGH', 'URGENT']).optional(),
+        scheduledAt: z.string().datetime().optional(),
       }).parse(req.body);
 
       const validatedItems = await storage.resolveOrderItems(items);
@@ -646,6 +648,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         courierInstructions,
         packItems: validatedPackItems,
         promotionResults: promoEval.bySupplier,
+        priority: priority ?? 'NORMAL',
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
       });
 
       // Record promotion usage for each applied promotion
@@ -654,6 +658,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           await storage.recordPromotionUsage(result.promotionId, cafeId, order.id, result.discountAmount);
         }
       }
+
+      // Notify all involved suppliers about the new order
+      const involvedSupplierIds = Array.from(new Set([...validatedItems.map(i => i.supplierId), ...(validatedPackItems ?? []).map(i => i.supplierId)]));
+      broadcastToUsers(involvedSupplierIds, 'order_created', { orderId: order.id, cafeId });
+      broadcast('inventory_updated', { orderId: order.id });
 
       res.status(201).json({ ...order, promotionSavings: promoEval.totalDiscount });
     } catch (err: any) {
@@ -678,9 +687,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (order.status !== 'CANCELLED' && input.status === 'CANCELLED') {
         broadcast("inventory_updated", { orderId });
       }
+      // Notify cafe owner of status change in real time
+      broadcastToUsers([order.cafeId], 'order_status_changed', { orderId, status: input.status });
       res.json(updated);
     } catch (err) {
       res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  // ── SubOrder status update (Supplier) ────────────────────────────────────────
+
+  app.patch('/api/suborders/:id/status', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      if (!['ADMIN', 'SUPER_ADMIN', 'SUPPLIER'].includes(user.role)) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      const subOrderId = parseInt(req.params.id);
+      const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, subOrderId));
+      if (!subOrder) return res.status(404).json({ message: 'SubOrder not found' });
+      if (user.role === 'SUPPLIER' && subOrder.supplierId !== user.id) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      const { status } = z.object({ status: z.string() }).parse(req.body);
+      const updated = await storage.updateSubOrderStatus(subOrderId, status);
+      // Notify cafe owner + supplier of suborder change
+      const order = await storage.getOrder(subOrder.orderId);
+      if (order) {
+        broadcastToUsers([order.cafeId, subOrder.supplierId], 'suborder_status_changed', {
+          orderId: subOrder.orderId, subOrderId, status,
+        });
+      }
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message ?? 'Invalid request' });
+    }
+  });
+
+  // ── Reorder — validate previous order items against current stock ────────────
+
+  app.get('/api/orders/:id/reorder', requireApprovedCafeOwner, async (req, res) => {
+    try {
+      const cafeId = req.session.userId!;
+      const orderId = parseInt(req.params.id);
+      const data = await storage.getReorderData(orderId, cafeId);
+      res.json(data);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message ?? 'Error preparing reorder' });
     }
   });
 

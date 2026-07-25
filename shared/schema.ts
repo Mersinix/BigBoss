@@ -136,6 +136,8 @@ export const orders = pgTable("orders", {
   totalAmount: integer("total_amount").notNull(),
   deliveryAddress: jsonb("delivery_address"),
   courierInstructions: text("courier_instructions"),
+  priority: text("priority").notNull().default('NORMAL'), // 'NORMAL' | 'HIGH' | 'URGENT'
+  scheduledAt: timestamp("scheduled_at"),                 // null = immediate
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -163,6 +165,7 @@ export const orderItems = pgTable("order_items", {
   orderId: integer("order_id").notNull(),
   subOrderId: integer("sub_order_id"),
   productId: integer("product_id"),
+  listingId: integer("listing_id"), // stored for reorder lookups
   packId: integer("pack_id"),
   packName: text("pack_name"),
   quantity: integer("quantity").notNull(),
@@ -1181,11 +1184,15 @@ export type GeoLocation = {
   details?: AddressDetails;
 };
 
+export type OrderPriority = 'NORMAL' | 'HIGH' | 'URGENT';
+
 export type CreateOrderRequest = {
   items: CreateOrderItem[];
   packItems?: CreatePackOrderItem[];
   deliveryAddress?: GeoLocation;
   courierInstructions?: string;
+  priority?: OrderPriority;
+  scheduledAt?: string; // ISO datetime string; undefined / null = immediate
 };
 
 export type UpdateOrderStatusRequest = { status: typeof orders.$inferSelect.status; deliveryId?: number };

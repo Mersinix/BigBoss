@@ -19,6 +19,7 @@ import { useLocation, Link } from "wouter";
 import type { CreateOrderRequest, GeoLocation } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { userToAccountAddress, pickedToGeoLocation } from "@/store/search-location-store";
+import OrderConfirmationModal, { type ConfirmOrderOpts } from "@/components/cafe/order-confirmation-modal";
 
 export default function CartPage() {
   const {
@@ -38,6 +39,7 @@ export default function CartPage() {
   const [courierInstructions, setCourierInstructions] = useState("");
   const [deliveryPickerOpen, setDeliveryPickerOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // ── Theme tokens ─────────────────────────────────────────────────────────────
   const dk          = isDark;
@@ -90,7 +92,8 @@ export default function CartPage() {
     setDeliveryPickerOpen(false);
   };
 
-  const handleCheckout = () => {
+  // Open the confirmation modal (with address validation)
+  const handleOpenConfirm = () => {
     if (!hasShop) return;
     if (!activeDeliveryAddress) {
       toast({
@@ -102,8 +105,13 @@ export default function CartPage() {
       });
       return;
     }
+    setConfirmOpen(true);
+  };
+
+  // Called when user clicks "Confirmer" inside the modal
+  const handleConfirmOrder = (opts: ConfirmOrderOpts) => {
     const request: CreateOrderRequest = {
-      items: items.map((i) => ({
+      items: opts.modifiedItems.map((i) => ({
         listingId: i.listingId,
         productId: i.productId,
         supplierId: i.supplierId,
@@ -115,13 +123,15 @@ export default function CartPage() {
         quantity: i.quantity,
         unitPrice: i.unitPrice,
       })),
-      packItems: packItems.map((p) => ({
+      packItems: opts.modifiedPackItems.map((p) => ({
         packId: p.packId,
         supplierId: p.supplierId,
         quantity: p.quantity,
       })),
-      deliveryAddress: activeDeliveryAddress,
+      deliveryAddress: activeDeliveryAddress!,
       courierInstructions: courierInstructions.trim() || undefined,
+      priority: opts.priority,
+      scheduledAt: opts.scheduledAt,
     };
     createOrder.mutate(request, {
       onSuccess: () => {
@@ -130,7 +140,8 @@ export default function CartPage() {
         clearPackItems();
         setCourierInstructions("");
         setCustomDeliveryAddress(null);
-        setLocation("/orders");
+        setConfirmOpen(false);
+        setLocation("/cafe/settings?tab=orders");
       },
       onError: (error) => {
         toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -503,7 +514,7 @@ export default function CartPage() {
 
                   <button
                     type="button"
-                    onClick={handleCheckout}
+                    onClick={handleOpenConfirm}
                     disabled={createOrder.isPending}
                     className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white py-3.5 font-semibold text-sm transition-all shadow-lg shadow-amber-500/20"
                     data-testid="button-place-order"

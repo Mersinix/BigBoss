@@ -2784,7 +2784,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   /** GET /api/messages/conversations — list all visible conversations for the current user */
   app.get("/api/messages/conversations", requireAuth, async (req: any, res) => {
     try {
-      const conversations = await storage.getConversationsForUser(req.user.id);
+      const userId: number = req.session.userId;
+      const conversations = await storage.getConversationsForUser(userId);
       res.json(conversations);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -2798,15 +2799,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "targetUserId is required" });
     }
     try {
-      // Authorization: verify eligibility
-      const isAdmin = req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN";
+      const userId: number = req.session.userId;
+      const me = await storage.getUser(userId);
+      if (!me) return res.status(401).json({ message: "User not found" });
+      // Authorization: verify eligibility (admins can message anyone)
+      const isAdmin = me.role === "ADMIN" || me.role === "SUPER_ADMIN";
       if (!isAdmin) {
-        const eligible = await storage.getEligibleContacts(req.user.id);
+        const eligible = await storage.getEligibleContacts(userId);
         if (!eligible.some(c => c.id === targetUserId)) {
           return res.status(403).json({ message: "You are not authorized to message this user" });
         }
       }
-      const { conversation, isNew } = await storage.findOrCreateDirectConversation(req.user.id, targetUserId);
+      const { conversation, isNew } = await storage.findOrCreateDirectConversation(userId, targetUserId);
       res.json({ conversation, isNew });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -2819,7 +2823,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = Math.min(parseInt(req.query.pageSize as string) || 50, 200);
     try {
-      const authorized = await storage.isParticipant(convId, req.user.id);
+      const userId: number = req.session.userId;
+      const authorized = await storage.isParticipant(convId, userId);
       if (!authorized) return res.status(403).json({ message: "Not authorized" });
       const { msgs, total } = await storage.getConversationMessages(convId, page, pageSize);
       res.json({ messages: msgs, total, page, pageSize });
@@ -2834,9 +2839,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ message: "content is required" });
     try {
-      const authorized = await storage.isParticipant(convId, req.user.id);
+      const userId: number = req.session.userId;
+      const authorized = await storage.isParticipant(convId, userId);
       if (!authorized) return res.status(403).json({ message: "Not authorized" });
-      const msg = await storage.sendMessage(convId, req.user.id, content.trim());
+      const msg = await storage.sendMessage(convId, userId, content.trim());
       // Notify all participants via WebSocket
       const participantIds = await storage.getConversationParticipantIds(convId);
       broadcastToUsers(participantIds, "new_message", { conversationId: convId, message: msg });
@@ -2850,7 +2856,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/messages/conversations/:id/read", requireAuth, async (req: any, res) => {
     const convId = parseInt(req.params.id);
     try {
-      await storage.markConversationRead(convId, req.user.id);
+      const userId: number = req.session.userId;
+      await storage.markConversationRead(convId, userId);
       res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -2860,7 +2867,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   /** GET /api/messages/eligible-contacts — users I can start a conversation with */
   app.get("/api/messages/eligible-contacts", requireAuth, async (req: any, res) => {
     try {
-      const contacts = await storage.getEligibleContacts(req.user.id);
+      const userId: number = req.session.userId;
+      const contacts = await storage.getEligibleContacts(userId);
       res.json(contacts);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -2870,7 +2878,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   /** GET /api/messages/unread-count — unread badge count */
   app.get("/api/messages/unread-count", requireAuth, async (req: any, res) => {
     try {
-      const count = await storage.getUnreadMessageCount(req.user.id);
+      const userId: number = req.session.userId;
+      const count = await storage.getUnreadMessageCount(userId);
       res.json({ count });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -2884,9 +2893,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ message: "title and targetUserIds are required" });
     }
     try {
-      const conv = await storage.createBroadcastConversation(req.user.id, title, targetUserIds);
+      const adminId: number = req.session.userId;
+      const conv = await storage.createBroadcastConversation(adminId, title, targetUserIds);
       if (content?.trim()) {
-        const msg = await storage.sendMessage(conv.id, req.user.id, content.trim());
+        const msg = await storage.sendMessage(conv.id, adminId, content.trim());
         broadcastToUsers(targetUserIds, "new_message", { conversationId: conv.id, message: msg });
       }
       res.json({ conversation: conv });
@@ -2901,7 +2911,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { targetUserId, hidden } = req.body;
     if (typeof hidden !== "boolean") return res.status(400).json({ message: "hidden (boolean) is required" });
     try {
-      await storage.setConversationVisibility(convId, targetUserId ?? null, hidden, req.user.id);
+      const adminId: number = req.session.userId;
+      await storage.setConversationVisibility(convId, targetUserId ?? null, hidden, adminId);
       // Notify affected user(s)
       const affectedIds = targetUserId ? [targetUserId] : await storage.getConversationParticipantIds(convId);
       broadcastToUsers(affectedIds, "conversation_updated", { conversationId: convId });

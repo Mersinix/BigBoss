@@ -1,0 +1,205 @@
+Continue from the commit:
+
+**`MESSAGES MODIFICATIONS`**
+
+Do **not** restart, rewrite, or replace the messaging system. Continue from the current implementation only.
+
+Your objective is to inspect the current implementation, automatically identify anything that is incomplete, broken, inconsistent, or not fully synchronized, then immediately fix and complete it.
+
+Do **not** produce a report or analysis. Execute the remaining work directly.
+
+---
+
+# Scope
+
+Only work on the **SHOP Messages** module.
+
+Do **not** modify:
+
+* PRINT Messages
+* BARISTA Messages
+* MARKETING Messages
+
+Those modules must remain exactly as they are.
+
+---
+
+# Verify the Entire SHOP Messaging System
+
+Perform a complete end-to-end verification of the messaging system between every supported role.
+
+Verify interactions between:
+
+* Coffee Owner ↔ Supplier
+* Coffee Owner ↔ Delivery
+* Coffee Owner ↔ Admin
+* Supplier ↔ Admin
+* Delivery ↔ Admin
+
+Ensure every messaging flow works correctly.
+
+---
+
+# Verify Coffee Owner Messages
+
+Confirm that the SHOP tab no longer depends on any fake or hardcoded SHOP conversations.
+
+The SHOP conversations must come exclusively from real marketplace data.
+
+Verify that:
+
+* only eligible Suppliers appear,
+* only eligible Delivery users appear,
+* Admin appears according to visibility rules,
+* conversations load correctly,
+* history loads correctly,
+* unread counters work,
+* latest message previews update,
+* timestamps update,
+* conversation ordering is correct.
+
+If any remaining SHOP placeholder data still exists, remove it and connect it to the real messaging system.
+
+PRINT, BARISTA and MARKETING placeholders must remain untouched.
+
+---
+
+# Verify Supplier Messages
+
+Confirm that Suppliers can:
+
+* see eligible Coffee Owners,
+* open conversations,
+* continue existing conversations,
+* start a new conversation with an eligible Coffee Owner,
+* receive replies,
+* receive new messages in real time.
+
+If any eligible Coffee Owners are missing, fix the eligibility logic.
+
+---
+
+# Verify Admin Messages
+
+Confirm that the Admin can:
+
+* see Coffee Owners,
+* see Suppliers,
+* see Delivery users,
+* open existing conversations,
+* start new conversations,
+* send broadcast/system messages (if already implemented),
+* receive replies,
+* continue conversations.
+
+If users are missing from the available contacts, fix the logic.
+
+---
+
+# Conversation Creation
+
+Verify that when two eligible users have never chatted before:
+
+* the first message automatically creates the conversation,
+* both users immediately see the conversation,
+* the conversation persists in the database,
+* no duplicate conversations are created.
+
+---
+
+# Real-Time Synchronization
+
+This is the highest priority.
+
+Verify that when any participant sends a message:
+
+* it is immediately saved to the database,
+* every participant instantly receives it,
+* open chats update automatically,
+* conversation previews update,
+* unread counters update,
+* timestamps update,
+* latest message previews update,
+* conversation ordering updates,
+* no page refresh is required.
+
+Test every supported role combination.
+
+If any real-time synchronization issue exists, fix it completely.
+
+---
+
+# Database Validation
+
+Verify that:
+
+* every message is stored,
+* every conversation is stored,
+* message history persists,
+* reconnecting reloads the complete history,
+* logout/login does not lose messages,
+* duplicate messages never occur,
+* duplicate conversations never occur.
+
+---
+
+# Authorization
+
+Verify that:
+
+* users only see conversations they are allowed to access,
+* hidden conversations remain hidden,
+* unauthorized conversations cannot be opened,
+* users cannot send messages to unauthorized users,
+* role permissions are enforced everywhere.
+
+Fix any authorization issue found.
+
+---
+
+# Existing UI
+
+Do **not** redesign anything.
+
+Do **not** change layouts.
+
+Do **not** modify styling.
+
+Do **not** change navigation.
+
+Only fix functionality where required.
+
+---
+
+# Regression Testing
+
+Before finishing, verify that the messaging implementation has not broken:
+
+* Orders
+* Products
+* Promotions
+* Inventory
+* Dashboard
+* Authentication
+* User Management
+* Navigation
+* Existing role permissions
+* Existing layouts
+
+If any regression is detected, fix it before completing the task.
+
+---
+
+# Final Requirement
+
+Do not stop after checking the code.
+
+Execute the remaining fixes, perform a complete end-to-end validation of the SHOP messaging system, resolve every issue discovered during testing, and only finish once:
+
+* all SHOP conversations use real marketplace data,
+* all eligible users are visible,
+* conversation creation works,
+* real-time synchronization works correctly,
+* database persistence is verified,
+* authorization rules are enforced,
+* and the messaging system is fully operational for Coffee Owners, Suppliers, Delivery, and Admin without breaking any other part of the BigBossCoffee project.

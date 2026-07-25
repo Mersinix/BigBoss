@@ -8,7 +8,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
@@ -29,6 +29,7 @@ import {
 import { useFavorites, selectTotalFavCount } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates } from "@/hooks/use-service-states";
+import { useRealtime } from "@/hooks/use-realtime";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
@@ -98,10 +99,8 @@ const SERVICE_BADGE: Record<ServiceId, string> = {
   MARKETING: "bg-purple-100 text-purple-700",
 };
 
+// SHOP conversations are loaded from the real API — only PRINT/BARISTA/MARKETING use fake data
 const fakeThreads: Thread[] = [
-  { id: 1, name: "Premium Beans Co",     service: "SHOP",      lastMessage: "Your order has been confirmed.", time: "2m ago",   unread: 2, messages: [{ from: "them", text: "Hello! Thank you for your order.", time: "10:03 AM" }, { from: "me", text: "Great! When dispatched?", time: "10:05 AM" }, { from: "them", text: "Your order has been confirmed and is being prepared.", time: "10:08 AM" }] },
-  { id: 2, name: "Oat & Grain Supply",   service: "SHOP",      lastMessage: "New batch of barista oat milk available.", time: "1h ago",   unread: 1, messages: [{ from: "them", text: "Hi! New batch of barista oat milk.", time: "09:15 AM" }, { from: "me", text: "How much for 12 units?", time: "09:20 AM" }] },
-  { id: 3, name: "TunRoast",             service: "SHOP",      lastMessage: "Our new seasonal blend just dropped!", time: "Yesterday", unread: 0, messages: [{ from: "them", text: "Our new seasonal blend just dropped!", time: "Yesterday" }] },
   { id: 4, name: "ImprimTunis",          service: "PRINT",     lastMessage: "Your flyer proof is ready for review.", time: "30m ago",  unread: 1, messages: [{ from: "them", text: "Hello! Your flyer proof is ready.", time: "09:40 AM" }, { from: "me", text: "Can you adjust the font size?", time: "09:45 AM" }, { from: "them", text: "Of course! Updated version sent.", time: "09:50 AM" }] },
   { id: 5, name: "PrintExpress Sfax",    service: "PRINT",     lastMessage: "Menu cards delivered, thank you!", time: "Mon",      unread: 0, messages: [{ from: "them", text: "Your menu cards have been delivered!", time: "Mon" }, { from: "me", text: "Perfect, thank you!", time: "Mon" }] },
   { id: 6, name: "Tunis Barista Academy",service: "BARISTA",   lastMessage: "Enrollment confirmed for next week.", time: "2h ago",  unread: 0, messages: [{ from: "them", text: "Enrollment confirmed for the Espresso Fundamentals course next week.", time: "10:00 AM" }, { from: "me", text: "Great! What should I bring?", time: "10:02 AM" }, { from: "them", text: "Just yourself — all equipment provided.", time: "10:04 AM" }] },
@@ -1038,7 +1037,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
                     </div>
                   ) : (
                     filteredShopConvs.map((conv) => {
-                      const name = conv.title ?? conv.otherParticipants.map(p => p.name).join(", ") || "Unknown";
+                      const name = (conv.title ?? conv.otherParticipants.map(p => p.name).join(", ")) || "Unknown";
                       return (
                         <button
                           key={conv.id}
@@ -1086,7 +1085,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="flex-1 min-w-0 flex items-center gap-2">
                     <span className={`font-semibold text-sm truncate ${textPrimary}`}>
-                      {shopActiveConv.title ?? shopActiveConv.otherParticipants.map(p => p.name).join(", ") || "Unknown"}
+                      {(shopActiveConv.title ?? shopActiveConv.otherParticipants.map(p => p.name).join(", ")) || "Unknown"}
                     </span>
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg shrink-0 ${SERVICE_BADGE["SHOP"]}`}>SHOP</span>
                   </div>
@@ -1149,7 +1148,8 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
             {/* ── New conversation dialog ── */}
             <Dialog open={newConvOpen} onOpenChange={o => { setNewConvOpen(o); if (!o) setContactSearch(""); }}>
               <DialogContent className={dk ? "bg-gray-900 border-gray-700 text-white" : ""}>
-                <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>New Conversation</p>
+                <DialogTitle className={`text-sm font-semibold ${textPrimary}`}>New Conversation</DialogTitle>
+                <DialogDescription className="sr-only">Search and select a contact to start a conversation with.</DialogDescription>
                 <Input
                   className={`mb-3 ${inputCls}`}
                   placeholder="Search contacts…"
@@ -1356,6 +1356,10 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const { getTotalItemCount } = useCart();
   const [location, navigate] = useLocation();
   const { toast } = useToast();
+
+  // Establish WebSocket connection for real-time message push on marketplace pages
+  // (cafe routes use MarketplaceLayout instead of DashboardLayout which has its own useRealtime)
+  useRealtime(user?.id);
 
   const { isVisitor, isPending, isApproved, hasCommercial } = computeAccess(user);
   const favTotalCount = useFavorites(selectTotalFavCount);

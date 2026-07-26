@@ -175,6 +175,30 @@ export const orderItems = pgTable("order_items", {
   sizeId: integer("size_id"),
 });
 
+// ── Returns ───────────────────────────────────────────────────────────────────
+
+export const returnStatusEnum = pgEnum('return_status', [
+  'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'IN_PROGRESS', 'RESOLVED'
+]);
+export const returnItemTypeEnum = pgEnum('return_item_type', ['PRODUCT', 'PACK']);
+
+export const orderReturns = pgTable("order_returns", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull(),
+  subOrderId: integer("sub_order_id"),
+  cafeId: integer("cafe_id").notNull(),
+  supplierId: integer("supplier_id").notNull(),
+  itemType: returnItemTypeEnum("item_type").notNull().default('PRODUCT'),
+  orderItemId: integer("order_item_id"),
+  itemName: text("item_name").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  reason: text("reason").notNull(),
+  status: returnStatusEnum("status").notNull().default('PENDING_REVIEW'),
+  supplierNotes: text("supplier_notes"),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  processedAt: timestamp("processed_at"),
+});
+
 // ── Category System ──────────────────────────────────────────────────────────
 
 export const categories = pgTable("categories", {
@@ -563,6 +587,12 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
   subOrder: one(subOrders, { fields: [orderItems.subOrderId], references: [subOrders.id] }),
   product: one(products, { fields: [orderItems.productId], references: [products.id] }),
+}));
+
+export const orderReturnsRelations = relations(orderReturns, ({ one }) => ({
+  order: one(orders, { fields: [orderReturns.orderId], references: [orders.id] }),
+  cafe: one(users, { fields: [orderReturns.cafeId], references: [users.id], relationName: 'cafeReturns' }),
+  supplier: one(users, { fields: [orderReturns.supplierId], references: [users.id], relationName: 'supplierReturns' }),
 }));
 
 export const categoriesRelations = relations(categories, ({ many }) => ({
@@ -1362,4 +1392,10 @@ export type ConversationMessageRow = {
 };
 
 export type EligibleContact = { id: number; name: string; role: string };
+
+// ── Returns types ─────────────────────────────────────────────────────────────
+export const insertOrderReturnSchema = createInsertSchema(orderReturns);
+export type InsertOrderReturn = z.infer<typeof insertOrderReturnSchema>;
+export type OrderReturn = typeof orderReturns.$inferSelect;
+export type ReturnStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'IN_PROGRESS' | 'RESOLVED';
 

@@ -120,3 +120,85 @@ export function useReorder(orderId: number | null) {
     enabled: false, // triggered manually
   });
 }
+
+// ── Returns ───────────────────────────────────────────────────────────────────
+
+export type OrderReturnRow = {
+  id: number;
+  orderId: number;
+  subOrderId: number | null;
+  cafeId: number;
+  supplierId: number;
+  itemType: "PRODUCT" | "PACK";
+  orderItemId: number | null;
+  itemName: string;
+  quantity: number;
+  reason: string;
+  status: "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "IN_PROGRESS" | "RESOLVED";
+  supplierNotes: string | null;
+  requestedAt: string;
+  processedAt: string | null;
+};
+
+export type CreateReturnRequest = {
+  orderId: number;
+  subOrderId?: number;
+  supplierId: number;
+  itemType?: "PRODUCT" | "PACK";
+  orderItemId?: number;
+  itemName: string;
+  quantity: number;
+  reason: string;
+};
+
+export function useReturns() {
+  return useQuery<OrderReturnRow[]>({
+    queryKey: ["/api/returns"],
+    queryFn: async () => {
+      const res = await fetch("/api/returns", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch returns");
+      return res.json();
+    },
+  });
+}
+
+export function useCreateReturn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: CreateReturnRequest) => {
+      const res = await fetch("/api/returns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Failed to create return" }));
+        throw new Error(err.message ?? "Failed to create return");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/returns"] });
+    },
+  });
+}
+
+export function useUpdateReturnStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status, supplierNotes }: { id: number; status: string; supplierNotes?: string }) => {
+      const res = await fetch(`/api/returns/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, supplierNotes }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update return status");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/returns"] });
+    },
+  });
+}

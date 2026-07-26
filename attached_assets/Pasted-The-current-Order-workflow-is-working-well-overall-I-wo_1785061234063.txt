@@ -1,0 +1,206 @@
+The current Order workflow is working well overall. I would like to improve the Order management experience for the Admin and Supplier while keeping the existing architecture, synchronization, APIs, database integrity, and design intact.
+
+Before making any changes:
+
+Review the current Order implementation.
+Verify the existing Order → SubOrder → OrderItem synchronization.
+Reuse existing components wherever possible.
+Do not duplicate logic or APIs.
+Only modify the areas described below.
+If something already works correctly, leave it unchanged.
+1. Admin → Orders
+
+Keep the existing page and workflow, but improve the management experience.
+
+Filter Bar
+
+Replace the current simplified filtering with the same complete Filter Bar style already used elsewhere in the project.
+
+The Admin should be able to filter Orders by:
+
+Status
+Supplier
+Coffee Owner
+Date
+Product
+Category
+Sub Category
+
+All filters should work together and remain synchronized.
+
+Page Switcher
+
+Split the Orders page into three sections using a switcher.
+
+Today Orders
+
+Display today's orders.
+
+Future Orders
+
+Display scheduled orders that will be delivered in the future.
+
+Old Orders
+
+Display completed, archived, cancelled, expired, or historical orders.
+
+The switcher should not change the existing logic, only organize the data into these three views.
+
+Order Details
+
+When the Admin clicks an Order, open the existing Order Details modal.
+
+The Admin should see the complete parent Order with all SubOrders exactly as they are synchronized today.
+
+Do not change permissions or existing actions unless necessary.
+
+2. Supplier → Orders
+
+The Supplier currently has three tabs:
+
+Order Requests
+Orders
+Returns
+
+Keep this workflow.
+
+Order Requests
+
+This remains the first confirmation step.
+
+Keep the existing confirmation flow.
+
+Once the Supplier confirms an Order Request, it should continue moving automatically to the Orders tab exactly as it works today.
+
+Do not change this behavior.
+
+Orders
+
+Improve the Orders page.
+
+Filter Bar
+
+Add the same complete Filter Bar.
+
+Allow filtering by:
+
+Status
+Coffee Owner
+Date
+Product
+Category
+Sub Category
+
+Filters should work together exactly like elsewhere in the application.
+
+Page Switcher
+
+Split the Orders page into:
+
+Today Orders
+
+Today's confirmed orders.
+
+Future Orders
+
+Scheduled orders.
+
+Old Orders
+
+Completed, delivered, cancelled, archived, or historical orders.
+
+Order Details
+
+When the Supplier clicks an Order, open the same Order Details experience used by the Coffee Owner.
+
+The Supplier should see:
+
+Coffee Owner information
+Delivery address
+Delivery instructions
+Scheduled delivery information
+Priority
+Status history (if available)
+Products
+Packs
+Quantities
+Selected variants
+Flavor selections
+Prices
+Totals
+Supplier subtotal
+
+The Supplier must continue seeing only their own SubOrder, never products belonging to other suppliers.
+
+This must remain fully synchronized with the existing Order/SubOrder architecture.
+
+3. Supplier → Returns
+
+The Returns tab should become fully synchronized with the Coffee Owner order workflow.
+
+Currently it is only a placeholder.
+
+Implement a complete Return Request workflow while preserving the current design language.
+
+When a Coffee Owner requests:
+
+a return for one item
+a return for multiple items
+or a return for an entire order
+
+the Supplier Returns page should update automatically.
+
+Each Return Request should include information such as:
+
+Return ID
+Coffee Owner
+Related Order
+Product or Pack
+Quantity
+Return reason
+Request date
+Current status
+
+Example statuses:
+
+Pending Review
+Approved
+Rejected
+In Progress
+Resolved
+
+The Supplier should be able to review and process return requests according to the existing permissions.
+
+Do not redesign the Returns page; extend the current implementation.
+
+Synchronization Requirements
+
+Maintain complete synchronization between:
+
+Coffee Owner
+Supplier
+Admin
+Delivery
+Order
+SubOrder
+Order Items
+Packs
+Products
+Returns
+
+Realtime updates must continue working without requiring page refresh.
+
+No duplicate Orders, SubOrders, or Return Requests should be created.
+
+General Requirements
+Do not redesign the application.
+Do not change existing user flows unless described above.
+Do not remove any existing functionality.
+Do not break Order → SubOrder synchronization.
+Do not break Delivery synchronization.
+Do not modify existing APIs unless absolutely necessary.
+Preserve database integrity.
+Preserve WebSocket and realtime synchronization.
+Reuse existing components wherever possible.
+Keep the UI consistent with the rest of the application.
+Verify the complete Order workflow end-to-end after implementing these improvements, including Order Requests, Orders, scheduled orders, filtering, Order Details, supplier isolation, returns, realtime synchronization, and Admin visibility.

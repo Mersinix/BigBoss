@@ -10,6 +10,8 @@ import {
   landingConfig, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
+  orderReturns,
+  type OrderReturn, type InsertOrderReturn,
   type LandingConfig, type Prospect, type InsertProspect, type ProspectStats,
   type ConversationSummary, type ConversationDetail, type ConversationMessageRow, type EligibleContact,
   type InsertUser, type User,
@@ -69,6 +71,9 @@ export interface IStorage {
   createOrder(cafeId: number, cartItems: CreateOrderItem[], opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[]; promotionResults?: import("@shared/schema").SupplierPromotionResult[] }): Promise<Order>;
   canUserAccessOrder(userId: number, userRole: string, orderId: number): Promise<boolean>;
   updateOrderStatus(id: number, status: typeof orders.$inferSelect.status, deliveryId?: number): Promise<Order>;
+  getReturns(filters?: { cafeId?: number; supplierId?: number }): Promise<OrderReturn[]>;
+  createReturn(data: InsertOrderReturn): Promise<OrderReturn>;
+  updateReturnStatus(id: number, status: string, supplierNotes?: string): Promise<OrderReturn>;
 
   // Marketplace (cafe browsing)
   getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string }): Promise<MarketplaceProduct[]>;
@@ -528,6 +533,30 @@ export class DatabaseStorage implements IStorage {
   async updateSubOrderStatus(subOrderId: number, status: string): Promise<SubOrder> {
     const [updated] = await db.update(subOrders).set({ status }).where(eq(subOrders.id, subOrderId)).returning();
     if (!updated) throw new Error('SubOrder not found');
+    return updated;
+  }
+
+  async getReturns(filters?: { cafeId?: number; supplierId?: number }): Promise<OrderReturn[]> {
+    const conditions: any[] = [];
+    if (filters?.cafeId) conditions.push(eq(orderReturns.cafeId, filters.cafeId));
+    if (filters?.supplierId) conditions.push(eq(orderReturns.supplierId, filters.supplierId));
+    const query = conditions.length
+      ? db.select().from(orderReturns).where(and(...conditions))
+      : db.select().from(orderReturns);
+    return query.orderBy(desc(orderReturns.requestedAt));
+  }
+
+  async createReturn(data: InsertOrderReturn): Promise<OrderReturn> {
+    const [created] = await db.insert(orderReturns).values(data).returning();
+    return created;
+  }
+
+  async updateReturnStatus(id: number, status: string, supplierNotes?: string): Promise<OrderReturn> {
+    const updates: Record<string, any> = { status };
+    if (status !== 'PENDING_REVIEW') updates.processedAt = new Date();
+    if (supplierNotes !== undefined) updates.supplierNotes = supplierNotes;
+    const [updated] = await db.update(orderReturns).set(updates).where(eq(orderReturns.id, id)).returning();
+    if (!updated) throw new Error('Return not found');
     return updated;
   }
 

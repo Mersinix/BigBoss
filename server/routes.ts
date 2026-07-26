@@ -738,6 +738,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Returns ────────────────────────────────────────────────────────────────
+
+  // GET /api/returns — cafe sees their requests; supplier sees their incoming requests; admin sees all
+  app.get('/api/returns', requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+      const filters = isAdmin ? undefined
+        : user.role === 'CAFE_OWNER' ? { cafeId: userId }
+        : user.role === 'SUPPLIER'   ? { supplierId: userId }
+        : undefined;
+      const returns = await storage.getReturns(filters);
+      res.json(returns);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching returns' });
+    }
+  });
+
+  // POST /api/returns — cafe owner creates a return request
+  app.post('/api/returns', requireApprovedCafeOwner, async (req, res) => {
+    try {
+      const cafeId = req.session.userId!;
+      const { orderId, subOrderId, supplierId, itemType, orderItemId, itemName, quantity, reason } = req.body;
+      if (!orderId || !supplierId || !itemName || !quantity || !reason) {
+        return res.status(400).json({ message: 'orderId, supplierId, itemName, quantity and reason are required' });
+      }
+      const returnReq = await storage.createReturn({
+        orderId, subOrderId: subOrderId ?? null, cafeId, supplierId,
+        itemType: itemType ?? 'PRODUCT', orderItemId: orderItemId ?? null,
+        itemName, quantity: Number(quantity), reason, status: 'PENDING_REVIEW',
+        supplierNotes: null, processedAt: null,
+      });
+      res.status(201).json(returnReq);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message ?? 'Error creating return' });
+    }
+  });
+
+  // PATCH /api/returns/:id/status — supplier or admin processes a return
+  app.patch('/api/returns/:id/status', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || !(['SUPPLIER','ADMIN','SUPER_ADMIN'].includes(user.role))) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      const returnId = parseInt(req.params.id);
+      if (isNaN(returnId)) return res.status(400).json({ message: 'Invalid return id' });
+      const { status, supplierNotes } = req.body;
+      if (!status) return res.status(400).json({ message: 'status is required' });
+      const updated = await storage.updateReturnStatus(returnId, status, supplierNotes);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message ?? 'Error updating return' });
+    }
+  });
+
   // ── Admin Users ────────────────────────────────────────────────────────────
 
   app.get("/api/admin/users", requireAdmin, async (req, res) => {

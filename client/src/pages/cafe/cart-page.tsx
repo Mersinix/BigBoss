@@ -20,6 +20,7 @@ import type { CreateOrderRequest, GeoLocation } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { userToAccountAddress, pickedToGeoLocation } from "@/store/search-location-store";
 import OrderConfirmationModal, { type ConfirmOrderOpts } from "@/components/cafe/order-confirmation-modal";
+import { useAccountOpenStore } from "@/store/account-open-store";
 
 export default function CartPage() {
   const {
@@ -31,6 +32,7 @@ export default function CartPage() {
   const createOrder = useCreateOrder();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const openAccountWithOrder = useAccountOpenStore((s) => s.openWithOrder);
 
   const savedAccountAddress = userToAccountAddress(user as any);
 
@@ -134,14 +136,20 @@ export default function CartPage() {
       scheduledAt: opts.scheduledAt,
     };
     createOrder.mutate(request, {
-      onSuccess: () => {
+      onSuccess: (newOrder: any) => {
         toast({ title: "Commande envoyée !", description: "Vos commandes ont été transmises aux fournisseurs." });
         clearCart();
         clearPackItems();
         setCourierInstructions("");
         setCustomDeliveryAddress(null);
         setConfirmOpen(false);
-        setLocation("/cafe/orders");
+        // Open My Account → Orders tab and auto-show the new order
+        if (newOrder?.id) {
+          openAccountWithOrder(newOrder.id);
+          setLocation("/products");
+        } else {
+          setLocation("/products");
+        }
       },
       onError: (error) => {
         toast({ title: "Erreur", description: error.message, variant: "destructive" });

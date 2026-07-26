@@ -32,6 +32,7 @@ import { useServiceStates } from "@/hooks/use-service-states";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
+import { useAccountOpenStore } from "@/store/account-open-store";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
@@ -123,13 +124,31 @@ const fakeSuppliers = [
 
 // ── Account Panel (premium dark/light — mirrors FavoritesPanel design) ────────
 
-function AccountPanel({ user, onClose, onLogout }: { user: any; onClose: () => void; onLogout: () => void }) {
+function AccountPanel({
+  user, onClose, onLogout, initialOrderId,
+}: {
+  user: any;
+  onClose: () => void;
+  onLogout: () => void;
+  initialOrderId?: number | null;
+}) {
   const [isDark, setIsDark] = useState(true);
   const [activeTab, setActiveTab] = useState<"orders" | "dashboard" | "settings">("orders");
   const { data: orders = [], isLoading: ordersLoading } = useOrders();
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
   const [notifs, setNotifs] = useState({ orderUpdates: true, promotions: false, newSuppliers: true });
+
+  // Auto-open a specific order when directed from the checkout flow
+  useEffect(() => {
+    if (initialOrderId && orders.length > 0) {
+      const target = (orders as any[]).find((o) => o.id === initialOrderId);
+      if (target) {
+        setActiveTab("orders");
+        setDetailOrder(target as OrderWithDetails);
+      }
+    }
+  }, [initialOrderId, orders]);
 
   const dk = isDark;
   const bg = dk ? "bg-gray-900" : "bg-white";
@@ -270,6 +289,8 @@ function AccountPanel({ user, onClose, onLogout }: { user: any; onClose: () => v
           open={!!detailOrder}
           onClose={() => setDetailOrder(null)}
           order={detailOrder}
+          showReorder={true}
+          showCancel={true}
         />
 
         {/* DASHBOARD */}
@@ -1442,6 +1463,17 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const [favOpen, setFavOpen] = useState(false);
   const [suppliersOpen, setSuppliersOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+
+  // Watch the account-open-store so cart page can trigger profile panel + show the new order
+  const { shouldOpen, orderIdToOpen, clearOpen } = useAccountOpenStore();
+  useEffect(() => {
+    if (shouldOpen) {
+      setProfileOpen(true);
+      setPendingOrderId(orderIdToOpen);
+      clearOpen();
+    }
+  }, [shouldOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cartCount = getTotalItemCount();
 
@@ -1694,12 +1726,13 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Profile Modal ── */}
       {user && (
-        <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <Dialog open={profileOpen} onOpenChange={(v) => { setProfileOpen(v); if (!v) setPendingOrderId(null); }}>
           <DialogContent className="sm:max-w-md h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
             <AccountPanel
               user={user}
-              onClose={() => setProfileOpen(false)}
-              onLogout={() => { logout(); setProfileOpen(false); }}
+              onClose={() => { setProfileOpen(false); setPendingOrderId(null); }}
+              onLogout={() => { logout(); setProfileOpen(false); setPendingOrderId(null); }}
+              initialOrderId={pendingOrderId}
             />
           </DialogContent>
         </Dialog>

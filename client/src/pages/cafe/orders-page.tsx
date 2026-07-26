@@ -160,6 +160,8 @@ export default function CafeOrdersPage() {
         open={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
         order={selectedOrder}
+        showReorder={true}
+        showCancel={true}
       />
     </div>
   );

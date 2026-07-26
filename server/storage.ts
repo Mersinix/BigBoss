@@ -601,7 +601,21 @@ export class DatabaseStorage implements IStorage {
           unavailable.push({ name: pack.name, reason: available === 0 ? 'Out of stock' : `Only ${available} available` });
           continue;
         }
-        packItems.push({ packId: pack.id, supplierId: pack.supplierId, quantity: item.quantity });
+        packItems.push({
+          packId: pack.id,
+          supplierId: pack.supplierId,
+          quantity: item.quantity,
+          packName: pack.name,
+          packImageUrl: pack.imageUrl ?? null,
+          supplierName: detail?.supplierName ?? '',
+          includedProducts: (detail?.items ?? []).map((pi: any) => ({
+            productName: pi.productName ?? pi.product?.name ?? '',
+            flavorName: pi.flavorName ?? null,
+            sizeName: pi.sizeName ?? null,
+            quantity: pi.quantity ?? 1,
+          })),
+          unitPrice: pack.price ?? 0,
+        } as any);
         continue;
       }
 
@@ -633,18 +647,18 @@ export class DatabaseStorage implements IStorage {
           if (variant.quantity === 0) { unavailable.push({ name: product.name, reason: 'Out of stock' }); continue; }
           unavailable.push({ name: product.name, reason: `Only ${variant.quantity} available` });
           // Add with reduced quantity
-          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, flavorName: (item as any).flavorName, sizeName: (item as any).sizeName, quantity: variant.quantity, unitPrice: variant.price });
+          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, flavorName: (item as any).flavorName, sizeName: (item as any).sizeName, quantity: variant.quantity, unitPrice: variant.price, productName: product.name, productImageUrl: product.imageUrl ?? null, productCategory: product.category ?? '' } as any);
           continue;
         }
-        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, flavorName: (item as any).flavorName, sizeName: (item as any).sizeName, quantity: item.quantity, unitPrice: variant.price });
+        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, flavorName: (item as any).flavorName, sizeName: (item as any).sizeName, quantity: item.quantity, unitPrice: variant.price, productName: product.name, productImageUrl: product.imageUrl ?? null, productCategory: product.category ?? '' } as any);
       } else {
         if (listing.stock < item.quantity) {
           if (listing.stock === 0) { unavailable.push({ name: product.name, reason: 'Out of stock' }); continue; }
           unavailable.push({ name: product.name, reason: `Only ${listing.stock} available` });
-          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, quantity: listing.stock, unitPrice: listing.price });
+          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, quantity: listing.stock, unitPrice: listing.price, productName: product.name, productImageUrl: product.imageUrl ?? null, productCategory: product.category ?? '' } as any);
           continue;
         }
-        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, quantity: item.quantity, unitPrice: listing.price });
+        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, quantity: item.quantity, unitPrice: listing.price, productName: product.name, productImageUrl: product.imageUrl ?? null, productCategory: product.category ?? '' } as any);
       }
     }
 

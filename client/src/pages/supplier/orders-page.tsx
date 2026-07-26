@@ -41,7 +41,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const NEXT_STATUSES: Record<string, { value: string; label: string }[]> = {
-  CONFIRMED:   [{ value: "PREPARING", label: "Commencer la préparation" }],
+  CONFIRMED:   [
+    { value: "PREPARING", label: "Commencer la préparation" },
+    { value: "PENDING",   label: "Retourner aux demandes" },
+  ],
   PREPARING:   [{ value: "READY",     label: "Marquer comme prête" }],
   READY:       [],
   IN_DELIVERY: [],
@@ -302,6 +305,7 @@ export default function SupplierOrdersPage() {
         open={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
         order={selectedOrder}
+        showReorder={false}
       />
     </div>
   );

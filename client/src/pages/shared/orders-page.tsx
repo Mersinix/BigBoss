@@ -288,6 +288,7 @@ export default function OrdersPage() {
         open={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
         order={selectedOrder}
+        showReorder={false}
       />
 
       {/* Admin: delete confirmation */}

@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
-  Store, Layers, RotateCcw, Calendar, Zap, Package
+  Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import type { OrderWithDetails } from "@shared/schema";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
@@ -41,19 +42,32 @@ const SUBORDER_STATUS: Record<string, { label: string; color: string }> = {
   CANCELLED:   { label: "Annulée",      color: "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300" },
 };
 
+// Statuses where the cafe owner can still cancel
+const CANCELLABLE_STATUSES = new Set(["PENDING"]);
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 type Props = {
   open: boolean;
   onClose: () => void;
   order: OrderWithDetails | null;
+  /** Show the Reorder button. Default: true. Pass false for Admin/Supplier views. */
+  showReorder?: boolean;
+  /** Show the Cancel button (for Cafe Owner). Default: false. */
+  showCancel?: boolean;
 };
 
-export default function OrderDetailsModal({ open, onClose, order }: Props) {
-  const { addItem, addPackItem, clearCart, clearPackItems } = useCart();
+export default function OrderDetailsModal({
+  open, onClose, order,
+  showReorder = true,
+  showCancel = false,
+}: Props) {
+  const { addItem, addPackItem } = useCart();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [reordering, setReordering] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   if (!order) return null;
 
@@ -63,6 +77,8 @@ export default function OrderDetailsModal({ open, onClose, order }: Props) {
   const scheduledAt = (order as any).scheduledAt;
   const deliveryAddress = (order as any).deliveryAddress as { address: string } | null;
   const courierInstructions = (order as any).courierInstructions as string | null;
+
+  const canCancel = showCancel && CANCELLABLE_STATUSES.has(order.status);
 
   // ── Reorder ────────────────────────────────────────────────────────────────
 
@@ -77,16 +93,13 @@ export default function OrderDetailsModal({ open, onClose, order }: Props) {
         unavailable: { name: string; reason: string }[];
       };
 
-      // Clear existing cart and populate
-      clearCart();
-      clearPackItems();
-
+      // Append to existing cart (do NOT clear — preserve what's already there)
       for (const item of data.items) {
         addItem({
           listingId: item.listingId,
           productId: item.productId,
           supplierId: item.supplierId,
-          supplierName: item.supplierName,
+          supplierName: item.supplierName ?? "",
           flavorId: item.flavorId ?? null,
           sizeId: item.sizeId ?? null,
           flavorName: item.flavorName ?? null,
@@ -106,7 +119,7 @@ export default function OrderDetailsModal({ open, onClose, order }: Props) {
           supplierId: pack.supplierId,
           supplierName: pack.supplierName ?? "",
           unitPrice: pack.unitPrice ?? 0,
-          includedProducts: [],
+          includedProducts: pack.includedProducts ?? [],
         }, pack.quantity);
       }
 
@@ -125,7 +138,7 @@ export default function OrderDetailsModal({ open, onClose, order }: Props) {
       let desc = `${addedCount} article(s) ajouté(s) au panier.`;
       if (unavailableCount > 0) desc += ` ${unavailableCount} article(s) non disponible(s).`;
 
-      toast({ title: "Panier reconstruit", description: desc });
+      toast({ title: "Articles ajoutés au panier", description: desc });
       onClose();
       setLocation("/cart");
     } catch (err: any) {
@@ -135,12 +148,38 @@ export default function OrderDetailsModal({ open, onClose, order }: Props) {
     }
   };
 
+  // ── Cancel order ────────────────────────────────────────────────────────────
+
+  const handleCancel = async () => {
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED" }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Impossible d'annuler la commande" }));
+        throw new Error(err.message ?? "Impossible d'annuler la commande");
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      toast({ title: "Commande annulée", description: "La commande a été annulée avec succès." });
+      onClose();
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const subOrders = order.subOrders ?? [];
   const hasSubOrders = subOrders.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden">
+      {/* Force dark theme so the modal matches the app's default dark design */}
+      <DialogContent className="dark sm:max-w-2xl max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/50 shrink-0">
           {/* Order number + status */}
           <div className="flex items-start justify-between gap-3">
@@ -277,18 +316,34 @@ export default function OrderDetailsModal({ open, onClose, order }: Props) {
             <span>Total commande</span>
             <span className="text-amber-500 text-xl">{formatCurrency(order.totalAmount)}</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" className="flex-1" onClick={onClose}>Fermer</Button>
-            <Button
-              variant="outline"
-              className="flex-1 gap-2"
-              onClick={handleReorder}
-              disabled={reordering}
-              data-testid="button-reorder"
-            >
-              <RotateCcw className="w-4 h-4" />
-              {reordering ? "Chargement…" : "Recommander"}
-            </Button>
+
+            {canCancel && (
+              <Button
+                variant="outline"
+                className="flex-1 gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                onClick={handleCancel}
+                disabled={cancelling}
+                data-testid="button-cancel-order"
+              >
+                <XCircle className="w-4 h-4" />
+                {cancelling ? "Annulation…" : "Annuler la commande"}
+              </Button>
+            )}
+
+            {showReorder && (
+              <Button
+                variant="outline"
+                className="flex-1 gap-2"
+                onClick={handleReorder}
+                disabled={reordering}
+                data-testid="button-reorder"
+              >
+                <RotateCcw className="w-4 h-4" />
+                {reordering ? "Chargement…" : "Recommander"}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

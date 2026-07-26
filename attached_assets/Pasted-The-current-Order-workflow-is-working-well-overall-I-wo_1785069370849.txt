@@ -1,0 +1,245 @@
+The current Order workflow is working well overall. I would like to make a few targeted improvements while keeping the existing architecture, synchronization, APIs, database integrity, and design intact.
+
+Before making any changes:
+
+Review the current Order implementation.
+Verify the existing Order → SubOrder → OrderItem synchronization.
+Reuse existing components wherever possible.
+Do not duplicate logic or APIs.
+Only modify the areas described below.
+If something already works correctly, leave it unchanged.
+1. Admin → Orders
+Order Details Modal
+
+When the Admin clicks Details on any Order, the existing Order Details modal opens correctly.
+
+Inside this modal:
+
+Remove the "Recommander" (Reorder) action.
+Keep every other action and piece of information unchanged.
+
+The Reorder action must remain available only for the Coffee Owner.
+
+2. Supplier → Orders
+Order Details Modal
+
+When the Supplier opens the Order Details modal:
+
+Remove the "Recommander" (Reorder) button.
+Keep the rest of the modal unchanged.
+
+Only Coffee Owners should be able to reorder.
+
+Order Status Management
+
+The Supplier is the only role responsible for updating Order status.
+
+Verify that:
+
+changing an Order status from the Supplier side immediately updates:
+Coffee Owner
+Admin
+
+without requiring any page refresh.
+
+Realtime synchronization must continue working through the existing WebSocket architecture.
+
+Order Requests Synchronization
+
+The existing workflow is:
+
+Order Requests
+→ confirmation
+→ Orders
+
+Keep this workflow.
+
+When the Supplier confirms an Order Request:
+
+the Order should automatically move into the Supplier Orders tab,
+the updated status must immediately appear for:
+Coffee Owner
+Admin
+
+without refreshing the application.
+
+Moving Orders Back to Order Requests
+
+If the Supplier changes an Order status inside the Orders tab back to "En attente" (Pending),
+
+the Order should automatically:
+
+disappear from the Orders tab,
+return to the Order Requests tab,
+
+while remaining synchronized everywhere.
+
+The Admin and Coffee Owner must immediately receive the updated status.
+
+3. Coffee Owner
+Remove the old Orders page
+
+After placing an Order, the application still redirects to the legacy Orders page that belongs to the old dashboard/sidebar layout.
+
+This old workflow must be removed.
+
+The old sidebar Orders page should no longer be used by the new marketplace experience.
+
+Do not continue using the legacy page after checkout.
+
+New Order Flow
+
+After the Coffee Owner successfully creates an Order:
+
+Instead of redirecting to the legacy Orders page,
+
+the application should automatically:
+
+open the existing My Account modal,
+switch to the Orders tab,
+automatically open the newly created Order inside the existing Order Details modal.
+
+This should feel like a seamless continuation of the checkout process.
+
+Do not introduce any new pages.
+
+Reuse the existing Account modal and Order Details modal.
+
+Reorder Improvements
+
+The Reorder feature already works but has two synchronization issues.
+
+Missing Product Information
+
+After reordering, the Cart receives the correct quantities but several product details are missing.
+
+Verify and restore all information, including where applicable:
+
+Product image
+Product name
+Pack image
+Pack name
+Flavor
+Size
+Selected variant
+Pack composition
+Supplier
+Pricing
+Any other product metadata already displayed during a normal shopping flow
+
+The reordered items should be visually identical to products that were added normally from the Shop.
+
+Preserve Existing Cart
+
+Currently:
+
+If the Cart already contains products,
+
+using Reorder clears the Cart and replaces it with the reordered items.
+
+This must change.
+
+The expected behavior is:
+
+Keep every existing Cart item.
+Append the reordered products and Packs to the current Cart.
+Do not remove anything already present.
+Continue using the existing duplicate/merge logic where applicable.
+Cancel Order
+
+Allow the Coffee Owner to cancel an Order only while it has not yet been confirmed by the Supplier.
+
+Example:
+
+Allowed:
+
+Pending
+Waiting confirmation
+
+Not allowed:
+
+Confirmed
+Preparing
+Ready
+Shipped
+Delivered
+Completed
+Cancelled
+
+When an Order is cancelled:
+
+synchronize immediately with Supplier,
+synchronize immediately with Admin,
+synchronize immediately with Delivery when applicable,
+update realtime without refresh.
+4. Dark Mode
+
+The following existing modals should respect the application's default dark theme.
+
+Order Confirmation Modal
+
+Example:
+
+Récapitulatif de commande
+
+This modal should use the same dark design language as the rest of the application.
+
+Order Details Modal
+
+Example:
+
+Commande #000040
+
+This modal should also follow the application's default dark theme.
+
+Keep the current layout and functionality.
+
+Only update the styling so it matches the rest of the application.
+
+Synchronization Requirements
+
+Maintain complete synchronization between:
+
+Coffee Owner
+Supplier
+Admin
+Delivery
+Orders
+SubOrders
+Order Items
+Packs
+Products
+Cart
+Reorder
+Cancellation
+
+Realtime synchronization must continue working without page refresh.
+
+No duplicate Orders or Cart items should be created unless intentionally increasing quantities according to the existing merge rules.
+
+General Requirements
+Do not redesign the application.
+Do not change existing user flows unless described above.
+Do not remove existing functionality.
+Do not break Order → SubOrder synchronization.
+Do not break Delivery synchronization.
+Do not modify existing APIs unless absolutely necessary.
+Preserve database integrity.
+Preserve WebSocket and realtime synchronization.
+Reuse existing components wherever possible.
+Keep the UI consistent with the rest of the application.
+
+Before considering the implementation complete, verify the entire Order workflow end-to-end, including:
+
+Order creation
+Order confirmation
+Order Requests → Orders transition
+Status updates
+Realtime synchronization
+My Account → Orders flow
+Order Details modal
+Reorder
+Cart synchronization
+Order cancellation
+Dark mode styling
+Admin, Supplier, Coffee Owner, and Delivery synchronization.

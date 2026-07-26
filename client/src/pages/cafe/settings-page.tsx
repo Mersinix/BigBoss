@@ -557,6 +557,8 @@ export default function CafeSettingsPage() {
         open={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
         order={selectedOrder}
+        showReorder={true}
+        showCancel={true}
       />
     </>
   );

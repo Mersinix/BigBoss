@@ -1,0 +1,261 @@
+Task: Apply the existing Favorites modal design system to the Coffee Owner side only for the following modals:
+
+- order-confirmation-modal.tsx
+- order-details-modal.tsx
+
+Important context:
+
+- This task applies ONLY to the Coffee Owner experience.
+- Do NOT modify the Admin side.
+- Do NOT modify the Supplier side.
+- Do NOT modify the Delivery side.
+- Do NOT modify any business logic.
+- Before making any changes, analyze both modal implementations and compare them with the Favorites modal that has already been implemented.
+- Reuse the same visual language and UX patterns.
+- Verify all existing synchronization and interactions continue working before and after the changes.
+
+---
+
+# Global Design Rules
+
+Apply the same design system already implemented for:
+
+- Favorites Modal
+- Product Details Modal
+- Pack Details Modal
+- My Account Modal
+- Messages Modal
+- /products page
+- Store page
+
+Use the same:
+
+- Apple / iPhone-inspired design.
+- Dark mode by default.
+- Light mode support.
+- Same rounded modal.
+- Same border radius.
+- Same colors.
+- Same typography.
+- Same spacing.
+- Same shadows.
+- Same premium appearance.
+- Same transitions.
+- Same responsive behavior.
+- Same scrolling behavior.
+
+Everything should feel like one unified BigBossCoffee design system.
+
+Do NOT redesign them differently.
+
+---
+
+# 1. order-confirmation-modal.tsx
+
+Example:
+
+Récapitulatif de commande
+
+Vérifiez votre commande avant de confirmer.
+
+Pack / Product list
+
+Adresse de livraison
+
+Priorité
+
+Planification
+
+Total
+
+Annuler
+
+Confirmer la commande
+
+Apply the Favorites modal design system.
+
+Requirements:
+
+- Same premium Apple-inspired modal.
+- Same rounded design.
+- Same header style.
+- Same typography.
+- Same spacing.
+- Same dark/light mode.
+- Same shadows.
+- Same responsive layout.
+- Same scrolling behavior.
+- Keep the modal fixed while allowing the content area to scroll when necessary.
+- No content should overflow outside the modal.
+
+Improve only the UI presentation of:
+
+- Product/Pack cards.
+- Delivery address section.
+- Priority selector.
+- Scheduling selector.
+- Totals section.
+- Footer action buttons.
+
+Do NOT change:
+
+- Order confirmation logic.
+- Priority logic.
+- Scheduling logic.
+- Quantity logic.
+- Address logic.
+- Total calculations.
+- Cart synchronization.
+- Checkout flow.
+
+---
+
+# 2. order-details-modal.tsx
+
+Example:
+
+Commande #000042
+
+Status
+
+Date
+
+Delivery address
+
+Supplier sections
+
+Products
+
+Subtotals
+
+Total
+
+Fermer
+
+Annuler la commande
+
+Recommander
+
+Apply the Favorites modal design system.
+
+Requirements:
+
+- Same premium Apple-inspired modal.
+- Same rounded design.
+- Same header.
+- Same typography.
+- Same spacing.
+- Same shadows.
+- Same dark/light mode.
+- Same responsive layout.
+- Same scrolling behavior.
+- Keep the modal fixed while allowing the content area to scroll.
+- No content should overflow outside the modal.
+
+Improve only the UI presentation of:
+
+- Order header.
+- Status badge.
+- Date.
+- Delivery address.
+- Supplier cards.
+- Product rows.
+- Subtotals.
+- Total section.
+- Footer buttons.
+
+Keep supplier sections visually separated using the same premium card style already used throughout the Coffee Owner design system.
+
+---
+
+# Responsive Design
+
+Ensure both modals work perfectly on:
+
+- Desktop.
+- Tablet.
+- Mobile.
+
+Verify:
+
+- Modal width.
+- Header.
+- Product cards.
+- Supplier sections.
+- Totals.
+- Buttons.
+- Touch interactions.
+- Internal scrolling.
+- Overflow handling.
+
+There should be:
+
+- No horizontal overflow.
+- No elements extending outside the modal.
+- Smooth vertical scrolling.
+
+---
+
+# Dark / Light Mode
+
+Apply the same modal-level theme behavior already implemented in the Favorites modal.
+
+Requirements:
+
+- Dark mode by default.
+- Light mode available.
+- Same theme toggle.
+- Theme affects only these modals.
+- Do not modify the application's global theme behavior.
+
+---
+
+# Important Rules
+
+Do NOT change:
+
+- Any functionality.
+- Business logic.
+- Order flow.
+- Checkout flow.
+- Cart synchronization.
+- Product data.
+- Pack data.
+- Order status logic.
+- Buttons behavior.
+- Existing actions.
+- Existing routes.
+- Existing APIs.
+- Existing synchronization.
+
+Do NOT refactor unrelated code.
+
+Do NOT remove any existing components.
+
+Only improve the UI/UX.
+
+---
+
+# Final Verification
+
+Before completing, verify:
+
+- Order Confirmation modal works exactly as before.
+- Order Details modal works exactly as before.
+- Order confirmation still functions correctly.
+- Cancel order still works.
+- Reorder still works.
+- Priority selection still works.
+- Scheduling still works.
+- Delivery address remains unchanged.
+- Totals remain correct.
+- Product and Pack information remains unchanged.
+- All scrolling behaves correctly.
+- No horizontal overflow exists.
+- Mobile responsiveness is correct.
+- No synchronization issues were introduced.
+- No other pages or components were modified.
+
+Only update the visual design of these two Coffee Owner modals.
+
+Do not touch anything else.

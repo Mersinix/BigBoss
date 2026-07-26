@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
+  Sun, Moon, X,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useCart } from "@/hooks/use-cart";
@@ -16,34 +16,59 @@ import type { OrderWithDetails } from "@shared/schema";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
 
-const STATUS_META: Record<string, { label: string; color: string; icon: any }> = {
-  PENDING:    { label: "En attente",   color: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-300", icon: Clock },
-  CONFIRMED:  { label: "Confirmée",    color: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300",           icon: CheckCircle2 },
-  PREPARING:  { label: "En préparation", color: "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-500/20 dark:text-orange-300", icon: Box },
-  READY:      { label: "Prête",        color: "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-500/20 dark:text-teal-300",           icon: Box },
-  IN_DELIVERY:{ label: "En livraison", color: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-500/20 dark:text-purple-300", icon: Truck },
-  DELIVERED:  { label: "Livrée",       color: "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/20 dark:text-green-300",      icon: CheckCircle2 },
-  CANCELLED:  { label: "Annulée",      color: "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/20 dark:text-red-300",               icon: AlertCircle },
+const STATUS_META: Record<string, { label: string; badgeDk: string; badgeLt: string; icon: any }> = {
+  PENDING:     { label: "En attente",      badgeDk: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",   badgeLt: "bg-yellow-100 text-yellow-800 border-yellow-200",   icon: Clock },
+  CONFIRMED:   { label: "Confirmée",       badgeDk: "bg-blue-500/20 text-blue-300 border-blue-500/30",         badgeLt: "bg-blue-100 text-blue-800 border-blue-200",         icon: CheckCircle2 },
+  PREPARING:   { label: "En préparation",  badgeDk: "bg-orange-500/20 text-orange-300 border-orange-500/30",   badgeLt: "bg-orange-100 text-orange-800 border-orange-200",   icon: Box },
+  READY:       { label: "Prête",           badgeDk: "bg-teal-500/20 text-teal-300 border-teal-500/30",         badgeLt: "bg-teal-100 text-teal-800 border-teal-200",         icon: Box },
+  IN_DELIVERY: { label: "En livraison",    badgeDk: "bg-purple-500/20 text-purple-300 border-purple-500/30",   badgeLt: "bg-purple-100 text-purple-800 border-purple-200",   icon: Truck },
+  DELIVERED:   { label: "Livrée",          badgeDk: "bg-green-500/20 text-green-300 border-green-500/30",      badgeLt: "bg-green-100 text-green-800 border-green-200",      icon: CheckCircle2 },
+  CANCELLED:   { label: "Annulée",         badgeDk: "bg-red-500/20 text-red-300 border-red-500/30",            badgeLt: "bg-red-100 text-red-800 border-red-200",            icon: AlertCircle },
 };
 
-const PRIORITY_META: Record<string, { label: string; color: string }> = {
-  NORMAL: { label: "Normal",         color: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" },
-  HIGH:   { label: "Haute priorité", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
-  URGENT: { label: "Urgent",         color: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+const PRIORITY_META: Record<string, { label: string; badgeDk: string; badgeLt: string }> = {
+  NORMAL: { label: "Normal",          badgeDk: "bg-gray-700 text-gray-300",                badgeLt: "bg-gray-100 text-gray-700" },
+  HIGH:   { label: "Haute priorité",  badgeDk: "bg-orange-500/25 text-orange-300",         badgeLt: "bg-orange-100 text-orange-700" },
+  URGENT: { label: "Urgent",          badgeDk: "bg-red-500/25 text-red-300",               badgeLt: "bg-red-100 text-red-700" },
 };
 
-const SUBORDER_STATUS: Record<string, { label: string; color: string }> = {
-  PENDING:     { label: "En attente",   color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300" },
-  CONFIRMED:   { label: "Confirmée",    color: "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300" },
-  PREPARING:   { label: "En préparation", color: "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-300" },
-  READY:       { label: "Prête",        color: "bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-300" },
-  IN_DELIVERY: { label: "En livraison", color: "bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300" },
-  DELIVERED:   { label: "Livrée",       color: "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300" },
-  CANCELLED:   { label: "Annulée",      color: "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300" },
+const SUBORDER_STATUS: Record<string, { label: string; badgeDk: string; badgeLt: string }> = {
+  PENDING:     { label: "En attente",      badgeDk: "bg-yellow-500/20 text-yellow-300", badgeLt: "bg-yellow-100 text-yellow-800" },
+  CONFIRMED:   { label: "Confirmée",       badgeDk: "bg-blue-500/20 text-blue-300",     badgeLt: "bg-blue-100 text-blue-800" },
+  PREPARING:   { label: "En préparation",  badgeDk: "bg-orange-500/20 text-orange-300", badgeLt: "bg-orange-100 text-orange-800" },
+  READY:       { label: "Prête",           badgeDk: "bg-teal-500/20 text-teal-300",     badgeLt: "bg-teal-100 text-teal-800" },
+  IN_DELIVERY: { label: "En livraison",    badgeDk: "bg-purple-500/20 text-purple-300", badgeLt: "bg-purple-100 text-purple-800" },
+  DELIVERED:   { label: "Livrée",         badgeDk: "bg-green-500/20 text-green-300",   badgeLt: "bg-green-100 text-green-800" },
+  CANCELLED:   { label: "Annulée",         badgeDk: "bg-red-500/20 text-red-300",       badgeLt: "bg-red-100 text-red-800" },
 };
 
 // Statuses where the cafe owner can still cancel
 const CANCELLABLE_STATUSES = new Set(["PENDING"]);
+
+// ── Design system (mirrors pack-quick-view-modal) ─────────────────────────────
+
+function useTheme(isDark: boolean) {
+  const dk = isDark;
+  return {
+    dk,
+    modalBg:      dk ? "bg-gray-900"                         : "bg-white",
+    headerBg:     dk ? "bg-gray-900 border-gray-800"         : "bg-white border-gray-100",
+    stickyBg:     dk ? "bg-gray-900 border-gray-800"         : "bg-white border-gray-100",
+    cardBg:       dk ? "bg-gray-800 border-gray-700/60"      : "bg-white border-gray-100",
+    cardHeader:   dk ? "bg-gray-800/80 border-gray-700/50"   : "bg-gray-50 border-gray-100",
+    innerCard:    dk ? "bg-gray-800/60 border-gray-700/40"   : "bg-gray-50 border-gray-100",
+    rowDivide:    dk ? "divide-gray-700/50"                  : "divide-gray-100",
+    dividerBg:    dk ? "bg-gray-800"                         : "bg-gray-100",
+    textPrimary:  dk ? "text-white"                          : "text-gray-900",
+    textMuted:    dk ? "text-gray-400"                       : "text-gray-500",
+    textSubtle:   dk ? "text-gray-500"                       : "text-gray-400",
+    iconBtn:      dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white"
+                     : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800",
+    badge: (status: string, map: Record<string, { badgeDk: string; badgeLt: string }>) =>
+      dk ? (map[status]?.badgeDk ?? "bg-gray-700 text-gray-300")
+         : (map[status]?.badgeLt ?? "bg-gray-100 text-gray-700"),
+  };
+}
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +87,9 @@ export default function OrderDetailsModal({
   showReorder = true,
   showCancel = false,
 }: Props) {
+  const [isDark, setIsDark] = useState(true);
+  const t = useTheme(isDark);
+
   const { addItem, addPackItem } = useCart();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -71,11 +99,11 @@ export default function OrderDetailsModal({
 
   if (!order) return null;
 
-  const statusMeta = STATUS_META[order.status] ?? { label: order.status, color: "bg-gray-100 text-gray-800", icon: Box };
-  const StatusIcon = statusMeta.icon;
-  const priorityMeta = PRIORITY_META[(order as any).priority ?? "NORMAL"] ?? PRIORITY_META.NORMAL;
-  const scheduledAt = (order as any).scheduledAt;
-  const deliveryAddress = (order as any).deliveryAddress as { address: string } | null;
+  const statusMeta    = STATUS_META[order.status] ?? { label: order.status, badgeDk: "bg-gray-700 text-gray-300", badgeLt: "bg-gray-100 text-gray-700", icon: Box };
+  const StatusIcon    = statusMeta.icon;
+  const priorityMeta  = PRIORITY_META[(order as any).priority ?? "NORMAL"] ?? PRIORITY_META.NORMAL;
+  const scheduledAt   = (order as any).scheduledAt;
+  const deliveryAddress   = (order as any).deliveryAddress as { address: string } | null;
   const courierInstructions = (order as any).courierInstructions as string | null;
 
   const canCancel = showCancel && CANCELLABLE_STATUSES.has(order.status);
@@ -173,178 +201,292 @@ export default function OrderDetailsModal({
     }
   };
 
-  const subOrders = order.subOrders ?? [];
+  const subOrders  = order.subOrders ?? [];
   const hasSubOrders = subOrders.length > 0;
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      {/* Force dark theme so the modal matches the app's default dark design */}
-      <DialogContent className="dark sm:max-w-2xl max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/50 shrink-0">
-          {/* Order number + status */}
-          <div className="flex items-start justify-between gap-3">
-            <DialogTitle className="font-mono text-lg">
-              Commande #{String(order.id).padStart(6, "0")}
-            </DialogTitle>
-            <Badge variant="outline" className={`${statusMeta.color} border flex items-center gap-1 text-xs font-bold px-2 py-0.5`}>
-              <StatusIcon className="w-3 h-3" />{statusMeta.label}
-            </Badge>
-          </div>
-          {/* Meta row */}
-          <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              {formatDate(order.createdAt as any)}
-            </span>
-            {(order as any).priority && (order as any).priority !== "NORMAL" && (
-              <Badge variant="secondary" className={`${priorityMeta.color} text-xs`}>
-                <Zap className="w-3 h-3 mr-0.5" />{priorityMeta.label}
-              </Badge>
-            )}
-            {scheduledAt && (
-              <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
-                <Calendar className="w-3.5 h-3.5" />
-                Livraison planifiée : {formatDate(scheduledAt)}
+      <DialogContent
+        className="max-w-2xl w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+      >
+        {/* Accessible title */}
+        <DialogTitle className="sr-only">Commande #{String(order.id).padStart(6, "0")}</DialogTitle>
+
+        <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${t.modalBg}`}>
+
+          {/* ── Header ── */}
+          <div className={`shrink-0 border-b px-6 pt-5 pb-4 ${t.headerBg}`}>
+
+            {/* Top row: close / order number / theme toggle */}
+            <div className="flex items-center justify-between mb-3">
+              <button
+                onClick={onClose}
+                aria-label="Fermer"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <span className={`font-mono text-[15px] font-bold tracking-tight ${t.textPrimary}`}>
+                Commande #{String(order.id).padStart(6, "0")}
               </span>
-            )}
+
+              <button
+                onClick={() => setIsDark(d => !d)}
+                aria-label="Changer le thème"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}
+              >
+                {t.dk
+                  ? <Sun className="w-4 h-4 text-amber-400" />
+                  : <Moon className="w-4 h-4 text-gray-500" />
+                }
+              </button>
+            </div>
+
+            {/* Status + meta row */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {/* Status badge */}
+              <Badge
+                variant="outline"
+                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${t.badge(order.status, STATUS_META)}`}
+              >
+                <StatusIcon className="w-3 h-3" />
+                {statusMeta.label}
+              </Badge>
+
+              {/* Date */}
+              <span className={`flex items-center gap-1 text-xs ${t.textMuted}`}>
+                <Clock className="w-3 h-3" />
+                {formatDate(order.createdAt as any)}
+              </span>
+
+              {/* Priority (non-normal only) */}
+              {(order as any).priority && (order as any).priority !== "NORMAL" && (
+                <Badge
+                  variant="secondary"
+                  className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${t.badge((order as any).priority, PRIORITY_META)}`}
+                >
+                  <Zap className="w-3 h-3 mr-1" />
+                  {priorityMeta.label}
+                </Badge>
+              )}
+
+              {/* Scheduled */}
+              {scheduledAt && (
+                <span className={`flex items-center gap-1 text-xs font-medium ${t.dk ? "text-blue-400" : "text-blue-600"}`}>
+                  <Calendar className="w-3 h-3" />
+                  Planifiée : {formatDate(scheduledAt)}
+                </span>
+              )}
+            </div>
           </div>
-        </DialogHeader>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {/* ── Scrollable body ── */}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4
+              [&::-webkit-scrollbar]:w-1
+              [&::-webkit-scrollbar-track]:bg-transparent
+              [&::-webkit-scrollbar-thumb]:rounded-full
+              [&::-webkit-scrollbar-thumb]:bg-gray-700
+              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
 
-          {/* ── Delivery info ── */}
-          {(deliveryAddress || courierInstructions) && (
-            <div className="p-3 bg-secondary/30 border border-border/50 rounded-xl space-y-1.5">
-              {deliveryAddress && (
-                <div className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium">Adresse de livraison</p>
-                    <p className="text-sm font-medium">{deliveryAddress.address}</p>
-                  </div>
-                </div>
-              )}
-              {courierInstructions && (
-                <div className="flex items-start gap-2 pt-1 border-t border-border/30">
-                  <Package className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium">Instructions coursier</p>
-                    <p className="text-sm">{courierInstructions}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── SubOrders by supplier ── */}
-          {hasSubOrders ? (
-            <div className="space-y-3">
-              {subOrders.map((sub: any) => {
-                const subStatus = SUBORDER_STATUS[sub.status] ?? { label: sub.status, color: "bg-gray-100 text-gray-800" };
-                return (
-                  <div key={sub.id} className="border border-border/50 rounded-xl overflow-hidden">
-                    <div className="bg-secondary/40 px-4 py-2.5 flex items-center justify-between gap-2 border-b border-border/50">
-                      <div className="flex items-center gap-2">
-                        <Store className="w-4 h-4 text-amber-500" />
-                        <span className="font-semibold text-sm">{sub.supplierName}</span>
-                      </div>
-                      <Badge variant="secondary" className={`${subStatus.color} text-xs`}>{subStatus.label}</Badge>
+            {/* ── Delivery info ── */}
+            {(deliveryAddress || courierInstructions) && (
+              <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
+                {deliveryAddress && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+                      <MapPin className="w-4 h-4 text-amber-500" />
                     </div>
-                    <div className="divide-y divide-border/30">
-                      {(sub.items ?? []).map((item: any, idx: number) => {
-                        const variant = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
-                        const isPackItem = !!item.packId;
-                        return (
-                          <div key={idx} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {isPackItem
-                                ? <Layers className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                : <Box className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              }
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">
-                                  {isPackItem ? item.packName : item.product?.name}
-                                </p>
-                                {variant && <p className="text-xs text-muted-foreground">{variant}</p>}
-                              </div>
-                              <span className="text-muted-foreground text-xs shrink-0">×{item.quantity}</span>
-                            </div>
-                            <span className="font-medium shrink-0 ml-4">
-                              {formatCurrency((item.unitPrice ?? 0) * item.quantity)}
-                            </span>
-                          </div>
-                        );
-                      })}
+                    <div className="min-w-0">
+                      <p className={`text-xs font-semibold mb-0.5 ${t.textMuted}`}>Adresse de livraison</p>
+                      <p className={`text-sm font-medium ${t.textPrimary}`}>{deliveryAddress.address}</p>
                     </div>
-                    {/* SubOrder subtotal */}
-                    <div className="px-4 py-2 border-t border-border/30 flex justify-between text-sm">
-                      <span className="text-muted-foreground">Sous-total {sub.supplierName}</span>
-                      <span className="font-semibold">{formatCurrency(sub.subtotal)}</span>
-                    </div>
-                    {sub.discountAmount > 0 && (
-                      <div className="px-4 pb-2 flex justify-between text-xs text-green-600 dark:text-green-400">
-                        <span>Réduction ({sub.promotionName ?? 'Promotion'})</span>
-                        <span>−{formatCurrency(sub.discountAmount)}</span>
-                      </div>
-                    )}
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            /* Fallback: show flat items if no subOrders */
-            <div className="border border-border/50 rounded-xl overflow-hidden">
-              <div className="divide-y divide-border/30">
-                {(order.items ?? []).map((item: any, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground font-bold text-xs w-6">{item.quantity}×</span>
-                      <span className="font-medium">{item.product?.name}</span>
+                )}
+                {courierInstructions && (
+                  <div className={`flex items-start gap-3 pt-2.5 border-t ${t.dk ? "border-gray-700/50" : "border-gray-100"}`}>
+                    <div className="w-8 h-8 rounded-xl bg-gray-500/10 flex items-center justify-center shrink-0">
+                      <Package className="w-4 h-4 text-gray-400" />
                     </div>
-                    <span className="text-muted-foreground">{formatCurrency((item.unitPrice ?? 0) * item.quantity)}</span>
+                    <div className="min-w-0">
+                      <p className={`text-xs font-semibold mb-0.5 ${t.textMuted}`}>Instructions coursier</p>
+                      <p className={`text-sm ${t.textPrimary}`}>{courierInstructions}</p>
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
+            )}
+
+            {/* ── SubOrders by supplier ── */}
+            {hasSubOrders ? (
+              <div className="space-y-3">
+                {subOrders.map((sub: any) => {
+                  const subStatusBadge = t.badge(sub.status, SUBORDER_STATUS);
+                  return (
+                    <div key={sub.id} className={`border rounded-2xl overflow-hidden ${t.cardBg}`}>
+
+                      {/* Supplier header */}
+                      <div className={`px-4 py-3 flex items-center justify-between gap-3 border-b ${t.cardHeader}`}>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+                            <Store className="w-3.5 h-3.5 text-amber-500" />
+                          </div>
+                          <span className={`font-semibold text-sm ${t.textPrimary}`}>{sub.supplierName}</span>
+                        </div>
+                        <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${subStatusBadge}`}>
+                          {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
+                        </span>
+                      </div>
+
+                      {/* Item rows */}
+                      <div className={`divide-y ${t.rowDivide}`}>
+                        {(sub.items ?? []).map((item: any, idx: number) => {
+                          const variant = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
+                          const isPackItem = !!item.packId;
+                          return (
+                            <div key={idx} className="flex items-center justify-between px-4 py-3 gap-3">
+                              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                                  isPackItem
+                                    ? "bg-amber-500/15"
+                                    : (t.dk ? "bg-gray-700" : "bg-gray-100")
+                                }`}>
+                                  {isPackItem
+                                    ? <Layers className="w-3 h-3 text-amber-500" />
+                                    : <Box className={`w-3 h-3 ${t.textMuted}`} />
+                                  }
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className={`font-medium text-sm truncate ${t.textPrimary}`}>
+                                    {isPackItem ? item.packName : item.product?.name}
+                                  </p>
+                                  {variant && (
+                                    <p className={`text-xs mt-0.5 ${t.textMuted}`}>{variant}</p>
+                                  )}
+                                </div>
+                                <span className={`text-xs font-semibold shrink-0 ${t.textMuted}`}>
+                                  ×{item.quantity}
+                                </span>
+                              </div>
+                              <span className={`font-semibold text-sm shrink-0 ${t.textPrimary}`}>
+                                {formatCurrency((item.unitPrice ?? 0) * item.quantity)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Subtotal row */}
+                      <div className={`px-4 py-2.5 border-t flex justify-between items-center ${t.dk ? "border-gray-700/50" : "border-gray-100"}`}>
+                        <span className={`text-xs font-medium ${t.textMuted}`}>
+                          Sous-total {sub.supplierName}
+                        </span>
+                        <span className={`font-bold text-sm ${t.textPrimary}`}>
+                          {formatCurrency(sub.subtotal)}
+                        </span>
+                      </div>
+
+                      {/* Discount row */}
+                      {sub.discountAmount > 0 && (
+                        <div className={`px-4 pb-2.5 flex justify-between text-xs text-green-500 font-medium`}>
+                          <span>Réduction ({sub.promotionName ?? "Promotion"})</span>
+                          <span>−{formatCurrency(sub.discountAmount)}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Fallback: flat items when no subOrders */
+              <div className={`border rounded-2xl overflow-hidden ${t.cardBg}`}>
+                <div className={`divide-y ${t.rowDivide}`}>
+                  {(order.items ?? []).map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between px-4 py-3 gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold w-6 ${t.textMuted}`}>{item.quantity}×</span>
+                        <span className={`font-medium text-sm ${t.textPrimary}`}>{item.product?.name}</span>
+                      </div>
+                      <span className={`text-sm ${t.textMuted}`}>
+                        {formatCurrency((item.unitPrice ?? 0) * item.quantity)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* bottom breathing room */}
+            <div className="h-1" />
+          </div>
+
+          {/* ── Sticky footer: total + actions ── */}
+          <div className={`shrink-0 border-t px-6 py-4 space-y-4 ${t.stickyBg}`}>
+
+            {/* Grand total */}
+            <div className={`flex justify-between items-center font-bold border-b pb-3 ${t.dk ? "border-gray-800" : "border-gray-100"}`}>
+              <span className={t.textPrimary}>Total commande</span>
+              <span className="text-amber-500 text-xl">{formatCurrency(order.totalAmount)}</span>
             </div>
-          )}
-        </div>
 
-        {/* ── Footer: total + actions ── */}
-        <div className="border-t border-border/50 px-6 py-4 shrink-0 space-y-3 bg-background">
-          <div className="flex justify-between items-center font-bold text-base">
-            <span>Total commande</span>
-            <span className="text-amber-500 text-xl">{formatCurrency(order.totalAmount)}</span>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" className="flex-1" onClick={onClose}>Fermer</Button>
-
-            {canCancel && (
+            {/* Action buttons */}
+            <div className="flex gap-2 flex-wrap">
+              {/* Close */}
               <Button
                 variant="outline"
-                className="flex-1 gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                onClick={handleCancel}
-                disabled={cancelling}
-                data-testid="button-cancel-order"
+                className={`flex-1 min-w-[80px] rounded-xl h-11 font-semibold border transition-colors
+                  ${t.dk
+                    ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white bg-transparent"
+                    : "border-gray-200 text-gray-700 hover:bg-gray-50 bg-white"
+                  }`}
+                onClick={onClose}
               >
-                <XCircle className="w-4 h-4" />
-                {cancelling ? "Annulation…" : "Annuler la commande"}
+                Fermer
               </Button>
-            )}
 
-            {showReorder && (
-              <Button
-                variant="outline"
-                className="flex-1 gap-2"
-                onClick={handleReorder}
-                disabled={reordering}
-                data-testid="button-reorder"
-              >
-                <RotateCcw className="w-4 h-4" />
-                {reordering ? "Chargement…" : "Recommander"}
-              </Button>
-            )}
+              {/* Cancel */}
+              {canCancel && (
+                <Button
+                  variant="outline"
+                  className={`flex-1 min-w-[140px] rounded-xl h-11 font-semibold gap-2 transition-colors
+                    ${t.dk
+                      ? "border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 bg-transparent"
+                      : "border-red-300 text-red-600 hover:bg-red-50 bg-white"
+                    }`}
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                  data-testid="button-cancel-order"
+                >
+                  <XCircle className="w-4 h-4" />
+                  {cancelling ? "Annulation…" : "Annuler la commande"}
+                </Button>
+              )}
+
+              {/* Reorder */}
+              {showReorder && (
+                <Button
+                  variant="outline"
+                  className={`flex-1 min-w-[120px] rounded-xl h-11 font-semibold gap-2 transition-colors
+                    ${t.dk
+                      ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white bg-transparent"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50 bg-white"
+                    }`}
+                  onClick={handleReorder}
+                  disabled={reordering}
+                  data-testid="button-reorder"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  {reordering ? "Chargement…" : "Recommander"}
+                </Button>
+              )}
+            </div>
           </div>
+
         </div>
       </DialogContent>
     </Dialog>

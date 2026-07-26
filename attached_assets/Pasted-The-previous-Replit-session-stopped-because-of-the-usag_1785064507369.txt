@@ -1,0 +1,139 @@
+The previous Replit session stopped because of the usage limit before finishing the implementation.
+
+Before making any changes:
+
+Read the commit ORDER STRATEGY ADMIN + SUPPLIER.
+Open and read the original prompt stored inside that commit.
+Review every file modified by that implementation.
+
+Your job is not to restart the feature.
+
+Your job is to compare:
+
+the original specification
+the current implementation
+
+and then complete only what is still missing.
+
+What I want you to do
+Read the original prompt completely.
+Scan every file modified in the commit.
+Compare the implementation against the original requirements.
+Detect everything already completed.
+Detect everything still missing, incomplete, broken, or partially implemented.
+Continue implementing only the remaining work.
+Do not duplicate logic.
+Do not replace working implementations.
+Reuse all existing APIs, components, routes, hooks, database models, and realtime events.
+
+Do not generate an audit report.
+
+Do not stop after analysis.
+
+Immediately execute the remaining work until the original specification is fully completed.
+
+Additional corrections (must also be implemented)
+
+While reviewing the implementation, I noticed these issues that must also be corrected.
+
+1. Admin must NOT manage Order Status
+
+Currently the Admin can change the status of Orders.
+
+This is not the intended workflow.
+
+The Admin should have a read-only view of the Order lifecycle.
+
+The Admin can:
+
+view Orders
+search Orders
+filter Orders
+inspect Order Details
+delete Orders (see below)
+
+The Admin must not be able to:
+
+confirm Orders
+reject Orders
+prepare Orders
+mark Orders as ready
+mark Orders as shipped
+mark Orders as delivered
+update any Order status
+
+Order status management must remain Supplier-only according to the existing Order workflow.
+
+Remove any Admin capability that updates Order status while keeping the rest of the Admin Orders page unchanged.
+
+2. Admin Order deletion must be synchronized
+
+Currently the Admin can delete an Order, but the deletion is not synchronized across the application.
+
+Deleting an Order from the Admin must completely remove the Order everywhere.
+
+This includes synchronization with:
+
+Coffee Owner
+Supplier
+SubOrders
+Order Items
+Packs inside Orders
+Delivery
+Returns (when applicable)
+realtime/WebSocket updates
+
+After deletion:
+
+The Order must disappear immediately from:
+
+Admin
+Coffee Owner
+Supplier
+Delivery
+
+without requiring a page refresh.
+
+No orphaned SubOrders or OrderItems should remain.
+
+No orphaned realtime state should remain.
+
+Database integrity must remain consistent.
+
+Keep everything else unchanged
+
+Do not redesign anything.
+
+Do not modify the existing UI unless required by the missing functionality.
+
+Do not break:
+
+Order → SubOrder synchronization
+Delivery synchronization
+Returns synchronization
+Scheduling
+Priorities
+Reorder
+WebSocket synchronization
+Existing APIs
+Existing database structure
+Existing permissions (except the Admin status update correction described above)
+
+Reuse existing components wherever possible.
+
+Final verification
+
+Before considering the implementation complete, verify that:
+
+every requirement from the original prompt has been implemented,
+the additional corrections above are completed,
+Coffee Owner, Supplier, Admin, and Delivery remain fully synchronized,
+Order deletion is propagated everywhere,
+only Suppliers can change Order statuses,
+there are no duplicate implementations,
+there are no TypeScript errors,
+there are no runtime errors,
+there are no broken routes,
+realtime synchronization works correctly.
+
+If everything from the original specification is already implemented correctly, do not make unnecessary changes. Otherwise, complete only the remaining missing work until the feature is fully finished.

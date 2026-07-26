@@ -83,7 +83,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   }
 
   function canUpdateOrderStatus(user: { id: number; role: string }, order: any, newStatus: string): boolean {
-    if (['SUPER_ADMIN', 'ADMIN'].includes(user.role)) return true;
+    // Admin has read-only access to orders; status management is Supplier-only
     if (user.role === 'CAFE_OWNER') {
       return order.cafeId === user.id && newStatus === 'CANCELLED' && order.status === 'PENDING';
     }
@@ -722,6 +722,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ message: err.message ?? 'Invalid request' });
+    }
+  });
+
+  // ── Admin: delete an order (cascade) ─────────────────────────────────────────
+
+  app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      const order = await storage.getOrder(orderId);
+      if (!order) return res.status(404).json({ message: 'Order not found' });
+      const cafeId = order.cafeId;
+      const supplierIds = Array.from(new Set((order.subOrders ?? []).map((so: any) => so.supplierId)));
+      await storage.deleteOrder(orderId);
+      // Broadcast to all involved parties so their UI removes the order in real time
+      broadcastToUsers([cafeId, ...supplierIds], 'order_deleted', { orderId });
+      broadcast('order_deleted', { orderId });
+      res.json({ message: 'Deleted' });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error deleting order' });
     }
   });
 

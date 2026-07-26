@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useOrders, useUpdateOrderStatus } from "@/hooks/use-orders";
+import { useOrders, useUpdateOrderStatus, useDeleteOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Clock, Calendar, Archive, Search, X, Box, Truck, CheckCircle2, AlertCircle, Zap, Store, MapPin } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Clock, Calendar, Archive, Search, X, Box, Zap, Store, MapPin, Trash2, Loader2 } from "lucide-react";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
+import { useToast } from "@/hooks/use-toast";
 import type { OrderWithDetails } from "@shared/schema";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,8 +58,10 @@ function isFuture(order: OrderWithDetails) {
 
 export default function OrdersPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { data: orders = [], isLoading } = useOrders();
   const updateStatus = useUpdateOrderStatus();
+  const deleteOrder = useDeleteOrder();
 
   const [view, setView] = useState<"today" | "future" | "old">("today");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -65,6 +69,7 @@ export default function OrdersPage() {
   const [supplierSearch, setSupplierSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
   const isSupplier = user?.role === "SUPPLIER";
@@ -244,19 +249,6 @@ export default function OrdersPage() {
                     <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
                       <p className="font-bold text-amber-500 text-lg">{formatCurrency(order.totalAmount)}</p>
                       <div className="flex gap-2 flex-wrap justify-end">
-                        {/* Admin status control */}
-                        {isAdmin && order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
-                          <Select defaultValue={order.status} onValueChange={(val) => handleStatusChange(order.id, val)}>
-                            <SelectTrigger className="h-7 w-[160px] text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {STATUS_OPTS.filter(o => o.value !== "ALL").map(o => (
-                                <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
                         {/* Delivery status control */}
                         {isDelivery && (order.status === "READY" || order.status === "IN_DELIVERY") && (
                           <Select defaultValue={order.status} onValueChange={(val) => handleStatusChange(order.id, val)}>
@@ -271,6 +263,17 @@ export default function OrdersPage() {
                         <Button size="sm" variant="ghost" className="h-7 text-xs text-primary" onClick={() => setSelectedOrder(order)}>
                           Détails
                         </Button>
+                        {/* Admin delete */}
+                        {isAdmin && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteTarget(order.id)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -286,6 +289,37 @@ export default function OrdersPage() {
         onClose={() => setSelectedOrder(null)}
         order={selectedOrder}
       />
+
+      {/* Admin: delete confirmation */}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer la commande ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. La commande sera définitivement supprimée avec tous ses sous-ordres, articles et retours associés.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!deleteTarget) return;
+                try {
+                  await deleteOrder.mutateAsync(deleteTarget);
+                  toast({ title: "Commande supprimée" });
+                } catch (err: any) {
+                  toast({ title: "Erreur", description: err.message, variant: "destructive" });
+                }
+                setDeleteTarget(null);
+              }}
+              disabled={deleteOrder.isPending}
+            >
+              {deleteOrder.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Supprimer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

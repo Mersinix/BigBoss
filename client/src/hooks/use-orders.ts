@@ -184,6 +184,26 @@ export function useCreateReturn() {
   });
 }
 
+export function useDeleteOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: number) => {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Failed to delete order" }));
+        throw new Error(err.message ?? "Failed to delete order");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
+    },
+  });
+}
+
 export function useUpdateReturnStatus() {
   const queryClient = useQueryClient();
   return useMutation({

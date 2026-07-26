@@ -561,6 +561,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
+   * Cascade-delete an order and all dependent records:
+   * promotionUsage → orderReturns → orderItems → subOrders → orders
+   */
+  async deleteOrder(orderId: number): Promise<void> {
+    await db.delete(promotionUsage).where(eq(promotionUsage.orderId, orderId));
+    await db.delete(orderReturns).where(eq(orderReturns.orderId, orderId));
+    await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
+    await db.delete(subOrders).where(eq(subOrders.orderId, orderId));
+    await db.delete(orders).where(eq(orders.id, orderId));
+  }
+
+  /**
    * Validate a previous order's items against the current marketplace state.
    * Returns which items can be re-added as-is, which need attention, and resolved pack items.
    */

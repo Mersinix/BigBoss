@@ -15,6 +15,7 @@ const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
 const PACK_EVENTS = ["pack_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
+const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "order_deleted"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated"];
 
 function invalidateInventoryQueries(qc: QueryClient) {
@@ -110,6 +111,10 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
             qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
             invalidateMarketplace(qc);
+          }
+          if (ORDER_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/orders"] });
+            qc.invalidateQueries({ queryKey: ["/api/returns"] });
           }
           if (MESSAGING_EVENTS.includes(event)) {
             invalidateMessagingQueries(qc);

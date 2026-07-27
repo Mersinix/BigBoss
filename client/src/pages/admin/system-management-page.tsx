@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Printer, Megaphone, Coffee, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Printer, Megaphone, Coffee, Wrench, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
@@ -16,9 +16,10 @@ import type { LandingConfig, HeroSlide } from "@shared/schema";
 // ── Service visibility ────────────────────────────────────────────────────────
 
 const SERVICES: { key: ServiceKey; label: string; description: string; icon: any }[] = [
-  { key: "PRINTING",  label: "Printing",  description: "Marketplace PRINT — services d'impression pour les cafés.", icon: Printer },
-  { key: "MARKETING", label: "Marketing", description: "Services MARKETING — agences et prestataires marketing.",   icon: Megaphone },
-  { key: "BARISTA",   label: "Barista",   description: "Barista Academy & Marketplace Baristas.",                  icon: Coffee },
+  { key: "PRINTING",    label: "Printing",     description: "Marketplace PRINT — services d'impression pour les cafés.", icon: Printer },
+  { key: "MARKETING",   label: "Marketing",    description: "Services MARKETING — agences et prestataires marketing.",   icon: Megaphone },
+  { key: "BARISTA",     label: "Barista",      description: "Barista Academy & Marketplace Baristas.",                  icon: Coffee },
+  { key: "MAINTENANCE", label: "Maintenance",  description: "Services MAINTENANCE — techniciens pour équipements café.", icon: Wrench },
 ];
 
 const STATE_OPTIONS: { value: ServiceState; label: string; icon: any; badgeClass: string }[] = [

@@ -1,0 +1,507 @@
+BigBossCoffee – Add the New Maintenance Service
+Mission
+
+Add a new Maintenance service to the BigBossCoffee ecosystem by following exactly the same UX, UI philosophy, navigation, permissions, responsiveness, and quality level as the existing services (Shop / Print / Barista / Marketing).
+
+IMPORTANT RULES (NON-NEGOTIABLE)
+
+Before making any modification:
+
+Analyze the entire project architecture.
+Understand how the existing services (Shop, Print, Marketing, Barista) are connected.
+Identify every place where services are synchronized.
+Verify all shared components, permissions, navigation, favorites, chat, routing, translations, responsive layouts, APIs, database models, and reusable UI.
+Make sure every new Maintenance feature follows the existing project architecture.
+Before writing any code
+
+Perform a complete impact analysis and verify that every dependency related to marketplace services is identified before making any modification.
+
+Only after verifying the synchronization points should implementation begin.
+
+Do NOT
+change existing business logic.
+refactor unrelated code.
+modify existing designs.
+remove existing features.
+rename existing components.
+change existing routes.
+modify existing APIs unless strictly required for Maintenance.
+break synchronization between services.
+affect Shop, Print, Marketing, Barista, Suppliers, Delivery, Admin, or Coffee Owner modules.
+
+Only add what is necessary for the new Maintenance service.
+
+Everything unrelated to Maintenance must remain exactly as it is.
+
+If an existing component does not require modification, leave it untouched.
+
+NEW SERVICE
+
+Create a new marketplace service:
+
+Maintenance
+
+This service connects Coffee Owners with maintenance professionals capable of repairing, installing and maintaining any equipment or infrastructure used inside coffee shops.
+
+The service must integrate naturally into the existing BigBossCoffee ecosystem exactly like the other marketplace services.
+
+1. Authentication & Global Integration
+
+Integrate Maintenance everywhere the existing services are available.
+
+This includes:
+
+Login flow
+Authentication
+Service selection
+Navigation
+Routing
+Permissions
+User roles
+Notifications
+Favorites
+Messaging
+Search
+Responsive layouts
+Dark mode
+Mobile
+Tablet
+Desktop
+
+The experience should feel as if Maintenance has always existed inside BigBossCoffee.
+
+2. Coffee Owner Side
+Service Switcher
+
+Add Maintenance to the existing marketplace service switcher.
+
+Current services:
+
+Shop
+Print
+Barista
+Marketing
+
+New services:
+
+Shop
+Print
+Barista
+Marketing
+Maintenance
+
+The switcher must keep exactly:
+
+same design
+same spacing
+same animations
+same responsiveness
+same behavior
+
+without changing the existing UX.
+
+Favorites
+
+Inside the Favorites modal:
+
+Add a Maintenance section following the same organization used by the existing services.
+
+Do not modify:
+
+Shop favorites
+Print favorites
+Marketing favorites
+Barista favorites
+
+Simply extend the modal.
+
+No redesign.
+
+Messages
+
+Integrate Maintenance into the existing messaging/chat system.
+
+Coffee Owners must be able to communicate with Maintenance Agents exactly like the existing messaging experience.
+
+Do not redesign or modify the chat logic.
+
+Only extend it.
+
+3. Maintenance Search & Filtering
+
+Create a filtering experience equivalent to Shop.
+
+Include filters such as:
+
+Category
+Subcategory
+Speciality
+Type
+Availability
+Rating
+Experience
+Location
+
+and any additional filters that improve usability while remaining perfectly consistent with the current UI.
+
+The search experience should feel identical to Shop.
+
+4. Maintenance Agent Marketplace
+
+When the Coffee Owner opens Maintenance, display professional cards similar in quality to the existing marketplace cards.
+
+Each card should include:
+
+Profile picture
+Name
+Job title
+Short description
+Skills
+Main specialties
+Maintenance categories
+Type
+Freelance
+Company
+Agency
+etc.
+Rating
+Reviews count
+Favorite button
+Availability indicator (color status)
+Years of experience
+Location
+Response speed (if available)
+Any additional useful professional information that improves decision making while keeping the interface clean.
+Example Maintenance Categories
+
+Examples include:
+
+Machines
+Coffee Machines
+Espresso Machines
+Automatic Coffee Machines
+Coffee Grinders
+Ice Machines
+Refrigerators
+Freezers
+Dishwashers
+Ovens
+Mixers
+Blenders
+Infrastructure
+Electricity
+Water Systems
+Plumbing
+Air Conditioning
+Ventilation
+Digital
+POS Systems
+Internet
+Wi-Fi
+Networking
+Security Cameras
+TVs
+Sound Systems
+Furniture & Design
+Decoration
+Furniture
+Lighting
+Signage
+Carpentry
+Painting
+Other
+
+Any maintenance category useful for coffee shops.
+
+5. Maintenance Agent Details Page
+
+Clicking a Maintenance Agent card opens a complete professional profile.
+
+The page should contain everything useful for a Coffee Owner.
+
+Including:
+
+Full profile
+Biography
+Photos
+Portfolio
+Gallery
+Skills
+Certifications
+Experience
+Service categories
+Specialities
+Ratings
+Reviews
+Availability
+Working hours
+Coverage area
+Contact
+Reservation button
+Favorite button
+Any additional professional information that increases trust.
+
+The page should follow the existing BigBossCoffee design system.
+
+6. Reservation System
+
+Coffee Owners can schedule a maintenance reservation.
+
+Reservation should include information such as:
+
+Requested service
+Preferred date
+Preferred time
+Description
+Notes
+Coffee shop location
+
+Reservations are then sent to the Maintenance Agent.
+
+Maintenance Agents can:
+
+Approve
+Reject
+Reschedule
+Manage
+
+from their own panel.
+
+The workflow must remain consistent with the existing project philosophy.
+
+7. Maintenance Agent Dashboard
+
+Create a dedicated interface for Maintenance Agents.
+
+The interface must be fully responsive for:
+
+Mobile
+Tablet
+Desktop
+
+using the same visual language already used across BigBossCoffee.
+
+Planning
+
+Reservation management.
+
+Provide filters such as:
+
+Today
+Upcoming
+Past
+
+with date filtering.
+
+Reservations should be displayed clearly and professionally.
+
+Profile
+
+Maintenance Agents manage everything visible on their public page.
+
+Including:
+
+Personal information
+Biography
+Skills
+Categories
+Specialities
+Photos
+Portfolio
+Gallery
+Certifications
+Service area
+Contact information
+Pricing (if applicable)
+Any additional profile information useful to Coffee Owners.
+Availability
+
+Maintenance Agents manage:
+
+Working days
+Working hours
+Available periods
+Vacation
+Busy periods
+
+Coffee Owners should only see available reservation slots whenever applicable.
+
+8. Admin Integration
+
+The new Maintenance service must be fully integrated into the Admin panel following exactly the same management logic as the existing marketplace services.
+
+Do not redesign the Admin.
+
+Only extend it.
+
+Admin → System Management
+
+Inside System Management, extend the Marketplace Services configuration.
+
+Current services include:
+
+Shop
+Print
+Marketing
+Barista
+
+Add:
+
+Maintenance
+
+The Maintenance service must support exactly the same global visibility options as the other services:
+
+Visible
+Coming Soon
+Hidden
+
+Changing the Maintenance visibility here must control the entire platform exactly like the other marketplace services.
+
+9. Landing Page Integration
+
+Integrate Maintenance into the Landing Page exactly like the existing services.
+
+Do not redesign the Landing Page.
+
+Only extend the current implementation.
+
+Maintenance should appear naturally wherever marketplace services are displayed.
+
+Including, when applicable:
+
+Hero Section
+Marketplace sections
+Service switchers
+Service cards
+Landing components
+Navigation
+Call-to-action sections
+Any existing marketplace presentation
+
+The Landing Page should make Maintenance feel like a core BigBossCoffee service that has always existed.
+
+10. Footer Integration
+
+Extend the footer while preserving its design and all existing content.
+
+Current services include:
+
+Marketplace SHOP
+Marketplace PRINT
+Services BARISTA
+Services MARKETING
+
+Add:
+
+Services MAINTENANCE
+Useful Links
+
+Add a Maintenance link consistent with the existing footer.
+
+For example:
+
+Rejoindre MAINTENANCE
+
+while preserving all existing links:
+
+À propos
+Ouvrir un compte café
+Devenir fournisseur
+Rejoindre PRINT
+Rejoindre MARKETING
+Rejoindre Barista Academy
+Rejoindre Marketplace Barista
+FAQ
+Contact
+
+Nothing should be removed.
+
+11. Design Requirements
+
+The Coffee Owner experience must remain:
+
+Fully Dark Mode
+Same typography
+Same spacing
+Same colors
+Same animations
+Same reusable components
+Same responsiveness
+
+Do not redesign any existing screens.
+
+Maintenance must look like it has always been part of the platform.
+
+12. Consistency
+
+Maintenance must integrate with:
+
+Authentication
+Navigation
+Permissions
+Favorites
+Messaging
+Notifications
+Search
+Filtering
+Routing
+Responsive layouts
+Landing Page
+Footer
+Admin
+Shared components
+Translation system
+Existing UI system
+
+without affecting the behavior of existing marketplace services.
+
+13. Synchronization & Quality Assurance (MANDATORY)
+
+Before considering the implementation complete:
+
+Perform a complete verification of the entire application.
+
+Confirm that:
+
+All existing features still work exactly as before.
+No existing UI changed unintentionally.
+No unrelated business logic was modified.
+Shop still works.
+Print still works.
+Marketing still works.
+Barista still works.
+Favorites remain unchanged except for the new Maintenance section.
+Messaging continues working for every existing service.
+Navigation is intact.
+Routing is intact.
+Permissions are intact.
+Dark mode consistency is preserved.
+Responsive layouts remain correct.
+Reservations work correctly.
+Maintenance Agent profile management works correctly.
+Coffee Owner experience remains consistent.
+
+Also verify that changing the Maintenance visibility from Admin → System Management correctly synchronizes every relevant area of the platform, including:
+
+Login
+Navigation
+Landing Page
+Hero Section
+Footer
+Coffee Owner Service Switcher
+Favorites
+Messaging
+Search
+Maintenance Marketplace
+Maintenance Agent Pages
+Reservation Workflow
+Maintenance Agent Dashboard
+Any other component that depends on marketplace service visibility
+
+If any unrelated component was modified during implementation, restore it so that only the required Maintenance functionality remains.
+
+Expected Final Result
+
+The final implementation should make Maintenance feel like one of the original core BigBossCoffee marketplace services.
+
+It must integrate seamlessly with the existing architecture, design system, navigation, permissions, synchronization, responsiveness, and user experience, with zero regressions, zero unnecessary modifications, and no unintended changes anywhere else in the project.

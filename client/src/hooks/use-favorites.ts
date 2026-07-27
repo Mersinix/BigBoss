@@ -46,12 +46,24 @@ export interface MarketingFavItem {
   portfolioImages: string[];
 }
 
+export interface MaintenanceFavItem {
+  id: number;
+  name: string;
+  initials: string;
+  specialty: string;
+  categories: string[];
+  location: string;
+  rating: number;
+  available: boolean;
+}
+
 interface FavoritesStore {
   shop: Record<number, ShopFavItem>;
   print: Record<string, PrintFavItem>;
   academy: Record<number, AcademyFavItem>;
   baristaMarket: Record<number, BaristaMktFavItem>;
   marketing: Record<number, MarketingFavItem>;
+  maintenance: Record<number, MaintenanceFavItem>;
   pack: Record<number, true>;
 
   toggleShop: (item: ShopFavItem) => void;
@@ -59,6 +71,7 @@ interface FavoritesStore {
   toggleAcademy: (item: AcademyFavItem) => void;
   toggleBaristaMarket: (item: BaristaMktFavItem) => void;
   toggleMarketing: (item: MarketingFavItem) => void;
+  toggleMaintenance: (item: MaintenanceFavItem) => void;
   togglePack: (packId: number) => void;
 
   removeShop: (id: number) => void;
@@ -66,6 +79,7 @@ interface FavoritesStore {
   removeAcademy: (id: number) => void;
   removeBaristaMarket: (id: number) => void;
   removeMarketing: (id: number) => void;
+  removeMaintenance: (id: number) => void;
   removePack: (id: number) => void;
 
   hydrateShop: (items: ShopFavItem[]) => void;
@@ -78,6 +92,7 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
   academy: {},
   baristaMarket: {},
   marketing: {},
+  maintenance: {},
   pack: {},
 
   togglePack: (packId) => {
@@ -154,6 +169,14 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
       return { marketing: next };
     }),
 
+  toggleMaintenance: (item) =>
+    set((s) => {
+      const next = { ...s.maintenance };
+      if (next[item.id]) delete next[item.id];
+      else next[item.id] = item;
+      return { maintenance: next };
+    }),
+
   removeShop: (id) => {
     set((s) => { const next = { ...s.shop }; delete next[id]; return { shop: next }; });
     apiRequest("DELETE", `/api/favorites/${id}`).catch(() => {});
@@ -177,6 +200,9 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
 
   removeMarketing: (id) =>
     set((s) => { const next = { ...s.marketing }; delete next[id]; return { marketing: next }; }),
+
+  removeMaintenance: (id) =>
+    set((s) => { const next = { ...s.maintenance }; delete next[id]; return { maintenance: next }; }),
 }));
 
 export const selectTotalFavCount = (s: FavoritesStore) =>
@@ -185,4 +211,5 @@ export const selectTotalFavCount = (s: FavoritesStore) =>
   Object.keys(s.academy).length +
   Object.keys(s.baristaMarket).length +
   Object.keys(s.marketing).length +
+  Object.keys(s.maintenance).length +
   Object.keys(s.pack).length;

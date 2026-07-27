@@ -5,12 +5,12 @@ import { z } from "zod";
 
 export const userRoleEnum = pgEnum('user_role', [
   'SUPER_ADMIN', 'ADMIN', 'SUPPLIER', 'CAFE_OWNER', 'DELIVERY_COMPANY', 'DRIVER',
-  'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE'
+  'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'
 ]);
 export const orderStatusEnum = pgEnum('order_status', ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'IN_DELIVERY', 'DELIVERED', 'CANCELLED']);
 export const listingVisibilityEnum = pgEnum('listing_visibility', ['VISIBLE', 'HIDDEN']);
 export const userAccountStatusEnum = pgEnum('user_account_status', ['pending', 'approved', 'rejected']);
-export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA']);
+export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA', 'MAINTENANCE']);
 export const serviceStateEnum = pgEnum('service_state', ['VISIBLE', 'HIDDEN', 'COMING_SOON']);
 
 export const users = pgTable("users", {
@@ -26,6 +26,7 @@ export const users = pgTable("users", {
   categories: text("categories").array(),
   printCategories: text("print_categories").array(),
   marketingCategories: text("marketing_categories").array(),
+  maintenanceCategories: text("maintenance_categories").array(),
   locationAddress: text("location_address"),
   locationLat: text("location_lat"),
   locationLng: text("location_lng"),

@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
-  ShoppingBag, Printer, Coffee, Megaphone, MapPin,
+  ShoppingBag, Printer, Coffee, Megaphone, Wrench, MapPin,
   ChevronDown, Instagram, Facebook, Mail,
   Phone, ArrowRight, CheckCircle, Building2, Truck, GraduationCap, Users, ChevronRight,
   ChevronLeft, Clock, Globe, Moon, Sun, X
@@ -75,10 +75,15 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     becomeMarketing: "Rejoindre MARKETING",
     becomeBaristaAcademy: "Rejoindre Barista Academy",
     becomeBaristaMarketplace: "Rejoindre Marketplace Barista",
+    becomeMaintenance: "Rejoindre MAINTENANCE",
     shopMarket: "Marketplace SHOP",
     printMarket: "Marketplace PRINT",
     baristaService: "Services BARISTA",
     marketingService: "Services MARKETING",
+    maintenanceService: "Services MAINTENANCE",
+    maintenanceTitle: "Services MAINTENANCE",
+    maintenanceDesc: "Proposez vos services de maintenance aux cafés professionnels.",
+    maintenanceCta: "Rejoindre en tant que technicien",
     footerAbout: "La marketplace B2B dédiée aux professionnels du café en Tunisie.",
   },
   en: {
@@ -123,10 +128,15 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     becomeMarketing: "Join MARKETING",
     becomeBaristaAcademy: "Join Barista Academy",
     becomeBaristaMarketplace: "Join Barista Marketplace",
+    becomeMaintenance: "Join MAINTENANCE",
     shopMarket: "SHOP Marketplace",
     printMarket: "PRINT Marketplace",
     baristaService: "BARISTA Services",
     marketingService: "MARKETING Services",
+    maintenanceService: "MAINTENANCE Services",
+    maintenanceTitle: "MAINTENANCE Services",
+    maintenanceDesc: "Offer your maintenance services to professional cafes.",
+    maintenanceCta: "Join as a Technician",
     footerAbout: "The B2B marketplace dedicated to coffee professionals in Tunisia.",
   },
   tn: {
@@ -171,10 +181,15 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     becomeMarketing: "انضم MARKETING",
     becomeBaristaAcademy: "انضم Barista Academy",
     becomeBaristaMarketplace: "انضم Marketplace Barista",
+    becomeMaintenance: "انضم MAINTENANCE",
     shopMarket: "سوق SHOP",
     printMarket: "سوق PRINT",
     baristaService: "خدمات BARISTA",
     marketingService: "خدمات MARKETING",
+    maintenanceService: "خدمات MAINTENANCE",
+    maintenanceTitle: "خدمات MAINTENANCE",
+    maintenanceDesc: "قدّم خدمات الصيانة متاعك للقهاوي المهنية.",
+    maintenanceCta: "انضم بصفة تقني",
     footerAbout: "السوق B2B المخصصة لمحترفي القهوة في تونس.",
   },
 };
@@ -208,10 +223,11 @@ const DEFAULT_MARKETPLACE_IMG = "https://images.unsplash.com/photo-1559056199-64
 // ── Services ──────────────────────────────────────────────────────────────────
 
 const SERVICES = [
-  { id: "shop",      label: "SHOP",      icon: ShoppingBag, href: "/products" },
-  { id: "print",     label: "PRINT",     icon: Printer,     href: "/print",      service: "PRINTING"  as ServiceKey },
-  { id: "barista",   label: "BARISTA",   icon: Coffee,      href: "/barista",    service: "BARISTA"   as ServiceKey },
-  { id: "marketing", label: "MARKETING", icon: Megaphone,   href: "/marketing",  service: "MARKETING" as ServiceKey },
+  { id: "shop",        label: "SHOP",        icon: ShoppingBag, href: "/products" },
+  { id: "print",       label: "PRINT",       icon: Printer,     href: "/print",       service: "PRINTING"    as ServiceKey },
+  { id: "barista",     label: "BARISTA",     icon: Coffee,      href: "/barista",     service: "BARISTA"     as ServiceKey },
+  { id: "marketing",   label: "MARKETING",   icon: Megaphone,   href: "/marketing",   service: "MARKETING"   as ServiceKey },
+  { id: "maintenance", label: "MAINTENANCE", icon: Wrench,      href: "/maintenance", service: "MAINTENANCE" as ServiceKey },
 ];
 
 const MARKETING_SERVICES = [
@@ -233,6 +249,7 @@ const ROLES = [
   { id: "MARKETING",           label: "Marketing",          icon: Megaphone,     color: "text-purple-600",  bg: "bg-purple-50",  border: "border-purple-200",  iconBg: "bg-purple-500",  hover: "hover:border-purple-400",  desc: "Proposez vos services marketing aux professionnels." },
   { id: "BARISTA_ACADEMY",     label: "Barista Academy",    icon: GraduationCap, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", iconBg: "bg-emerald-500", hover: "hover:border-emerald-400", desc: "Proposez des formations barista professionnelles." },
   { id: "BARISTA_MARKETPLACE", label: "Marketplace Barista",icon: Users,         color: "text-indigo-600",  bg: "bg-indigo-50",  border: "border-indigo-200",  iconBg: "bg-indigo-500",  hover: "hover:border-indigo-400",  desc: "Mettez en valeur vos services de barista." },
+  { id: "MAINTENANCE",         label: "Maintenance",        icon: Wrench,        color: "text-orange-600",  bg: "bg-orange-50",  border: "border-orange-200",  iconBg: "bg-orange-500",  hover: "hover:border-orange-400",  desc: "Proposez vos services de maintenance aux cafés." },
 ];
 
 // ── Registration constants ────────────────────────────────────────────────────
@@ -547,7 +564,7 @@ export default function LandingPage() {
       }
       const userData = await res.json();
       queryClient.setQueryData(["/api/auth/me"], userData);
-      const PROVIDER_ROLES_CHECK = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY"];
+      const PROVIDER_ROLES_CHECK = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY", "MAINTENANCE"];
       if (PROVIDER_ROLES_CHECK.includes(userData.role) && userData.status !== "approved") {
         setLoginPendingState(true);
         return;
@@ -578,14 +595,14 @@ export default function LandingPage() {
     const base: any = { role, email: data.email, phone: data.phone, password: data.password };
     switch (role) {
       case "CAFE_OWNER": base.name = `${data.firstName} — ${data.cafeName}`; break;
-      case "SUPPLIER": case "PRINTER": case "MARKETING": case "BARISTA_ACADEMY": case "BARISTA_MARKETPLACE":
+      case "SUPPLIER": case "PRINTER": case "MARKETING": case "BARISTA_ACADEMY": case "BARISTA_MARKETPLACE": case "MAINTENANCE":
         base.name = data.companyName; base.categories = data.categories; base.printCategories = data.printCategories; base.marketingCategories = data.marketingCategories; break;
       case "DELIVERY_COMPANY": base.name = `${data.firstName} ${data.lastName}`; base.governorates = data.governorates; break;
     }
     return base;
   };
 
-  const NEED_LOCATION = ["CAFE_OWNER", "SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE"];
+  const NEED_LOCATION = ["CAFE_OWNER", "SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "MAINTENANCE"];
 
   const submitRegistration = async (payload: any) => {
     setIsRegistering(true);
@@ -641,6 +658,8 @@ export default function LandingPage() {
   const isPrintVisible = serviceStates.PRINTING !== "HIDDEN";
   const isMarketingVisible = serviceStates.MARKETING !== "HIDDEN";
   const isBaristaVisible = serviceStates.BARISTA !== "HIDDEN";
+  const isMaintenanceVisible = serviceStates.MAINTENANCE !== "HIDDEN";
+  const isMaintenanceComingSoon = serviceStates.MAINTENANCE === "COMING_SOON";
   const isPrintComingSoon = serviceStates.PRINTING === "COMING_SOON";
   const isMarketingComingSoon = serviceStates.MARKETING === "COMING_SOON";
   const isBaristaComingSoon = serviceStates.BARISTA === "COMING_SOON";
@@ -972,6 +991,51 @@ export default function LandingPage() {
         </section>
       )}
 
+      {/* ── MAINTENANCE Section ── */}
+      {isMaintenanceVisible && (
+        <section className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}>
+          <div className="max-w-7xl mx-auto">
+            <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
+              {t.maintenanceTitle}
+              {isMaintenanceComingSoon && <Badge variant="outline" className="border-orange-200 text-orange-600 bg-orange-50 text-xs">Bientôt</Badge>}
+            </h2>
+            <p className={`text-center mb-8 ${dk("text-gray-500", "text-gray-400")}`}>{t.maintenanceDesc}</p>
+
+            <div className="grid md:grid-cols-2 gap-8 items-center">
+              {/* Left: image */}
+              <div className="order-2 md:order-1">
+                <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&q=80" alt="Maintenance" className="w-full h-72 object-cover rounded-2xl shadow-md" loading="lazy" />
+              </div>
+
+              {/* Right: specialties */}
+              <div className="order-1 md:order-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                  {[
+                    { icon: "⚙️", label: "Machines" },
+                    { icon: "🔌", label: "Infrastructure" },
+                    { icon: "💻", label: "Digital & IT" },
+                    { icon: "❄️", label: "Climatisation" },
+                    { icon: "⚡", label: "Électricité" },
+                    { icon: "🪑", label: "Mobilier" },
+                  ].map((svc) => (
+                    <div key={svc.label}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${dk("bg-white border-gray-100 shadow-sm", "bg-gray-800 border-gray-700")}`}>
+                      <span className="text-2xl">{svc.icon}</span>
+                      <span className={`text-xs font-semibold text-center leading-tight ${dk("text-gray-700", "text-gray-200")}`}>{svc.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <Button onClick={() => openAuth("register", "MAINTENANCE")}
+                  variant="outline" className={`w-full rounded-xl py-5 border-2 border-orange-300 text-orange-600 hover:bg-orange-50 ${isDark ? "hover:bg-orange-950 border-orange-700 text-orange-400" : ""}`}
+                  data-testid="button-maintenance-cta">
+                  {t.maintenanceCta} <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ── Why BigBossCoffee ── */}
       <section className={`py-14 px-4 ${dk("bg-white", "bg-gray-900")}`}>
         <div className="max-w-5xl mx-auto text-center">
@@ -1051,6 +1115,7 @@ export default function LandingPage() {
                 {isPrintVisible && <li><button onClick={() => handleServiceClick("/print")} className="hover:text-amber-400 transition-colors">{t.printMarket}</button></li>}
                 {isBaristaVisible && <li><button onClick={() => handleServiceClick("/barista")} className="hover:text-amber-400 transition-colors">{t.baristaService}</button></li>}
                 {isMarketingVisible && <li><button onClick={() => handleServiceClick("/marketing")} className="hover:text-amber-400 transition-colors">{t.marketingService}</button></li>}
+                {isMaintenanceVisible && <li><button onClick={() => handleServiceClick("/maintenance")} className="hover:text-amber-400 transition-colors">{t.maintenanceService}</button></li>}
               </ul>
             </div>
 
@@ -1065,6 +1130,7 @@ export default function LandingPage() {
                 {isMarketingVisible && <li><button onClick={() => openAuth("register", "MARKETING")} className="hover:text-amber-400 transition-colors">{t.becomeMarketing}</button></li>}
                 {isBaristaVisible && <li><button onClick={() => openAuth("register", "BARISTA_ACADEMY")} className="hover:text-amber-400 transition-colors">{t.becomeBaristaAcademy}</button></li>}
                 {isBaristaVisible && <li><button onClick={() => openAuth("register", "BARISTA_MARKETPLACE")} className="hover:text-amber-400 transition-colors">{t.becomeBaristaMarketplace}</button></li>}
+                {isMaintenanceVisible && <li><button onClick={() => openAuth("register", "MAINTENANCE")} className="hover:text-amber-400 transition-colors">{t.becomeMaintenance}</button></li>}
                 <li><a href="#" className="hover:text-amber-400 transition-colors">{t.faq}</a></li>
               </ul>
             </div>

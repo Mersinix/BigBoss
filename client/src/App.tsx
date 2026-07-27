@@ -46,6 +46,8 @@ import PrinterDashboard from "@/pages/printer/dashboard";
 import MarketingDashboard from "@/pages/marketing/dashboard";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
 import BaristaMarketplaceDashboard from "@/pages/barista-marketplace/dashboard";
+import MaintenanceDashboard from "@/pages/maintenance/dashboard";
+import MaintenancePage from "@/pages/maintenance-page";
 
 // Admin pages
 import AdminCategoriesPage from "@/pages/admin/categories-page";
@@ -81,7 +83,7 @@ const Spinner = () => (
 
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN"];
 const CAFE_ROLES = ["CAFE_OWNER"];
-const PROVIDER_ROLES = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY"];
+const PROVIDER_ROLES = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY", "MAINTENANCE"];
 
 function needsApproval(user: { role: string; status: string }) {
   return PROVIDER_ROLES.includes(user.role) && user.status !== "approved";
@@ -130,6 +132,7 @@ function SmartDashboard() {
   if (user?.role === "MARKETING") return <MarketingDashboard />;
   if (user?.role === "BARISTA_ACADEMY") return <BaristaAcademyDashboard />;
   if (user?.role === "BARISTA_MARKETPLACE") return <BaristaMarketplaceDashboard />;
+  if (user?.role === "MAINTENANCE") return <MaintenanceDashboard />;
   return <Dashboard />;
 }
 
@@ -265,6 +268,11 @@ function Router() {
         {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceDashboard} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
       </Route>
 
+      {/* ── Maintenance Agent routes ── */}
+      <Route path="/maintenance-panel/:rest*">
+        {() => (<DashboardLayout><ProtectedRoute component={MaintenanceDashboard} allowedRoles={["MAINTENANCE"]} requireApproved /></DashboardLayout>)}
+      </Route>
+
       {/* ── Service pages (publicly viewable, gated by System Management) ── */}
       <Route path="/coming-soon">
         {() => (
@@ -298,6 +306,13 @@ function Router() {
         {() => (
           <MarketplaceLayout>
             <GatedServiceRoute service="MARKETING" component={MarketingPage} />
+          </MarketplaceLayout>
+        )}
+      </Route>
+      <Route path="/maintenance">
+        {() => (
+          <MarketplaceLayout>
+            <GatedServiceRoute service="MAINTENANCE" component={MaintenancePage} />
           </MarketplaceLayout>
         )}
       </Route>

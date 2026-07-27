@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-export type ServiceKey = "PRINTING" | "MARKETING" | "BARISTA";
+export type ServiceKey = "PRINTING" | "MARKETING" | "BARISTA" | "MAINTENANCE";
 export type ServiceState = "VISIBLE" | "HIDDEN" | "COMING_SOON";
 export type ServiceStatesMap = Record<ServiceKey, ServiceState>;
 
@@ -8,6 +8,7 @@ const DEFAULT_STATES: ServiceStatesMap = {
   PRINTING: "VISIBLE",
   MARKETING: "VISIBLE",
   BARISTA: "VISIBLE",
+  MAINTENANCE: "VISIBLE",
 };
 
 export function useServiceStates() {
@@ -22,4 +23,5 @@ export const ROLE_TO_SERVICE: Record<string, ServiceKey> = {
   MARKETING: "MARKETING",
   BARISTA_ACADEMY: "BARISTA",
   BARISTA_MARKETPLACE: "BARISTA",
+  MAINTENANCE: "MAINTENANCE",
 };

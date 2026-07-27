@@ -2040,9 +2040,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServiceStates(): Promise<ServiceStatesMap> {
-    const ALL_SERVICES: ServiceKey[] = ['PRINTING', 'MARKETING', 'BARISTA'];
+    const ALL_SERVICES: ServiceKey[] = ['PRINTING', 'MARKETING', 'BARISTA', 'MAINTENANCE'];
     const rows = await db.select().from(platformServices);
-    const map: ServiceStatesMap = { PRINTING: 'VISIBLE', MARKETING: 'VISIBLE', BARISTA: 'VISIBLE' };
+    const map: ServiceStatesMap = { PRINTING: 'VISIBLE', MARKETING: 'VISIBLE', BARISTA: 'VISIBLE', MAINTENANCE: 'VISIBLE' };
     for (const row of rows) {
       map[row.service as ServiceKey] = row.state as ServiceState;
     }

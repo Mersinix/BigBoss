@@ -24,9 +24,9 @@ import {
   Search, LogOut, Settings, LayoutDashboard, Store, Send,
   Star, Package, Trash2, CheckCircle, Clock, Box, Truck,
   AlertCircle, DollarSign, ClipboardList, Phone, Globe, MapPinIcon, AlertTriangle,
-  Printer, Megaphone, User, GraduationCap, Sun, Moon, X, Plus, Loader2,
+  Printer, Megaphone, Wrench, User, GraduationCap, Sun, Moon, X, Plus, Loader2,
 } from "lucide-react";
-import { useFavorites, selectTotalFavCount } from "@/hooks/use-favorites";
+import { useFavorites, selectTotalFavCount, type MaintenanceFavItem } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates } from "@/hooks/use-service-states";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -90,25 +90,28 @@ const statusMeta: Record<string, { label: string; color: string; icon: any }> = 
 
 // ── Fake data ─────────────────────────────────────────────────────────────────
 
-type ServiceId = "SHOP" | "PRINT" | "BARISTA" | "MARKETING";
+type ServiceId = "SHOP" | "PRINT" | "BARISTA" | "MARKETING" | "MAINTENANCE";
 type ThreadMessage = { from: "me" | "them"; text: string; time: string };
 type Thread = { id: number; name: string; service: ServiceId; lastMessage: string; time: string; unread: number; messages: ThreadMessage[] };
 
 const SERVICE_BADGE: Record<ServiceId, string> = {
-  SHOP:      "bg-blue-100 text-blue-700",
-  PRINT:     "bg-orange-100 text-orange-700",
-  BARISTA:   "bg-green-100 text-green-700",
-  MARKETING: "bg-purple-100 text-purple-700",
+  SHOP:        "bg-blue-100 text-blue-700",
+  PRINT:       "bg-orange-100 text-orange-700",
+  BARISTA:     "bg-green-100 text-green-700",
+  MARKETING:   "bg-purple-100 text-purple-700",
+  MAINTENANCE: "bg-amber-100 text-amber-700",
 };
 
-// SHOP conversations are loaded from the real API — only PRINT/BARISTA/MARKETING use fake data
+// SHOP conversations are loaded from the real API — only PRINT/BARISTA/MARKETING/MAINTENANCE use fake data
 const fakeThreads: Thread[] = [
-  { id: 4, name: "ImprimTunis",          service: "PRINT",     lastMessage: "Your flyer proof is ready for review.", time: "30m ago",  unread: 1, messages: [{ from: "them", text: "Hello! Your flyer proof is ready.", time: "09:40 AM" }, { from: "me", text: "Can you adjust the font size?", time: "09:45 AM" }, { from: "them", text: "Of course! Updated version sent.", time: "09:50 AM" }] },
-  { id: 5, name: "PrintExpress Sfax",    service: "PRINT",     lastMessage: "Menu cards delivered, thank you!", time: "Mon",      unread: 0, messages: [{ from: "them", text: "Your menu cards have been delivered!", time: "Mon" }, { from: "me", text: "Perfect, thank you!", time: "Mon" }] },
-  { id: 6, name: "Tunis Barista Academy",service: "BARISTA",   lastMessage: "Enrollment confirmed for next week.", time: "2h ago",  unread: 0, messages: [{ from: "them", text: "Enrollment confirmed for the Espresso Fundamentals course next week.", time: "10:00 AM" }, { from: "me", text: "Great! What should I bring?", time: "10:02 AM" }, { from: "them", text: "Just yourself — all equipment provided.", time: "10:04 AM" }] },
-  { id: 7, name: "Youssef Ben Ali",      service: "BARISTA",   lastMessage: "Available this weekend, confirmed.", time: "Yesterday", unread: 1, messages: [{ from: "me", text: "Are you available Saturday?", time: "Yesterday" }, { from: "them", text: "Available this weekend, confirmed.", time: "Yesterday" }] },
-  { id: 8, name: "TunMedia Agency",      service: "MARKETING", lastMessage: "Q1 campaign report attached.", time: "Yesterday", unread: 2, messages: [{ from: "them", text: "Q1 campaign report is attached. Reach up 34%.", time: "Yesterday" }, { from: "me", text: "Impressive! Let's schedule a call.", time: "Yesterday" }] },
-  { id: 9, name: "Pixel & Grain Studio", service: "MARKETING", lastMessage: "Photo shoot scheduled for Tuesday.", time: "Mon",      unread: 0, messages: [{ from: "them", text: "Photo shoot scheduled for Tuesday 10am.", time: "Mon" }, { from: "me", text: "Perfect, see you then.", time: "Mon" }] },
+  { id: 4,  name: "ImprimTunis",          service: "PRINT",       lastMessage: "Your flyer proof is ready for review.", time: "30m ago",   unread: 1, messages: [{ from: "them", text: "Hello! Your flyer proof is ready.", time: "09:40 AM" }, { from: "me", text: "Can you adjust the font size?", time: "09:45 AM" }, { from: "them", text: "Of course! Updated version sent.", time: "09:50 AM" }] },
+  { id: 5,  name: "PrintExpress Sfax",    service: "PRINT",       lastMessage: "Menu cards delivered, thank you!", time: "Mon",       unread: 0, messages: [{ from: "them", text: "Your menu cards have been delivered!", time: "Mon" }, { from: "me", text: "Perfect, thank you!", time: "Mon" }] },
+  { id: 6,  name: "Tunis Barista Academy",service: "BARISTA",     lastMessage: "Enrollment confirmed for next week.", time: "2h ago",   unread: 0, messages: [{ from: "them", text: "Enrollment confirmed for the Espresso Fundamentals course next week.", time: "10:00 AM" }, { from: "me", text: "Great! What should I bring?", time: "10:02 AM" }, { from: "them", text: "Just yourself — all equipment provided.", time: "10:04 AM" }] },
+  { id: 7,  name: "Youssef Ben Ali",      service: "BARISTA",     lastMessage: "Available this weekend, confirmed.", time: "Yesterday", unread: 1, messages: [{ from: "me", text: "Are you available Saturday?", time: "Yesterday" }, { from: "them", text: "Available this weekend, confirmed.", time: "Yesterday" }] },
+  { id: 8,  name: "TunMedia Agency",      service: "MARKETING",   lastMessage: "Q1 campaign report attached.", time: "Yesterday", unread: 2, messages: [{ from: "them", text: "Q1 campaign report is attached. Reach up 34%.", time: "Yesterday" }, { from: "me", text: "Impressive! Let's schedule a call.", time: "Yesterday" }] },
+  { id: 9,  name: "Pixel & Grain Studio", service: "MARKETING",   lastMessage: "Photo shoot scheduled for Tuesday.", time: "Mon",       unread: 0, messages: [{ from: "them", text: "Photo shoot scheduled for Tuesday 10am.", time: "Mon" }, { from: "me", text: "Perfect, see you then.", time: "Mon" }] },
+  { id: 10, name: "Mohamed Gharbi",       service: "MAINTENANCE", lastMessage: "Intervention confirmée pour demain 9h.", time: "1h ago", unread: 1, messages: [{ from: "me", text: "La machine espresso ne chauffe plus, pouvez-vous intervenir ?", time: "08:00 AM" }, { from: "them", text: "Bien sûr, je peux venir demain matin à 9h.", time: "08:15 AM" }, { from: "me", text: "Parfait, merci !", time: "08:20 AM" }, { from: "them", text: "Intervention confirmée pour demain 9h.", time: "08:21 AM" }] },
+  { id: 11, name: "CleanTech Maintenance",service: "MAINTENANCE", lastMessage: "Devis envoyé par email.", time: "Mon",       unread: 0, messages: [{ from: "me", text: "Bonjour, nous avons besoin d'une maintenance préventive pour nos équipements.", time: "Mon" }, { from: "them", text: "Devis envoyé par email. N'hésitez pas à nous contacter.", time: "Mon" }] },
 ];
 
 const favItems = [
@@ -401,16 +404,17 @@ function SuppliersPanel() {
 
 // ── Favorites Panel ───────────────────────────────────────────────────────────
 
-type FavService = "SHOP" | "PRINT" | "BARISTA" | "MARKETING";
+type FavService = "SHOP" | "PRINT" | "BARISTA" | "MARKETING" | "MAINTENANCE";
 type BaristaSubTab = "academy" | "marketplace";
 type ShopSubTab = "products" | "packs" | "stores";
 
-const FAV_SERVICES: FavService[] = ["SHOP", "PRINT", "BARISTA", "MARKETING"];
-const FAV_SERVICE_TO_KEY: Record<FavService, "PRINTING" | "BARISTA" | "MARKETING" | null> = {
+const FAV_SERVICES: FavService[] = ["SHOP", "PRINT", "BARISTA", "MARKETING", "MAINTENANCE"];
+const FAV_SERVICE_TO_KEY: Record<FavService, "PRINTING" | "BARISTA" | "MARKETING" | "MAINTENANCE" | null> = {
   SHOP: null,
   PRINT: "PRINTING",
   BARISTA: "BARISTA",
   MARKETING: "MARKETING",
+  MAINTENANCE: "MAINTENANCE",
 };
 
 function FavoritesPanel({ onClose }: { onClose: () => void }) {
@@ -422,8 +426,8 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const [baristaTab, setBaristaTab] = useState<BaristaSubTab>("academy");
 
   const {
-    shop, print, academy, baristaMarket, marketing, pack,
-    removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removePack,
+    shop, print, academy, baristaMarket, marketing, maintenance, pack,
+    removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removeMaintenance, removePack,
   } = useFavorites();
   const { stores, toggleStore: toggleStoreFav } = useStoreFavorites();
 
@@ -468,6 +472,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const academyItems = Object.values(academy);
   const baristaItems = Object.values(baristaMarket);
   const marketingItems = Object.values(marketing);
+  const maintenanceItems = Object.values(maintenance) as MaintenanceFavItem[];
 
   const renderEmpty = () => (
     <div className={`text-center py-16 ${textMuted}`}>
@@ -814,6 +819,41 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           )
         )}
 
+        {/* MAINTENANCE */}
+        {activeService === "MAINTENANCE" && (
+          maintenanceItems.length === 0 ? renderEmpty() : (
+            <div className="space-y-2">
+              {maintenanceItems.map((item) => (
+                <div key={item.id} className={`group flex items-center gap-3 border rounded-2xl p-3 ${cardBg}`}>
+                  <Avatar className="w-9 h-9 shrink-0">
+                    <AvatarFallback className={`${dk ? "bg-orange-900 text-orange-300" : "bg-orange-100 text-orange-700"} font-bold text-xs`}>{item.initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.available ? "bg-green-400" : "bg-gray-500"}`} />
+                    </div>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.specialty}</p>
+                    <p className={`text-xs flex items-center gap-1 mt-0.5 ${textMuted}`}>
+                      <MapPinIcon className="w-2.5 h-2.5" />{item.location}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                    <button
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      onClick={() => removeMaintenance(item.id)}
+                      data-testid={`button-fav-remove-maintenance-${item.id}`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
       </div>
     </div>
   );
@@ -821,12 +861,13 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
 
 // ── Chat Panel ────────────────────────────────────────────────────────────────
 
-const SERVICES_LIST: ServiceId[] = ["SHOP", "PRINT", "BARISTA", "MARKETING"];
-const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "BARISTA" | "MARKETING" | null> = {
+const SERVICES_LIST: ServiceId[] = ["SHOP", "PRINT", "BARISTA", "MARKETING", "MAINTENANCE"];
+const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "BARISTA" | "MARKETING" | "MAINTENANCE" | null> = {
   SHOP: null,
   PRINT: "PRINTING",
   BARISTA: "BARISTA",
   MARKETING: "MARKETING",
+  MAINTENANCE: "MAINTENANCE",
 };
 
 // ── Messages Panel (premium dark/light — mirrors FavoritesPanel design) ───────
@@ -1669,6 +1710,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
               { id: "print", label: "PRINT", icon: Printer, href: "/print", service: "PRINTING" as const },
               { id: "barista", label: "BARISTA", icon: Coffee, href: "/barista", service: "BARISTA" as const },
               { id: "marketing", label: "MARKETING", icon: Megaphone, href: "/marketing", service: "MARKETING" as const },
+              { id: "maintenance", label: "MAINTENANCE", icon: Wrench, href: "/maintenance", service: "MAINTENANCE" as const },
             ].filter((svc) => !svc.service || headerServiceStates[svc.service] !== "HIDDEN").map((svc) => {
               const isActive = location.startsWith("/" + svc.id) || (svc.href === "/products" && (location === "/products" || location.startsWith("/products")));
               return (

@@ -1,4 +1,5 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
+import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -35,11 +36,9 @@ import PrintPage from "@/pages/cafe/print/print-page";
 import PrintDetailPage from "@/pages/cafe/print/print-detail-page";
 import BaristaPage from "@/pages/cafe/barista/barista-page";
 import MarketingPage from "@/pages/cafe/marketing/marketing-page";
-import MessagesPage from "@/pages/cafe/messages-page";
 import SupplierMessagesPage from "@/pages/supplier/messages-page";
 import AdminMessagesPage from "@/pages/admin/messages-page";
 import DeliveryMessagesPage from "@/pages/delivery/messages-page";
-import CafeSettingsPage from "@/pages/cafe/settings-page";
 
 // New role dashboards
 import PrinterDashboard from "@/pages/printer/dashboard";
@@ -71,7 +70,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useServiceStates, type ServiceKey } from "@/hooks/use-service-states";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { MarketplaceLayout } from "@/components/cafe/marketplace-layout";
-import { PendingApprovalScreen } from "@/components/auth/pending-approval-screen";
+import { useAccountOpenStore } from "@/store/account-open-store";
 
 // ── Protected route helpers ───────────────────────────────────────────────────
 
@@ -84,9 +83,10 @@ const Spinner = () => (
 const ADMIN_ROLES = ["SUPER_ADMIN", "ADMIN"];
 const CAFE_ROLES = ["CAFE_OWNER"];
 const PROVIDER_ROLES = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY", "MAINTENANCE"];
+const ALL_PENDING_ROLES = [...PROVIDER_ROLES, "CAFE_OWNER"];
 
 function needsApproval(user: { role: string; status: string }) {
-  return PROVIDER_ROLES.includes(user.role) && user.status !== "approved";
+  return ALL_PENDING_ROLES.includes(user.role) && user.status !== "approved";
 }
 
 const ProtectedRoute = ({
@@ -102,9 +102,44 @@ const ProtectedRoute = ({
   if (isLoading) return <Spinner />;
   if (!user) return <Redirect to="/" />;
   if (allowedRoles && !allowedRoles.includes(user.role)) return <Redirect to="/" />;
-  if (requireApproved && needsApproval(user)) return <PendingApprovalScreen />;
+  // Pending users are redirected to the landing page (which shows the approval modal)
+  if (requireApproved && needsApproval(user)) return <Redirect to="/" />;
   return <Component />;
 };
+
+// ── Cafe route redirectors — open Marketplace panels without old pages ─────────
+
+function CafeSettingsRedirect() {
+  const openWithTab = useAccountOpenStore((s) => s.openWithTab);
+  const [, navigate] = useLocation();
+  const searchParams = new URLSearchParams(window.location.search);
+  const tab = searchParams.get("tab");
+  useEffect(() => {
+    openWithTab(tab === "orders" ? "orders" : "settings");
+    navigate("/products", { replace: true } as any);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return <Spinner />;
+}
+
+function CafeOrdersRedirect() {
+  const openWithTab = useAccountOpenStore((s) => s.openWithTab);
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    openWithTab("orders");
+    navigate("/products", { replace: true } as any);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return <Spinner />;
+}
+
+function CafeMessagesRedirect() {
+  const openChat = useAccountOpenStore((s) => s.openChat);
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    openChat();
+    navigate("/products", { replace: true } as any);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return <Spinner />;
+}
 
 function GatedServiceRoute({ service, component: Component }: { service: ServiceKey; component: any }) {
   const { states, isLoading } = useServiceStates();
@@ -126,7 +161,6 @@ function RequireAuth({ component: Component }: { component: any }) {
 
 function SmartDashboard() {
   const { user } = useAuth();
-  if (user && needsApproval(user)) return <PendingApprovalScreen />;
   if (user?.role === "SUPPLIER") return <SupplierDashboard />;
   if (user?.role === "PRINTER") return <PrinterDashboard />;
   if (user?.role === "MARKETING") return <MarketingDashboard />;
@@ -142,6 +176,8 @@ function HomeRoute() {
   const { user, isLoading } = useAuth();
   if (isLoading) return <Spinner />;
   if (!user) return <LandingPage />;
+  // Pending users of any role stay on the landing page (which shows the approval modal)
+  if (needsApproval(user)) return <LandingPage />;
   if (user.role === "CAFE_OWNER") return <Redirect to="/products" />;
   return (
     <DashboardLayout>
@@ -327,27 +363,15 @@ function Router() {
       </Route>
 
       <Route path="/cafe/orders">
-        {() => (
-          <DashboardLayout>
-            <ProtectedRoute component={OrdersPage} allowedRoles={["CAFE_OWNER"]} />
-          </DashboardLayout>
-        )}
+        {() => <CafeOrdersRedirect />}
       </Route>
 
       <Route path="/cafe/messages">
-        {() => (
-          <MarketplaceLayout>
-            <MessagesPage />
-          </MarketplaceLayout>
-        )}
+        {() => <CafeMessagesRedirect />}
       </Route>
 
       <Route path="/cafe/settings">
-        {() => (
-          <MarketplaceLayout>
-            <ProtectedRoute component={CafeSettingsPage} allowedRoles={CAFE_ROLES} />
-          </MarketplaceLayout>
-        )}
+        {() => <CafeSettingsRedirect />}
       </Route>
 
       {/* ── Admin routes ── */}

@@ -529,10 +529,11 @@ export default function LandingPage() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any | null>(null);
   const [authLocationModalOpen, setAuthLocationModalOpen] = useState(false);
-  const [registrationDone, setRegistrationDone] = useState(false);
-  const [loginPendingState, setLoginPendingState] = useState(false);
   const [isDoingLogin, setIsDoingLogin] = useState(false);
   const [authModalPreLocationClose, setAuthModalPreLocationClose] = useState(false);
+
+  // Standalone pending approval modal (shown after registration or login for pending accounts)
+  const [pendingApprovalModalOpen, setPendingApprovalModalOpen] = useState(false);
 
   const loginForm = useForm({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
@@ -573,8 +574,6 @@ export default function LandingPage() {
   const openAuth = (tab: "login" | "register" = "login", role?: string) => {
     if (role) setSelectedRole(role);
     setAuthTab(tab);
-    setRegistrationDone(false);
-    setLoginPendingState(false);
     setAuthModalOpen(true);
   };
 
@@ -589,9 +588,11 @@ export default function LandingPage() {
       }
       const userData = await res.json();
       queryClient.setQueryData(["/api/auth/me"], userData);
-      const PROVIDER_ROLES_CHECK = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY", "MAINTENANCE"];
-      if (PROVIDER_ROLES_CHECK.includes(userData.role) && userData.status !== "approved") {
-        setLoginPendingState(true);
+      const ALL_PENDING_ROLES_CHECK = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY", "MAINTENANCE", "CAFE_OWNER"];
+      if (ALL_PENDING_ROLES_CHECK.includes(userData.role) && userData.status !== "approved") {
+        // Show standalone approval modal instead of entering the marketplace
+        setAuthModalOpen(false);
+        setPendingApprovalModalOpen(true);
         return;
       }
       setAuthModalOpen(false);
@@ -603,6 +604,13 @@ export default function LandingPage() {
       setIsDoingLogin(false);
     }
   };
+
+  // Auto-open approval modal when a pending user lands here (e.g. direct URL visit while still pending)
+  useEffect(() => {
+    if (user && user.status !== "approved") {
+      setPendingApprovalModalOpen(true);
+    }
+  }, [user?.id, user?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (
@@ -634,7 +642,9 @@ export default function LandingPage() {
     try {
       await apiRequest("POST", "/api/auth/register", payload);
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setRegistrationDone(true);
+      // Close auth modal and show the standalone pending approval modal
+      setAuthModalOpen(false);
+      setPendingApprovalModalOpen(true);
     } catch (err: any) {
       toast({ variant: "destructive", title: "Inscription échouée", description: err?.message ?? "Une erreur s'est produite." });
     } finally {
@@ -1217,7 +1227,7 @@ export default function LandingPage() {
           ? "[&_input]:bg-gray-800 [&_input]:border-gray-700 [&_input]:text-white [&_input]:placeholder:text-gray-500 [&_label]:text-gray-300 [&_textarea]:bg-gray-800 [&_textarea]:border-gray-700 [&_textarea]:text-white"
           : "";
         return (
-          <Dialog open={authModalOpen} onOpenChange={(open) => { if (!open) { setRegistrationDone(false); setLoginPendingState(false); } setAuthModalOpen(open); }}>
+          <Dialog open={authModalOpen} onOpenChange={(open) => { setAuthModalOpen(open); }}>
             <DialogContent className="sm:max-w-md w-full p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden max-h-[95vh]">
               <VisuallyHidden><DialogTitle>Bienvenue sur BigBossCoffee</DialogTitle></VisuallyHidden>
               <div className={`flex flex-col max-h-[95vh] overflow-hidden transition-colors duration-200 ${modalBg}`}>
@@ -1227,7 +1237,7 @@ export default function LandingPage() {
                   <div className="flex items-center justify-between mb-4">
                     <button
                       type="button"
-                      onClick={() => { setRegistrationDone(false); setLoginPendingState(false); setAuthModalOpen(false); }}
+                      onClick={() => { setAuthModalOpen(false); }}
                       aria-label="Close"
                       className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
                     >
@@ -1258,40 +1268,7 @@ export default function LandingPage() {
                     [&::-webkit-scrollbar-thumb]:bg-gray-700"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
-                  {registrationDone ? (
-                    <div className="flex flex-col items-center text-center gap-5 py-8">
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dk ? "bg-amber-500/15" : "bg-amber-50"}`}>
-                        <Clock className="w-8 h-8 text-amber-500" />
-                      </div>
-                      <div className="space-y-2">
-                        <h2 className={`font-bold text-xl ${textPri}`}>Compte créé avec succès !</h2>
-                        <p className={`text-sm leading-relaxed max-w-xs mx-auto ${textMut}`}>Votre compte est en <strong className={dk ? "text-gray-200" : "text-gray-700"}>attente d'approbation</strong> par un administrateur. L'accès sera disponible dès validation.</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-lg shadow-amber-500/20"
-                        data-testid="button-registration-done-close"
-                        onClick={() => { setRegistrationDone(false); setAuthModalOpen(false); }}
-                      >Compris</button>
-                    </div>
-                  ) : loginPendingState ? (
-                    <div className="flex flex-col items-center text-center gap-5 py-8">
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dk ? "bg-amber-500/15" : "bg-amber-50"}`}>
-                        <Clock className="w-8 h-8 text-amber-500" />
-                      </div>
-                      <div className="space-y-2">
-                        <h2 className={`font-bold text-xl ${textPri}`}>Compte en attente</h2>
-                        <p className={`text-sm leading-relaxed max-w-xs mx-auto ${textMut}`}>Votre compte est en <strong className={dk ? "text-gray-200" : "text-gray-700"}>attente d'approbation</strong>. Vous serez notifié dès validation.</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-lg shadow-amber-500/20"
-                        data-testid="button-login-pending-close"
-                        onClick={() => { setLoginPendingState(false); setAuthModalOpen(false); fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => { queryClient.setQueryData(["/api/auth/me"], null); }); }}
-                      >Compris</button>
-                    </div>
-                  ) : (
-                    <div className="pt-2">
+                  <div className="pt-2">
                       {/* Tab switcher — pill style */}
                       <div className={`flex gap-1 rounded-2xl p-1 mb-5 ${swBg}`}>
                         <button
@@ -1383,7 +1360,6 @@ export default function LandingPage() {
                         </div>
                       )}
                     </div>
-                  )}
                 </div>
               </div>
             </DialogContent>
@@ -1451,6 +1427,55 @@ export default function LandingPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* ── Pending Approval Standalone Modal ── */}
+      {(() => {
+        const dk = isDark;
+        const modalBg = dk ? "bg-gray-900" : "bg-white";
+        const textPri = dk ? "text-white" : "text-gray-900";
+        const textMut = dk ? "text-gray-400" : "text-gray-500";
+        const handleClose = async () => {
+          setPendingApprovalModalOpen(false);
+          // Log out the user so they return to the unauthenticated landing page
+          try {
+            await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+            queryClient.setQueryData(["/api/auth/me"], null);
+          } catch { /* ignore */ }
+        };
+        return (
+          <Dialog open={pendingApprovalModalOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+            <DialogContent className="sm:max-w-sm w-full p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+              <VisuallyHidden><DialogTitle>Demande d'inscription reçue</DialogTitle></VisuallyHidden>
+              <div className={`flex flex-col transition-colors duration-200 ${modalBg}`}>
+                {/* Amber gradient header */}
+                <div className="bg-gradient-to-br from-amber-500 to-amber-600 px-6 pt-6 pb-5 flex flex-col items-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center">
+                    <Clock className="w-7 h-7 text-white" />
+                  </div>
+                  <div className="text-center">
+                    <h2 className="text-[17px] font-bold text-white leading-tight">Inscription reçue</h2>
+                    <p className="text-amber-100 text-[12px] mt-1">BigBossCoffee</p>
+                  </div>
+                </div>
+                {/* Content */}
+                <div className="px-6 py-6 flex flex-col gap-5">
+                  <p className={`text-[14px] leading-relaxed text-center ${textMut}`}>
+                    Votre demande d'inscription a bien été reçue. Notre équipe va examiner votre dossier dans les plus brefs délais. Une fois votre compte approuvé, vous serez contacté par téléphone ou par email. Vous pourrez ensuite vous connecter et accéder à votre espace.
+                  </p>
+                  <button
+                    type="button"
+                    data-testid="button-pending-approval-close"
+                    onClick={handleClose}
+                    className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-lg shadow-amber-500/20"
+                  >
+                    Compris
+                  </button>
                 </div>
               </div>
             </DialogContent>

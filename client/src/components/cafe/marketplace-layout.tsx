@@ -128,15 +128,16 @@ const fakeSuppliers = [
 // ── Account Panel (premium dark/light — mirrors FavoritesPanel design) ────────
 
 function AccountPanel({
-  user, onClose, onLogout, initialOrderId,
+  user, onClose, onLogout, initialOrderId, initialTab,
 }: {
   user: any;
   onClose: () => void;
   onLogout: () => void;
   initialOrderId?: number | null;
+  initialTab?: "orders" | "dashboard" | "settings" | null;
 }) {
   const [isDark, setIsDark] = useState(true);
-  const [activeTab, setActiveTab] = useState<"orders" | "dashboard" | "settings">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "dashboard" | "settings">(initialTab ?? "orders");
   const { data: orders = [], isLoading: ordersLoading } = useOrders();
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
@@ -1501,20 +1502,26 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const t = useTheme(isDark);
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState<"orders" | "dashboard" | "settings" | null>(null);
   const [favOpen, setFavOpen] = useState(false);
   const [suppliersOpen, setSuppliersOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
 
-  // Watch the account-open-store so cart page can trigger profile panel + show the new order
-  const { shouldOpen, orderIdToOpen, clearOpen } = useAccountOpenStore();
+  // Watch the account-open-store so external routes can trigger the profile panel or chat
+  const { shouldOpen, orderIdToOpen, initialTab, shouldOpenChat, clearOpen } = useAccountOpenStore();
   useEffect(() => {
     if (shouldOpen) {
       setProfileOpen(true);
       setPendingOrderId(orderIdToOpen);
+      setProfileInitialTab(initialTab);
       clearOpen();
     }
-  }, [shouldOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (shouldOpenChat) {
+      setChatOpen(true);
+      clearOpen();
+    }
+  }, [shouldOpen, shouldOpenChat]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cartCount = getTotalItemCount();
 
@@ -1768,13 +1775,14 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Profile Modal ── */}
       {user && (
-        <Dialog open={profileOpen} onOpenChange={(v) => { setProfileOpen(v); if (!v) setPendingOrderId(null); }}>
+        <Dialog open={profileOpen} onOpenChange={(v) => { setProfileOpen(v); if (!v) { setPendingOrderId(null); setProfileInitialTab(null); } }}>
           <DialogContent className="sm:max-w-md h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
             <AccountPanel
               user={user}
-              onClose={() => { setProfileOpen(false); setPendingOrderId(null); }}
-              onLogout={() => { logout(); setProfileOpen(false); setPendingOrderId(null); }}
+              onClose={() => { setProfileOpen(false); setPendingOrderId(null); setProfileInitialTab(null); }}
+              onLogout={() => { logout(); setProfileOpen(false); setPendingOrderId(null); setProfileInitialTab(null); }}
               initialOrderId={pendingOrderId}
+              initialTab={profileInitialTab}
             />
           </DialogContent>
         </Dialog>

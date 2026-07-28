@@ -1,0 +1,341 @@
+Coffee Owner Cleanup, Route Unification & Pending Approval Flow (No Design Changes / Keep Everything Else Intact)
+
+The current implementation is working well.
+
+Before making any modification, first perform a complete verification of the existing implementation and synchronization.
+
+Read all related files, routes, components and navigation flows first.
+
+Verify what is already implemented before changing anything.
+
+If something already works correctly, do not modify it.
+
+Do not redesign anything.
+
+Do not change business logic that is unrelated to this request.
+
+Do not remove or modify any feature we did not discuss.
+
+Keep the current UI/UX design exactly as it is.
+
+Keep all realtime synchronization exactly as it currently works.
+
+1. Coffee Owner — Remove Remaining Old Pages & Redirect Them To The New Marketplace Layout
+
+The Coffee Owner should now use only the new Marketplace Layout.
+
+The old standalone pages should no longer be used.
+
+A. /cafe/settings
+
+Currently this route still opens the old page:
+
+src/pages/cafe/settings-page.tsx
+
+This page is obsolete.
+
+The Settings already exist inside:
+
+src/components/cafe/marketplace-layout.tsx
+
+inside:
+
+My Account Modal
+→ Settings
+Required
+
+When opening:
+
+/cafe/settings
+
+the application must use the new Marketplace Layout and directly open:
+
+My Account Modal
+→ Settings
+
+Update every required routing so this happens correctly.
+
+Also update every related reference inside:
+
+App.tsx
+
+including the old:
+
+import CafeSettingsPage ...
+
+and every remaining reference to the old page.
+
+B. /cafe/settings?tab=orders
+
+Currently this still opens the old Settings page.
+
+It should instead open:
+
+Marketplace Layout
+
+↓
+
+My Account Modal
+
+↓
+
+Orders
+
+The Orders switcher inside the Account modal should already be selected.
+
+No old Settings page should appear.
+
+Update every required routing and App.tsx reference.
+
+C. /cafe/messages
+
+Currently it still opens:
+
+src/pages/cafe/messages-page.tsx
+
+This page is obsolete.
+
+The project already has the new messaging system used inside Marketplace Layout.
+
+Example components:
+
+chat-view.tsx
+
+conversation-list.tsx
+
+messages-panel.tsx
+
+Those are the components that must be used.
+
+Opening:
+
+/cafe/messages
+
+must simply open Marketplace Layout with the Messages panel already opened.
+
+Update every required routing.
+
+Update App.tsx.
+
+Remove every obsolete routing pointing to the old Messages page.
+
+D. /cafe/orders
+
+Currently this opens the old page:
+
+src/pages/shared/orders-page.tsx
+
+This old page still contains the obsolete sidebar/dashboard.
+
+Example:
+
+BigBoss Coffee
+
+MAIN
+
+Dashboard
+
+Marketplace
+
+...
+
+My Orders
+
+...
+
+This entire experience is obsolete.
+
+The project already contains the new Orders interface inside:
+
+Marketplace Layout
+
+↓
+
+My Account
+
+↓
+
+Orders
+
+Opening:
+
+/cafe/orders
+
+must simply open:
+
+Marketplace Layout
+
+↓
+
+My Account Modal
+
+↓
+
+Orders
+
+The old Orders page must no longer be used anywhere.
+
+Update every routing.
+
+Update App.tsx.
+
+Remove every obsolete route pointing to the old Orders page.
+
+2. Remove Obsolete Favorite Page
+
+Delete the obsolete page:
+
+src/pages/cafe/favorites-page.tsx
+
+Only if it is no longer used.
+
+Before deleting:
+
+Verify every import.
+
+Verify every route.
+
+Verify every navigation.
+
+Remove every obsolete reference.
+
+Keep only the Favorites implementation already integrated inside Marketplace Layout.
+
+3. Remove Obsolete Suppliers Page
+
+Delete:
+
+src/pages/cafe/suppliers-page.tsx
+
+only after verifying that nothing depends on it anymore.
+
+Remove every obsolete import.
+
+Remove every obsolete route.
+
+Remove every obsolete navigation.
+
+4. Remove Remaining Old Coffee Owner Pages
+
+After updating the routes above:
+
+If these pages are no longer used anywhere:
+
+settings-page.tsx
+
+messages-page.tsx
+
+orders-page.tsx
+
+favorites-page.tsx
+
+suppliers-page.tsx
+
+remove them from the project together with every obsolete reference.
+
+Do not remove anything that is still actively used.
+
+Perform a complete dependency verification before deleting anything.
+
+5. Pending Approval Flow
+
+The current Pending Approval experience must be simplified.
+
+Current Behavior
+
+When a newly created account is waiting for approval, the application currently shows several approval screens and banners such as:
+
+Awaiting approval
+
+Pending account
+
+Prices hidden
+
+Login to view prices
+
+Pending approval screen
+
+Return Home
+
+There are also components like:
+
+pending-approval-screen.tsx
+
+PendingApprovalScreen
+
+App.tsx approval logic
+
+and possibly other related code.
+
+New Required Behavior
+
+When a user creates a new account that is not yet approved:
+
+After registration:
+
+Redirect the user directly to the Landing Page.
+
+Do not redirect them into their Marketplace.
+
+Do not open the Coffee Owner panel.
+
+Do not show the pending dashboard.
+
+Do not show:
+
+Awaiting Approval banner
+Pending Approval screen
+Hidden prices message
+Login to view prices message
+Any other pending-account UI inside Marketplace
+
+Instead:
+
+Immediately display a simple professional confirmation modal on the Landing Page.
+
+Example meaning (rewrite professionally):
+
+Your registration has been received successfully.
+Our team will review your account shortly. Once your account has been approved, we will contact you by phone or email. After approval, you will be able to sign in and access your dashboard.
+
+The wording may be improved, but the meaning should remain the same.
+
+After closing the modal:
+
+The user simply remains on the Landing Page.
+
+Until approved by Admin:
+
+If they try to log in:
+
+They should not access Marketplace.
+
+Instead:
+
+Show the same professional approval modal.
+
+No Marketplace should open before approval.
+
+6. Verification & Synchronization
+
+Before finishing:
+
+Perform a complete synchronization audit.
+
+Verify that:
+
+/cafe/settings opens Marketplace → My Account → Settings.
+/cafe/settings?tab=orders opens Marketplace → My Account → Orders.
+/cafe/orders opens Marketplace → My Account → Orders.
+/cafe/messages opens Marketplace → Messages.
+No old dashboard/sidebar pages remain accessible.
+No broken imports remain.
+No broken routes remain.
+No duplicate implementations remain.
+No dead navigation remains.
+No orphan components remain.
+Pending Approval flow works exactly as described.
+Approved users continue using the Marketplace exactly as before.
+Existing functionality, realtime synchronization, business logic and design remain unchanged everywhere else.
+
+Only make the modifications described above. Everything outside this scope must remain exactly as it is.

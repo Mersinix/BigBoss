@@ -27,6 +27,7 @@ const TUNISIAN_GOVERNORATES = [
 const PRINT_CATS = ["Flyers","Menus","Cartes de visite","Affiches","Enseignes","Packaging","Étiquettes","Banderoles","Gobelets","Kakémonos"];
 const MARKETING_CATS = ["Réseaux sociaux","Vidéo","Photographie","SEO","Publicité","Branding","Site web","Influence","Email marketing","Événementiel"];
 const BARISTA_SPECIALTIES = ["Espresso","Latte Art","Cold Brew","Brewing Methods","Formation barista","Sensory Training","Coffee Roasting","Machine Maintenance"];
+const MAINTENANCE_CATS = ["Machines à café","Machines espresso","Moulins à café","Machines à glace","Réfrigérateurs","Lave-vaisselle","Fours","Mixeurs","Électricité","Plomberie","Climatisation","Ventilation","Systèmes POS","Réseaux WiFi","Caméras sécurité","Mobilier","Éclairage","Menuiserie","Peinture","Signalétique"];
 
 // ── Styling helpers ────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ const roleColors: Record<string, string> = {
   MARKETING: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
   BARISTA_ACADEMY: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   BARISTA_MARKETPLACE: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+  MAINTENANCE: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
 };
 
 const statusConfig: Record<string, { label: string; className: string; icon: any }> = {
@@ -51,10 +53,10 @@ const statusConfig: Record<string, { label: string; className: string; icon: any
 
 const ALL_ROLES = [
   "SUPER_ADMIN", "ADMIN", "SUPPLIER", "CAFE_OWNER", "DELIVERY_COMPANY",
-  "DRIVER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE"
+  "DRIVER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "MAINTENANCE"
 ];
-const REGISTERABLE_ROLES = ["CAFE_OWNER", "SUPPLIER", "DELIVERY_COMPANY", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE"];
-const APPROVABLE_ROLES = ["CAFE_OWNER", "SUPPLIER", "DELIVERY_COMPANY", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE"];
+const REGISTERABLE_ROLES = ["CAFE_OWNER", "SUPPLIER", "DELIVERY_COMPANY", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "MAINTENANCE"];
+const APPROVABLE_ROLES = ["CAFE_OWNER", "SUPPLIER", "DELIVERY_COMPANY", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "MAINTENANCE"];
 
 // ── MultiChip inline multi-select ─────────────────────────────────────────────
 
@@ -104,6 +106,7 @@ function UserDetailDialog({
     governorates: [] as string[],
     printCategories: [] as string[],
     marketingCategories: [] as string[],
+    maintenanceCategories: [] as string[],
     categories: [] as string[],
   });
 
@@ -118,6 +121,7 @@ function UserDetailDialog({
         governorates: u.governorates ?? [],
         printCategories: u.printCategories ?? [],
         marketingCategories: u.marketingCategories ?? [],
+        maintenanceCategories: u.maintenanceCategories ?? [],
         categories: u.categories ?? [],
       });
       setConfirmDelete(false);
@@ -161,6 +165,7 @@ function UserDetailDialog({
       governorates: form.governorates.length > 0 ? form.governorates : null,
       printCategories: form.printCategories.length > 0 ? form.printCategories : null,
       marketingCategories: form.marketingCategories.length > 0 ? form.marketingCategories : null,
+      maintenanceCategories: form.maintenanceCategories.length > 0 ? form.maintenanceCategories : null,
       categories: form.categories.length > 0 ? form.categories : null,
     });
   };
@@ -237,6 +242,10 @@ function UserDetailDialog({
           {(user.role === "BARISTA_ACADEMY" || user.role === "BARISTA_MARKETPLACE") && (
             <MultiChip label="Spécialités" options={BARISTA_SPECIALTIES}
               selected={form.categories} onChange={v => setForm(f => ({ ...f, categories: v }))} />
+          )}
+          {user.role === "MAINTENANCE" && (
+            <MultiChip label="Catégories de maintenance" options={MAINTENANCE_CATS}
+              selected={form.maintenanceCategories} onChange={v => setForm(f => ({ ...f, maintenanceCategories: v }))} />
           )}
 
           {/* Save button */}
@@ -322,13 +331,14 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
     governorates: [] as string[],
     printCategories: [] as string[],
     marketingCategories: [] as string[],
+    maintenanceCategories: [] as string[],
     categories: [] as string[],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const reset = () => {
     setRole("CAFE_OWNER");
-    setForm({ email: "", phone: "", password: "", firstName: "", lastName: "", cafeName: "", companyName: "", contactName: "", governorates: [], printCategories: [], marketingCategories: [], categories: [] });
+    setForm({ email: "", phone: "", password: "", firstName: "", lastName: "", cafeName: "", companyName: "", contactName: "", governorates: [], printCategories: [], marketingCategories: [], maintenanceCategories: [], categories: [] });
     setErrors({});
   };
 
@@ -376,6 +386,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
     if (role === "PRINTER") payload.printCategories = form.printCategories;
     if (role === "MARKETING") payload.marketingCategories = form.marketingCategories;
     if (role === "BARISTA_ACADEMY" || role === "BARISTA_MARKETPLACE") payload.categories = form.categories;
+    if (role === "MAINTENANCE") payload.maintenanceCategories = form.maintenanceCategories;
 
     try {
       const res = await fetch("/api/admin/users", {
@@ -498,6 +509,10 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
           {(role === "BARISTA_ACADEMY" || role === "BARISTA_MARKETPLACE") && (
             <MultiChip label="Spécialités" options={BARISTA_SPECIALTIES}
               selected={form.categories} onChange={v => setForm(f => ({ ...f, categories: v }))} />
+          )}
+          {role === "MAINTENANCE" && (
+            <MultiChip label="Catégories de maintenance" options={MAINTENANCE_CATS}
+              selected={form.maintenanceCategories} onChange={v => setForm(f => ({ ...f, maintenanceCategories: v }))} />
           )}
 
           <div className="flex gap-2 pt-1">

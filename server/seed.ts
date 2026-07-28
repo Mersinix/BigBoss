@@ -132,6 +132,15 @@ export async function seedDatabase(): Promise<void> {
       name: "Fast Delivery",
       role: "DRIVER",
     });
+    await storage.createUser({
+      email: "maintenance@techpro.com",
+      password: "password",
+      name: "TechPro Maintenance",
+      role: "MAINTENANCE",
+      status: "approved",
+      phone: "+216 71 234 001",
+      maintenanceCategories: ["Machines à café", "Machines espresso", "Électricité", "Plomberie"],
+    } as any);
 
     // Legacy supplier-owned products for cafe browsing
     await storage.createProduct({

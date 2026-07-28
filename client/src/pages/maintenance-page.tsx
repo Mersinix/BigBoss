@@ -23,7 +23,6 @@ import {
   MessageCircle,
   SlidersHorizontal,
   RotateCcw,
-  CheckCircle,
   X,
   Heart,
   Clock,
@@ -666,15 +665,6 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
         </div>
       ) : (
         <>
-          {/* Pending notice */}
-          {accessLevel === "pending" && (
-            <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
-              <div className="max-w-7xl mx-auto flex items-center gap-2 text-amber-800 text-sm font-medium">
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                Votre compte est en attente d'approbation. Vous pourrez accéder aux tarifs et réservations une fois approuvé.
-              </div>
-            </div>
-          )}
 
           {/* Category quick-filter row */}
           <div className="bg-white border-b border-gray-100">

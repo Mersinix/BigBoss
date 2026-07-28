@@ -1,0 +1,214 @@
+BigBossCoffee – Maintenance Service Audit & Completion
+Mission
+
+Do NOT start implementing new features immediately.
+
+Your first task is to perform a complete audit of the work already completed in the commit:
+
+MAINTENANCE STRATEGY
+
+The implementation was based on the specification contained in:
+
+Pasted-BigBossCoffee-Add-the-New-Maintenance-Service-Mission-A_1785193372644.txt
+
+This audit must compare:
+
+the original specification,
+the current codebase,
+every file modified by the commit,
+every new file created,
+every existing file that was changed.
+
+Do not assume the implementation is complete.
+
+Phase 1 — Analyze the Commit
+
+Carefully inspect the MAINTENANCE STRATEGY commit.
+
+Produce a complete report containing:
+
+Files
+
+List:
+
+every modified file
+every newly created file
+every deleted file (if any)
+For each file
+
+Explain:
+
+why it was modified
+what was implemented
+whether it matches the original specification
+whether something is missing
+whether something is incorrect
+whether something was implemented differently than requested
+Phase 2 — Compare Against the Original Specification
+
+Using the original prompt
+Pasted-BigBossCoffee-Add-the-New-Maintenance-Service-Mission-A_1785193372644.txt
+
+Go through every requirement one by one.
+
+For each requirement mark:
+
+✅ Fully implemented
+🟡 Partially implemented
+❌ Missing
+
+Do not skip any section.
+
+Phase 3 — Synchronization Audit
+
+Verify that Maintenance is correctly synchronized with all existing marketplace services.
+
+Check every integration point including:
+
+Login
+Registration
+Authentication
+Roles
+Navigation
+Routing
+Marketplace Service Switcher
+Landing Page
+Hero Section
+Footer
+Favorites
+Messaging
+Notifications
+Search
+Filters
+Reservation flow
+Maintenance dashboard
+Admin
+Permissions
+APIs
+Database
+Mobile
+Desktop
+Dark Mode
+Responsive layouts
+Shared reusable components
+
+Report every missing synchronization.
+
+Phase 4 — Verify Existing Features
+
+Confirm that the implementation did not break:
+
+Shop
+Print
+Marketing
+Barista
+Supplier
+Delivery
+Admin
+Coffee Owner
+
+If any regression exists, report it.
+
+Phase 5 — Compare UI
+
+Verify that every new Maintenance screen follows the existing BigBossCoffee design system.
+
+Check:
+
+spacing
+typography
+cards
+colors
+dark mode
+mobile responsiveness
+desktop responsiveness
+animations
+reusable components
+
+Report every inconsistency.
+
+Phase 6 — Missing Features Already Identified
+
+The following issues have already been discovered and must be verified first.
+
+1. Login / Registration
+
+The Maintenance registration flow is incomplete.
+
+The Maintenance account creation must include the required professional information, consistent with the other marketplace services.
+
+Verify that the registration supports all required information, including (where applicable):
+
+Name
+Email
+Password
+Phone Number
+Profile Picture
+Job Title
+Company/Freelance Type
+Description
+Skills
+Specialities
+Service Categories
+Working Area
+Experience
+Any additional information required for a professional Maintenance profile
+
+If any required information is missing, complete the registration flow while preserving the existing authentication architecture.
+
+2. Admin
+
+Verify that Maintenance has been fully integrated into the Admin.
+
+Currently identified missing items:
+
+Maintenance Role
+Test Maintenance Account
+
+Create a realistic fake Maintenance account for testing purposes that follows the same conventions as the existing seeded/demo accounts.
+
+Verify that all permissions work correctly.
+
+3. Coffee Owner
+
+Verify that every Maintenance page follows the existing Coffee Owner design system.
+
+Currently identified issue:
+
+Dark Mode is missing or inconsistent.
+
+Correct the implementation so the entire Maintenance experience fully matches the existing Coffee Owner Dark Mode without redesigning anything.
+
+Phase 7 — Final Completion
+
+After the audit is finished:
+
+Implement only the missing or incorrect parts.
+
+Do not rewrite already correct code.
+
+Do not refactor unrelated files.
+
+Do not redesign existing screens.
+
+Keep all existing functionality intact.
+
+Phase 8 — Final Verification
+
+Before finishing:
+
+Verify once again that:
+
+every requirement from the original specification has been completed,
+every synchronization point works correctly,
+no unrelated functionality was modified,
+no regression has been introduced,
+Maintenance behaves exactly like a native BigBossCoffee marketplace service.
+
+Finally, provide a detailed completion report listing:
+
+✅ Completed items
+🟡 Corrected items
+❌ Remaining items (if any)
+Files modified during this completion pass
+Any recommendations for future improvements (without implementing them).

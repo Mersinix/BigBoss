@@ -262,6 +262,7 @@ const TUNISIAN_GOVERNORATES = [
 const PRINT_CATS = ["Flyers","Menus","Cartes de visite","Affiches","Enseignes","Packaging","Étiquettes","Banderoles","Gobelets","Kakémonos"];
 const MARKETING_CATS = ["Réseaux sociaux","Vidéo","Photographie","SEO","Publicité","Branding","Site web","Influence","Email marketing","Événementiel"];
 const BARISTA_SPECIALTIES = ["Espresso","Latte Art","Cold Brew","Brewing Methods","Formation barista","Sensory Training","Coffee Roasting","Machine Maintenance"];
+const MAINTENANCE_CATS = ["Machines à café","Machines espresso","Moulins à café","Machines à glace","Réfrigérateurs","Lave-vaisselle","Fours","Mixeurs","Électricité","Plomberie","Climatisation","Ventilation","Systèmes POS","Réseaux WiFi","Caméras sécurité","Mobilier","Éclairage","Menuiserie","Peinture","Signalétique"];
 
 // ── Validation schemas ────────────────────────────────────────────────────────
 
@@ -283,6 +284,7 @@ const deliverySchema = z.object({ ...baseFields, firstName: z.string().min(2), l
 const printerSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 const marketingSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 const baristaSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
+const maintenanceSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 
 // ── Reusable form components ──────────────────────────────────────────────────
 
@@ -474,6 +476,29 @@ function BaristaMarketplaceForm({ onSubmit, isLoading }: { onSubmit: (data: any)
   );
 }
 
+function MaintenanceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(maintenanceSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
+  const [cats, setCats] = useState<string[]>([]);
+  const doSubmit = (d: any) => onSubmit({ ...d, maintenanceCategories: cats });
+  return (
+    <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <FormField id="companyName" label="Nom / Structure" placeholder="Ex: TechPro Maintenance" register={register("companyName")} error={errors.companyName?.message} />
+        <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
+      </div>
+      <FormField id="reg-email" label="Email" type="email" placeholder="info@maintenance.com" register={register("email")} error={errors.email?.message} />
+      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <div className="grid grid-cols-2 gap-3">
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+      </div>
+      <MultiSelect label="Catégories de maintenance" options={MAINTENANCE_CATS} selected={cats} onChange={setCats} />
+      <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+    </form>
+  );
+}
+
 // ── Main Landing Page ─────────────────────────────────────────────────────────
 
 export default function LandingPage() {
@@ -596,7 +621,7 @@ export default function LandingPage() {
     switch (role) {
       case "CAFE_OWNER": base.name = `${data.firstName} — ${data.cafeName}`; break;
       case "SUPPLIER": case "PRINTER": case "MARKETING": case "BARISTA_ACADEMY": case "BARISTA_MARKETPLACE": case "MAINTENANCE":
-        base.name = data.companyName; base.categories = data.categories; base.printCategories = data.printCategories; base.marketingCategories = data.marketingCategories; break;
+        base.name = data.companyName; base.categories = data.categories; base.printCategories = data.printCategories; base.marketingCategories = data.marketingCategories; base.maintenanceCategories = data.maintenanceCategories ?? null; break;
       case "DELIVERY_COMPANY": base.name = `${data.firstName} ${data.lastName}`; base.governorates = data.governorates; break;
     }
     return base;
@@ -1350,6 +1375,7 @@ export default function LandingPage() {
                             {selectedRole === "MARKETING"           && <MarketingForm onSubmit={handleRegister} isLoading={isRegistering} />}
                             {selectedRole === "BARISTA_ACADEMY"     && <BaristaAcademyForm onSubmit={handleRegister} isLoading={isRegistering} />}
                             {selectedRole === "BARISTA_MARKETPLACE" && <BaristaMarketplaceForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                            {selectedRole === "MAINTENANCE"         && <MaintenanceForm onSubmit={handleRegister} isLoading={isRegistering} />}
                           </div>
                           <p className={`text-center text-sm pt-3 ${textMut}`}>Déjà un compte ?{" "}
                             <button className="text-amber-500 font-medium hover:underline" onClick={() => setAuthTab("login")}>Se connecter</button>

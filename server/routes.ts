@@ -105,11 +105,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Valid email required"),
     password: z.string().min(6, "Password must be at least 6 characters"),
-    role: z.enum(['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE']).optional(),
+    role: z.enum(['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE']).optional(),
     phone: z.string().optional().nullable(),
     governorates: z.array(z.string()).optional().nullable(),
     printCategories: z.array(z.string()).optional().nullable(),
     marketingCategories: z.array(z.string()).optional().nullable(),
+    maintenanceCategories: z.array(z.string()).optional().nullable(),
     categories: z.array(z.string()).optional().nullable(),
     locationAddress: z.string().optional().nullable(),
     locationLat: z.number().optional().nullable(),
@@ -135,8 +136,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0].message });
       const body = parsed.data;
       // All new registrations (non-admin-created) start as pending
-      const PENDING_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE'];
-      const LOCATION_REQUIRED_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE'];
+      const PENDING_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
+      const LOCATION_REQUIRED_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
       const role = body.role ?? 'CAFE_OWNER';
       if (LOCATION_REQUIRED_ROLES.includes(role) && (!body.locationAddress || !body.locationLat || !body.locationLng)) {
         return res.status(400).json({ message: "Location is required for this role. Please pick your address on the map." });
@@ -161,6 +162,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         governorates: body.governorates ?? null,
         printCategories: body.printCategories ?? null,
         marketingCategories: body.marketingCategories ?? null,
+        maintenanceCategories: body.maintenanceCategories ?? null,
         locationAddress: body.locationAddress ?? null,
         locationLat: body.locationLat ?? null,
         locationLng: body.locationLng ?? null,
@@ -826,7 +828,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/users", requireAdmin, async (req, res) => {
     try {
-      const { name, email, password, role, phone, governorates, printCategories, marketingCategories, categories } = req.body;
+      const { name, email, password, role, phone, governorates, printCategories, marketingCategories, maintenanceCategories, categories } = req.body;
       if (!name || !email || !password || !role) return res.status(400).json({ message: "name, email, password and role are required" });
       const existing = await storage.getUserByEmail(email);
       if (existing) return res.status(400).json({ message: "Email already exists" });
@@ -840,6 +842,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         governorates: governorates ?? null,
         printCategories: printCategories ?? null,
         marketingCategories: marketingCategories ?? null,
+        maintenanceCategories: maintenanceCategories ?? null,
         categories: categories ?? null,
       } as any);
       res.status(201).json(user);
@@ -849,7 +852,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { name, email, phone, governorates, printCategories, marketingCategories, categories, locationAddress } = req.body;
+      const { name, email, phone, governorates, printCategories, marketingCategories, maintenanceCategories, categories, locationAddress } = req.body;
       const updates: any = {};
       if (name !== undefined) updates.name = name;
       if (email !== undefined) updates.email = email;
@@ -857,6 +860,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (governorates !== undefined) updates.governorates = governorates;
       if (printCategories !== undefined) updates.printCategories = printCategories;
       if (marketingCategories !== undefined) updates.marketingCategories = marketingCategories;
+      if (maintenanceCategories !== undefined) updates.maintenanceCategories = maintenanceCategories;
       if (categories !== undefined) updates.categories = categories;
       if (locationAddress !== undefined) updates.locationAddress = locationAddress;
       const updated = await storage.updateUser(id, updates);
@@ -968,11 +972,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/users/:id/categories", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { categories, printCategories, marketingCategories } = req.body;
+      const { categories, printCategories, marketingCategories, maintenanceCategories } = req.body;
       const updateData: any = {};
       if (categories !== undefined) updateData.categories = categories;
       if (printCategories !== undefined) updateData.printCategories = printCategories;
       if (marketingCategories !== undefined) updateData.marketingCategories = marketingCategories;
+      if (maintenanceCategories !== undefined) updateData.maintenanceCategories = maintenanceCategories;
       const [updated] = await db.update(users).set(updateData).where(eq(users.id, id)).returning();
       res.json(updated);
     } catch { res.status(500).json({ message: "Error" }); }

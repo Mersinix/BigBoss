@@ -119,12 +119,6 @@ const favItems = [
   { id: 2, type: "product", name: "Oat Milk 1L x 6", supplier: "Oat & Grain", price: 1800, image: "https://images.unsplash.com/photo-1600788886242-5c96aabe3757?w=300&q=80" },
 ];
 
-const fakeSuppliers = [
-  { id: 1, name: "Premium Beans Co", location: "Tunis Centre", rating: 4.9, orders: 14, tags: ["Single Origin", "Specialty"], phone: "+216 71 234 001", website: "www.premiumbeans.tn" },
-  { id: 2, name: "Oat & Grain Supply", location: "Sfax", rating: 4.7, orders: 9, tags: ["Vegan", "Barista Grade"], phone: "+216 74 345 002", website: "www.oatgrain.tn" },
-  { id: 3, name: "Arabica Direct", location: "Sousse", rating: 4.5, orders: 6, tags: ["Direct Trade", "Arabica"], phone: "+216 73 456 003", website: "www.arabicadirect.tn" },
-];
-
 // ── Account Panel (premium dark/light — mirrors FavoritesPanel design) ────────
 
 function AccountPanel({
@@ -372,36 +366,6 @@ function AccountPanel({
   );
 }
 
-// ── Suppliers Panel ───────────────────────────────────────────────────────────
-
-function SuppliersPanel() {
-  const [search, setSearch] = useState("");
-  const filtered = fakeSuppliers.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
-  return (
-    <div className="space-y-4">
-      <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" /><Input className="pl-8 h-9" placeholder="Search suppliers…" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-      <div className="space-y-3">
-        {filtered.map((s) => (
-          <div key={s.id} className="border border-border rounded-xl p-4 space-y-3">
-            <div className="flex items-start justify-between">
-              <div><p className="font-semibold">{s.name}</p><p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><MapPinIcon className="w-3 h-3" />{s.location}</p></div>
-              <div className="flex items-center gap-1 text-xs font-semibold text-amber-500"><Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />{s.rating}</div>
-            </div>
-            <div className="flex flex-wrap gap-1.5">{s.tags.map((t) => <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>)}</div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span><Phone className="w-3 h-3 inline mr-1" />{s.phone}</span>
-              <span><Globe className="w-3 h-3 inline mr-1" />{s.website}</span>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button size="sm" variant="outline" className="flex-1 h-8 text-xs">Contact</Button>
-              <Link href="/products"><Button size="sm" className="flex-1 h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white">Browse</Button></Link>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ── Favorites Panel ───────────────────────────────────────────────────────────
 
@@ -1504,7 +1468,6 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileInitialTab, setProfileInitialTab] = useState<"orders" | "dashboard" | "settings" | null>(null);
   const [favOpen, setFavOpen] = useState(false);
-  const [suppliersOpen, setSuppliersOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
 
@@ -1617,22 +1580,6 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
                   <AlertTriangle className="w-3.5 h-3.5" />
                   <span>Awaiting approval</span>
                 </div>
-              )}
-
-              {/* Suppliers — approved/admin only */}
-              {hasCommercial && (
-                <button
-                  onClick={() => setSuppliersOpen(true)}
-                  className={`p-2 rounded-xl transition-colors hidden sm:flex items-center gap-1.5 text-xs font-medium ${
-                    isDark
-                      ? "text-gray-400 hover:text-white hover:bg-gray-800"
-                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                  }`}
-                  data-testid="button-suppliers"
-                >
-                  <Store className="w-4 h-4" />
-                  <span className="hidden md:block">Suppliers</span>
-                </button>
               )}
 
               {/* Favorites — approved/admin only */}
@@ -1793,18 +1740,6 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
         <Dialog open={favOpen} onOpenChange={setFavOpen}>
           <DialogContent className="sm:max-w-md h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
             <FavoritesPanel onClose={() => setFavOpen(false)} />
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* ── Suppliers Modal ── */}
-      {user && hasCommercial && (
-        <Dialog open={suppliersOpen} onOpenChange={setSuppliersOpen}>
-          <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2"><Store className="w-5 h-5 text-amber-500" /><h2 className="font-bold text-lg">Our Suppliers</h2></div>
-              <SuppliersPanel />
-            </div>
           </DialogContent>
         </Dialog>
       )}

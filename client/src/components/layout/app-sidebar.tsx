@@ -97,6 +97,15 @@ export function AppSidebar() {
   const getNavGroups = (): NavGroup[] => {
     if (isAdmin) {
       return [
+         {
+          label: "PROSPECTING",
+          items: [
+            { title: "Prospecting ⭐", url: "/admin/prospecting", icon: Target },
+            { title: "System Management", url: "/admin/system-management", icon: Sliders },
+            { title: "Messages", url: "/admin/messages", icon: MessageCircle },
+            { title: "Reviews", url: "/admin/reviews", icon: Star },
+          ],
+        },
         {
           label: "MAIN",
           items: [
@@ -121,19 +130,7 @@ export function AppSidebar() {
             { title: "Delivery", url: "/admin/delivery", icon: Truck },
             { title: "Payments", url: "/admin/payments", icon: DollarSign },
             { title: "Invoices", url: "/admin/invoices", icon: FileText },
-            { title: "System Management", url: "/admin/system-management", icon: Sliders },
-          ],
-        },
-        {
-          label: "PROSPECTING",
-          items: [
-            { title: "Prospecting ⭐", url: "/admin/prospecting", icon: Target },
-          ],
-        },
-        {
-          label: "REVIEWS",
-          items: [
-            { title: "Reviews", url: "/admin/reviews", icon: Star },
+            
           ],
         },
         {
@@ -142,7 +139,7 @@ export function AppSidebar() {
             { title: "Analytics", url: "/admin/analytics", icon: BarChart2 },
             { title: "Notifications", url: "/admin/notifications", icon: Bell },
             { title: "Earnings", url: "/admin/earnings", icon: TrendingUp },
-            { title: "Messages", url: "/admin/messages", icon: MessageCircle },
+            
           ],
         },
       ];

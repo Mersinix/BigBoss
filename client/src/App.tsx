@@ -31,10 +31,10 @@ import DiscountCodesPage from "@/pages/supplier/discount-codes-page";
 import SupplierSettingsPage from "@/pages/supplier/settings-page";
 import HelpCenterPage from "@/pages/supplier/help-center-page";
 import OrdersPage from "@/pages/shared/orders-page";
-import PrintPage from "@/pages/print-page";
-import PrintDetailPage from "@/pages/print-detail-page";
-import BaristaPage from "@/pages/barista-page";
-import MarketingPage from "@/pages/marketing-page";
+import PrintPage from "@/pages/cafe/print/print-page";
+import PrintDetailPage from "@/pages/cafe/print/print-detail-page";
+import BaristaPage from "@/pages/cafe/barista/barista-page";
+import MarketingPage from "@/pages/cafe/marketing/marketing-page";
 import MessagesPage from "@/pages/cafe/messages-page";
 import SupplierMessagesPage from "@/pages/supplier/messages-page";
 import AdminMessagesPage from "@/pages/admin/messages-page";
@@ -47,7 +47,7 @@ import MarketingDashboard from "@/pages/marketing/dashboard";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
 import BaristaMarketplaceDashboard from "@/pages/barista-marketplace/dashboard";
 import MaintenanceDashboard from "@/pages/maintenance/dashboard";
-import MaintenancePage from "@/pages/maintenance-page";
+import MaintenancePage from "@/pages/cafe/maintenance/maintenance-page";
 
 // Admin pages
 import AdminCategoriesPage from "@/pages/admin/categories-page";

@@ -37,7 +37,7 @@ const ROLE_INDICATOR: Record<string, { border: string; dot: string }> = {
   DRIVER:           { border: "border-l-green-500", dot: "bg-green-500" },
 };
 
-const SERVICES_LIST: ServiceId[] = ["SHOP", "PRINT", "BARISTA", "MARKETING"];
+const SERVICES_LIST: ServiceId[] = ["SHOP", "PRINT", "BARISTA", "MARKETING", "MAINTENANCE"];
 
 // ── Static demo threads for non-SHOP services (unchanged) ────────────────────
 const fakeThreads: Thread[] = [
@@ -47,6 +47,7 @@ const fakeThreads: Thread[] = [
   { id: 8,  name: "Youssef Ben Ali",       service: "BARISTA",   lastMessage: "Available this weekend, confirmed.", time: "Yesterday", unread: 1, messages: [{ from: "me", text: "Are you available this Saturday for a shift?", time: "Yesterday" }, { from: "them", text: "Yes, available this weekend. Confirmed!", time: "Yesterday" }] },
   { id: 9,  name: "TunMedia Agency",       service: "MARKETING", lastMessage: "Q1 campaign report attached.", time: "Yesterday", unread: 2, messages: [{ from: "them", text: "Q1 campaign report is attached. Reach is up 34% vs last quarter.", time: "Yesterday" }, { from: "me", text: "Impressive results! Let's schedule a review call.", time: "Yesterday" }] },
   { id: 10, name: "Pixel & Grain Studio",  service: "MARKETING", lastMessage: "Photo shoot scheduled for Tuesday.", time: "Mon",      unread: 0, messages: [{ from: "them", text: "Photo shoot confirmed for Tuesday at 10am.", time: "Mon" }, { from: "me", text: "Perfect, see you then.", time: "Mon" }] },
+  { id: 11, name: "Pixel & Grain Studio",  service: "MAINTENANCE", lastMessage: "Photo shoot scheduled for Tuesday.", time: "Mon",      unread: 0, messages: [{ from: "them", text: "Photo shoot confirmed for Tuesday at 10am.", time: "Mon" }, { from: "me", text: "Perfect, see you then.", time: "Mon" }] },
 ];
 
 function formatRelativeTime(iso: string) {

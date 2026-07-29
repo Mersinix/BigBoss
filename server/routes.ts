@@ -2,6 +2,17 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { broadcast, broadcastToUsers } from "./ws";
 import { storage } from "./storage";
+import {
+  geocodeAddress,
+  generateGrid,
+  fetchAllNearbyPages,
+  fetchPlaceDetails,
+  extractAddressComponents,
+  calculateDistanceKm,
+  calculateProspectScore,
+  withConcurrency,
+  type NearbyPlace,
+} from "./prospecting-engine";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import session from "express-session";
@@ -2470,111 +2481,156 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { address, radiusKm = 5, keyword = 'coffee', prospectType, minRating, onlyWithPhone, onlyWithWebsite } = req.body;
       if (!address) return res.status(400).json({ message: 'address is required' });
 
-      // 1. Geocode address → lat/lng
-      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${MAPS_KEY}`;
-      const geoRes = await fetch(geoUrl);
-      const geoData = await geoRes.json() as any;
-      if (geoData.status !== 'OK' || !geoData.results?.[0]) {
-        return res.status(400).json({ message: `Geocoding failed: ${geoData.status}` });
+      const startMs = Date.now();
+      const radiusKmNum = parseFloat(String(radiusKm));
+      const minRatingNum = minRating ? parseFloat(String(minRating)) : null;
+
+      // ── 1. Geocode address ──────────────────────────────────────────────────
+      const coords = await geocodeAddress(address, MAPS_KEY);
+      if (!coords) {
+        return res.status(400).json({ message: 'Geocoding failed: address not found' });
       }
-      const { lat, lng } = geoData.results[0].geometry.location;
-      const radiusMeters = parseFloat(String(radiusKm)) * 1000;
+      const { lat, lng } = coords;
 
-      // 2. Call Nearby Search with pagination (up to 3 pages)
-      let places: any[] = [];
-      let nextPageToken: string | null = null;
-      const pages: string[] = [];
+      // ── 2. Generate geographic grid ─────────────────────────────────────────
+      const grid = generateGrid(lat, lng, radiusKmNum);
+      console.log(`[Prospecting] Starting search — Address: "${address}", Radius: ${radiusKmNum} km, Grid cells: ${grid.length}`);
 
-      for (let page = 1; page <= 3; page++) {
-        let url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&keyword=${encodeURIComponent(keyword)}&key=${MAPS_KEY}`;
-        if (nextPageToken) url += `&pagetoken=${nextPageToken}`;
+      // ── 3. Concurrent Nearby Search across all grid cells ───────────────────
+      const CELL_CONCURRENCY = 8;
+      let nearbyRequests = 0;
+      const allPlaces: NearbyPlace[] = [];
 
-        const searchRes = await fetch(url);
-        const data = await searchRes.json() as any;
-        pages.push(`Page ${page}: ${(data.results ?? []).length} results`);
+      await withConcurrency(
+        grid,
+        async (point) => {
+          const { places, requestCount } = await fetchAllNearbyPages(point, keyword, MAPS_KEY);
+          nearbyRequests += requestCount;
+          allPlaces.push(...places);
+        },
+        CELL_CONCURRENCY,
+      );
 
-        if (data.results) places.push(...data.results);
-        nextPageToken = data.next_page_token ?? null;
-        if (!nextPageToken) break;
-        // Google requires 2-second delay before using next_page_token
-        if (page < 3) await new Promise(r => setTimeout(r, 2000));
+      console.log(`[Prospecting] Nearby requests: ${nearbyRequests}, Raw places found: ${allPlaces.length}`);
+
+      // ── 4. Deduplicate by Google place_id ───────────────────────────────────
+      const uniqueMap = new Map<string, NearbyPlace>();
+      for (const p of allPlaces) {
+        if (!uniqueMap.has(p.place_id)) uniqueMap.set(p.place_id, p);
       }
+      const uniquePlaces = Array.from(uniqueMap.values());
+      console.log(`[Prospecting] Unique places after deduplication: ${uniquePlaces.length}`);
 
-      // 3. Apply filters (minRating, onlyWithPhone)
-      if (minRating) places = places.filter((p: any) => (p.rating ?? 0) >= parseFloat(String(minRating)));
+      // ── 5. Apply rating filter before detail fetching ───────────────────────
+      const ratingFiltered = minRatingNum
+        ? uniquePlaces.filter(p => (p.rating ?? 0) >= minRatingNum)
+        : uniquePlaces;
 
-      // 4. Get details (phone, website) and save each place
-      let saved = 0, skipped = 0;
-      const caller = await storage.getUser(req.session.userId);
+      // ── 6. DB duplicate check (skip places already saved) ──────────────────
+      const DB_CHECK_CONCURRENCY = 20;
+      const dupCheckResults = await withConcurrency(
+        ratingFiltered,
+        async (place) => {
+          const existing = await storage.findDuplicateProspect({ googlePlaceId: place.place_id });
+          return existing ? null : place;
+        },
+        DB_CHECK_CONCURRENCY,
+      );
+      const toFetch    = dupCheckResults.filter((r): r is NearbyPlace => r !== null);
+      const duplicates = ratingFiltered.length - toFetch.length;
+      console.log(`[Prospecting] To fetch details: ${toFetch.length} (${duplicates} DB duplicates skipped)`);
+
+      // ── 7. Fetch Place Details with concurrency limit ───────────────────────
+      const DETAIL_CONCURRENCY = 8;
+      const detailResults = await withConcurrency(
+        toFetch,
+        async (place) => {
+          const details = await fetchPlaceDetails(place.place_id, MAPS_KEY);
+          return { place, details };
+        },
+        DETAIL_CONCURRENCY,
+      );
+      const detailsFetched = detailResults.filter(r => r !== null).length;
+      console.log(`[Prospecting] Place details fetched: ${detailsFetched}`);
+
+      // ── 8. Apply filters, score, and save ───────────────────────────────────
+      const caller     = await storage.getUser(req.session.userId);
       const callerName = caller?.name ?? 'Admin';
+      let saved = 0, skipped = 0;
 
-      for (const place of places) {
-        // Duplicate detection
-        const existing = await storage.findDuplicateProspect({ googlePlaceId: place.place_id });
-        if (existing) { skipped++; continue; }
+      for (const item of detailResults) {
+        if (!item) { skipped++; continue; }
+        const { place, details } = item;
 
-        // Fetch Place Details for phone + website
-        let phone: string | null = null, website: string | null = null;
-        try {
-          const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=formatted_phone_number,website,opening_hours&key=${MAPS_KEY}`;
-          const detailRes = await fetch(detailUrl);
-          const detail = await detailRes.json() as any;
-          phone = detail.result?.formatted_phone_number ?? null;
-          website = detail.result?.website ?? null;
-        } catch { /* ignore detail fetch errors */ }
+        const phone   = details?.formatted_phone_number ?? null;
+        const website = details?.website ?? null;
 
-        if (onlyWithPhone && !phone) { skipped++; continue; }
+        if (onlyWithPhone   && !phone)   { skipped++; continue; }
         if (onlyWithWebsite && !website) { skipped++; continue; }
 
-        // Calculate distance from search center
-        const placeLat = place.geometry?.location?.lat ?? 0;
-        const placeLng = place.geometry?.location?.lng ?? 0;
-        const distKm = Math.sqrt(Math.pow((placeLat - lat) * 111, 2) + Math.pow((placeLng - lng) * 111 * Math.cos((lat * Math.PI) / 180), 2));
-
-        // Extract city from vicinity or address_components
-        const city = place.vicinity?.split(',').pop()?.trim() ?? null;
-
-        // Prospect score
-        let score = 0;
-        if (phone) score += 20;
-        if (website) score += 15;
-        if ((place.rating ?? 0) >= 4.5) score += 20;
-        if ((place.user_ratings_total ?? 0) >= 100) score += 15;
+        const { city, country } = extractAddressComponents(details?.address_components);
+        const distKm = calculateDistanceKm(lat, lng, place.geometry.location.lat, place.geometry.location.lng);
+        const score  = calculateProspectScore(place, details);
 
         await storage.createProspect({
           googlePlaceId: place.place_id,
-          businessName: place.name,
-          businessType: (place.types ?? []).join(', '),
-          prospectType: prospectType ?? null,
-          address: place.vicinity ?? place.formatted_address ?? null,
-          latitude: String(placeLat),
-          longitude: String(placeLng),
+          businessName:  place.name,
+          businessType:  (place.types ?? []).join(', '),
+          prospectType:  prospectType ?? null,
+          address:       place.vicinity ?? null,
+          latitude:      String(place.geometry.location.lat),
+          longitude:     String(place.geometry.location.lng),
           phone,
           website,
-          rating: place.rating != null ? String(place.rating) : null,
-          reviewCount: place.user_ratings_total ?? 0,
-          status: 'NEW',
-          distanceKm: distKm.toFixed(2),
-          searchCenter: address,
-          searchRadius: String(radiusKm),
+          rating:        place.rating != null ? String(place.rating) : null,
+          reviewCount:   place.user_ratings_total ?? 0,
+          status:        'NEW',
+          distanceKm:    distKm.toFixed(2),
+          searchCenter:  address,
+          searchRadius:  String(radiusKm),
           keyword,
-          city,
-          country: 'Tunisia',
+          city:          city ?? null,
+          country:       country ?? 'Tunisia',
           prospectScore: score,
-          notes: [],
+          notes:    [],
           timeline: [{
-            id: Date.now().toString(),
-            event: 'Created via Google Places search',
-            detail: `Search: "${keyword}" near ${address} (${radiusKm} km)`,
+            id:        Date.now().toString(),
+            event:     'Created via Google Places grid search',
+            detail:    `Grid search: "${keyword}" near ${address} (${radiusKmNum} km, ${grid.length} cells)`,
             createdAt: new Date().toISOString(),
-            userName: callerName,
+            userName:  callerName,
           }],
           contacts: [],
         } as any);
         saved++;
       }
 
-      res.json({ saved, skipped, total: places.length, pages, searchCenter: `${lat},${lng}`, radiusKm });
+      const elapsedMs = Date.now() - startMs;
+
+      console.log(
+        `[Prospecting] Summary:\n` +
+        `  Grid cells generated:          ${grid.length}\n` +
+        `  Nearby requests executed:      ${nearbyRequests}\n` +
+        `  Google places found:           ${allPlaces.length}\n` +
+        `  Unique places after dedup:     ${uniquePlaces.length}\n` +
+        `  Place details fetched:         ${detailsFetched}\n` +
+        `  Prospects saved:               ${saved}\n` +
+        `  Elapsed time:                  ${(elapsedMs / 1000).toFixed(1)}s`,
+      );
+
+      res.json({
+        searchCenter:     `${lat},${lng}`,
+        gridCells:        grid.length,
+        nearbyRequests,
+        googlePlacesFound: allPlaces.length,
+        uniquePlaces:     uniquePlaces.length,
+        detailsFetched,
+        saved,
+        skipped,
+        duplicates,
+        elapsedMs,
+      } satisfies import('./prospecting-engine').ProspectingResult);
+
     } catch (err: any) {
       console.error('[Prospecting search]', err);
       res.status(500).json({ message: err?.message ?? 'Search failed' });

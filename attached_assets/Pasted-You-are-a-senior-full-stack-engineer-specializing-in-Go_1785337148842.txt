@@ -1,0 +1,636 @@
+You are a senior full-stack engineer specializing in Google Maps Platform, Express.js, TypeScript, React, PostgreSQL, and scalable lead-generation systems.
+
+# Project Context
+
+We have an existing Google Places prospecting feature inside our admin dashboard.
+
+The current flow allows an admin to search for coffee shops and create prospects.
+
+Current frontend fields:
+
+* Search Center Address
+
+  * Example: Tunis, Nabeul, Avenue Habib Bourguiba...
+* Radius
+* Min Rating
+* Search Keyword
+
+  * Default: coffee
+* Prospect Type
+
+  * Auto Detect
+* Only businesses with phone
+* Only businesses with website
+* Cancel
+* Search
+
+Current backend endpoint:
+
+```
+POST /api/admin/prospecting/search
+```
+
+The current implementation:
+
+1. Receives an address.
+2. Uses Google Geocoding API.
+3. Executes Google Places Nearby Search once.
+4. Uses pagination.
+5. Saves returned places as prospects.
+
+The problem:
+
+Google Nearby Search only returns approximately 60 places maximum per search center.
+
+For cities like Tunis, Nabeul, Hammamet, Sousse, etc., this is not enough.
+
+We need a production-grade local business discovery system capable of finding significantly more coffee shops in a selected geographic area.
+
+---
+
+# Main Objective
+
+Replace the current search engine implementation with a geographic grid-based Google Places discovery system.
+
+Do NOT create a new endpoint.
+
+Keep:
+
+```
+POST /api/admin/prospecting/search
+```
+
+and improve the internal implementation.
+
+Do not break existing frontend functionality.
+
+---
+
+# Backend Requirements
+
+## 1. Keep Existing Request Body
+
+Continue supporting:
+
+```ts
+{
+  address,
+  radiusKm,
+  keyword,
+  prospectType,
+  minRating,
+  onlyWithPhone,
+  onlyWithWebsite
+}
+```
+
+The frontend should continue working without breaking changes.
+
+---
+
+# 2. Geocode Address
+
+Keep using Google Geocoding API.
+
+Convert:
+
+Example:
+
+```
+Nabeul Tunisia
+```
+
+into:
+
+```ts
+{
+ latitude,
+ longitude
+}
+```
+
+Use these coordinates as the search center.
+
+---
+
+# 3. Implement Geographic Grid Search
+
+Replace the single Nearby Search request.
+
+Generate a geographic grid covering the requested radius.
+
+Example:
+
+User selects:
+
+```
+Tunis
+Radius: 10 km
+```
+
+Generate multiple search points covering the area.
+
+Each grid cell should approximately cover:
+
+```
+400m - 500m
+```
+
+For each grid point:
+
+Execute Google Places Nearby Search.
+
+---
+
+# 4. Google Nearby Search
+
+For every grid location:
+
+Use:
+
+```
+type=cafe
+```
+
+Always include cafe type.
+
+Also include keyword when provided.
+
+Examples:
+
+```
+coffee
+café
+coffee shop
+espresso
+cafeteria
+```
+
+Do not rely only on keyword because many cafés are categorized only as:
+
+```
+cafe
+restaurant
+food
+point_of_interest
+```
+
+---
+
+# 5. Pagination
+
+For every grid search:
+
+Handle all Google pagination.
+
+Google requires waiting before using:
+
+```
+next_page_token
+```
+
+Implement:
+
+* first request
+* wait approximately 2 seconds
+* next page
+* next page
+
+Stop when no token exists.
+
+---
+
+# 6. Deduplication
+
+Grid searches will overlap.
+
+Before saving:
+
+Deduplicate by:
+
+```
+google place_id
+```
+
+Requirements:
+
+* Never save the same Google place twice.
+* Never call Place Details twice for the same place.
+
+---
+
+# 7. Place Details Enrichment
+
+For every unique place retrieve:
+
+```
+formatted_phone_number
+website
+opening_hours
+address_components
+```
+
+Do not execute hundreds of requests simultaneously.
+
+Implement concurrency control:
+
+Example:
+
+```
+5-10 requests at the same time
+```
+
+Use:
+
+* Promise pool
+* p-limit
+* custom concurrency limiter
+
+---
+
+# 8. Correct Address Extraction
+
+Do not use:
+
+```ts
+place.vicinity.split(",")
+```
+
+This is unreliable.
+
+Use:
+
+```
+address_components
+```
+
+Extract:
+
+```
+locality
+administrative_area_level_1
+country
+```
+
+Example:
+
+Store:
+
+```
+city: Tunis
+country: Tunisia
+```
+
+---
+
+# 9. Prospect Scoring
+
+Improve the current scoring system.
+
+Use:
+
+Phone:
+
+```
++20
+```
+
+Website:
+
+```
++15
+```
+
+Rating >= 4.5:
+
+```
++20
+```
+
+Rating >= 4:
+
+```
++10
+```
+
+Reviews >= 200:
+
+```
++20
+```
+
+Reviews >= 100:
+
+```
++15
+```
+
+Currently open:
+
+```
++10
+```
+
+Maximum score:
+
+```
+100
+```
+
+---
+
+# 10. Keep Existing Filters
+
+Preserve:
+
+## Minimum rating
+
+Example:
+
+```
+rating >= 4
+```
+
+## Only businesses with phone
+
+Remove places without phone.
+
+## Only businesses with website
+
+Remove places without website.
+
+## Prospect type
+
+Keep existing behavior.
+
+Apply filters before saving.
+
+---
+
+# 11. Database Integration
+
+Keep using:
+
+```ts
+storage.findDuplicateProspect()
+```
+
+and:
+
+```ts
+storage.createProspect()
+```
+
+Do not modify database schema.
+
+Do not rename existing fields.
+
+Keep existing prospect structure.
+
+---
+
+# 12. Performance Requirements
+
+The search may create hundreds of Google API calls.
+
+Implement:
+
+* concurrency limiting
+* retry handling
+* exponential backoff
+* handling Google API errors
+* handling HTTP 429 rate limits
+* graceful partial failures
+
+One failed Google request should not stop the entire search.
+
+---
+
+# 13. Logging
+
+Add clear logs:
+
+Example:
+
+```
+[Prospecting]
+Starting search
+
+Grid cells generated: 250
+
+Nearby searches executed: 250
+
+Google places found: 1400
+
+Unique places after deduplication: 700
+
+Place details fetched: 680
+
+Prospects saved: 500
+
+Elapsed time: 45s
+```
+
+---
+
+# 14. API Response
+
+Return useful statistics.
+
+Example:
+
+```json
+{
+  "searchCenter": "36.8,10.18",
+  "gridCells": 250,
+  "nearbyRequests": 250,
+  "googlePlacesFound": 1400,
+  "uniquePlaces": 700,
+  "detailsFetched": 680,
+  "saved": 500,
+  "skipped": 180,
+  "duplicates": 200,
+  "elapsedMs": 45000
+}
+```
+
+---
+
+# 15. Code Organization
+
+Do not put everything inside the Express route.
+
+Create reusable helpers:
+
+Example:
+
+```
+generateGrid()
+
+nearbySearch()
+
+fetchAllNearbyPages()
+
+fetchPlaceDetails()
+
+extractAddressComponents()
+
+calculateDistance()
+
+calculateProspectScore()
+
+retryGoogleRequest()
+
+processGridCell()
+```
+
+Keep the code clean and maintainable.
+
+---
+
+# Frontend Synchronization (MANDATORY)
+
+Before coding, inspect the complete frontend flow related to Google Places Prospecting.
+
+The backend update must remain synchronized with the existing frontend.
+
+---
+
+## Frontend Requirements
+
+The existing modal/search form contains:
+
+```
+Search Google Places
+
+Search Center Address
+
+Radius
+
+Min Rating
+
+Search Keyword
+
+Prospect Type
+
+Only businesses with phone
+
+Only businesses with website
+
+Cancel
+
+Search
+```
+
+Keep this UI.
+
+Do not redesign it.
+
+Do not change the user experience.
+
+---
+
+## Verify Frontend → Backend Communication
+
+Confirm that:
+
+Frontend sends:
+
+```ts
+address
+radiusKm
+keyword
+prospectType
+minRating
+onlyWithPhone
+onlyWithWebsite
+```
+
+Backend receives exactly these values.
+
+---
+
+## Update Frontend If Needed
+
+If backend improvements require additional fields:
+
+Example:
+
+```
+gridCells
+uniquePlaces
+duplicates
+saved
+elapsedMs
+```
+
+Update frontend accordingly.
+
+Display statistics only if there is an appropriate existing location.
+
+Do not create unnecessary UI.
+
+---
+
+# End-to-End Testing
+
+After implementation verify:
+
+## Search Flow
+
+Admin enters:
+
+```
+Nabeul Tunisia
+Radius 5 km
+Keyword coffee
+```
+
+Click:
+
+```
+Search
+```
+
+Verify:
+
+1. Frontend sends correct payload.
+2. Backend receives payload.
+3. Address is geocoded.
+4. Grid is generated.
+5. Google searches execute.
+6. Pagination works.
+7. Places are deduplicated.
+8. Details are retrieved.
+9. Filters work.
+10. Prospects are saved.
+
+---
+
+# Regression Protection
+
+Do not break:
+
+* Authentication
+* Admin permissions
+* Existing prospect management
+* Database schema
+* Existing UI components
+* Dark mode
+* Responsive behavior
+* Existing translations
+
+---
+
+# Final Deliverable
+
+Provide:
+
+1. Modified backend implementation.
+2. Any required frontend changes.
+3. Explanation of files changed.
+4. Explanation of the new search architecture.
+5. Testing results.
+6. Any Google API quota considerations.
+
+The final implementation must be production-ready, TypeScript-safe, scalable, and suitable for discovering coffee shops across Tunisia (Tunis, Nabeul, Hammamet, Sousse, etc.) while respecting Google Maps Platform limitations.

@@ -161,11 +161,12 @@ export async function nearbySearch(
   lng: number,
   radiusM: number,
   keyword: string,
+  keytype: string,
   apiKey: string,
   pageToken?: string,
 ): Promise<{ places: NearbyPlace[]; nextPageToken: string | null }> {
   // Always include type=cafe; add keyword when present
-  let url = `${GOOGLE_NEARBY_URL}?location=${lat},${lng}&radius=${radiusM}&type=cafe&key=${apiKey}`;
+  let url = `${GOOGLE_NEARBY_URL}?location=${lat},${lng}&radius=${radiusM}&type=${keytype}&key=${apiKey}`;
   if (keyword.trim()) url += `&keyword=${encodeURIComponent(keyword.trim())}`;
   if (pageToken)       url += `&pagetoken=${encodeURIComponent(pageToken)}`;
 

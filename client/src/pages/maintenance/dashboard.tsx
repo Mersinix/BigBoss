@@ -237,7 +237,7 @@ export default function MaintenanceDashboard() {
 
   const tabs = [
     { key: "planning" as const, label: "Planning", icon: ClipboardList },
-    { key: "profile" as const, label: "Mon Profil", icon: User },
+    { key: "profile" as const, label: "Profil", icon: User },
     { key: "availability" as const, label: "Disponibilité", icon: Calendar },
   ];
 

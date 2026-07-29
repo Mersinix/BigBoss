@@ -126,6 +126,7 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [radiusKm, setRadiusKm] = useState("5");
   const [keyword, setKeyword] = useState("coffee");
+  const [keytype, setkeytype] = useState("cafe");
   const [prospectType, setProspectType] = useState("");
   const [minRating, setMinRating] = useState("");
   const [onlyWithPhone, setOnlyWithPhone] = useState(false);
@@ -180,7 +181,7 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
     setResult(null);
     try {
       const res = await apiRequest("POST", "/api/admin/prospecting/search", {
-        address, radiusKm: parseFloat(radiusKm), keyword, prospectType: prospectType || null,
+        address, radiusKm: parseFloat(radiusKm), keyword,keytype, prospectType: prospectType || null,
         minRating: minRating ? parseFloat(minRating) : null, onlyWithPhone, onlyWithWebsite, includeClosedPlaces,
       });
       const data = await res.json();
@@ -258,6 +259,10 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
           <div>
             <Label>Search Keyword</Label>
             <Input className="mt-1" placeholder="coffee, café, supplier water, printer..." value={keyword} onChange={e => setKeyword(e.target.value)} />
+          </div>
+          <div>
+            <Label>Type de Business</Label>
+            <Input className="mt-1" placeholder="coffee, café, supplier water, printer..." value={keytype} onChange={e => setkeytype(e.target.value)} />
           </div>
 
           {/* Prospect Type */}
@@ -593,6 +598,7 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
                       ["Country", prospect.country],
                       ["Distance", prospect.distanceKm ? `${prospect.distanceKm} km` : null],
                       ["Keyword", prospect.keyword],
+                      ["keytype", prospect.keytype],
                       ["Search Radius", prospect.searchRadius ? `${prospect.searchRadius} km` : null],
                     ].filter(([, v]) => v).map(([label, val]) => (
                       <div key={label as string}>

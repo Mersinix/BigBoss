@@ -1,0 +1,219 @@
+Unify Pending Approval Flow For All Account Types (No Design Changes / Keep Everything Else Intact)
+
+The current implementation is working well.
+
+Before making any modification, first perform a complete verification of the current registration, login and approval flow for every account type.
+
+Read all related files, authentication flow, routing, approval logic and role guards before changing anything.
+
+Verify what is already implemented before making changes.
+
+If something already works correctly, do not modify it.
+
+Do not redesign anything.
+
+Do not change any business logic unrelated to this request.
+
+Do not remove any existing feature we did not discuss.
+
+Keep the current UI/UX exactly as it is.
+
+Keep realtime synchronization exactly as it currently works.
+
+Objective
+
+The new Pending Approval experience currently works correctly for the Coffee Owner.
+
+We now want exactly the same behavior for every account type.
+
+Currently:
+
+Coffee Owner ✅ works correctly.
+Supplier ❌ does not.
+Printer ❌ does not.
+Marketing ❌ does not.
+Maintenance ❌ does not.
+Barista Academy ❌ does not.
+Marketplace Barista ❌ does not.
+Delivery Company ❌ (if applicable).
+Driver ❌ (if applicable).
+Every other approval-based role ❌.
+
+All approval-based roles must now follow one single approval workflow.
+
+1. Registration Flow
+
+After a new user successfully creates an account:
+
+If the account requires Admin approval and is not yet approved:
+
+The application must never redirect the user to their dashboard or panel.
+
+Instead:
+
+Log the user out automatically.
+Redirect the user back to the Landing Page.
+Display the existing Pending Approval Standalone Modal.
+
+The modal already exists and already works correctly for Coffee Owners.
+
+Use this exact modal and design for every account type.
+
+Do not create another modal.
+
+Do not duplicate the component.
+
+Use one common approval flow for every role.
+
+2. Login Flow
+
+If a user whose account is still awaiting approval attempts to log in:
+
+Do not allow access to:
+
+Coffee Owner Marketplace
+Supplier Dashboard
+Printer Dashboard
+Marketing Dashboard
+Maintenance Dashboard
+Barista Dashboard
+Delivery Dashboard
+Driver Dashboard
+Any other protected panel
+
+Instead:
+
+Authenticate normally.
+Detect that the account is still awaiting approval.
+Immediately log the user out.
+Redirect them back to the Landing Page.
+Display the same existing Pending Approval modal.
+
+The behavior should be identical regardless of the user's role.
+
+3. Remove Old Pending Experiences
+
+Currently, some roles still end up on pages such as:
+
+"Coming Soon"
+"404 Page Not Found"
+Old Pending pages
+Temporary placeholder pages
+Empty dashboards
+Role-specific pending screens
+
+These should never be shown to a user whose account is still awaiting Admin approval.
+
+Instead, every non-approved account should always follow the same flow:
+
+Landing Page
+
+↓
+
+Pending Approval Modal
+
+↓
+
+User closes modal
+
+↓
+
+Remain on Landing Page
+
+Nothing else.
+
+4. Approved Users
+
+Once the Admin approves the account:
+
+The user should log in normally.
+
+They should be redirected to their proper dashboard according to their role.
+
+Nothing should change for approved users.
+
+The Pending Approval modal must never appear again after approval.
+
+5. One Shared Approval Logic
+
+Verify the authentication and approval flow across the entire application.
+
+There should be one centralized approval decision shared by every role instead of separate role-specific implementations.
+
+Ensure every approval-based account uses exactly the same logic and behavior.
+
+Avoid duplicated implementations.
+
+Avoid inconsistent routing.
+
+Avoid role-specific exceptions unless intentionally required.
+
+6. Synchronization
+
+Verify the following scenarios:
+
+New Registration
+
+For every account type:
+
+Coffee Owner
+Supplier
+Printer
+Marketing
+Maintenance
+Barista Academy
+Marketplace Barista
+Delivery Company (if applicable)
+Driver (if applicable)
+Any other approval-based role
+
+After registration:
+
+Redirect to Landing Page.
+Show the existing Pending Approval modal.
+User cannot access any dashboard.
+Login Before Approval
+
+For every account type:
+
+If the account is still awaiting approval:
+
+User cannot access any protected page.
+Redirect to Landing Page.
+Show the same Pending Approval modal.
+No dashboard is displayed.
+No placeholder page is displayed.
+No 404 page is displayed.
+No "Coming Soon" page is displayed.
+Login After Approval
+
+For every account type:
+
+After Admin approval:
+
+Login works normally.
+Correct dashboard opens.
+No Pending Approval modal appears.
+Existing functionality remains unchanged.
+Final Verification
+
+Before finishing:
+
+Perform a complete verification of the approval workflow.
+
+Confirm that:
+
+Every approval-based role uses the exact same Pending Approval flow.
+The existing Coffee Owner implementation remains unchanged.
+The same Pending Approval modal is reused everywhere.
+No duplicate approval components exist.
+No duplicate approval logic exists.
+No "Coming Soon" page is shown for pending users.
+No "404" page is shown for pending users.
+No dashboard is accessible before approval.
+Approved users continue working exactly as before.
+Routing, authentication and synchronization remain consistent across the entire application.
+
+Only implement the changes described above.
+
+Do not modify any design, business logic or feature outside the scope of this request.

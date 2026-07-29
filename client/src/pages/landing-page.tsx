@@ -620,7 +620,7 @@ export default function LandingPage() {
     );
   }
 
-  if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "SUPPLIER")) {
+  if (user && user.status === "approved" && (user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "SUPPLIER")) {
     return <Redirect to="/dashboard" />;
   }
 

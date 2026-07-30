@@ -180,6 +180,8 @@ export interface IStorage {
   getLandingConfig(): Promise<LandingConfig>;
   updateLandingConfig(data: Partial<Omit<LandingConfig, "id" | "updatedAt">>): Promise<LandingConfig>;
   setServiceState(service: ServiceKey, state: ServiceState): Promise<ServiceStatesMap>;
+  getCurrency(): Promise<string>;
+  setCurrency(symbol: string): Promise<string>;
 
   // Inventory
   getSupplierInventory(supplierId: number, filters?: InventoryFilters, sort?: InventorySort, page?: number, pageSize?: number): Promise<InventoryListResult>;
@@ -2537,6 +2539,16 @@ export class DatabaseStorage implements IStorage {
       .where(eq(landingConfig.id, existing.id))
       .returning();
     return updated;
+  }
+
+  async getCurrency(): Promise<string> {
+    const config = await this.getLandingConfig();
+    return config.currency ?? 'DT';
+  }
+
+  async setCurrency(symbol: string): Promise<string> {
+    await this.updateLandingConfig({ currency: symbol });
+    return symbol;
   }
 
   // ── Prospecting ──────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ import {
   ArrowLeft, Package, Store, Minus, Plus, ShoppingCart, CheckCircle2,
   Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag, Sun, Moon,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant } from "@shared/schema";
@@ -59,6 +59,7 @@ function VariantRow({
   product: MarketplaceProduct;
   isDark?: boolean;
 }) {
+  const fmt = useFormatCurrency();
   const { addItem, getItemQuantity } = useCart();
   const { toast } = useToast();
   const [qty, setQty] = useState(1);
@@ -95,7 +96,7 @@ function VariantRow({
           <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
           {outOfStock && <span className="ml-2 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md">Out of stock</span>}
         </div>
-        <div className={`font-bold text-base shrink-0 ${priceCls}`}>{formatCurrency(variant.price)}</div>
+        <div className={`font-bold text-base shrink-0 ${priceCls}`}>{fmt(variant.price)}</div>
         {!outOfStock && (
           <div className="flex items-center gap-2 shrink-0">
             <div className={`flex items-center border ${stepBorder} rounded-lg overflow-hidden`}>
@@ -125,7 +126,7 @@ function VariantRow({
         {/* Line 2: price + qty + add */}
         {!outOfStock && (
           <div className="flex items-center justify-between gap-2">
-            <div className={`font-bold text-base ${priceCls}`}>{formatCurrency(variant.price)}</div>
+            <div className={`font-bold text-base ${priceCls}`}>{fmt(variant.price)}</div>
             <div className="flex items-center gap-2 shrink-0">
               <div className={`flex items-center border ${stepBorder} rounded-lg overflow-hidden`}>
                 <button className={`px-2 py-1.5 ${stepHover} transition-colors ${stepText}`} onClick={() => setQty(q => Math.max(1, q - 1))}><Minus className="w-3 h-3" /></button>
@@ -144,7 +145,7 @@ function VariantRow({
           </div>
         )}
         {outOfStock && (
-          <div className={`font-bold text-base ${priceCls}`}>{formatCurrency(variant.price)}</div>
+          <div className={`font-bold text-base ${priceCls}`}>{fmt(variant.price)}</div>
         )}
       </div>
     </div>

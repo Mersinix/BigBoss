@@ -243,6 +243,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Currency ─────────────────────────────────────────────────────────────
+
+  app.get("/api/system-currency", async (_req, res) => {
+    try {
+      const symbol = await storage.getCurrency();
+      res.json({ symbol });
+    } catch { res.status(500).json({ message: "Failed to load currency" }); }
+  });
+
+  app.patch("/api/admin/system-currency", requireAdmin, async (req, res) => {
+    try {
+      const { symbol } = req.body;
+      const VALID = ['DT', '$', '€', '£', 'AED', 'SAR', 'MAD', 'DZD', '¥', '₹', 'CHF', 'CAD', 'AUD'];
+      if (!symbol || !VALID.includes(symbol)) return res.status(400).json({ message: "Invalid currency symbol" });
+      const saved = await storage.setCurrency(symbol);
+      broadcast("currency_updated", { symbol: saved });
+      res.json({ symbol: saved });
+    } catch { res.status(500).json({ message: "Failed to update currency" }); }
+  });
+
   // ── Landing Page Config ───────────────────────────────────────────────────
 
   app.get("/api/landing-config", async (_req, res) => {

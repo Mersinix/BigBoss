@@ -12,6 +12,7 @@ const CATALOG_EVENTS = [
 
 const TAXONOMY_EVENTS = ["taxonomy_updated"];
 const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
+const CURRENCY_EVENTS = ["currency_updated"];
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
 const PACK_EVENTS = ["pack_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
@@ -92,6 +93,9 @@ export function useRealtime(userId?: number) {
           }
           if (SYSTEM_SERVICES_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/system-services"] });
+          }
+          if (CURRENCY_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/system-currency"] });
           }
           if (STORE_EVENTS.includes(event)) {
             invalidateStoreQueries(qc);

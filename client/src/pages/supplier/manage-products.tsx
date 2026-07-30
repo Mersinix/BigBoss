@@ -14,7 +14,7 @@ import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, La
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency, useFormatDecimalCurrency } from "@/hooks/use-currency";
 import { useLocation } from "wouter";
 import type { ProductWithTaxonomy, FlavorWithCount, SizeWithCount, BrandWithCount, SupplierListingWithProduct, CategoryWithCount, SubCategoryWithDetails } from "@shared/schema";
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";

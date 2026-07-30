@@ -1,8 +1,9 @@
-export function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(cents / 100);
+export function formatCurrency(cents: number, symbol = 'DT'): string {
+  return `${symbol}${(cents / 100).toFixed(2)}`;
+}
+
+export function formatDecimalCurrency(amount: number, symbol = 'DT'): string {
+  return `${symbol}${amount.toFixed(2)}`;
 }
 
 export function formatDate(dateString: string | Date): string {

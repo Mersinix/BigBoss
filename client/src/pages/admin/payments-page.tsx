@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -6,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DollarSign, CreditCard, TrendingUp } from "lucide-react";
 
 export default function PaymentsPage() {
+  const currency = useCurrency();
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
 
   const totalRevenue = orders
@@ -33,7 +35,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium">Total Revenue</p>
-              <p className="text-2xl font-bold text-green-600">DT{(totalRevenue / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-green-600">{currency}{(totalRevenue / 100).toFixed(2)}</p>
             </div>
           </CardContent>
         </Card>
@@ -44,7 +46,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium">Pending Payments</p>
-              <p className="text-2xl font-bold text-amber-600">DT{(pendingAmount / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-amber-600">{currency}{(pendingAmount / 100).toFixed(2)}</p>
             </div>
           </CardContent>
         </Card>
@@ -55,7 +57,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium">Platform Commission (5%)</p>
-              <p className="text-2xl font-bold text-blue-600">DT{(commission / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-blue-600">{currency}{(commission / 100).toFixed(2)}</p>
             </div>
           </CardContent>
         </Card>
@@ -86,8 +88,8 @@ export default function PaymentsPage() {
                   <TableRow key={o.id}>
                     <TableCell className="font-medium">#{o.id}</TableCell>
                     <TableCell>{o.cafe?.name}</TableCell>
-                    <TableCell>DT{((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
-                    <TableCell className="text-muted-foreground">DT{(((o.totalAmount || 0) * 0.05) / 100).toFixed(2)}</TableCell>
+                    <TableCell>{currency}{((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
+                    <TableCell className="text-muted-foreground">{currency}{(((o.totalAmount || 0) * 0.05) / 100).toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge
                         variant="secondary"

@@ -13,7 +13,7 @@ import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
   Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck, Sun, Moon
 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, Link } from "wouter";
 import type { CreateOrderRequest, GeoLocation } from "@shared/schema";

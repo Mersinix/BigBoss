@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Package, MoreVertical, Plus, History, Pencil, Eye, EyeOff, Trash2, Layers, ChevronDown, ChevronRight } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import type { InventoryItem, InventoryVariantItem, StockStatus } from "@shared/schema";
 
 const STOCK_BADGE: Record<StockStatus, string> = {

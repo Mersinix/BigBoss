@@ -10,7 +10,7 @@ import {
   ArrowLeft, Upload, X, Star, Clock, MapPin, FileImage,
   ShoppingCart, Check, Package, Palette, Scissors, Ruler
 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import {

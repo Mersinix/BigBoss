@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Package, CheckCircle2, EyeOff, Boxes, AlertTriangle, XCircle, Layers, Wallet } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import type { InventoryStats } from "@shared/schema";
 
 function StatCard({ icon, iconBg, iconColor, label, value }: { icon: React.ReactNode; iconBg: string; iconColor: string; label: string; value: string | number }) {
@@ -20,6 +20,7 @@ function StatCard({ icon, iconBg, iconColor, label, value }: { icon: React.React
 }
 
 export function InventoryStatsCards({ stats, isLoading }: { stats?: InventoryStats; isLoading?: boolean }) {
+  const fmt = useFormatCurrency();
   if (isLoading || !stats) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
@@ -36,7 +37,7 @@ export function InventoryStatsCards({ stats, isLoading }: { stats?: InventorySta
       <StatCard icon={<AlertTriangle className="w-4 h-4" />} iconBg="bg-amber-500/10" iconColor="text-amber-600" label="Low Stock" value={stats.lowStock} />
       <StatCard icon={<XCircle className="w-4 h-4" />} iconBg="bg-red-500/10" iconColor="text-red-600" label="Out of Stock" value={stats.outOfStock} />
       <StatCard icon={<Layers className="w-4 h-4" />} iconBg="bg-violet-500/10" iconColor="text-violet-600" label="Total Units" value={stats.totalUnits.toLocaleString()} />
-      <StatCard icon={<Wallet className="w-4 h-4" />} iconBg="bg-cyan-500/10" iconColor="text-cyan-600" label="Inventory Value" value={formatCurrency(stats.inventoryValue)} />
+      <StatCard icon={<Wallet className="w-4 h-4" />} iconBg="bg-cyan-500/10" iconColor="text-cyan-600" label="Inventory Value" value={fmt(stats.inventoryValue)} />
     </div>
   );
 }

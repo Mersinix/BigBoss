@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -6,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { DollarSign, TrendingUp, TrendingDown, Percent } from "lucide-react";
 
 export default function EarningsPage() {
+  const currency = useCurrency();
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
 
   const deliveredOrders = orders.filter((o) => o.status === "DELIVERED");
@@ -52,7 +54,7 @@ export default function EarningsPage() {
                   <DollarSign className="w-4 h-4 text-amber-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-amber-500">DT{(totalEarnings / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-amber-500">{currency}{(totalEarnings / 100).toFixed(2)}</p>
               <p className="text-xs text-muted-foreground mt-1">All time delivered orders</p>
             </CardContent>
           </Card>
@@ -64,7 +66,7 @@ export default function EarningsPage() {
                   <TrendingUp className="w-4 h-4 text-green-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-green-500">DT{(thisMonth / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-green-500">{currency}{(thisMonth / 100).toFixed(2)}</p>
               <p className="text-xs text-muted-foreground mt-1">Current month</p>
             </CardContent>
           </Card>
@@ -88,7 +90,7 @@ export default function EarningsPage() {
                   <Percent className="w-4 h-4 text-blue-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-blue-500">DT{(commission / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-blue-500">{currency}{(commission / 100).toFixed(2)}</p>
               <p className="text-xs text-muted-foreground mt-1">5% of total</p>
             </CardContent>
           </Card>

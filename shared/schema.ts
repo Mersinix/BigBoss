@@ -325,6 +325,7 @@ export const landingConfig = pgTable("landing_config", {
   footerFacebook: text("footer_facebook"),
   footerInstagram: text("footer_instagram"),
   footerTiktok: text("footer_tiktok"),
+  currency: text("currency").default("DT"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

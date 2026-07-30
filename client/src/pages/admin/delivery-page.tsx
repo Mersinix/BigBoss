@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +21,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function DeliveryPage() {
+  const currency = useCurrency();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
@@ -107,7 +109,7 @@ export default function DeliveryPage() {
                     <TableCell className="font-medium">#{o.id}</TableCell>
                     <TableCell>{o.cafe?.name}</TableCell>
                     <TableCell>{o.supplier?.name}</TableCell>
-                    <TableCell>DT{((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
+                    <TableCell>{currency}{((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={statusColors[o.status] || ""}>
                         {o.status.replace(/_/g, " ")}

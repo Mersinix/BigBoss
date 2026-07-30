@@ -13,7 +13,7 @@ import {
   Plus, ShoppingBag, Layers, Star, MapPin, Zap, Sun, Moon,
 } from "lucide-react";
 import type { ListingPromotion } from "@shared/schema";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
@@ -183,6 +183,7 @@ function ProductCard({
   promotions: ListingPromotion[];
   isDark: boolean;
 }) {
+  const fmt = useFormatCurrency();
   const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
@@ -315,12 +316,12 @@ function ProductCard({
               <p className={`text-[10px] ${t.textMuted}`}>From</p>
               {promoDiscountedPrice != null ? (
                 <div className="flex items-baseline gap-1.5">
-                  <p className={`font-bold text-sm ${t.textPrice}`}>{formatCurrency(promoDiscountedPrice)}</p>
-                  <p className={`text-[10px] line-through ${t.textMuted}`}>{formatCurrency(product.bestPrice)}</p>
+                  <p className={`font-bold text-sm ${t.textPrice}`}>{fmt(promoDiscountedPrice)}</p>
+                  <p className={`text-[10px] line-through ${t.textMuted}`}>{fmt(product.bestPrice)}</p>
                 </div>
               ) : (
                 <p className={`font-bold text-sm ${t.textPrice}`}>
-                  {product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}
+                  {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
                 </p>
               )}
             </div>
@@ -543,6 +544,7 @@ function PackCardTile({
   hasCommercialAccess: boolean;
   isDark: boolean;
 }) {
+  const fmt = useFormatCurrency();
   const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.pack[pack.id]);
   const togglePack = useFavorites((s) => s.togglePack);
@@ -657,10 +659,10 @@ function PackCardTile({
           {hasCommercialAccess ? (
             <div className="flex items-baseline gap-2">
               <p className={`font-bold text-sm ${t.dk ? "text-amber-400" : "text-amber-600"}`}>
-                {formatCurrency(pack.price)}
+                {fmt(pack.price)}
               </p>
               {individualTotal > pack.price && (
-                <p className={`text-xs line-through ${t.textMuted}`}>{formatCurrency(individualTotal)}</p>
+                <p className={`text-xs line-through ${t.textMuted}`}>{fmt(individualTotal)}</p>
               )}
             </div>
           ) : (

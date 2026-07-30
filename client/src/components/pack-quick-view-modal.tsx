@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Layers, Minus, Plus, Package, Heart, Star, Calendar, AlertCircle, X, Sun, Moon, Lock,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { useCart } from "@/hooks/use-cart";
 import { useFavorites } from "@/hooks/use-favorites";

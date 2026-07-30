@@ -1,0 +1,234 @@
+Global Currency Management Strategy (Admin Controlled) (No Design Changes / Keep Everything Else Intact)
+
+The current implementation is working well.
+
+Before making any modification, first perform a complete verification of the current pricing system across the entire project.
+
+Read all related files, components, APIs, shared utilities and pricing displays before making any changes.
+
+Verify what is already implemented before changing anything.
+
+If something already works correctly, do not modify it.
+
+Do not redesign anything.
+
+Do not change pricing logic.
+
+Do not change business logic.
+
+Do not change order calculations.
+
+Do not change product, pack, promotion, cart or order behavior.
+
+Do not remove any existing functionality.
+
+Only implement the global currency management described below.
+
+Objective
+
+Currently, the entire project displays prices using a fixed currency symbol (for example: $).
+
+We now want a single global currency configuration controlled by the Admin.
+
+The selected currency should automatically be used everywhere in the application.
+
+The currency is only a display setting.
+
+Do not convert prices.
+
+Do not recalculate values.
+
+Only change the currency symbol shown throughout the application.
+
+1. Admin → System Management
+Location
+Admin Panel
+→ System Management
+
+Add a new global setting:
+
+Project Currency
+
+Display it as a picklist (dropdown).
+
+Example options:
+
+$
+DT
+€
+£
+AED
+SAR
+MAD
+DZD
+
+The list can contain additional currencies if appropriate.
+
+2. Global Project Currency
+
+When the Admin selects a currency:
+
+The selection becomes the global project currency.
+
+Every price displayed anywhere in the application must immediately use this selected currency.
+
+The change must be applied consistently throughout the project.
+
+3. Scope
+
+The selected currency must be reflected everywhere prices are displayed, including (but not limited to):
+
+Admin
+Product Management
+Product Preview
+Promotions
+Packs
+Orders
+Analytics
+Reports
+Dashboard
+Any other price display
+Supplier
+My Products
+Admin Products
+Product Preview
+Packs
+Pack Preview
+Promotions
+Orders
+Returns
+Reviews (if prices appear)
+Dashboard
+Any other price display
+Coffee Owner
+Shop
+Store
+Product Cards
+Product Details
+Packs
+Pack Details
+Cart
+Order Confirmation
+Orders
+Order Details
+Favorites
+Flash Mode
+Promotions
+Messages (if prices appear)
+Dashboard
+Any other price display
+Delivery
+
+Anywhere delivery prices or order values appear.
+
+Marketing
+
+Anywhere prices appear.
+
+Printing
+
+Anywhere prices appear.
+
+Maintenance
+
+Anywhere prices appear.
+
+Barista Marketplace
+
+Anywhere prices appear.
+
+Any future modules
+
+They should automatically use the same global currency.
+
+4. Existing Prices
+
+Do not modify stored prices.
+
+Example:
+
+If a product price is stored as:
+
+20
+
+and the Admin selects:
+
+$
+
+Display:
+
+$20
+
+If the Admin later selects:
+
+DT
+
+Display:
+
+DT20
+
+No price conversion should occur.
+
+Only the displayed currency symbol changes.
+
+5. Realtime Synchronization
+
+When the Admin changes the currency:
+
+The update should propagate throughout the application.
+
+Every user should see the new currency consistently.
+
+No manual refresh should be required where realtime synchronization already exists.
+
+Keep the existing synchronization behavior intact.
+
+6. Persistence
+
+The selected currency must be saved as a global system setting.
+
+If the server restarts or users reconnect:
+
+The last selected currency should still be used throughout the project.
+
+7. Future Compatibility
+
+Implement the currency management so that future modules automatically use the same global currency without requiring additional changes.
+
+Avoid hardcoded currency symbols throughout the project.
+
+All price displays should reference the single global currency configuration.
+
+Final Verification Checklist
+
+Before completing:
+
+Verify that:
+
+Admin can change the Project Currency from System Management.
+The selected currency is saved globally.
+Prices are not converted.
+Only the displayed currency changes.
+Product prices display correctly.
+Pack prices display correctly.
+Promotion prices display correctly.
+Cart prices display correctly.
+Order prices display correctly.
+Order Details display correctly.
+Supplier pages display correctly.
+Admin pages display correctly.
+Coffee Owner pages display correctly.
+Delivery pages display correctly.
+Marketing pages display correctly.
+Printing pages display correctly.
+Maintenance pages display correctly.
+Barista Marketplace pages display correctly.
+Existing business logic remains unchanged.
+Existing pricing calculations remain unchanged.
+Existing synchronization remains intact.
+No UI redesign is introduced.
+No unrelated code is modified.
+
+Only implement the changes described above.
+
+Do not modify any other functionality, design or business logic outside this scope.

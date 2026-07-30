@@ -14,7 +14,7 @@ import {
   ChevronLeft, MapPin, Plus, Info, Star, Music, Zap, Clock, Layers,
   Sun, Moon, X,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
@@ -383,10 +383,10 @@ function StorePackCard({ pack, hasCommercialAccess, supplierLat, supplierLng, is
           {hasCommercialAccess ? (
             <div className="flex items-baseline gap-2">
               <p className={`font-bold text-sm ${t.dk ? "text-amber-400" : "text-amber-600"}`}>
-                {formatCurrency(pack.price)}
+                {fmt(pack.price)}
               </p>
               {individualTotal > pack.price && (
-                <p className={`text-xs line-through ${t.textMuted}`}>{formatCurrency(individualTotal)}</p>
+                <p className={`text-xs line-through ${t.textMuted}`}>{fmt(individualTotal)}</p>
               )}
             </div>
           ) : (
@@ -589,7 +589,7 @@ function StoreProductCard({
             <div>
               <p className={`text-[10px] ${t.textMuted}`}>From</p>
               <p className={`font-bold text-sm ${t.textPrice}`}>
-                {product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}
+                {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
               </p>
             </div>
           ) : (

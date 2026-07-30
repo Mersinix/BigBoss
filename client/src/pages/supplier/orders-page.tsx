@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { useOrders, useUpdateSubOrderStatus } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ function isFuture(order: any): boolean {
 
 export default function SupplierOrdersPage() {
   const { user } = useAuth();
+  const fmt = useFormatCurrency();
   const { data: orders = [], isLoading } = useOrders();
   const updateSubOrderStatus = useUpdateSubOrderStatus();
   const { toast } = useToast();
@@ -276,7 +278,7 @@ export default function SupplierOrdersPage() {
 
                     {/* Right: total + actions */}
                     <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
-                      <p className="font-bold text-amber-500">{formatCurrency(so.subtotal)}</p>
+                      <p className="font-bold text-amber-500">{fmt(so.subtotal)}</p>
                       <div className="flex gap-2">
                         {nextStatuses.map(ns => (
                           <Button key={ns.value} size="sm" variant="outline" className="h-7 text-xs"

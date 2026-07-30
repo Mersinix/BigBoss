@@ -1,6 +1,7 @@
 import { useOrders, useUpdateSubOrderStatus } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ export default function OrderRequestsPage() {
   const { data: orders = [], isLoading } = useOrders();
   const updateSubOrderStatus = useUpdateSubOrderStatus();
   const { toast } = useToast();
+  const fmt = useFormatCurrency();
 
   // Extract all subOrders for this supplier from the orders
   const mySubOrders = orders.flatMap(order =>
@@ -147,7 +149,7 @@ export default function OrderRequestsPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="font-semibold">{formatCurrency(so.subtotal)}</TableCell>
+                    <TableCell className="font-semibold">{fmt(so.subtotal)}</TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {formatDate(so.orderCreatedAt)}
                     </TableCell>
@@ -222,7 +224,7 @@ export default function OrderRequestsPage() {
                         #{String(so.orderId).padStart(6, "0")}
                       </TableCell>
                       <TableCell className="font-medium">{so.cafeName}</TableCell>
-                      <TableCell className="font-semibold">{formatCurrency(so.subtotal)}</TableCell>
+                      <TableCell className="font-semibold">{fmt(so.subtotal)}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">{formatDate(so.orderCreatedAt)}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={`${s.color} text-xs`}>{s.label}</Badge>

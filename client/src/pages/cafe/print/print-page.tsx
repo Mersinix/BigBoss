@@ -10,7 +10,7 @@ import {
 import {
   Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart
 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import {
   PRINT_CATEGORIES, PRINT_SUBCATEGORIES, PRINT_BRANDS, PRINT_PRODUCTS,

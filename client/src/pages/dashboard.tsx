@@ -2,11 +2,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useOrders } from "@/hooks/use-orders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, TrendingUp, Clock, CheckCircle2 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { data: orders = [], isLoading } = useOrders();
+  const fmt = useFormatCurrency();
 
   if (isLoading) {
     return <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
@@ -60,7 +61,7 @@ export default function Dashboard() {
               <TrendingUp className="h-5 w-5 text-emerald-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-display font-bold">{formatCurrency(totalRevenue)}</div>
+              <div className="text-4xl font-display font-bold">{fmt(totalRevenue)}</div>
             </CardContent>
           </Card>
         )}
@@ -94,7 +95,7 @@ export default function Dashboard() {
                       <p className="text-xs text-muted-foreground">{order.status}</p>
                     </div>
                     <div className="font-medium text-sm">
-                      {formatCurrency(order.totalAmount)}
+                      {fmt(order.totalAmount)}
                     </div>
                   </div>
                 ))}

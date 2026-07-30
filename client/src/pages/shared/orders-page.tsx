@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { useOrders, useUpdateOrderStatus, useDeleteOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,6 +60,7 @@ function isFuture(order: OrderWithDetails) {
 export default function OrdersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const fmt = useFormatCurrency();
   const { data: orders = [], isLoading } = useOrders();
   const updateStatus = useUpdateOrderStatus();
   const deleteOrder = useDeleteOrder();
@@ -247,7 +249,7 @@ export default function OrdersPage() {
 
                     {/* Right */}
                     <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
-                      <p className="font-bold text-amber-500 text-lg">{formatCurrency(order.totalAmount)}</p>
+                      <p className="font-bold text-amber-500 text-lg">{fmt(order.totalAmount)}</p>
                       <div className="flex gap-2 flex-wrap justify-end">
                         {/* Delivery status control */}
                         {isDelivery && (order.status === "READY" || order.status === "IN_DELIVERY") && (

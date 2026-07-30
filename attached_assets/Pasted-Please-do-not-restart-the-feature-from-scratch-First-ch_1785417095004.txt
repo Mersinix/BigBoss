@@ -1,0 +1,269 @@
+Please do not restart the feature from scratch.
+
+First, checkout and review the commit named:
+
+Currency System Strategy
+
+Inside this commit you will also find the original implementation specification:
+
+Pasted-Global-Currency-Management-Strategy-Admin-Controlled-No_1785415707654.txt
+
+Your task is to continue the work, not redo it.
+
+Phase 1 — Audit
+
+Before changing anything:
+
+Read the complete prompt:
+Pasted-Global-Currency-Management-Strategy-Admin-Controlled-No_1785415707654.txt
+Review every file modified in the commit.
+Compare the implementation against the prompt.
+Identify:
+✅ What is already implemented correctly.
+❌ What is partially implemented.
+❌ What is still missing.
+❌ Any synchronization gaps.
+❌ Any places that still use hardcoded currency values.
+
+Do not rewrite code that already works.
+
+Only complete the missing parts.
+
+Phase 2 — Complete the Currency Strategy
+
+The final implementation must satisfy the original specification completely.
+
+Admin
+
+Inside:
+
+Admin → System Management
+
+There must be a global currency selector.
+
+Examples:
+
+$
+DT
+€
+£
+AED
+SAR
+...
+
+The selected currency becomes the global currency for the whole marketplace.
+
+Changing it once should update the entire project.
+
+Global synchronization
+
+Changing the currency must update:
+
+Admin
+Supplier
+Coffee Owner
+Landing Pages
+Shop
+Products
+Packs
+Orders
+Cart
+Flash
+Promotions
+Reviews
+Modals
+Statistics
+Dashboards
+Inventory
+Analytics
+
+Everything.
+
+No page refresh.
+
+Realtime synchronization.
+
+Remove every hardcoded currency
+
+Search the entire project for:
+
+$
+DT
+formatCurrency(...)
+currency literals
+string concatenations with currency
+
+Replace every remaining hardcoded display with the global currency formatter.
+
+Nothing should stay hardcoded.
+
+Existing prices
+
+Do NOT convert values.
+
+Example:
+
+Current value:
+
+100
+
+If admin changes:
+
+$
+
+Display:
+
+$100
+
+If admin changes:
+
+DT
+
+Display:
+
+DT100
+
+If admin changes:
+
+£
+
+Display:
+
+£100
+
+Only the displayed currency changes.
+
+Never modify stored product prices.
+
+Realtime
+
+When admin changes currency:
+
+Every connected client must update immediately.
+
+No refresh.
+
+This includes:
+
+products
+packs
+cart
+checkout
+supplier pages
+admin pages
+coffee owner pages
+flash mode
+orders
+previews
+statistics
+
+Everything.
+
+Database
+
+Verify that:
+
+The currency is persisted correctly.
+
+It survives:
+
+server restart
+deployment
+reconnect
+Hook / Formatter
+
+Verify that every screen uses the same centralized formatter.
+
+There must not be multiple competing currency implementations.
+
+Pages to verify
+
+Carefully verify every major area including (but not limited to):
+
+Admin
+Product Management
+Orders
+Packs
+Inventory
+Dashboard
+Reviews
+Promotions
+Statistics
+System Management
+Supplier
+Products
+Packs
+Orders
+Returns
+Inventory
+Reviews
+Dashboard
+Coffee Owner
+Shop
+Store
+Flash
+Cart
+Checkout
+Order Confirmation
+Orders
+My Account
+Favorites
+Product Details
+Pack Details
+Reviews
+Modals
+
+Verify every modal.
+
+Examples:
+
+Product modal
+Pack modal
+Cart modal
+Order modal
+Confirmation modal
+Preview modal
+
+All prices must use the global currency.
+
+Search for leftovers
+
+Perform a project-wide search for any remaining:
+
+"$"
+"DT"
+price literals
+old formatter
+duplicated formatter
+manual formatting
+
+Remove all remaining inconsistencies.
+
+Synchronization Verification
+
+Before finishing, verify:
+
+Admin changes currency.
+Supplier sees update instantly.
+Coffee Owner sees update instantly.
+Cart updates instantly.
+Orders update instantly.
+Packs update instantly.
+Product cards update instantly.
+Flash mode updates instantly.
+Checkout updates instantly.
+Statistics update instantly.
+
+No refresh required.
+
+Important Rules
+Do NOT redesign anything.
+Do NOT modify any business logic unrelated to currency.
+Do NOT remove existing functionality.
+Do NOT change layouts.
+Do NOT touch features that are already working.
+Preserve all existing UI/UX exactly as it is.
+
+Work only on the missing parts needed to fully complete the currency strategy.
+
+Finally, perform a full synchronization audit to ensure there are no remaining hardcoded currencies or inconsistencies anywhere in the project before considering the task complete.

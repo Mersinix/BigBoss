@@ -717,7 +717,7 @@ export function ProductDetailContent({
           <div>
             <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Starting from</p>
             <p className={`text-2xl font-bold ${isModal ? (dk ? "text-blue-400" : "text-blue-600") : "text-primary"}`}>
-              {product.bestPrice != null ? formatCurrency(product.bestPrice) : "—"}
+              {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
             </p>
           </div>
           <div className={`h-8 border-l ${isModal ? (dk ? "border-gray-700" : "border-gray-200") : "border-border"}`} />

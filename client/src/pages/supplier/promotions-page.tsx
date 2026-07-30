@@ -19,7 +19,6 @@ import {
   Check, Edit2, Package, BarChart3, Settings2, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/format";
 import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import type { Promotion, PromotionType, PromotionStatus } from "@shared/schema";
 

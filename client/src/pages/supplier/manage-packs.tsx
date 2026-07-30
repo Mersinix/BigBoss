@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import type { SupplierListingWithProduct, PackDetail } from "@shared/schema";
 
 // ── Variant grouping helper ───────────────────────────────────────────────────
@@ -96,6 +96,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   onCreated?: () => void;
 }) {
   const { toast } = useToast();
+  const fmt = useFormatCurrency();
   const qc = useQueryClient();
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -249,7 +250,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
               <div>
                 <Label>Pack price (auto)</Label>
                 <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm font-medium" data-testid="text-pack-auto-price">
-                  {items.length > 0 ? formatCurrency(preview.packTotal) : "—"}
+                  {items.length > 0 ? fmt(preview.packTotal) : "—"}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant pack prices below</p>
               </div>
@@ -303,7 +304,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                                   <input type="checkbox" checked={checked} onChange={() => toggleItem(listing.id, g.representativeId, g.price)} className="rounded" data-testid={`checkbox-pack-item-${listing.id}-${g.key}`} />
                                   <span className="text-xs text-muted-foreground">
                                     {variantGroupLabel(g)}
-                                    <span className="ml-1 text-gray-400">Original: {formatCurrency(g.price)}</span>
+                                    <span className="ml-1 text-gray-400">Original: {fmt(g.price)}</span>
                                     · {g.totalStock} in stock
                                   </span>
                                 </label>
@@ -357,9 +358,9 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                   <p className="text-sm text-muted-foreground">{description || "Description…"}</p>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-bold text-primary">{formatCurrency(preview.packTotal)}</span>
+                  <span className="text-xl font-bold text-primary">{fmt(preview.packTotal)}</span>
                   {preview.individualTotal > 0 && preview.packTotal > 0 && preview.packTotal < preview.individualTotal && (
-                    <span className="text-sm text-muted-foreground line-through">{formatCurrency(preview.individualTotal)}</span>
+                    <span className="text-sm text-muted-foreground line-through">{fmt(preview.individualTotal)}</span>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -373,7 +374,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                   {preview.rows.map((r, i) => (
                     <div key={i} className="flex justify-between text-sm">
                       <span>{r.quantity}× {r.productName}{r.flavorName ? ` (${r.flavorName})` : ""}{r.sizeName ? ` — ${r.sizeName}` : ""}</span>
-                      <span className="text-muted-foreground">{formatCurrency(r.unitPrice * r.quantity)}</span>
+                      <span className="text-muted-foreground">{fmt(r.unitPrice * r.quantity)}</span>
                     </div>
                   ))}
                 </div>
@@ -398,6 +399,7 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
   onArchive: () => void;
   onDelete: () => void;
 }) {
+  const fmt = useFormatCurrency();
   if (!pack) return null;
   const maxQty = pack.maxBuildable; // always show real synchronized stock
   const individualTotal = pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
@@ -415,9 +417,9 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
             {pack.description && <p className="text-sm text-muted-foreground mt-1">{pack.description}</p>}
           </div>
           <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-bold text-primary">{formatCurrency(pack.price)}</span>
+            <span className="text-2xl font-bold text-primary">{fmt(pack.price)}</span>
             {individualTotal > pack.price && (
-              <span className="text-sm text-muted-foreground line-through">{formatCurrency(individualTotal)}</span>
+              <span className="text-sm text-muted-foreground line-through">{fmt(individualTotal)}</span>
             )}
             <span className="text-sm text-muted-foreground">{maxQty} available</span>
             <Badge variant={pack.visibility === "VISIBLE" ? "default" : "secondary"} className="text-[10px] ml-auto">
@@ -460,7 +462,7 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
                   )}
                 </div>
                 <span className="text-xs font-semibold text-muted-foreground shrink-0">×{item.quantity}</span>
-                <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(item.unitPrice * item.quantity)}</span>
+                <span className="text-xs text-muted-foreground shrink-0">{fmt(item.unitPrice * item.quantity)}</span>
               </div>
             ))}
           </div>
@@ -518,6 +520,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
   resetSignal: number;
 }) {
   const { toast } = useToast();
+  const fmt = useFormatCurrency();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("__all__");
@@ -757,7 +760,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                             data-testid={`checkbox-pack-product-${listing.id}-${g.key}`}
                           />
                           <span className="text-xs text-muted-foreground">
-                            {variantGroupLabel(g)} — {formatCurrency(g.price)} · <span className="text-green-600">{g.totalStock} in stock</span>
+                            {variantGroupLabel(g)} — {fmt(g.price)} · <span className="text-green-600">{g.totalStock} in stock</span>
                           </span>
                         </label>
                         {isChecked && (
@@ -793,6 +796,7 @@ function ActivePackCard({ pack, onPreview }: {
   pack: PackDetail;
   onPreview: () => void;
 }) {
+  const fmt = useFormatCurrency();
   const maxQty = pack.maxBuildable; // always show real synchronized stock
   const individualTotal = pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
 
@@ -818,9 +822,9 @@ function ActivePackCard({ pack, onPreview }: {
         <h3 className="font-semibold text-sm leading-tight truncate">{pack.name}</h3>
         {pack.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{pack.description}</p>}
         <div className="flex items-center gap-3 mt-2">
-          <span className="text-sm font-bold text-primary">{formatCurrency(pack.price)}</span>
+          <span className="text-sm font-bold text-primary">{fmt(pack.price)}</span>
           {individualTotal > pack.price && (
-            <span className="text-xs text-muted-foreground line-through">{formatCurrency(individualTotal)}</span>
+            <span className="text-xs text-muted-foreground line-through">{fmt(individualTotal)}</span>
           )}
           <span className="text-xs text-muted-foreground flex items-center gap-0.5 ml-auto">
             <BoxesIcon className="w-3 h-3" />{maxQty}
@@ -857,7 +861,7 @@ function ArchivedPackRow({ pack, onToggleVisibility, onUnarchive, onDelete, onEd
         <div className="flex-1 min-w-0">
           <p className="font-medium truncate">{pack.name}</p>
           <p className="text-xs text-muted-foreground">
-            {pack.items.length} items · {formatCurrency(pack.price)} · {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}
+            {pack.items.length} items · {fmt(pack.price)} · {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}
           </p>
           <div className="flex flex-wrap gap-1 mt-1">
             {pack.categoryLabels.map(c => <Badge key={c.id} variant="secondary" className="text-[10px]">{c.name}</Badge>)}

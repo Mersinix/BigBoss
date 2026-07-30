@@ -7,7 +7,8 @@ import {
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
   Sun, Moon, X,
 } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -96,6 +97,7 @@ export default function OrderDetailsModal({
   const queryClient = useQueryClient();
   const [reordering, setReordering] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const fmt = useFormatCurrency();
 
   if (!order) return null;
 
@@ -374,7 +376,7 @@ export default function OrderDetailsModal({
                                 </span>
                               </div>
                               <span className={`font-semibold text-sm shrink-0 ${t.textPrimary}`}>
-                                {formatCurrency((item.unitPrice ?? 0) * item.quantity)}
+                                {fmt((item.unitPrice ?? 0) * item.quantity)}
                               </span>
                             </div>
                           );
@@ -387,7 +389,7 @@ export default function OrderDetailsModal({
                           Sous-total {sub.supplierName}
                         </span>
                         <span className={`font-bold text-sm ${t.textPrimary}`}>
-                          {formatCurrency(sub.subtotal)}
+                          {fmt(sub.subtotal)}
                         </span>
                       </div>
 
@@ -395,7 +397,7 @@ export default function OrderDetailsModal({
                       {sub.discountAmount > 0 && (
                         <div className={`px-4 pb-2.5 flex justify-between text-xs text-green-500 font-medium`}>
                           <span>Réduction ({sub.promotionName ?? "Promotion"})</span>
-                          <span>−{formatCurrency(sub.discountAmount)}</span>
+                          <span>−{fmt(sub.discountAmount)}</span>
                         </div>
                       )}
                     </div>
@@ -413,7 +415,7 @@ export default function OrderDetailsModal({
                         <span className={`font-medium text-sm ${t.textPrimary}`}>{item.product?.name}</span>
                       </div>
                       <span className={`text-sm ${t.textMuted}`}>
-                        {formatCurrency((item.unitPrice ?? 0) * item.quantity)}
+                        {fmt((item.unitPrice ?? 0) * item.quantity)}
                       </span>
                     </div>
                   ))}
@@ -431,7 +433,7 @@ export default function OrderDetailsModal({
             {/* Grand total */}
             <div className={`flex justify-between items-center font-bold border-b pb-3 ${t.dk ? "border-gray-800" : "border-gray-100"}`}>
               <span className={t.textPrimary}>Total commande</span>
-              <span className="text-amber-500 text-xl">{formatCurrency(order.totalAmount)}</span>
+              <span className="text-amber-500 text-xl">{fmt(order.totalAmount)}</span>
             </div>
 
             {/* Action buttons */}

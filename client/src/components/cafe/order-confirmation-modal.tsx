@@ -6,7 +6,7 @@ import {
   Minus, Plus, Trash2, Zap, ArrowRight, Calendar, CheckCircle,
   Sun, Moon, X,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import type { CartItem, PackCartItem } from "@/hooks/use-cart";
 import type { CartPromotionEvaluation, GeoLocation, OrderPriority } from "@shared/schema";
 
@@ -90,6 +90,7 @@ export default function OrderConfirmationModal({
 }: Props) {
   const [isDark, setIsDark] = useState(true);
   const t = useTheme(isDark);
+  const fmt = useFormatCurrency();
 
   // Local editable copies of cart items
   const [localItems, setLocalItems] = useState<CartItem[]>([]);
@@ -243,7 +244,7 @@ export default function OrderConfirmationModal({
                         <div className="flex-1 min-w-0">
                           <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{item.productName}</p>
                           {variant && <p className={`text-xs mt-0.5 ${t.textMuted}`}>{variant}</p>}
-                          <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{formatCurrency(item.unitPrice)} / unité</p>
+                          <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{fmt(item.unitPrice)} / unité</p>
                         </div>
                         <div className="flex items-center gap-2.5 shrink-0">
                           {/* Stepper */}
@@ -265,7 +266,7 @@ export default function OrderConfirmationModal({
                             </button>
                           </div>
                           <span className={`text-sm font-bold min-w-[64px] text-right ${t.textPrimary}`}>
-                            {formatCurrency(item.unitPrice * item.quantity)}
+                            {fmt(item.unitPrice * item.quantity)}
                           </span>
                           <button
                             className={`transition-colors ${t.textMuted} hover:text-red-400`}
@@ -300,7 +301,7 @@ export default function OrderConfirmationModal({
                         {pack.includedProducts.map(ip => `${ip.quantity}× ${ip.productName}`).join(", ")}
                       </p>
                     )}
-                    <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{formatCurrency(pack.unitPrice)} / pack</p>
+                    <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{fmt(pack.unitPrice)} / pack</p>
                   </div>
                   <div className="flex items-center gap-2.5 shrink-0">
                     <div className={`flex items-center border rounded-xl overflow-hidden ${t.stepperBorder}`}>
@@ -321,7 +322,7 @@ export default function OrderConfirmationModal({
                       </button>
                     </div>
                     <span className={`text-sm font-bold min-w-[64px] text-right ${t.textPrimary}`}>
-                      {formatCurrency(pack.unitPrice * pack.quantity)}
+                      {fmt(pack.unitPrice * pack.quantity)}
                     </span>
                     <button
                       className={`transition-colors ${t.textMuted} hover:text-red-400`}
@@ -447,24 +448,24 @@ export default function OrderConfirmationModal({
               {itemsTotal > 0 && (
                 <div className={`flex justify-between text-sm ${t.textMuted}`}>
                   <span>Articles</span>
-                  <span>{formatCurrency(itemsTotal)}</span>
+                  <span>{fmt(itemsTotal)}</span>
                 </div>
               )}
               {packsTotal > 0 && (
                 <div className={`flex justify-between text-sm ${t.textMuted}`}>
                   <span>Packs</span>
-                  <span>{formatCurrency(packsTotal)}</span>
+                  <span>{fmt(packsTotal)}</span>
                 </div>
               )}
               {discount > 0 && (
                 <div className="flex justify-between text-sm text-green-500 font-medium">
                   <span>Réduction</span>
-                  <span>−{formatCurrency(discount)}</span>
+                  <span>−{fmt(discount)}</span>
                 </div>
               )}
               <div className={`flex justify-between font-bold text-base pt-2 border-t ${t.dk ? "border-gray-800" : "border-gray-100"}`}>
                 <span className={t.textPrimary}>Total</span>
-                <span className="text-amber-500 text-lg">{formatCurrency(grandTotal)}</span>
+                <span className="text-amber-500 text-lg">{fmt(grandTotal)}</span>
               </div>
             </div>
 

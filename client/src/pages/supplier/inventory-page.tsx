@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { formatCurrency } from "@/lib/format";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { ChevronLeft, ChevronRight, EyeOff, Eye, Trash2, X } from "lucide-react";
 import type { InventoryStats, InventoryListResult, InventoryItem, InventoryVariantItem, CategoryWithCount, BrandWithCount } from "@shared/schema";
 import { InventoryStatsCards } from "./inventory/inventory-stats-cards";
@@ -31,6 +31,7 @@ function buildQueryString(filters: InventoryFilterState, extra?: Record<string, 
 
 export default function InventoryPage() {
   const { toast } = useToast();
+  const fmt = useFormatCurrency();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<InventoryFilterState>(EMPTY_INVENTORY_FILTERS);
   const [page, setPage] = useState(1);
@@ -154,7 +155,7 @@ export default function InventoryPage() {
             <div className="flex items-center gap-4 text-xs text-muted-foreground border-t pt-3" data-testid="filtered-totals">
               <span>Filtered results: <strong className="text-foreground">{filteredStats.totalProducts}</strong> products</span>
               <span>Filtered units: <strong className="text-foreground">{filteredStats.totalUnits.toLocaleString()}</strong></span>
-              <span>Filtered value: <strong className="text-foreground">{formatCurrency(filteredStats.inventoryValue)}</strong></span>
+              <span>Filtered value: <strong className="text-foreground">{fmt(filteredStats.inventoryValue)}</strong></span>
             </div>
           )}
 

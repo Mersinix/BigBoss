@@ -1,0 +1,206 @@
+Product Images Synchronization & Preview Improvements (Admin / Supplier / Coffee Owner) (No Design Changes / Keep Everything Else Intact)
+
+The current implementation is working well.
+
+Before making any modification, first perform a complete verification of the current Product system across:
+
+Admin Product Management
+Supplier Admin Products
+Supplier My Products
+Coffee Owner Product Cards
+Coffee Owner Product Details Modal
+
+Read all related components, image handling logic, database models, APIs and synchronization flows before changing anything.
+
+Verify what is already implemented before making changes.
+
+If something already works correctly, do not modify it.
+
+Do not redesign anything.
+
+Do not change the current UI/UX design system.
+
+Do not change product logic, pricing logic, variants logic, supplier mapping logic or availability logic.
+
+Do not remove any existing functionality.
+
+Only implement the requested modifications.
+
+1. Admin Part
+Location:
+Admin Panel
+→ Products TAB
+→ Product Management
+→ Edit Product Modal
+
+Currently:
+
+The modal already contains:
+
+Main Product Image URL
+Additional Images URLs
+
+Example:
+
+Image URL
+
+https://images.unsplash.com/photo-1611854779393-1b2da9d400fe?w=500&q=80
+
+
+Additional Images
+
+https://www.shutterstock.com/image-photo/hot-coffee-white-cup-many-260nw-2478921599.jpg
+
+https://www.shutterstock.com/image-photo/hot-coffee-white-cup-many-260nw-2478921599.jpg
+Required Update
+
+Inside the same Edit Product Modal:
+
+The Preview section must display:
+
+Main image
+All additional images
+
+The preview should represent exactly how the product images will appear later in the marketplace.
+
+Image Adjustment Controls
+
+For every product image:
+
+Add the possibility to adjust image positioning:
+
+Move image up
+Move image down
+Move image left
+Move image right
+Zoom in
+Zoom out
+
+The objective:
+
+Allow Admin to properly position every image before saving.
+
+The adjustments must apply only to the image display/positioning.
+
+Do not modify the original image URL.
+
+Do not break existing image storage.
+
+2. Supplier Part
+
+The same image preview improvement must be applied to both supplier product modals.
+
+A. Supplier → Products TAB → My Products
+
+Modal:
+
+Edit Pricing & Stock — Variant Builder
+B. Supplier → Products TAB → Admin Products
+
+Modal:
+
+Add to My Products — Variant Builder
+Required Update
+
+Inside the preview section:
+
+Display:
+
+Main product image
+Additional images
+
+The additional images should appear under the main image.
+
+The supplier should be able to visually see the complete product image gallery before saving.
+
+Important:
+
+Do not add new image management features here.
+
+The supplier should only preview the images already available from the product.
+
+Keep the existing product creation/editing logic unchanged.
+
+3. Supplier Product Addition Realtime Synchronization
+
+Currently:
+
+When a Supplier adds an Admin Product to:
+
+Supplier Panel
+→ Products TAB
+→ My Products
+
+the product mapping requires refresh.
+
+Required Behavior
+
+After the supplier successfully adds a product:
+
+The product should appear immediately without manual refresh.
+
+The synchronization should update automatically.
+
+Verify that:
+
+Supplier My Products list updates instantly.
+Product data remains synchronized.
+Variants remain synchronized.
+Images remain synchronized.
+Existing marketplace behavior remains unchanged.
+4. Data Synchronization Verification
+
+Before finishing, verify the complete image flow:
+
+Admin creates/updates product:
+
+↓
+
+Product images saved correctly.
+
+↓
+
+Supplier sees:
+
+Main image
+Additional images
+
+↓
+
+Supplier adds product to My Products.
+
+↓
+
+Coffee Owner marketplace receives:
+
+Correct product image
+Correct additional images
+Correct product details.
+Final Verification Checklist
+
+Before completing:
+
+Confirm that:
+
+✅ Admin Edit Product modal shows additional images in preview.
+✅ Admin can adjust image position:
+
+up
+down
+left
+right
+zoom in
+zoom out
+
+✅ Supplier Add to My Products modal shows additional images.
+✅ Supplier Edit Pricing & Stock modal shows additional images.
+✅ Existing image URLs and database structure remain compatible.
+✅ Supplier product addition updates realtime without refresh.
+✅ Coffee Owner product display continues working.
+✅ Product details modal continues working.
+✅ No variant, price, stock, supplier mapping or marketplace logic is changed.
+✅ No unrelated design changes are introduced.
+
+Only make the requested changes.
+
+Do not modify anything outside this scope.

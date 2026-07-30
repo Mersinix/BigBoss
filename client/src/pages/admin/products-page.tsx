@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGrid, LayoutList, Layers, Eye, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGrid, LayoutList, Layers, Eye, EyeOff, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -123,6 +123,71 @@ function ProductStatusBadge({ product }: { product: ProductWithTaxonomy }) {
   return <Badge className="text-xs bg-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0">Active</Badge>;
 }
 
+// ── Image Adjust Preview ──────────────────────────────────────────────────────
+
+type ImgAdj = { x: number; y: number; scale: number };
+const DEFAULT_ADJ: ImgAdj = { x: 0, y: 0, scale: 1 };
+const ADJ_STEP = 5;
+const SCALE_STEP = 0.1;
+
+function ImageAdjustPreview({
+  url, adj, onChange, compact = false,
+}: {
+  url: string;
+  adj: ImgAdj;
+  onChange: (a: ImgAdj) => void;
+  compact?: boolean;
+}) {
+  const iconCls = compact ? "w-3 h-3" : "w-3.5 h-3.5";
+  const btnCls = "bg-black/60 text-white rounded p-0.5 hover:bg-black/80 transition-colors";
+  if (!url) {
+    return (
+      <div className={`${compact ? "w-full h-full" : "aspect-square"} bg-secondary flex items-center justify-center`}>
+        <Package className={`${compact ? "w-8 h-8" : "w-16 h-16"} text-muted-foreground opacity-40`} />
+      </div>
+    );
+  }
+  return (
+    <div className={`relative group overflow-hidden bg-secondary ${compact ? "w-full h-full" : "aspect-square"}`}>
+      <img
+        src={url}
+        alt=""
+        className="w-full h-full object-cover"
+        style={{
+          objectPosition: `calc(50% + ${adj.x}px) calc(50% + ${adj.y}px)`,
+          transform: `scale(${adj.scale})`,
+          transformOrigin: "center",
+        }}
+        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+      />
+      <div className="absolute inset-0 flex flex-col items-center justify-between p-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto bg-black/10">
+        <button type="button" onClick={() => onChange({ ...adj, y: adj.y - ADJ_STEP })} className={btnCls} title="Move up">
+          <ChevronUp className={iconCls} />
+        </button>
+        <div className="flex items-center justify-between w-full">
+          <button type="button" onClick={() => onChange({ ...adj, x: adj.x - ADJ_STEP })} className={btnCls} title="Move left">
+            <ChevronLeft className={iconCls} />
+          </button>
+          <div className="flex flex-col gap-0.5 items-center">
+            <button type="button" onClick={() => onChange({ ...adj, scale: Math.min(adj.scale + SCALE_STEP, 3) })} className={btnCls} title="Zoom in">
+              <ZoomIn className={iconCls} />
+            </button>
+            <button type="button" onClick={() => onChange({ ...adj, scale: Math.max(adj.scale - SCALE_STEP, 0.3) })} className={btnCls} title="Zoom out">
+              <ZoomOut className={iconCls} />
+            </button>
+          </div>
+          <button type="button" onClick={() => onChange({ ...adj, x: adj.x + ADJ_STEP })} className={btnCls} title="Move right">
+            <ChevronRight className={iconCls} />
+          </button>
+        </div>
+        <button type="button" onClick={() => onChange({ ...adj, y: adj.y + ADJ_STEP })} className={btnCls} title="Move down">
+          <ChevronDown className={iconCls} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Multi-select list ─────────────────────────────────────────────────────────
 
 function MultiSelectList({ label, items, selected, onChange, hint }: {
@@ -180,6 +245,7 @@ function ProductFormModal({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [imgAdj, setImgAdj] = useState<Record<number, ImgAdj>>({});
 
   const [form, setForm] = useState<ProductForm>(() => {
     if (editing) {
@@ -433,14 +499,29 @@ function ProductFormModal({
 
           <div className="lg:sticky lg:top-0">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
+            {(form.imageUrl || form.additionalImageUrls.some(u => u.trim())) && (
+              <p className="text-xs text-muted-foreground mb-1.5">Hover an image to adjust its position and zoom.</p>
+            )}
             <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
-              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
-                {form.imageUrl ? (
-                  <img src={form.imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                ) : (
-                  <Package className="w-16 h-16 text-muted-foreground opacity-40" />
-                )}
-              </div>
+              <ImageAdjustPreview
+                url={form.imageUrl}
+                adj={imgAdj[0] ?? DEFAULT_ADJ}
+                onChange={a => setImgAdj(prev => ({ ...prev, 0: a }))}
+              />
+              {form.additionalImageUrls.filter(u => u.trim()).length > 0 && (
+                <div className="flex gap-1.5 p-2 border-t bg-secondary/20 flex-wrap">
+                  {form.additionalImageUrls.filter(u => u.trim()).map((url, idx) => (
+                    <div key={idx} className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border">
+                      <ImageAdjustPreview
+                        url={url}
+                        adj={imgAdj[idx + 1] ?? DEFAULT_ADJ}
+                        onChange={a => setImgAdj(prev => ({ ...prev, [idx + 1]: a }))}
+                        compact
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="p-4 space-y-2">
                 <p className="font-semibold text-lg leading-tight">{form.name || "Product name"}</p>
                 {form.description && <p className="text-sm text-muted-foreground line-clamp-3">{form.description}</p>}

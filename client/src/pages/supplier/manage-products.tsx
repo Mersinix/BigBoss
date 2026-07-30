@@ -418,6 +418,12 @@ function ListingLivePreview({
   );
   const hasVariantData = previewEntries.some(e => parseFloat(e.price) > 0 || parseInt(e.qty) > 0);
 
+  const additionalImages: string[] = useMemo(() => {
+    const urls = (product as any).imageUrls;
+    if (Array.isArray(urls)) return urls.filter(Boolean);
+    return [];
+  }, [product]);
+
   return (
     <div className="lg:sticky lg:top-0">
       <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
@@ -429,6 +435,20 @@ function ListingLivePreview({
             <Package className="w-16 h-16 text-muted-foreground opacity-40" />
           )}
         </div>
+        {additionalImages.length > 0 && (
+          <div className="flex gap-1.5 p-2 border-t bg-secondary/20 flex-wrap">
+            {additionalImages.map((url, idx) => (
+              <div key={idx} className="w-16 h-16 shrink-0 rounded-lg overflow-hidden border bg-secondary">
+                <img
+                  src={url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
         <div className="p-4 space-y-2">
           <p className="font-semibold text-lg leading-tight">{product.name}</p>
           {product.description && <p className="text-sm text-muted-foreground line-clamp-3">{product.description}</p>}
@@ -484,6 +504,7 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
   const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
   const [onlyForPack, setOnlyForPack] = useState(false);
 
+  const qc = useQueryClient();
   const add = useMutation({
     mutationFn: async () => {
       const entries = groupsToEntries(groups, availableFlavors, availableSizes);
@@ -509,6 +530,9 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
     },
     onSuccess: () => {
       toast({ title: "Added to your products!" });
+      qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
+      qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
+      invalidateMarketplace(qc);
       onSuccess();
       onClose();
     },

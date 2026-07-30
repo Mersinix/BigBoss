@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ const recentOrders = [
 
 export default function PrinterDashboard() {
   const { user } = useAuth();
+  const currency = useCurrency();
   return (
     <div className="flex flex-col gap-5 p-6">
       <div>
@@ -63,7 +65,7 @@ export default function PrinterDashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`TND ${v}`, "Revenu"]} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`${currency} ${v}`, "Revenu"]} />
                 <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={2} fill="url(#printerGrad)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
@@ -83,7 +85,7 @@ export default function PrinterDashboard() {
                     <p className="text-xs text-muted-foreground">{o.type} · {o.qty} unités</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">TND {o.amount}</span>
+                    <span className="font-semibold text-sm">{currency} {o.amount}</span>
                     <Badge variant="secondary" className={
                       o.status === "Livré" ? "bg-green-100 text-green-700" :
                       o.status === "En cours" ? "bg-blue-100 text-blue-700" :

@@ -1617,6 +1617,7 @@ function MyProductsTab({
   brnds: BrandWithCount[];
   onGoToCategories: () => void;
 }) {
+  const fmt = useFormatCurrency();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<SimpleFilters>(EMPTY_SIMPLE);
@@ -1869,7 +1870,7 @@ function MyProductsTab({
                   </div>
                   <div className="p-2.5 space-y-1">
                     <p className="font-medium text-sm line-clamp-2">{l.product.name}</p>
-                    <p className="text-sm font-semibold">{formatCurrency(l.price)}</p>
+                    <p className="text-sm font-semibold">{fmt(l.price)}</p>
                     <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} in stock` : "Out of stock"}</p>
                     <div className="flex gap-1 pt-1">
                       <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
@@ -1907,7 +1908,7 @@ function MyProductsTab({
                         {l.product.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{l.product.description}</p>}
                       </TableCell>
                       <TableCell><TaxBadges product={l.product} /></TableCell>
-                      <TableCell className="font-medium">{formatCurrency(l.price)}</TableCell>
+                      <TableCell className="font-medium">{fmt(l.price)}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded-md text-xs font-medium ${l.stock > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"}`}>
                           {l.stock > 0 ? `${l.stock} units` : "Out of stock"}

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import marketingHeroImg from "@assets/image_1780681027926.png";
 import { Link, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -342,6 +343,7 @@ function ProviderCard({
   onViewProfile: (p: Provider) => void;
 }) {
   const hasAccess = accessLevel === "approved";
+  const fmt = useFormatCurrency();
   const lowestPrice = Math.min(...provider.packages.map((p) => p.priceInCents));
   const faved = useFavorites((s) => !!s.marketing[provider.id]);
   const toggleMarketing = useFavorites((s) => s.toggleMarketing);
@@ -431,7 +433,7 @@ function ProviderCard({
               <div>
                 <p className="text-[10px] text-gray-400">À partir de</p>
                 <p className="font-bold text-sm text-purple-600">
-                  {(lowestPrice / 100).toFixed(0)} TND/mois
+                  {fmt(lowestPrice)}/mois
                 </p>
               </div>
               <div className="flex gap-1.5">
@@ -496,6 +498,7 @@ function ProviderDetailDialog({
   accessLevel: AccessLevel;
   user: ReturnType<typeof useAuth>["user"];
 }) {
+  const fmt = useFormatCurrency();
   if (!provider) return null;
   const hasAccess = accessLevel === "approved";
 
@@ -594,8 +597,7 @@ function ProviderDetailDialog({
                     )}
                     <p className="font-bold text-sm text-gray-900">{pkg.name}</p>
                     <p className="font-bold text-lg text-purple-600">
-                      {(pkg.priceInCents / 100).toFixed(0)}{" "}
-                      <span className="text-xs font-normal text-gray-400">TND</span>
+                      {fmt(pkg.priceInCents)}
                     </p>
                     <ul className="space-y-1">
                       {pkg.features.map((f) => (

@@ -14,6 +14,7 @@ import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGr
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import type { ProductWithTaxonomy, CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount } from "@shared/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -1189,6 +1190,7 @@ function AdminPackPreviewModal({
   onDelete: () => void;
   isPending: boolean;
 }) {
+  const fmt = useFormatCurrency();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const individualTotal = (pack.items ?? []).reduce((s: number, i: any) => s + (i.unitPrice ?? 0) * (i.quantity ?? 1), 0);
 
@@ -1252,11 +1254,11 @@ function AdminPackPreviewModal({
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">Pack Price</p>
               <p className="font-bold text-lg text-amber-600">
-                {pack.price != null ? `${(pack.price / 100).toFixed(2)} TND` : "—"}
+                {pack.price != null ? fmt(pack.price) : "—"}
               </p>
               {individualTotal > (pack.price ?? 0) && (
                 <p className="text-xs text-muted-foreground line-through">
-                  {(individualTotal / 100).toFixed(2)} TND (individual)
+                  {fmt(individualTotal)} (individual)
                 </p>
               )}
             </div>
@@ -1317,7 +1319,7 @@ function AdminPackPreviewModal({
                           {item.unitPrice != null ? `${(item.unitPrice / 100).toFixed(2)}` : "—"}
                         </TableCell>
                         <TableCell className="py-2 text-right text-xs font-medium">
-                          {item.packVariantPrice != null ? `${(item.packVariantPrice / 100).toFixed(2)} TND` : "—"}
+                          {item.packVariantPrice != null ? fmt(item.packVariantPrice) : "—"}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1403,6 +1405,7 @@ function AdminPacksSection({
   szs: SizeWithCount[];
   brnds: BrandWithCount[];
 }) {
+  const fmt = useFormatCurrency();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [packFilters, setPackFilters] = useState<PackFilters>(EMPTY_PACK_FILTERS);
@@ -1797,7 +1800,7 @@ function AdminPacksSection({
                     </div>
                   </TableCell>
                   <TableCell className="text-sm font-medium">
-                    {pack.price != null ? `${(pack.price / 100).toFixed(2)} TND` : "—"}
+                    {pack.price != null ? fmt(pack.price) : "—"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {pack.maxBuildable ?? 0}

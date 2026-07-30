@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Megaphone, Users, TrendingUp, Star, BarChart2, Clock } from "lucide-react";
@@ -17,6 +18,7 @@ const recentProjects = [
 
 export default function MarketingDashboard() {
   const { user } = useAuth();
+  const currency = useCurrency();
   return (
     <div className="flex flex-col gap-5 p-6">
       <div>
@@ -62,7 +64,7 @@ export default function MarketingDashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`TND ${v}`, "Revenu"]} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`${currency} ${v}`, "Revenu"]} />
                 <Area type="monotone" dataKey="revenue" stroke="#a855f7" strokeWidth={2} fill="url(#marketingGrad)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
@@ -82,7 +84,7 @@ export default function MarketingDashboard() {
                     <p className="text-xs text-muted-foreground">{p.service} · {p.duration}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">TND {p.amount}</span>
+                    <span className="font-semibold text-sm">{currency} {p.amount}</span>
                     <Badge variant="secondary" className={
                       p.status === "Terminé" ? "bg-green-100 text-green-700" :
                       p.status === "Actif" ? "bg-purple-100 text-purple-700" :

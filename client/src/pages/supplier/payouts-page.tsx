@@ -1,3 +1,4 @@
+import { useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ const statusStyle: Record<string, string> = {
 };
 
 export default function PayoutsPage() {
+  const currency = useCurrency();
   const totalPaid = fakePayouts.filter((p) => p.status === "Paid").reduce((s, p) => s + p.net, 0);
 
   return (
@@ -30,13 +32,13 @@ export default function PayoutsPage() {
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-green-500/10 rounded-xl p-3"><DollarSign className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Total Paid Out</p><p className="text-2xl font-bold text-green-600">TND {totalPaid.toLocaleString()}</p></div>
+            <div><p className="text-xs text-muted-foreground">Total Paid Out</p><p className="text-2xl font-bold text-green-600">{currency} {totalPaid.toLocaleString()}</p></div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Pending Payout</p><p className="text-2xl font-bold text-amber-600">TND 2,945</p></div>
+            <div><p className="text-xs text-muted-foreground">Pending Payout</p><p className="text-2xl font-bold text-amber-600">{currency} 2,945</p></div>
           </CardContent>
         </Card>
         <Card>
@@ -68,9 +70,9 @@ export default function PayoutsPage() {
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs text-muted-foreground">{p.id}</TableCell>
                   <TableCell className="font-medium">{p.period}</TableCell>
-                  <TableCell>TND {p.amount.toLocaleString()}</TableCell>
-                  <TableCell className="text-muted-foreground">TND {p.fee}</TableCell>
-                  <TableCell className="font-semibold text-green-600">TND {p.net.toLocaleString()}</TableCell>
+                  <TableCell>{currency} {p.amount.toLocaleString()}</TableCell>
+                  <TableCell className="text-muted-foreground">{currency} {p.fee}</TableCell>
+                  <TableCell className="font-semibold text-green-600">{currency} {p.net.toLocaleString()}</TableCell>
                   <TableCell className="text-muted-foreground">{p.method}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">{p.date}</TableCell>
                   <TableCell><Badge variant="secondary" className={statusStyle[p.status]}>{p.status}</Badge></TableCell>

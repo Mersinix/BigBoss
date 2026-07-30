@@ -1,3 +1,4 @@
+import { useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ const statusStyle: Record<string, string> = {
 };
 
 export default function InvoicesPage() {
+  const currency = useCurrency();
   const totalPaid = fakeInvoices.filter((i) => i.status === "Paid").reduce((s, i) => s + i.total, 0);
   const totalUnpaid = fakeInvoices.filter((i) => i.status !== "Paid").reduce((s, i) => s + i.total, 0);
 
@@ -32,8 +34,8 @@ export default function InvoicesPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
           { label: "Total Invoices", value: fakeInvoices.length, suffix: "" },
-          { label: "Collected", value: totalPaid, suffix: "TND " },
-          { label: "Outstanding", value: totalUnpaid, suffix: "TND " },
+          { label: "Collected", value: totalPaid, suffix: `${currency} ` },
+          { label: "Outstanding", value: totalUnpaid, suffix: `${currency} ` },
         ].map(({ label, value, suffix }) => (
           <Card key={label}>
             <CardContent className="p-5 flex items-center gap-4">
@@ -69,9 +71,9 @@ export default function InvoicesPage() {
                 <TableRow key={inv.id}>
                   <TableCell className="font-mono text-xs text-muted-foreground">{inv.id}</TableCell>
                   <TableCell className="font-medium">{inv.cafe}</TableCell>
-                  <TableCell>TND {inv.amount}</TableCell>
-                  <TableCell className="text-muted-foreground">TND {inv.tax}</TableCell>
-                  <TableCell className="font-semibold">TND {inv.total}</TableCell>
+                  <TableCell>{currency} {inv.amount}</TableCell>
+                  <TableCell className="text-muted-foreground">{currency} {inv.tax}</TableCell>
+                  <TableCell className="font-semibold">{currency} {inv.total}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">{inv.issued}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">{inv.due}</TableCell>
                   <TableCell><Badge variant="secondary" className={statusStyle[inv.status]}>{inv.status}</Badge></TableCell>

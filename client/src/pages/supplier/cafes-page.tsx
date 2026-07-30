@@ -1,3 +1,4 @@
+import { useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ const statusStyle: Record<string, string> = {
 };
 
 export default function CafesPage() {
+  const currency = useCurrency();
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
@@ -54,7 +56,7 @@ export default function CafesPage() {
                 </div>
                 <div className="bg-muted/40 rounded-lg p-2">
                   <p className="text-xs text-muted-foreground">Spent</p>
-                  <p className="font-bold text-sm text-amber-500">TND {c.spent}</p>
+                  <p className="font-bold text-sm text-amber-500">{currency} {c.spent}</p>
                 </div>
                 <div className="bg-muted/40 rounded-lg p-2">
                   <p className="text-xs text-muted-foreground">Rating</p>

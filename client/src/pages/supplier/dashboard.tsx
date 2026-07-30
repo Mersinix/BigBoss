@@ -66,6 +66,7 @@ const activityDot: Record<string, string> = {
 
 export default function SupplierDashboard() {
   const { user } = useAuth();
+  const currency = useCurrency();
   const { data: orders = [] } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const { data: listings = [] } = useQuery<any[]>({ queryKey: ["/api/supplier/listings"] });
 
@@ -87,7 +88,7 @@ export default function SupplierDashboard() {
               <p className="text-xs text-muted-foreground">Total Revenue</p>
               <DollarSign className="w-4 h-4 text-amber-500" />
             </div>
-            <p className="text-2xl font-bold text-amber-500">TND {Math.max(totalRevenue / 100, 3624).toFixed(0)}</p>
+            <p className="text-2xl font-bold text-amber-500">{currency} {Math.max(totalRevenue / 100, 3624).toFixed(0)}</p>
             <p className="text-xs text-muted-foreground mt-1">All time</p>
           </CardContent>
         </Card>
@@ -141,7 +142,7 @@ export default function SupplierDashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`TND ${v}`, "Revenue"]} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`${currency} ${v}`, "Revenue"]} />
                 <Area type="monotone" dataKey="revenue" stroke="#d97706" strokeWidth={2} fill="url(#salesGrad)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
@@ -193,7 +194,7 @@ export default function SupplierDashboard() {
                       <td className="py-2 px-2 font-mono text-muted-foreground">{o.id}</td>
                       <td className="py-2 px-2 font-medium">{o.cafe}</td>
                       <td className="py-2 px-2 text-muted-foreground max-w-[160px] truncate">{o.products}</td>
-                      <td className="py-2 px-2 font-semibold">TND {o.amount}</td>
+                      <td className="py-2 px-2 font-semibold">{currency} {o.amount}</td>
                       <td className="py-2 px-2">
                         <Badge variant="secondary" className={`text-[10px] ${statusColors[o.status] || "bg-gray-100 text-gray-600"}`}>
                           {o.status}
@@ -252,7 +253,7 @@ export default function SupplierDashboard() {
                   <tr key={p.name} className="border-b border-border/30">
                     <td className="py-2 font-medium">{p.name}</td>
                     <td className="py-2 text-muted-foreground">{p.sold}</td>
-                    <td className="py-2 font-semibold text-amber-500">TND {p.revenue}</td>
+                    <td className="py-2 font-semibold text-amber-500">{currency} {p.revenue}</td>
                   </tr>
                 ))}
               </tbody>

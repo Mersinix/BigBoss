@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -274,6 +275,7 @@ function AgentCard({
   onOpenDetail: (agent: (typeof AGENTS)[0]) => void;
 }) {
   const hasAccess = accessLevel === "approved";
+  const fmt = useFormatCurrency();
   const faved = useFavorites((s) => !!s.maintenance[agent.id]);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
   const TypeIcon = TYPE_ICONS[agent.type] ?? User;
@@ -377,7 +379,7 @@ function AgentCard({
               <div>
                 <p className="text-[10px] text-gray-400">Tarif / jour</p>
                 <p className="font-bold text-sm text-orange-600">
-                  {(agent.dailyRateInCents / 100).toFixed(0)} TND
+                  {fmt(agent.dailyRateInCents)}
                 </p>
               </div>
               <div className="flex gap-1.5">
@@ -423,6 +425,7 @@ function AgentDetailModal({
   user: ReturnType<typeof useAuth>["user"];
 }) {
   const hasAccess = accessLevel === "approved";
+  const fmt = useFormatCurrency();
   const faved = useFavorites((s) => agent ? !!s.maintenance[agent.id] : false);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
 
@@ -558,7 +561,7 @@ function AgentDetailModal({
                   <div>
                     <p className="text-xs text-gray-400">Tarif journalier</p>
                     <p className="font-bold text-xl text-orange-600">
-                      {(agent.dailyRateInCents / 100).toFixed(0)} <span className="text-sm font-normal text-gray-400">TND</span>
+                      {fmt(agent.dailyRateInCents)}
                     </p>
                   </div>
                   <div className="flex gap-2">

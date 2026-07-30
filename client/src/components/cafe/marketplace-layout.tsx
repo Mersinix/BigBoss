@@ -174,7 +174,7 @@ function AccountPanel({
     { label: "Total Orders", value: total, icon: ShoppingBag, color: dk ? "text-white" : "text-gray-900" },
     { label: "In Progress", value: inProgress, icon: Clock, color: "text-amber-400" },
     { label: "Delivered", value: delivered, icon: CheckCircle, color: "text-green-400" },
-    { label: "Spent", value: `TND ${(spent / 100).toFixed(0)}`, icon: DollarSign, color: "text-blue-400" },
+    { label: "Spent", value: fmt(spent), icon: DollarSign, color: "text-blue-400" },
   ];
   const statusCounts: Record<string, number> = {};
   allOrders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1; });
@@ -707,7 +707,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                       <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
                       <span className={`text-[10px] ${textMuted}`}>{item.duration}</span>
                     </div>
-                    <p className="text-sm font-bold text-green-400 mt-1">{(item.price / 100).toFixed(0)} TND</p>
+                    <p className="text-sm font-bold text-green-400 mt-1">{fmt(item.price)}</p>
                   </div>
                 </div>
               ))}

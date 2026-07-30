@@ -75,17 +75,17 @@ const STATUS_STYLES: Record<PromotionStatus, string> = {
   EXPIRED: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
-function discountLabel(p: Promotion): string {
+function discountLabel(p: Promotion, fmt: (n: number) => string): string {
   switch (p.type) {
     case 'PERCENTAGE':
     case 'CATEGORY_DISCOUNT':
     case 'MIN_QUANTITY':
     case 'FIRST_ORDER': return `${p.discountValue / 100}% off`;
     case 'FIXED_AMOUNT':
-    case 'MIN_ORDER_AMOUNT': return `${formatCurrency(p.discountValue)} off`;
+    case 'MIN_ORDER_AMOUNT': return `${fmt(p.discountValue)} off`;
     case 'BUY_X_GET_Y': return `Buy ${p.buyQuantity} Get ${p.getQuantity} Free`;
     case 'QUANTITY_TIER': return 'Tier Pricing';
-    case 'FREE_SHIPPING': return p.freeShippingMinAmount ? `Free shipping on ${formatCurrency(p.freeShippingMinAmount)}+` : 'Always free shipping';
+    case 'FREE_SHIPPING': return p.freeShippingMinAmount ? `Free shipping on ${fmt(p.freeShippingMinAmount)}+` : 'Always free shipping';
     case 'GIFT': return 'Free gift';
     default: return '';
   }
@@ -415,6 +415,7 @@ function PromotionAssignmentDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const fmt = useFormatCurrency();
   const { toast } = useToast();
   const isProducts = promo.targetType === 'PRODUCTS';
   const [search, setSearch] = useState("");
@@ -588,7 +589,7 @@ function PromotionAssignmentDialog({
                       <p className="text-xs text-muted-foreground">{listing.category}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold">{formatCurrency(listing.price)}</p>
+                      <p className="text-sm font-semibold">{fmt(listing.price)}</p>
                       <p className={`text-xs ${listing.stock === 0 ? "text-destructive" : listing.stock < 10 ? "text-yellow-600" : "text-muted-foreground"}`}>
                         {listing.stock === 0 ? "Out of stock" : `${listing.stock} in stock`}
                       </p>
@@ -667,6 +668,7 @@ function PromotionCard({
   onStatusChange: (s: PromotionStatus) => void;
   onManageAssignments: () => void;
 }) {
+  const fmt = useFormatCurrency();
   const [showMenu, setShowMenu] = useState(false);
   const effectiveStatus = getEffectiveStatus(promo);
   const remaining = promo.maxUses != null ? promo.maxUses - promo.usageCount : null;
@@ -710,7 +712,7 @@ function PromotionCard({
                   </Badge>
                 )}
               </div>
-              <p className="text-sm text-amber-600 font-semibold">{discountLabel(promo)}</p>
+              <p className="text-sm text-amber-600 font-semibold">{discountLabel(promo, fmt)}</p>
               {promo.description && (
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{promo.description}</p>
               )}
@@ -773,6 +775,7 @@ function PromotionCard({
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PromotionsPage() {
+  const fmt = useFormatCurrency();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -887,7 +890,7 @@ export default function PromotionsPage() {
           { label: "Active", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600" />, color: "bg-green-50" },
           { label: "Paused", value: stats?.paused ?? promos.filter(p => getEffectiveStatus(p) === 'PAUSED').length, icon: <Pause className="w-4 h-4 text-yellow-600" />, color: "bg-yellow-50" },
           { label: "Total Uses", value: stats?.totalUses ?? promos.reduce((s, p) => s + p.usageCount, 0), icon: <Users className="w-4 h-4 text-primary" />, color: "bg-primary/5" },
-          { label: "Savings Generated", value: stats?.totalDiscount != null ? formatCurrency(stats.totalDiscount) : "—", icon: <TrendingUp className="w-4 h-4 text-blue-600" />, color: "bg-blue-50" },
+          { label: "Savings Generated", value: stats?.totalDiscount != null ? fmt(stats.totalDiscount) : "—", icon: <TrendingUp className="w-4 h-4 text-blue-600" />, color: "bg-blue-50" },
         ].map(({ label, value, icon, color }) => (
           <Card key={label} className="rounded-xl border-border/60">
             <CardContent className="p-4 flex items-center gap-3">

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ShoppingBag, Clock, CheckCircle, DollarSign, Star } from "lucide-react";
@@ -22,6 +23,7 @@ const fakeTopSuppliers = [
 
 export default function CafeDashboard() {
   const { user } = useAuth();
+  const fmt = useFormatCurrency();
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
 
   const total = orders.length;
@@ -75,7 +77,7 @@ export default function CafeDashboard() {
               <p className="text-xs text-muted-foreground">Total Money Spent</p>
               <DollarSign className="w-4 h-4 text-primary" />
             </div>
-            <p className="text-2xl font-bold text-primary">TND {(spent / 100).toFixed(0)}</p>
+            <p className="text-2xl font-bold text-primary">{fmt(spent)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -125,7 +127,7 @@ export default function CafeDashboard() {
                       <p className="text-sm font-medium text-foreground">{s.name}</p>
                       <p className="text-xs text-muted-foreground">{s.orders} orders</p>
                     </div>
-                    <span className="text-sm font-semibold text-amber-500">TND {(s.total / 100).toFixed(0)}</span>
+                    <span className="text-sm font-semibold text-amber-500">{fmt(s.total)}</span>
                   </div>
                 ))}
               </div>

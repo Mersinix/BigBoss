@@ -1,0 +1,267 @@
+Do NOT restart the feature. Do NOT rewrite the currency system. Continue only from the latest work.
+
+The latest commit is:
+
+Currency System Strategy PART THREE
+
+Inside this commit you will also find the continuation prompt:
+
+Pasted-Do-not-restart-the-feature-Continue-from-the-latest-wor_1785418741313.txt
+
+That prompt already references the previous work. Use both the commit and the prompt as the source of truth.
+
+Mission
+
+This is now the final completion pass for the Global Currency Strategy.
+
+Your goal is to finish the remaining work only.
+
+Do NOT reimplement anything that already works.
+
+Do NOT create another formatter.
+
+Do NOT create another hook.
+
+Do NOT redesign any UI.
+
+Only complete what is still missing.
+
+Phase 1 — Full Audit
+
+Before modifying anything:
+
+Read the continuation prompt.
+Review every file modified in Currency System Strategy PART THREE.
+Compare the implementation against the original specification.
+Produce an internal checklist of:
+✅ Already completed
+⚠️ Partially completed
+❌ Missing
+❌ Broken
+❌ Runtime errors
+❌ Compile errors
+❌ Remaining hardcoded currencies
+❌ Remaining old formatter usages
+❌ Synchronization gaps
+
+Only then continue.
+
+Phase 2 — Finish Every Remaining Currency Issue
+
+The project must end with one single centralized currency system.
+
+Everything displaying money must use it.
+
+There must not be:
+
+duplicated formatters
+duplicated hooks
+duplicated currency state
+local formatters
+manual currency concatenation
+hardcoded symbols
+Complete Project-Wide Audit
+
+Search the entire repository for every remaining occurrence of:
+
+formatCurrency(
+$
+DT
+€
+£
+"USD"
+"TND"
+"EUR"
+"GBP"
+manual string concatenation with prices
+local formatter helpers
+duplicated currency utilities
+
+Replace only the remaining incorrect usages with the centralized currency formatter.
+
+Verify Every Feature
+
+Carefully verify every place where money is displayed.
+
+Admin
+
+Verify:
+
+Dashboard
+Product Management
+Product Edit
+Inventory
+Promotions
+Packs
+Orders
+Reviews
+Statistics
+Analytics
+System Management
+Every modal
+Every table
+Every card
+Supplier
+
+Verify:
+
+Dashboard
+Products
+Admin Products
+My Products
+Variant Builder
+Inventory
+Promotions
+Packs
+Orders
+Returns
+Reviews
+Statistics
+Every modal
+Every preview
+Every card
+Coffee Owner
+
+Verify:
+
+Shop
+Store
+Product Cards
+Pack Cards
+Flash Mode
+Favorites
+Product Details
+Pack Details
+Cart
+Checkout
+Order Confirmation
+Orders
+Order Details
+My Account
+Reviews
+Dashboard
+Every modal
+Every card
+Verify Every Monetary Value
+
+Ensure all of the following use the centralized formatter:
+
+Product prices
+Pack prices
+Promotion prices
+Old prices
+Discount prices
+Variant prices
+Inventory values
+Totals
+Subtotals
+Shipping
+Cart totals
+Checkout totals
+Order totals
+Statistics
+Revenue
+Dashboard KPIs
+Analytics
+Preview cards
+Runtime Verification
+
+Verify there are no runtime errors caused by the partial migration.
+
+Specifically check for:
+
+formatCurrency is not defined
+fmt is not defined
+missing hook imports
+duplicated imports
+unused imports
+hook placement issues
+React hook violations
+
+Ensure every component using the formatter correctly initializes the centralized currency hook.
+
+Realtime Synchronization
+
+Verify that changing the currency in:
+
+Admin → System Management
+
+updates immediately for:
+
+Admin
+Supplier
+Coffee Owner
+
+without refreshing.
+
+Verify:
+
+Product Cards
+Pack Cards
+Product Details
+Pack Details
+Flash Mode
+Cart
+Checkout
+Orders
+Statistics
+Inventory
+Promotions
+Dashboards
+Modals
+
+Everything should update instantly.
+
+Persistence
+
+Verify the selected currency:
+
+survives page refresh
+survives logout/login
+survives server restart
+survives deployment
+is correctly loaded for every new session
+Existing Prices
+
+Do NOT convert stored values.
+
+Only the displayed currency changes.
+
+Example:
+
+Stored value:
+
+100
+
+Display:
+
+$100
+DT100
+£100
+€100
+
+depending on the global currency selected by the admin.
+
+Final Quality Assurance
+
+Before considering the task complete, perform one final project-wide verification:
+
+No remaining hardcoded currency symbols.
+No remaining old formatter usages.
+No duplicate formatter implementations.
+No duplicate currency hooks.
+No duplicate currency state.
+No runtime errors.
+No TypeScript errors.
+No synchronization issues.
+No regressions.
+No UI changes unrelated to currency.
+Important Rules
+Do NOT redesign the UI.
+Do NOT modify unrelated business logic.
+Do NOT change layouts.
+Do NOT remove existing functionality.
+Do NOT rewrite working code.
+Do NOT create a new currency architecture.
+
+This is the final completion pass. Finish only the remaining unfinished work required to fully complete the global currency strategy exactly as specified, while preserving everything else in the project.

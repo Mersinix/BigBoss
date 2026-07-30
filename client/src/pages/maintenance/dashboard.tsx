@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useCurrency } from "@/hooks/use-currency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -187,6 +188,7 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule }: {
 
 export default function MaintenanceDashboard() {
   const { user } = useAuth();
+  const currency = useCurrency();
   const [activeTab, setActiveTab] = useState<"planning" | "profile" | "availability">("planning");
   const [planTab, setPlanTab] = useState<"today" | "upcoming" | "past">("upcoming");
   const [reservations, setReservations] = useState(FAKE_RESERVATIONS);
@@ -382,7 +384,7 @@ export default function MaintenanceDashboard() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-gray-500">Tarif journalier (TND)</Label>
+                    <Label className="text-xs text-gray-500">Tarif journalier ({currency})</Label>
                     <Input value={dailyRate} onChange={(e) => setDailyRate(e.target.value)} type="number" className="h-9 rounded-xl mt-0.5" />
                   </div>
                   <div>

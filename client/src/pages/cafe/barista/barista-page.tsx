@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import baristaHeroImg from "@assets/8d80708f-be87-4e8d-8805-f60e3c292914-1000x562.5-rjZKXkudAsN4bH_1780680229193.jpg";
 import { Link, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -265,6 +266,7 @@ function TrainingCard({
   user: ReturnType<typeof useAuth>["user"];
 }) {
   const hasAccess = accessLevel === "approved";
+  const fmt = useFormatCurrency();
   const faved = useFavorites((s) => !!s.academy[program.id]);
   const toggleAcademy = useFavorites((s) => s.toggleAcademy);
 
@@ -332,7 +334,7 @@ function TrainingCard({
               <div>
                 <p className="text-[10px] text-gray-400">Prix</p>
                 <p className="font-bold text-sm text-green-600">
-                  {(program.priceInCents / 100).toFixed(0)} TND
+                  {fmt(program.priceInCents)}
                 </p>
               </div>
               <Button
@@ -364,6 +366,7 @@ function BaristaCard({
   user: ReturnType<typeof useAuth>["user"];
 }) {
   const hasAccess = accessLevel === "approved";
+  const fmt = useFormatCurrency();
   const faved = useFavorites((s) => !!s.baristaMarket[barista.id]);
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
 
@@ -450,7 +453,7 @@ function BaristaCard({
               <div>
                 <p className="text-[10px] text-gray-400">Tarif / jour</p>
                 <p className="font-bold text-sm text-green-600">
-                  {(barista.dailyRateInCents / 100).toFixed(0)} TND
+                  {fmt(barista.dailyRateInCents)}
                 </p>
               </div>
               <div className="flex gap-1.5">

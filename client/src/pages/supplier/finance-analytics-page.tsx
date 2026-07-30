@@ -31,6 +31,7 @@ const tooltipStyle = {
 };
 
 export default function FinanceAnalyticsPage() {
+  const currency = useCurrency();
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
@@ -40,10 +41,10 @@ export default function FinanceAnalyticsPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Revenue", value: "TND 3,624", icon: TrendingUp, cls: "text-amber-500 bg-amber-500/10" },
+          { label: "Total Revenue", value: `${currency} 3,624`, icon: TrendingUp, cls: "text-amber-500 bg-amber-500/10" },
           { label: "Total Orders", value: "162", icon: ShoppingBag, cls: "text-primary bg-primary/10" },
           { label: "Products Listed", value: "27", icon: Package, cls: "text-green-600 bg-green-500/10" },
-          { label: "Platform Fee", value: "TND 181", icon: Percent, cls: "text-blue-600 bg-blue-500/10" },
+          { label: "Platform Fee", value: `${currency} 181`, icon: Percent, cls: "text-blue-600 bg-blue-500/10" },
         ].map(({ label, value, icon: Icon, cls }) => (
           <Card key={label}>
             <CardContent className="p-5 flex items-center gap-4">
@@ -56,14 +57,14 @@ export default function FinanceAnalyticsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader><CardTitle className="text-base font-semibold">Monthly Revenue (TND)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base font-semibold">Monthly Revenue ({currency})</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthly} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip {...tooltipStyle} formatter={(v: any) => [`TND ${v}`, "Revenue"]} />
+                <Tooltip {...tooltipStyle} formatter={(v: any) => [`${currency} ${v}`, "Revenue"]} />
                 <Bar dataKey="revenue" fill="#d97706" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -99,7 +100,7 @@ export default function FinanceAnalyticsPage() {
                     <p className="text-xs text-muted-foreground">{c.orders} orders</p>
                   </div>
                 </div>
-                <span className="font-semibold text-sm text-amber-500">TND {c.revenue}</span>
+                <span className="font-semibold text-sm text-amber-500">{currency} {c.revenue}</span>
               </div>
             ))}
           </div>

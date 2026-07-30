@@ -215,6 +215,7 @@ export default function PrintDetailPage() {
   const [generalQuantity, setGeneralQuantity] = useState(product?.minQuantity ?? 1);
   const [notes, setNotes] = useState("");
   const [added, setAdded] = useState(false);
+  const fmt = useFormatCurrency();
 
   if (!product) {
     return (
@@ -445,7 +446,7 @@ export default function PrintDetailPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Prix unitaire</span>
-                  <span className="font-medium">{formatCurrency(product.basePrice)} / {product.priceUnit}</span>
+                  <span className="font-medium">{fmt(product.basePrice)} / {product.priceUnit}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Quantité</span>
@@ -465,7 +466,7 @@ export default function PrintDetailPage() {
                 </div>
                 <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
                   <span className="font-bold text-gray-900">Sous-total</span>
-                  <span className="text-xl font-bold text-blue-600">{formatCurrency(subtotal)}</span>
+                  <span className="text-xl font-bold text-blue-600">{fmt(subtotal)}</span>
                 </div>
               </div>
 

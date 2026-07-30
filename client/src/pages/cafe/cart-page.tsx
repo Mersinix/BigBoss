@@ -42,6 +42,7 @@ export default function CartPage() {
   const [deliveryPickerOpen, setDeliveryPickerOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const fmt = useFormatCurrency();
 
   // ── Theme tokens ─────────────────────────────────────────────────────────────
   const dk          = isDark;
@@ -232,7 +233,7 @@ export default function CartPage() {
                           <Store className="w-4 h-4 text-amber-500 shrink-0" />
                           <span className={`font-semibold text-sm truncate ${textPrimary}`}>{group.supplierName}</span>
                         </div>
-                        <span className={`text-sm font-medium shrink-0 ${textPrimary}`}>{formatCurrency(supplierTotal)}</span>
+                        <span className={`text-sm font-medium shrink-0 ${textPrimary}`}>{fmt(supplierTotal)}</span>
                       </div>
                       <div className={`divide-y ${divideClr}`}>
                         {group.items.map((item) => {
@@ -249,7 +250,7 @@ export default function CartPage() {
                               <div className="flex-1 min-w-0">
                                 <p className={`font-medium text-sm truncate ${textPrimary}`}>{item.productName}</p>
                                 {variantLabel && <p className={`text-xs truncate ${textMuted}`}>{variantLabel}</p>}
-                                <p className={`text-xs ${textMuted}`}>{formatCurrency(item.unitPrice)} chacun</p>
+                                <p className={`text-xs ${textMuted}`}>{fmt(item.unitPrice)} chacun</p>
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <div className={`flex items-center border rounded-xl overflow-hidden ${borderClr}`}>
                                     <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, Math.max(1, item.quantity - 1))} data-testid={`button-decrease-${item.listingId}`}><Minus className={`w-3 h-3 ${textMuted}`} /></button>
@@ -259,7 +260,7 @@ export default function CartPage() {
                                 </div>
                               </div>
                               <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
-                                <p className={`font-bold text-sm ${textPrimary}`}>{formatCurrency(item.unitPrice * item.quantity)}</p>
+                                <p className={`font-bold text-sm ${textPrimary}`}>{fmt(item.unitPrice * item.quantity)}</p>
                                 <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removeItem(item.listingId, item.flavorId, item.sizeId)} data-testid={`button-remove-${item.listingId}`}><Trash2 className="w-4 h-4" /></button>
                               </div>
                             </div>
@@ -277,7 +278,7 @@ export default function CartPage() {
                         <Layers className="w-4 h-4 text-amber-500 shrink-0" />
                         <span className={`font-semibold text-sm truncate ${dk ? "text-amber-400" : "text-amber-700"}`}>{pack.supplierName} · Pack</span>
                       </div>
-                      <span className={`text-sm font-medium shrink-0 ${dk ? "text-amber-400" : "text-amber-700"}`}>{formatCurrency(pack.unitPrice * pack.quantity)}</span>
+                      <span className={`text-sm font-medium shrink-0 ${dk ? "text-amber-400" : "text-amber-700"}`}>{fmt(pack.unitPrice * pack.quantity)}</span>
                     </div>
                     <div className="p-3 sm:p-4">
                       <div className="flex gap-3">
@@ -290,7 +291,7 @@ export default function CartPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`font-medium text-sm truncate ${textPrimary}`}>{pack.packName}</p>
-                          <p className={`text-xs ${textMuted}`}>{formatCurrency(pack.unitPrice)} le pack</p>
+                          <p className={`text-xs ${textMuted}`}>{fmt(pack.unitPrice)} le pack</p>
                           {pack.includedProducts.length > 0 && (
                             <p className={`text-xs mt-0.5 line-clamp-1 ${textMuted}`}>
                               {pack.includedProducts.map((ip) => `${ip.quantity}× ${ip.productName}`).join(", ")}
@@ -305,7 +306,7 @@ export default function CartPage() {
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
-                          <p className={`font-bold text-sm ${textPrimary}`}>{formatCurrency(pack.unitPrice * pack.quantity)}</p>
+                          <p className={`font-bold text-sm ${textPrimary}`}>{fmt(pack.unitPrice * pack.quantity)}</p>
                           <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePackItem(pack.packId)} data-testid={`button-remove-pack-${pack.packId}`}><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
@@ -333,7 +334,7 @@ export default function CartPage() {
                           <Printer className={`w-4 h-4 shrink-0 ${dk ? "text-blue-400" : "text-blue-600"}`} />
                           <span className={`font-semibold text-sm truncate ${dk ? "text-blue-400" : "text-blue-700"}`}>{item.brandName}</span>
                         </div>
-                        <span className={`text-sm font-medium shrink-0 ${dk ? "text-blue-400" : "text-blue-700"}`}>{formatCurrency(item.unitPrice * item.totalQuantity)}</span>
+                        <span className={`text-sm font-medium shrink-0 ${dk ? "text-blue-400" : "text-blue-700"}`}>{fmt(item.unitPrice * item.totalQuantity)}</span>
                       </div>
                       <div className="p-3 sm:p-4">
                         <div className="flex gap-3">
@@ -387,7 +388,7 @@ export default function CartPage() {
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
-                            <p className={`font-bold text-sm ${textPrimary}`}>{formatCurrency(item.unitPrice * item.totalQuantity)}</p>
+                            <p className={`font-bold text-sm ${textPrimary}`}>{fmt(item.unitPrice * item.totalQuantity)}</p>
                             <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePrintItem(item.id)} data-testid={`button-remove-print-${item.id}`}>
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -481,12 +482,12 @@ export default function CartPage() {
                         <div key={sid}>
                           <div className={`flex justify-between ${textMuted}`}>
                             <span className="truncate mr-2">{group.supplierName}</span>
-                            <span>{formatCurrency(supTotal)}</span>
+                            <span>{fmt(supTotal)}</span>
                           </div>
                           {promoResult && promoResult.discountAmount > 0 && (
                             <div className="flex justify-between text-green-500 text-xs mt-0.5">
                               <span className="flex items-center gap-1"><Tag className="w-3 h-3" />{promoResult.promotionName ?? 'Promotion'}</span>
-                              <span>−{formatCurrency(promoResult.discountAmount)}</span>
+                              <span>−{fmt(promoResult.discountAmount)}</span>
                             </div>
                           )}
                           {promoResult?.freeShipping && (
@@ -505,18 +506,18 @@ export default function CartPage() {
                     {packItems.length > 0 && (
                       <div className={`flex justify-between ${textMuted}`}>
                         <span>Packs</span>
-                        <span>{formatCurrency(totalPack)}</span>
+                        <span>{fmt(totalPack)}</span>
                       </div>
                     )}
                     {promoEval.totalDiscount > 0 && (
                       <div className={`flex justify-between text-green-500 font-medium border-t pt-2 ${dk ? "border-green-500/20" : "border-green-100"}`}>
                         <span>Promotion savings</span>
-                        <span>−{formatCurrency(promoEval.totalDiscount)}</span>
+                        <span>−{fmt(promoEval.totalDiscount)}</span>
                       </div>
                     )}
                     <div className={`border-t pt-3 flex justify-between items-center font-bold ${borderClr}`}>
                       <span className={textPrimary}>Total SHOP</span>
-                      <span className="text-xl text-amber-500">{formatCurrency(Math.max(0, totalShop + totalPack - promoEval.totalDiscount))}</span>
+                      <span className="text-xl text-amber-500">{fmt(Math.max(0, totalShop + totalPack - promoEval.totalDiscount))}</span>
                     </div>
                   </div>
 
@@ -546,12 +547,12 @@ export default function CartPage() {
                     {printItems.map((item) => (
                       <div key={item.id} className={`flex justify-between ${textMuted}`}>
                         <span className="truncate mr-2">{item.printProductName}</span>
-                        <span>{formatCurrency(item.unitPrice * item.totalQuantity)}</span>
+                        <span>{fmt(item.unitPrice * item.totalQuantity)}</span>
                       </div>
                     ))}
                     <div className={`border-t pt-3 flex justify-between items-center font-bold ${dk ? "border-blue-500/20" : "border-blue-100"}`}>
                       <span className={textPrimary}>Total PRINT</span>
-                      <span className={`text-xl ${dk ? "text-blue-400" : "text-blue-600"}`}>{formatCurrency(totalPrint)}</span>
+                      <span className={`text-xl ${dk ? "text-blue-400" : "text-blue-600"}`}>{fmt(totalPrint)}</span>
                     </div>
                   </div>
                   <button
@@ -574,7 +575,7 @@ export default function CartPage() {
                 <div className="p-5">
                   <div className="flex justify-between items-center">
                     <span className={`font-bold ${textMuted}`}>Total général</span>
-                    <span className={`text-2xl font-bold ${textPrimary}`}>{formatCurrency(grandTotal)}</span>
+                    <span className={`text-2xl font-bold ${textPrimary}`}>{fmt(grandTotal)}</span>
                   </div>
                 </div>
               </div>

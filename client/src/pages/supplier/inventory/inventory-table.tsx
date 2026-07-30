@@ -32,6 +32,7 @@ export function InventoryTable({
   onDelete: (item: InventoryItem) => void;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const fmt = useFormatCurrency();
   const allSelected = items.length > 0 && items.every((i) => selectedIds.has(i.listingId));
 
   const toggleExpand = (listingId: number) => {
@@ -124,8 +125,8 @@ export function InventoryTable({
                       </>
                     )}
                   </TableCell>
-                  <TableCell className="font-medium">{formatCurrency(item.price)}</TableCell>
-                  <TableCell className="text-sm">{formatCurrency(item.inventoryValue)}</TableCell>
+                  <TableCell className="font-medium">{fmt(item.price)}</TableCell>
+                  <TableCell className="text-sm">{fmt(item.inventoryValue)}</TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <Badge variant="secondary" className={`${STOCK_BADGE[item.stockStatus]} border-0 w-fit`}>{STOCK_LABEL[item.stockStatus]}</Badge>
@@ -189,7 +190,7 @@ export function InventoryTable({
                         <p className="text-xs text-muted-foreground">max {variant.maxStock}</p>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm font-medium">{formatCurrency(variant.price)}</TableCell>
+                    <TableCell className="text-sm font-medium">{fmt(variant.price)}</TableCell>
                     <TableCell /> {/* Value — aggregate shown at product level */}
                     <TableCell>
                       <Badge variant="secondary" className={`${STOCK_BADGE[variant.stockStatus]} border-0 w-fit`}>

@@ -562,6 +562,7 @@ export function PackQuickViewModal() {
   // ── Dark / light mode (dark by default) ───────────────────────────────────
   const [isDark, setIsDark] = useState(true);
   const t = useTheme(isDark);
+  const fmt = useFormatCurrency();
 
   // ── Scroll detection for fixed header ─────────────────────────────────────
   const [scrolled, setScrolled] = useState(false);
@@ -819,10 +820,10 @@ export function PackQuickViewModal() {
                       className={`text-2xl font-extrabold ${t.dk ? "text-amber-400" : "text-amber-600"}`}
                       data-testid="text-pack-price"
                     >
-                      {formatCurrency(pack.price)}
+                      {fmt(pack.price)}
                     </span>
                     {individualTotal > pack.price && (
-                      <span className={`text-sm line-through ${t.textMuted}`}>{formatCurrency(individualTotal)}</span>
+                      <span className={`text-sm line-through ${t.textMuted}`}>{fmt(individualTotal)}</span>
                     )}
                   </div>
 
@@ -1021,7 +1022,7 @@ export function PackQuickViewModal() {
                   ? "Out of stock"
                   : !flavorSelectionsValid
                     ? "Complete flavor selection"
-                    : `Ajouter au panier · ${formatCurrency(pack.price * qty)}`
+                    : `Ajouter au panier · ${fmt(pack.price * qty)}`
                 }
               </button>
             </div>

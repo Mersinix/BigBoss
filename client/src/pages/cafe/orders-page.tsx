@@ -29,6 +29,7 @@ export default function CafeOrdersPage() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [calOpen, setCalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
+  const fmt = useFormatCurrency();
 
   const merged = [...apiOrders].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -141,7 +142,7 @@ export default function CafeOrdersPage() {
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total</p>
-                      <p className="text-sm mt-0.5 font-bold">{formatCurrency(order.totalAmount)}</p>
+                      <p className="text-sm mt-0.5 font-bold">{fmt(order.totalAmount)}</p>
                     </div>
                   </div>
                   <Badge variant="outline" className={`${meta.color} border px-3 py-1 text-xs font-bold rounded-lg flex items-center gap-1.5`}>

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +10,7 @@ import { FileText, Download } from "lucide-react";
 export default function InvoicesPage() {
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const invoiceOrders = orders.filter((o) => ["DELIVERED", "IN_DELIVERY", "CONFIRMED"].includes(o.status));
+  const fmt = useFormatCurrency();
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -37,7 +39,7 @@ export default function InvoicesPage() {
             <div>
               <p className="text-xs text-muted-foreground font-medium">Total Invoiced Amount</p>
               <p className="text-2xl font-bold text-green-600">
-                ${(invoiceOrders.reduce((s, o) => s + (o.totalAmount || 0), 0) / 100).toFixed(2)}
+                {fmt(invoiceOrders.reduce((s, o) => s + (o.totalAmount || 0), 0))}
               </p>
             </div>
           </CardContent>
@@ -72,7 +74,7 @@ export default function InvoicesPage() {
                     <TableCell className="font-medium">INV-{String(o.id).padStart(4, "0")}</TableCell>
                     <TableCell>{o.cafe?.name}</TableCell>
                     <TableCell>{o.supplier?.name}</TableCell>
-                    <TableCell>DT{((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
+                    <TableCell>{fmt(o.totalAmount || 0)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {o.createdAt ? new Date(o.createdAt).toLocaleDateString() : "—"}
                     </TableCell>

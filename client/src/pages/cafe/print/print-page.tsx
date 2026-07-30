@@ -69,6 +69,7 @@ function PrintProductCard({ product, onClick }: { product: PrintProduct; onClick
   const category = getPrintCategory(product.categoryId);
   const faved = useFavorites((s) => !!s.print[product.id]);
   const togglePrint = useFavorites((s) => s.togglePrint);
+  const fmt = useFormatCurrency();
 
   return (
     <div
@@ -118,7 +119,7 @@ function PrintProductCard({ product, onClick }: { product: PrintProduct; onClick
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[10px] text-gray-400">À partir de</p>
-              <p className="font-bold text-sm text-blue-600">{formatCurrency(product.basePrice)}<span className="text-[10px] text-gray-400 font-normal">/{product.priceUnit}</span></p>
+              <p className="font-bold text-sm text-blue-600">{fmt(product.basePrice)}<span className="text-[10px] text-gray-400 font-normal">/{product.priceUnit}</span></p>
             </div>
             <div className="flex items-center gap-1 text-[11px] text-gray-400">
               <Clock className="w-3 h-3" />

@@ -137,6 +137,7 @@ function AccountPanel({
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
   const [notifs, setNotifs] = useState({ orderUpdates: true, promotions: false, newSuppliers: true });
+  const fmt = useFormatCurrency();
 
   // Auto-open a specific order when directed from the checkout flow
   useEffect(() => {
@@ -276,7 +277,7 @@ function AccountPanel({
                         )}
                         <div className="flex items-center justify-between">
                           <span className={`text-xs ${textMuted}`}>{order.createdAt ? formatDate(order.createdAt) : "—"}</span>
-                          <span className={`text-sm font-bold ${dk ? "text-amber-400" : "text-amber-600"}`}>{formatCurrency(order.totalAmount)}</span>
+                          <span className={`text-sm font-bold ${dk ? "text-amber-400" : "text-amber-600"}`}>{fmt(order.totalAmount)}</span>
                         </div>
                       </button>
                     );
@@ -399,6 +400,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
 
   const openQuickView = useQuickView((s) => s.open);
   const openPackQuickView = usePackQuickView((s) => s.open);
+  const fmt = useFormatCurrency();
 
   // Fetch pack details for favorited packs
   const packFavIds = Object.keys(pack).map(Number);
@@ -563,7 +565,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   <div className="p-3">
                     <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{item.name}</p>
                     <p className={`text-xs mt-0.5 ${textMuted}`}>{item.supplier}</p>
-                    <p className={`text-sm font-bold mt-1 ${dk ? "text-blue-400" : "text-blue-600"}`}>{formatCurrency(item.price)}</p>
+                    <p className={`text-sm font-bold mt-1 ${dk ? "text-blue-400" : "text-blue-600"}`}>{fmt(item.price)}</p>
                   </div>
                 </div>
               ))}
@@ -602,7 +604,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   <div className="p-3">
                     <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{p.name}</p>
                     <p className={`text-xs mt-0.5 ${textMuted}`}>{p.supplierName}</p>
-                    <p className={`text-sm font-bold mt-1 ${dk ? "text-amber-400" : "text-amber-600"}`}>{formatCurrency(p.price)}</p>
+                    <p className={`text-sm font-bold mt-1 ${dk ? "text-amber-400" : "text-amber-600"}`}>{fmt(p.price)}</p>
                   </div>
                 </div>
               ))}
@@ -673,7 +675,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                     <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{item.name}</p>
                     <p className={`text-xs mt-0.5 ${textMuted}`}>{item.brand}</p>
                     <p className={`text-sm font-bold mt-1 ${dk ? "text-blue-400" : "text-blue-600"}`}>
-                      {formatCurrency(item.price)}<span className={`text-[10px] font-normal ${textMuted}`}>/{item.priceUnit}</span>
+                      {fmt(item.price)}<span className={`text-[10px] font-normal ${textMuted}`}>/{item.priceUnit}</span>
                     </p>
                   </div>
                 </div>

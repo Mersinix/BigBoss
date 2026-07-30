@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCurrency } from "@/hooks/use-currency";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,8 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DollarSign, CreditCard, TrendingUp } from "lucide-react";
 
 export default function PaymentsPage() {
-  const currency = useCurrency();
+  const fmt = useFormatCurrency();
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
+  // NOTE: 'currency' was renamed to 'fmt' — all {currency}... expressions below use fmt(...)
 
   const totalRevenue = orders
     .filter((o) => o.status === "DELIVERED")

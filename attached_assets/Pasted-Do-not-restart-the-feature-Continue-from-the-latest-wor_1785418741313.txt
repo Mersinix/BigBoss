@@ -1,0 +1,248 @@
+Do not restart the feature. Continue from the latest work only.
+
+The latest commit is:
+
+Currency System Strategy PART TWO
+
+Inside this commit you will also find the continuation prompt:
+
+Pasted-Please-do-not-restart-the-feature-from-scratch-First-ch_1785417095004.txt
+
+That prompt already references the original implementation, so use both the commit and the prompt as the source of truth.
+
+Objective
+
+Your task is NOT to redesign or reimplement the currency system.
+
+Your task is to:
+
+Read the continuation prompt.
+Review every file modified in Currency System Strategy PART TWO.
+Compare the implementation against the specification.
+Finish only what is still missing.
+Verify the entire project for consistency.
+
+Do not rewrite working code.
+
+Do not duplicate logic.
+
+Do not create a second currency system.
+
+Phase 1 — Complete Audit
+
+Perform a complete audit before modifying anything.
+
+Identify:
+
+✅ Completed correctly.
+⚠️ Partially completed.
+❌ Missing.
+❌ Broken.
+❌ Still using hardcoded currency.
+❌ Still using the old formatter.
+❌ Components that import the formatter but don't use the global currency hook.
+❌ Components that still manually concatenate currency strings.
+❌ Realtime synchronization gaps.
+
+Only after the audit should you continue.
+
+Phase 2 — Finish the Currency Strategy
+
+The project must end with one centralized global currency system.
+
+There must not be:
+
+duplicate formatters
+duplicated hooks
+duplicated state
+local currency implementations
+hardcoded currency strings
+
+Everything must use the same global currency source.
+
+Verify every screen
+
+Perform a project-wide verification of every screen that displays money.
+
+Admin
+
+Verify:
+
+Dashboard
+Product Management
+Inventory
+Promotions
+Packs
+Orders
+Reviews
+Statistics
+Analytics
+System Management
+Every modal
+Supplier
+
+Verify:
+
+Dashboard
+Products
+Product Preview
+Variant Builder
+Inventory
+Promotions
+Packs
+Orders
+Returns
+Reviews
+Statistics
+Every modal
+Coffee Owner
+
+Verify:
+
+Shop
+Store
+Product cards
+Pack cards
+Product Details
+Pack Details
+Flash Mode
+Favorites
+Cart
+Checkout
+Order Summary
+Orders
+Order Details
+My Account
+Dashboard
+Reviews
+Every modal
+Cards
+
+Verify every card showing prices.
+
+Examples:
+
+Product Card
+Pack Card
+Promotion Card
+Store Card
+Flash Card
+Favorite Card
+
+All prices must use the centralized formatter.
+
+Modals
+
+Verify every modal.
+
+Examples:
+
+Product Details
+Pack Details
+Cart
+Checkout
+Order Confirmation
+Order Details
+Preview
+Reviews
+Promotions
+
+Every displayed price must use the global currency.
+
+Orders
+
+Verify every order view.
+
+Including:
+
+Admin
+Supplier
+Coffee Owner
+
+Every subtotal, total, item price, pack price, shipping amount, and summary must use the global currency formatter.
+
+Statistics
+
+Verify:
+
+Revenue
+Sales
+Totals
+Inventory values
+Dashboard widgets
+Analytics
+
+No hardcoded currency symbols.
+
+Search the entire project
+
+Perform a complete project search for any remaining:
+
+$
+DT
+€
+£
+currency literals
+manual concatenations
+old formatCurrency(...)
+duplicate formatter implementations
+duplicated currency helpers
+
+Replace every remaining occurrence with the centralized currency formatter where appropriate.
+
+Realtime Synchronization
+
+Verify that changing the currency in:
+
+Admin → System Management
+
+updates immediately everywhere without refreshing.
+
+Check:
+
+Admin
+Supplier
+Coffee Owner
+Product cards
+Pack cards
+Flash Mode
+Cart
+Checkout
+Orders
+Statistics
+Dashboards
+Modals
+Inventory
+Promotions
+
+Everything should update in real time.
+
+Persistence
+
+Verify that the selected currency:
+
+survives logout/login
+survives page refresh
+survives server restart
+survives deployment
+loads correctly for new sessions
+Final Consistency Audit
+
+Before considering the task complete, perform one last full verification to ensure:
+
+there is only one currency source
+there is only one formatter
+every monetary value uses it
+there are no remaining hardcoded currency symbols
+there are no duplicate implementations
+there are no synchronization issues
+there are no regressions to existing functionality
+Important Rules
+Do not redesign the UI.
+Do not change layouts.
+Do not modify unrelated business logic.
+Do not remove any existing features.
+Do not break synchronization.
+Preserve all existing behavior except for the remaining currency-related work.
+
+Complete only the unfinished parts required to fully deliver the global currency strategy exactly as specified.

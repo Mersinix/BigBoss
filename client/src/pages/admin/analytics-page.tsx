@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCurrency } from "@/hooks/use-currency";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -7,7 +7,7 @@ import { TrendingUp, Users, Package, ShoppingBag } from "lucide-react";
 import type { User } from "@shared/schema";
 
 export default function AnalyticsPage() {
-  const currency = useCurrency();
+  const fmt = useFormatCurrency();
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
   const { data: products = [] } = useQuery<any[]>({ queryKey: ["/api/products"] });
@@ -46,7 +46,7 @@ export default function AnalyticsPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Revenue</p>
-                <p className="text-xl font-bold text-green-600">{currency}{(totalRevenue / 100).toFixed(2)}</p>
+                <p className="text-xl font-bold text-green-600">{fmt(totalRevenue)}</p>
               </div>
             </CardContent>
           </Card>

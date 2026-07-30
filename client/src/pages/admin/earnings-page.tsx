@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCurrency } from "@/hooks/use-currency";
+import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,7 +7,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { DollarSign, TrendingUp, TrendingDown, Percent } from "lucide-react";
 
 export default function EarningsPage() {
-  const currency = useCurrency();
+  const fmt = useFormatCurrency();
+  const currency = useCurrency(); // used only for Recharts tooltip formatter (decimal values)
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
 
   const deliveredOrders = orders.filter((o) => o.status === "DELIVERED");
@@ -54,7 +55,7 @@ export default function EarningsPage() {
                   <DollarSign className="w-4 h-4 text-amber-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-amber-500">{currency}{(totalEarnings / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-amber-500">{fmt(totalEarnings)}</p>
               <p className="text-xs text-muted-foreground mt-1">All time delivered orders</p>
             </CardContent>
           </Card>
@@ -66,7 +67,7 @@ export default function EarningsPage() {
                   <TrendingUp className="w-4 h-4 text-green-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-green-500">{currency}{(thisMonth / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-green-500">{fmt(thisMonth)}</p>
               <p className="text-xs text-muted-foreground mt-1">Current month</p>
             </CardContent>
           </Card>
@@ -90,7 +91,7 @@ export default function EarningsPage() {
                   <Percent className="w-4 h-4 text-blue-500" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-blue-500">{currency}{(commission / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-blue-500">{fmt(commission)}</p>
               <p className="text-xs text-muted-foreground mt-1">5% of total</p>
             </CardContent>
           </Card>
@@ -121,7 +122,7 @@ export default function EarningsPage() {
                       borderRadius: 8,
                       fontSize: 12,
                     }}
-                    formatter={(v: any) => [`$${Number(v).toFixed(2)}`, "Revenue"]}
+                    formatter={(v: any) => [`${currency}${Number(v).toFixed(2)}`, "Revenue"]}
                   />
                   <Bar dataKey="revenue" fill="#d97706" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -154,7 +155,7 @@ export default function EarningsPage() {
                       <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell>{s.orders}</TableCell>
                       <TableCell className="text-right font-semibold text-amber-500">
-                        ${(s.total / 100).toFixed(2)}
+                        {fmt(s.total)}
                       </TableCell>
                     </TableRow>
                   ))}

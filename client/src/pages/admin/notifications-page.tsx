@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Bell, ShoppingBag, Users, AlertCircle } from "lucide-react";
 
 export default function NotificationsPage() {
   const { data: orders = [] } = useQuery<any[]>({ queryKey: ["/api/orders"] });
+  const fmt = useFormatCurrency();
 
   const recentOrders = [...orders]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -15,7 +17,7 @@ export default function NotificationsPage() {
     icon: ShoppingBag,
     color: "text-primary bg-primary/10",
     title: `New order #${o.id} placed`,
-    description: `${o.cafe?.name} ordered from ${o.supplier?.name} — $${((o.totalAmount || 0) / 100).toFixed(2)}`,
+    description: `${o.cafe?.name} ordered from ${o.supplier?.name} — ${fmt(o.totalAmount || 0)}`,
     time: o.createdAt ? new Date(o.createdAt).toLocaleString() : "",
     badge: o.status,
   }));

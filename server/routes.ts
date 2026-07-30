@@ -255,7 +255,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/system-currency", requireAdmin, async (req, res) => {
     try {
       const { symbol } = req.body;
-      const VALID = ['DT', '$', '€', '£', 'AED', 'SAR', 'MAD', 'DZD', '¥', '₹', 'CHF', 'CAD', 'AUD'];
+      const VALID = ['DT', 'د.ت', '$', '€', '£', 'AED', 'SAR', 'MAD', 'DZD', '¥', '₹', 'CHF', 'CAD', 'AUD'];
       if (!symbol || !VALID.includes(symbol)) return res.status(400).json({ message: "Invalid currency symbol" });
       const saved = await storage.setCurrency(symbol);
       broadcast("currency_updated", { symbol: saved });

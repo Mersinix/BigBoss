@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Printer, Megaphone, Coffee, Wrench, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Printer, Megaphone, Coffee, Wrench, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
@@ -249,6 +250,95 @@ function LandingConfigSection() {
   );
 }
 
+// ── Global Currency ───────────────────────────────────────────────────────────
+
+const CURRENCY_OPTIONS: { symbol: string; label: string }[] = [
+  { symbol: "DT",   label: "DT — Tunisian Dinar" },
+  { symbol: "د.ت",  label: "د.ت — Dinar Tunisien (arabe)" },
+  { symbol: "$",    label: "$ — US Dollar" },
+  { symbol: "€",    label: "€ — Euro" },
+  { symbol: "£",    label: "£ — British Pound" },
+  { symbol: "AED",  label: "AED — UAE Dirham" },
+  { symbol: "SAR",  label: "SAR — Saudi Riyal" },
+  { symbol: "MAD",  label: "MAD — Moroccan Dirham" },
+  { symbol: "DZD",  label: "DZD — Algerian Dinar" },
+  { symbol: "¥",    label: "¥ — Japanese Yen" },
+  { symbol: "₹",    label: "₹ — Indian Rupee" },
+  { symbol: "CHF",  label: "CHF — Swiss Franc" },
+  { symbol: "CAD",  label: "CAD — Canadian Dollar" },
+  { symbol: "AUD",  label: "AUD — Australian Dollar" },
+];
+
+function GlobalCurrencySection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery<{ symbol: string }>({ queryKey: ["/api/system-currency"] });
+
+  const saveMutation = useMutation({
+    mutationFn: (symbol: string) => apiRequest("PATCH", "/api/admin/system-currency", { symbol }),
+    onSuccess: (_data, symbol) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/system-currency"] });
+      toast({ title: `✅ Currency updated to ${symbol}` });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Failed to update currency", description: "Please try again." });
+    },
+  });
+
+  const currentSymbol = data?.symbol ?? "DT";
+
+  return (
+    <Card data-testid="card-global-currency">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-muted rounded-lg p-2.5">
+            <CircleDollarSign className="w-5 h-5 text-foreground/70" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Global Currency</CardTitle>
+            <CardDescription className="pt-1 text-sm">
+              Currency symbol displayed across the entire platform for all users.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <SectionLabel>Active currency</SectionLabel>
+            <Select
+              value={currentSymbol}
+              onValueChange={(symbol) => saveMutation.mutate(symbol)}
+              disabled={saveMutation.isPending}
+            >
+              <SelectTrigger className="rounded-xl" data-testid="select-currency">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.symbol} value={opt.symbol} data-testid={`option-currency-${opt.symbol}`}>
+                    <span className="font-mono font-semibold mr-2">{opt.symbol}</span>
+                    <span className="text-muted-foreground text-sm">{opt.label.split("—")[1]?.trim()}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {saveMutation.isPending && (
+              <p className="text-xs text-muted-foreground">Saving…</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SystemManagementPage() {
@@ -321,6 +411,9 @@ export default function SystemManagementPage() {
               );
             })}
       </div>
+
+      {/* ── Global Currency ── */}
+      <GlobalCurrencySection />
 
       {/* ── Landing Page Config ── */}
       <LandingConfigSection />

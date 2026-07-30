@@ -1,0 +1,90 @@
+The global currency system is almost complete. Do not restart or rewrite the feature. Continue from the current implementation exactly as it is.
+
+Before making any changes:
+
+Review the latest currency implementation.
+Verify what is already implemented.
+Only complete what is still missing.
+Do not modify any unrelated functionality.
+Do not change any design outside of what is described below.
+Do not remove any existing features.
+Remaining task
+Admin → System Management
+
+The System Management page must contain a dedicated Global Currency section.
+
+If it already exists, verify that it is visible and fully connected.
+If it does not exist, add it using the existing design system of the page (same cards, spacing, colors, typography and components already used in System Management).
+
+The administrator must be able to choose the global project currency from a dropdown/picklist.
+
+Example values:
+
+$
+DT
+د.ت
+€
+£
+
+(Keep the system extensible so additional currencies can be added later.)
+
+Expected behavior
+
+When the administrator changes the currency:
+
+the new currency must immediately be saved
+it must become the global currency for the entire project
+it must persist after server restart
+it must broadcast the existing realtime event
+every connected client must update immediately without refreshing
+
+This includes every module already migrated to the currency system:
+
+Admin
+Coffee Owner
+Supplier
+Print
+Marketing
+Maintenance
+Barista
+Marketplace
+Products
+Packs
+Orders
+Cart
+Favorites
+Promotions
+Inventory
+Analytics
+every other page already using the global formatter
+
+Do not introduce another currency implementation.
+Use the existing one already created.
+
+Verification checklist
+
+Before finishing, verify that all of the following are true:
+
+A visible Currency selector exists in Admin → System Management.
+Changing the selector updates the global currency.
+The change is saved in the database.
+The value persists after restarting the application.
+The existing /api/system-currency endpoint is used.
+The existing realtime currency_updated broadcast is triggered.
+All connected clients receive the update instantly.
+No page refresh is required.
+No duplicate currency logic exists.
+No duplicate formatter exists.
+No duplicate realtime logic exists.
+No existing functionality is broken.
+Important
+
+Do not modify anything else in the project.
+
+Do not redesign the page.
+
+Do not change unrelated files.
+
+Do not refactor working code.
+
+Only complete the missing Admin → System Management → Global Currency UI and verify that it is fully synchronized with the existing backend and realtime currency system.

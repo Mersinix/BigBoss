@@ -852,6 +852,7 @@ function ArchivedPackRow({ pack, onToggleVisibility, onUnarchive, onDelete, onEd
   onDelete: () => void;
   onEdit: () => void;
 }) {
+  const fmt = useFormatCurrency();
   return (
     <Card className="overflow-hidden opacity-75" data-testid={`card-pack-archived-${pack.id}`}>
       <CardContent className="p-3 flex gap-3 items-center">

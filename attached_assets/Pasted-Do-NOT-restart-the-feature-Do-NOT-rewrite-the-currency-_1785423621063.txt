@@ -1,0 +1,273 @@
+Do NOT restart the feature. Do NOT rewrite the currency system. Continue only from the latest work.
+
+The latest commit is:
+
+Currency System Strategy PART FOUR
+
+Inside this commit you will also find the continuation prompt:
+
+Pasted-Do-NOT-restart-the-feature-Do-NOT-rewrite-the-currency-_1785422141467.txt
+
+This prompt already contains the previous instructions. Use both the commit and the prompt as the source of truth.
+
+Mission
+
+This is the final verification and completion pass for the Global Currency Strategy.
+
+The architecture has already been implemented through the previous commits.
+
+Your task is NOT to redesign or recreate it.
+
+Your task is to:
+
+audit the latest implementation,
+identify only what is still missing,
+finish those missing parts,
+perform a complete verification of the whole project.
+
+Do NOT rewrite working code.
+
+Do NOT duplicate existing logic.
+
+Do NOT create another formatter or another currency hook.
+
+Phase 1 — Complete Audit
+
+Before writing any code:
+
+Read:
+Pasted-Do-NOT-restart-the-feature-Do-NOT-rewrite-the-currency-_1785422141467.txt
+
+Review every file modified in:
+
+Currency System Strategy PART FOUR
+
+Compare the implementation with the original currency strategy.
+Build an internal checklist of:
+✅ Already complete
+⚠️ Partially complete
+❌ Missing
+❌ Runtime problems
+❌ TypeScript problems
+❌ Remaining hardcoded currencies
+❌ Remaining old formatter usages
+❌ Synchronization issues
+
+Only after the audit should you continue.
+
+Phase 2 — Repository-Wide Currency Audit
+
+Perform a complete repository search for any remaining occurrences of:
+
+formatCurrency(
+$
+DT
+€
+£
+USD
+TND
+EUR
+GBP
+manual currency concatenation
+duplicated formatter helpers
+duplicated currency utilities
+duplicated currency state
+duplicated currency hooks
+
+Replace only the remaining incorrect usages with the centralized global formatter.
+
+Do not modify already-correct files.
+
+Verify Every Feature
+
+Carefully verify every page that displays money.
+
+Admin
+
+Verify:
+
+Dashboard
+Product Management
+Product Edit
+Inventory
+Promotions
+Packs
+Orders
+Reviews
+Statistics
+Analytics
+System Management
+Every modal
+Every preview
+Every table
+Every card
+Supplier
+
+Verify:
+
+Dashboard
+Products
+Admin Products
+My Products
+Variant Builder
+Inventory
+Promotions
+Packs
+Orders
+Returns
+Reviews
+Statistics
+Every modal
+Every preview
+Every card
+Coffee Owner
+
+Verify:
+
+Shop
+Store
+Flash Mode
+Product Cards
+Pack Cards
+Product Details
+Pack Details
+Favorites
+Cart
+Checkout
+Order Confirmation
+Orders
+Order Details
+My Account
+Reviews
+Dashboard
+Every modal
+Every card
+Verify Every Monetary Value
+
+Ensure every monetary value uses the centralized formatter.
+
+Examples include:
+
+Product prices
+Pack prices
+Promotion prices
+Old prices
+Discount prices
+Variant prices
+Inventory values
+Dashboard totals
+Revenue
+Statistics
+Analytics
+Cart totals
+Checkout totals
+Shipping
+Order totals
+Subtotals
+Supplier totals
+Preview cards
+
+Nothing should bypass the global currency system.
+
+Runtime Verification
+
+Perform a full runtime verification.
+
+Check for:
+
+formatCurrency is not defined
+fmt is not defined
+missing hook imports
+duplicate imports
+unused imports
+invalid hook placement
+React Hook rule violations
+TypeScript errors
+compilation errors
+
+Every component using the formatter must correctly initialize the centralized currency hook.
+
+Realtime Synchronization
+
+Verify that changing the currency from:
+
+Admin → System Management
+
+updates instantly across:
+
+Admin
+Supplier
+Coffee Owner
+
+without refreshing.
+
+Specifically verify:
+
+Product cards
+Pack cards
+Product Details
+Pack Details
+Flash Mode
+Cart
+Checkout
+Orders
+Statistics
+Inventory
+Promotions
+Dashboards
+All open modals
+Persistence
+
+Verify that the selected currency:
+
+survives refresh
+survives logout/login
+survives reconnect
+survives server restart
+survives deployment
+loads correctly for new sessions
+Existing Prices
+
+Do NOT convert stored numeric values.
+
+Only the displayed currency changes.
+
+Example:
+
+Stored value:
+
+100
+
+Display becomes:
+
+$100
+DT100
+£100
+€100
+
+depending on the administrator's selected currency.
+
+Final Quality Assurance
+
+Before considering the feature complete, perform one final project-wide verification to ensure:
+
+Only one centralized currency source exists.
+Only one formatter exists.
+Only one currency hook exists.
+No duplicate implementations remain.
+No hardcoded currency symbols remain where dynamic formatting should be used.
+No runtime errors exist.
+No TypeScript errors exist.
+No synchronization issues exist.
+No regressions have been introduced.
+No unrelated functionality has been modified.
+The UI and UX remain exactly as before except for the currency behavior.
+Important Rules
+Do NOT redesign the UI.
+Do NOT change layouts.
+Do NOT modify unrelated business logic.
+Do NOT remove any existing functionality.
+Do NOT rewrite working code.
+Do NOT replace the current architecture.
+
+This should be treated as the final completion and verification pass. Complete only the remaining unfinished work required to fully deliver the global currency strategy while preserving every other part of the project exactly as it currently works.

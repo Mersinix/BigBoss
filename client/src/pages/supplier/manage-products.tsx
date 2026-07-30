@@ -412,6 +412,7 @@ function ListingLivePreview({
   availableFlavors: { id: number; name: string }[];
   availableSizes: { id: number; name: string }[];
 }) {
+  const fmtDecimal = useFormatDecimalCurrency();
   const previewEntries = useMemo(
     () => groupsToEntries(groups, availableFlavors, availableSizes),
     [groups, availableFlavors, availableSizes],
@@ -464,7 +465,7 @@ function ListingLivePreview({
                   <div key={i} className="flex items-center justify-between gap-2 text-sm">
                     <span className="text-muted-foreground truncate">{label}</span>
                     <div className="flex items-center gap-2 shrink-0">
-                      {price > 0 && <span className="font-medium">DT{price.toFixed(2)}</span>}
+                      {price > 0 && <span className="font-medium">{fmtDecimal(price)}</span>}
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${qty > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}>
                         {qty > 0 ? `${qty} in stock` : "No stock"}
                       </span>

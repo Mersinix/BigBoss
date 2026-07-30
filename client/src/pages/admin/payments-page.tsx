@@ -36,7 +36,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium">Total Revenue</p>
-              <p className="text-2xl font-bold text-green-600">{currency}{(totalRevenue / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-green-600">{fmt(totalRevenue)}</p>
             </div>
           </CardContent>
         </Card>
@@ -47,7 +47,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium">Pending Payments</p>
-              <p className="text-2xl font-bold text-amber-600">{currency}{(pendingAmount / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-amber-600">{fmt(pendingAmount)}</p>
             </div>
           </CardContent>
         </Card>
@@ -58,7 +58,7 @@ export default function PaymentsPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground font-medium">Platform Commission (5%)</p>
-              <p className="text-2xl font-bold text-blue-600">{currency}{(commission / 100).toFixed(2)}</p>
+              <p className="text-2xl font-bold text-blue-600">{fmt(commission)}</p>
             </div>
           </CardContent>
         </Card>
@@ -89,8 +89,8 @@ export default function PaymentsPage() {
                   <TableRow key={o.id}>
                     <TableCell className="font-medium">#{o.id}</TableCell>
                     <TableCell>{o.cafe?.name}</TableCell>
-                    <TableCell>{currency}{((o.totalAmount || 0) / 100).toFixed(2)}</TableCell>
-                    <TableCell className="text-muted-foreground">{currency}{(((o.totalAmount || 0) * 0.05) / 100).toFixed(2)}</TableCell>
+                    <TableCell>{fmt(o.totalAmount || 0)}</TableCell>
+                    <TableCell className="text-muted-foreground">{fmt(Math.round((o.totalAmount || 0) * 0.05))}</TableCell>
                     <TableCell>
                       <Badge
                         variant="secondary"

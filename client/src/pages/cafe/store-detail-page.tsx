@@ -266,6 +266,7 @@ function StorePackCard({ pack, hasCommercialAccess, supplierLat, supplierLng, is
   isDark: boolean;
 }) {
   const t = useTheme(isDark);
+  const fmt = useFormatCurrency();
   const faved = useFavorites((s) => !!s.pack[pack.id]);
   const togglePack = useFavorites((s) => s.togglePack);
   const openPackQuickView = usePackQuickView((s) => s.open);
@@ -500,6 +501,7 @@ function StoreProductCard({
   isDark: boolean;
 }) {
   const t = useTheme(isDark);
+  const fmt = useFormatCurrency();
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
   const openQuickView = useQuickView((s) => s.open);

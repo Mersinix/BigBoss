@@ -345,6 +345,7 @@ export function ProductDetailContent({
   const { user } = useAuth();
   const { items } = useCart();
   const { isVisitor, isPending, hasCommercial } = useAccess(user);
+  const fmt = useFormatCurrency();
 
   // ── Filter state ──────────────────────────────────────────────────────────
   const [selectedFlavorId, setSelectedFlavorId] = useState<number | null>(null);

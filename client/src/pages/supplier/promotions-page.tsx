@@ -217,6 +217,7 @@ function promoToForm(p: Promotion): FormState {
 // ── Promotion Form ──────────────────────────────────────────────────────────
 
 function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: FormState) => void }) {
+  const symbol = useCurrency();
   const set = (k: keyof FormState, v: any) => onChange({ ...form, [k]: v });
 
   return (
@@ -262,7 +263,7 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
       )}
       {['FIXED_AMOUNT', 'MIN_ORDER_AMOUNT'].includes(form.type) && (
         <div className="space-y-1.5">
-          <Label>Discount Amount (DT) *</Label>
+          <Label>Discount Amount ({symbol}) *</Label>
           <Input type="number" min="0" step="0.001" value={form.discountValue} onChange={e => set('discountValue', e.target.value)} placeholder="e.g. 10.000" />
         </div>
       )}
@@ -280,7 +281,7 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
       )}
       {form.type === 'FREE_SHIPPING' && (
         <div className="space-y-1.5">
-          <Label>Minimum Order Amount (DT) — leave empty for always free</Label>
+          <Label>Minimum Order Amount ({symbol}) — leave empty for always free</Label>
           <Input type="number" min="0" step="0.001" value={form.freeShippingMinAmount} onChange={e => set('freeShippingMinAmount', e.target.value)} placeholder="e.g. 300.000" />
         </div>
       )}
@@ -323,7 +324,7 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
       <div className="grid grid-cols-2 gap-4">
         {['MIN_ORDER_AMOUNT', 'GIFT', 'FREE_SHIPPING'].includes(form.type) === false && (
           <div className="space-y-1.5">
-            <Label>Min Order Value (DT)</Label>
+            <Label>Min Order Value ({symbol})</Label>
             <Input type="number" min="0" step="0.001" value={form.minimumOrderValue} onChange={e => set('minimumOrderValue', e.target.value)} placeholder="No minimum" />
           </div>
         )}
@@ -334,7 +335,7 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
           </div>
         ) : null}
         <div className="space-y-1.5">
-          <Label>Max Discount Cap (DT)</Label>
+          <Label>Max Discount Cap ({symbol})</Label>
           <Input type="number" min="0" step="0.001" value={form.maximumDiscount} onChange={e => set('maximumDiscount', e.target.value)} placeholder="No cap" />
         </div>
         <div className="space-y-1.5">

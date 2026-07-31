@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
-  Heart, X, ChevronRight, Package, Zap, SlidersHorizontal, Layers, Check,
+  Heart, X, ChevronRight, Package, Zap, SlidersHorizontal, Layers, Check, Info,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useQuickView } from "@/hooks/use-quick-view";
+import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import type { ProductWithTaxonomy, PackDetail } from "@shared/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -129,6 +131,30 @@ export function FlashMode({
     return [...productItems, ...packItems];
   }, [products, packs]);
 
+  // ── Content availability flags ───────────────────────────────────────────────
+  const hasPromotions = useMemo(
+    () => allItems.some((i) => i.kind === "product" && !!(i.data as FlashProduct).hasPromo),
+    [allItems],
+  );
+  const hasPacks = useMemo(() => allItems.some((i) => i.kind === "pack"), [allItems]);
+  const hasStandaloneProducts = useMemo(
+    () => allItems.some((i) => i.kind === "product" && !(i.data as FlashProduct).hasPromo),
+    [allItems],
+  );
+  // When there are neither packs nor promotions, skip step 1 entirely
+  const skipContentTypeStep = !hasPacks && !hasPromotions;
+
+  // Visible content-type options in the filter panel (step 1)
+  const visibleContentOptions = useMemo(() => {
+    if (skipContentTypeStep) return [];
+    return CONTENT_OPTIONS.filter((opt) => {
+      if (opt.type === "PROMOTIONS") return hasPromotions;
+      if (opt.type === "PACKS") return hasPacks;
+      if (opt.type === "PRODUCTS") return hasStandaloneProducts;
+      return true; // "ALL" always shown when step 1 is not skipped
+    });
+  }, [skipContentTypeStep, hasPromotions, hasPacks, hasStandaloneProducts]);
+
   // ── Apply content type filter ────────────────────────────────────────────────
   const contentFiltered = useMemo((): FlashItem[] => {
     switch (activeContent) {
@@ -186,21 +212,31 @@ export function FlashMode({
     if (!current || current.kind !== "product") return false;
     return !!s.shop[(current.data as FlashProduct).id];
   });
+  const favedPack = useFavorites((s) => {
+    if (!current || current.kind !== "pack") return false;
+    return !!s.pack[current.data.id];
+  });
+  const favedCurrent = current?.kind === "product" ? faved : favedPack;
   const toggleShop = useFavorites((s) => s.toggleShop);
+  const togglePack = useFavorites((s) => s.togglePack);
 
   const triggerFavorite = useCallback(() => {
-    if (!current || current.kind !== "product") return;
-    const p = current.data as FlashProduct;
-    toggleShop({
-      id: p.id,
-      name: p.name,
-      supplier: p.categoryLabel?.name ?? (p as any).category ?? "",
-      price: p.bestPrice ?? 0,
-      image: p.imageUrl ?? "",
-    });
+    if (!current) return;
+    if (current.kind === "product") {
+      const p = current.data as FlashProduct;
+      toggleShop({
+        id: p.id,
+        name: p.name,
+        supplier: p.categoryLabel?.name ?? (p as any).category ?? "",
+        price: p.bestPrice ?? 0,
+        image: p.imageUrl ?? "",
+      });
+    } else if (current.kind === "pack") {
+      togglePack(current.data.id);
+    }
     setHeartAnim(true);
     setTimeout(() => setHeartAnim(false), 800);
-  }, [current, toggleShop]);
+  }, [current, toggleShop, togglePack]);
 
   // ── Navigation ────────────────────────────────────────────────────────────────
   const goNextItem = useCallback(() => {
@@ -217,33 +253,38 @@ export function FlashMode({
     setHeartAnim(false);
   }, [filteredItems.length]);
 
-  // ── Image area click: single = next image, double = favorite ─────────────────
+  // ── Image area click: double-tap = favorite (single-tap no longer navigates) ──
   const handleImageClick = useCallback(() => {
     const now = Date.now();
     const delta = now - lastTapRef.current;
     lastTapRef.current = now;
-
     if (delta < 350) {
-      // Double-tap → favorite (products only)
+      // Double-tap → favorite
       triggerFavorite();
-      return;
     }
+    // Single tap intentionally does nothing — use Next/Prev buttons to navigate
+  }, [triggerFavorite]);
 
-    // Single tap → advance image; if last image → next item
-    if (currentImages.length > 1 && imgIdx < currentImages.length - 1) {
-      setImgIdx((i) => i + 1);
-    } else {
-      goNextItem();
+  // ── Quick-view detail openers ─────────────────────────────────────────────────
+  const openQuickView = useQuickView((s) => s.open);
+  const openPackQuickView = usePackQuickView((s) => s.open);
+  const handleOpenDetails = useCallback(() => {
+    if (!current) return;
+    if (current.kind === "product") {
+      openQuickView((current.data as FlashProduct).id);
+    } else if (current.kind === "pack") {
+      openPackQuickView(current.data.id);
     }
-  }, [currentImages.length, imgIdx, goNextItem, triggerFavorite]);
+  }, [current, openQuickView, openPackQuickView]);
 
   // ── Filter panel helpers ──────────────────────────────────────────────────────
   const openFilter = useCallback(() => {
     setPendingContent(activeContent);
     setPendingCats(activeCats);
-    setFilterStep(1);
+    // Skip content-type step when there are only plain products (no packs/promotions)
+    setFilterStep(skipContentTypeStep ? 2 : 1);
     setFilterOpen(true);
-  }, [activeContent, activeCats]);
+  }, [activeContent, activeCats, skipContentTypeStep]);
 
   const selectPendingContent = (ct: ContentType) => {
     setPendingContent(ct);
@@ -484,18 +525,30 @@ export function FlashMode({
               <SlidersHorizontal className="w-5 h-5 text-white" />
             </button>
 
-            {/* Favorite button — products only */}
-            {current?.kind === "product" && (
+            {/* Details button — opens full Product or Pack detail modal */}
+            {current && (
+              <button
+                className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90"
+                onClick={handleOpenDetails}
+                data-testid="button-flash-details"
+                title="View full details"
+              >
+                <Info className="w-5 h-5 text-white" />
+              </button>
+            )}
+
+            {/* Favorite button — products and packs */}
+            {current && (
               <button
                 className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${
-                  faved ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"
+                  favedCurrent ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"
                 }`}
                 onClick={triggerFavorite}
                 data-testid="button-flash-favorite"
               >
                 <Heart
                   className={`w-5 h-5 transition-colors ${
-                    faved ? "fill-white text-white" : "text-white"
+                    favedCurrent ? "fill-white text-white" : "text-white"
                   }`}
                 />
               </button>
@@ -519,6 +572,14 @@ export function FlashMode({
               <ChevronRight className="w-6 h-6 text-white" />
             </button>
           </div>
+
+          {/* ── Filter panel backdrop — click outside to close ───────────── */}
+          {filterOpen && (
+            <div
+              className="absolute inset-0 z-[55]"
+              onClick={() => setFilterOpen(false)}
+            />
+          )}
 
           {/* ── Filter panel — slides from top ────────────────────────────── */}
           <div
@@ -548,10 +609,10 @@ export function FlashMode({
               </div>
 
               {filterStep === 1 ? (
-                /* ── Step 1: Content type ──────────────────────────────────── */
+                /* ── Step 1: Content type (only visible options) ───────────── */
                 <div className="px-5 pb-5">
                   <div className="grid grid-cols-2 gap-3">
-                    {CONTENT_OPTIONS.map((opt) => {
+                    {visibleContentOptions.map((opt) => {
                       const active = pendingContent === opt.type;
                       return (
                         <button
@@ -638,12 +699,15 @@ export function FlashMode({
                   </div>
 
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setFilterStep(1)}
-                      className="flex-1 py-3 bg-white/10 text-white font-semibold rounded-2xl transition-colors hover:bg-white/15"
-                    >
-                      Back
-                    </button>
+                    {/* Back button is hidden when step 1 is skipped */}
+                    {!skipContentTypeStep && (
+                      <button
+                        onClick={() => setFilterStep(1)}
+                        className="flex-1 py-3 bg-white/10 text-white font-semibold rounded-2xl transition-colors hover:bg-white/15"
+                      >
+                        Back
+                      </button>
+                    )}
                     <button
                       onClick={applyFilters}
                       className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-white font-semibold rounded-2xl transition-colors active:scale-[.98]"

@@ -1,0 +1,168 @@
+The Flash Modal is working well overall. Do not redesign it and do not rewrite it. Continue from the existing implementation and only make the following functional improvements.
+
+Before making any changes:
+
+Review the current Flash Modal implementation.
+Verify how Products, Promotions and Packs are currently loaded.
+Verify how Favorites currently work.
+Verify how the Filter panel currently works.
+Verify how Product and Pack detail modals are currently opened.
+Only modify the parts described below.
+Do not change any business logic outside of these requirements.
+Do not change the existing design.
+Do not remove any existing functionality.
+Keep all realtime behavior exactly as it is.
+Coffee Owner → Flash Modal
+
+Applies to:
+
+SHOP → Products
+SHOP → Store
+
+Everything else must remain unchanged.
+
+1. Favorites on Packs
+
+Currently:
+
+Products display the Favorite icon.
+Packs do not display the Favorite icon.
+
+Update the Flash Modal so the Favorite functionality is identical for:
+
+Products
+Promotions
+Packs
+
+The Favorite icon must be available everywhere appropriate.
+
+The existing Favorite behavior must remain unchanged.
+
+2. Remove one-click image navigation
+
+Currently:
+
+Single click changes the image.
+Double click adds/removes Favorites.
+
+This creates a conflict because the first click already changes the image.
+
+Update the interaction:
+
+Remove the single-click image change behavior.
+Double click must continue to add/remove Favorites.
+Images must no longer change when clicking directly on them.
+Images must change only using the existing Next/Previous navigation buttons.
+
+Do not change anything else about the image gallery.
+
+3. Close Filter Panel by clicking outside
+
+Currently:
+
+The Filter panel can only be closed using the Close icon.
+
+Update it so the user can also close it by:
+
+clicking outside the panel
+
+Keep the existing close button.
+
+Do not change the animation or design.
+
+4. Improve Filter Panel logic
+
+Currently the first step is:
+
+All
+Products
+Promotions
+Packs
+
+followed by category selection.
+
+Update the behavior dynamically according to available content.
+
+Case A
+
+If there are no Packs available for the selected context:
+
+hide the Packs button.
+Case B
+
+If there are no Promotions available:
+
+hide the Promotions button.
+Case C
+
+If there are neither Packs nor Promotions:
+
+Hide:
+
+All
+Promotions
+Packs
+
+Open the category selection directly.
+
+Do not display the unnecessary "What would you like to browse?" step.
+
+Case D
+
+If every available item belongs only to Promotions or Packs and there are no standalone Products:
+
+Hide:
+
+Products
+
+Show only the available content types.
+
+The filter should always display only meaningful options.
+
+No empty navigation choices should ever appear.
+
+5. Open Details button
+
+Add one additional action inside the Flash Modal.
+
+This button should open the complete details modal for the current item.
+
+Behavior:
+
+if the current item is a Product → open the Product Details modal
+if the current item is a Pack → open the Pack Details modal
+if the current item is a Promotion → open the corresponding Product Details modal already used by the marketplace
+
+Reuse the existing detail modals.
+
+Do not create duplicate detail pages.
+
+Do not change the existing detail modal design.
+
+Synchronization
+
+Verify everything continues to work correctly with:
+
+Favorites
+Flash Modal
+Product Details
+Pack Details
+Promotions
+Store page
+Products page
+Filters
+Images
+Realtime updates
+Important
+
+Do not change any design.
+
+Do not modify any feature outside the Flash Modal.
+
+Do not remove existing functionality.
+
+Do not introduce duplicate logic.
+
+Do not rewrite working code.
+
+Before finishing, verify that every existing Flash Modal feature still works exactly as before, with only the improvements listed above implemented.

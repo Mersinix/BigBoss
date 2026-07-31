@@ -513,7 +513,7 @@ export function FlashMode({
           <div className="absolute right-4 bottom-24 flex flex-col gap-4 z-20">
             {/* Filter button */}
             <button
-              className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${
                 hasActiveFilter
                   ? "bg-amber-500"
                   : "bg-white/20 backdrop-blur-sm"
@@ -528,7 +528,7 @@ export function FlashMode({
             {/* Details button — opens full Product or Pack detail modal */}
             {current && (
               <button
-                className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90"
+                className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90"
                 onClick={handleOpenDetails}
                 data-testid="button-flash-details"
                 title="View full details"
@@ -540,7 +540,7 @@ export function FlashMode({
             {/* Favorite button — products and packs */}
             {current && (
               <button
-                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${
+                className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${
                   favedCurrent ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"
                 }`}
                 onClick={triggerFavorite}

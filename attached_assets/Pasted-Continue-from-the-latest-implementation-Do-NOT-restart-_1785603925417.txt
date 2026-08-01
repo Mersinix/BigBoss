@@ -1,0 +1,115 @@
+Continue from the latest implementation. Do NOT restart this feature from scratch.
+
+The previous session stopped because of the quota limit.
+
+Continue from the commit:
+
+Store Modification Admin and Supplier PART TWO
+
+Inside this commit you will also find the continuation prompt:
+
+Pasted-Continue-from-the-latest-work-Do-NOT-restart-this-featu_1785582631733.txt
+
+Read that prompt and review the files modified in this commit, then continue exactly from where you stopped. Complete only the remaining work that has not yet been implemented.
+
+Do not rewrite working code.
+
+Do not redesign the Store feature.
+
+Do not duplicate components.
+
+Do not duplicate business logic.
+
+Complete the remaining Admin Store work
+
+If anything is still incomplete, finish it:
+
+Stores as its own Admin sidebar item under Products.
+Complete the new Store Cards interface.
+Complete the filter/search bar.
+Status filter.
+Visibility filter.
+Search by supplier/store name.
+Store cards displaying:
+Cover image
+Logo
+Store name
+Product count
+Status border
+Visibility indicator
+Drag-and-drop Store ordering.
+Saving Store order.
+Realtime synchronization of Store order.
+Existing Store Details modal.
+Store actions inside the modal.
+Auto Approve action.
+Auto Approve persistence.
+Auto Approve synchronization.
+
+Only finish what is still missing.
+
+Complete the remaining Supplier Store work
+
+Finish the Store preview so it fully matches the Coffee Owner Store header.
+
+Reuse the existing Coffee Owner Store preview components whenever possible.
+
+The Supplier preview should include:
+
+Dark mode presentation
+Cover image carousel
+Logo
+Favorite icon
+Flash icon
+Opening hours
+Rating
+Back button
+Product count
+Distance indicator
+Description
+
+Do not modify anything below this preview section.
+
+Everything below must remain exactly as it currently works.
+
+Synchronization
+
+Verify that all Store updates remain synchronized correctly, including:
+
+Approval
+Reject
+Hold
+Delete
+Auto Approve
+Visibility
+Store ordering
+Product count
+Store information
+Store preview
+
+No refresh should ever be required where realtime synchronization already exists.
+
+Final verification
+
+Before considering the feature complete, verify that:
+
+No previous Store functionality has been broken.
+Coffee Owner Store still works correctly.
+Supplier Store still works correctly.
+Admin Store still works correctly.
+Store Details modal still works.
+Favorites still work.
+Flash modal still works.
+Store ordering is synchronized.
+Auto Approve behaves correctly.
+Realtime synchronization works correctly.
+No duplicate Store components exist.
+No duplicate Store logic exists.
+Important
+Continue only from Store Modification Admin and Supplier PART TWO.
+Use the continuation prompt stored in that commit as the implementation reference.
+Do not restart the Store feature.
+Do not rewrite completed work.
+Do not refactor unrelated files.
+Do not change the design outside the requested Store improvements.
+Only complete the remaining unfinished work while preserving everything that is already working.

@@ -1219,9 +1219,9 @@ export default function LandingPage() {
         const swBg      = dk ? "bg-gray-800"                    : "bg-gray-100";
         const swActive  = dk ? "bg-gray-700 text-white shadow-sm"   : "bg-white text-amber-600 shadow-sm";
         const swInact   = dk ? "text-gray-400 hover:text-gray-200"  : "text-gray-500 hover:text-gray-700";
-        const inputCls  = dk
-          ? "rounded-xl px-4 py-5 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus-visible:border-amber-500 focus-visible:ring-amber-500/20"
-          : "rounded-xl px-4 py-5 bg-gray-50 border-gray-200";
+        const inputCls = dk
+  ? "rounded-xl px-4 py-5 bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus-visible:border-amber-500 focus-visible:ring-amber-500/20"
+  : "rounded-xl px-4 py-5 bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 focus-visible:border-amber-500 focus-visible:ring-amber-500/20";
         const labelCls  = dk ? "text-gray-300" : "";
         const formDark  = dk
           ? "[&_input]:bg-gray-800 [&_input]:border-gray-700 [&_input]:text-white [&_input]:placeholder:text-gray-500 [&_label]:text-gray-300 [&_textarea]:bg-gray-800 [&_textarea]:border-gray-700 [&_textarea]:text-white"

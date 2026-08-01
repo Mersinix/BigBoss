@@ -208,6 +208,104 @@ export default function StorePage() {
         <ApprovalBadge status={store?.approvalStatus} />
       </div>
 
+       {/* Store immersive preview — matches Coffee Owner view */}
+          <div
+            className="rounded-2xl overflow-hidden shadow-lg bg-gray-900 max-w-6xl mx-auto lg:mx-0"
+            data-testid="preview-store-card"
+          >
+            {/* Cover media */}
+            <div className="relative h-52 overflow-hidden bg-gray-800">
+              {form.mediaType === "VIDEO" && form.videoUrl ? (
+                <video src={form.videoUrl} className="w-full h-full object-cover" muted autoPlay loop playsInline />
+              ) : (
+                <CoverSlideshow
+                  urls={previewImages.length > 0 ? previewImages : [form.coverUrl].filter(Boolean)}
+                  name={form.name}
+                />
+              )}
+
+              {/* Dark gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 pointer-events-none" />
+
+              {/* Back button — top left */}
+              <div className="absolute top-3 left-3 w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                <ChevronLeft className="w-4 h-4 text-white" />
+              </div>
+
+              {/* Top-right action cluster */}
+              <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <Heart className="w-3.5 h-3.5 text-white/80" />
+                </div>
+                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                </div>
+              </div>
+
+              {/* Bottom-right: rating + info */}
+              <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+                <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                  <span className="text-[11px] font-bold text-white">4.8</span>
+                </div>
+                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <Info className="w-3.5 h-3.5 text-white/80" />
+                </div>
+              </div>
+
+              {/* Closed badge */}
+              {!form.isOpen && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-gray-900/80 text-white border-0 text-[10px] font-semibold">Closed</Badge>
+                </div>
+              )}
+
+              {/* Music indicator */}
+              {form.musicUrl && (
+                <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/50 text-white rounded-full px-2 py-0.5">
+                  <Music className="w-3 h-3 animate-pulse" />
+                  <span className="text-[10px]">Music</span>
+                </div>
+              )}
+            </div>
+
+            {/* Store info section — dark style */}
+            <div className="px-4 pt-1 pb-4 bg-gray-900">
+              {/* Logo overlapping cover */}
+              <div className="flex items-end gap-3 -mt-7 mb-3">
+                <div className="w-14 h-14 rounded-2xl border-4 border-gray-900 bg-gray-800 shadow-lg overflow-hidden shrink-0 flex items-center justify-center">
+                  {form.logoUrl ? (
+                    <img src={form.logoUrl} alt="Logo" className="w-full h-full object-cover z-20" />
+                  ) : (
+                    <Store className="w-6 h-6 text-gray-500" />
+                  )}
+                </div>
+              </div>
+
+              {/* Name */}
+              <h3 className="font-extrabold text-lg text-white leading-tight truncate">
+                {form.name || "Your Store Name"}
+              </h3>
+
+              {/* Meta row */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 mt-1">
+                <span className="flex items-center gap-1">
+                  <Package className="w-3 h-3" />
+                  {store ? (store as any).productCount ?? 0 : 0} products
+                </span>
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  Distance shown to nearby cafés
+                </span>
+              </div>
+
+              {/* Description */}
+              {form.description && (
+                <p className="text-xs text-gray-400 mt-2 line-clamp-2">{form.description}</p>
+              )}
+            </div>
+          </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Left column: form ── */}
         <div className="space-y-4">
@@ -245,7 +343,68 @@ export default function StorePage() {
             </CardContent>
           </Card>
 
-          {/* Background Media */}
+          {/* Opening Hours */}
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4" />Opening Hours</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {DAYS.map(({ key, label }) => {
+                const day = form.openingHours[key] ?? DEFAULT_HOURS;
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <div className="w-24 shrink-0">
+                      <p className="text-sm font-medium">{label}</p>
+                    </div>
+                    <Switch
+                      checked={!day.closed}
+                      onCheckedChange={(v) => updateDay(key, "closed", !v)}
+                      data-testid={`switch-${key}`}
+                    />
+                    {!day.closed ? (
+                      <>
+                        <Input
+                          type="time"
+                          value={day.open}
+                          onChange={(e) => updateDay(key, "open", e.target.value)}
+                          className="h-8 text-xs w-28"
+                          data-testid={`input-${key}-open`}
+                        />
+                        <span className="text-xs text-muted-foreground shrink-0">to</span>
+                        <Input
+                          type="time"
+                          value={day.close}
+                          onChange={(e) => updateDay(key, "close", e.target.value)}
+                          className="h-8 text-xs w-28"
+                          data-testid={`input-${key}-close`}
+                        />
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Closed</span>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          {/* Save */}
+          <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-store">
+            {saveMutation.isPending ? <RefreshCw className="w-4 h-4 animate-spin mr-1.5" /> : <Save className="w-4 h-4 mr-1.5" />}
+            Save Store Profile
+          </Button>
+          {store?.approvalStatus === "REJECTED" && (
+            <p className="text-xs text-red-600">Your store was rejected. Editing and saving will resubmit it for review.</p>
+          )}
+          {store?.approvalStatus === "ON_HOLD" && (
+            <p className="text-xs text-muted-foreground">Your store is on hold by the admin team.</p>
+          )}
+        </div>
+
+        {/* ── Right column: Live Preview ── */}
+        <div className="space-y-4">        
+
+         
+
+            {/* Background Media */}
           <Card>
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><ImageIcon className="w-4 h-4" />Background Media</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -326,166 +485,7 @@ export default function StorePage() {
               <p className="text-xs text-muted-foreground">Music plays automatically when Coffee Owners visit your store page. It only affects your store.</p>
             </CardContent>
           </Card>
-
-          {/* Opening Hours */}
-          <Card>
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4" />Opening Hours</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {DAYS.map(({ key, label }) => {
-                const day = form.openingHours[key] ?? DEFAULT_HOURS;
-                return (
-                  <div key={key} className="flex items-center gap-3">
-                    <div className="w-24 shrink-0">
-                      <p className="text-sm font-medium">{label}</p>
-                    </div>
-                    <Switch
-                      checked={!day.closed}
-                      onCheckedChange={(v) => updateDay(key, "closed", !v)}
-                      data-testid={`switch-${key}`}
-                    />
-                    {!day.closed ? (
-                      <>
-                        <Input
-                          type="time"
-                          value={day.open}
-                          onChange={(e) => updateDay(key, "open", e.target.value)}
-                          className="h-8 text-xs w-28"
-                          data-testid={`input-${key}-open`}
-                        />
-                        <span className="text-xs text-muted-foreground shrink-0">to</span>
-                        <Input
-                          type="time"
-                          value={day.close}
-                          onChange={(e) => updateDay(key, "close", e.target.value)}
-                          className="h-8 text-xs w-28"
-                          data-testid={`input-${key}-close`}
-                        />
-                      </>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Closed</span>
-                    )}
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          {/* Save */}
-          <Button className="w-full" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-store">
-            {saveMutation.isPending ? <RefreshCw className="w-4 h-4 animate-spin mr-1.5" /> : <Save className="w-4 h-4 mr-1.5" />}
-            Save Store Profile
-          </Button>
-          {store?.approvalStatus === "REJECTED" && (
-            <p className="text-xs text-red-600">Your store was rejected. Editing and saving will resubmit it for review.</p>
-          )}
-          {store?.approvalStatus === "ON_HOLD" && (
-            <p className="text-xs text-muted-foreground">Your store is on hold by the admin team.</p>
-          )}
-        </div>
-
-        {/* ── Right column: Live Preview ── */}
-        <div className="space-y-4">
-          <p className="text-sm font-medium text-muted-foreground">Live Preview — how Coffee Owners see your store</p>
-
-          {/* Store immersive preview — matches Coffee Owner view */}
-          <div
-            className="rounded-2xl overflow-hidden shadow-lg bg-gray-900 max-w-sm mx-auto lg:mx-0"
-            data-testid="preview-store-card"
-          >
-            {/* Cover media */}
-            <div className="relative h-52 overflow-hidden bg-gray-800">
-              {form.mediaType === "VIDEO" && form.videoUrl ? (
-                <video src={form.videoUrl} className="w-full h-full object-cover" muted autoPlay loop playsInline />
-              ) : (
-                <CoverSlideshow
-                  urls={previewImages.length > 0 ? previewImages : [form.coverUrl].filter(Boolean)}
-                  name={form.name}
-                />
-              )}
-
-              {/* Dark gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 pointer-events-none" />
-
-              {/* Back button — top left */}
-              <div className="absolute top-3 left-3 w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
-                <ChevronLeft className="w-4 h-4 text-white" />
-              </div>
-
-              {/* Top-right action cluster */}
-              <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
-                  <Heart className="w-3.5 h-3.5 text-white/80" />
-                </div>
-                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
-                  <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                </div>
-              </div>
-
-              {/* Bottom-right: rating + info */}
-              <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
-                <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
-                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                  <span className="text-[11px] font-bold text-white">4.8</span>
-                </div>
-                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
-                  <Info className="w-3.5 h-3.5 text-white/80" />
-                </div>
-              </div>
-
-              {/* Closed badge */}
-              {!form.isOpen && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-gray-900/80 text-white border-0 text-[10px] font-semibold">Closed</Badge>
-                </div>
-              )}
-
-              {/* Music indicator */}
-              {form.musicUrl && (
-                <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/50 text-white rounded-full px-2 py-0.5">
-                  <Music className="w-3 h-3 animate-pulse" />
-                  <span className="text-[10px]">Music</span>
-                </div>
-              )}
-            </div>
-
-            {/* Store info section — dark style */}
-            <div className="px-4 pt-1 pb-4 bg-gray-900">
-              {/* Logo overlapping cover */}
-              <div className="flex items-end gap-3 -mt-7 mb-3">
-                <div className="w-14 h-14 rounded-2xl border-4 border-gray-900 bg-gray-800 shadow-lg overflow-hidden shrink-0 flex items-center justify-center">
-                  {form.logoUrl ? (
-                    <img src={form.logoUrl} alt="Logo" className="w-full h-full object-cover" />
-                  ) : (
-                    <Store className="w-6 h-6 text-gray-500" />
-                  )}
-                </div>
-              </div>
-
-              {/* Name */}
-              <h3 className="font-extrabold text-lg text-white leading-tight truncate">
-                {form.name || "Your Store Name"}
-              </h3>
-
-              {/* Meta row */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 mt-1">
-                <span className="flex items-center gap-1">
-                  <Package className="w-3 h-3" />
-                  {store ? (store as any).productCount ?? 0 : 0} products
-                </span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  Distance shown to nearby cafés
-                </span>
-              </div>
-
-              {/* Description */}
-              {form.description && (
-                <p className="text-xs text-gray-400 mt-2 line-clamp-2">{form.description}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Opening hours preview */}
+ {/* Opening hours preview */}
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="w-3.5 h-3.5" />Opening Hours Preview</CardTitle></CardHeader>
             <CardContent>
@@ -506,7 +506,6 @@ export default function StorePage() {
               </div>
             </CardContent>
           </Card>
-
           {form.visibility === "HIDDEN" && (
             <p className="text-xs text-muted-foreground text-center">This store card is hidden from the marketplace. Your products still appear normally.</p>
           )}

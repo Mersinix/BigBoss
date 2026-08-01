@@ -1,0 +1,88 @@
+The Store experience is working well. Do not redesign or rewrite it. Continue from the existing implementation and make only the improvements described below.
+
+Before making any changes:
+
+Review the current Coffee Owner Store implementation.
+Reuse the existing Store components.
+Do not change any business logic outside the requested items.
+Do not modify unrelated pages.
+Do not redesign the Store.
+Keep all existing functionality intact.
+Coffee Owner → Store
+1. Open Store from the top
+
+Current behavior:
+
+When the Coffee Owner scrolls down to the mapped Stores section in the Shop page and opens a Store, the Store page opens at approximately the same scroll position where the user clicked.
+
+This should be changed.
+
+Expected behavior
+
+Whenever a Store is opened from the Shop page:
+
+the Store should always open from the very top
+the Cover/Header should always be the first thing visible
+the user should never enter the Store halfway down the page
+
+This should happen every time a Store is opened.
+
+Do not change anything else about the navigation.
+
+2. Category icons
+
+Inside the Store page, the mapped Categories currently display without their icons/logos.
+
+Update the Store so every mapped Category displays its corresponding icon/logo exactly as it does elsewhere in the marketplace.
+
+Reuse the existing category assets.
+
+Do not create duplicate icons.
+
+Do not change category behavior.
+
+3. Music button
+
+The Store already has a Music button.
+
+Currently:
+
+music starts correctly
+clicking the Music button does not mute the audio
+
+Update the Music button so it behaves as a proper toggle.
+
+Expected behavior
+First click → Play music
+Next click → Mute/Pause music
+Next click → Play again
+Continue toggling between Play and Mute
+
+The button state should always reflect the current audio state.
+
+Do not change the design of the button.
+
+Do not modify any other Store controls.
+
+Verification
+
+Before finishing, verify that:
+
+Opening a Store always starts at the top of the page.
+Store navigation still works correctly.
+Category icons are displayed correctly.
+Music can be toggled between Play and Mute.
+No Store functionality has been broken.
+No duplicate logic has been introduced.
+No unnecessary redesign has been made.
+Important
+
+Do not modify any functionality outside these three items.
+
+Do not redesign the Store.
+
+Do not remove existing features.
+
+Do not refactor unrelated code.
+
+Only implement the three improvements above while preserving the existing Store experience and keeping everything synchronized with the current architecture.

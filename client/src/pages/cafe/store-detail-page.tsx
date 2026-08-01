@@ -22,7 +22,7 @@ import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { FlashMode } from "@/components/flash-mode";
-import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail } from "@shared/schema";
+import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount } from "@shared/schema";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -645,6 +645,10 @@ export default function StoreDetailPage() {
   const [filters, setFilters] = useState<FilterState>({ subCategoryId: "", brandId: "" });
   const [infoOpen, setInfoOpen] = useState(false);
   const [flashOpen, setFlashOpen] = useState(false);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(true);
+
+  // Scroll to top whenever a store is opened
+  useEffect(() => { window.scrollTo(0, 0); }, [storeId]);
 
   const { data: store, isLoading } = useQuery<StoreDetail>({
     queryKey: ["/api/stores", storeId],
@@ -676,13 +680,27 @@ export default function StoreDetailPage() {
 
   const products = store?.products ?? [];
 
+  const { data: allCategories = [] } = useQuery<CategoryWithCount[]>({
+    queryKey: ["/api/categories"],
+  });
+
+  const categoryIconMap = useMemo(() => {
+    const map = new Map<number, string>();
+    allCategories.forEach((c) => { if (c.icon) map.set(c.id, c.icon); });
+    return map;
+  }, [allCategories]);
+
   const categories = useMemo(() => {
     const map = new Map<string, string>();
     products.forEach((p) => {
       if (p.categoryLabel?.id && p.categoryLabel?.name) map.set(String(p.categoryLabel.id), p.categoryLabel.name);
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [products]);
+    return Array.from(map.entries()).map(([id, name]) => ({
+      id,
+      name,
+      icon: categoryIconMap.get(Number(id)) ?? null,
+    }));
+  }, [products, categoryIconMap]);
 
   const categoryFiltered = useMemo(() => {
     if (!categoryId) return products;
@@ -765,8 +783,8 @@ export default function StoreDetailPage() {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
-      {/* Background music */}
-      {musicUrl && <MusicPlayer musicUrl={musicUrl} />}
+      {/* Background music — unmount iframe to stop playback when muted */}
+      {musicUrl && isMusicPlaying && <MusicPlayer musicUrl={musicUrl} />}
 
       {/* ── Cover media ──────────────────────────────────────────────────── */}
       <div className="relative h-64 sm:h-72 lg:h-80 overflow-hidden bg-gray-900">
@@ -875,9 +893,15 @@ export default function StoreDetailPage() {
                 </span>
               )}
               {musicUrl && (
-                <span className={`flex items-center gap-1 ${t.dk ? "text-indigo-400" : "text-indigo-500"}`}>
-                  <Music className="w-3 h-3" />Music
-                </span>
+                <button
+                  onClick={() => setIsMusicPlaying((p) => !p)}
+                  className={`flex items-center gap-1 rounded-full transition-opacity hover:opacity-80 ${t.dk ? "text-indigo-400" : "text-indigo-500"}`}
+                  title={isMusicPlaying ? "Mute music" : "Play music"}
+                  data-testid="button-music-toggle"
+                >
+                  <Music className={`w-3 h-3 ${isMusicPlaying ? "" : "opacity-40"}`} />
+                  <span>{isMusicPlaying ? "Music" : "Muted"}</span>
+                </button>
               )}
             </div>
           </div>
@@ -920,6 +944,7 @@ export default function StoreDetailPage() {
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${categoryId === cat.id ? t.switcherActive : t.switcherInactive}`}
                       data-testid={`button-cat-${cat.id}`}
                     >
+                      {cat.icon && <span className="text-base leading-none">{cat.icon}</span>}
                       <span className="max-w-[72px] truncate">{cat.name}</span>
                     </button>
                   </div>

@@ -416,7 +416,7 @@ function StoreCardTile({
             <Store className={`w-4 h-4 ${t.textMuted}`} />
           )}
         </div>
-       
+        <div className="flex-1 min-w-0 pt-1">
           <h3 className={`font-bold text-sm leading-tight truncate ${t.textPrimary}`}>
             {store.name}
           </h3>
@@ -430,7 +430,7 @@ function StoreCardTile({
             </span>
             {distance != null && <span>{formatDistance(distance)}</span>}
           </div>
-        
+        </div>
       </div>
     </div>
   );

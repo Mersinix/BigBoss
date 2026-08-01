@@ -112,6 +112,7 @@ export function AppSidebar() {
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
             { title: "Categories", url: "/admin/categories", icon: Folder },
             { title: "Products", url: "/admin/products", icon: Package },
+            { title: "Stores", url: "/admin/stores", icon: Store },
             { title: "Orders", url: "/orders", icon: ClipboardList },
            
           ],

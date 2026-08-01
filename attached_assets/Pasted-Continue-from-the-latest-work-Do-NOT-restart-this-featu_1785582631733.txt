@@ -1,0 +1,99 @@
+Continue from the latest work. Do NOT restart this feature from scratch.
+
+The previous implementation was interrupted because of the quota limit.
+
+Continue from the commit:
+
+Store Modification Admin and Supplier
+
+Inside this commit you will also find the original specification prompt:
+
+Pasted-The-Store-feature-is-already-working-well-Do-not-redesi_1785581686309.txt
+
+Read the prompt and review the files modified in that commit, then continue from where you stopped. Complete only the remaining work that has not yet been implemented.
+
+Do not rewrite working code.
+
+Do not duplicate components.
+
+Do not duplicate business logic.
+
+Do not redesign anything.
+
+Complete any remaining Admin work
+
+If not already completed, finish:
+
+Move Stores into its own Admin sidebar item directly under Products.
+Replace the old Stores table with the new Store card layout.
+Add the filter/search bar.
+Filter by:
+Status
+Visibility
+Search by supplier/store name.
+Display Store cards with:
+Cover image
+Store logo
+Store name
+Product count
+Green border when Approved
+Red border when On Hold
+Visibility indicator (green/grey)
+Replace the manual order input with drag-and-drop Store ordering.
+Save the new Store order automatically.
+Synchronize the Store order everywhere in realtime.
+Continue using the existing Store Details modal.
+Move all Store actions into that modal.
+Add the new Auto Approve action.
+Ensure Auto Approve is fully synchronized and persists correctly.
+Complete any remaining Supplier work
+
+If not already completed:
+
+Update only the upper Store preview so it matches the Coffee Owner Store preview.
+
+Reuse the existing Store preview design.
+
+The preview should include:
+
+Dark mode appearance
+Cover image carousel
+Logo
+Favorite icon
+Flash icon
+Opening hours
+Rating
+Back button
+Product count
+Distance
+Description
+
+Everything below the preview must remain exactly as it is.
+
+Realtime synchronization
+
+Verify that every Store update remains synchronized without requiring refresh, including:
+
+Approval
+Reject
+Hold
+Delete
+Auto Approve
+Visibility
+Store ordering
+Product count
+Store information
+Store preview
+Keep everything else unchanged
+
+Do not modify unrelated parts of the project.
+
+Do not redesign any existing pages.
+
+Do not remove existing functionality.
+
+Do not refactor working code.
+
+Do not create duplicate components or duplicate business logic.
+
+Only complete the remaining Store improvements from the original specification while preserving everything that is already working.

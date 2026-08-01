@@ -53,6 +53,7 @@ import AdminCategoriesPage from "@/pages/admin/categories-page";
 import CategoryRequestsPage from "@/pages/admin/category-requests-page";
 import AdminProductsPage from "@/pages/admin/products-page";
 import SuppliersPage from "@/pages/admin/suppliers-page";
+import AdminStoresPage from "@/pages/admin/stores-page";
 import UsersPage from "@/pages/admin/users-page";
 import RolesPage from "@/pages/admin/roles-page";
 import DeliveryPage from "@/pages/admin/delivery-page";
@@ -383,6 +384,9 @@ function Router() {
       </Route>
       <Route path="/admin/suppliers">
         {() => (<DashboardLayout><ProtectedRoute component={SuppliersPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      <Route path="/admin/stores">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminStoresPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
       <Route path="/admin/users">
         {() => (<DashboardLayout><ProtectedRoute component={UsersPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}

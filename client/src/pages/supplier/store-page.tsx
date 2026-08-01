@@ -11,7 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Store, Image as ImageIcon, RefreshCw, Save, Heart, Package,
   Video, Music, Clock, Plus, Trash2, ChevronLeft, ChevronRight,
+  Zap, Star, MapPin, Info,
 } from "lucide-react";
+import { CoverSlideshow } from "@/pages/cafe/store-detail-page";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SupplierStore, OpeningHoursMap, OpeningDayHours } from "@shared/schema";
@@ -385,44 +387,101 @@ export default function StorePage() {
         <div className="space-y-4">
           <p className="text-sm font-medium text-muted-foreground">Live Preview — how Coffee Owners see your store</p>
 
-          {/* Store card preview */}
-          <div className="bg-white dark:bg-card rounded-2xl border shadow-sm overflow-hidden max-w-sm mx-auto lg:mx-0" data-testid="preview-store-card">
-            <div className="relative aspect-[16/9] bg-gray-100 dark:bg-muted overflow-hidden">
+          {/* Store immersive preview — matches Coffee Owner view */}
+          <div
+            className="rounded-2xl overflow-hidden shadow-lg bg-gray-900 max-w-sm mx-auto lg:mx-0"
+            data-testid="preview-store-card"
+          >
+            {/* Cover media */}
+            <div className="relative h-52 overflow-hidden bg-gray-800">
               {form.mediaType === "VIDEO" && form.videoUrl ? (
                 <video src={form.videoUrl} className="w-full h-full object-cover" muted autoPlay loop playsInline />
               ) : (
-                <SlideshowPreview urls={previewImages.length > 0 ? previewImages : [form.coverUrl].filter(Boolean)} name={form.name} />
+                <CoverSlideshow
+                  urls={previewImages.length > 0 ? previewImages : [form.coverUrl].filter(Boolean)}
+                  name={form.name}
+                />
               )}
-              <button className="absolute top-2 right-2 w-7 h-7 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm">
-                <Heart className="w-3.5 h-3.5 text-gray-400" />
-              </button>
+
+              {/* Dark gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 pointer-events-none" />
+
+              {/* Back button — top left */}
+              <div className="absolute top-3 left-3 w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                <ChevronLeft className="w-4 h-4 text-white" />
+              </div>
+
+              {/* Top-right action cluster */}
+              <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <Heart className="w-3.5 h-3.5 text-white/80" />
+                </div>
+                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                </div>
+              </div>
+
+              {/* Bottom-right: rating + info */}
+              <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+                <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                  <span className="text-[11px] font-bold text-white">4.8</span>
+                </div>
+                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <Info className="w-3.5 h-3.5 text-white/80" />
+                </div>
+              </div>
+
+              {/* Closed badge */}
               {!form.isOpen && (
-                <div className="absolute top-2 left-2">
-                  <Badge className="bg-gray-900/80 text-white border-0 text-[10px]">Closed</Badge>
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-gray-900/80 text-white border-0 text-[10px] font-semibold">Closed</Badge>
                 </div>
               )}
+
+              {/* Music indicator */}
               {form.musicUrl && (
-                <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/50 text-white rounded-full px-2 py-0.5">
+                <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/50 text-white rounded-full px-2 py-0.5">
                   <Music className="w-3 h-3 animate-pulse" />
                   <span className="text-[10px]">Music</span>
                 </div>
               )}
             </div>
-            <div className="p-3 flex gap-3 relative z-20">
-              <div className="w-12 h-12 rounded-full border-2 border-white dark:border-card -mt-8 bg-white dark:bg-card shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
-                {form.logoUrl ? (
-                  <img src={form.logoUrl} alt="Logo" className="w-full h-full object-cover" />
-                ) : (
-                  <Store className="w-5 h-5 text-gray-300" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0 mt-0.5">
-                <h3 className="font-bold text-sm leading-tight truncate">{form.name || "Your Store Name"}</h3>
-                <p className="text-xs text-gray-400 line-clamp-2 mt-0.5">{form.description || "Your store description will appear here."}</p>
-                <div className="flex items-center gap-1 text-[11px] text-amber-600 mt-1.5">
-                  <Package className="w-3 h-3" /><span>Distance shown to nearby cafe owners</span>
+
+            {/* Store info section — dark style */}
+            <div className="px-4 pt-1 pb-4 bg-gray-900">
+              {/* Logo overlapping cover */}
+              <div className="flex items-end gap-3 -mt-7 mb-3">
+                <div className="w-14 h-14 rounded-2xl border-4 border-gray-900 bg-gray-800 shadow-lg overflow-hidden shrink-0 flex items-center justify-center">
+                  {form.logoUrl ? (
+                    <img src={form.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <Store className="w-6 h-6 text-gray-500" />
+                  )}
                 </div>
               </div>
+
+              {/* Name */}
+              <h3 className="font-extrabold text-lg text-white leading-tight truncate">
+                {form.name || "Your Store Name"}
+              </h3>
+
+              {/* Meta row */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 mt-1">
+                <span className="flex items-center gap-1">
+                  <Package className="w-3 h-3" />
+                  {store ? (store as any).productCount ?? 0 : 0} products
+                </span>
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  Distance shown to nearby cafés
+                </span>
+              </div>
+
+              {/* Description */}
+              {form.description && (
+                <p className="text-xs text-gray-400 mt-2 line-clamp-2">{form.description}</p>
+              )}
             </div>
           </div>
 

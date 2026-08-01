@@ -2155,6 +2155,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: 'Error' }); }
   });
 
+  app.patch('/api/admin/stores/:id/auto-approve', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const autoApprove = Boolean(req.body?.autoApprove);
+      const store = await storage.setStoreAutoApprove(id, autoApprove);
+      if (!store) return res.status(404).json({ message: 'Not found' });
+      broadcast('store_updated', { storeId: id, supplierId: store.supplierId });
+      res.json(store);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.patch('/api/admin/stores/bulk-order', requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: 'Invalid payload' });
+      await storage.bulkUpdateStoreOrder(orders);
+      broadcast('store_updated', { bulk: true });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
   // ── Stores (coffee owner browsing) ───────────────────────────────────────────
 
   app.get('/api/stores', async (req, res) => {

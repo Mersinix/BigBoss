@@ -356,6 +356,7 @@ export const supplierStores = pgTable("supplier_stores", {
   visibility: storeVisibilityEnum("visibility").notNull().default('VISIBLE'),
   approvalStatus: storeApprovalStatusEnum("approval_status").notNull().default('PENDING'),
   displayOrder: integer("display_order").notNull().default(0),
+  autoApprove: boolean("auto_approve").notNull().default(false),
   mediaType: text("media_type").notNull().default('IMAGE'), // 'IMAGE' | 'VIDEO'
   coverUrls: text("cover_urls").array().default([]),        // up to 5 image URLs for slideshow
   videoUrl: text("video_url"),
@@ -921,6 +922,7 @@ export type StoreCard = {
 export type StoreAdminRow = StoreCard & {
   supplierName: string;
   supplierEmail: string;
+  autoApprove: boolean;
   createdAt: Date | null;
   updatedAt: Date | null;
 };

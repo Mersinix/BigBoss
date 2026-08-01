@@ -80,7 +80,7 @@ const DAYS: { key: keyof OpeningHoursMap; label: string }[] = [
 
 // ── Slideshow cover ───────────────────────────────────────────────────────────
 
-function CoverSlideshow({ urls, name }: { urls: string[]; name: string }) {
+export function CoverSlideshow({ urls, name }: { urls: string[]; name: string }) {
   const [idx, setIdx] = useState(0);
   const active = urls.filter(Boolean);
   useEffect(() => {
@@ -105,7 +105,7 @@ function CoverSlideshow({ urls, name }: { urls: string[]; name: string }) {
 
 // ── YouTube music player ──────────────────────────────────────────────────────
 
-function MusicPlayer({ musicUrl }: { musicUrl: string }) {
+export function MusicPlayer({ musicUrl }: { musicUrl: string }) {
   const embedUrl = useMemo(() => {
     if (!musicUrl) return null;
     try {

@@ -139,7 +139,9 @@ export interface IStorage {
   upsertSupplierStore(supplierId: number, data: Partial<InsertSupplierStore>): Promise<SupplierStore>;
   getAllStoresAdmin(): Promise<StoreAdminRow[]>;
   setStoreApprovalStatus(id: number, status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ON_HOLD'): Promise<SupplierStore | undefined>;
+  setStoreAutoApprove(id: number, autoApprove: boolean): Promise<SupplierStore | undefined>;
   updateStoreDisplayOrder(id: number, displayOrder: number): Promise<SupplierStore | undefined>;
+  bulkUpdateStoreOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
   deleteStore(id: number): Promise<void>;
   getVisibleStores(): Promise<StoreCard[]>;
   getStoreDetail(id: number, opts?: { requireVisible?: boolean }): Promise<StoreDetail | undefined>;
@@ -2101,7 +2103,8 @@ export class DatabaseStorage implements IStorage {
       (data.logoUrl !== undefined && (data.logoUrl ?? null) !== (existing.logoUrl ?? null))
     );
     let approvalStatus = existing.approvalStatus;
-    if (identityChanged && (existing.approvalStatus === 'APPROVED' || existing.approvalStatus === 'REJECTED')) {
+    const storeHasAutoApprove = (existing as any).autoApprove === true;
+    if (identityChanged && !storeHasAutoApprove && (existing.approvalStatus === 'APPROVED' || existing.approvalStatus === 'REJECTED')) {
       approvalStatus = 'PENDING';
     }
     const [updated] = await db.update(supplierStores).set({
@@ -2190,6 +2193,7 @@ export class DatabaseStorage implements IStorage {
         ...card,
         supplierName: supplier?.name ?? '',
         supplierEmail: supplier?.email ?? '',
+        autoApprove: (store as any).autoApprove ?? false,
         createdAt: store.createdAt,
         updatedAt: store.updatedAt,
       };
@@ -2201,9 +2205,20 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async setStoreAutoApprove(id: number, autoApprove: boolean): Promise<SupplierStore | undefined> {
+    const [updated] = await db.update(supplierStores).set({ autoApprove, updatedAt: new Date() } as any).where(eq(supplierStores.id, id)).returning();
+    return updated;
+  }
+
   async updateStoreDisplayOrder(id: number, displayOrder: number): Promise<SupplierStore | undefined> {
     const [updated] = await db.update(supplierStores).set({ displayOrder, updatedAt: new Date() }).where(eq(supplierStores.id, id)).returning();
     return updated;
+  }
+
+  async bulkUpdateStoreOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(({ id, displayOrder }) =>
+      db.update(supplierStores).set({ displayOrder, updatedAt: new Date() }).where(eq(supplierStores.id, id))
+    ));
   }
 
   async deleteStore(id: number): Promise<void> {

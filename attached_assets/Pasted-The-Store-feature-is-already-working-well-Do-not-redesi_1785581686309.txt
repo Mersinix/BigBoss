@@ -1,0 +1,202 @@
+The Store feature is already working well. Do not redesign or rewrite the Store system. Continue from the existing implementation and only make the improvements described below.
+
+Before making any changes:
+
+Review the current Store implementation in both the Admin and Supplier areas.
+Verify all existing Store synchronization and realtime behavior.
+Verify the existing Store Details modal.
+Verify how Store approval, visibility and ordering currently work.
+Only modify the parts described below.
+Do not change unrelated functionality.
+Do not change business logic unless explicitly requested.
+Do not remove any existing features.
+Keep the existing design language throughout the application.
+1. Admin Part
+Sidebar organization
+
+Move the current Stores page so it becomes its own main sidebar item named:
+
+Stores
+
+Place it directly under the Products tab in the Admin sidebar.
+
+Do not change any other sidebar items.
+
+Admin → Stores
+
+Replace the current table presentation with a modern card layout.
+
+Do not remove any existing Store management functionality.
+
+Everything that currently works must continue working.
+
+Filter Bar
+
+Add a filter/search bar at the top of the page.
+
+The administrator should be able to filter stores by:
+
+Status
+Visibility
+any existing store status already supported by the system
+
+Also add:
+
+Search input to search stores by supplier/store name.
+
+Keep the page responsive.
+
+Store Cards
+
+Replace the table with Store cards.
+
+Each Store card should display:
+
+Cover image
+Store logo
+Store name
+Number of products
+Status indicator using the card border
+Green border = Approved
+Red border = On Hold
+Visibility indicator at the top-right
+Green point = Visible
+Grey point = Hidden
+
+Keep the existing visual language.
+
+Do not redesign the application.
+
+Store Ordering
+
+Currently the display order is managed using an input.
+
+Replace this behavior.
+
+The administrator should now reorder stores directly by moving the Store cards.
+
+The mapped order should become the display order.
+
+After reordering:
+
+the new order must be saved
+the new order must be synchronized everywhere
+no page refresh should be required
+Store Details Modal
+
+When clicking a Store card, continue opening the existing Store Details modal.
+
+Do not recreate the modal.
+
+Reuse the current one.
+
+Move Store Actions
+
+Move the Store management actions into the Store Details modal.
+
+The modal should contain:
+
+Approve
+Reject
+Hold
+Delete
+
+Keep their current behavior exactly the same.
+
+New Auto Approve option
+
+Add one additional action:
+
+Auto Approve
+
+Behavior:
+
+When enabled for a Store:
+
+the Store is approved once
+afterwards the supplier can update that Store without requiring future admin approvals
+
+This applies only to that Store.
+
+All future Store edits should follow the Auto Approve setting.
+
+When disabled:
+
+the Store returns to the normal approval workflow.
+
+Keep everything synchronized in realtime.
+
+2. Supplier Part
+Store Page
+
+The upper preview section should match the Coffee Owner Store presentation.
+
+Reuse the existing Store preview design already used by Coffee Owners.
+
+Do not create another Store layout.
+
+The Supplier should preview the Store exactly as customers see it.
+
+The preview should include:
+
+Dark mode appearance
+Favorite icon
+Flash icon
+Cover image carousel
+Store logo
+Opening hours
+Rating
+Back button
+Product count
+Distance indicator
+Description
+
+Only the preview area should be updated.
+
+Everything below the preview must remain exactly as it is today.
+
+Realtime Synchronization
+
+Verify that all Store updates remain synchronized in realtime where appropriate.
+
+This includes:
+
+Store approval
+Hold
+Visibility
+Auto Approve
+Product count
+Store ordering
+Store updates
+Store preview
+Store information
+
+No refresh should be required.
+
+Verification
+
+Before finishing, verify that:
+
+Existing Store functionality is preserved.
+Existing Store Details modal still works.
+Existing approval workflow still works.
+Auto Approve works only for Stores where it is enabled.
+Store ordering updates correctly everywhere.
+Store cards replace only the old table.
+Supplier preview matches the Coffee Owner Store presentation.
+Realtime synchronization continues working.
+No duplicate Store logic has been introduced.
+No duplicate Store pages have been created.
+Important
+
+Do not redesign unrelated pages.
+
+Do not modify any feature outside the Store functionality described above.
+
+Do not remove existing functionality.
+
+Do not rewrite working code.
+
+Do not introduce duplicate components or duplicate business logic.
+
+Before implementing anything, review the current Store implementation and reuse the existing architecture wherever possible. Only complete the improvements described above while keeping the rest of the project unchanged.

@@ -479,18 +479,22 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Service switcher */}
-        <div className={`flex gap-1 rounded-2xl p-1 ${switcherBg}`}>
+        <div className={`flex gap-2 overflow-x-auto rounded-2xl p-1
+    [-ms-overflow-style:none]
+    [scrollbar-width:none]
+    [&::-webkit-scrollbar]:hidden ${switcherBg}`}>
           {visibleFavServices.map((s) => (
             <button
               key={s}
               data-testid={`tab-fav-${s.toLowerCase()}`}
               onClick={() => setActiveService(s)}
-              className={`flex-1 py-2 text-[11px] font-semibold rounded-xl transition-all ${activeService === s ? switcherActive : switcherInactive}`}
+              className={`shrink-0 min-w-[110px] h-7 px-4 flex items-center justify-center text-[11px] font-semibold rounded-xl transition-all whitespace-nowrap scrollbar-hide ${activeService === s ? switcherActive : switcherInactive}`}
             >
               {s}
             </button>
           ))}
         </div>
+        
 
         {/* SHOP sub-switcher */}
         {activeService === "SHOP" && (
@@ -829,13 +833,14 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
 
 // ── Chat Panel ────────────────────────────────────────────────────────────────
 
-const SERVICES_LIST: ServiceId[] = ["SHOP", "PRINT", "BARISTA", "MARKETING", "MAINTENANCE"];
-const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "BARISTA" | "MARKETING" | "MAINTENANCE" | null> = {
+const SERVICES_LIST: ServiceId[] = ["SHOP", "MAINTENANCE", "PRINT", "BARISTA", "MARKETING"];
+const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "MAINTENANCE" | "BARISTA" | "MARKETING"  | null> = {
   SHOP: null,
+  MAINTENANCE: "MAINTENANCE",
   PRINT: "PRINTING",
   BARISTA: "BARISTA",
   MARKETING: "MARKETING",
-  MAINTENANCE: "MAINTENANCE",
+  
 };
 
 // ── Messages Panel (premium dark/light — mirrors FavoritesPanel design) ───────

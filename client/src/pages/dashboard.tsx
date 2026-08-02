@@ -21,7 +21,7 @@ export default function Dashboard() {
     .reduce((sum, order) => sum + order.totalAmount, 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8  p-6">
       <div>
         <h1 className="text-3xl font-display font-bold tracking-tight">
           Welcome back, {user?.name}

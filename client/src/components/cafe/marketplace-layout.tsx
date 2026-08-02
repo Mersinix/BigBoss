@@ -1033,13 +1033,16 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Service switcher */}
-        <div className={`flex gap-1 rounded-2xl p-1 ${switcherBg}`}>
+        <div className={`flex gap-2 overflow-x-auto rounded-2xl p-1
+    [-ms-overflow-style:none]
+    [scrollbar-width:none]
+    [&::-webkit-scrollbar]:hidden ${switcherBg}`}>
           {visibleServicesList.map((s) => (
             <button
               key={s}
               data-testid={`tab-messages-${s.toLowerCase()}`}
               onClick={() => switchService(s)}
-              className={`flex-1 py-2 text-[11px] font-semibold rounded-xl transition-all ${service === s ? switcherActive : switcherInactive}`}
+              className={`shrink-0 min-w-[110px] h-7 px-4 flex items-center justify-center text-[11px] font-semibold rounded-xl transition-all whitespace-nowrap scrollbar-hide ${service === s ? switcherActive : switcherInactive}`}
             >
               {s}
             </button>

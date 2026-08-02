@@ -371,17 +371,18 @@ function AccountPanel({
 
 // ── Favorites Panel ───────────────────────────────────────────────────────────
 
-type FavService = "SHOP" | "PRINT" | "BARISTA" | "MARKETING" | "MAINTENANCE";
+type FavService = "SHOP" | "MAINTENANCE" | "PRINT" | "BARISTA" | "MARKETING" ;
 type BaristaSubTab = "academy" | "marketplace";
 type ShopSubTab = "products" | "packs" | "stores";
 
-const FAV_SERVICES: FavService[] = ["SHOP", "PRINT", "BARISTA", "MARKETING", "MAINTENANCE"];
-const FAV_SERVICE_TO_KEY: Record<FavService, "PRINTING" | "BARISTA" | "MARKETING" | "MAINTENANCE" | null> = {
+const FAV_SERVICES: FavService[] = ["SHOP", "MAINTENANCE" , "PRINT", "BARISTA", "MARKETING"];
+const FAV_SERVICE_TO_KEY: Record<FavService,  "MAINTENANCE" | "PRINTING" | "BARISTA" | "MARKETING"  | null> = {
   SHOP: null,
+   MAINTENANCE: "MAINTENANCE",
   PRINT: "PRINTING",
   BARISTA: "BARISTA",
   MARKETING: "MARKETING",
-  MAINTENANCE: "MAINTENANCE",
+ 
 };
 
 function FavoritesPanel({ onClose }: { onClose: () => void }) {

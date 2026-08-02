@@ -1,0 +1,107 @@
+The Pack cards are now in the correct layout. Do not redesign them and do not change any functionality. Only apply the following small visual adjustments.
+
+Before making changes, use the current Pack card implementation as the baseline and modify only the requested elements.
+
+Coffee Owner → SHOP → Mapped Pack Cards
+1. Description
+
+The Pack description should always occupy one single line only.
+
+If the description is longer than the available width:
+
+truncate it with an ellipsis (...)
+never wrap onto a second line
+
+Example:
+
+Premium summer gift pack for coffee...
+
+2. Currency position
+
+Move the currency symbol to the right side of the amount.
+
+Current example:
+
+DT65.00
+
+New example:
+
+65.00 DT
+
+Apply the project's global currency system so the selected currency is displayed after the value.
+
+3. Quantity display
+
+Current:
+
+65.00 DT 75.00 DT 1998 available
+
+Replace the quantity section with:
+
+a small boxes/packages icon
+the quantity only
+
+Example:
+
+📦 1998
+
+Requirements:
+
+remove the word "available"
+keep the quantity aligned at the far right of the row
+use the same text color as the current price
+4. Expiration date color
+
+The expiration date remains in the same position.
+
+Only change its color so it matches the current price color.
+
+Example:
+
+Expires: 15 Aug 2026
+
+Use the same color styling as the price.
+
+5. Brand beside each category
+
+On the categories row, display the related brand immediately after each category.
+
+Example:
+
+Coffee • Lavazza Dairy • Delice +2
+
+Requirements:
+
+keep everything on a single line
+preserve the existing +X overflow behavior
+the brand text/badge should use the same color as the current price
+keep the category styling unchanged except for adding the brand information beside it
+Keep everything else exactly as it is
+
+Do not modify:
+
+card dimensions
+scrolling
+responsive behavior
+See More / See Less
+favorites
+flash modal
+filters
+pack details
+backend
+APIs
+database
+realtime synchronization
+design system
+typography (except the requested single-line truncation)
+
+Before considering the task complete, verify that:
+
+descriptions are always a single truncated line,
+the currency is displayed to the right of every price,
+the quantity is displayed as 📦 + number with no "available" text,
+the quantity uses the same color as the price,
+the expiration date uses the same color as the price,
+every category displays its related brand,
+category overflow (+X) still works correctly,
+no unrelated functionality or design has changed.

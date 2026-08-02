@@ -13,7 +13,7 @@ import {
   Plus, ShoppingBag, Layers, Star, MapPin, Zap, Sun, Moon,
 } from "lucide-react";
 import type { ListingPromotion } from "@shared/schema";
-import { useFormatCurrency } from "@/hooks/use-currency";
+import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
@@ -544,8 +544,11 @@ function PackCardTile({
   hasCommercialAccess: boolean;
   isDark: boolean;
 }) {
-  const fmt = useFormatCurrency();
   const t = useTheme(isDark);
+  const symbol = useCurrency(); // use global currency symbol
+  // Format cents as "65.00 DT" (currency symbol on the right)
+  const fmtRight = (cents: number) => `${(cents / 100).toFixed(2)} ${symbol}`;
+
   const faved = useFavorites((s) => !!s.pack[pack.id]);
   const togglePack = useFavorites((s) => s.togglePack);
   const openPackQuickView = usePackQuickView((s) => s.open);
@@ -562,10 +565,13 @@ function PackCardTile({
     return calculateDistance(parseFloat(searchLocation.lat), parseFloat(searchLocation.lng), lat, lng);
   }, [(pack as any).supplierLat, (pack as any).supplierLng, searchLocation]);
 
-  // For the categories row: show up to 2 labels on one line + "+N" overflow indicator
+  // Categories row: up to 2 chips, each paired with its corresponding brand by index, +N overflow
   const MAX_CAT = 2;
   const visibleCats = pack.categoryLabels.slice(0, MAX_CAT);
-  const hiddenCatCount = pack.categoryLabels.length - MAX_CAT;
+  const hiddenCatCount = Math.max(0, pack.categoryLabels.length - MAX_CAT);
+
+  // Amber price color class (reused for quantity and expiration)
+  const priceColor = t.dk ? "text-amber-400" : "text-amber-600";
 
   // Format expiration date as "15 Sep 2026"
   const expiryLabel = pack.expirationDate
@@ -611,54 +617,60 @@ function PackCardTile({
 
       {/* Body — fixed height so all cards are identical */}
       <div className="p-3 flex flex-col gap-0" style={{ height: 164 }}>
-        {/* Row 1: Name — 1 line, fixed height */}
+        {/* Row 1: Name — 1 line */}
         <h3 className={`font-bold text-sm leading-tight line-clamp-1 transition-colors ${t.dk ? "text-white group-hover:text-amber-400" : "text-gray-900 group-hover:text-amber-600"}`}>
           {pack.name}
         </h3>
 
-        {/* Row 2: Description — 2 lines, fixed height (~32px) */}
-        <p className={`text-xs line-clamp-2 leading-snug mt-1 min-h-[32px] ${t.textMuted}`}>
+        {/* Row 2: Description — always 1 line, truncated with ellipsis */}
+        <p className={`text-xs line-clamp-1 truncate mt-1 min-h-[16px] ${t.textMuted}`}>
           {pack.description || "\u00A0"}
         </p>
 
-        {/* Row 3: Price / old price / quantity — single line */}
-        <div className="flex items-baseline gap-1.5 mt-1.5 flex-nowrap overflow-hidden">
+        {/* Row 3: Price (right-of-symbol) / old price / 📦 quantity — single line */}
+        <div className="flex items-center gap-1.5 mt-1.5 flex-nowrap overflow-hidden">
           {hasCommercialAccess ? (
             <>
-              <span className={`font-bold text-sm shrink-0 ${t.dk ? "text-amber-400" : "text-amber-600"}`}>
-                {fmt(pack.price)}
+              <span className={`font-bold text-sm shrink-0 ${priceColor}`}>
+                {fmtRight(pack.price)}
               </span>
               {individualTotal > pack.price && (
-                <span className={`text-xs line-through shrink-0 ${t.textMuted}`}>{fmt(individualTotal)}</span>
+                <span className={`text-xs line-through shrink-0 ${t.textMuted}`}>{fmtRight(individualTotal)}</span>
               )}
-              <span className={`text-[10px] truncate ${t.textMuted}`}>{maxQty} available</span>
+              {/* 📦 quantity — amber, aligned right */}
+              <span className={`flex items-center gap-0.5 ml-auto shrink-0 text-[11px] font-medium ${priceColor}`}>
+                <Package className="w-3 h-3" />{maxQty}
+              </span>
             </>
           ) : (
-            <div className={`flex items-center gap-1 text-[11px] font-medium ${t.dk ? "text-amber-400" : "text-amber-700"}`}>
+            <div className={`flex items-center gap-1 text-[11px] font-medium ${priceColor}`}>
               <Lock className="w-3 h-3 shrink-0" />
               <span className="truncate">Price for approved owners</span>
             </div>
           )}
         </div>
 
-        {/* Row 4: Categories — single line, no wrap, +N overflow */}
+        {/* Row 4: Categories — single line, no wrap, each with brand, +N overflow */}
         <div className="flex items-center gap-1 mt-1.5 flex-nowrap overflow-hidden min-h-[20px]">
-          {visibleCats.map(c => (
-            <Badge
-              key={c.id}
-              className={`text-[10px] px-1.5 py-0 border shrink-0 ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"}`}
-            >
-              {c.name}
-            </Badge>
-          ))}
+          {visibleCats.map((c, i) => {
+            const brand = pack.brandLabels[i];
+            return (
+              <Badge
+                key={c.id}
+                className={`text-[10px] px-1.5 py-0 border shrink-0 ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"}`}
+              >
+                {c.name}{brand ? <span className={`ml-0.5 ${priceColor}`}> • {brand.name}</span> : null}
+              </Badge>
+            );
+          })}
           {hiddenCatCount > 0 && (
             <span className={`text-[10px] shrink-0 ${t.textMuted}`}>+{hiddenCatCount}</span>
           )}
         </div>
 
-        {/* Row 5 (bottom): Expiration date left, Rating right — pushed to bottom */}
+        {/* Row 5 (bottom): Expiration date (amber) left, Rating right — pushed to bottom */}
         <div className={`flex items-center justify-between mt-auto pt-1.5 border-t ${t.priceBorder}`}>
-          <span className={`text-[10px] truncate ${t.textMuted}`}>
+          <span className={`text-[10px] truncate ${expiryLabel ? priceColor : t.textMuted}`}>
             {expiryLabel ? `Expires: ${expiryLabel}` : (distance != null ? formatDistance(distance) : "\u00A0")}
           </span>
           <StarRating rating={pack.packAvgRating} count={pack.packReviewCount} isDark={isDark} />

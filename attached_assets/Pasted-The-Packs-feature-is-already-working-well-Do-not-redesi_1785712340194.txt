@@ -1,0 +1,116 @@
+The Packs feature is already working well. Do not redesign it, do not refactor it, and do not change any functionality that is not explicitly requested below.
+
+Before making any changes, read the existing Packs implementation completely so you understand the current structure. Then implement only the following UI/UX improvements while preserving all existing behavior, business logic, APIs, realtime synchronization, filtering, favorites, cart behavior, scrolling behavior, animations, and responsive behavior.
+
+Coffee Owner → SHOP → Packs Cards
+
+Update only the mapped Pack cards.
+
+1. Reorganize the information inside each Pack card
+
+Keep the following at the top exactly as they are:
+
+Pack image
+Pack name
+Pack description
+
+Immediately below the description display:
+
+Current price
+Old price (if available)
+Available quantity
+
+These three pieces of information must appear on the same line.
+
+Example:
+
+DT56.00 DT67.00 111 available
+
+2. Categories row
+
+Below the price row, display the mapped categories.
+
+Rules:
+
+Show category chips/text on one single line only.
+If they don't fit, do not wrap to a second line.
+Instead display:
+
+Coffee Dairy & Alternatives +1
+
+where +1 indicates the remaining hidden categories.
+
+3. Bottom row
+
+The last row of the card should contain:
+
+Left side:
+
+Expiration date
+
+Right side:
+
+Rating
+
+Example:
+
+Expires: 15 Sep 2026 ★ 5.0 (1)
+
+4. Same card dimensions
+
+All Pack cards must always have identical dimensions.
+
+The card height and width must stay consistent even when:
+
+description is shorter
+expiration date is missing
+old price is missing
+quantity differs
+category count differs
+
+No Pack card should become taller or shorter than another.
+
+5. Increase Pack card width
+
+Increase the width of the mapped Pack cards so they match the visual width of the Store cards.
+
+Keep:
+
+the current horizontal scrolling behavior
+current spacing
+current responsive behavior
+
+Only make the Pack cards wider.
+
+6. Keep everything else exactly as it is
+
+Do not modify:
+
+card animations
+scrolling behavior
+"See More / See Less"
+favorites
+flash modal
+filters
+opening Pack details
+cart logic
+realtime synchronization
+backend
+APIs
+database
+design system
+colors
+typography (except where necessary for the new layout)
+
+Only reorganize the displayed information and resize the Pack cards as requested.
+
+Before considering the task complete, verify that:
+
+every Pack card has identical dimensions,
+categories never wrap onto multiple lines,
+the +X indicator works correctly,
+price/old price/quantity appear on one row,
+expiration date and rating appear on the last row,
+Pack cards have the same width as Store cards,
+all existing functionality continues to work exactly as before,
+no unrelated files, logic, or UI have been modified.

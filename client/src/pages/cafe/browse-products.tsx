@@ -562,14 +562,24 @@ function PackCardTile({
     return calculateDistance(parseFloat(searchLocation.lat), parseFloat(searchLocation.lng), lat, lng);
   }, [(pack as any).supplierLat, (pack as any).supplierLng, searchLocation]);
 
+  // For the categories row: show up to 2 labels on one line + "+N" overflow indicator
+  const MAX_CAT = 2;
+  const visibleCats = pack.categoryLabels.slice(0, MAX_CAT);
+  const hiddenCatCount = pack.categoryLabels.length - MAX_CAT;
+
+  // Format expiration date as "15 Sep 2026"
+  const expiryLabel = pack.expirationDate
+    ? new Date(pack.expirationDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : null;
+
   return (
     <div
       data-testid={`card-pack-${pack.id}`}
       className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.dk ? "bg-gray-800 border-amber-900/40" : "bg-white border-amber-100"}`}
       onClick={() => openPackQuickView(pack.id)}
     >
-      {/* Image */}
-      <div className={`relative aspect-[4/3] overflow-hidden ${t.dk ? "bg-amber-900/20" : "bg-amber-50"}`}>
+      {/* Image — aspect-[4/3], identical across all cards */}
+      <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.dk ? "bg-amber-900/20" : "bg-amber-50"}`}>
         {pack.imageUrl ? (
           <img
             src={pack.imageUrl}
@@ -587,14 +597,6 @@ function PackCardTile({
             <Layers className="w-3 h-3 mr-1 inline" />Pack
           </Badge>
         </div>
-        {/* Expiration badge */}
-        {pack.expirationDate && (
-          <div className="absolute bottom-2 right-2">
-            <Badge className="bg-orange-500/90 text-white text-[10px] font-semibold shadow-sm border-0 px-2 backdrop-blur-sm">
-              Exp. {new Date(pack.expirationDate).toLocaleDateString()}
-            </Badge>
-          </div>
-        )}
         {/* Favorite button */}
         {hasCommercialAccess && (
           <button
@@ -607,70 +609,59 @@ function PackCardTile({
         )}
       </div>
 
-      {/* Body */}
-      <div className="p-3 flex-1 flex flex-col gap-1.5">
-        <h3 className={`font-bold text-sm leading-tight line-clamp-2 transition-colors ${t.dk ? "text-white group-hover:text-amber-400" : "text-gray-900 group-hover:text-amber-600"}`}>
+      {/* Body — fixed height so all cards are identical */}
+      <div className="p-3 flex flex-col gap-0" style={{ height: 164 }}>
+        {/* Row 1: Name — 1 line, fixed height */}
+        <h3 className={`font-bold text-sm leading-tight line-clamp-1 transition-colors ${t.dk ? "text-white group-hover:text-amber-400" : "text-gray-900 group-hover:text-amber-600"}`}>
           {pack.name}
         </h3>
-        {pack.description && (
-          <p className={`text-xs line-clamp-1 ${t.textMuted}`}>{pack.description}</p>
-        )}
 
-        {/* Brands */}
-        {pack.brandLabels.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {pack.brandLabels.slice(0, 2).map(b => (
-              <Badge
-                key={b.id}
-                className={`text-[10px] px-1.5 py-0 border ${t.dk ? "bg-amber-900/40 text-amber-400 border-amber-800/60" : "bg-amber-50 text-amber-700 border-amber-200"}`}
-              >
-                {b.name}
-              </Badge>
-            ))}
-            {pack.brandLabels.length > 2 && (
-              <span className={`text-[10px] ${t.textMuted}`}>+{pack.brandLabels.length - 2}</span>
-            )}
-          </div>
-        )}
+        {/* Row 2: Description — 2 lines, fixed height (~32px) */}
+        <p className={`text-xs line-clamp-2 leading-snug mt-1 min-h-[32px] ${t.textMuted}`}>
+          {pack.description || "\u00A0"}
+        </p>
 
-        {/* Categories */}
-        {pack.categoryLabels.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {pack.categoryLabels.slice(0, 2).map(c => (
-              <Badge
-                key={c.id}
-                className={`text-[10px] px-1.5 py-0 border ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"}`}
-              >
-                {c.name}
-              </Badge>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between mt-0.5">
-          <StarRating rating={pack.packAvgRating} count={pack.packReviewCount} isDark={isDark} />
-          <div className={`flex items-center gap-2 text-[10px] ${t.textMuted}`}>
-            {distance != null && <span>{formatDistance(distance)}</span>}
-            <span>{maxQty} dispo.</span>
-          </div>
-        </div>
-
-        <div className={`mt-auto pt-2 border-t ${t.priceBorder}`}>
+        {/* Row 3: Price / old price / quantity — single line */}
+        <div className="flex items-baseline gap-1.5 mt-1.5 flex-nowrap overflow-hidden">
           {hasCommercialAccess ? (
-            <div className="flex items-baseline gap-2">
-              <p className={`font-bold text-sm ${t.dk ? "text-amber-400" : "text-amber-600"}`}>
+            <>
+              <span className={`font-bold text-sm shrink-0 ${t.dk ? "text-amber-400" : "text-amber-600"}`}>
                 {fmt(pack.price)}
-              </p>
+              </span>
               {individualTotal > pack.price && (
-                <p className={`text-xs line-through ${t.textMuted}`}>{fmt(individualTotal)}</p>
+                <span className={`text-xs line-through shrink-0 ${t.textMuted}`}>{fmt(individualTotal)}</span>
               )}
-            </div>
+              <span className={`text-[10px] truncate ${t.textMuted}`}>{maxQty} available</span>
+            </>
           ) : (
             <div className={`flex items-center gap-1 text-[11px] font-medium ${t.dk ? "text-amber-400" : "text-amber-700"}`}>
               <Lock className="w-3 h-3 shrink-0" />
-              <span>Price for approved owners</span>
+              <span className="truncate">Price for approved owners</span>
             </div>
           )}
+        </div>
+
+        {/* Row 4: Categories — single line, no wrap, +N overflow */}
+        <div className="flex items-center gap-1 mt-1.5 flex-nowrap overflow-hidden min-h-[20px]">
+          {visibleCats.map(c => (
+            <Badge
+              key={c.id}
+              className={`text-[10px] px-1.5 py-0 border shrink-0 ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"}`}
+            >
+              {c.name}
+            </Badge>
+          ))}
+          {hiddenCatCount > 0 && (
+            <span className={`text-[10px] shrink-0 ${t.textMuted}`}>+{hiddenCatCount}</span>
+          )}
+        </div>
+
+        {/* Row 5 (bottom): Expiration date left, Rating right — pushed to bottom */}
+        <div className={`flex items-center justify-between mt-auto pt-1.5 border-t ${t.priceBorder}`}>
+          <span className={`text-[10px] truncate ${t.textMuted}`}>
+            {expiryLabel ? `Expires: ${expiryLabel}` : (distance != null ? formatDistance(distance) : "\u00A0")}
+          </span>
+          <StarRating rating={pack.packAvgRating} count={pack.packReviewCount} isDark={isDark} />
         </div>
       </div>
     </div>
@@ -736,7 +727,7 @@ function PacksSection({
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}
         >
           {filteredPacks.map((pack) => (
-            <div key={pack.id} className="shrink-0 w-48 sm:w-56">
+            <div key={pack.id} className="shrink-0 w-52 sm:w-60">
               <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
             </div>
           ))}

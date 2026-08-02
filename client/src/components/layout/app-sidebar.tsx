@@ -98,106 +98,104 @@ export function AppSidebar() {
     if (isAdmin) {
       return [
          {
-          label: "PROSPECTING",
+          label: "MANAGEMENT",
           items: [
             { title: "Prospecting ⭐", url: "/admin/prospecting", icon: Target },
             { title: "System Management", url: "/admin/system-management", icon: Sliders },
-            { title: "Messages", url: "/admin/messages", icon: MessageCircle },
-            { title: "Reviews", url: "/admin/reviews", icon: Star },
-          ],
-        },
-        {
-          label: "MAIN",
-          items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
-            { title: "Categories", url: "/admin/categories", icon: Folder },
-            { title: "Products", url: "/admin/products", icon: Package },
-            { title: "Stores", url: "/admin/stores", icon: Store },
-            { title: "Orders", url: "/orders", icon: ClipboardList },
-           
+             { title: "Analytics", url: "/admin/analytics", icon: BarChart2 },
+             
           ],
         },
         {
           label: "USERS & PERMISSIONS",
           items: [
             { title: "Users", url: "/admin/users", icon: Users },
-            { title: "Suppliers", url: "/admin/suppliers", icon: Store },
             { title: "Roles & Permissions", url: "/admin/roles", icon: ShieldCheck },
+            { title: "Suppliers", url: "/admin/suppliers", icon: Store },
+            { title: "Delivery", url: "/admin/delivery", icon: Truck },
+          ],
+        },
+        {
+          label: "MAIN",
+          items: [
+            { title: "Categories", url: "/admin/categories", icon: Folder },
+            { title: "Products", url: "/admin/products", icon: Package },
+            { title: "Stores", url: "/admin/stores", icon: Store },
+            { title: "Orders", url: "/orders", icon: ClipboardList },
+            { title: "Invoices", url: "/admin/invoices", icon: FileText },
+            { title: "Payments", url: "/admin/payments", icon: DollarSign },
+            { title: "Earnings", url: "/admin/earnings", icon: TrendingUp },
+           
           ],
         },
         {
           label: "MANAGEMENT",
           items: [
-            { title: "Delivery", url: "/admin/delivery", icon: Truck },
-            { title: "Payments", url: "/admin/payments", icon: DollarSign },
-            { title: "Invoices", url: "/admin/invoices", icon: FileText },
-            
-          ],
-        },
-        {
-          label: "ACCOUNT",
-          items: [
-            { title: "Analytics", url: "/admin/analytics", icon: BarChart2 },
+           
             { title: "Notifications", url: "/admin/notifications", icon: Bell },
-            { title: "Earnings", url: "/admin/earnings", icon: TrendingUp },
+            { title: "Messages", url: "/admin/messages", icon: MessageCircle },
+            { title: "Reviews", url: "/admin/reviews", icon: Star },
             
           ],
         },
+       
       ];
     }
 
-    if (user.role === "CAFE_OWNER") {
-      return [
-        {
-          label: "MAIN",
-          items: [
-            { title: "Dashboard", url: "/", icon: LayoutDashboard },
-          ],
-        },
-        {
-          label: "MARKETPLACE",
-          items: [
-            { title: "Browse Products", url: "/products", icon: Store },
-            { title: "Cart", url: "/cart", icon: ShoppingCart },
-            { title: "Suppliers", url: "/cafe/suppliers", icon: Package },
-          ],
-        },
-        {
-          label: "ORDERS",
-          items: [
-            { title: "My Orders", url: "/cafe/orders", icon: ClipboardList },
-          ],
-        },
-        {
-          label: "ENGAGEMENT",
-          items: [
-            { title: "Favorites", url: "/cafe/favorites", icon: Star },
-            { title: "Messages", url: "/cafe/messages", icon: MessageCircle },
-          ],
-        },
-        {
-          label: "INSIGHTS",
-          items: [
-            { title: "Analytics", url: "/cafe/analytics", icon: BarChart2 },
-          ],
-        },
-        {
-          label: "ACCOUNT",
-          items: [
-            { title: "Settings", url: "/cafe/settings", icon: Settings },
-          ],
-        },
-      ];
-    }
+    // if (user.role === "CAFE_OWNER") {
+    //   return [
+    //     {
+    //       label: "MAIN",
+    //       items: [
+    //         { title: "Dashboard", url: "/", icon: LayoutDashboard },
+    //       ],
+    //     },
+    //     {
+    //       label: "MARKETPLACE",
+    //       items: [
+    //         { title: "Browse Products", url: "/products", icon: Store },
+    //         { title: "Cart", url: "/cart", icon: ShoppingCart },
+    //         { title: "Suppliers", url: "/cafe/suppliers", icon: Package },
+    //       ],
+    //     },
+    //     {
+    //       label: "ORDERS",
+    //       items: [
+    //         { title: "My Orders", url: "/cafe/orders", icon: ClipboardList },
+    //       ],
+    //     },
+    //     {
+    //       label: "ENGAGEMENT",
+    //       items: [
+    //         { title: "Favorites", url: "/cafe/favorites", icon: Star },
+    //         { title: "Messages", url: "/cafe/messages", icon: MessageCircle },
+    //       ],
+    //     },
+    //     {
+    //       label: "INSIGHTS",
+    //       items: [
+    //         { title: "Analytics", url: "/cafe/analytics", icon: BarChart2 },
+    //       ],
+    //     },
+    //     {
+    //       label: "ACCOUNT",
+    //       items: [
+    //         { title: "Settings", url: "/cafe/settings", icon: Settings },
+    //       ],
+    //     },
+    //   ];
+    // }
 
     if (user.role === "SUPPLIER") {
       return [
+       
         {
           label: "MAIN",
           items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
-            { title: "Categories", url: "/supplier/categories", icon: Folder },
             { title: "Store", url: "/supplier/store", icon: Store },
+            { title: "Categories", url: "/supplier/categories", icon: Folder },
             { title: "Products", url: "/supplier/products", icon: Package },
             { title: "Inventory", url: "/supplier/inventory", icon: Warehouse },
           ],
@@ -210,11 +208,14 @@ export function AppSidebar() {
             { title: "Returns", url: "/supplier/returns", icon: RotateCcw },
           ],
         },
-        {
-          label: "DELIVERY",
+         {
+          label: "MARKETING",
           items: [
-            { title: "Drivers", url: "/supplier/drivers", icon: Truck },
-            { title: "Delivery Status", url: "/supplier/delivery-status", icon: MapPin },
+            { title: "Messages", url: "/supplier/messages", icon: MessageCircle },
+            { title: "Notifications", url: "/supplier/notifications", icon: Bell },
+            { title: "Reviews", url: "/supplier/reviews", icon: Star },
+            { title: "Promotions", url: "/supplier/promotions", icon: Tag },
+            { title: "Discount Codes", url: "/supplier/discount-codes", icon: Ticket },
           ],
         },
         {
@@ -229,30 +230,19 @@ export function AppSidebar() {
           label: "CUSTOMERS",
           items: [
             { title: "Cafes", url: "/supplier/cafes", icon: Coffee },
-            { title: "Reviews", url: "/supplier/reviews", icon: Star },
+            { title: "Drivers", url: "/supplier/drivers", icon: Truck },
+            { title: "Delivery Status", url: "/supplier/delivery-status", icon: MapPin },
           ],
         },
-        {
-          label: "MARKETING",
-          items: [
-            { title: "Notifications", url: "/supplier/notifications", icon: Bell },
-            { title: "Promotions", url: "/supplier/promotions", icon: Tag },
-            { title: "Discount Codes", url: "/supplier/discount-codes", icon: Ticket },
-          ],
-        },
+        
         {
           label: "ACCOUNT",
           items: [
             { title: "Settings", url: "/supplier/settings", icon: Settings },
+             { title: "Help Center", url: "/supplier/help", icon: HelpCircle },
           ],
         },
-        {
-          label: "SUPPORT",
-          items: [
-            { title: "Help Center", url: "/supplier/help", icon: HelpCircle },
-            { title: "Messages", url: "/supplier/messages", icon: MessageCircle },
-          ],
-        },
+        
       ];
     }
 

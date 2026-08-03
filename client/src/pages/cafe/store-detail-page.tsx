@@ -22,6 +22,7 @@ import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { FlashMode } from "@/components/flash-mode";
+import { PackCardTile } from "@/pages/cafe/browse-products";
 import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount } from "@shared/schema";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -256,152 +257,6 @@ function InfoModal({ open, onClose, openingHours, storeName }: {
   );
 }
 
-// ── Pack card (store context) ─────────────────────────────────────────────────
-
-function StorePackCard({ pack, hasCommercialAccess, supplierLat, supplierLng, isDark }: {
-  pack: PackDetail;
-  hasCommercialAccess: boolean;
-  supplierLat?: string | null;
-  supplierLng?: string | null;
-  isDark: boolean;
-}) {
-  const t = useTheme(isDark);
-  const fmt = useFormatCurrency();
-  const faved = useFavorites((s) => !!s.pack[pack.id]);
-  const togglePack = useFavorites((s) => s.togglePack);
-  const openPackQuickView = usePackQuickView((s) => s.open);
-  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
-  const maxQty = Math.min(pack.quantityAvailable, pack.maxBuildable);
-  const individualTotal = pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-
-  const distance = useMemo(() => {
-    const lat = supplierLat ?? (pack as any).supplierLat;
-    const lng = supplierLng ?? (pack as any).supplierLng;
-    if (!searchLocation || !lat || !lng) return null;
-    const latN = parseFloat(lat);
-    const lngN = parseFloat(lng);
-    if (Number.isNaN(latN) || Number.isNaN(lngN)) return null;
-    return calculateDistance(parseFloat(searchLocation.lat), parseFloat(searchLocation.lng), latN, lngN);
-  }, [supplierLat, supplierLng, (pack as any).supplierLat, (pack as any).supplierLng, searchLocation]);
-
-  return (
-    <div
-      data-testid={`card-pack-${pack.id}`}
-      className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.dk ? "bg-gray-800 border-amber-900/40" : "bg-white border-amber-100"}`}
-      onClick={() => openPackQuickView(pack.id)}
-    >
-      {/* Image */}
-      <div className={`relative aspect-[4/3] overflow-hidden ${t.dk ? "bg-amber-900/20" : "bg-amber-50"}`}>
-        {pack.imageUrl ? (
-          <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Layers className={`w-10 h-10 ${t.dk ? "text-amber-800/60" : "text-amber-200"}`} />
-          </div>
-        )}
-        {/* Pack badge */}
-        <div className="absolute top-2 left-2">
-          <Badge className="bg-amber-500/90 text-white text-[10px] font-semibold shadow-sm border-0 px-2 backdrop-blur-sm">
-            <Layers className="w-3 h-3 mr-1 inline" />Pack
-          </Badge>
-        </div>
-        {/* Expiration badge */}
-        {pack.expirationDate && (
-          <div className="absolute bottom-2 right-2">
-            <Badge className="bg-orange-500/90 text-white text-[10px] font-semibold shadow-sm border-0 px-2 backdrop-blur-sm">
-              Exp. {new Date(pack.expirationDate).toLocaleDateString()}
-            </Badge>
-          </div>
-        )}
-        {/* Favorite button */}
-        {hasCommercialAccess && (
-          <button
-            className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
-            onClick={(e) => { e.stopPropagation(); togglePack(pack.id); }}
-            data-testid={`button-fav-pack-${pack.id}`}
-          >
-            <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
-          </button>
-        )}
-      </div>
-
-      {/* Body */}
-      <div className="p-3 flex-1 flex flex-col gap-1.5">
-        <h3 className={`font-bold text-sm leading-tight line-clamp-2 transition-colors ${t.dk ? "text-white group-hover:text-amber-400" : "text-gray-900 group-hover:text-amber-600"}`}>
-          {pack.name}
-        </h3>
-        {pack.description && (
-          <p className={`text-xs line-clamp-1 ${t.textMuted}`}>{pack.description}</p>
-        )}
-
-        {/* Brands */}
-        {pack.brandLabels.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {pack.brandLabels.slice(0, 2).map(b => (
-              <Badge
-                key={b.id}
-                className={`text-[10px] px-1.5 py-0 border ${t.dk ? "bg-amber-900/40 text-amber-400 border-amber-800/60" : "bg-amber-50 text-amber-700 border-amber-200"}`}
-              >
-                {b.name}
-              </Badge>
-            ))}
-            {pack.brandLabels.length > 2 && (
-              <span className={`text-[10px] ${t.textMuted}`}>+{pack.brandLabels.length - 2}</span>
-            )}
-          </div>
-        )}
-
-        {/* Categories */}
-        {pack.categoryLabels.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {pack.categoryLabels.slice(0, 2).map(c => (
-              <Badge
-                key={c.id}
-                className={`text-[10px] px-1.5 py-0 border ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"}`}
-              >
-                {c.name}
-              </Badge>
-            ))}
-          </div>
-        )}
-
-        {/* Rating + stock + distance */}
-        <div className="flex items-center justify-between mt-0.5">
-          {pack.packReviewCount > 0 ? (
-            <div className="flex items-center gap-1">
-              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-              <span className={`text-[11px] font-medium ${t.textPrimary}`}>{pack.packAvgRating.toFixed(1)}</span>
-              <span className={`text-[10px] ${t.textMuted}`}>({pack.packReviewCount})</span>
-            </div>
-          ) : <span />}
-          <div className={`flex items-center gap-2 text-[10px] ${t.textMuted}`}>
-            {distance != null && <span>{formatDistance(distance)}</span>}
-            <span>{maxQty} dispo.</span>
-          </div>
-        </div>
-
-        <div className={`mt-auto pt-2 border-t ${t.priceBorder}`}>
-          {hasCommercialAccess ? (
-            <div className="flex items-baseline gap-2">
-              <p className={`font-bold text-sm ${t.dk ? "text-amber-400" : "text-amber-600"}`}>
-                {fmt(pack.price)}
-              </p>
-              {individualTotal > pack.price && (
-                <p className={`text-xs line-through ${t.textMuted}`}>{fmt(individualTotal)}</p>
-              )}
-            </div>
-          ) : (
-            <div className={`flex items-center gap-1 text-[11px] font-medium ${t.dk ? "text-amber-400" : "text-amber-700"}`}>
-              <Lock className="w-3 h-3 shrink-0" />
-              <span>Price for approved owners</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function StorePacksSection({ packs, filters, hasCommercialAccess, isDark }: {
   packs: PackDetail[];
   filters: { subCategoryId: string; brandId: string };
@@ -447,14 +302,14 @@ function StorePacksSection({ packs, filters, hasCommercialAccess, isDark }: {
       {expanded ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {filtered.map((pack) => (
-            <StorePackCard key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
+            <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
           ))}
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
           {filtered.map((pack) => (
-            <div key={pack.id} className="shrink-0 w-48 sm:w-56">
-              <StorePackCard pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
+            <div key={pack.id} className="shrink-0 w-52 sm:w-60">
+              <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
             </div>
           ))}
         </div>

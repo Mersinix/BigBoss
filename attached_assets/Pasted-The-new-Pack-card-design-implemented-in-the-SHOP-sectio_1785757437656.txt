@@ -1,0 +1,76 @@
+The new Pack card design implemented in the SHOP section is exactly the design we want.
+
+Now apply the exact same Pack card design to the Pack cards displayed inside every Store page.
+
+Do not redesign anything. Do not create another variation. The Store Pack cards should be visually identical to the SHOP Pack cards.
+
+Before making changes, compare both implementations and reuse the existing SHOP Pack card design so there is only one consistent design across the project.
+
+Coffee Owner → Store → Mapped Pack Cards
+
+Apply the same Pack card layout already used in the SHOP section.
+
+This includes:
+
+Same card width
+Same card height
+Same spacing
+Same typography
+Same image layout
+Same description behavior (single line with ellipsis)
+Same price layout (currency displayed on the right)
+Same old price styling
+Same quantity layout (packages icon + quantity)
+Same quantity color
+Same expiration date placement
+Same expiration date color
+Same category layout
+Same brand display beside each category
+Same +X overflow behavior
+Same rating placement
+Same badges
+Same icons
+Same shadows
+Same border radius
+Same hover behavior
+Same responsive behavior
+
+The Pack cards inside a Store should look exactly like the Pack cards shown in SHOP.
+
+Reuse the existing implementation
+
+If possible, reuse the same Pack card component already used in SHOP instead of maintaining two separate UI implementations.
+
+The objective is to have one unified Pack card design used everywhere in the Coffee Owner experience.
+
+Do not change anything else
+
+Do not modify:
+
+Store page layout
+Store header
+Store information
+Store categories
+Product cards
+Flash modal
+Favorites
+Cart
+Pack details modal
+Filtering
+Backend
+APIs
+Database
+Realtime synchronization
+Business logic
+Existing animations
+Scrolling behavior
+
+Only make the Store Pack cards use the exact same design as the SHOP Pack cards.
+
+Before considering the task complete, verify that:
+
+Every Store page displays the new Pack card design.
+SHOP and Store Pack cards are visually identical.
+There is no duplicated Pack card design maintained in two different ways if it can be avoided.
+All existing functionality continues to work exactly as before.
+No unrelated files, logic, or UI have been modified.

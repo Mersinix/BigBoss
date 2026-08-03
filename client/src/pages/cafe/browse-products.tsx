@@ -525,7 +525,7 @@ function StoresSection({
 
 // ── Pack Card ─────────────────────────────────────────────────────────────────
 
-function StarRating({ rating, count, isDark }: { rating: number; count: number; isDark: boolean }) {
+export function StarRating({ rating, count, isDark }: { rating: number; count: number; isDark: boolean }) {
   const t = useTheme(isDark);
   if (!count) return null;
   return (
@@ -537,7 +537,7 @@ function StarRating({ rating, count, isDark }: { rating: number; count: number; 
   );
 }
 
-function PackCardTile({
+export function PackCardTile({
   pack, hasCommercialAccess, isDark,
 }: {
   pack: PackDetail;

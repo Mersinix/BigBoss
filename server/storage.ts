@@ -535,9 +535,88 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateSubOrderStatus(subOrderId: number, status: string): Promise<SubOrder> {
+    // Read existing status so we can detect confirmation transitions
+    const [existing] = await db.select().from(subOrders).where(eq(subOrders.id, subOrderId));
+    if (!existing) throw new Error('SubOrder not found');
     const [updated] = await db.update(subOrders).set({ status }).where(eq(subOrders.id, subOrderId)).returning();
     if (!updated) throw new Error('SubOrder not found');
+
+    // Deduct pack component variant/flavor stock the first time a suborder is confirmed.
+    // Regular (non-pack) item stock is already deducted at order creation; pack components
+    // are deducted here so the correct Variant+Flavor quantities decrease on approval.
+    const CONFIRMED_STATUSES = new Set(['CONFIRMED', 'APPROVED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
+    const wasAlreadyConfirmed = CONFIRMED_STATUSES.has(existing.status ?? '');
+    const isNowConfirmed = CONFIRMED_STATUSES.has(status);
+    if (!wasAlreadyConfirmed && isNowConfirmed) {
+      await this.deductPackComponentStock(subOrderId);
+    }
+
     return updated;
+  }
+
+  /** Deducts variant/flavor stock for every pack item in a sub-order on first confirmation. */
+  private async deductPackComponentStock(subOrderId: number): Promise<void> {
+    const items = await db.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+    const packOrderItems = items.filter((i) => i.packId != null);
+    if (!packOrderItems.length) return;
+
+    for (const orderItem of packOrderItems) {
+      const packId = orderItem.packId!;
+      const orderQty = orderItem.quantity;
+      const components = await db.select().from(packItems).where(eq(packItems.packId, packId));
+
+      const affectedListingIds = new Set<number>();
+      for (const comp of components) {
+        const deductQty = comp.quantity * orderQty;
+        if (comp.variantId) {
+          await db.update(supplierProductVariants)
+            .set({ quantity: sql`GREATEST(${supplierProductVariants.quantity} - ${deductQty}, 0)` })
+            .where(eq(supplierProductVariants.id, comp.variantId));
+          affectedListingIds.add(comp.listingId);
+        } else {
+          await db.update(supplierProductListings)
+            .set({ stock: sql`GREATEST(${supplierProductListings.stock} - ${deductQty}, 0)` })
+            .where(eq(supplierProductListings.id, comp.listingId));
+        }
+      }
+
+      // Refresh aggregate listing stock for every affected listing
+      for (const listingId of Array.from(affectedListingIds)) {
+        const listingVariants = await this.getVariantsByListingId(listingId);
+        const aggStock = listingVariants.reduce((s, v) => s + v.quantity, 0);
+        await db.update(supplierProductListings)
+          .set({ stock: aggStock })
+          .where(eq(supplierProductListings.id, listingId));
+      }
+    }
+  }
+
+  /** Restores variant/flavor stock for every pack item — used on order cancellation. */
+  private async restorePackComponentStock(packId: number, orderQty: number): Promise<void> {
+    const components = await db.select().from(packItems).where(eq(packItems.packId, packId));
+
+    const affectedListingIds = new Set<number>();
+    for (const comp of components) {
+      const restoreQty = comp.quantity * orderQty;
+      if (comp.variantId) {
+        await db.update(supplierProductVariants)
+          .set({ quantity: sql`${supplierProductVariants.quantity} + ${restoreQty}` })
+          .where(eq(supplierProductVariants.id, comp.variantId));
+        affectedListingIds.add(comp.listingId);
+      } else {
+        await db.update(supplierProductListings)
+          .set({ stock: sql`${supplierProductListings.stock} + ${restoreQty}` })
+          .where(eq(supplierProductListings.id, comp.listingId));
+      }
+    }
+
+    for (const listingId of Array.from(affectedListingIds)) {
+      const listingVariants = await this.getVariantsByListingId(listingId);
+      const aggStock = listingVariants.reduce((s, v) => s + v.quantity, 0);
+      await db.update(supplierProductListings)
+        .set({ stock: aggStock })
+        .where(eq(supplierProductListings.id, listingId));
+    }
   }
 
   async getReturns(filters?: { cafeId?: number; supplierId?: number }): Promise<OrderReturn[]> {
@@ -788,6 +867,15 @@ export class DatabaseStorage implements IStorage {
     for (const item of items) {
       if (item.packId) {
         await db.update(packs).set({ quantityAvailable: sql`${packs.quantityAvailable} + ${item.quantity}` }).where(eq(packs.id, item.packId));
+        // Also restore component variant/flavor stock if this suborder was already confirmed
+        // (component stock is only deducted at confirmation, not at order creation)
+        if (item.subOrderId) {
+          const [so] = await db.select().from(subOrders).where(eq(subOrders.id, item.subOrderId));
+          const CONFIRMED_STATUSES = new Set(['CONFIRMED', 'APPROVED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
+          if (so && CONFIRMED_STATUSES.has(so.status ?? '')) {
+            await this.restorePackComponentStock(item.packId, item.quantity);
+          }
+        }
         continue;
       }
       if (!item.productId) continue;

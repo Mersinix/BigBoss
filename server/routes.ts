@@ -752,6 +752,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           orderId: subOrder.orderId, subOrderId, status,
         });
       }
+      // Broadcast inventory_updated so all Pack/product screens refresh stock in realtime
+      const CONFIRMED_STATUSES = new Set(['CONFIRMED', 'APPROVED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
+      if (CONFIRMED_STATUSES.has(status)) {
+        broadcast('inventory_updated', { subOrderId, orderId: subOrder.orderId });
+      }
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ message: err.message ?? 'Invalid request' });

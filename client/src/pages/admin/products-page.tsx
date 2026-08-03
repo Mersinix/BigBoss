@@ -1309,10 +1309,34 @@ function AdminPackPreviewModal({
                           </div>
                         </TableCell>
                         <TableCell className="py-2">
-                          <div className="flex flex-wrap gap-1">
-                            {item.flavorName && <Badge className="text-[10px] px-1 py-0 bg-pink-100 text-pink-700 border-0">{item.flavorName}</Badge>}
-                            {item.sizeName && <Badge className="text-[10px] px-1 py-0 bg-amber-100 text-amber-700 border-0">{item.sizeName}</Badge>}
-                          </div>
+                          {item.sizeName && (
+                            <Badge className="text-[10px] px-1 py-0 bg-amber-100 text-amber-700 border-0 mb-1">{item.sizeName}</Badge>
+                          )}
+                          {(() => {
+                            const sameSizeFlavors = ((item as any).listingVariants ?? [])
+                              .filter((v: any) => v.sizeName === item.sizeName && v.flavorName);
+                            if (sameSizeFlavors.length > 0) {
+                              return (
+                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                  {sameSizeFlavors.map((v: any, vi: number) => (
+                                    <span key={vi} className="text-[11px] text-muted-foreground">
+                                      <Badge className="text-[10px] px-1 py-0 bg-pink-100 text-pink-700 border-0 mr-1">{v.flavorName}</Badge>
+                                      <span className="text-gray-500">({v.availableQuantity ?? 0})</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            if (item.flavorName) {
+                              return (
+                                <span className="text-[11px] text-muted-foreground">
+                                  <Badge className="text-[10px] px-1 py-0 bg-pink-100 text-pink-700 border-0 mr-1">{item.flavorName}</Badge>
+                                  <span className="text-gray-500">({(item as any).availableQuantity ?? 0})</span>
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                         </TableCell>
                         <TableCell className="py-2 text-right text-xs">×{item.quantity}</TableCell>
                         <TableCell className="py-2 text-right text-xs text-muted-foreground">

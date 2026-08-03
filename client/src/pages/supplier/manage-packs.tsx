@@ -26,11 +26,12 @@ import type { SupplierListingWithProduct, PackDetail } from "@shared/schema";
 
 // ── Variant grouping helper ───────────────────────────────────────────────────
 // Groups individual flavor variants by size so the supplier works with
-// "Espresso Shot (Vanilla • Caramel • Hazelnut)" rather than separate rows.
+// "Espresso Shot" size groups, each with per-flavor stock.
 type VariantGroup = {
   key: string;
   sizeName: string | null;
   flavors: string[];
+  flavorDetails: { name: string; stock: number }[]; // per-flavor stock
   price: number;
   totalStock: number;
   representativeId: number | null; // first variant's id, used as the pack item variantId
@@ -40,7 +41,7 @@ function getVariantGroups(listing: SupplierListingWithProduct): VariantGroup[] {
   const variants = (listing.variants ?? []).filter(v => v.price > 0 && v.quantity > 0);
   if (variants.length === 0) {
     if (listing.price > 0 && listing.stock > 0) {
-      return [{ key: "__none__", sizeName: null, flavors: [], price: listing.price, totalStock: listing.stock, representativeId: null }];
+      return [{ key: "__none__", sizeName: null, flavors: [], flavorDetails: [], price: listing.price, totalStock: listing.stock, representativeId: null }];
     }
     return [];
   }
@@ -51,10 +52,13 @@ function getVariantGroups(listing: SupplierListingWithProduct): VariantGroup[] {
       // Representative = first variant in the size group.
       // totalStock = representative's stock to stay consistent with backend maxBuildable
       // (which checks the representative variantId's availableQuantity, not the group sum).
-      map.set(key, { key, sizeName: v.sizeName ?? null, flavors: [], price: v.price, totalStock: v.quantity, representativeId: v.id ?? null });
+      map.set(key, { key, sizeName: v.sizeName ?? null, flavors: [], flavorDetails: [], price: v.price, totalStock: v.quantity, representativeId: v.id ?? null });
     }
     const g = map.get(key)!;
-    if (v.flavorName) g.flavors.push(v.flavorName);
+    if (v.flavorName) {
+      g.flavors.push(v.flavorName);
+      g.flavorDetails.push({ name: v.flavorName, stock: v.quantity });
+    }
   }
   return Array.from(map.values());
 }
@@ -303,9 +307,20 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                                 <label className="flex items-center gap-2 flex-1 cursor-pointer">
                                   <input type="checkbox" checked={checked} onChange={() => toggleItem(listing.id, g.representativeId, g.price)} className="rounded" data-testid={`checkbox-pack-item-${listing.id}-${g.key}`} />
                                   <span className="text-xs text-muted-foreground">
-                                    {variantGroupLabel(g)}
-                                    <span className="ml-1 text-gray-400">Original: {fmt(g.price)}</span>
-                                    · {g.totalStock} in stock
+                                    {g.sizeName && <span className="font-medium">{g.sizeName}</span>}
+                                    {g.flavorDetails.length > 0 ? (
+                                      <span className="ml-1">
+                                        {g.flavorDetails.map((f, fi) => (
+                                          <span key={fi}>
+                                            {fi > 0 && <span className="mx-0.5 text-gray-300">•</span>}
+                                            {f.name} <span className="text-gray-400">({f.stock})</span>
+                                          </span>
+                                        ))}
+                                      </span>
+                                    ) : (
+                                      <span className="ml-1 text-gray-400">{g.totalStock} in stock</span>
+                                    )}
+                                    <span className="ml-1 text-gray-400">· Original: {fmt(g.price)}</span>
                                   </span>
                                 </label>
                                 {checked && (
@@ -446,20 +461,28 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{item.productName}</p>
-                  {(item.flavorName || item.sizeName) && (
-                    <p className="text-xs text-muted-foreground">
-                      {(() => {
-                        // Filter listingVariants to only those matching this item's size
-                        const sameSizeFlavors = (item.listingVariants ?? [])
-                          .filter(v => v.sizeName === item.sizeName && v.flavorName)
-                          .map(v => v.flavorName as string);
-                        if (sameSizeFlavors.length > 1) {
-                          return `( ${sameSizeFlavors.join(" • ")} )${item.sizeName ? " · " + item.sizeName : ""}`;
-                        }
-                        return [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
-                      })()}
-                    </p>
+                  {item.sizeName && (
+                    <p className="text-xs font-medium text-muted-foreground">{item.sizeName}</p>
                   )}
+                  {(() => {
+                    const sameSizeFlavors = (item.listingVariants ?? [])
+                      .filter((v: any) => v.sizeName === item.sizeName && v.flavorName);
+                    if (sameSizeFlavors.length > 0) {
+                      return (
+                        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
+                          {sameSizeFlavors.map((v: any, vi: number) => (
+                            <span key={vi} className="text-[11px] text-muted-foreground">
+                              {v.flavorName} <span className="text-gray-400">({v.availableQuantity ?? 0})</span>
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    }
+                    if (item.flavorName) {
+                      return <p className="text-xs text-muted-foreground">{item.flavorName} ({(item as any).availableQuantity ?? 0})</p>;
+                    }
+                    return null;
+                  })()}
                 </div>
                 <span className="text-xs font-semibold text-muted-foreground shrink-0">×{item.quantity}</span>
                 <span className="text-xs text-muted-foreground shrink-0">{fmt(item.unitPrice * item.quantity)}</span>

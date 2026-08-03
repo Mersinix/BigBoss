@@ -1,0 +1,201 @@
+The Pack system is working very well. Do not redesign it and do not change any existing behavior unless explicitly requested below. The goal of this task is to improve stock synchronization and stock visibility while preserving everything else.
+
+Pack Stock Synchronization & Variant Stock Improvements
+
+Before making changes, review the existing Pack logic and keep all current functionality intact.
+
+Do not change the UI design, layouts, pricing logic, variant builder, flavor distribution logic, cart behavior, or business rules that are already working.
+
+1. Pack stock synchronization after order confirmation
+
+Currently, when a Coffee Owner orders a Pack and the Supplier approves the order, the Pack stock is updated, but the stock of the individual variants/flavors is not always synchronized correctly.
+
+Update the synchronization so that:
+
+When a Pack order is confirmed/approved by the Supplier, the correct stock is deducted from every included product.
+The deduction must happen at the exact Variant + Flavor level.
+Only the selected flavor(s) used for the Pack should be decremented.
+No unrelated variants or flavors should be modified.
+
+Example:
+
+If a Pack contains:
+
+2 × Product A → Variant Medium → Flavor Toffeh
+1 × Product B → Variant Gajou → Flavor BLANC
+
+After the Supplier confirms the order:
+
+Product A → Medium → Toffeh stock decreases by 2
+Product B → Gajou → BLANC stock decreases by 1
+
+No other flavors should change.
+
+Realtime synchronization
+
+After confirmation:
+
+The updated stock must immediately appear everywhere without refreshing:
+
+Coffee Owner
+Supplier
+Admin
+Pack Preview
+Product pages
+Product Details
+Pack Details
+Variant Builder
+Inventory
+Every place that displays stock
+
+Keep the existing realtime architecture and extend it where necessary.
+
+2. Display stock for every flavor
+
+Currently, many Pack screens display only the stock of the first flavor of a variant.
+
+That is incorrect.
+
+Every flavor must display its own stock.
+
+Example (current):
+
+(Citron • Ananas • Mojito • Blanc) · Gajou
+Original: DT28.50
+333 in stock
+
+Correct result:
+
+(Citron (111 in stock) •
+Ananas (44 in stock) •
+MOJITO (54 in stock) •
+BLANC (666 in stock))
+· Gajou
+
+Original: DT28.50
+
+Each flavor must display its own stock.
+
+Never reuse the first flavor's stock for all flavors.
+
+Apply this everywhere
+
+The same stock representation must be used consistently throughout the project.
+
+Admin
+
+Products → Packs
+
+Pack Preview
+
+Display the correct stock for every Variant + Flavor.
+
+Supplier
+
+Products → Packs
+
+Pack Preview
+
+Display the correct stock for every Variant + Flavor.
+
+Edit Pack
+
+Inside the Variant Builder, display every flavor with its own stock.
+
+Example:
+
+Instead of:
+
+Vanilla • Coconut • Hazelnut
+300 in stock
+
+Display:
+
+Vanilla (300)
+Coconut (154)
+Hazelnut (82)
+
+for every variant.
+
+Coffee Owner
+
+Pack Details
+
+The Coffee Owner Pack Details already behaves correctly.
+
+Do not redesign it.
+
+Use it as the reference implementation for displaying flavor stock.
+
+Reuse the same logic so every other Pack screen behaves consistently.
+
+3. Keep Pack stock computation unchanged
+
+Do not modify how:
+
+Pack availability
+Max Buildable
+Pack price
+Individual price
+
+are calculated.
+
+Only ensure that the displayed stock information is correct and synchronized.
+
+4. Keep flavor distribution logic unchanged
+
+The flavor distribution selector already works well.
+
+Do not modify:
+
+quantity selector
+validation
+distribution behavior
+add to cart flow
+Pack creation
+Pack editing
+
+Only ensure the displayed stock values are accurate.
+
+5. Realtime consistency
+
+Whenever stock changes because of:
+
+Supplier approves an order
+Inventory changes
+Variant stock changes
+Flavor stock changes
+
+Every Pack screen should update automatically without refreshing.
+
+Do NOT modify
+
+Do not change:
+
+Pack card design
+Pack Details design
+Product Details
+Variant Builder UI
+Cart
+Checkout
+Pricing
+Currency
+Categories
+Brands
+Images
+Reviews
+Favorites
+Flash modal
+Store pages
+APIs unless required
+Business logic unless required
+Existing realtime behavior except extending it for stock synchronization
+Before considering the task complete, verify that:
+Variant stock is deducted correctly after Supplier approval.
+Only the selected Variant + Flavor stock changes.
+Every flavor displays its own stock everywhere.
+No screen still displays the first flavor's stock for all flavors.
+Admin, Supplier, and Coffee Owner all display identical stock information.
+Stock updates appear in realtime without refreshing.
+Existing Pack functionality remains unchanged.
+No unrelated files, logic, or UI have been modified.

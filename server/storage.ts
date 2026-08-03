@@ -1799,6 +1799,8 @@ export class DatabaseStorage implements IStorage {
           productId: product?.id ?? 0,
           productName: product?.name ?? "Unknown product",
           productImageUrl: product?.imageUrl ?? null,
+          categoryId: product?.categoryId ?? null,
+          brandId: product?.brandId ?? null,
           flavorId: variant?.flavorId ?? null,
           flavorName: variant?.flavorId ? (tx.flvMap.get(variant.flavorId)?.name ?? null) : null,
           sizeId: variant?.sizeId ?? null,

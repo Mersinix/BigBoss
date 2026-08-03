@@ -1,0 +1,95 @@
+The Pack cards are now working perfectly. Do not redesign them and do not modify any existing functionality. Implement only the two improvements below.
+
+Coffee Owner → SHOP → Pack Cards
+Coffee Owner → Store → Pack Cards
+
+Apply the same changes to both locations so they remain perfectly synchronized and visually identical.
+
+1. Correct Category → Brand mapping
+
+Currently, the brands are not always displayed under the correct category.
+
+Example of the current incorrect result:
+
+Boisson • Boga
+
+Dairy & Alternatives • Fanta
+
+In this example, Fanta belongs to the Boisson category, not Dairy & Alternatives.
+
+The correct result should be:
+
+Boisson • Boga • Fanta
+
+Dairy & Alternatives • Delice
+
+Requirements:
+
+Every brand must appear only under its own category.
+Never display a brand under the wrong category.
+If multiple brands belong to the same category, display them after that category.
+Preserve the current single-line overflow behavior (+X) if needed.
+Keep the current styling and spacing.
+Do not change the category badges or typography.
+2. Display the Supplier name
+
+There is currently unused vertical space below the category section whenever there is no additional information displayed.
+
+Use that space to display the Supplier (Store) name.
+
+Requirements:
+
+Center the supplier name horizontally.
+Use the same typography and visual style as the Pack name (scaled appropriately for this secondary information).
+Keep it on a single line.
+Truncate with an ellipsis if it is too long.
+Do not increase the card height.
+Do not modify the spacing of the other elements except what is necessary to naturally fit the supplier name.
+
+Example:
+
+Boisson • Boga • Fanta
+Dairy & Alternatives • Delice
+
+Café Bondin
+
+or
+
+Boncafe
+
+depending on the supplier.
+
+Keep everything else exactly as it is
+
+Do not modify:
+
+card dimensions
+card width
+prices
+currency placement
+quantity
+expiration date
+distance
+rating
+images
+scrolling
+flash modal
+favorites
+filters
+Pack details
+Store pages
+backend
+APIs
+realtime synchronization
+business logic
+
+Only implement the two requested improvements.
+
+Before considering the task complete, verify that:
+
+every brand is displayed under the correct category,
+categories never display brands belonging to another category,
+the supplier name is displayed in the previously unused space,
+the supplier name is centered and truncated when necessary,
+SHOP and Store Pack cards remain visually identical,
+no unrelated functionality or UI has been modified.

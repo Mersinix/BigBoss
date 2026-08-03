@@ -20,7 +20,7 @@ import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
-import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail } from "@shared/schema";
+import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
@@ -565,7 +565,21 @@ export function PackCardTile({
     return calculateDistance(parseFloat(searchLocation.lat), parseFloat(searchLocation.lng), lat, lng);
   }, [(pack as any).supplierLat, (pack as any).supplierLng, searchLocation]);
 
-  // Categories row: up to 2 chips, each paired with its corresponding brand by index, +N overflow
+  // Build correct category → brands map from items (each item carries its own categoryId + brandId)
+  const catBrandMap = useMemo(() => {
+    const map = new Map<number, TaxonomyLabel[]>();
+    for (const item of pack.items) {
+      if (!item.categoryId) continue;
+      const brandLabel = item.brandId ? pack.brandLabels.find((b) => b.id === item.brandId) : null;
+      if (!map.has(item.categoryId)) map.set(item.categoryId, []);
+      if (brandLabel && !map.get(item.categoryId)!.find((b) => b.id === brandLabel.id)) {
+        map.get(item.categoryId)!.push(brandLabel);
+      }
+    }
+    return map;
+  }, [pack.items, pack.brandLabels]);
+
+  // Categories row: up to 2 chips, each showing its own correct brands, +N overflow
   const MAX_CAT = 2;
   const visibleCats = pack.categoryLabels.slice(0, MAX_CAT);
   const hiddenCatCount = Math.max(0, pack.categoryLabels.length - MAX_CAT);
@@ -650,16 +664,18 @@ export function PackCardTile({
           )}
         </div>
 
-        {/* Row 4: Categories — single line, no wrap, each with brand, +N overflow */}
+        {/* Row 4: Categories — single line, each chip shows only its own correct brands */}
         <div className="flex items-center gap-1 mt-1.5 flex-nowrap overflow-hidden min-h-[20px]">
-          {visibleCats.map((c, i) => {
-            const brand = pack.brandLabels[i];
+          {visibleCats.map((c) => {
+            const brands = catBrandMap.get(c.id) ?? [];
             return (
               <Badge
                 key={c.id}
                 className={`text-[10px] px-1.5 py-0 border shrink-0 ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"}`}
               >
-                {c.name}{brand ? <span className={`ml-0.5 ${priceColor}`}> • {brand.name}</span> : null}
+                {c.name}{brands.map((b) => (
+                  <span key={b.id} className={`ml-0.5 ${priceColor}`}> • {b.name}</span>
+                ))}
               </Badge>
             );
           })}
@@ -667,6 +683,13 @@ export function PackCardTile({
             <span className={`text-[10px] shrink-0 ${t.textMuted}`}>+{hiddenCatCount}</span>
           )}
         </div>
+
+        {/* Row 4b: Supplier name — centered, muted, single line, fills flexible gap */}
+        {pack.supplierName && (
+          <p className={`text-[10px] text-center truncate mt-1 ${t.textMuted}`}>
+            {pack.supplierName}
+          </p>
+        )}
 
         {/* Row 5 (bottom): Expiry left · Distance center · Rating right */}
         <div className={`flex items-center justify-between gap-1 mt-auto pt-1.5 border-t ${t.priceBorder}`}>

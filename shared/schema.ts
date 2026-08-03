@@ -854,6 +854,8 @@ export type PackItemDetail = {
   productId: number;
   productName: string;
   productImageUrl: string | null;
+  categoryId: number | null;   // product's category — used for correct category→brand mapping on cards
+  brandId: number | null;       // product's brand — used for correct category→brand mapping on cards
   flavorId: number | null;
   flavorName: string | null;
   sizeId: number | null;

@@ -487,7 +487,7 @@ function StoresSection({
       </div>
 
       {expanded ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
           {filteredStores.map((store) => (
             <StoreCardTile
               key={store.id}
@@ -763,7 +763,7 @@ function PacksSection({
         )}
       </div>
       {expanded ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
           {filteredPacks.map((pack) => (
             <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
           ))}

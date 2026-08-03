@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
+import { useCart } from "@/hooks/use-cart";
 
 const CATALOG_EVENTS = [
   "catalog_suggestion_created",
@@ -105,6 +106,40 @@ export function useRealtime(userId?: number) {
           }
           if (INVENTORY_EVENTS.includes(event)) {
             invalidateInventoryQueries(qc);
+            invalidatePackQueries(qc);
+          }
+          if (event === 'suborder_rejected') {
+            // Restore rejected items directly into the cafe owner's cart
+            const cart = useCart.getState();
+            for (const item of (data?.regularItems ?? [])) {
+              cart.addItem({
+                listingId: item.listingId,
+                productId: item.productId,
+                supplierId: item.supplierId,
+                supplierName: item.supplierName ?? '',
+                flavorId: item.flavorId ?? null,
+                sizeId: item.sizeId ?? null,
+                flavorName: item.flavorName ?? null,
+                sizeName: item.sizeName ?? null,
+                unitPrice: item.unitPrice,
+                productName: item.productName ?? '',
+                productImageUrl: item.productImageUrl ?? null,
+                productCategory: item.productCategory ?? '',
+              }, item.quantity);
+            }
+            for (const pack of (data?.packItems ?? [])) {
+              cart.addPackItem({
+                packId: pack.packId,
+                packName: pack.packName ?? '',
+                packImageUrl: pack.packImageUrl ?? null,
+                supplierId: pack.supplierId,
+                supplierName: pack.supplierName ?? '',
+                unitPrice: pack.unitPrice ?? 0,
+                includedProducts: pack.includedProducts ?? [],
+              }, pack.quantity);
+            }
+            // Invalidate orders so the UI reflects the rejection
+            qc.invalidateQueries({ queryKey: ['/api/orders'] });
           }
           if (TAXONOMY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/categories"] });

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Calendar, Clock, Archive, Search, X, Store, Box, Layers, MapPin, Package, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import OrderDetailsModal from "@/components/cafe/order-details-modal";
+import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
 import type { OrderWithDetails } from "@shared/schema";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -303,11 +303,11 @@ export default function SupplierOrdersPage() {
         </div>
       )}
 
-      <OrderDetailsModal
+      <SupplierOrderDetailsModal
         open={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
         order={selectedOrder}
-        showReorder={false}
+        supplierId={user?.id ?? 0}
       />
     </div>
   );

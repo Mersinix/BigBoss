@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useOrders, useUpdateSubOrderStatus } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/format";
@@ -6,8 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle, XCircle, Clock, Box, Store, Package } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Box, Store, Package, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
+import type { OrderWithDetails } from "@shared/schema";
 
 export default function OrderRequestsPage() {
   const { user } = useAuth();
@@ -15,6 +18,7 @@ export default function OrderRequestsPage() {
   const updateSubOrderStatus = useUpdateSubOrderStatus();
   const { toast } = useToast();
   const fmt = useFormatCurrency();
+  const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
 
   // Extract all subOrders for this supplier from the orders
   const mySubOrders = orders.flatMap(order =>
@@ -29,6 +33,7 @@ export default function OrderRequestsPage() {
         orderPriority: (order as any).priority ?? "NORMAL",
         orderScheduledAt: (order as any).scheduledAt,
         deliveryAddress: (order as any).deliveryAddress,
+        _order: order, // full order for details modal
       }))
   ).sort((a, b) => new Date(b.orderCreatedAt as any).getTime() - new Date(a.orderCreatedAt as any).getTime());
 
@@ -180,6 +185,14 @@ export default function OrderRequestsPage() {
                         >
                           <XCircle className="w-3.5 h-3.5" />
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-primary"
+                          onClick={() => setSelectedOrder((so as any)._order ?? null)}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -237,6 +250,12 @@ export default function OrderRequestsPage() {
           </CardContent>
         </Card>
       )}
+      <SupplierOrderDetailsModal
+        open={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        order={selectedOrder}
+        supplierId={user?.id ?? 0}
+      />
     </div>
   );
 }

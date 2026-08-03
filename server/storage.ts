@@ -879,27 +879,155 @@ export class DatabaseStorage implements IStorage {
         continue;
       }
       if (!item.productId) continue;
-      // Find the listing this order item came from (best-effort: match by product; the order item
-      // doesn't store listingId directly, so we search the ordering supplier's listing for this product).
-      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
-      const supplierIdForItem = order?.supplierId ?? (await db.select().from(subOrders).where(eq(subOrders.orderId, orderId)))
-        .find(() => true)?.supplierId;
-      const candidateListings = supplierIdForItem
-        ? await db.select().from(supplierProductListings).where(and(eq(supplierProductListings.productId, item.productId), eq(supplierProductListings.supplierId, supplierIdForItem)))
-        : await db.select().from(supplierProductListings).where(eq(supplierProductListings.productId, item.productId));
-      const listing = candidateListings[0];
-      if (!listing) continue;
+
+      // Prefer the stored listingId — this is the most accurate source for multi-supplier orders
+      // because each item knows exactly which listing it came from.
+      let listingId: number | null = item.listingId ?? null;
+
+      if (!listingId) {
+        // Fallback: look up by product + suborder supplier
+        let supplierId: number | null = null;
+        if (item.subOrderId) {
+          const [so] = await db.select().from(subOrders).where(eq(subOrders.id, item.subOrderId));
+          supplierId = so?.supplierId ?? null;
+        }
+        if (!supplierId) {
+          const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+          supplierId = order?.supplierId ?? null;
+        }
+        const candidateListings = supplierId
+          ? await db.select().from(supplierProductListings).where(and(eq(supplierProductListings.productId, item.productId), eq(supplierProductListings.supplierId, supplierId)))
+          : await db.select().from(supplierProductListings).where(eq(supplierProductListings.productId, item.productId));
+        listingId = candidateListings[0]?.id ?? null;
+      }
+
+      if (!listingId) continue;
 
       if (item.flavorId != null || item.sizeId != null) {
-        const variants = await this.getVariantsByListingId(listing.id);
+        const variants = await this.getVariantsByListingId(listingId);
         const variant = variants.find((v) => (v.flavorId ?? null) === (item.flavorId ?? null) && (v.sizeId ?? null) === (item.sizeId ?? null));
         if (variant) {
           await this.restockVariantFromOrderCancellation(variant.id, item.quantity, `Order #${orderId} cancelled`);
           continue;
         }
       }
-      await this.restockFromOrderCancellation(listing.id, item.quantity, `Order #${orderId} cancelled`);
+      await this.restockFromOrderCancellation(listingId, item.quantity, `Order #${orderId} cancelled`);
     }
+  }
+
+  /**
+   * Collects items from a sub-order with all the data needed to restore them to the cafe
+   * owner's cart (used when a supplier rejects/cancels their sub-order).
+   */
+  async getSubOrderItemsForCartRestore(subOrderId: number): Promise<{
+    regularItems: Array<{
+      listingId: number;
+      productId: number;
+      productName: string;
+      productImageUrl: string | null;
+      productCategory: string;
+      supplierId: number;
+      supplierName: string;
+      flavorId: number | null;
+      sizeId: number | null;
+      flavorName: string | null;
+      sizeName: string | null;
+      unitPrice: number;
+      quantity: number;
+    }>;
+    packItems: Array<{
+      packId: number;
+      packName: string;
+      packImageUrl: string | null;
+      supplierId: number;
+      supplierName: string;
+      unitPrice: number;
+      quantity: number;
+      includedProducts: Array<{ productName: string; flavorName: string | null; sizeName: string | null; quantity: number }>;
+    }>;
+  }> {
+    const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, subOrderId));
+    if (!subOrder) return { regularItems: [], packItems: [] };
+
+    const [supplier] = await db.select().from(users).where(eq(users.id, subOrder.supplierId));
+    const supplierName = supplier?.name ?? subOrder.supplierName;
+
+    const items = await db.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+    const tx = await buildTaxonomyCache();
+
+    const regularItems: any[] = [];
+    const packItemsResult: any[] = [];
+
+    for (const item of items) {
+      if (item.packId) {
+        const [pack] = await db.select().from(packs).where(eq(packs.id, item.packId));
+        if (!pack) continue;
+        const [packDetail] = await this.buildPackDetails([pack]);
+        packItemsResult.push({
+          packId: item.packId,
+          packName: item.packName ?? pack.name,
+          packImageUrl: pack.imageUrl ?? null,
+          supplierId: subOrder.supplierId,
+          supplierName,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          includedProducts: (packDetail?.items ?? []).map((pi) => ({
+            productName: pi.productName,
+            flavorName: pi.flavorName ?? null,
+            sizeName: pi.sizeName ?? null,
+            quantity: pi.quantity,
+          })),
+        });
+      } else if (item.productId && item.listingId) {
+        const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, item.listingId));
+        if (!listing) continue;
+        const [product] = await db.select().from(products).where(eq(products.id, item.productId));
+        if (!product) continue;
+        regularItems.push({
+          listingId: item.listingId,
+          productId: item.productId,
+          productName: product.name,
+          productImageUrl: product.imageUrl ?? null,
+          productCategory: product.category ?? '',
+          supplierId: subOrder.supplierId,
+          supplierName,
+          flavorId: item.flavorId ?? null,
+          sizeId: item.sizeId ?? null,
+          flavorName: item.flavorId ? (tx.flvMap.get(item.flavorId)?.name ?? null) : null,
+          sizeName: item.sizeId ? (tx.szMap.get(item.sizeId)?.name ?? null) : null,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+        });
+      }
+    }
+
+    return { regularItems, packItems: packItemsResult };
+  }
+
+  /**
+   * Returns the composition of a pack (product name, variant, flavor, size, quantity per slot)
+   * for display in the Supplier order details modal.
+   */
+  async getPackComposition(packId: number): Promise<Array<{
+    listingId: number;
+    variantId: number | null;
+    productName: string;
+    flavorName: string | null;
+    sizeName: string | null;
+    quantity: number;
+  }>> {
+    const [pack] = await db.select().from(packs).where(eq(packs.id, packId));
+    if (!pack) return [];
+    const [detail] = await this.buildPackDetails([pack]);
+    if (!detail) return [];
+    return detail.items.map((item) => ({
+      listingId: item.listingId,
+      variantId: item.variantId ?? null,
+      productName: item.productName,
+      flavorName: item.flavorName ?? null,
+      sizeName: item.sizeName ?? null,
+      quantity: item.quantity,
+    }));
   }
 
   // ── Marketplace ─────────────────────────────────────────────────────────────

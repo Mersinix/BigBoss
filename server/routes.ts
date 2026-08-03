@@ -757,9 +757,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (CONFIRMED_STATUSES.has(status)) {
         broadcast('inventory_updated', { subOrderId, orderId: subOrder.orderId });
       }
+      // When supplier rejects (CANCELLED), broadcast items back to the cafe owner so their cart
+      // can be restored automatically without losing the product/variant details.
+      if (status === 'CANCELLED' && order) {
+        const cartItems = await storage.getSubOrderItemsForCartRestore(subOrderId);
+        broadcastToUsers([order.cafeId], 'suborder_rejected', {
+          orderId: subOrder.orderId,
+          subOrderId,
+          supplierName: subOrder.supplierName,
+          regularItems: cartItems.regularItems,
+          packItems: cartItems.packItems,
+        });
+        // Also restore pack.quantityAvailable and component stock for already-confirmed sub-orders
+        broadcast('inventory_updated', { subOrderId, orderId: subOrder.orderId });
+      }
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ message: err.message ?? 'Invalid request' });
+    }
+  });
+
+  // ── Pack composition (for Supplier order details modal) ────────────────────
+
+  app.get('/api/packs/:id/composition', requireAuth, async (req, res) => {
+    try {
+      const packId = parseInt(req.params.id);
+      const composition = await storage.getPackComposition(packId);
+      res.json(composition);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching pack composition' });
     }
   });
 

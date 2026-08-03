@@ -1,0 +1,316 @@
+The Order system is working, but we need to separate the Admin and Supplier order details experience and improve Pack order handling.
+
+**Do not break existing functionality.**
+Before making changes, check the current order flow, stock synchronization, Pack logic, cart behavior, and realtime system.
+
+Do not change designs that are not related to this request.
+
+---
+
+# 1. Supplier Order Details Modal must be different from Admin Order Details Modal
+
+Currently:
+
+Admin → Orders → Details
+
+and
+
+Supplier → Orders → Details
+
+open the same modal.
+
+This is not correct.
+
+Keep the Admin modal as it is.
+
+The Admin should continue seeing the simple order overview:
+
+* Order number
+* Status
+* Date
+* Delivery address
+* Supplier sections
+* Products/Packs
+* Total
+* Close action
+
+---
+
+## Supplier Order Details Modal
+
+Create a Supplier-specific version.
+
+When the Supplier opens an order details modal, it should contain additional information and actions.
+
+The Supplier modal should include:
+
+### Order information
+
+* Order number
+* Current status
+* Date
+* Delivery address
+* Coffee Owner information if available
+
+---
+
+### Supplier actions
+
+The Supplier must be able to update the order status directly from this modal.
+
+The Supplier should have the existing allowed status actions.
+
+Example:
+
+* Confirm
+* Processing
+* Ready
+* Shipped
+* Delivered
+* Reject (if available in the current flow)
+
+The status update must synchronize immediately with:
+
+* Admin
+* Coffee Owner
+
+without refresh.
+
+---
+
+# 2. Pack details inside Supplier Order Details
+
+Currently the modal only shows:
+
+Pack name
+Quantity
+Price
+
+This is not enough.
+
+When an order contains Packs, the Supplier must see the exact Pack composition.
+
+For every ordered Pack display:
+
+* Pack name
+* Pack quantity ordered
+* Included products
+* Selected variant
+* Selected size
+* Selected flavor
+* Quantity consumed from each variant/flavor
+
+Example:
+
+Pack:
+
+CHICHA W GAZOUZA
+
+Contains:
+
+```
+chicha
+Variant:
+Medium
+
+Flavor:
+Toffeh
+
+Quantity:
+×2
+```
+
+```
+FANTA 25cl
+
+Variant:
+Gajou
+
+Flavor:
+BLANC
+
+Quantity:
+×1
+```
+
+The Supplier must know exactly which stock should be deducted.
+
+---
+
+# 3. Supplier rejection behavior
+
+If the Supplier rejects:
+
+* the full order
+  or
+* part of the order belonging to that Supplier
+
+then the rejected items must return to the Coffee Owner cart.
+
+The Coffee Owner should be able to reorder those items from another supplier.
+
+Do not lose the items.
+
+Keep:
+
+* Product information
+* Variant
+* Flavor
+* Size
+* Quantity
+
+when returning items to cart.
+
+---
+
+# 4. Coffee Owner cancellation and stock restoration
+
+If the Coffee Owner cancels an order:
+
+Only if stock was already deducted:
+
+restore the exact stock.
+
+The restoration must happen at:
+
+* Product level
+* Variant level
+* Flavor level
+* Size level
+
+Example:
+
+Original deduction:
+
+```
+FANTA 25cl
+Variant: Gajou
+Flavor: BLANC
+Quantity deducted: 3
+```
+
+After cancellation:
+
+```
+BLANC stock +3
+```
+
+Do not restore:
+
+* another flavor
+* another variant
+* total product stock only
+
+Restore the exact inventory source.
+
+---
+
+# 5. Pack stock must always come from related products
+
+The Pack stock displayed everywhere must always be calculated from the real related products.
+
+Update all required places:
+
+Admin:
+
+* Products → Packs
+* Pack Preview
+* Pack details
+
+Supplier:
+
+* Products → Packs
+* Pack Preview
+* Edit Pack
+
+Coffee Owner:
+
+* Shop Packs
+* Store Packs
+* Pack Details
+
+Anywhere the Pack availability appears.
+
+Do not use outdated Pack stock values.
+
+The source of truth must remain the related:
+
+* Product
+* Variant
+* Flavor
+* Size
+
+quantities.
+
+---
+
+# 6. Realtime synchronization
+
+All modifications must work without refresh.
+
+When:
+
+* Supplier confirms an order
+* Supplier changes status
+* Supplier rejects an order
+* Coffee Owner cancels an order
+* Stock is deducted
+* Stock is restored
+
+Synchronize immediately with:
+
+* Admin panel
+* Supplier panel
+* Coffee Owner panel
+
+Update:
+
+* Orders
+* Pack stock
+* Product stock
+* Variant stock
+* Flavor stock
+* Cart when required
+
+using the existing realtime architecture.
+
+---
+
+# 7. Keep unchanged
+
+Do not modify:
+
+* Current Admin order design
+* Current Coffee Owner order design
+* Cart design
+* Checkout flow
+* Pricing system
+* Currency system
+* Pack creation flow
+* Pack builder design
+* Existing realtime architecture unless required
+* Any unrelated module
+
+---
+
+Before finishing verify:
+
+✅ Admin still has its simple order details modal.
+
+✅ Supplier has a dedicated order details modal.
+
+✅ Supplier can update order status.
+
+✅ Status changes appear instantly everywhere.
+
+✅ Supplier can see exact Pack variant/flavor/size details.
+
+✅ Rejected supplier items return correctly to Coffee Owner cart.
+
+✅ Cancelled confirmed orders restore exact stock.
+
+✅ Pack stock always matches related product inventory.
+
+✅ No refresh is needed for synchronization.
+
+Do not change anything outside this scope.

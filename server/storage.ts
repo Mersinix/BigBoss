@@ -1753,6 +1753,18 @@ export class DatabaseStorage implements IStorage {
       if (!reviewsByPack.has(pid)) reviewsByPack.set(pid, []);
       reviewsByPack.get(pid)!.push(r);
     }
+    // Batch-fetch supplier-level review stats (same source as StoreDetail.avgRating)
+    const supplierReviews = supplierIds.length
+      ? await db.select().from(supplierProductReviews)
+          .where(and(inArray(supplierProductReviews.supplierId, supplierIds), eq(supplierProductReviews.reviewType as any, 'SUPPLIER')))
+      : [];
+    const supplierRatingMap = new Map<number, { sum: number; count: number }>();
+    for (const r of supplierReviews) {
+      const sid = r.supplierId!;
+      if (!supplierRatingMap.has(sid)) supplierRatingMap.set(sid, { sum: 0, count: 0 });
+      supplierRatingMap.get(sid)!.sum += r.rating;
+      supplierRatingMap.get(sid)!.count += 1;
+    }
 
     const now = new Date();
     const result: PackDetail[] = [];
@@ -1817,11 +1829,14 @@ export class DatabaseStorage implements IStorage {
       const packReviewCount = packRevs.length;
       const packAvgRating = packReviewCount ? packRevs.reduce((s, r) => s + r.rating, 0) / packReviewCount : 0;
       const supplierInfo = supplierMap.get(pack.supplierId);
+      const supRating = supplierRatingMap.get(pack.supplierId);
       result.push({
         ...pack,
         supplierName: supplierInfo?.name ?? "",
         supplierLat: supplierInfo?.lat ?? null,
         supplierLng: supplierInfo?.lng ?? null,
+        supplierAvgRating: supRating ? supRating.sum / supRating.count : 0,
+        supplierReviewCount: supRating?.count ?? 0,
         items: itemDetails,
         categoryIds: Array.from(categoryIds),
         subCategoryIds: Array.from(subCategoryIds),

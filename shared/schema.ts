@@ -870,6 +870,8 @@ export type PackDetail = Pack & {
   supplierName: string;
   supplierLat: string | null;
   supplierLng: string | null;
+  supplierAvgRating: number;   // supplier-level rating (same source as StoreDetail.avgRating)
+  supplierReviewCount: number;
   items: PackItemDetail[];
   categoryIds: number[];
   subCategoryIds: number[];

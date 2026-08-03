@@ -684,11 +684,17 @@ export function PackCardTile({
           )}
         </div>
 
-        {/* Row 4b: Supplier name — centered, muted, single line, fills flexible gap */}
+        {/* Row 4b: Supplier name (left) + supplier rating (right) */}
         {pack.supplierName && (
-          <p className={`font-bold text-sm leading-tight line-clamp-1 transition-colors text-[10px] text-center truncate mt-1 ${t.textMuted} ${t.dk ? "text-white" : "text-gray-900"}`}>
-            {pack.supplierName}
-          </p>
+          <div className="flex items-center gap-1 mt-1 min-w-0">
+            <span className={`text-[10px] truncate flex-1 ${t.textMuted}`}>{pack.supplierName}</span>
+            {pack.supplierReviewCount > 0 && (
+              <span className="flex items-center gap-0.5 shrink-0">
+                <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                <span className={`text-[10px] font-medium ${t.textPrimary}`}>{pack.supplierAvgRating.toFixed(1)}</span>
+              </span>
+            )}
+          </div>
         )}
 
         {/* Row 5 (bottom): Expiry left · Distance center · Rating right */}

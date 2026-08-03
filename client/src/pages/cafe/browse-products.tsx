@@ -687,7 +687,8 @@ export function PackCardTile({
         {/* Row 4b: Supplier name (left) + supplier rating (right) */}
         {pack.supplierName && (
           <div className="flex items-center gap-1 mt-1 min-w-0">
-            <span className={`text-[10px] truncate flex-1 ${t.textMuted}`}>{pack.supplierName}</span>
+            
+            <span className={`text-[10px] truncate flex-1 font-bold text-sm leading-tight line-clamp-1 transition-colors ${t.textMuted} ${t.dk ? "text-white" : "text-gray-900"}`}>{pack.supplierName}</span>
             {pack.supplierReviewCount > 0 && (
               <span className="flex items-center gap-0.5 shrink-0">
                 <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />

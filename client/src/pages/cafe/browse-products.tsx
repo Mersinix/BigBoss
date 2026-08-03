@@ -668,11 +668,16 @@ export function PackCardTile({
           )}
         </div>
 
-        {/* Row 5 (bottom): Expiration date (amber) left, Rating right — pushed to bottom */}
-        <div className={`flex items-center justify-between mt-auto pt-1.5 border-t ${t.priceBorder}`}>
-          <span className={`text-[10px] truncate ${expiryLabel ? priceColor : t.textMuted}`}>
-            {expiryLabel ? `Expires: ${expiryLabel}` : (distance != null ? formatDistance(distance) : "\u00A0")}
+        {/* Row 5 (bottom): Expiry left · Distance center · Rating right */}
+        <div className={`flex items-center justify-between gap-1 mt-auto pt-1.5 border-t ${t.priceBorder}`}>
+          <span className={`text-[10px] truncate shrink-0 ${expiryLabel ? priceColor : t.textMuted}`}>
+            {expiryLabel ? `Expires: ${expiryLabel}` : "\u00A0"}
           </span>
+          {distance != null ? (
+            <span className={`flex items-center gap-0.5 text-[10px] shrink-0 ${t.textMuted}`}>
+              <MapPin className="w-2.5 h-2.5 shrink-0" />{formatDistance(distance)}
+            </span>
+          ) : <span />}
           <StarRating rating={pack.packAvgRating} count={pack.packReviewCount} isDark={isDark} />
         </div>
       </div>

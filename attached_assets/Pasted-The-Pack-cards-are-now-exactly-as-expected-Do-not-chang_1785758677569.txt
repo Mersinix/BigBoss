@@ -1,0 +1,104 @@
+The Pack cards are now exactly as expected. Do not change any part of their design or behavior.
+
+Implement only the following small enhancement.
+
+Coffee Owner → SHOP → Pack Cards
+Coffee Owner → Store → Pack Cards
+
+Add the distance between the Coffee Owner and the Supplier on the bottom information row.
+
+The current bottom row is:
+
+Left: Expires: 28 Aug 2026
+Right: ★ 5.0 (1)
+
+Update it to:
+
+Left
+
+Expiration date
+
+Center
+
+📍 Location icon + distance
+
+Right
+
+Rating
+
+Example:
+
+Expires: 28 Aug 2026 📍 4.8 km ★ 5.0 (1)
+
+Distance calculation
+
+The displayed distance must always be calculated between:
+
+Start point
+
+The Coffee Owner's currently active delivery location:
+
+the saved profile address by default, or
+the address currently selected from the location picker/modal in the navbar if the user has changed it.
+
+End point
+
+The address/location of the Supplier who owns the Pack.
+
+The Pack should always display the correct distance for its own Supplier.
+
+Realtime behavior
+
+If the Coffee Owner changes the active location from the navbar location selector:
+
+all visible Pack cards must immediately update their displayed distance
+no page refresh
+no manual reload
+
+The behavior should remain consistent with the rest of the project's realtime location updates.
+
+Design requirements
+Add only a small location icon before the distance.
+Use the existing design system.
+Keep the spacing balanced.
+Keep the row on a single line.
+Keep the expiration date on the left.
+Keep the rating on the right.
+Place the distance naturally between them.
+Apply everywhere
+
+Apply this enhancement to:
+
+SHOP Pack cards
+Store Pack cards
+
+Both must stay perfectly synchronized and visually identical.
+
+Do not modify anything else
+
+Do not change:
+
+card dimensions
+typography
+colors
+spacing (except what is necessary to fit the distance)
+categories
+brands
+prices
+images
+scrolling
+favorites
+flash modal
+pack details
+backend APIs
+business logic
+database structure (unless a minimal change is required to support the feature)
+any unrelated component
+
+Before considering the task complete, verify that:
+
+every Pack card displays the correct supplier distance,
+changing the Coffee Owner's active address immediately updates every visible Pack card,
+SHOP and Store Pack cards remain visually identical,
+all existing functionality continues to work exactly as before,
+no unrelated files, logic, or UI have been modified.

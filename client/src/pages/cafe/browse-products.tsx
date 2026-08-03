@@ -686,7 +686,7 @@ export function PackCardTile({
 
         {/* Row 4b: Supplier name — centered, muted, single line, fills flexible gap */}
         {pack.supplierName && (
-          <p className={`text-[10px] text-center truncate mt-1 ${t.textMuted}`}>
+          <p className={`font-bold text-sm leading-tight line-clamp-1 transition-colors text-[10px] text-center truncate mt-1 ${t.textMuted} ${t.dk ? "text-white" : "text-gray-900"}`}>
             {pack.supplierName}
           </p>
         )}
@@ -694,7 +694,7 @@ export function PackCardTile({
         {/* Row 5 (bottom): Expiry left · Distance center · Rating right */}
         <div className={`flex items-center justify-between gap-1 mt-auto pt-1.5 border-t ${t.priceBorder}`}>
           <span className={`text-[10px] truncate shrink-0 ${expiryLabel ? priceColor : t.textMuted}`}>
-            {expiryLabel ? `Expires: ${expiryLabel}` : "\u00A0"}
+            {expiryLabel ? `Exp: ${expiryLabel}` : "\u00A0"}
           </span>
           {distance != null ? (
             <span className={`flex items-center gap-0.5 text-[10px] shrink-0 ${t.textMuted}`}>

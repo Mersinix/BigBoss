@@ -27,21 +27,33 @@ const STATUS_META: Record<string, { label: string; badgeDk: string; badgeLt: str
   CANCELLED:   { label: "Annulée",         badgeDk: "bg-red-500/20 text-red-300 border-red-500/30",           badgeLt: "bg-red-100 text-red-800 border-red-200",           icon: AlertCircle },
 };
 
-// Allowed next statuses from supplier's perspective (for the sub-order)
+// All forward-moving statuses available to the supplier for each current state.
+// Giving the full forward chain lets the supplier skip steps when needed (e.g. direct to Delivered).
 const SUPPLIER_NEXT_STATUSES: Record<string, { value: string; label: string; variant: "default" | "destructive" | "outline" }[]> = {
-  PENDING:   [
-    { value: "CONFIRMED", label: "Accepter",             variant: "default" },
-    { value: "CANCELLED", label: "Refuser",              variant: "destructive" },
+  PENDING: [
+    { value: "CONFIRMED",   label: "Accepter",                   variant: "default" },
+    { value: "CANCELLED",   label: "Refuser",                    variant: "destructive" },
   ],
   CONFIRMED: [
-    { value: "PREPARING", label: "Commencer la préparation", variant: "default" },
-    { value: "CANCELLED", label: "Refuser",              variant: "destructive" },
+    { value: "PREPARING",   label: "Commencer la préparation",   variant: "default" },
+    { value: "READY",       label: "Marquer comme prête",        variant: "default" },
+    { value: "IN_DELIVERY", label: "En cours de livraison",      variant: "default" },
+    { value: "DELIVERED",   label: "Marquer comme livrée",       variant: "default" },
+    { value: "CANCELLED",   label: "Annuler",                    variant: "destructive" },
   ],
   PREPARING: [
-    { value: "READY",     label: "Marquer comme prête",  variant: "default" },
+    { value: "READY",       label: "Marquer comme prête",        variant: "default" },
+    { value: "IN_DELIVERY", label: "En cours de livraison",      variant: "default" },
+    { value: "DELIVERED",   label: "Marquer comme livrée",       variant: "default" },
+    { value: "CANCELLED",   label: "Annuler",                    variant: "destructive" },
   ],
-  READY:       [],
-  IN_DELIVERY: [],
+  READY: [
+    { value: "IN_DELIVERY", label: "En cours de livraison",      variant: "default" },
+    { value: "DELIVERED",   label: "Marquer comme livrée",       variant: "default" },
+  ],
+  IN_DELIVERY: [
+    { value: "DELIVERED",   label: "Marquer comme livrée",       variant: "default" },
+  ],
   DELIVERED:   [],
   CANCELLED:   [],
 };

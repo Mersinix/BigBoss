@@ -734,7 +734,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Notify cafe owner + supplier of suborder change
       const order = await storage.getOrder(subOrder.orderId);
       if (order) {
+        // Targeted: cafe owner + supplier (for cart/UI updates specific to them)
         broadcastToUsers([order.cafeId, subOrder.supplierId], 'suborder_status_changed', {
+          orderId: subOrder.orderId, subOrderId, status,
+        });
+        // Global: ensures Admin and all other connected clients (other browser tabs) also
+        // invalidate their orders cache and see the status change in real time.
+        broadcast('suborder_status_changed', {
           orderId: subOrder.orderId, subOrderId, status,
         });
       }

@@ -1,0 +1,120 @@
+The Order system is working very well. We now need to improve the synchronization between **Supplier → Order Requests** and **Supplier → Orders**.
+
+**Important:**
+
+* Do **not** redesign unrelated parts.
+* Do **not** change the existing order workflow, permissions, realtime synchronization, stock synchronization, Pack logic, or UI outside of what is described below.
+* Keep the existing design system and behavior unless explicitly requested.
+
+---
+
+# Supplier → Order Requests → Supplier → Orders Synchronization
+
+Currently, when the Supplier accepts/confirms an order from:
+
+**Supplier → Order Requests**
+
+the synchronization with:
+
+**Supplier → Orders**
+
+is not complete.
+
+This must be corrected.
+
+---
+
+## 1. Automatic Synchronization
+
+When a Supplier confirms/accepts an order from:
+
+**Supplier → Order Requests**
+
+that order must automatically appear in:
+
+**Supplier → Orders**
+
+without requiring any page refresh.
+
+Depending on the scheduled delivery date, it should automatically be placed in the correct section:
+
+* Aujourd'hui
+* Futures
+
+using the existing business logic.
+
+Do not change the current categorization rules.
+
+---
+
+## 2. Realtime Updates
+
+The synchronization must happen immediately.
+
+No manual refresh should ever be required.
+
+The accepted order should disappear from the pending request list (following the existing workflow) and immediately appear inside Supplier → Orders.
+
+---
+
+## 3. Supplier → Orders → Details
+
+Inside:
+
+**Supplier → Orders**
+
+When the Supplier clicks **Details** on any mapped order, the Order Details modal should allow the Supplier to update the order status.
+
+Add (or complete) a status picklist containing all order statuses already supported by the project.
+
+The Supplier must be able to move the order through the normal workflow directly from this modal.
+
+Use the project's existing statuses only.
+
+Do not introduce new statuses.
+
+---
+
+## 4. Status Synchronization
+
+Whenever the Supplier changes the status from the Order Details modal:
+
+Immediately synchronize the update everywhere it is displayed, including:
+
+* Supplier → Orders
+* Supplier → Order Requests (when applicable)
+* Admin → Orders
+* Coffee Owner → My Orders
+
+No page refresh should be required.
+
+---
+
+## 5. Keep Everything Else Unchanged
+
+Do not modify:
+
+* Order workflow
+* Acceptance / rejection logic
+* Pack stock synchronization
+* Variant stock synchronization
+* Cart behavior
+* Currency system
+* Product logic
+* Pack logic
+* Existing permissions
+* Existing layouts
+* Existing designs outside this request
+
+Only implement the synchronization and status management improvements described above.
+
+---
+
+Before considering the task complete, verify that:
+
+* ✅ Accepting an order from **Supplier → Order Requests** immediately moves it into **Supplier → Orders**.
+* ✅ The order appears automatically in **Aujourd'hui** or **Futures** according to the existing business rules.
+* ✅ No page refresh is required.
+* ✅ The **Details** modal in **Supplier → Orders** allows status changes through a picklist containing all existing order statuses.
+* ✅ Status updates synchronize immediately across Supplier, Admin, and Coffee Owner views.
+* ✅ No unrelated functionality or design was modified.

@@ -1,0 +1,141 @@
+# BigBossCoffee – Coffee Owner Dark Mode Unification
+
+## Objective
+
+Analyze the entire **Coffee Owner** application and unify the **Dark / Light Mode** behavior so there is **only one global theme state** shared across the whole Coffee Owner experience.
+
+Currently, multiple pages, components, modals, and UI sections manage Dark Mode independently. This creates inconsistent behavior where changing the theme in one place does not update the others.
+
+The goal is to make every Dark Mode switch behave as a single synchronized switch.
+
+---
+
+## Before Making Any Changes
+
+First perform a complete analysis of the Coffee Owner application.
+
+Identify every location where Dark Mode can be:
+
+* changed
+* toggled
+* initialized
+* stored
+* read
+* managed
+
+This includes (but is not limited to):
+
+* Navbar
+* Header
+* Sidebar
+* Dashboard
+* Home
+* Shop
+* Orders
+* Cart
+* Favorites
+* Profile
+* Settings
+* Product pages
+* Product Details
+* All modals
+* All dialogs
+* All sheets
+* All popovers
+* All reusable components
+* Any other Coffee Owner UI that contains its own Dark Mode behavior
+
+Before modifying anything, verify how these pieces currently interact so no synchronization issue is introduced.
+
+---
+
+## Required Behavior
+
+After the implementation:
+
+If the Coffee Owner changes Dark Mode from **ANY** place:
+
+* Navbar
+* any page
+* any modal
+* any component
+* any dialog
+* any settings screen
+
+the entire Coffee Owner application must immediately reflect the same theme.
+
+Examples:
+
+* Change Dark → Light from a Product Details modal → every page, navbar, sidebar, modal and component becomes Light.
+
+* Change Light → Dark from the Navbar → every currently opened or future modal, page and component becomes Dark.
+
+There must never be a situation where one part remains Dark while another stays Light.
+
+Every theme switch must control exactly the same global theme.
+
+---
+
+## Important Constraints
+
+Do **NOT** redesign anything.
+
+Do **NOT** modify layouts.
+
+Do **NOT** change spacing.
+
+Do **NOT** change animations.
+
+Do **NOT** modify colors.
+
+Do **NOT** change typography.
+
+Do **NOT** change icons.
+
+Do **NOT** change business logic.
+
+Do **NOT** remove existing features.
+
+Do **NOT** add new features.
+
+Do **NOT** simplify components.
+
+Do **NOT** refactor unrelated code.
+
+Do **NOT** modify any behavior that is unrelated to Dark Mode synchronization.
+
+If a file does not need to be changed, leave it exactly as it is.
+
+The visual appearance of the Coffee Owner application must remain identical.
+
+Only the synchronization behavior should change.
+
+---
+
+## Safety Requirements
+
+Before implementing the changes:
+
+* Analyze the existing Dark Mode flow completely.
+* Verify where the current theme originates.
+* Check every place that reads or updates the theme.
+* Ensure there will be only one source of truth after the work.
+* Ensure there are no conflicting theme states remaining.
+* Ensure existing functionality continues working exactly as before.
+
+After implementation, verify that:
+
+* Every existing Dark Mode switch still works.
+* Every switch updates every other switch.
+* Every page uses the same synchronized theme.
+* Every modal uses the same synchronized theme.
+* Newly opened modals use the correct current theme.
+* Previously opened UI updates correctly.
+* Navigation between pages preserves the selected theme.
+* Refreshing the application preserves the correct theme if that behavior already exists.
+
+---
+
+## Final Validation
+
+Before considering the task complete, perform a full verification of the Coffee Owner application to ensure there are no remaining isolated Dark Mode implementations and that every theme toggle is synchronized across the entire Coffee Owner experience without changing any existing design or functionality unrelated to this task.

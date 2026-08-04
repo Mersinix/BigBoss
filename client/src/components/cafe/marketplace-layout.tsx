@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useThemeStore } from "@/store/theme-store";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
@@ -131,7 +132,8 @@ function AccountPanel({
   initialOrderId?: number | null;
   initialTab?: "orders" | "dashboard" | "settings" | null;
 }) {
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
   const [activeTab, setActiveTab] = useState<"orders" | "dashboard" | "settings">(initialTab ?? "orders");
   const { data: orders = [], isLoading: ordersLoading } = useOrders();
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
@@ -201,7 +203,7 @@ function AccountPanel({
           </button>
           <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>My Account</h2>
           <button
-            onClick={() => setIsDark((d) => !d)}
+            onClick={() => toggle()}
             aria-label="Toggle theme"
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
           >
@@ -388,7 +390,8 @@ const FAV_SERVICE_TO_KEY: Record<FavService,  "MAINTENANCE" | "PRINTING" | "BARI
 function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const [, navigate] = useLocation();
   const { states: serviceStates } = useServiceStates();
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
   const [activeService, setActiveService] = useState<FavService>("SHOP");
   const [shopTab, setShopTab] = useState<ShopSubTab>("products");
   const [baristaTab, setBaristaTab] = useState<BaristaSubTab>("academy");
@@ -468,7 +471,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           </button>
           <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>My Favorites</h2>
           <button
-            onClick={() => setIsDark((d) => !d)}
+            onClick={() => toggle()}
             aria-label="Toggle theme"
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
           >
@@ -856,7 +859,8 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
     return !key || serviceStates[key] !== "HIDDEN";
   });
 
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
   const [service, setService] = useState<ServiceId>("SHOP");
   const [view, setView] = useState<"list" | "chat">("list");
 
@@ -1025,7 +1029,8 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
           </button>
           <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>Messages</h2>
           <button
-            onClick={() => setIsDark((d) => !d)}
+            onClick={() => toggle()
+            }
             aria-label="Toggle theme"
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
           >
@@ -1474,7 +1479,8 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
     toast({ title: "📍 Zone de recherche mise à jour", description: formatLocationLabel(loc.address) });
   };
 
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -1567,7 +1573,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
           {/* Sun / Moon toggle */}
           <button
-            onClick={() => setIsDark((d) => !d)}
+            onClick={() => toggle()}
             aria-label="Toggle theme"
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
               isDark ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"

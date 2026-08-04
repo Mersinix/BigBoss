@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useThemeStore } from "@/store/theme-store";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useSearch, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -930,7 +931,8 @@ export default function BrowseProducts() {
   const hasSearchLocation = searchLat !== null && searchLng !== null && !Number.isNaN(searchLat) && !Number.isNaN(searchLng);
 
   // ── Dark / light mode (dark by default — matches Favorites modal) ──────────
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
   const [flashOpen, setFlashOpen] = useState(false);
@@ -1070,7 +1072,7 @@ export default function BrowseProducts() {
         <div className="relative flex justify-end items-center gap-2 mb-9">
           
           <button
-            onClick={() => setIsDark((d) => !d)}
+            onClick={() => toggle()}
             aria-label="Toggle theme"
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
           >

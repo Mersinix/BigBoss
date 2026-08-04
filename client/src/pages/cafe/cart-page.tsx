@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useThemeStore } from "@/store/theme-store";
 import { useCart } from "@/hooks/use-cart";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
@@ -40,7 +41,8 @@ export default function CartPage() {
   const [customDeliveryAddress, setCustomDeliveryAddress] = useState<GeoLocation | null>(null);
   const [courierInstructions, setCourierInstructions] = useState("");
   const [deliveryPickerOpen, setDeliveryPickerOpen] = useState(false);
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const fmt = useFormatCurrency();
 
@@ -205,7 +207,7 @@ export default function CartPage() {
           </div>
           {/* Dark/light toggle */}
           <button
-            onClick={() => setIsDark((d) => !d)}
+            onClick={() => toggle()}
             aria-label="Toggle theme"
             className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 ${toggleBtn}`}
           >

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useThemeStore } from "@/store/theme-store";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -508,7 +509,8 @@ export default function LandingPage() {
 
   // Language & dark mode
   const [lang, setLang] = useState<Lang>("fr");
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
   const t = TRANSLATIONS[lang];
   const isRtl = lang === "tn";
 
@@ -745,7 +747,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2 shrink-0">
             {/* Dark mode toggle */}
             <button
-              onClick={() => setIsDark(!isDark)}
+              onClick={() => toggle()}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk("hover:bg-gray-100 text-gray-600", "hover:bg-gray-700 text-gray-300")}`}
               aria-label="Toggle dark mode"
             >
@@ -1249,7 +1251,7 @@ export default function LandingPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setIsDark((d) => !d)}
+                      onClick={() => toggle()}
                       aria-label="Toggle theme"
                       className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
                     >

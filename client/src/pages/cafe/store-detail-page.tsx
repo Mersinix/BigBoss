@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useThemeStore } from "@/store/theme-store";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -139,7 +140,8 @@ function InfoModal({ open, onClose, openingHours, storeName }: {
   storeName: string;
 }) {
   const todayKey = DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1].key;
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
 
   const dk = isDark;
   const bg          = dk ? "bg-gray-900"                    : "bg-white";
@@ -182,7 +184,7 @@ function InfoModal({ open, onClose, openingHours, storeName }: {
 
               {/* Dark / light toggle */}
               <button
-                onClick={() => setIsDark((d) => !d)}
+                onClick={() => toggle()}
                 aria-label="Toggle theme"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
               >
@@ -493,7 +495,8 @@ export default function StoreDetailPage() {
   const toggleStore = useStoreFavorites((s) => s.toggleStore);
 
   // ── Dark / light mode (dark by default — matches Favorites modal + /products page) ──
-  const [isDark, setIsDark] = useState(true);
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggle = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
   const [categoryId, setCategoryId] = useState("");
@@ -664,7 +667,7 @@ export default function StoreDetailPage() {
         {/* Top-right cluster: Dark/Light toggle + Flash + Favorite */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
           <button
-            onClick={() => setIsDark((d) => !d)}
+            onClick={() => toggle()}
             aria-label="Toggle theme"
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-105 transition-transform"
           >

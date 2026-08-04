@@ -4,7 +4,8 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Search, Navigation, ChevronLeft, CheckCircle, Loader2, X, Sun, Moon } from "lucide-react";
+import { MapPin, Search, Navigation, ChevronLeft, CheckCircle, Loader2, X } from "lucide-react";
+import { useThemeStore } from "@/store/theme-store";
 import type { AddressDetails } from "@shared/schema";
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
@@ -116,7 +117,7 @@ export default function LocationPickerModal({
   const [details, setDetails] = useState<AddressDetails>({ ...EMPTY_DETAILS, ...initialDetails });
   const [saving, setSaving] = useState(false);
   const [radiusKm, setRadiusKm] = useState<number | null>(null);
-  const [isDark, setIsDark] = useState(true);
+  const { isDark } = useThemeStore();
 
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -350,25 +351,15 @@ export default function LocationPickerModal({
                 </span>
               </div>
 
-              {/* Right: sun/moon + close */}
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setIsDark((d) => !d)}
-                  aria-label="Toggle theme"
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-                >
-                  {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  aria-label="Close"
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              {/* Right: close */}
+              <button
+                type="button"
+                onClick={handleClose}
+                aria-label="Close"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Progress dots */}

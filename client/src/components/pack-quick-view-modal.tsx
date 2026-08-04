@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Layers, Minus, Plus, Package, Heart, Star, Calendar, AlertCircle, X, Sun, Moon, Lock,
+  Layers, Minus, Plus, Package, Heart, Star, Calendar, AlertCircle, X, Lock,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
@@ -16,6 +16,7 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
+import { useThemeStore } from "@/store/theme-store";
 import type { PackDetail, SupplierProductReview, PackVariantOption, ProductWithTaxonomy } from "@shared/schema";
 
 // ── Theme tokens (mirrors browse-products + store-detail-page) ────────────────
@@ -429,7 +430,7 @@ function FlavorDistributionRow({ item, allocations, onChange, isDark }: {
 // ── Product Preview Modal (read-only, opened from inside a Pack) ─────────────
 
 function ProductPreviewModal({ productId, onClose }: { productId: number | null; onClose: () => void }) {
-  const [isDark, setIsDark] = useState(true);
+  const { isDark } = useThemeStore();
 
   const { data: product, isLoading } = useQuery<ProductWithTaxonomy>({
     queryKey: ["/api/marketplace", productId],
@@ -474,13 +475,6 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
 
               <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>Product Preview</span>
 
-              <button
-                onClick={() => setIsDark((d) => !d)}
-                aria-label="Toggle theme"
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-              >
-                {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
-              </button>
             </div>
             <div className={`h-px w-full ${divider}`} />
           </div>
@@ -559,8 +553,8 @@ export function PackQuickViewModal() {
   const [reviewsTab, setReviewsTab] = useState<"pack" | "supplier">("pack");
   const [previewProductId, setPreviewProductId] = useState<number | null>(null);
 
-  // ── Dark / light mode (dark by default) ───────────────────────────────────
-  const [isDark, setIsDark] = useState(true);
+  // ── Global theme ──────────────────────────────────────────────────────────
+  const { isDark } = useThemeStore();
   const t = useTheme(isDark);
   const fmt = useFormatCurrency();
 
@@ -732,18 +726,6 @@ export function PackQuickViewModal() {
                 </div>
               )}
             </div>
-
-            {/* Sun/Moon toggle */}
-            <button
-              onClick={() => setIsDark(d => !d)}
-              aria-label="Toggle theme"
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${t.iconBtn}`}
-            >
-              {isDark
-                ? <Sun className="w-4 h-4 text-amber-400" />
-                : <Moon className="w-4 h-4 text-gray-500" />
-              }
-            </button>
 
             {/* Close button */}
             <button

@@ -1,0 +1,90 @@
+# BigBossCoffee – Complete Dark Mode Synchronization (Remaining Modals)
+
+The previous Dark Mode unification is working correctly across the Coffee Owner application.
+
+Only a few remaining modals are still using an independent theme and are not synchronized with the global Coffee Owner theme.
+
+## Remaining Modals to Synchronize
+
+### 1. Pack Details Modal
+
+Synchronize the Pack Details modal with the global Coffee Owner theme.
+
+Inside this modal, also synchronize the:
+
+* **Included Products** modal
+
+Both must always use the same global theme as the rest of the application.
+
+---
+
+### 2. Product Details Flow
+
+Synchronize the following with the global Coffee Owner theme:
+
+* Product Details modal
+* Location modal opened from Product Details
+* Reviews modal opened from Product Details
+
+These three must always follow the global Coffee Owner Dark/Light mode.
+
+---
+
+### 3. Navbar Location Modal
+
+Synchronize the Location modal opened from the Navbar with the same global Coffee Owner theme.
+
+---
+
+## Expected Behavior
+
+After this update:
+
+* Switching Dark/Light Mode from anywhere in the Coffee Owner application must immediately update these remaining modals.
+* Opening any of these modals after changing the theme must display the correct current theme.
+* If one of these modals is already open while the theme changes, it should update accordingly and remain synchronized.
+
+There should no longer be any modal using its own independent Dark Mode state.
+
+---
+
+## Important Constraints
+
+Do **NOT** redesign anything.
+
+Do **NOT** change layouts.
+
+Do **NOT** modify spacing.
+
+Do **NOT** change colors.
+
+Do **NOT** modify typography.
+
+Do **NOT** change icons.
+
+Do **NOT** change animations.
+
+Do **NOT** modify business logic.
+
+Do **NOT** remove or add features.
+
+Do **NOT** refactor unrelated code.
+
+Do **NOT** change any files that do not require modifications.
+
+The only objective is to make these remaining modals use the existing global Coffee Owner theme so they behave exactly like the rest of the application.
+
+---
+
+## Final Verification
+
+Before completing the task, verify that:
+
+* Pack Details modal is synchronized.
+* Included Products modal is synchronized.
+* Product Details modal is synchronized.
+* Product Location modal is synchronized.
+* Product Reviews modal is synchronized.
+* Navbar Location modal is synchronized.
+
+Finally, perform one complete synchronization check across the entire Coffee Owner application to confirm there are no remaining isolated Dark Mode implementations and that every page, component, dialog, sheet, popover, and modal now follows the same global Dark/Light theme without altering any existing design or functionality.

@@ -557,6 +557,39 @@ export class DatabaseStorage implements IStorage {
       await this.restoreSubOrderPackStock(subOrderId);
     }
 
+    // ── Propagate aggregate status to the parent order ────────────────────────
+    // The parent order.status must always reflect the current collective state of
+    // its sub-orders so that every card, badge, and modal header shows a consistent
+    // value without requiring separate per-role status derivation on the frontend.
+    //
+    // Aggregation rule:
+    //   • If ALL sub-orders are CANCELLED → parent = CANCELLED
+    //   • Otherwise rank non-cancelled sub-orders by progress and use the MINIMUM
+    //     (least-advanced) status as the parent status — the order is only as far
+    //     along as its slowest active supplier.
+    const STATUS_RANK: Record<string, number> = {
+      PENDING: 0, CONFIRMED: 1, PREPARING: 2,
+      READY: 3, IN_DELIVERY: 4, DELIVERED: 5,
+    };
+    const siblings = await db.select().from(subOrders).where(eq(subOrders.orderId, existing.orderId));
+    const active = siblings.filter((s) => s.status !== 'CANCELLED');
+    let aggregateStatus: string;
+    if (active.length === 0) {
+      // Every sub-order is cancelled → cancel the whole order
+      aggregateStatus = 'CANCELLED';
+    } else {
+      // Use the least-advanced status among active (non-cancelled) sub-orders
+      const minRank = active.reduce((min, s) => {
+        const rank = STATUS_RANK[s.status ?? 'PENDING'] ?? 0;
+        return rank < min ? rank : min;
+      }, Infinity);
+      aggregateStatus = Object.keys(STATUS_RANK).find((k) => STATUS_RANK[k] === minRank) ?? 'PENDING';
+    }
+    await db.update(orders)
+      .set({ status: aggregateStatus as any })
+      .where(eq(orders.id, existing.orderId));
+    // ── End aggregate propagation ─────────────────────────────────────────────
+
     return updated;
   }
 

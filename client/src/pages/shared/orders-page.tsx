@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Clock, Calendar, Archive, Search, X, Box, Zap, Store, MapPin, Trash2, Loader2 } from "lucide-react";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
+import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderWithDetails } from "@shared/schema";
 
@@ -300,12 +301,21 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <OrderDetailsModal
-        open={!!selectedOrder}
-        onClose={() => setSelectedOrder(null)}
-        order={selectedOrder}
-        showReorder={false}
-      />
+      {isSupplier && user ? (
+        <SupplierOrderDetailsModal
+          open={!!selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          order={selectedOrder}
+          supplierId={user.id}
+        />
+      ) : (
+        <OrderDetailsModal
+          open={!!selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          order={selectedOrder}
+          showReorder={false}
+        />
+      )}
 
       {/* Admin: delete confirmation */}
       <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>

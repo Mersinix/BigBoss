@@ -1,0 +1,194 @@
+The Order module is working well. We now need to synchronize the **Supplier → Orders** page with the existing **Supplier Order Details** component so the Supplier has the same order management capabilities everywhere.
+
+**Important:**
+
+* Do **not** redesign any page.
+* Do **not** modify unrelated logic.
+* Do **not** change the existing workflow.
+* Keep the current UI and design system.
+* Reuse the existing logic already implemented wherever possible so there is only one source of truth.
+
+---
+
+# Supplier → Orders
+
+**File:**
+
+`src/pages/shared/orders-page.tsx`
+
+Currently, when the Supplier opens:
+
+**Supplier → Orders**
+
+and clicks **Details** on an order, the modal that opens does **not** expose the complete Supplier order management features.
+
+This needs to be corrected.
+
+---
+
+# 1. Use the Existing Supplier Order Details Logic
+
+Review the relationship between:
+
+* `src/pages/shared/orders-page.tsx`
+* `src/components/supplier/supplier-order-details-modal.tsx`
+
+The Supplier → Orders page should use the same order management capabilities already implemented inside the Supplier Order Details component.
+
+There should not be two different implementations of the Supplier Order Details experience.
+
+Keep a single source of truth.
+
+---
+
+# 2. Status Picker
+
+Inside the Order Details modal opened from:
+
+**Supplier → Orders**
+
+the Supplier must be able to update the order status.
+
+The modal should expose the same status management already implemented in:
+
+`src/components/supplier/supplier-order-details-modal.tsx`
+
+including the existing:
+
+* STATUS_META
+* SUPPLIER_NEXT_STATUSES
+
+and the complete workflow already defined there.
+
+Do not duplicate or rewrite this logic.
+
+Reuse the existing implementation.
+
+---
+
+# 3. Workflow
+
+The Supplier should always see the correct actions according to the current status.
+
+For example:
+
+PENDING
+
+↓
+
+Accepter
+
+Refuser
+
+↓
+
+CONFIRMED
+
+↓
+
+Commencer la préparation
+
+Marquer comme prête
+
+En cours de livraison
+
+Marquer comme livrée
+
+Annuler
+
+↓
+
+PREPARING
+
+↓
+
+READY
+
+↓
+
+IN_DELIVERY
+
+↓
+
+DELIVERED
+
+Use the existing workflow already implemented.
+
+Do not create a different workflow.
+
+---
+
+# 4. Synchronization
+
+When the Supplier changes the status from this modal:
+
+Immediately synchronize:
+
+* Supplier → Orders
+* Supplier → Order Requests
+* Admin → Orders
+* Coffee Owner → Orders
+
+without refreshing.
+
+---
+
+# 5. Existing Order Details
+
+Keep all existing information already displayed inside the modal, including:
+
+* Coffee Owner information
+* Delivery address
+* Supplier information
+* Ordered products
+* Pack composition
+* Selected variants
+* Selected flavors
+* Selected sizes
+* Prices
+* Totals
+
+Only add the missing Supplier status management.
+
+---
+
+# 6. Avoid Duplicate Logic
+
+If the Supplier → Orders modal currently has its own implementation, replace it by using the existing Supplier Order Details component (or fully synchronize both so they behave identically).
+
+There should not be two different behaviors depending on where the Supplier opens an order.
+
+The functionality must remain consistent everywhere.
+
+---
+
+# 7. Keep Everything Else Unchanged
+
+Do not modify:
+
+* Order workflow
+* Stock synchronization
+* Pack synchronization
+* Variant synchronization
+* Currency system
+* Realtime architecture
+* Admin permissions
+* Coffee Owner permissions
+* Existing layouts
+* Existing design
+* Existing business rules
+
+Only complete the missing synchronization between the Supplier Orders page and the Supplier Order Details component.
+
+---
+
+Before considering the task complete, verify that:
+
+* ✅ Supplier → Orders uses the same Order Details behavior as the Supplier Order Details component.
+* ✅ The status picker is available from the Supplier → Orders Details modal.
+* ✅ STATUS_META is used consistently.
+* ✅ SUPPLIER_NEXT_STATUSES is used consistently.
+* ✅ Status transitions follow the existing workflow.
+* ✅ Status updates synchronize immediately across Supplier, Admin, and Coffee Owner without refreshing.
+* ✅ No duplicate order-management logic remains.
+* ✅ No unrelated functionality or design was modified.

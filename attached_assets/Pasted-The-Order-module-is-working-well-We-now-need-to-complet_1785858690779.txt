@@ -1,0 +1,101 @@
+The Order module is working well. We now need to complete the synchronization of the order status displayed on the mapped order cards.
+
+**Important:**
+
+* Do **not** redesign any page.
+* Do **not** modify unrelated logic.
+* Do **not** change the existing order workflow.
+* Keep the existing UI, layout, and design exactly as they are.
+* Only fix the synchronization issue described below.
+
+---
+
+# Order Status Synchronization
+
+There is currently an inconsistency between the status displayed:
+
+* on the mapped order card
+* inside the Order Details modal
+
+Example:
+
+The mapped order card displays:
+
+**En attente**
+
+while the Order Details modal correctly displays:
+
+**Livrée**
+
+The mapped card should always display exactly the same current status as the Order Details modal.
+
+There must never be two different statuses for the same order.
+
+---
+
+# Single Source of Truth
+
+The mapped order cards must use the same order status source used by the Order Details modal.
+
+There should be only one source of truth for the order status.
+
+Do not maintain separate local state or duplicate status logic.
+
+---
+
+# Realtime Synchronization
+
+Whenever an order status changes (for example):
+
+* PENDING
+* CONFIRMED
+* PREPARING
+* READY
+* IN_DELIVERY
+* DELIVERED
+* CANCELLED
+
+the mapped order card must update immediately.
+
+No page refresh should ever be required.
+
+---
+
+# Apply Everywhere
+
+Ensure this synchronization works consistently everywhere order cards are displayed, including:
+
+* Supplier → Orders
+* Supplier → Order Requests (where applicable)
+* Admin → Orders
+* Coffee Owner → Orders
+
+Every mapped order should always display the current real status.
+
+---
+
+# Existing Design
+
+Do not change:
+
+* badge colors
+* badge styles
+* icons
+* spacing
+* typography
+* layouts
+
+Only synchronize the displayed status with the actual order status.
+
+---
+
+# Verification
+
+Before considering the task complete, verify that:
+
+* ✅ The mapped order card always displays the same status as the Order Details modal.
+* ✅ Changing the order status immediately updates the mapped card.
+* ✅ No page refresh is required.
+* ✅ Admin, Supplier, and Coffee Owner all see the updated status in real time.
+* ✅ There is only one source of truth for order status.
+* ✅ No unrelated functionality or design was modified.

@@ -216,8 +216,14 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map(order => {
-            const badgeColor = STATUS_BADGE[order.status] ?? "bg-gray-100 text-gray-800";
-            const label = STATUS_LABELS[order.status] ?? order.status;
+            // Suppliers must show their sub-order status, not the top-level order status.
+            // The top-level status only advances when all sub-orders complete, so it can
+            // lag behind the supplier's own sub-order status and cause a mismatch with the modal.
+            const displayStatus = isSupplier
+              ? ((order.subOrders ?? []).find((so: any) => so.supplierId === user?.id) as any)?.status ?? order.status
+              : order.status;
+            const badgeColor = STATUS_BADGE[displayStatus] ?? "bg-gray-100 text-gray-800";
+            const label = STATUS_LABELS[displayStatus] ?? displayStatus;
             const priority = (order as any).priority;
             const scheduledAt = (order as any).scheduledAt;
             const deliveryAddress = (order as any).deliveryAddress as { address: string } | null;

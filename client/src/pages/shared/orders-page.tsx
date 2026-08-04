@@ -56,6 +56,31 @@ function isFuture(order: OrderWithDetails) {
   return scheduled >= tomorrow;
 }
 
+// Derive the most meaningful order status from its sub-orders.
+// The DB `order.status` column only advances when ALL sub-orders complete, so it
+// can lag behind the individual supplier statuses that are already visible inside
+// the Order Details modal body.  Using this helper keeps every card badge in sync
+// with what the modal shows — there is no separate local state to maintain.
+//
+// Rule: minimum (least-advanced) non-cancelled sub-order status, which represents
+// the current bottleneck. Falls back to order.status when there are no sub-orders.
+const _STATUS_RANK: Record<string, number> = {
+  PENDING: 0, CONFIRMED: 1, PREPARING: 2,
+  READY: 3, IN_DELIVERY: 4, DELIVERED: 5,
+};
+
+function deriveOrderStatus(order: OrderWithDetails): string {
+  const subs = (order.subOrders ?? []) as any[];
+  if (!subs.length) return order.status;
+  const active = subs.filter((s: any) => s.status !== "CANCELLED");
+  if (active.length === 0) return "CANCELLED";
+  const minRank = active.reduce((min: number, s: any) => {
+    const rank = _STATUS_RANK[s.status ?? "PENDING"] ?? 0;
+    return rank < min ? rank : min;
+  }, Infinity);
+  return Object.keys(_STATUS_RANK).find((k) => _STATUS_RANK[k] === minRank) ?? order.status;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function OrdersPage() {
@@ -216,12 +241,18 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map(order => {
-            // Suppliers must show their sub-order status, not the top-level order status.
-            // The top-level status only advances when all sub-orders complete, so it can
-            // lag behind the supplier's own sub-order status and cause a mismatch with the modal.
+            // Derive the display status from sub-orders so every card badge stays in sync
+            // with what the Order Details modal shows — there is a single source of truth
+            // (the sub-order rows) and no separate cached state on the cards.
+            //
+            // • Supplier  → their own sub-order status (already correct from previous fix)
+            // • All other roles (Admin, Coffee Owner, Delivery) → aggregate status derived
+            //   from sub-orders via deriveOrderStatus(), which mirrors the Order Details
+            //   modal body. This avoids relying on the DB order.status column, which only
+            //   advances when ALL sub-orders complete and can lag behind individual updates.
             const displayStatus = isSupplier
               ? ((order.subOrders ?? []).find((so: any) => so.supplierId === user?.id) as any)?.status ?? order.status
-              : order.status;
+              : deriveOrderStatus(order);
             const badgeColor = STATUS_BADGE[displayStatus] ?? "bg-gray-100 text-gray-800";
             const label = STATUS_LABELS[displayStatus] ?? displayStatus;
             const priority = (order as any).priority;
@@ -307,18 +338,22 @@ export default function OrdersPage() {
         </div>
       )}
 
+      {/* Always resolve the modal's order from the live query data so it stays in sync
+          when React Query refetches the list (e.g. after a supplier status change).
+          selectedOrder is only used to track which order is open; the actual data
+          comes from the fresh `orders` array — single source of truth. */}
       {isSupplier && user ? (
         <SupplierOrderDetailsModal
           open={!!selectedOrder}
           onClose={() => setSelectedOrder(null)}
-          order={selectedOrder}
+          order={orders.find((o) => o.id === selectedOrder?.id) ?? selectedOrder}
           supplierId={user.id}
         />
       ) : (
         <OrderDetailsModal
           open={!!selectedOrder}
           onClose={() => setSelectedOrder(null)}
-          order={selectedOrder}
+          order={orders.find((o) => o.id === selectedOrder?.id) ?? selectedOrder}
           showReorder={false}
         />
       )}

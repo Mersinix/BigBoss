@@ -1,0 +1,101 @@
+There is still one remaining synchronization issue in the **Admin → Orders** page.
+
+**Important:**
+
+* Do **not** redesign anything.
+* Do **not** modify unrelated logic.
+* Do **not** change the existing order workflow.
+* Keep the existing UI exactly as it is.
+* Only fix the synchronization issue described below.
+
+---
+
+# Admin → Orders → Status Synchronization
+
+There is a mismatch between:
+
+* the status displayed on the mapped order cards
+* the status displayed inside the Order Details modal
+
+Example:
+
+The mapped order card displays:
+
+**En attente**
+
+while opening the same order shows:
+
+**Livrée**
+
+inside the Order Details modal.
+
+This is incorrect.
+
+The mapped order card and the Order Details modal must always display the exact same current status.
+
+---
+
+# Use the Same Data Source
+
+The mapped order cards must use the exact same order status that is used by the Order Details modal.
+
+There must be only one source of truth for the order status.
+
+Do not keep separate local state or cached values for the mapped cards.
+
+---
+
+# Realtime Updates
+
+Whenever the Supplier changes the status of an order, the following must update immediately without any page refresh:
+
+* Admin → Orders mapped cards
+* Admin → Order Details modal
+* Supplier → Orders
+* Supplier → Order Requests (where applicable)
+* Coffee Owner → My Orders
+
+All views must always remain synchronized.
+
+---
+
+# Check the Admin Orders Page Specifically
+
+The synchronization already works correctly inside the **Order Details** modal.
+
+The remaining issue is only the mapped order cards displayed in:
+
+**Admin → Orders**
+
+Verify that these cards are reading the current order status instead of an outdated or cached value.
+
+---
+
+# Existing Design
+
+Do not change:
+
+* card layout
+* badge design
+* colors
+* icons
+* filters
+* sorting
+* typography
+* spacing
+* business logic
+
+Only correct the synchronization so the mapped cards always display the current order status.
+
+---
+
+# Verification
+
+Before considering the task complete, verify that:
+
+* ✅ The mapped order cards in **Admin → Orders** always display the same status as the Order Details modal.
+* ✅ Changing the status from the Supplier side immediately updates the Admin mapped cards.
+* ✅ No page refresh is required.
+* ✅ Admin, Supplier, and Coffee Owner all remain synchronized in real time.
+* ✅ There is only one source of truth for the order status.
+* ✅ No unrelated functionality or design was modified.

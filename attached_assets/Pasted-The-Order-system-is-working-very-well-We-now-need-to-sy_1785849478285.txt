@@ -1,0 +1,219 @@
+The Order system is working very well. We now need to **synchronize the Order Details experience across all roles** while keeping the existing permissions and actions specific to each role.
+
+**Do not redesign unrelated parts.**
+**Do not break the existing order flow, stock synchronization, realtime updates, Pack logic, or permissions.**
+Keep all existing designs unless explicitly mentioned below.
+
+---
+
+# 1. Supplier → "Orders" Tab → Order Details
+
+The Supplier already has the correct detailed Order Details modal inside **Order Requests**.
+
+We want to use **the same level of detail** inside:
+
+**Supplier → Orders → Order Details**
+
+Currently this modal is still simplified.
+
+Replace it with the same detailed information already available in **Order Requests**.
+
+The Supplier should see:
+
+* Order number
+* Current status
+* Date
+* Coffee Owner information
+* Delivery address
+* Ordered products
+* Ordered Packs
+* Complete Pack composition
+* Selected Variant
+* Selected Flavor
+* Selected Size
+* Ordered quantity for every Pack component
+* Subtotal
+* Total
+
+Example:
+
+* Product:
+
+  * Nespresso Original Capsules x10
+  * ×2
+
+* Pack:
+
+  * CHICHA W GAZOUZA
+  * Composition du pack ×1
+
+Contains:
+
+* chicha
+
+  * Flavor: Toffeh
+  * Size: Medium
+  * ×2
+
+* FANTA 25cl
+
+  * Flavor: BLANC
+  * Size: Gajou
+  * ×1
+
+The Supplier must clearly see exactly what was ordered.
+
+---
+
+## Supplier Actions
+
+Unlike the Admin,
+
+the Supplier must still be able to update the order status directly from this modal.
+
+Keep the existing allowed workflow, including statuses such as:
+
+* CONFIRMED
+* APPROVED
+* PROCESSING
+* SHIPPED
+* DELIVERED
+
+(and any other statuses already supported by the project).
+
+Do not remove any existing permissions.
+
+Status updates must continue to synchronize in realtime.
+
+---
+
+# 2. Admin → Orders → Order Details
+
+The Admin should also display the same detailed Pack information.
+
+Currently the Admin modal is missing the Pack composition.
+
+Keep the Admin modal design exactly as it is.
+
+Only enrich the displayed information.
+
+The Admin should now also see:
+
+* Ordered Products
+* Ordered Packs
+* Pack composition
+* Selected Variant
+* Selected Flavor
+* Selected Size
+* Quantity for every Pack component
+
+Do **not** add Supplier actions.
+
+The Admin must continue having only the existing action(s), such as:
+
+* Close
+
+No status management should be added here.
+
+---
+
+# 3. Coffee Owner → My Account → Orders
+
+Inside:
+
+My Account → Orders
+
+when the Coffee Owner opens an Order Details modal,
+
+display the same Pack details as the Supplier and Admin.
+
+Add:
+
+* Complete Pack composition
+* Variant
+* Flavor
+* Size
+* Ordered quantity for every Pack component
+
+Keep everything else exactly as it already works.
+
+Do not change:
+
+* Current actions
+* Priority display
+* Existing layout
+* Existing timeline
+* Existing order status display
+
+Only enrich the Pack information.
+
+---
+
+# 4. Consistency
+
+All three roles must display the same Pack information.
+
+Only the available actions should differ.
+
+## Coffee Owner
+
+* Existing actions only.
+
+## Admin
+
+* Existing actions only (Close).
+
+## Supplier
+
+* Existing actions.
+* Status management.
+* Status updates.
+
+---
+
+# 5. Realtime
+
+Everything must remain synchronized without refreshing.
+
+Whenever the Supplier changes an order status:
+
+Immediately update:
+
+* Supplier Orders
+* Supplier Order Requests
+* Admin Orders
+* Coffee Owner Orders
+
+without requiring a page refresh.
+
+---
+
+# 6. Keep unchanged
+
+Do not modify:
+
+* Order workflow
+* Cart workflow
+* Pack stock deduction
+* Stock restoration
+* Product logic
+* Pack logic
+* Currency system
+* Realtime architecture
+* Existing designs outside this request
+
+Only extend the Order Details modals with the additional Pack information and keep role-specific actions intact.
+
+---
+
+Before finishing, verify:
+
+* ✅ Supplier → Order Requests still works exactly as before.
+* ✅ Supplier → Orders now shows the same detailed Pack information.
+* ✅ Supplier can still update order statuses from the Orders modal.
+* ✅ Admin → Orders now shows complete Pack composition while keeping only the Close action.
+* ✅ Coffee Owner → My Account → Orders now shows complete Pack composition.
+* ✅ Variant, Flavor, Size, and quantities are displayed correctly everywhere.
+* ✅ All status updates remain synchronized in realtime.
+* ✅ No page refresh is required.
+* ✅ No unrelated designs or functionality were modified.

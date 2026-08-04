@@ -551,6 +551,12 @@ export class DatabaseStorage implements IStorage {
       await this.deductPackComponentStock(subOrderId);
     }
 
+    // Restore pack component stock + packs.quantityAvailable when a previously-confirmed
+    // sub-order is cancelled (e.g. supplier rejects after accepting).
+    if (wasAlreadyConfirmed && status === 'CANCELLED') {
+      await this.restoreSubOrderPackStock(subOrderId);
+    }
+
     return updated;
   }
 
@@ -588,6 +594,30 @@ export class DatabaseStorage implements IStorage {
           .set({ stock: aggStock })
           .where(eq(supplierProductListings.id, listingId));
       }
+    }
+  }
+
+  /**
+   * Restores packs.quantityAvailable and component variant/listing stock for all pack
+   * items in a sub-order. Called when a previously-confirmed sub-order is cancelled
+   * (supplier rejects after accepting). Idempotent: each pack item is only restored once.
+   */
+  private async restoreSubOrderPackStock(subOrderId: number): Promise<void> {
+    const items = await db.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+    const packOrderItems = items.filter((i) => i.packId != null);
+    if (!packOrderItems.length) return;
+
+    for (const orderItem of packOrderItems) {
+      const packId = orderItem.packId!;
+      const orderQty = orderItem.quantity;
+
+      // Restore pack-level availability
+      await db.update(packs)
+        .set({ quantityAvailable: sql`${packs.quantityAvailable} + ${orderQty}` })
+        .where(eq(packs.id, packId));
+
+      // Restore component variant/listing stock
+      await this.restorePackComponentStock(packId, orderQty);
     }
   }
 
@@ -866,15 +896,25 @@ export class DatabaseStorage implements IStorage {
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
     for (const item of items) {
       if (item.packId) {
-        await db.update(packs).set({ quantityAvailable: sql`${packs.quantityAvailable} + ${item.quantity}` }).where(eq(packs.id, item.packId));
-        // Also restore component variant/flavor stock if this suborder was already confirmed
-        // (component stock is only deducted at confirmation, not at order creation)
+        // If the sub-order was already cancelled (supplier rejected after confirming),
+        // restoreSubOrderPackStock() already ran — skip to avoid double-restock.
+        const CONFIRMED_STATUSES = new Set(['CONFIRMED', 'APPROVED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
         if (item.subOrderId) {
           const [so] = await db.select().from(subOrders).where(eq(subOrders.id, item.subOrderId));
-          const CONFIRMED_STATUSES = new Set(['CONFIRMED', 'APPROVED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
+          if (so?.status === 'CANCELLED') {
+            // Already fully restored by sub-order cancellation path — nothing to do.
+            continue;
+          }
+          // Restore pack-level availability for this order item
+          await db.update(packs).set({ quantityAvailable: sql`${packs.quantityAvailable} + ${item.quantity}` }).where(eq(packs.id, item.packId));
+          // Restore component stock only if this sub-order was confirmed
+          // (component stock is only deducted at confirmation, not at order creation)
           if (so && CONFIRMED_STATUSES.has(so.status ?? '')) {
             await this.restorePackComponentStock(item.packId, item.quantity);
           }
+        } else {
+          // No sub-order record: restore pack availability unconditionally
+          await db.update(packs).set({ quantityAvailable: sql`${packs.quantityAvailable} + ${item.quantity}` }).where(eq(packs.id, item.packId));
         }
         continue;
       }

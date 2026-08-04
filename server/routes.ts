@@ -15,8 +15,7 @@ import {
 } from "./prospecting-engine";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import session from "express-session";
-import MemoryStore from "memorystore";
+import { sessionMiddleware } from "./session";
 import { db } from "./db";
 import {
   users, categories, subCategories, flavors, sizes, brands, products, supplierProductListings, supplierCategories, supplierSubCategories,
@@ -24,6 +23,7 @@ import {
   insertSizeSchema, insertBrandSchema,
   type MarketplaceProduct,
   supplierProductReviews, supplierStores, packs, packItems as packItemsTable, subOrders,
+  orders, orderItems,
   supplierProductVariants,
   type InventoryFilters, type InventorySort,
 } from "@shared/schema";
@@ -34,21 +34,7 @@ declare module "express-session" {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  const SessionStore = MemoryStore(session);
-  if (!process.env.SESSION_SECRET) {
-    throw new Error("SESSION_SECRET environment variable is required");
-  }
-  app.use(session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: new SessionStore({ checkPeriod: 86400000 }),
-    cookie: {
-      secure: process.env.NODE_ENV === 'production',
-      httpOnly: true,
-      sameSite: 'lax',
-    },
-  }));
+  app.use(sessionMiddleware);
 
   const requireAuth = (req: any, res: any, next: any) => {
     if (!req.session.userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -779,9 +765,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── Pack composition (for Supplier order details modal) ────────────────────
 
-  app.get('/api/packs/:id/composition', requireAuth, async (req, res) => {
+  app.get('/api/packs/:id/composition', requireAuth, async (req: any, res) => {
     try {
       const packId = parseInt(req.params.id);
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+      // Load the pack to enforce ownership / visibility
+      const [pack] = await db.select().from(packs).where(eq(packs.id, packId));
+      if (!pack) return res.status(404).json({ message: 'Pack not found' });
+
+      // Suppliers may only view composition of their own packs
+      if (user.role === 'SUPPLIER' && pack.supplierId !== user.id) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+
+      // Cafe owners may view composition of visible packs OR packs they have ordered
+      if (user.role === 'CAFE_OWNER') {
+        const isVisible = pack.visibility === 'VISIBLE' && !pack.isArchived;
+        if (!isVisible) {
+          // Allow if the cafe has an order containing this pack
+          const ordered = await db
+            .select({ id: orderItems.id })
+            .from(orderItems)
+            .innerJoin(subOrders, eq(subOrders.id, orderItems.subOrderId))
+            .innerJoin(orders, eq(orders.id, subOrders.orderId))
+            .where(and(eq(orderItems.packId, packId), eq(orders.cafeId, user.id)))
+            .limit(1);
+          if (!ordered.length) return res.status(403).json({ message: 'Forbidden' });
+        }
+      }
+
       const composition = await storage.getPackComposition(packId);
       res.json(composition);
     } catch (err: any) {

@@ -5,14 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
-  Sun, Moon, X,
+  Sun, Moon, X, ChevronRight,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { OrderWithDetails } from "@shared/schema";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
@@ -69,6 +69,75 @@ function useTheme(isDark: boolean) {
       dk ? (map[status]?.badgeDk ?? "bg-gray-700 text-gray-300")
          : (map[status]?.badgeLt ?? "bg-gray-100 text-gray-700"),
   };
+}
+
+// ── Pack composition hook + view ──────────────────────────────────────────────
+
+type PackCompositionItem = {
+  listingId: number;
+  variantId: number | null;
+  productName: string;
+  flavorName: string | null;
+  sizeName: string | null;
+  quantity: number;
+};
+
+function usePackComposition(packId: number | null) {
+  return useQuery<PackCompositionItem[]>({
+    queryKey: ["/api/packs", packId, "composition"],
+    queryFn: async () => {
+      const res = await fetch(`/api/packs/${packId}/composition`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch pack composition");
+      return res.json();
+    },
+    enabled: packId != null,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+function PackCompositionView({ packId, quantity, t }: { packId: number; quantity: number; t: ReturnType<typeof useTheme> }) {
+  const { data: composition, isLoading } = usePackComposition(packId);
+
+  if (isLoading) {
+    return (
+      <div className={`mt-2 rounded-xl p-3 space-y-1.5 ${t.innerCard} border`}>
+        {[1, 2].map(i => (
+          <div key={i} className={`h-4 rounded animate-pulse ${t.dk ? "bg-gray-700" : "bg-gray-200"}`} />
+        ))}
+      </div>
+    );
+  }
+
+  if (!composition?.length) return null;
+
+  return (
+    <div className={`mt-2 rounded-xl p-3 border ${t.innerCard}`}>
+      <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textSubtle}`}>
+        Composition du pack × {quantity}
+      </p>
+      <div className="space-y-2">
+        {composition.map((comp, i) => {
+          const totalQty = comp.quantity * quantity;
+          return (
+            <div key={i} className={`flex items-start gap-2 text-xs ${t.textPrimary}`}>
+              <ChevronRight className={`w-3 h-3 mt-0.5 shrink-0 ${t.textSubtle}`} />
+              <div className="flex-1 min-w-0">
+                <span className="font-medium">{comp.productName}</span>
+                {(comp.flavorName || comp.sizeName) && (
+                  <span className={`ml-1.5 ${t.textMuted}`}>
+                    {comp.flavorName && <span>Saveur: <b>{comp.flavorName}</b></span>}
+                    {comp.flavorName && comp.sizeName && <span className="mx-1">·</span>}
+                    {comp.sizeName && <span>Taille: <b>{comp.sizeName}</b></span>}
+                  </span>
+                )}
+              </div>
+              <span className={`font-bold shrink-0 ${t.textMuted}`}>×{totalQty}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -351,8 +420,8 @@ export default function OrderDetailsModal({
                           const variant = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
                           const isPackItem = !!item.packId;
                           return (
-                            <div key={idx} className="flex items-center justify-between px-4 py-3 gap-3">
-                              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                            <div key={idx} className="px-4 py-3">
+                              <div className="flex items-start gap-2.5">
                                 <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                                   isPackItem
                                     ? "bg-amber-500/15"
@@ -364,20 +433,29 @@ export default function OrderDetailsModal({
                                   }
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className={`font-medium text-sm truncate ${t.textPrimary}`}>
+                                  <p className={`font-medium text-sm ${t.textPrimary}`}>
                                     {isPackItem ? item.packName : item.product?.name}
                                   </p>
-                                  {variant && (
+                                  {variant && !isPackItem && (
                                     <p className={`text-xs mt-0.5 ${t.textMuted}`}>{variant}</p>
                                   )}
+                                  {isPackItem && (
+                                    <PackCompositionView
+                                      packId={item.packId}
+                                      quantity={item.quantity}
+                                      t={t}
+                                    />
+                                  )}
                                 </div>
-                                <span className={`text-xs font-semibold shrink-0 ${t.textMuted}`}>
-                                  ×{item.quantity}
-                                </span>
+                                <div className="shrink-0 text-right">
+                                  <span className={`text-xs font-semibold block ${t.textMuted}`}>
+                                    ×{item.quantity}
+                                  </span>
+                                  <span className={`font-semibold text-sm ${t.textPrimary}`}>
+                                    {fmt((item.unitPrice ?? 0) * item.quantity)}
+                                  </span>
+                                </div>
                               </div>
-                              <span className={`font-semibold text-sm shrink-0 ${t.textPrimary}`}>
-                                {fmt((item.unitPrice ?? 0) * item.quantity)}
-                              </span>
                             </div>
                           );
                         })}

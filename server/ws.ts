@@ -1,5 +1,6 @@
 import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { sessionMiddleware } from "./session";
 
 let wss: WebSocketServer | null = null;
 
@@ -20,18 +21,28 @@ function unregisterUser(userId: number, ws: WebSocket) {
 
 export function setupWebSocket(httpServer: Server) {
   wss = new WebSocketServer({ server: httpServer, path: "/ws" });
-  wss.on("connection", (ws) => {
+
+  wss.on("connection", (ws, req: any) => {
     let registeredUserId: number | null = null;
 
-    ws.on("message", (raw) => {
-      try {
-        const msg = JSON.parse(raw.toString());
-        if (msg.event === "user_register" && typeof msg.userId === "number") {
-          registeredUserId = msg.userId;
-          registerUser(msg.userId, ws);
-        }
-      } catch {}
+    // Authenticate server-side from the session cookie — never trust client-supplied userId.
+    // express-session parses the cookie and loads the store asynchronously; we provide a
+    // minimal no-op response object since we have no HTTP response to write headers to.
+    const fakeRes: any = {
+      getHeader: () => undefined,
+      setHeader: () => {},
+      end: () => {},
+    };
+    sessionMiddleware(req, fakeRes, () => {
+      const userId: unknown = req.session?.userId;
+      if (typeof userId === "number") {
+        registeredUserId = userId;
+        registerUser(userId, ws);
+      }
     });
+
+    // Ignore client-provided user_register messages — registration is now server-side only.
+    ws.on("message", () => {});
 
     ws.on("close", () => {
       if (registeredUserId !== null) unregisterUser(registeredUserId, ws);

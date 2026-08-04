@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, Calendar, Zap, Package, X,
@@ -148,11 +149,13 @@ type Props = {
   onClose: () => void;
   order: OrderWithDetails | null;
   supplierId: number;
+  /** When true, hides all status-update actions (read-only history view). */
+  readOnly?: boolean;
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function SupplierOrderDetailsModal({ open, onClose, order, supplierId }: Props) {
+export default function SupplierOrderDetailsModal({ open, onClose, order, supplierId, readOnly = false }: Props) {
   const [isDark, setIsDark] = useState(true);
   const t = useTheme(isDark);
   const { toast } = useToast();
@@ -351,32 +354,35 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
           {/* ── Footer: actions ── */}
           <div className={`shrink-0 border-t px-6 py-4 space-y-3 ${t.stickyBg}`}>
 
-            {/* Status actions */}
-            {nextStatuses.length > 0 && (
+            {/* Status picklist — hidden in readOnly mode */}
+            {!readOnly && nextStatuses.length > 0 && (
               <div className="space-y-2">
                 <p className={`text-xs font-semibold uppercase tracking-wide ${t.textSubtle}`}>
                   Mettre à jour le statut
                 </p>
-                <div className="flex gap-2 flex-wrap">
-                  {nextStatuses.map((ns) => (
-                    <Button
-                      key={ns.value}
-                      size="sm"
-                      variant={ns.variant === "destructive" ? "destructive" : "outline"}
-                      className={`h-9 text-xs font-semibold rounded-xl flex-1 min-w-[100px] transition-colors ${
-                        ns.variant === "default"
-                          ? isDark
-                            ? "border-amber-500/50 text-amber-400 hover:bg-amber-500/10 bg-transparent"
-                            : "border-amber-500 text-amber-600 hover:bg-amber-50 bg-white"
-                          : ""
-                      }`}
-                      onClick={() => handleStatusUpdate(ns.value)}
-                      disabled={updateSubOrderStatus.isPending}
-                    >
-                      {ns.label}
-                    </Button>
-                  ))}
-                </div>
+                <Select
+                  onValueChange={(val) => handleStatusUpdate(val)}
+                  disabled={updateSubOrderStatus.isPending}
+                >
+                  <SelectTrigger className={`h-9 rounded-xl text-sm ${
+                    isDark
+                      ? "bg-gray-800 border-gray-700 text-white hover:bg-gray-700"
+                      : "bg-white border-gray-200 text-gray-900"
+                  }`}>
+                    <SelectValue placeholder="Sélectionner un statut…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {nextStatuses.map((ns) => (
+                      <SelectItem
+                        key={ns.value}
+                        value={ns.value}
+                        className={ns.variant === "destructive" ? "text-red-600 focus:text-red-600" : ""}
+                      >
+                        {ns.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 

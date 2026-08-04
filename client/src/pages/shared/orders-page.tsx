@@ -70,6 +70,7 @@ export default function OrdersPage() {
   const [cafeSearch, setCafeSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
@@ -103,12 +104,17 @@ export default function OrdersPage() {
         });
         if (!match) return false;
       }
+      if (dateFilter) {
+        const d = new Date(o.createdAt as any);
+        const f = new Date(dateFilter);
+        if (d.getFullYear() !== f.getFullYear() || d.getMonth() !== f.getMonth() || d.getDate() !== f.getDate()) return false;
+      }
       return true;
     });
-  }, [filteredByView, statusFilter, cafeSearch, supplierSearch, productSearch]);
+  }, [filteredByView, statusFilter, cafeSearch, supplierSearch, productSearch, dateFilter]);
 
-  const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setSupplierSearch(""); setProductSearch(""); };
-  const hasFilters = statusFilter !== "ALL" || cafeSearch || supplierSearch || productSearch;
+  const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setSupplierSearch(""); setProductSearch(""); setDateFilter(""); };
+  const hasFilters = statusFilter !== "ALL" || cafeSearch || supplierSearch || productSearch || dateFilter;
 
   const handleStatusChange = (orderId: number, status: string) => {
     updateStatus.mutate({ id: orderId, status: status as any });
@@ -177,6 +183,14 @@ export default function OrdersPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input placeholder="Produit..." value={productSearch} onChange={e => setProductSearch(e.target.value)} className="pl-9 w-40" />
         </div>
+
+        <Input
+          type="date"
+          value={dateFilter}
+          onChange={e => setDateFilter(e.target.value)}
+          className="w-40"
+          title="Filtrer par date"
+        />
 
         {hasFilters && (
           <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>

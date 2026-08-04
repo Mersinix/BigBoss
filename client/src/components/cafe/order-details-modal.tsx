@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
-  Sun, Moon, X, ChevronRight,
+  Sun, Moon, X, ChevronRight, User,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -365,11 +365,23 @@ export default function OrderDetailsModal({
             style={{ WebkitOverflowScrolling: "touch" }}
           >
 
-            {/* ── Delivery info ── */}
-            {(deliveryAddress || courierInstructions) && (
+            {/* ── Order info: café client + delivery ── */}
+            {(order.cafe?.name || deliveryAddress || courierInstructions) && (
               <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
-                {deliveryAddress && (
+                {/* Café client */}
+                {order.cafe?.name && (
                   <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-xs font-semibold mb-0.5 ${t.textMuted}`}>Café client</p>
+                      <p className={`text-sm font-medium ${t.textPrimary}`}>{order.cafe.name}</p>
+                    </div>
+                  </div>
+                )}
+                {deliveryAddress && (
+                  <div className={`flex items-start gap-3 ${order.cafe?.name ? `pt-2.5 border-t ${t.dk ? "border-gray-700/50" : "border-gray-100"}` : ""}`}>
                     <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
                       <MapPin className="w-4 h-4 text-amber-500" />
                     </div>

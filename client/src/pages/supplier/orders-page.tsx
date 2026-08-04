@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Calendar, Clock, Archive, Search, X, Store, Box, Layers, MapPin, Package, Zap } from "lucide-react";
+import { Calendar, Clock, Archive, Search, X, Store, Box, Layers, MapPin, Package, Zap, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
 import type { OrderWithDetails } from "@shared/schema";
@@ -40,6 +40,13 @@ const STATUS_LABELS: Record<string, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", PREPARING: "En préparation",
   READY: "Prête", IN_DELIVERY: "En livraison", DELIVERED: "Livrée", CANCELLED: "Annulée",
 };
+
+const PRIORITY_OPTS = [
+  { value: "ALL",    label: "Toutes priorités" },
+  { value: "NORMAL", label: "Normal" },
+  { value: "HIGH",   label: "Haute priorité" },
+  { value: "URGENT", label: "Urgent" },
+];
 
 const NEXT_STATUSES: Record<string, { value: string; label: string }[]> = {
   CONFIRMED:   [
@@ -80,6 +87,8 @@ export default function SupplierOrdersPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [cafeSearch, setCafeSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
 
   // Extract suborders for this supplier
@@ -121,9 +130,15 @@ export default function SupplierOrdersPage() {
         });
         if (!hasMatch) return false;
       }
+      if (priorityFilter !== "ALL" && so.orderPriority !== priorityFilter) return false;
+      if (dateFilter) {
+        const d = new Date(so.orderCreatedAt as any);
+        const f = new Date(dateFilter);
+        if (d.getFullYear() !== f.getFullYear() || d.getMonth() !== f.getMonth() || d.getDate() !== f.getDate()) return false;
+      }
       return true;
     });
-  }, [filteredByView, statusFilter, cafeSearch, productSearch]);
+  }, [filteredByView, statusFilter, cafeSearch, productSearch, priorityFilter, dateFilter]);
 
   const handleStatusUpdate = (subOrderId: number, status: string) => {
     updateSubOrderStatus.mutate({ subOrderId, status }, {
@@ -132,8 +147,8 @@ export default function SupplierOrdersPage() {
     });
   };
 
-  const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setProductSearch(""); };
-  const hasFilters = statusFilter !== "ALL" || cafeSearch || productSearch;
+  const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setProductSearch(""); setPriorityFilter("ALL"); setDateFilter(""); };
+  const hasFilters = statusFilter !== "ALL" || cafeSearch || productSearch || priorityFilter !== "ALL" || dateFilter;
 
   const views = [
     { id: "today",  label: "Aujourd'hui",     icon: Clock,    count: mySubOrders.filter(so => isToday(so.orderCreatedAt) && !isFuture(so._order) && !["DELIVERED","CANCELLED"].includes(so.status)).length },
@@ -199,6 +214,23 @@ export default function SupplierOrdersPage() {
             className="pl-9 w-44"
           />
         </div>
+
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Priorité" />
+          </SelectTrigger>
+          <SelectContent>
+            {PRIORITY_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Input
+          type="date"
+          value={dateFilter}
+          onChange={e => setDateFilter(e.target.value)}
+          className="w-40"
+          title="Filtrer par date"
+        />
 
         {hasFilters && (
           <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>

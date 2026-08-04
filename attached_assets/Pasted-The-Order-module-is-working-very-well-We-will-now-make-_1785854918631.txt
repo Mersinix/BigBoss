@@ -1,0 +1,238 @@
+The Order module is working very well. We will now make a few targeted improvements to the **Admin** and **Supplier** Order pages.
+
+**Important:**
+
+* Do **not** redesign unrelated parts.
+* Do **not** change the existing order workflow, permissions, realtime synchronization, stock synchronization, Pack logic, or UI outside of what is described below.
+* Keep the existing design system and behavior unless explicitly requested.
+* Ensure all new filters and updates continue to work in realtime where applicable.
+
+---
+
+# 1. Admin → Orders
+
+## A. Add Calendar Filter
+
+Inside:
+
+**Admin → Orders**
+
+For both:
+
+* **Futures**
+* **Historique**
+
+add a **calendar date filter** so the Admin can filter orders by date.
+
+This should work together with the existing filters already available on the page.
+
+Do not remove or modify the current filters.
+
+---
+
+## B. Order Details Modal
+
+When the Admin opens an Order Details modal, add the Coffee Owner information in the same location and design already used in the Supplier Order Details modal.
+
+Display:
+
+**Café client**
+
+**MERSINIX**
+
+(or the correct Coffee Owner for the selected order)
+
+Use the exact same visual style and placement already used in the Supplier modal.
+
+Do not modify any other part of the Admin Order Details modal.
+
+---
+
+# 2. Supplier → Order Requests
+
+**Important:**
+This section refers only to:
+
+**Supplier → Order Requests**
+
+**Do not confuse it with Supplier → Orders.**
+
+---
+
+## A. Add Details Button in History
+
+Currently:
+
+### Pending Requests
+
+already has a View button that opens the complete Order Details modal with:
+
+* Accept
+* Reject
+
+Everything here is correct.
+
+Now apply the same behavior to:
+
+**Historique des demandes**
+
+Each historical request should also have a View icon/button.
+
+When opened, display the same complete Order Details modal with all Pack information already implemented.
+
+The only difference:
+
+The History modal must **not** contain Accept or Reject actions.
+
+It should only contain:
+
+* Close
+
+---
+
+## B. Improve the Page Layout
+
+Replace the current layout with a switcher similar to the Order pages.
+
+The page should contain two sections:
+
+* Demandes en attente
+* Historique des demandes
+
+Each section should have its own filtering area.
+
+---
+
+## C. Filters
+
+For both sections add:
+
+* Existing Order filters already used in Admin → Orders
+* Calendar date filter
+* Priority filter
+
+Reuse the same filtering experience already available in the Admin Order pages.
+
+Do not redesign the filter system.
+
+---
+
+# 3. Supplier → Orders
+
+**Important:**
+This section refers only to:
+
+**Supplier → Orders**
+
+**Do not confuse it with Order Requests.**
+
+---
+
+## A. Order Details Actions
+
+For:
+
+* Aujourd'hui
+* Futures
+
+when the Supplier opens the Order Details modal,
+
+the Supplier must be able to update the order status directly from that modal.
+
+Add a status selector (picklist) that allows the Supplier to move the order through the supported workflow.
+
+Use the project's existing statuses only.
+
+Do not introduce new statuses.
+
+---
+
+## B. Role Separation
+
+Ensure this functionality remains Supplier-only.
+
+If the same Order Details component is shared with Admin or Coffee Owner, preserve role-specific behavior.
+
+The Supplier can update statuses.
+
+The Admin cannot.
+
+The Coffee Owner cannot.
+
+The Admin should only see status updates appear automatically in realtime.
+
+---
+
+# 4. Supplier → Orders → Historique
+
+Inside:
+
+**Supplier → Orders → Historique**
+
+add:
+
+* Calendar date filter
+* Existing Order filters already used in Admin
+* Priority filter
+
+Keep the existing page design.
+
+Only extend the filtering capabilities.
+
+---
+
+# 5. Realtime
+
+Maintain the current realtime synchronization.
+
+Whenever the Supplier updates an order status:
+
+Immediately synchronize:
+
+* Supplier Orders
+* Supplier Order Requests
+* Admin Orders
+* Coffee Owner Orders
+
+without requiring any page refresh.
+
+All filters should continue to work correctly with realtime updates.
+
+---
+
+# 6. Keep Everything Else Unchanged
+
+Do not modify:
+
+* Order workflow
+* Acceptance / rejection logic
+* Cart behavior
+* Pack stock synchronization
+* Variant stock synchronization
+* Currency system
+* Pack logic
+* Product logic
+* Existing permissions
+* Existing layouts outside this request
+* Existing designs that were not mentioned above
+
+Only implement the requested additions.
+
+---
+
+Before considering the task complete, verify that:
+
+* ✅ Admin → Futures includes a calendar date filter.
+* ✅ Admin → Historique includes a calendar date filter.
+* ✅ Admin Order Details now displays the Coffee Owner information exactly like the Supplier modal.
+* ✅ Supplier → Order Requests → Historique now includes a View button.
+* ✅ Historical requests open the same detailed Order Details modal with only the Close action.
+* ✅ Supplier → Order Requests uses a switcher between Pending Requests and History.
+* ✅ Both Order Request sections include the existing filters, a calendar filter, and a priority filter.
+* ✅ Supplier → Orders → Aujourd'hui allows status updates from the Order Details modal.
+* ✅ Supplier → Orders → Futures allows status updates from the Order Details modal.
+* ✅ Supplier → Orders → Historique includes the same filters, priority filter, and calendar date filter.
+* ✅ Admin remains read-only regarding order status changes.
+* ✅ Coffee Owner permissions remain unchanged.
+* ✅ All updates continue to synchronize in realtime without refreshing.
+* ✅ No unrelated functionality or design was modified.

@@ -1,0 +1,185 @@
+The Shop module is working well. We now need to improve the **Coffee Owner → Shop → Product Cards** and move some information to the appropriate place in the Product Details modal.
+
+**Important:**
+
+* Do **not** redesign the application.
+* Do **not** modify unrelated logic.
+* Do **not** change the Product Details workflow.
+* Keep all existing functionality unless explicitly mentioned below.
+* Maintain all realtime behavior.
+* Do not remove any existing feature that is not mentioned here.
+
+---
+
+# Coffee Owner → Shop → Product Cards
+
+We need to reorganize the mapped Product Cards.
+
+The goal is to make the card represent the product itself, while supplier-specific information (such as pricing and promotions) is displayed inside the Product Details modal where the user chooses a supplier.
+
+---
+
+# 1. Remove Product Price From the Product Card
+
+A single product can be sold by multiple suppliers.
+
+Because of that, the Product Card should no longer display a price.
+
+Remove the displayed price from the mapped Product Card.
+
+The Coffee Owner should only see supplier prices after opening the Product Details modal.
+
+Do not remove pricing from the Product Details modal.
+
+---
+
+# 2. Remove Promotion Pricing From the Product Card
+
+Do not display promotion prices or discount information directly on the Product Card.
+
+Instead:
+
+If at least one supplier has an active promotion for that product:
+
+Display a small **"On Sale"** badge on the Product Card.
+
+The badge should use the same visual style already used in the Flash module (red promotion indicator).
+
+Only indicate that promotions exist.
+
+Do not display:
+
+* discounted price
+* original price
+* percentage
+* promotion details
+
+on the Product Card.
+
+---
+
+# 3. Product Details Modal
+
+Promotion information belongs inside the Product Details modal.
+
+When the Coffee Owner opens a product:
+
+Display each supplier's promotion only in the correct supplier section.
+
+Promotion information must stay associated with:
+
+* the correct supplier
+* the correct product
+
+Do not display promotion information outside its related supplier.
+
+Keep the existing Product Details workflow.
+
+---
+
+# 4. Reorganize the Product Card Layout
+
+Keep:
+
+* Product image
+* Favorite icon (top-right)
+
+already implemented.
+
+Add:
+
+* "On Sale" badge (top-left on the image) when applicable.
+
+Remove:
+
+* the current category label displayed on the image.
+
+---
+
+# 5. Information Below the Image
+
+Keep the Product Name exactly where it is.
+
+Below the Product Name:
+
+Keep the Supplier information and the distance exactly as they currently are.
+
+---
+
+# 6. Bottom Row
+
+Move the rating from its current position on the image.
+
+Display the rating at the bottom-right of the Product Card.
+
+---
+
+# 7. Category + Brand Badge
+
+At the bottom-left of the Product Card:
+
+Display a badge using:
+
+Category • Brand
+
+Example:
+
+CHICHA • CHIKH
+
+The Brand text (• Brand) should use the same hover color behavior as the Product Name.
+
+This replaces the category label currently displayed on the image.
+
+---
+
+# 8. Keep Existing Behavior
+
+Do not modify:
+
+* Product Details modal layout
+* Favorite functionality
+* Flash functionality
+* Product opening behavior
+* Filters
+* Search
+* Infinite scrolling
+* Store pages
+* Packs
+* Promotions logic
+* Supplier mapping
+* Distance calculation
+* Realtime synchronization
+
+Only reorganize the Product Cards and move promotion information to the appropriate location.
+
+---
+
+# 9. Realtime Synchronization
+
+Ensure that the following remain synchronized without refreshing:
+
+* Favorite status
+* Promotion availability (On Sale badge)
+* Supplier changes
+* Product updates
+* Category updates
+* Brand updates
+
+---
+
+# Verification
+
+Before considering the task complete, verify that:
+
+* ✅ Product Cards no longer display prices.
+* ✅ Product Cards no longer display promotion prices.
+* ✅ Product Cards display the red "On Sale" badge when at least one supplier has an active promotion.
+* ✅ Promotion details are displayed only inside the Product Details modal, in the correct supplier section.
+* ✅ Favorite icon remains at the top-right.
+* ✅ The "On Sale" badge appears at the top-left.
+* ✅ The Product Name remains unchanged.
+* ✅ Supplier and distance remain below the Product Name.
+* ✅ Rating is displayed at the bottom-right.
+* ✅ Category • Brand badge is displayed at the bottom-left.
+* ✅ No unrelated functionality or design was modified.
+* ✅ All realtime synchronization continues to work correctly.

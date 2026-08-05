@@ -14,7 +14,7 @@ import {
   Plus, ShoppingBag, Layers, Star, MapPin, Zap, Sun, Moon,
 } from "lucide-react";
 import type { ListingPromotion } from "@shared/schema";
-import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
+import { useCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
@@ -184,7 +184,6 @@ function ProductCard({
   promotions: ListingPromotion[];
   isDark: boolean;
 }) {
-  const fmt = useFormatCurrency();
   const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
@@ -193,21 +192,11 @@ function ProductCard({
 
   const listingIds = product.listings.map(l => l.id);
 
-  const promoForProduct = useMemo(() => {
-    const matches = promotions.filter(p => listingIds.includes(p.listingId));
-    if (!matches.length) return null;
-    const pct = matches.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
-    if (pct.length) return pct.reduce((best, p) => p.discountValue > best.discountValue ? p : best, pct[0]);
-    return matches[0];
-  }, [promotions, listingIds.join(',')]);
-
-  const promoDiscountedPrice = useMemo(() => {
-    if (!promoForProduct || product.bestPrice == null) return null;
-    if (['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(promoForProduct.type)) {
-      return Math.max(0, Math.round(product.bestPrice * (1 - promoForProduct.discountValue / 10000)));
-    }
-    return null;
-  }, [promoForProduct, product.bestPrice]);
+  // True when at least one supplier has an active promotion for this product
+  const hasPromo = useMemo(
+    () => promotions.some(p => listingIds.includes(p.listingId)),
+    [promotions, listingIds.join(',')],
+  );
 
   const distanceKm = useMemo(() => {
     if (!searchLocation) return null;
@@ -227,6 +216,8 @@ function ProductCard({
   }, [searchLocation, product.listings]);
 
   const hasReviews = product.reviewCount > 0;
+  const categoryName = product.categoryLabel?.name ?? product.category ?? null;
+  const brandName = product.brandLabel?.name ?? null;
 
   return (
     <div
@@ -247,23 +238,17 @@ function ProductCard({
             <Package className={`w-10 h-10 ${t.emptyIcon}`} />
           </div>
         )}
-        {/* Category badge */}
-        {product.category && (
+
+        {/* "On Sale" badge — top-left, shown when ≥1 supplier has an active promotion */}
+        {hasPromo && (
           <div className="absolute top-2 left-2">
-            <Badge className="bg-black/50 text-white backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2">
-              {product.category}
-            </Badge>
+            <span className="bg-rose-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+              <Zap className="w-2.5 h-2.5" />On Sale
+            </span>
           </div>
         )}
-        {/* Review overlay */}
-        {hasCommercialAccess && hasReviews && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
-            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-            <span className="text-[10px] font-medium text-white">{product.avgRating.toFixed(1)}</span>
-            <span className="text-[10px] text-white/70">({product.reviewCount})</span>
-          </div>
-        )}
-        {/* Favorite button */}
+
+        {/* Favorite button — top-right */}
         {hasCommercialAccess && (
           <button
             className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
@@ -282,7 +267,8 @@ function ProductCard({
             <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
           </button>
         )}
-        {/* Quick view button */}
+
+        {/* Quick view button — bottom-right */}
         <button
           className="absolute bottom-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => { e.stopPropagation(); openQuickView(product.id); }}
@@ -297,6 +283,8 @@ function ProductCard({
         <h3 className={`font-bold text-sm leading-tight truncate transition-colors group-hover:${t.dk ? "text-blue-400" : "text-blue-600"} ${t.textPrimary}`}>
           {product.name}
         </h3>
+
+        {/* Supplier logos + distance */}
         <div className="flex items-center gap-1.5">
           <SupplierLogoStrip listings={product.listings} count={product.supplierCount} isDark={isDark} />
           {distanceKm !== null && (
@@ -306,27 +294,30 @@ function ProductCard({
           )}
         </div>
 
-        <div className={`mt-auto pt-1.5 border-t ${t.priceBorder}`}>
-          
-            <div>
-              {promoForProduct && (
-                <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5">
-                  <Zap className="w-2.5 h-2.5" />{promoForProduct.label}
+        {/* Bottom row: Category • Brand (left) + Rating (right) */}
+        <div className={`mt-auto pt-1.5 border-t flex items-center justify-between gap-2 ${t.priceBorder}`}>
+          {/* Category • Brand */}
+          {categoryName ? (
+            <span className={`text-[10px] font-semibold uppercase tracking-wide truncate ${t.textMuted}`}>
+              {categoryName}
+              {brandName && (
+                <span className={`transition-colors group-hover:${t.dk ? "text-blue-400" : "text-blue-600"}`}>
+                  {" • "}{brandName}
                 </span>
               )}
-              <p className={`text-[10px] ${t.textMuted}`}>From</p>
-              {promoDiscountedPrice != null ? (
-                <div className="flex items-baseline gap-1.5">
-                  <p className={`font-bold text-sm ${t.textPrice}`}>{fmt(promoDiscountedPrice)}</p>
-                  <p className={`text-[10px] line-through ${t.textMuted}`}>{fmt(product.bestPrice)}</p>
-                </div>
-              ) : (
-                <p className={`font-bold text-sm ${t.textPrice}`}>
-                  {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
-                </p>
-              )}
-            </div>
-         
+            </span>
+          ) : (
+            <span />
+          )}
+
+          {/* Rating */}
+          {hasCommercialAccess && hasReviews && (
+            <span className="flex items-center gap-1 shrink-0">
+              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+              <span className={`text-[10px] font-medium ${t.textPrimary}`}>{product.avgRating.toFixed(1)}</span>
+              <span className={`text-[10px] ${t.textMuted}`}>({product.reviewCount})</span>
+            </span>
+          )}
         </div>
       </div>
     </div>

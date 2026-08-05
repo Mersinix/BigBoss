@@ -287,34 +287,7 @@ const PROVIDER_TYPE_COLORS: Record<ProviderType, string> = {
   studio: "bg-violet-100 text-violet-700",
 };
 
-// ── Shared Price Lock UI (mirrors barista-page pattern) ───────────────────────
 
-function PriceLocked({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1 text-[11px] text-blue-700 font-medium">
-        <Lock className="w-3 h-3 shrink-0" />
-        <span>
-          {user
-            ? "En attente d'approbation"
-            : "Disponible pour les cafés approuvés"}
-        </span>
-      </div>
-      {!user && (
-        <Link href="/login">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-6 text-[11px] w-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400 px-2"
-            data-testid="button-login-marketing-price"
-          >
-            Connexion to view pricing
-          </Button>
-        </Link>
-      )}
-    </div>
-  );
-}
 
 // ── Star Rating ───────────────────────────────────────────────────────────────
 
@@ -342,7 +315,6 @@ function ProviderCard({
   user: ReturnType<typeof useAuth>["user"];
   onViewProfile: (p: Provider) => void;
 }) {
-  const hasAccess = accessLevel === "approved";
   const fmt = useFormatCurrency();
   const lowestPrice = Math.min(...provider.packages.map((p) => p.priceInCents));
   const faved = useFavorites((s) => !!s.marketing[provider.id]);
@@ -428,7 +400,7 @@ function ProviderCard({
         </div>
 
         <div className="mt-auto pt-2 border-t border-gray-50">
-          {hasAccess ? (
+         
             <div className="space-y-2">
               <div>
                 <p className="text-[10px] text-gray-400">À partir de</p>
@@ -465,20 +437,7 @@ function ProviderCard({
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-[11px] w-full border-gray-200 text-gray-600 hover:bg-gray-50 rounded-lg"
-                onClick={() => onViewProfile(provider)}
-                data-testid={`button-view-profile-locked-${provider.id}`}
-              >
-                Voir profil
-              </Button>
-              <PriceLocked user={user} />
-            </div>
-          )}
+         
         </div>
       </div>
     </div>
@@ -582,7 +541,7 @@ function ProviderDetailDialog({
             <h3 className="font-semibold text-sm text-gray-700 mb-2 flex items-center gap-1.5">
               <ImageIcon className="w-3.5 h-3.5 text-purple-500" /> Forfaits &amp; tarifs
             </h3>
-            {hasAccess ? (
+            
               <div className="grid sm:grid-cols-3 gap-3">
                 {provider.packages.map((pkg, i) => (
                   <div
@@ -617,30 +576,7 @@ function ProviderDetailDialog({
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="bg-gray-50 rounded-xl p-4 text-center border border-gray-100">
-                <Lock className="w-6 h-6 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm font-medium text-gray-700 mb-1">
-                  Tarifs réservés aux cafés approuvés
-                </p>
-                <p className="text-xs text-gray-400 mb-3">
-                  {user
-                    ? "Votre compte est en attente d'approbation."
-                    : "Connectez-vous et obtenez l'approbation pour accéder aux tarifs."}
-                </p>
-                {!user && (
-                  <Link href="/login">
-                    <Button
-                      size="sm"
-                      className="bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg"
-                      data-testid="button-login-packages"
-                    >
-                      Connexion to view pricing
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            )}
+          
           </div>
 
           {/* Actions */}

@@ -444,31 +444,14 @@ function StoreProductCard({
           )}
         </div>
         <div className={`mt-auto pt-1.5 border-t ${t.priceBorder}`}>
-          {hasCommercialAccess ? (
+         
             <div>
               <p className={`text-[10px] ${t.textMuted}`}>From</p>
               <p className={`font-bold text-sm ${t.textPrice}`}>
                 {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
               </p>
             </div>
-          ) : (
-            <div className="space-y-1.5">
-              <div className={`flex items-center gap-1 text-[11px] font-medium ${t.dk ? "text-amber-400" : "text-blue-700"}`}>
-                <Lock className="w-3 h-3 shrink-0" />
-                <span>Price for approved owners</span>
-              </div>
-              <Link href="/login" onClick={(e) => e.stopPropagation()}>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`h-6 text-[11px] w-full px-2 ${t.dk ? "border-gray-700 text-gray-300 hover:bg-gray-700" : "border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400"}`}
-                  data-testid={`button-login-price-${product.id}`}
-                >
-                  Connexion to view prices
-                </Button>
-              </Link>
-            </div>
-          )}
+         
         </div>
       </div>
     </div>

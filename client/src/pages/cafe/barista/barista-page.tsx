@@ -216,32 +216,7 @@ const LEVEL_COLORS: Record<string, string> = {
   Expert: "bg-purple-100 text-purple-700",
 };
 
-// ── Shared Price Lock UI ──────────────────────────────────────────────────────
 
-function PriceLocked({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1 text-[11px] text-blue-700 font-medium">
-        <Lock className="w-3 h-3 shrink-0" />
-        <span>
-          {user ? "En attente d'approbation" : "Disponible pour les cafés approuvés"}
-        </span>
-      </div>
-      {!user && (
-        <Link href="/login">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-6 text-[11px] w-full border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400 px-2"
-            data-testid="button-login-price"
-          >
-            Connexion to view prices
-          </Button>
-        </Link>
-      )}
-    </div>
-  );
-}
 
 // ── Star Rating ───────────────────────────────────────────────────────────────
 
@@ -265,7 +240,6 @@ function TrainingCard({
   accessLevel: AccessLevel;
   user: ReturnType<typeof useAuth>["user"];
 }) {
-  const hasAccess = accessLevel === "approved";
   const fmt = useFormatCurrency();
   const faved = useFavorites((s) => !!s.academy[program.id]);
   const toggleAcademy = useFavorites((s) => s.toggleAcademy);
@@ -329,7 +303,7 @@ function TrainingCard({
         </div>
 
         <div className="mt-auto pt-2 border-t border-gray-50">
-          {hasAccess ? (
+          
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-gray-400">Prix</p>
@@ -345,9 +319,7 @@ function TrainingCard({
                 S'inscrire
               </Button>
             </div>
-          ) : (
-            <PriceLocked user={user} />
-          )}
+         
         </div>
       </div>
     </div>
@@ -365,7 +337,6 @@ function BaristaCard({
   accessLevel: AccessLevel;
   user: ReturnType<typeof useAuth>["user"];
 }) {
-  const hasAccess = accessLevel === "approved";
   const fmt = useFormatCurrency();
   const faved = useFavorites((s) => !!s.baristaMarket[barista.id]);
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
@@ -448,7 +419,7 @@ function BaristaCard({
         )}
 
         <div className="mt-auto pt-2 border-t border-gray-50">
-          {hasAccess ? (
+         
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-[10px] text-gray-400">Tarif / jour</p>
@@ -477,9 +448,7 @@ function BaristaCard({
                 </Button>
               </div>
             </div>
-          ) : (
-            <PriceLocked user={user} />
-          )}
+         
         </div>
       </div>
     </div>

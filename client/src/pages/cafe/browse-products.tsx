@@ -307,7 +307,7 @@ function ProductCard({
         </div>
 
         <div className={`mt-auto pt-1.5 border-t ${t.priceBorder}`}>
-          {hasCommercialAccess ? (
+          
             <div>
               {promoForProduct && (
                 <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mb-1.5">
@@ -326,24 +326,7 @@ function ProductCard({
                 </p>
               )}
             </div>
-          ) : (
-            <div className="space-y-1.5">
-              <div className={`flex items-center gap-1 text-[11px] font-medium ${t.dk ? "text-amber-400" : "text-blue-700"}`}>
-                <Lock className="w-3 h-3 shrink-0" />
-                <span>Price for approved owners</span>
-              </div>
-              <Link href="/login" onClick={(e) => e.stopPropagation()}>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`h-6 text-[11px] w-full px-2 ${t.dk ? "border-gray-700 text-gray-300 hover:bg-gray-700" : "border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400"}`}
-                  data-testid={`button-login-price-${product.id}`}
-                >
-                  Connexion to view prices
-                </Button>
-              </Link>
-            </div>
-          )}
+         
         </div>
       </div>
     </div>
@@ -644,7 +627,7 @@ export function PackCardTile({
 
         {/* Row 3: Price (right-of-symbol) / old price / 📦 quantity — single line */}
         <div className="flex items-center gap-1.5 mt-1.5 flex-nowrap overflow-hidden">
-          {hasCommercialAccess ? (
+        
             <>
               <span className={`font-bold text-sm shrink-0 ${priceColor}`}>
                 {fmtRight(pack.price)}
@@ -657,12 +640,7 @@ export function PackCardTile({
                 <Package className="w-3 h-3" />{maxQty}
               </span>
             </>
-          ) : (
-            <div className={`flex items-center gap-1 text-[11px] font-medium ${priceColor}`}>
-              <Lock className="w-3 h-3 shrink-0" />
-              <span className="truncate">Price for approved owners</span>
-            </div>
-          )}
+         
         </div>
 
         {/* Row 4: Categories — single line, each chip shows only its own correct brands */}

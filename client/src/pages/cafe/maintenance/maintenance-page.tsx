@@ -229,26 +229,7 @@ const TYPE_ICONS: Record<string, any> = {
   Agency:    Users,
 };
 
-// ── Price Lock ────────────────────────────────────────────────────────────────
 
-function PriceLocked({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1 text-[11px] text-orange-700 font-medium">
-        <Lock className="w-3 h-3 shrink-0" />
-        <span>{user ? "En attente d'approbation" : "Disponible pour les cafés approuvés"}</span>
-      </div>
-      {!user && (
-        <Link href="/login">
-          <Button size="sm" variant="outline"
-            className="h-6 text-[11px] w-full border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-400 px-2">
-            Connexion pour voir les tarifs
-          </Button>
-        </Link>
-      )}
-    </div>
-  );
-}
 
 // ── Star Rating ───────────────────────────────────────────────────────────────
 
@@ -274,7 +255,6 @@ function AgentCard({
   user: ReturnType<typeof useAuth>["user"];
   onOpenDetail: (agent: (typeof AGENTS)[0]) => void;
 }) {
-  const hasAccess = accessLevel === "approved";
   const fmt = useFormatCurrency();
   const faved = useFavorites((s) => !!s.maintenance[agent.id]);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
@@ -374,7 +354,7 @@ function AgentCard({
 
         {/* CTA */}
         <div className="mt-auto pt-2 border-t border-gray-50">
-          {hasAccess ? (
+          
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-[10px] text-gray-400">Tarif / jour</p>
@@ -400,9 +380,7 @@ function AgentCard({
                 </Button>
               </div>
             </div>
-          ) : (
-            <PriceLocked user={user} />
-          )}
+         
         </div>
       </div>
     </div>
@@ -556,7 +534,7 @@ function AgentDetailModal({
 
             {/* Pricing & CTA */}
             <div className="border-t border-gray-100 pt-4">
-              {hasAccess ? (
+             
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs text-gray-400">Tarif journalier</p>
@@ -579,9 +557,7 @@ function AgentDetailModal({
                     </Button>
                   </div>
                 </div>
-              ) : (
-                <PriceLocked user={user} />
-              )}
+             
             </div>
           </div>
         </div>

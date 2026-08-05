@@ -7,15 +7,38 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Package, Store, Minus, Plus, ShoppingCart, CheckCircle2,
-  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag, Sun, Moon,
+  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag, Sun, Moon, Zap,
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
-import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant } from "@shared/schema";
+import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant, ListingPromotion } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { ReviewModal } from "@/components/review-modal";
+
+// ── Promotion helpers ─────────────────────────────────────────────────────────
+
+// Non-price promotions — shown as badges next to the supplier name
+const SUPPLIER_BADGE_TYPES = new Set([
+  'FREE_SHIPPING', 'GIFT', 'BUY_X_GET_Y', 'QUANTITY_TIER', 'MIN_ORDER_AMOUNT',
+]);
+
+// Price-affecting promotions — shown per-variant with promotional pricing
+const VARIANT_PRICE_TYPES = new Set([
+  'PERCENTAGE', 'FIXED_AMOUNT', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER',
+]);
+
+function calcPromoPrice(basePrice: number, promo: ListingPromotion): number | null {
+  if (['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(promo.type)) {
+    return Math.max(0, Math.round(basePrice * (1 - promo.discountValue / 10000)));
+  }
+  if (promo.type === 'FIXED_AMOUNT') {
+    // discountValue is in milli-DT; price is in cents (1 DT = 100 cents = 1000 milli-DT → 1 cent = 10 milli-DT)
+    return Math.max(0, basePrice - Math.round(promo.discountValue / 10));
+  }
+  return null;
+}
 
 // ── Haversine distance (km) ───────────────────────────────────────────────────
 
@@ -53,11 +76,12 @@ function Stars({ rating, size = "sm" }: { rating: number; size?: "sm" | "xs" }) 
 // ── Variant Row ───────────────────────────────────────────────────────────────
 
 function VariantRow({
-  variant, listing, product, isDark = false,
+  variant, listing, product, promotions = [], isDark = false,
 }: {
   variant: MarketplaceVariant;
   listing: MarketplaceListing;
   product: MarketplaceProduct;
+  promotions?: ListingPromotion[];
   isDark?: boolean;
 }) {
   const fmt = useFormatCurrency();
@@ -67,6 +91,17 @@ function VariantRow({
   const inCart = getItemQuantity(listing.id, variant.flavorId, variant.sizeId);
   const outOfStock = variant.quantity <= 0;
 
+  // Best price-affecting promotion for this listing
+  const bestPricePromo = useMemo(() => {
+    const eligible = promotions.filter(p => VARIANT_PRICE_TYPES.has(p.type));
+    if (!eligible.length) return null;
+    const pct = eligible.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
+    if (pct.length) return pct.reduce((best, p) => p.discountValue > best.discountValue ? p : best, pct[0]);
+    return eligible[0];
+  }, [promotions]);
+
+  const promoPrice = bestPricePromo ? calcPromoPrice(variant.price, bestPricePromo) : null;
+
   const handleAdd = () => {
     if (outOfStock) return;
     addItem({
@@ -74,7 +109,7 @@ function VariantRow({
       productId: product.id, productName: product.name, productImageUrl: product.imageUrl ?? null,
       productCategory: product.category ?? "", supplierId: listing.supplierId,
       supplierName: listing.supplierName, flavorName: variant.flavorName ?? null,
-      sizeName: variant.sizeName ?? null, unitPrice: variant.price,
+      sizeName: variant.sizeName ?? null, unitPrice: promoPrice ?? variant.price,
     }, qty);
     toast({ title: "Added to cart", description: `${product.name}${variant.flavorName ? ` – ${variant.flavorName}` : ""}${variant.sizeName ? ` (${variant.sizeName})` : ""} × ${qty}` });
   };
@@ -85,9 +120,31 @@ function VariantRow({
   const borderCls   = isDark ? "border-gray-700/40"  : "border-border/40";
   const labelCls    = isDark ? "text-white"           : "";
   const priceCls    = isDark ? "text-blue-400"        : "";
+  const origCls     = isDark ? "text-gray-500"        : "text-muted-foreground";
   const stepBorder  = isDark ? "border-gray-700"      : "border-border";
   const stepHover   = isDark ? "hover:bg-gray-700"    : "hover:bg-secondary";
   const stepText    = isDark ? "text-gray-200"        : "";
+
+  // Promo badge rendered below the variant label
+  const promoBadge = bestPricePromo && (
+    <span className="inline-flex items-center gap-1 bg-rose-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5">
+      <Zap className="w-2.5 h-2.5" />{bestPricePromo.label}
+    </span>
+  );
+
+  // Price display: promotional (large) + original (strikethrough) when promo active
+  const priceDisplay = (shrink = true) => (
+    <div className={`text-right ${shrink ? "shrink-0" : ""}`}>
+      <div className={`font-bold text-base ${priceCls}`}>
+        {fmt(promoPrice ?? variant.price)}
+      </div>
+      {promoPrice != null && (
+        <div className={`text-xs line-through leading-tight ${origCls}`}>
+          {fmt(variant.price)}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className={`py-3 border-b ${borderCls} last:border-0`}>
@@ -96,8 +153,9 @@ function VariantRow({
         <div className="flex-1 min-w-0">
           <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
           {outOfStock && <span className="ml-2 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md">Out of stock</span>}
+          {promoBadge && <div>{promoBadge}</div>}
         </div>
-        <div className={`font-bold text-base shrink-0 ${priceCls}`}>{fmt(variant.price)}</div>
+        {priceDisplay()}
         {!outOfStock && (
           <div className="flex items-center gap-2 shrink-0">
             <div className={`flex items-center border ${stepBorder} rounded-lg overflow-hidden`}>
@@ -119,15 +177,18 @@ function VariantRow({
 
       {/* Mobile: two-line layout */}
       <div className="flex flex-col gap-2 sm:hidden">
-        {/* Line 1: label */}
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
-          {outOfStock && <span className="text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md shrink-0">Out of stock</span>}
+        {/* Line 1: label + promo badge */}
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
+            {outOfStock && <span className="text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md shrink-0">Out of stock</span>}
+          </div>
+          {promoBadge}
         </div>
         {/* Line 2: price + qty + add */}
         {!outOfStock && (
           <div className="flex items-center justify-between gap-2">
-            <div className={`font-bold text-base ${priceCls}`}>{fmt(variant.price)}</div>
+            {priceDisplay(false)}
             <div className="flex items-center gap-2 shrink-0">
               <div className={`flex items-center border ${stepBorder} rounded-lg overflow-hidden`}>
                 <button className={`px-2 py-1.5 ${stepHover} transition-colors ${stepText}`} onClick={() => setQty(q => Math.max(1, q - 1))}><Minus className="w-3 h-3" /></button>
@@ -145,9 +206,7 @@ function VariantRow({
             </div>
           </div>
         )}
-        {outOfStock && (
-          <div className={`font-bold text-base ${priceCls}`}>{fmt(variant.price)}</div>
-        )}
+        {outOfStock && priceDisplay(false)}
       </div>
     </div>
   );
@@ -156,13 +215,14 @@ function VariantRow({
 // ── Supplier Section ──────────────────────────────────────────────────────────
 
 function SupplierSection({
-  listing, product, visibleVariants, reviewStats, distanceKm, isDark = false,
+  listing, product, visibleVariants, reviewStats, distanceKm, promotions = [], isDark = false,
 }: {
   listing: MarketplaceListing;
   product: MarketplaceProduct;
   visibleVariants: MarketplaceVariant[];
   reviewStats?: { avgRating: number; total: number };
   distanceKm?: number;
+  promotions?: ListingPromotion[];
   isDark?: boolean;
 }) {
   const cardBorder = isDark ? "bg-gray-800 border-gray-700/60" : "border-border/50";
@@ -173,6 +233,12 @@ function SupplierSection({
   const nameCls    = isDark ? "text-white font-semibold" : "font-semibold";
   const subCls     = isDark ? "text-gray-400"     : "text-muted-foreground";
 
+  // Supplier-level badges: non-price promotions shown next to the supplier name
+  const supplierBadgePromos = promotions.filter(p => SUPPLIER_BADGE_TYPES.has(p.type));
+
+  // Price-affecting promotions are passed to each VariantRow
+  const pricePromos = promotions.filter(p => VARIANT_PRICE_TYPES.has(p.type));
+
   return (
     <div className={`rounded-2xl border overflow-hidden shadow-sm ${cardBorder}`}>
       <div className={`${headerBg} px-5 py-4 flex items-center gap-3`}>
@@ -182,9 +248,20 @@ function SupplierSection({
             : <Store className={`w-5 h-5 ${logoIcon}`} />
           }
         </div>
-        <div>
-          <p className={nameCls}>{listing.supplierName}</p>
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="min-w-0 flex-1">
+          {/* Supplier name + supplier-level promo badges on the same line */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className={nameCls}>{listing.supplierName}</p>
+            {supplierBadgePromos.map((promo, i) => (
+              <span
+                key={`${promo.promotionId}-${i}`}
+                className="inline-flex items-center gap-1 bg-blue-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full"
+              >
+                <Zap className="w-2.5 h-2.5" />{promo.label}
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap mt-0.5">
             <p className={`text-xs ${subCls}`}>{visibleVariants.length} variant{visibleVariants.length !== 1 ? "s" : ""}</p>
             {distanceKm !== undefined && (
               <span className={`text-xs ${subCls} flex items-center gap-0.5`}>
@@ -207,6 +284,7 @@ function SupplierSection({
             variant={v}
             listing={listing}
             product={product}
+            promotions={pricePromos}
             isDark={isDark}
           />
         ))}
@@ -396,6 +474,27 @@ export function ProductDetailContent({
       return res.json();
     },
     enabled: !!productId && hasCommercial,
+  });
+
+  // ── Promotions for all listings of this product ───────────────────────────
+  const allListingIds = useMemo(
+    () => product?.listings.map(l => l.id) ?? [],
+    [product],
+  );
+  const { data: listingPromotions = [] } = useQuery<ListingPromotion[]>({
+    queryKey: ["/api/marketplace/promotions", allListingIds.slice().sort().join(",")],
+    queryFn: async () => {
+      if (!allListingIds.length) return [];
+      const res = await fetch(
+        `/api/marketplace/promotions?listingIds=${allListingIds.join(",")}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: allListingIds.length > 0 && hasCommercial,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
@@ -839,6 +938,7 @@ export function ProductDetailContent({
               visibleVariants={variants}
               reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
               distanceKm={distanceKm}
+              promotions={listingPromotions.filter(p => p.listingId === listing.id)}
               isDark={isModal && isDark}
             />
           );
@@ -939,6 +1039,7 @@ export function ProductDetailContent({
                         visibleVariants={variants}
                         reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
                         distanceKm={distanceKm}
+                        promotions={listingPromotions.filter(p => p.listingId === listing.id)}
                         isDark={isModal && isDark}
                       />
                     );

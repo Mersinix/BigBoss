@@ -1,0 +1,157 @@
+The Product Cards are now working perfectly.
+
+The remaining work concerns only the **Coffee Owner → Product Details** modal so that promotions are displayed in the correct place and clearly associated with the supplier and/or the affected variant.
+
+**Important:**
+
+* Do **not** redesign the Product Details modal.
+* Do **not** change the existing Product Details workflow.
+* Do **not** modify unrelated logic.
+* Keep the current design system.
+* Only improve how promotion information is displayed.
+* Maintain all realtime synchronization.
+
+---
+
+# Coffee Owner → Product Details Modal
+
+Promotions must be displayed only inside the Product Details modal and always be associated with the correct supplier and the correct product.
+
+There must never be promotion information floating outside the supplier that owns it.
+
+---
+
+# 1. Supplier-Level Promotions
+
+Some promotions apply to the supplier's entire product listing rather than to a specific variant.
+
+Examples include:
+
+* Free Shipping
+* Buy X Get Y
+* Gift Included
+* Cashback
+* General Percentage Discount (when applied to the entire listing)
+* Any promotion that affects every variant of that supplier's listing
+
+For these promotions:
+
+Display them as badges immediately next to the supplier name.
+
+Example:
+
+Supplier Name [Free Shipping] [Gift] [Cashback]
+
+Only show the badges that belong to that supplier.
+
+Do not display badges from another supplier.
+
+---
+
+# 2. Variant-Level Promotions
+
+Some promotions only affect one or more specific variants.
+
+Those promotions must **not** be displayed beside the supplier name.
+
+Instead:
+
+Display the promotion badge directly beneath the affected variant.
+
+Each variant should only display its own promotions.
+
+Variants without promotions should not display any promotion badge.
+
+---
+
+# 3. Promotional Pricing
+
+When a promotion changes the selling price:
+
+Display the promotional price as the primary (large) price.
+
+Below it, display the original price with a strikethrough.
+
+Example:
+
+DT18.00
+
+~~DT25.00~~
+
+This pricing must only appear for the supplier and variant affected by the promotion.
+
+Do not apply promotional pricing to suppliers or variants that do not have that promotion.
+
+---
+
+# 4. Correct Promotion Association
+
+Every promotion must always remain linked to:
+
+* the correct supplier
+* the correct product
+* the correct variant (when applicable)
+
+There must never be promotions appearing under the wrong supplier or the wrong variant.
+
+---
+
+# 5. Multiple Promotions
+
+If multiple promotions apply to the same supplier or variant:
+
+Display all applicable promotion badges together while keeping the existing layout clean and readable.
+
+Do not remove or replace existing badges unless they are no longer valid.
+
+---
+
+# 6. Existing Workflow
+
+Do not modify:
+
+* Product selection
+* Variant selection
+* Flavor selection
+* Size selection
+* Quantity controls
+* Add to Cart
+* Favorite functionality
+* Reviews
+* Product images
+* Supplier ordering
+* Pricing logic
+* Promotion calculation logic
+
+Only improve how promotion information is presented.
+
+---
+
+# 7. Realtime Synchronization
+
+Ensure that the following update immediately without refreshing:
+
+* Promotion creation
+* Promotion modification
+* Promotion deletion
+* Promotion activation/deactivation
+* Promotional pricing
+* Promotion badges
+* Supplier changes
+* Variant changes
+
+The Product Details modal should always reflect the current promotion state in real time.
+
+---
+
+# Verification
+
+Before considering the task complete, verify that:
+
+* ✅ Supplier-level promotions appear as badges next to the correct supplier name.
+* ✅ Variant-level promotions appear only beneath the affected variant.
+* ✅ Promotional pricing displays the discounted price as the main price and the original price below with a strikethrough.
+* ✅ Promotions never appear under the wrong supplier or variant.
+* ✅ Multiple promotions display correctly when applicable.
+* ✅ Realtime synchronization works without refreshing.
+* ✅ No unrelated functionality, workflow, or design was modified.

@@ -1,0 +1,45 @@
+The Dark Mode synchronization is working correctly, but one part of the implementation does **not** match the requested requirements.
+
+You removed the Sun/Moon Dark Mode toggle buttons from several Coffee Owner modals. I did **not** ask for those controls to be removed.
+
+The requirement was to **unify the behavior**, not to remove any existing UI elements.
+
+## Please restore the existing UI exactly as it was.
+
+Restore the Dark Mode toggle buttons (Sun/Moon icons) in every Coffee Owner modal where they originally existed, including but not limited to:
+
+* Pack Details modal
+* Included Products modal
+* Product Details modal
+* Product Location modal
+* Product Reviews modal
+* Order Confirmation modal
+* Order Details modal
+* Any other Coffee Owner modal where the toggle originally existed
+
+## Expected Behavior
+
+The Sun/Moon toggle buttons must remain visible in exactly the same location and with the same design as before.
+
+When the user clicks the toggle from **any** modal:
+
+* the global Coffee Owner theme must change,
+* every page must update,
+* every component must update,
+* every modal must update,
+* every other Dark Mode toggle in the application must immediately reflect the new state.
+
+Likewise, if the theme is changed elsewhere (Navbar, another modal, a page, etc.), the toggle displayed inside each modal must automatically reflect the current global theme.
+
+## Important Constraints
+
+* Do **NOT** remove any existing buttons, icons, or controls.
+* Do **NOT** redesign the modals.
+* Do **NOT** change spacing or layouts.
+* Do **NOT** change colors or styling.
+* Do **NOT** modify unrelated functionality.
+* Do **NOT** introduce local Dark Mode state again.
+
+The only change required is that the existing Sun/Moon toggle buttons should control and display the already implemented global Coffee Owner theme instead of using an independent local state.
+
+Before finishing, verify that all restored toggle buttons remain perfectly synchronized with the single global Dark/Light theme across the entire Coffee Owner application.

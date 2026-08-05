@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Package, Store, Minus, Plus, ShoppingCart, CheckCircle2,
-  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag,
+  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag, Sun, Moon,
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -360,7 +360,7 @@ export function ProductDetailContent({
   const [supplierSort,      setSupplierSort]      = useState<"nearest" | "cheapest" | null>(null);
 
   // ── Modal-only: dark theme + scroll detection ─────────────────────────────
-  const { isDark } = useThemeStore();
+  const { isDark, toggle: toggleTheme } = useThemeStore();
   const [scrolled, setScrolled] = useState(false);
 
   // ── Zoom via ref ──────────────────────────────────────────────────────────
@@ -574,6 +574,13 @@ export function ProductDetailContent({
             </div>
           )}
         </div>
+        <button
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
+        >
+          {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+        </button>
       </div>
       <div className={`h-px ${dividerColor}`} />
     </div>

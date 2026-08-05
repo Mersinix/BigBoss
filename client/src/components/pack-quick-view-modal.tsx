@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Layers, Minus, Plus, Package, Heart, Star, Calendar, AlertCircle, X, Lock,
+  Layers, Minus, Plus, Package, Heart, Star, Calendar, AlertCircle, X, Lock, Sun, Moon,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
@@ -430,7 +430,7 @@ function FlavorDistributionRow({ item, allocations, onChange, isDark }: {
 // ── Product Preview Modal (read-only, opened from inside a Pack) ─────────────
 
 function ProductPreviewModal({ productId, onClose }: { productId: number | null; onClose: () => void }) {
-  const { isDark } = useThemeStore();
+  const { isDark, toggle } = useThemeStore();
 
   const { data: product, isLoading } = useQuery<ProductWithTaxonomy>({
     queryKey: ["/api/marketplace", productId],
@@ -475,6 +475,13 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
 
               <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>Product Preview</span>
 
+              <button
+                onClick={toggle}
+                aria-label="Toggle theme"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+              </button>
             </div>
             <div className={`h-px w-full ${divider}`} />
           </div>
@@ -554,7 +561,7 @@ export function PackQuickViewModal() {
   const [previewProductId, setPreviewProductId] = useState<number | null>(null);
 
   // ── Global theme ──────────────────────────────────────────────────────────
-  const { isDark } = useThemeStore();
+  const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
   const fmt = useFormatCurrency();
 
@@ -726,6 +733,18 @@ export function PackQuickViewModal() {
                 </div>
               )}
             </div>
+
+            {/* Sun/Moon toggle */}
+            <button
+              onClick={toggle}
+              aria-label="Toggle theme"
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${t.iconBtn}`}
+            >
+              {isDark
+                ? <Sun className="w-4 h-4 text-amber-400" />
+                : <Moon className="w-4 h-4 text-gray-500" />
+              }
+            </button>
 
             {/* Close button */}
             <button

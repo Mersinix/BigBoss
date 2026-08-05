@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Store, Layers, MapPin, Clock, AlertTriangle,
   Minus, Plus, Trash2, Zap, ArrowRight, Calendar, CheckCircle,
-  X,
+  Sun, Moon, X,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useThemeStore } from "@/store/theme-store";
@@ -89,7 +89,7 @@ export default function OrderConfirmationModal({
   open, onClose, items, packItems, deliveryAddress, courierInstructions,
   promoEval, isSubmitting, onConfirm,
 }: Props) {
-  const { isDark } = useThemeStore();
+  const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
   const fmt = useFormatCurrency();
 
@@ -194,8 +194,17 @@ export default function OrderConfirmationModal({
                 </span>
               </div>
 
-              {/* Spacer to keep title centered */}
-              <div className="w-8" />
+              {/* Theme toggle */}
+              <button
+                onClick={toggle}
+                aria-label="Changer le thème"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}
+              >
+                {t.dk
+                  ? <Sun className="w-4 h-4 text-amber-400" />
+                  : <Moon className="w-4 h-4 text-gray-500" />
+                }
+              </button>
             </div>
             <p className={`text-sm text-center ${t.textMuted}`}>
               Vérifiez votre commande avant de confirmer.

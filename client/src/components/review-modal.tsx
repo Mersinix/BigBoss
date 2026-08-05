@@ -5,7 +5,7 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, Loader2, CheckCircle, Package, Store, AlertCircle, X, Pencil } from "lucide-react";
+import { Star, Loader2, CheckCircle, Package, Store, AlertCircle, X, Sun, Moon, Pencil } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -68,7 +68,7 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
   const [comment, setComment] = useState("");
   const [supplierId, setSupplierId] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
-  const { isDark } = useThemeStore();
+  const { isDark, toggle } = useThemeStore();
 
   // ── Theme tokens ─────────────────────────────────────────────────────────────
   const dk = isDark;
@@ -245,8 +245,14 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                 <span className={`text-[11px] font-medium ${textMuted}`}>{product.name}</span>
               </div>
 
-              {/* Spacer to keep title centered */}
-              <div className="w-8" />
+              {/* Dark / light toggle */}
+              <button
+                onClick={toggle}
+                aria-label="Toggle theme"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+              </button>
             </div>
 
             {/* Tab switcher — pill style */}

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
-  X, ChevronRight, User,
+  Sun, Moon, X, ChevronRight, User,
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { formatDate } from "@/lib/format";
@@ -158,7 +158,7 @@ export default function OrderDetailsModal({
   showReorder = true,
   showCancel = false,
 }: Props) {
-  const { isDark } = useThemeStore();
+  const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
 
   const { addItem, addPackItem } = useCart();
@@ -305,8 +305,16 @@ export default function OrderDetailsModal({
                 Commande #{String(order.id).padStart(6, "0")}
               </span>
 
-              {/* Spacer to keep title centered */}
-              <div className="w-8" />
+              <button
+                onClick={toggle}
+                aria-label="Changer le thème"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}
+              >
+                {t.dk
+                  ? <Sun className="w-4 h-4 text-amber-400" />
+                  : <Moon className="w-4 h-4 text-gray-500" />
+                }
+              </button>
             </div>
 
             {/* Status + meta row */}

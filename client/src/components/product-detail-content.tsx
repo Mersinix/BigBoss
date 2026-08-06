@@ -479,10 +479,24 @@ export function ProductDetailContent({
     enabled: !!productId && hasCommercial,
   });
 
+  // ── Store-scoped listings ─────────────────────────────────────────────────
+  // When supplierId is set (Store context), every listing-dependent computation
+  // must be restricted to that single supplier's listing only. The backend
+  // already filters via ?supplierId=X, but this client-side guard prevents any
+  // stale-cache or race-condition scenario from leaking other suppliers' data.
+  const storeListings = useMemo(
+    () => supplierId != null
+      ? (product?.listings ?? []).filter(l => l.supplierId === supplierId)
+      : (product?.listings ?? []),
+    [product, supplierId],
+  );
+
   // ── Promotions for all listings of this product ───────────────────────────
   const allListingIds = useMemo(
-    () => product?.listings.map(l => l.id) ?? [],
-    [product],
+    // Use storeListings so that in a Store context the promotions fetch is
+    // scoped to the store supplier's listing only.
+    () => storeListings.map(l => l.id),
+    [storeListings],
   );
   const { data: listingPromotions = [] } = useQuery<ListingPromotion[]>({
     queryKey: ["/api/marketplace/promotions", allListingIds.slice().sort().join(",")],
@@ -503,14 +517,20 @@ export function ProductDetailContent({
   // ── Best promotional price for the header (store context only) ───────────────
   const headerBestPromoPrice = useMemo(() => {
     if (supplierId == null || !product) return null;
-    const eligible = listingPromotions.filter(p => VARIANT_PRICE_TYPES.has(p.type));
+    // Scope promotions to the store supplier's listings only
+    const storeListingIdSet = new Set(storeListings.map(l => l.id));
+    const eligible = listingPromotions.filter(
+      p => storeListingIdSet.has(p.listingId) && VARIANT_PRICE_TYPES.has(p.type),
+    );
     if (!eligible.length) return null;
     const pct = eligible.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
     const best = pct.length
       ? pct.reduce((b, p) => p.discountValue > b.discountValue ? p : b, pct[0])
       : eligible.reduce((b, p) => p.discountValue > b.discountValue ? p : b, eligible[0]);
-    return calcPromoPrice(product.bestPrice, best);
-  }, [supplierId, product, listingPromotions]);
+    const promoPrice = calcPromoPrice(product.bestPrice, best);
+    // Only return the promo price when it is strictly less than the base price
+    return promoPrice != null && promoPrice < product.bestPrice ? promoPrice : null;
+  }, [supplierId, product, listingPromotions, storeListings]);
 
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
 
@@ -524,10 +544,9 @@ export function ProductDetailContent({
 
   // ── Flavors / Sizes ───────────────────────────────────────────────────────
   const { allFlavors, allSizes } = useMemo(() => {
-    if (!product) return { allFlavors: [], allSizes: [] };
     const fMap = new Map<number, string>();
     const sMap = new Map<number, string>();
-    for (const l of product.listings) {
+    for (const l of storeListings) {
       for (const v of l.variants) {
         if (v.flavorId && v.flavorName) fMap.set(v.flavorId, v.flavorName);
         if (v.sizeId   && v.sizeName)   sMap.set(v.sizeId,   v.sizeName);
@@ -537,47 +556,47 @@ export function ProductDetailContent({
       allFlavors: Array.from(fMap.entries()).map(([id, name]) => ({ id, name })),
       allSizes:   Array.from(sMap.entries()).map(([id, name]) => ({ id, name })),
     };
-  }, [product]);
+  }, [storeListings]);
 
   const availableFlavors = useMemo(() => {
-    if (!product || selectedSizeId === null) return allFlavors;
+    if (selectedSizeId === null) return allFlavors;
     const validIds = new Set<number>();
-    for (const l of product.listings)
+    for (const l of storeListings)
       for (const v of l.variants)
         if (v.sizeId === selectedSizeId && v.flavorId) validIds.add(v.flavorId);
     return allFlavors.filter(f => validIds.has(f.id));
-  }, [product, allFlavors, selectedSizeId]);
+  }, [storeListings, allFlavors, selectedSizeId]);
 
   const availableSizes = useMemo(() => {
-    if (!product || selectedFlavorId === null) return allSizes;
+    if (selectedFlavorId === null) return allSizes;
     const validIds = new Set<number>();
-    for (const l of product.listings)
+    for (const l of storeListings)
       for (const v of l.variants)
         if (v.flavorId === selectedFlavorId && v.sizeId) validIds.add(v.sizeId);
     return allSizes.filter(s => validIds.has(s.id));
-  }, [product, allSizes, selectedFlavorId]);
+  }, [storeListings, allSizes, selectedFlavorId]);
 
   const handleFlavorSelect = useCallback((id: number | null) => {
     setSelectedFlavorId(id);
     if (id !== null && selectedSizeId !== null) {
       const valid = new Set<number>();
-      for (const l of (product?.listings ?? []))
+      for (const l of storeListings)
         for (const v of l.variants)
           if (v.flavorId === id && v.sizeId) valid.add(v.sizeId);
       if (!valid.has(selectedSizeId)) setSelectedSizeId(null);
     }
-  }, [selectedSizeId, product]);
+  }, [selectedSizeId, storeListings]);
 
   const handleSizeSelect = useCallback((id: number | null) => {
     setSelectedSizeId(id);
     if (id !== null && selectedFlavorId !== null) {
       const valid = new Set<number>();
-      for (const l of (product?.listings ?? []))
+      for (const l of storeListings)
         for (const v of l.variants)
           if (v.sizeId === id && v.flavorId) valid.add(v.flavorId);
       if (!valid.has(selectedFlavorId)) setSelectedFlavorId(null);
     }
-  }, [selectedFlavorId, product]);
+  }, [selectedFlavorId, storeListings]);
 
   const refLocation = useMemo(() => {
     if (locationFilter) return { lat: locationFilter.lat, lng: locationFilter.lng };
@@ -587,8 +606,8 @@ export function ProductDetailContent({
   }, [locationFilter, user?.locationLat, user?.locationLng]);
 
   const filteredListings = useMemo(() => {
-    if (!product) return [];
-    return product.listings
+    if (!storeListings.length) return [];
+    return storeListings
       .map((listing) => {
         const variants = listing.variants.filter((v) => {
           if (selectedFlavorId !== null && v.flavorId !== selectedFlavorId) return false;
@@ -624,7 +643,7 @@ export function ProductDetailContent({
         }
         return 0;
       });
-  }, [product, selectedFlavorId, selectedSizeId, locationFilter, supplierSort, refLocation]);
+  }, [storeListings, selectedFlavorId, selectedSizeId, locationFilter, supplierSort, refLocation]);
 
   const handleLocationConfirm = (loc: PickedLocation) => {
     setLocationFilter({
@@ -936,7 +955,7 @@ export function ProductDetailContent({
           <Tag className="w-3 h-3" /> Cheapest
         </button>}
         {/* Write review */}
-        {isCafeOwner && product.listings.length > 0 && (
+        {isCafeOwner && storeListings.length > 0 && (
           <Button variant="outline" size="sm" className={`gap-1.5 text-xs ${tbOutline}`} onClick={() => setReviewModalOpen(true)}>
             <MessageSquarePlus className="w-3.5 h-3.5" /> Write a Review
           </Button>
@@ -955,7 +974,7 @@ export function ProductDetailContent({
             ? `rounded-2xl border p-12 text-center ${dk ? "border-gray-700/60 text-gray-400" : "border-gray-100 text-gray-500"}`
             : "rounded-2xl border border-border/50 p-12 text-center text-muted-foreground"
         }>
-          {product.listings.length === 0
+          {storeListings.length === 0
             ? "No supplier listings available for this product."
             : "No suppliers match the current filters. Try adjusting your flavor, size, or location filters."}
         </div>
@@ -998,7 +1017,7 @@ export function ProductDetailContent({
         open={reviewModalOpen}
         onClose={() => setReviewModalOpen(false)}
         product={product}
-        listings={filteredListings.length > 0 ? filteredListings.map(fl => fl.listing) : product.listings}
+        listings={filteredListings.length > 0 ? filteredListings.map(fl => fl.listing) : storeListings}
       />
     </>
   );
@@ -1056,7 +1075,7 @@ export function ProductDetailContent({
               <div className="space-y-3">
                 {filteredListings.length === 0 ? (
                   <div className={`rounded-2xl border p-12 text-center ${dk ? "border-gray-700/60 text-gray-400" : "border-gray-100 text-gray-500"}`}>
-                    {product.listings.length === 0
+                    {storeListings.length === 0
                       ? "No supplier listings available for this product."
                       : "No suppliers match the current filters. Try adjusting your flavor, size, or location filters."}
                   </div>

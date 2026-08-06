@@ -501,7 +501,7 @@ function StoreProductCard({
           <span className={`font-bold text-sm ${t.textPrice}`}>
             {discounted != null ? fmt(discounted) : product.bestPrice != null ? fmt(product.bestPrice) : "—"}
           </span>
-          {discounted != null && (
+          {discounted != null && discounted < product.bestPrice! && (
             <span className={`text-xs line-through whitespace-nowrap ${t.textMuted}`}>
               {fmt(product.bestPrice!)}
             </span>

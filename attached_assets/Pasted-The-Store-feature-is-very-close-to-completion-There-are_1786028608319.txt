@@ -1,0 +1,121 @@
+The Store feature is very close to completion. There are only two remaining Store-specific issues to fix.
+
+**Important:**
+
+* Continue from the current implementation.
+* Do **not** restart or redesign this feature.
+* Do **not** modify the Shop marketplace behavior.
+* Do **not** change any unrelated functionality.
+* Keep all realtime synchronization working.
+
+---
+
+# 1. Fix Product Pricing Inside a Store
+
+When browsing products inside a Store, the pricing must always come from **the supplier who owns that Store**.
+
+### Product Card
+
+Currently, a product with an active promotion displays an incorrect price.
+
+Instead, the Product Card should display:
+
+* The promotional (discounted) price as the main price.
+* The original price with a strikethrough.
+* The distance at the end of the same row.
+
+Example:
+
+**18.00 DT** ~~20.00 DT~~ ........ **11.3 km**
+
+Use the existing global currency formatting (currency symbol on the right).
+
+---
+
+# 2. Fix Product Details Modal Inside a Store
+
+The Product Details modal is still using marketplace data instead of Store-scoped data.
+
+This must be corrected.
+
+When a Coffee Owner opens a product **from inside a Store**, every piece of information in the modal must come **only from the supplier who owns that Store**.
+
+That includes:
+
+* Product price
+* Promotional price
+* Original price
+* Variants
+* Flavors
+* Sizes
+* Stock
+* Promotions
+* Distance
+* Reviews
+* Supplier information
+
+The header price must be calculated using that supplier's product only.
+
+Do **not** calculate it from another supplier or from marketplace data.
+
+---
+
+# 3. Remove Marketplace Supplier Comparison
+
+The following marketplace behavior must not appear inside a Store Product Details modal.
+
+Remove the multi-supplier comparison completely.
+
+For example, instead of showing:
+
+* Café Bondin
+* Café Ellouze
+
+the modal should display only the supplier that owns the Store currently being viewed.
+
+There must be:
+
+* one supplier
+* one supplier section
+* one supplier's variants
+* one supplier's prices
+* one supplier's promotions
+* one supplier's stock
+
+No marketplace comparison should remain inside a Store.
+
+The marketplace supplier comparison must continue working exactly as it does today **only in the Shop Product Details modal**.
+
+---
+
+# 4. Keep Marketplace Behavior Unchanged
+
+Do **not** modify the Product Details modal opened from the Shop marketplace.
+
+Only the Store Product Details modal should become supplier-scoped.
+
+The Shop must continue to:
+
+* compare suppliers
+* display multiple suppliers
+* sort suppliers
+* filter suppliers
+* compare prices
+
+exactly as it works today.
+
+---
+
+# Final Verification
+
+Before considering the task complete, verify that:
+
+* ✅ Store Product Cards display the correct promotional price and original price.
+* ✅ Prices come only from the supplier that owns the selected Store.
+* ✅ The Product Details modal header displays the correct Store supplier price.
+* ✅ The Product Details modal displays only one supplier (the Store owner).
+* ✅ No other suppliers appear inside the Store Product Details modal.
+* ✅ Variants, stock, promotions, reviews, and distance all belong to the Store owner only.
+* ✅ The Shop Product Details modal continues to display multiple suppliers exactly as before.
+* ✅ Realtime synchronization continues to work correctly.
+* ✅ No unrelated functionality or design was modified.

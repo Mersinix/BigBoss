@@ -276,6 +276,15 @@ function ProductCard({
         >
           <Plus className="w-3.5 h-3.5 text-white/80" />
         </button>
+
+        {/* Rating — bottom-left image overlay */}
+        {hasCommercialAccess && hasReviews && (
+          <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/40 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-sm">
+            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+            <span className="text-[10px] font-medium text-white">{product.avgRating.toFixed(1)}</span>
+            <span className="text-[10px] text-white/80">({product.reviewCount})</span>
+          </span>
+        )}
       </div>
 
       {/* Body */}
@@ -294,38 +303,28 @@ function ProductCard({
           )}
         </div>
 
-        {/* Bottom row: Category • Brand (left) + Rating (right) */}
-        <div className={`mt-auto pt-1.5 border-t flex items-center justify-between gap-2 ${t.priceBorder}`}>
+        {/* Bottom row: full-width Category • Brand badge */}
+        <div className={`mt-auto pt-1.5 border-t flex items-center gap-2 ${t.priceBorder}`}>
           {/* Category • Brand */}
-           {categoryName ? (
-    <Badge
-      className={`text-[10px] px-1.5 py-0 border shrink-0 max-w-[70%] ${
-        t.dk
-          ? "bg-gray-700 text-rose-500 border-gray-600"
-          : "bg-gray-100 text-gray-600 border-gray-200"
-      }`}
-    >
-      <span className="truncate">
-       
-        {categoryName && (
-          <span className={`mr-0.5 ${t.textPrimary}`}>
-             {categoryName} • 
-          </span>
-        )}
-        {brandName}
-      </span>
-    </Badge>
-  ) : (
-    <span />
-  )}
-
-          {/* Rating */}
-          {hasCommercialAccess && hasReviews && (
-            <span className="flex items-center gap-1 shrink-0">
-              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-              <span className={`text-[10px] font-medium ${t.textPrimary}`}>{product.avgRating.toFixed(1)}</span>
-              <span className={`text-[10px] ${t.textMuted}`}>({product.reviewCount})</span>
-            </span>
+          {categoryName ? (
+            <Badge
+              className={`w-full min-w-0 text-[10px] px-1.5 py-0 border ${
+                t.dk
+                  ? "bg-gray-700 text-rose-500 border-gray-600"
+                  : "bg-gray-100 text-gray-600 border-gray-200"
+              }`}
+            >
+              <span className="block min-w-0 truncate">
+                {categoryName && (
+                  <span className={`mr-0.5 ${t.textPrimary}`}>
+                    {categoryName} •
+                  </span>
+                )}
+                {brandName}
+              </span>
+            </Badge>
+          ) : (
+            <span />
           )}
         </div>
       </div>

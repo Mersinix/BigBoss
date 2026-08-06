@@ -1,0 +1,80 @@
+The Shop module is working well. We only need one small visual adjustment to the **Coffee Owner → Shop → Product Cards**.
+
+**Important:**
+
+* Do **not** redesign the Product Cards.
+* Do **not** modify any business logic.
+* Do **not** change the existing workflow.
+* Keep all current functionality exactly as it is.
+* Do **not** remove or alter any feature that was not explicitly requested.
+* Maintain all realtime synchronization.
+
+---
+
+# Coffee Owner → Shop → Product Cards
+
+Make only the following visual changes.
+
+## 1. Move the Rating
+
+Currently, the product rating is displayed at the **bottom-right** of the Product Card.
+
+Move the rating to the **bottom-left corner of the product image**.
+
+The rating should be overlaid on the image in the same way as other image overlays, while remaining clearly readable.
+
+---
+
+## 2. Expand the Category • Brand Badge
+
+Currently, the **Category • Brand** badge is displayed on the bottom row alongside the rating.
+
+Since the rating will now be moved onto the product image, the **Category • Brand** badge should take the full width of its row.
+
+If the combined Category • Brand text is too long to fit on one line, truncate it with an ellipsis (`...`).
+
+Keep it on a single line and preserve the existing badge style, colors, and hover behavior.
+
+---
+
+# Keep Everything Else Exactly the Same
+
+Do **not** change:
+
+* Product image
+* Favorite icon
+* "On Sale" badge
+* Product Name
+* Supplier information
+* Distance
+* Card dimensions
+* Hover effects
+* Scrolling behavior
+* Card spacing
+* Product opening behavior
+* Product Details modal
+* Filters
+* Search
+* Promotions
+* Favorites
+* Realtime updates
+
+The only required changes are:
+
+* Move the rating to the bottom-left corner of the product image.
+* Allow the Category • Brand badge to use the full width of its row with ellipsis when necessary.
+
+---
+
+# Verification
+
+Before considering the task complete, verify that:
+
+* ✅ The rating is displayed in the bottom-left corner of the product image.
+* ✅ The rating is no longer displayed at the bottom-right of the card.
+* ✅ The Category • Brand badge now occupies the full width of its row.
+* ✅ Long Category • Brand values are truncated with an ellipsis on a single line.
+* ✅ All other Product Card elements remain in their current positions.
+* ✅ The existing design and spacing remain unchanged.
+* ✅ Favorites, promotions, and realtime synchronization continue to work correctly.
+* ✅ No unrelated functionality or design was modified.

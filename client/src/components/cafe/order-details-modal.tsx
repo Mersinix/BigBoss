@@ -556,7 +556,7 @@ export default function OrderDetailsModal({
                   data-testid="button-cancel-order"
                 >
                   <XCircle className="w-4 h-4" />
-                  {cancelling ? "Annulation…" : "Annuler la commande"}
+                  {cancelling ? "Annulation…" : "Annuler"}
                 </Button>
               )}
 

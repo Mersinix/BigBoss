@@ -297,18 +297,27 @@ function ProductCard({
         {/* Bottom row: Category • Brand (left) + Rating (right) */}
         <div className={`mt-auto pt-1.5 border-t flex items-center justify-between gap-2 ${t.priceBorder}`}>
           {/* Category • Brand */}
-          {categoryName ? (
-            <span className={`text-[10px] font-semibold uppercase tracking-wide truncate ${t.textMuted}`}>
-              {categoryName}
-              {brandName && (
-                <span className={`transition-colors group-hover:${t.dk ? "text-blue-400" : "text-blue-600"}`}>
-                  {" • "}{brandName}
-                </span>
-              )}
-            </span>
-          ) : (
-            <span />
-          )}
+           {categoryName ? (
+    <Badge
+      className={`text-[10px] px-1.5 py-0 border shrink-0 max-w-[70%] ${
+        t.dk
+          ? "bg-gray-700 text-rose-500 border-gray-600"
+          : "bg-gray-100 text-gray-600 border-gray-200"
+      }`}
+    >
+      <span className="truncate">
+       
+        {categoryName && (
+          <span className={`mr-0.5 ${t.textPrimary}`}>
+             {categoryName} • 
+          </span>
+        )}
+        {brandName}
+      </span>
+    </Badge>
+  ) : (
+    <span />
+  )}
 
           {/* Rating */}
           {hasCommercialAccess && hasReviews && (

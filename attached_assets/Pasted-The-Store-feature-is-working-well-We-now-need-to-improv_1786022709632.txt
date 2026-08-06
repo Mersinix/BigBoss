@@ -1,0 +1,186 @@
+The Store feature is working well. We now need to improve the **Coffee Owner → Store** page so that it represents a single supplier's store instead of the global marketplace.
+
+**Important:**
+
+* Do **not** redesign the Store page.
+* Do **not** modify unrelated business logic.
+* Do **not** change the Shop page behavior.
+* Keep all existing functionality unless explicitly mentioned below.
+* Maintain all realtime synchronization.
+* Do not remove any feature that was not requested.
+
+---
+
+# Coffee Owner → Store Page
+
+A Store belongs to a single supplier.
+
+Once the Coffee Owner enters a Store, everything displayed on that page must represent **only that supplier**.
+
+The supplier comparison logic must remain available only in the Shop marketplace, not inside an individual Store.
+
+---
+
+# 1. Display Only This Store's Products
+
+Currently, the Store page displays products as if they were marketplace products, showing multiple suppliers for the same product.
+
+This should be changed.
+
+Inside a Store:
+
+* Display only the products that belong to the supplier who owns that Store.
+* Do not compare products with other suppliers.
+* Do not merge listings from different suppliers.
+* Do not show marketplace-style product aggregation.
+
+The Shop page should continue to work exactly as it does today.
+
+Only the Store page should change.
+
+---
+
+# 2. Product Card Layout Inside the Store
+
+Update the mapped Product Cards inside the Store to use the following organization.
+
+## Product Image
+
+On the product image display:
+
+* Favorite icon
+* "On Sale" badge (when applicable)
+* Rating
+* "+" (Quick Add) button
+
+Use the same placement, styling, and behavior already used by the Product Cards in the Shop page.
+
+Do not invent a new design.
+
+---
+
+## Under the Image
+
+Keep the Product Name exactly as it is.
+
+---
+
+## Category • Brand
+
+Below the Product Name:
+
+Display the **Category • Brand** badge.
+
+Use the exact same design, colors, hover behavior, truncation, and layout already used by the Product Cards in the Shop page.
+
+---
+
+## Bottom Row
+
+Display:
+
+**Left side**
+
+* Current price
+* Old price with strikethrough (when applicable)
+
+**Right side**
+
+* Distance
+
+Keep the current pricing logic.
+
+Do not change promotion calculations.
+
+---
+
+# 3. Product Details Modal Inside a Store
+
+When the Coffee Owner opens a product from inside a Store:
+
+Display only the supplier who owns that Store.
+
+Do not display:
+
+* other suppliers
+* supplier comparison
+* supplier list
+* supplier sorting
+* "Available from Suppliers"
+* marketplace supplier selection
+
+The Product Details modal should represent only that Store's supplier.
+
+---
+
+# 4. Keep Marketplace Behavior
+
+The following behavior must remain unchanged outside the Store:
+
+Coffee Owner → Shop
+
+There, products should continue to:
+
+* aggregate multiple suppliers
+* compare suppliers
+* display supplier selection
+* display marketplace pricing
+
+Do not modify this behavior.
+
+---
+
+# 5. Existing Functionality
+
+Do not modify:
+
+* Favorites
+* Flash
+* Promotions
+* Product Details workflow
+* Variant selection
+* Flavor selection
+* Size selection
+* Add to Cart
+* Reviews
+* Store header
+* Categories
+* Filters
+* Search
+* Navigation
+* Distance calculation
+* Realtime synchronization
+
+Only adjust the Store page so it behaves as a single-supplier storefront.
+
+---
+
+# Realtime Synchronization
+
+Ensure that the following continue to update immediately without refreshing:
+
+* Product updates
+* Stock updates
+* Price updates
+* Promotion updates
+* Favorite status
+* Rating updates
+* Product visibility
+* Store changes
+
+---
+
+# Verification
+
+Before considering the task complete, verify that:
+
+* ✅ A Store displays only the products belonging to the supplier who owns that Store.
+* ✅ Product Cards use the same visual organization as the Shop Product Cards.
+* ✅ The product image contains the Favorite icon, "On Sale" badge, Rating, and "+" button using the existing Shop design.
+* ✅ The Product Name remains unchanged.
+* ✅ The Category • Brand badge matches the Shop Product Card design.
+* ✅ The bottom row displays the current price (and old price when applicable) on the left and the distance on the right.
+* ✅ Opening a product from inside a Store displays only that Store's supplier.
+* ✅ The Shop marketplace continues to compare multiple suppliers exactly as before.
+* ✅ All realtime synchronization continues to work correctly.
+* ✅ No unrelated functionality or design was modified.

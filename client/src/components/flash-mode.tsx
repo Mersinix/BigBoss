@@ -29,6 +29,7 @@ export interface FlashModeProps {
   products: FlashProduct[];
   packs?: PackDetail[];
   storeName: string;
+  supplierId?: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,6 +99,7 @@ export function FlashMode({
   products,
   packs = [],
   storeName,
+  supplierId,
 }: FlashModeProps) {
   // ── Navigation state ────────────────────────────────────────────────────────
   const [itemIdx, setItemIdx] = useState(0);
@@ -271,11 +273,11 @@ export function FlashMode({
   const handleOpenDetails = useCallback(() => {
     if (!current) return;
     if (current.kind === "product") {
-      openQuickView((current.data as FlashProduct).id);
+      openQuickView((current.data as FlashProduct).id, supplierId);
     } else if (current.kind === "pack") {
       openPackQuickView(current.data.id);
     }
-  }, [current, openQuickView, openPackQuickView]);
+  }, [current, openQuickView, openPackQuickView, supplierId]);
 
   // ── Filter panel helpers ──────────────────────────────────────────────────────
   const openFilter = useCallback(() => {

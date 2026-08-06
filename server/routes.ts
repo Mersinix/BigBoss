@@ -2276,7 +2276,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/marketplace/:productId", async (req, res) => {
     try {
-      const product = await storage.getMarketplaceProduct(parseInt(req.params.productId));
+      const supplierId = req.query.supplierId ? parseInt(req.query.supplierId as string) : undefined;
+      const product = await storage.getMarketplaceProduct(parseInt(req.params.productId), supplierId);
       if (!product) return res.status(404).json({ message: "Not found" });
       const commercial = await hasCommercialAccess(req);
       res.json(commercial ? product : stripCommercialData(product));
@@ -2918,6 +2919,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         startDate: body.startDate ? new Date(body.startDate) : null,
         endDate: body.endDate ? new Date(body.endDate) : null,
       });
+      broadcast('promotion_updated', { supplierId: req.supplier.id });
       res.status(201).json(promo);
     } catch (err: any) {
       res.status(400).json({ message: err?.message ?? 'Error creating promotion' });
@@ -2935,6 +2937,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'No target fields provided' });
       const updated = await storage.updatePromotion(parseInt(req.params.id), req.supplier.id, updates);
       if (!updated) return res.status(404).json({ message: 'Not found' });
+      broadcast('promotion_updated', { supplierId: req.supplier.id, promotionId: updated.id });
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ message: err?.message ?? 'Error updating targets' });
@@ -2953,6 +2956,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         endDate: safeBody.endDate ? new Date(safeBody.endDate) : null,
       });
       if (!updated) return res.status(404).json({ message: 'Not found' });
+      broadcast('promotion_updated', { supplierId: req.supplier.id, promotionId: updated.id });
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ message: err?.message ?? 'Error updating promotion' });
@@ -2968,6 +2972,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const updated = await storage.updatePromotion(parseInt(req.params.id), req.supplier.id, { status });
       if (!updated) return res.status(404).json({ message: 'Not found' });
+      broadcast('promotion_updated', { supplierId: req.supplier.id, promotionId: updated.id });
       res.json(updated);
     } catch { res.status(500).json({ message: 'Error' }); }
   });
@@ -2977,6 +2982,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const dup = await storage.duplicatePromotion(parseInt(req.params.id), req.supplier.id);
       if (!dup) return res.status(404).json({ message: 'Not found' });
+      broadcast('promotion_updated', { supplierId: req.supplier.id, promotionId: dup.id });
       res.status(201).json(dup);
     } catch { res.status(500).json({ message: 'Error' }); }
   });
@@ -2985,6 +2991,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete('/api/promotions/:id', requireSupplier, async (req: any, res) => {
     try {
       await storage.deletePromotion(parseInt(req.params.id), req.supplier.id);
+      broadcast('promotion_updated', { supplierId: req.supplier.id, promotionId: parseInt(req.params.id) });
       res.json({ ok: true });
     } catch { res.status(500).json({ message: 'Error' }); }
   });

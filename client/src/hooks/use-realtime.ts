@@ -17,12 +17,15 @@ const CURRENCY_EVENTS = ["currency_updated"];
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
 const PACK_EVENTS = ["pack_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
+const PROMOTION_EVENTS = ["promotion_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "order_deleted"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated"];
 
 function invalidateInventoryQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
   qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
+  invalidateMarketplace(qc);
+  invalidateStoreQueries(qc);
 }
 
 function invalidateStoreQueries(qc: QueryClient) {
@@ -107,6 +110,10 @@ export function useRealtime(userId?: number) {
           if (INVENTORY_EVENTS.includes(event)) {
             invalidateInventoryQueries(qc);
             invalidatePackQueries(qc);
+          }
+          if (PROMOTION_EVENTS.includes(event)) {
+            invalidateMarketplace(qc);
+            qc.invalidateQueries({ queryKey: ["/api/stores"] });
           }
           if (event === 'suborder_rejected') {
             // Restore rejected items directly into the cafe owner's cart

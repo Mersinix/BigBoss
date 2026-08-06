@@ -5,6 +5,7 @@ import { useQuickView } from "@/hooks/use-quick-view";
 
 export function ProductQuickViewModal() {
   const productId = useQuickView((s) => s.productId);
+  const supplierId = useQuickView((s) => s.supplierId);
   const close = useQuickView((s) => s.close);
 
   return (
@@ -20,6 +21,7 @@ export function ProductQuickViewModal() {
         {productId != null && (
           <ProductDetailContent
             productId={String(productId)}
+            supplierId={supplierId ?? undefined}
             onBack={close}
             backLabel="Close"
             isModal

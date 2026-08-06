@@ -411,11 +411,13 @@ function FilterBadges<T extends { id: number; name: string }>({
 
 export function ProductDetailContent({
   productId,
+  supplierId,
   onBack,
   backLabel = "Back to Browse",
   isModal = false,
 }: {
   productId: string;
+  supplierId?: number;
   onBack: () => void;
   backLabel?: string;
   isModal?: boolean;
@@ -452,9 +454,10 @@ export function ProductDetailContent({
 
   // ── Product data ──────────────────────────────────────────────────────────
   const { data: product, isLoading, error } = useQuery<MarketplaceProduct>({
-    queryKey: ["/api/marketplace", productId],
+    queryKey: ["/api/marketplace", productId, supplierId ?? null],
     queryFn: async () => {
-      const res = await fetch(`/api/marketplace/${productId}`);
+      const supplierQuery = supplierId != null ? `?supplierId=${supplierId}` : "";
+      const res = await fetch(`/api/marketplace/${productId}${supplierQuery}`);
       if (!res.ok) throw new Error("Not found");
       return res.json();
     },
@@ -821,16 +824,20 @@ export function ProductDetailContent({
               {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
             </p>
           </div>
-          <div className={`h-8 border-l ${isModal ? (dk ? "border-gray-700" : "border-gray-200") : "border-border"}`} />
-          <div>
-            <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Suppliers</p>
-            <p className={`font-bold text-lg ${isModal ? textPrimary : ""}`}>
-              {filteredListings.length}
-              <span className={`text-xs font-normal ml-1 ${isModal ? textMuted : "text-muted-foreground"}`}>
-                /{product.supplierCount} visible
-              </span>
-            </p>
-          </div>
+          {supplierId == null && (
+            <>
+              <div className={`h-8 border-l ${isModal ? (dk ? "border-gray-700" : "border-gray-200") : "border-border"}`} />
+              <div>
+                <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Suppliers</p>
+                <p className={`font-bold text-lg ${isModal ? textPrimary : ""}`}>
+                  {filteredListings.length}
+                  <span className={`text-xs font-normal ml-1 ${isModal ? textMuted : "text-muted-foreground"}`}>
+                    /{product.supplierCount} visible
+                  </span>
+                </p>
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div className="flex items-center gap-2 pt-2 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
@@ -865,11 +872,11 @@ export function ProductDetailContent({
   const supplierToolbar = (
     <div className="flex items-center justify-between flex-wrap gap-2">
       <h2 className={isModal ? `font-semibold text-base ${textPrimary}` : "font-semibold text-lg"}>
-        Available from Suppliers
+        {supplierId != null ? "From this store" : "Available from Suppliers"}
       </h2>
       <div className="flex items-center gap-2 flex-wrap">
         {/* Location filter */}
-        {locationFilter ? (
+        {supplierId == null && locationFilter ? (
           <div className={`flex items-center gap-1.5 border rounded-xl px-3 py-1.5 text-xs font-medium ${locPillCls}`}>
             <MapPin className="w-3.5 h-3.5 shrink-0" />
             <span>{locationFilter.label}</span>
@@ -878,13 +885,13 @@ export function ProductDetailContent({
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
-        ) : (
+        ) : supplierId == null ? (
           <Button variant="outline" size="sm" className={`gap-1.5 text-xs ${tbOutline}`} onClick={() => setLocationModalOpen(true)}>
             <MapPin className="w-3.5 h-3.5" /> Filter by location
           </Button>
-        )}
+        ) : null}
         {/* Nearest */}
-        {refLocation && (
+        {supplierId == null && refLocation && (
           <button
             type="button"
             onClick={() => setSupplierSort(supplierSort === "nearest" ? null : "nearest")}
@@ -894,13 +901,13 @@ export function ProductDetailContent({
           </button>
         )}
         {/* Cheapest */}
-        <button
+        {supplierId == null && <button
           type="button"
           onClick={() => setSupplierSort(supplierSort === "cheapest" ? null : "cheapest")}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${supplierSort === "cheapest" ? tbActive : tbInactive}`}
         >
           <Tag className="w-3 h-3" /> Cheapest
-        </button>
+        </button>}
         {/* Write review */}
         {isCafeOwner && product.listings.length > 0 && (
           <Button variant="outline" size="sm" className={`gap-1.5 text-xs ${tbOutline}`} onClick={() => setReviewModalOpen(true)}>

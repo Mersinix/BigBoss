@@ -340,7 +340,13 @@ function SingleStoreLogoStrip({ logoUrl, name, isDark }: { logoUrl: string | nul
 
 // ── Product card (store context) ──────────────────────────────────────────────
 
-type StoreProduct = ProductWithTaxonomy & { bestPrice?: number; avgRating?: number; reviewCount?: number };
+type StoreProduct = ProductWithTaxonomy & {
+  bestPrice?: number;
+  avgRating?: number;
+  reviewCount?: number;
+  hasPromo?: boolean;
+  listingPromotions?: { type: string; discountValue: number }[];
+};
 
 function StoreProductCard({
   product,
@@ -371,7 +377,7 @@ function StoreProductCard({
     <div
       data-testid={`card-product-${product.id}`}
       className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
-      onClick={() => openQuickView(product.id)}
+      onClick={() => openQuickView(product.id, product.supplier?.id)}
     >
       {/* Image */}
       <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.imageOverlay}`}>
@@ -382,23 +388,23 @@ function StoreProductCard({
             <Package className={`w-10 h-10 ${t.emptyIcon}`} />
           </div>
         )}
-        {/* Category badge */}
-        {product.categoryLabel?.name && (
+        {/* On Sale badge — same placement and treatment as the Shop card */}
+        {product.hasPromo && (
           <div className="absolute top-2 left-2">
-            <Badge className="bg-black/50 text-white backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2">
-              {product.categoryLabel.name}
-            </Badge>
+            <span className="bg-rose-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+              <Zap className="w-2.5 h-2.5" />On Sale
+            </span>
           </div>
         )}
-        {/* Review overlay */}
+        {/* Rating — bottom-left image overlay, as in Shop */}
         {hasReviews && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2 py-0.5">
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/40 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-sm">
             <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
             <span className="text-[10px] font-medium text-white">{avgRating.toFixed(1)}</span>
-            <span className="text-[10px] text-white/70">({reviewCount})</span>
+            <span className="text-[10px] text-white/80">({reviewCount})</span>
           </div>
         )}
-        {/* Favorite button */}
+        {/* Favorite button — top-right, as in Shop */}
         {hasCommercialAccess && (
           <button
             className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
@@ -407,7 +413,7 @@ function StoreProductCard({
               toggleShop({
                 id: product.id,
                 name: product.name,
-                supplier: product.categoryLabel?.name ?? "",
+                supplier: storeName,
                 price: product.bestPrice ?? 0,
                 image: product.imageUrl ?? "",
               });
@@ -417,12 +423,12 @@ function StoreProductCard({
             <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
           </button>
         )}
-        {/* Quick-view button */}
+        {/* Quick-add button — bottom-right, as in Shop */}
         <button
           className="absolute bottom-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
             e.stopPropagation();
-            openQuickView(product.id);
+            openQuickView(product.id, product.supplier?.id);
           }}
           data-testid={`button-quick-view-${product.id}`}
         >
@@ -436,22 +442,42 @@ function StoreProductCard({
           {product.name}
         </h3>
         <div className="flex items-center gap-1.5">
-          <SingleStoreLogoStrip logoUrl={storeLogoUrl} name={storeName} isDark={isDark} />
           {distanceKm !== null && (
             <span className={`text-[11px] flex items-center gap-0.5 ml-auto ${t.textMuted}`}>
               <MapPin className="w-2.5 h-2.5 shrink-0" />{formatDistance(distanceKm)}
             </span>
           )}
         </div>
+        {/* Category • Brand badge — same design and truncation as Shop */}
+        {(product.categoryLabel?.name || product.brandLabel?.name) && (
+          <Badge
+            className={`w-full min-w-0 text-[10px] px-1.5 py-0 border ${
+              t.dk
+                ? "bg-gray-700 text-rose-500 border-gray-600"
+                : "bg-gray-100 text-gray-600 border-gray-200"
+            }`}
+          >
+            <span className="block min-w-0 truncate">
+              {product.categoryLabel?.name && (
+                <span className={`mr-0.5 ${t.textPrimary}`}>
+                  {product.categoryLabel.name} •
+                </span>
+              )}
+              {product.brandLabel?.name}
+            </span>
+          </Badge>
+        )}
         <div className={`mt-auto pt-1.5 border-t ${t.priceBorder}`}>
-         
+          <div className="flex items-end justify-between gap-2">
             <div>
-              <p className={`text-[10px] ${t.textMuted}`}>From</p>
               <p className={`font-bold text-sm ${t.textPrice}`}>
                 {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
               </p>
+              {product.hasPromo && (
+                <p className={`text-xs line-through ${t.textMuted}`}>{fmt(product.price)}</p>
+              )}
             </div>
-         
+          </div>
         </div>
       </div>
     </div>
@@ -883,6 +909,7 @@ export default function StoreDetailPage() {
                 hasCommercialAccess={hasCommercialAccess}
                 storeLogoUrl={store.logoUrl ?? null}
                 storeName={store.name}
+                supplierId={store.supplierId}
                 distanceKm={distance}
                 isDark={isDark}
               />

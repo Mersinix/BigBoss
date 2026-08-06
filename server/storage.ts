@@ -76,8 +76,8 @@ export interface IStorage {
   updateReturnStatus(id: number, status: string, supplierNotes?: string): Promise<OrderReturn>;
 
   // Marketplace (cafe browsing)
-  getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string }): Promise<MarketplaceProduct[]>;
-  getMarketplaceProduct(productId: number): Promise<MarketplaceProduct | undefined>;
+  getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string; supplierId?: number }): Promise<MarketplaceProduct[]>;
+  getMarketplaceProduct(productId: number, supplierId?: number): Promise<MarketplaceProduct | undefined>;
 
   // Supplier product variants
   getVariantsByListingId(listingId: number): Promise<SupplierVariantWithLabels[]>;
@@ -1105,8 +1105,10 @@ export class DatabaseStorage implements IStorage {
 
   // ── Marketplace ─────────────────────────────────────────────────────────────
 
-  async getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string }): Promise<MarketplaceProduct[]> {
-    const allProducts = await db.select().from(products).where(eq(products.isAdminProduct, true));
+  async getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string; supplierId?: number }): Promise<MarketplaceProduct[]> {
+    const allProducts = filters?.supplierId != null
+      ? await db.select().from(products)
+      : await db.select().from(products).where(eq(products.isAdminProduct, true));
     const allListings = await db.select().from(supplierProductListings);
     const allVariants = await db.select().from(supplierProductVariants);
     const allUsers = await db.select().from(users);
@@ -1149,11 +1151,14 @@ export class DatabaseStorage implements IStorage {
 
     const result: MarketplaceProduct[] = [];
     for (const prod of prods) {
-      const listings = allListings.filter((l) => l.productId === prod.id);
+       const listings = allListings.filter((l) =>
+         l.productId === prod.id && (filters?.supplierId == null || l.supplierId === filters.supplierId)
+       );
       if (!listings.length) continue;
       const marketListings: MarketplaceListing[] = listings
-        .filter((l) => {
+         .filter((l) => {
           if (l.onlyForPack) return false;
+           if (filters?.supplierId != null && l.visibility !== 'VISIBLE') return false;
           if (prod.categoryId && frozenSet.has(`${l.supplierId}:${prod.categoryId}`)) return false;
           return true;
         })
@@ -1188,8 +1193,8 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getMarketplaceProduct(productId: number): Promise<MarketplaceProduct | undefined> {
-    const all = await this.getMarketplaceProducts();
+  async getMarketplaceProduct(productId: number, supplierId?: number): Promise<MarketplaceProduct | undefined> {
+    const all = await this.getMarketplaceProducts(supplierId == null ? undefined : { supplierId });
     return all.find((p) => p.id === productId);
   }
 
@@ -2448,7 +2453,9 @@ export class DatabaseStorage implements IStorage {
     }
     return stores.map((store) => {
       const supplier = userMap.get(store.supplierId);
-      const listings = (listingsBySupplier.get(store.supplierId) ?? []).filter((l) => l.stock > 0 && l.price > 0);
+       const listings = (listingsBySupplier.get(store.supplierId) ?? []).filter(
+         (l) => l.visibility === 'VISIBLE' && !l.onlyForPack && l.stock > 0 && l.price > 0,
+       );
       const categoryIds = new Set<number>();
       const subCategoryIds = new Set<number>();
       const brandIds = new Set<number>();
@@ -2552,7 +2559,9 @@ export class DatabaseStorage implements IStorage {
         and(eq(supplierProductReviews.supplierId, store.supplierId), eq(supplierProductReviews.reviewType as any, 'SUPPLIER'))
       ),
     ]);
-    const activeListings = listings.filter((l) => l.stock > 0 && l.price > 0);
+    const activeListings = listings.filter(
+      (l) => l.visibility === 'VISIBLE' && !l.onlyForPack && l.stock > 0 && l.price > 0,
+    );
     const reviewCount = reviewRows.length;
     const avgRating = reviewCount ? reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount : 0;
     if (!activeListings.length) return { ...card, products: [], avgRating, reviewCount };
@@ -2566,7 +2575,7 @@ export class DatabaseStorage implements IStorage {
           eq(supplierProductReviews.reviewType as any, 'PRODUCT')
         )
       ),
-      this.getPromotionsForListings(listingIds),
+      this.getPromotionsForListings(listingIds, undefined),
     ]);
     const promoListingSet = new Set(promoListings.map((p) => p.listingId));
     const listingByProduct = new Map(activeListings.map((l) => [l.productId, l]));
@@ -2586,6 +2595,7 @@ export class DatabaseStorage implements IStorage {
         price: listing.price, bestPrice: listing.price, totalStock: listing.stock,
         listingId: listing.id,
         hasPromo: promoListingSet.has(listing.id),
+         listingPromotions: promoListings.filter((promo) => promo.listingId === listing.id),
         avgRating: stats ? stats.sum / stats.count : 0,
         reviewCount: stats?.count ?? 0,
       } as unknown as ProductWithTaxonomy;

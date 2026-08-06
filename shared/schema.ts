@@ -964,6 +964,8 @@ export type ProductWithTaxonomy = Product & {
   brandLabel?: TaxonomyLabel | null;
   flavorLabels?: TaxonomyLabel[];
   sizeLabels?: TaxonomyLabel[];
+  // Active promotions for the supplier listing in a single-store context.
+  listingPromotions?: ListingPromotion[];
 };
 
 export type SupplierListingWithProduct = SupplierProductListing & {

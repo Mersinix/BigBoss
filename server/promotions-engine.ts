@@ -51,7 +51,13 @@ function getTargetedItems(p: Promotion, items: PromoCartItem[]): PromoCartItem[]
   }
   if (p.targetType === 'CATEGORIES') {
     const ids = new Set(p.targetCategoryIds ?? []);
-    return items.filter(i => i.categoryId != null && ids.has(i.categoryId));
+    return items.filter(i =>
+      i.categoryId != null &&
+      ids.has(i.categoryId) &&
+      // Category Discount is supplier-scoped. Other promotion types retain
+      // their existing category-targeting behavior.
+      (p.type !== 'CATEGORY_DISCOUNT' || i.supplierId === p.supplierId)
+    );
   }
   return items;
 }

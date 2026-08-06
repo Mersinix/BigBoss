@@ -3116,10 +3116,14 @@ export class DatabaseStorage implements IStorage {
         applicableListings = p.targetListingIds.filter(id => listingIds.includes(id));
       } else if (p.targetType === 'CATEGORIES' && p.targetCategoryIds) {
         // Resolve by looking at the product's categoryId
-        const prodMap = new Map(listingRows.map(l => [l.id, l.productId]));
         const prods = await db.select().from(products).where(inArray(products.id, listingRows.map(l => l.productId)));
         const catSet = new Set(p.targetCategoryIds);
-        for (const l of listingRows) {
+        // Category Discount promotions are scoped to the supplier that owns
+        // the promotion. Only inspect that supplier's requested listings.
+        const candidateListings = p.type === 'CATEGORY_DISCOUNT'
+          ? listingRows.filter(l => l.supplierId === p.supplierId)
+          : listingRows;
+        for (const l of candidateListings) {
           const prod = prods.find(pr => pr.id === l.productId);
           if (prod?.categoryId != null && catSet.has(prod.categoryId) && listingIds.includes(l.id)) {
             applicableListings.push(l.id);
@@ -3160,6 +3164,34 @@ export class DatabaseStorage implements IStorage {
     itemsBySupplier: Map<number, PromoCartItem[]>,
     cafeId: number,
   ): Promise<import("@shared/schema").CartPromotionEvaluation> {
+    // The cart clients do not need to persist taxonomy data. Resolve category
+    // IDs from the authoritative listing/product rows before evaluating so a
+    // category promotion can never rely on stale or missing client data.
+    const allItems = Array.from(itemsBySupplier.values()).flat();
+    const listingIds = Array.from(new Set(allItems.map(item => item.listingId)));
+    if (listingIds.length > 0) {
+      const listingRows = await db.select().from(supplierProductListings)
+        .where(inArray(supplierProductListings.id, listingIds));
+      const productIds = Array.from(new Set(listingRows.map(listing => listing.productId)));
+      const productRows = productIds.length
+        ? await db.select().from(products).where(inArray(products.id, productIds))
+        : [];
+      const listingMap = new Map(listingRows.map(listing => [listing.id, listing]));
+      const productMap = new Map(productRows.map(product => [product.id, product]));
+
+      for (const [supplierId, items] of Array.from(itemsBySupplier.entries())) {
+        for (const item of items) {
+          const listing = listingMap.get(item.listingId);
+          const product = listing ? productMap.get(listing.productId) : undefined;
+          // Keep the supplied grouping and all other promotion inputs intact;
+          // only replace the category with the server-authoritative value.
+          item.categoryId = listing && listing.supplierId === supplierId && product
+            ? product.categoryId
+            : null;
+        }
+      }
+    }
+
     const supplierIds = Array.from(itemsBySupplier.keys());
     if (supplierIds.length === 0) {
       return { bySupplier: [], totalOriginal: 0, totalDiscount: 0, totalFinal: 0 };

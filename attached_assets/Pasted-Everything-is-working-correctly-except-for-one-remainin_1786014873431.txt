@@ -1,0 +1,121 @@
+Everything is working correctly except for one remaining issue affecting **Category Discount** promotions.
+
+**Important:**
+
+* Do **not** redesign anything.
+* Do **not** change the promotion system architecture.
+* Do **not** modify unrelated promotion types.
+* Keep all existing functionality exactly as it is.
+* Only fix the scope of **Category Discount** promotions.
+
+---
+
+# Category Discount Promotion Scope
+
+Currently there is an incorrect behavior.
+
+Example:
+
+Supplier **A** creates:
+
+**Category Discount**
+
+20% OFF
+
+assigned to:
+
+* Category A
+* Category B
+
+The discount is currently being applied to **every supplier** that has products in those categories.
+
+This is incorrect.
+
+---
+
+# Expected Behavior
+
+A Category Discount must only affect the products belonging to the supplier who created that promotion.
+
+Example:
+
+Supplier A creates:
+
+20% OFF
+
+Categories:
+
+* Coffee
+* Drinks
+
+Only Supplier A's products inside those categories should receive the promotion.
+
+Supplier B
+
+Supplier C
+
+Supplier D
+
+must not receive that promotion, even if they sell products in the exact same categories.
+
+---
+
+# Promotion Scope
+
+Category Discount must always be filtered by:
+
+* Promotion Owner (Supplier)
+* Selected Category
+* Product belonging to that Supplier
+
+All three conditions must be satisfied before applying the promotion.
+
+---
+
+# Do Not Affect Other Promotion Types
+
+Do not modify the behavior of:
+
+* Product promotions
+* Variant promotions
+* Pack promotions
+* Flash promotions
+* Free Shipping
+* Buy X Get Y
+* Cashback
+* Gift promotions
+* Any other promotion type
+
+Those are already working correctly and must remain unchanged.
+
+---
+
+# Existing Workflow
+
+Keep:
+
+* Promotion creation
+* Promotion editing
+* Promotion activation
+* Promotion expiration
+* Priority
+* Realtime synchronization
+* Product Details modal
+* Product cards
+* Store pages
+
+exactly as they are.
+
+Only correct the scope of the **Category Discount** promotion.
+
+---
+
+# Verification
+
+Before considering the task complete, verify that:
+
+* ✅ A Category Discount only applies to products owned by the supplier who created the promotion.
+* ✅ Products from other suppliers in the same category do not receive that promotion.
+* ✅ Other promotion types continue to behave exactly as before.
+* ✅ Realtime synchronization still works correctly.
+* ✅ No unrelated functionality or design was modified.

@@ -500,6 +500,18 @@ export function ProductDetailContent({
     refetchInterval: 30_000,
   });
 
+  // ── Best promotional price for the header (store context only) ───────────────
+  const headerBestPromoPrice = useMemo(() => {
+    if (supplierId == null || !product) return null;
+    const eligible = listingPromotions.filter(p => VARIANT_PRICE_TYPES.has(p.type));
+    if (!eligible.length) return null;
+    const pct = eligible.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
+    const best = pct.length
+      ? pct.reduce((b, p) => p.discountValue > b.discountValue ? p : b, pct[0])
+      : eligible.reduce((b, p) => p.discountValue > b.discountValue ? p : b, eligible[0]);
+    return calcPromoPrice(product.bestPrice, best);
+  }, [supplierId, product, listingPromotions]);
+
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
 
   // ── Images ────────────────────────────────────────────────────────────────
@@ -818,24 +830,39 @@ export function ProductDetailContent({
       {/* Price + supplier count */}
       {hasCommercial ? (
         <div className="flex items-center gap-4 pt-2">
-          <div>
-            <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Starting from</p>
-            <p className={`text-2xl font-bold ${isModal ? (dk ? "text-blue-400" : "text-blue-600") : "text-primary"}`}>
-              {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
-            </p>
-          </div>
-          {supplierId == null && (
+          {supplierId != null ? (
+            /* Store context: no "Starting from", show promo price if applicable */
+            <div className="flex items-center gap-2">
+              <p className={`text-2xl font-bold ${isModal ? (dk ? "text-blue-400" : "text-blue-600") : "text-primary"}`}>
+                {headerBestPromoPrice != null ? fmt(headerBestPromoPrice) : product.bestPrice != null ? fmt(product.bestPrice) : "—"}
+              </p>
+              {headerBestPromoPrice != null && (
+                <p className={`text-base line-through ${isModal ? textMuted : "text-muted-foreground"}`}>
+                  {product.bestPrice != null ? fmt(product.bestPrice) : ""}
+                </p>
+              )}
+            </div>
+          ) : (
+            /* Marketplace context: "Starting from" + supplier count */
             <>
-              <div className={`h-8 border-l ${isModal ? (dk ? "border-gray-700" : "border-gray-200") : "border-border"}`} />
               <div>
-                <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Suppliers</p>
-                <p className={`font-bold text-lg ${isModal ? textPrimary : ""}`}>
-                  {filteredListings.length}
-                  <span className={`text-xs font-normal ml-1 ${isModal ? textMuted : "text-muted-foreground"}`}>
-                    /{product.supplierCount} visible
-                  </span>
+                <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Starting from</p>
+                <p className={`text-2xl font-bold ${isModal ? (dk ? "text-blue-400" : "text-blue-600") : "text-primary"}`}>
+                  {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
                 </p>
               </div>
+              <>
+                <div className={`h-8 border-l ${isModal ? (dk ? "border-gray-700" : "border-gray-200") : "border-border"}`} />
+                <div>
+                  <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Suppliers</p>
+                  <p className={`font-bold text-lg ${isModal ? textPrimary : ""}`}>
+                    {filteredListings.length}
+                    <span className={`text-xs font-normal ml-1 ${isModal ? textMuted : "text-muted-foreground"}`}>
+                      /{product.supplierCount} visible
+                    </span>
+                  </p>
+                </div>
+              </>
             </>
           )}
         </div>

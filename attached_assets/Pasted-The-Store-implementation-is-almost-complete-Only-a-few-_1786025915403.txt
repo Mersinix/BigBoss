@@ -1,0 +1,149 @@
+The Store implementation is almost complete. Only a few Store-specific behaviors still need to be corrected.
+
+**Important:**
+
+* Continue from the current implementation.
+* Do **not** restart the feature.
+* Do **not** redesign the Product Details modal.
+* Do **not** modify the Shop marketplace behavior.
+* Do **not** change any unrelated functionality.
+* Keep all realtime synchronization working.
+
+---
+
+# 1. Store Product Card Pricing
+
+Currently, when a product has a promotion, the Product Card inside the Store displays the old price twice.
+
+This is incorrect.
+
+The Product Card should display:
+
+* The discounted price (after applying the promotion) as the main price.
+* The original price below (or beside it, according to the existing design) with a strikethrough.
+
+Also ensure that every price uses the project's global currency format, with the currency symbol displayed on the **right side** of the value (matching the current currency strategy used throughout the project).
+
+---
+
+# 2. Store Product Details Modal Pricing
+
+When opening a product from inside a Store:
+
+If the product has a promotion:
+
+* Display the discounted price as the main price.
+* Display the original price with a strikethrough.
+* Do not display the original price as the active price.
+
+Also remove the text:
+
+**"Starting from"**
+
+Inside a Store there is only one supplier, so there is no longer a price comparison between suppliers.
+
+The pricing should represent only the supplier that owns the Store.
+
+---
+
+# 3. Remove Marketplace Supplier Section
+
+Inside the Product Details modal opened from a Store, remove the marketplace supplier comparison section.
+
+Remove this entire section:
+
+* Available from Suppliers
+* Filter by location
+* Nearest
+* Cheapest
+
+These controls belong only to the Shop marketplace.
+
+The **Write a Review** functionality must remain available, but it should only relate to:
+
+* the product
+* the supplier who owns the Store
+
+It must no longer reference or aggregate other suppliers.
+
+---
+
+# 4. Show Only the Store Owner Supplier
+
+The Product Details modal opened from inside a Store must display only the supplier who owns that Store.
+
+Do not display:
+
+* other suppliers
+* marketplace comparison
+* supplier sorting
+* supplier filters
+* marketplace supplier list
+* supplier cards from other stores
+
+Display only:
+
+* the Store owner's supplier
+* that supplier's variants
+* that supplier's flavors
+* that supplier's sizes
+* that supplier's stock
+* that supplier's promotions
+* that supplier's prices
+* that supplier's distance
+* that supplier's reviews
+
+Everything shown inside the modal must belong exclusively to the Store owner.
+
+---
+
+# 5. Flash → Store Behavior
+
+Apply the exact same Store-specific supplier logic when a product is opened from the **Flash** feature while browsing inside a Store.
+
+When the Flash modal is being used within a Store:
+
+* Opening a product must display only the Store owner's supplier.
+* Do not display marketplace supplier comparison.
+* Do not display other suppliers.
+* Do not display marketplace supplier filters or sorting.
+* Show only that supplier's variants, promotions, prices, stock, reviews, distance, flavors, and sizes.
+
+The Flash behavior inside a Store should be identical to the Store Product Details behavior.
+
+---
+
+# Preserve Existing Behavior
+
+Do **not** modify:
+
+* Shop marketplace behavior
+* Product comparison in the Shop
+* Flash outside the Store
+* Favorites
+* Reviews workflow
+* Cart
+* Variant selection
+* Flavor selection
+* Size selection
+* Product Details workflow outside the Store
+* Existing design
+
+Only complete the remaining Store-specific behavior.
+
+---
+
+# Final Verification
+
+Before considering the task complete, verify that:
+
+* ✅ Store Product Cards display the correct promotional price and original price.
+* ✅ All prices use the global currency with the symbol on the right.
+* ✅ The Product Details modal inside a Store displays the correct promotional pricing.
+* ✅ The "Starting from" text has been removed from the Store Product Details modal.
+* ✅ The marketplace supplier section (Available from Suppliers / Filter by location / Nearest / Cheapest) is removed from the Store Product Details modal.
+* ✅ Only the Store owner's supplier is displayed in the Product Details modal.
+* ✅ Flash opened from inside a Store follows the exact same single-supplier behavior.
+* ✅ Shop marketplace behavior remains unchanged.
+* ✅ Realtime synchronization continues to work correctly.
+* ✅ No unrelated functionality or design was modified.

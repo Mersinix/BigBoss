@@ -338,6 +338,32 @@ function SingleStoreLogoStrip({ logoUrl, name, isDark }: { logoUrl: string | nul
   );
 }
 
+// ── Promo price helpers (store context) ───────────────────────────────────────
+
+const STORE_PRICE_PROMO_TYPES = new Set([
+  'PERCENTAGE', 'FIXED_AMOUNT', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER',
+]);
+
+function calcStorePromoPrice(basePrice: number, promo: { type: string; discountValue: number }): number | null {
+  if (['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(promo.type)) {
+    return Math.max(0, Math.round(basePrice * (1 - promo.discountValue / 10000)));
+  }
+  if (promo.type === 'FIXED_AMOUNT') {
+    return Math.max(0, basePrice - Math.round(promo.discountValue / 10));
+  }
+  return null;
+}
+
+function bestStorePromoPrice(basePrice: number, promos: { type: string; discountValue: number }[]): number | null {
+  const eligible = promos.filter(p => STORE_PRICE_PROMO_TYPES.has(p.type));
+  if (!eligible.length) return null;
+  const pct = eligible.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
+  const best = pct.length
+    ? pct.reduce((b, p) => p.discountValue > b.discountValue ? p : b, pct[0])
+    : eligible.reduce((b, p) => p.discountValue > b.discountValue ? p : b, eligible[0]);
+  return calcStorePromoPrice(basePrice, best);
+}
+
 // ── Product card (store context) ──────────────────────────────────────────────
 
 type StoreProduct = ProductWithTaxonomy & {
@@ -466,17 +492,23 @@ function StoreProductCard({
         <div className={`mt-auto pt-1.5 border-t ${t.priceBorder}`}>
   <div className="flex items-center justify-between gap-2">
     {/* Price */}
-    <div className="flex items-center gap-1.5 min-w-0">
-      <span className={`font-bold text-sm ${t.textPrice}`}>
-        {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
-      </span>
-
-      {product.hasPromo && (
-        <span className={`text-xs line-through whitespace-nowrap ${t.textMuted}`}>
-          {fmt(product.price)}
-        </span>
-      )}
-    </div>
+    {(() => {
+      const discounted = product.bestPrice != null && (product.listingPromotions?.length ?? 0) > 0
+        ? bestStorePromoPrice(product.bestPrice, product.listingPromotions ?? [])
+        : null;
+      return (
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className={`font-bold text-sm ${t.textPrice}`}>
+            {discounted != null ? fmt(discounted) : product.bestPrice != null ? fmt(product.bestPrice) : "—"}
+          </span>
+          {discounted != null && (
+            <span className={`text-xs line-through whitespace-nowrap ${t.textMuted}`}>
+              {fmt(product.bestPrice!)}
+            </span>
+          )}
+        </div>
+      );
+    })()}
 
     {/* Distance */}
     {distanceKm !== null && (
@@ -943,6 +975,7 @@ export default function StoreDetailPage() {
         products={products as any[]}
         packs={storePacks}
         storeName={store.name}
+        supplierId={store.supplierId}
       />
     </div>
   );

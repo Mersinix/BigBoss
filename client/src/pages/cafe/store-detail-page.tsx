@@ -441,13 +441,7 @@ function StoreProductCard({
         <h3 className={`font-bold text-sm leading-tight truncate transition-colors ${t.dk ? "text-white group-hover:text-blue-400" : "text-gray-900 group-hover:text-blue-600"}`}>
           {product.name}
         </h3>
-        <div className="flex items-center gap-1.5">
-          {distanceKm !== null && (
-            <span className={`text-[11px] flex items-center gap-0.5 ml-auto ${t.textMuted}`}>
-              <MapPin className="w-2.5 h-2.5 shrink-0" />{formatDistance(distanceKm)}
-            </span>
-          )}
-        </div>
+        
         {/* Category • Brand badge — same design and truncation as Shop */}
         {(product.categoryLabel?.name || product.brandLabel?.name) && (
           <Badge
@@ -468,17 +462,31 @@ function StoreProductCard({
           </Badge>
         )}
         <div className={`mt-auto pt-1.5 border-t ${t.priceBorder}`}>
-          <div className="flex items-end justify-between gap-2">
-            <div>
-              <p className={`font-bold text-sm ${t.textPrice}`}>
-                {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
-              </p>
-              {product.hasPromo && (
-                <p className={`text-xs line-through ${t.textMuted}`}>{fmt(product.price)}</p>
-              )}
-            </div>
-          </div>
-        </div>
+  <div className="flex items-center justify-between gap-2">
+    {/* Price */}
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className={`font-bold text-sm ${t.textPrice}`}>
+        {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
+      </span>
+
+      {product.hasPromo && (
+        <span className={`text-xs line-through whitespace-nowrap ${t.textMuted}`}>
+          {fmt(product.price)}
+        </span>
+      )}
+    </div>
+
+    {/* Distance */}
+    {distanceKm !== null && (
+      <span
+        className={`text-[11px] flex items-center gap-0.5 shrink-0 ${t.textMuted}`}
+      >
+        <MapPin className="w-2.5 h-2.5" />
+        {formatDistance(distanceKm)}
+      </span>
+    )}
+  </div>
+</div>
       </div>
     </div>
   );

@@ -353,6 +353,7 @@ function StoreProductCard({
   hasCommercialAccess,
   storeLogoUrl,
   storeName,
+  supplierId,
   distanceKm,
   isDark,
 }: {
@@ -360,6 +361,7 @@ function StoreProductCard({
   hasCommercialAccess: boolean;
   storeLogoUrl: string | null;
   storeName: string;
+  supplierId: number;
   distanceKm: number | null;
   isDark: boolean;
 }) {
@@ -377,7 +379,7 @@ function StoreProductCard({
     <div
       data-testid={`card-product-${product.id}`}
       className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
-      onClick={() => openQuickView(product.id, product.supplier?.id)}
+      onClick={() => openQuickView(product.id, supplierId)}
     >
       {/* Image */}
       <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.imageOverlay}`}>
@@ -428,7 +430,7 @@ function StoreProductCard({
           className="absolute bottom-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
             e.stopPropagation();
-            openQuickView(product.id, product.supplier?.id);
+            openQuickView(product.id, supplierId);
           }}
           data-testid={`button-quick-view-${product.id}`}
         >

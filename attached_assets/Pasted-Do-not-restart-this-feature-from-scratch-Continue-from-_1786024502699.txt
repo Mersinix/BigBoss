@@ -1,0 +1,163 @@
+Do **not** restart this feature from scratch.
+
+Continue from the latest work already committed.
+
+Read the commit named:
+
+**`Single Supplier's Store Products`**
+
+and also read the prompt stored in that commit:
+
+**`Pasted-The-Store-feature-is-working-well-We-now-need-to-improv_1786022709632.txt`**
+
+Those represent the current implementation state and the original requirements.
+
+After reading them:
+
+* Check what has already been implemented.
+* Identify only the remaining incomplete parts.
+* Continue from the current codebase.
+* Do **not** undo, rewrite, or duplicate work that is already correct.
+
+Keep all existing behavior unless it is part of the remaining unfinished requirements.
+
+---
+
+# Continue the Remaining Store Work
+
+Complete only the parts that are still missing.
+
+## 1. Store Product Cards
+
+Finish making the Product Cards inside the Store identical in organization to the Shop Product Cards while preserving Store-specific behavior.
+
+Verify that each Store Product Card contains:
+
+* Product image
+* Favorite icon
+* "On Sale" badge
+* Rating
+* "+" button
+* Product name
+* Category • Brand badge
+* Current price
+* Old price (when applicable)
+* Distance
+
+Use the exact same visual placement and styling already used in the Shop Product Cards.
+
+Do not create a second design.
+
+---
+
+## 2. Single-Supplier Store Behavior
+
+Verify that a Store behaves as a true single-supplier storefront.
+
+Inside a Store:
+
+* Display only products belonging to that Store's supplier.
+* Never aggregate products from multiple suppliers.
+* Never compare suppliers.
+* Never mix marketplace listings.
+
+The marketplace comparison behavior must remain available only in the Shop page.
+
+---
+
+## 3. Product Details Modal
+
+When opening a product from inside a Store:
+
+Verify that the Product Details modal is supplier-scoped.
+
+It must display:
+
+* only the supplier that owns the Store
+* only that supplier's variants
+* only that supplier's promotions
+* only that supplier's pricing
+
+It must not display:
+
+* other suppliers
+* supplier comparison
+* marketplace supplier list
+* "Available from Suppliers"
+* marketplace sorting options
+
+The Shop Product Details modal must continue working exactly as before.
+
+---
+
+## 4. Promotions
+
+Verify that promotions inside a Store are calculated only for that Store's supplier.
+
+Ensure that:
+
+* promotion badges
+* discounted prices
+* old prices
+* supplier-level promotions
+* variant-level promotions
+
+continue to work correctly.
+
+Do not affect marketplace promotions.
+
+---
+
+## 5. Realtime Synchronization
+
+Verify that Store pages update immediately without refreshing whenever:
+
+* stock changes
+* prices change
+* promotions change
+* product visibility changes
+* favorite status changes
+* ratings change
+* supplier product updates occur
+
+Only fix any missing realtime synchronization if necessary.
+
+---
+
+## 6. Preserve Existing Behavior
+
+Do **not** modify:
+
+* Shop marketplace behavior
+* Product comparison
+* Flash
+* Favorites
+* Reviews
+* Store header
+* Categories
+* Filters
+* Search
+* Navigation
+* Cart
+* Product Details workflow
+* Variant selection
+* Flavor selection
+* Size selection
+* Existing design
+
+Only complete the remaining Store-specific work.
+
+---
+
+# Final Verification
+
+Before considering the task complete, verify that:
+
+* ✅ The Store Product Cards match the Shop Product Card layout.
+* ✅ A Store displays only products belonging to its owner supplier.
+* ✅ Opening a product from a Store shows only that Store's supplier.
+* ✅ Marketplace comparison remains unchanged in the Shop page.
+* ✅ Promotion display and pricing remain correct.
+* ✅ Realtime synchronization works everywhere it is required.
+* ✅ No existing functionality or design was changed outside the requested Store scope.
+* ✅ Resolve any type-check or integration issue introduced by the unfinished Store work, while leaving unrelated pre-existing issues untouched.

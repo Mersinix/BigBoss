@@ -767,7 +767,7 @@ export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
 
 export type PlatformService = typeof platformServices.$inferSelect;
 export type InsertPlatformService = z.infer<typeof insertPlatformServiceSchema>;
-export type ServiceKey = 'PRINTING' | 'MARKETING' | 'BARISTA';
+export type ServiceKey = 'PRINTING' | 'MARKETING' | 'BARISTA' | 'MAINTENANCE';
 export type ServiceState = 'VISIBLE' | 'HIDDEN' | 'COMING_SOON';
 export type ServiceStatesMap = Record<ServiceKey, ServiceState>;
 

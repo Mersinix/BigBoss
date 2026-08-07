@@ -1,0 +1,50 @@
+Continue from the latest work.
+
+The current state is already committed under:
+
+**Commit:**
+`SYSTEM MANAGEMENT`
+
+Inside that commit you will find:
+
+`Pasted-The-current-implementation-is-working-well-This-task-is_1786129427235.txt`
+
+Read that prompt first, then inspect the files modified in that commit to understand exactly what has already been implemented.
+
+Do **not** restart this feature from scratch.
+
+Do **not** re-analyze the whole project.
+
+Continue from the existing implementation and complete only the remaining work.
+
+If something from the prompt is already fully implemented, leave it unchanged.
+
+Only implement the parts that are still incomplete.
+
+Maintain the existing architecture, naming, synchronization logic, realtime updates, and UI patterns already used in the project.
+
+Do not redesign anything.
+
+Do not change any unrelated functionality.
+
+Do not modify Products, Packs, Promotions, Orders, Stores, Flash, Favorites, Messages, Currency, or any other working feature.
+
+Only finish the remaining **System Management** work.
+
+When implementing, ensure the following are fully completed:
+
+* Maintenance supports **Visible**, **Coming Soon**, and **Hidden** exactly like every other marketplace service.
+* The administrator can reorder the marketplace service cards.
+* The selected order becomes the global order used everywhere in the application.
+* The selected order is persisted.
+* Connected clients receive the new order in realtime without refreshing.
+* The Landing Page configuration includes the missing **Maintenance** image configuration.
+* The configured Maintenance image is displayed correctly on the Landing Page.
+* Every consumer of marketplace services (Landing Page, Shop switcher, Favorites modal, Messages modal, and every other service selector) uses the same shared global order.
+* Existing behavior remains unchanged outside this scope.
+
+If you encounter code that was partially implemented in the previous commit, continue from it instead of replacing it.
+
+Preserve all existing design, styling, business logic, and synchronization behavior.
+
+Only finish what is still missing.

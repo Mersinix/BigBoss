@@ -2389,7 +2389,8 @@ export class DatabaseStorage implements IStorage {
     const valid = configured.filter((id): id is MarketplaceServiceId =>
       (DEFAULT_SERVICE_ORDER as readonly string[]).includes(id),
     );
-    return [...new Set(valid), ...DEFAULT_SERVICE_ORDER.filter((id) => !valid.includes(id))];
+    const uniqueValid = Array.from(new Set(valid));
+    return [...uniqueValid, ...DEFAULT_SERVICE_ORDER.filter((id) => !uniqueValid.includes(id))];
   }
 
   async setServiceOrder(order: MarketplaceServiceId[]): Promise<MarketplaceServiceId[]> {

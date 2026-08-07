@@ -860,9 +860,14 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Marketplace service sections ── */}
+      <div className="flex flex-col">
       {/* ── SHOP Section ── */}
       {activeCategories.length > 0 && (
-        <section className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}>
+        <section
+          className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
+          style={{ order: serviceOrder.indexOf("SHOP") }}
+        >
           <div className="max-w-7xl mx-auto">
             <h2 className={`text-2xl font-bold mb-3 text-center ${dk("text-gray-900", "text-white")}`}>
               {t.shopTitle}
@@ -906,7 +911,10 @@ export default function LandingPage() {
 
       {/* ── PRINT Section ── */}
       {isPrintVisible && (
-        <section className={`py-14 px-4 ${dk("bg-white", "bg-gray-950")}`}>
+        <section
+          className={`py-14 px-4 ${dk("bg-white", "bg-gray-950")}`}
+          style={{ order: serviceOrder.indexOf("PRINT") }}
+        >
           <div className="max-w-7xl mx-auto">
             <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
               {t.printTitle}
@@ -944,7 +952,10 @@ export default function LandingPage() {
 
       {/* ── MARKETING Section ── */}
       {isMarketingVisible && (
-        <section className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}>
+        <section
+          className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
+          style={{ order: serviceOrder.indexOf("MARKETING") }}
+        >
           <div className="max-w-7xl mx-auto">
             <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
               {t.marketingTitle}
@@ -982,7 +993,10 @@ export default function LandingPage() {
 
       {/* ── BARISTA Section ── */}
       {isBaristaVisible && (
-        <section className={`py-14 px-4 ${dk("bg-white", "bg-gray-950")}`}>
+        <section
+          className={`py-14 px-4 ${dk("bg-white", "bg-gray-950")}`}
+          style={{ order: serviceOrder.indexOf("BARISTA") }}
+        >
           <div className="max-w-7xl mx-auto">
             <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
               {t.baristaTitle}
@@ -1034,7 +1048,10 @@ export default function LandingPage() {
 
       {/* ── MAINTENANCE Section ── */}
       {isMaintenanceVisible && (
-        <section className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}>
+        <section
+          className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
+          style={{ order: serviceOrder.indexOf("MAINTENANCE") }}
+        >
           <div className="max-w-7xl mx-auto">
             <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
               {t.maintenanceTitle}
@@ -1076,6 +1093,7 @@ export default function LandingPage() {
           </div>
         </section>
       )}
+      </div>
 
       {/* ── Why BigBossCoffee ── */}
       <section className={`py-14 px-4 ${dk("bg-white", "bg-gray-900")}`}>

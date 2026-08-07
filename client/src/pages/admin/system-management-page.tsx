@@ -416,9 +416,10 @@ export default function SystemManagementPage() {
               <Card key={i}><CardContent className="p-6"><Skeleton className="h-6 w-32 mb-3" /><Skeleton className="h-4 w-full mb-1" /><Skeleton className="h-4 w-2/3 mb-4" /><Skeleton className="h-9 w-full" /></CardContent></Card>
             ))
           : orderedCards.map((svc) => {
-              const currentState: ServiceState = svc.key ? (states?.[svc.key] ?? "VISIBLE") : "VISIBLE";
+              const serviceKey = svc.key;
+              const currentState: ServiceState = serviceKey ? (states?.[serviceKey] ?? "VISIBLE") : "VISIBLE";
               const currentOption = STATE_OPTIONS.find((o) => o.value === currentState)!;
-              const isPending = !!svc.key && updateState.isPending && updateState.variables?.service === svc.key;
+              const isPending = !!serviceKey && updateState.isPending && updateState.variables?.service === serviceKey;
               return (
                 <Card key={svc.id} draggable onDragStart={() => setDraggedService(svc.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => moveService(svc.id)} data-testid={`card-service-${svc.id.toLowerCase()}`}>
                   <CardHeader className="pb-3">
@@ -428,7 +429,7 @@ export default function SystemManagementPage() {
                         <div className="bg-muted rounded-lg p-2.5"><svc.icon className="w-5 h-5 text-foreground/70" /></div>
                         <CardTitle className="text-base">{svc.label}</CardTitle>
                       </div>
-                      <Badge variant="outline" className={`text-xs ${currentOption.badgeClass}`} data-testid={`badge-status-${svc.key.toLowerCase()}`}>
+                      <Badge variant="outline" className={`text-xs ${currentOption.badgeClass}`} data-testid={`badge-status-${(serviceKey ?? svc.id).toLowerCase()}`}>
                         {currentOption.label}
                       </Badge>
                     </div>
@@ -436,11 +437,11 @@ export default function SystemManagementPage() {
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="flex flex-col gap-2">
-                      {svc.key && STATE_OPTIONS.map((opt) => (
+                      {serviceKey && STATE_OPTIONS.map((opt) => (
                         <Button key={opt.value} type="button" size="sm" variant={currentState === opt.value ? "default" : "outline"}
-                          disabled={isPending} onClick={() => updateState.mutate({ service: svc.key, state: opt.value })}
+                          disabled={isPending} onClick={() => updateState.mutate({ service: serviceKey, state: opt.value })}
                           className={`justify-start gap-2 w-full ${currentState === opt.value ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}`}
-                          data-testid={`button-set-${svc.key.toLowerCase()}-${opt.value.toLowerCase()}`}>
+                          data-testid={`button-set-${serviceKey.toLowerCase()}-${opt.value.toLowerCase()}`}>
                           <opt.icon className="w-4 h-4" />{opt.label}
                         </Button>
                       ))}

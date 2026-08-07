@@ -1,0 +1,155 @@
+The current implementation is working well. This task is only about improving realtime synchronization.
+
+**Important:**
+
+* Do **not** redesign anything.
+* Do **not** change any business logic.
+* Do **not** modify existing workflows.
+* Do **not** change the UI unless it is required for realtime synchronization.
+* Do **not** remove any existing functionality.
+* Continue from the current implementation.
+
+---
+
+# Objective
+
+Ensure that every change made by a Supplier is reflected immediately throughout the Coffee Owner experience without requiring any page refresh.
+
+The Shop and the Store must always stay synchronized with the Supplier's latest data.
+
+---
+
+# 1. My Products → Realtime Synchronization
+
+When a Supplier creates a new product in **My Products**, the new product should appear immediately wherever it is supposed to be visible.
+
+This includes, when applicable:
+
+* Coffee Owner → Shop
+* Coffee Owner → Store
+* Flash
+* Favorites
+* Product Details
+* Search results
+* Category views
+* Brand views
+* Any other place where products are displayed
+
+No page refresh should be required.
+
+---
+
+# 2. Packs → Realtime Synchronization
+
+When a Supplier:
+
+* creates a new Pack,
+* edits a Pack,
+* changes Pack visibility,
+* archives or restores a Pack,
+* updates Pack stock,
+* updates Pack price,
+
+the changes should immediately appear everywhere Packs are displayed.
+
+This includes:
+
+* Shop
+* Store
+* Flash
+* Pack Details
+* Search
+* Favorites
+* Categories
+* Any Pack listings
+
+No manual refresh should ever be required.
+
+---
+
+# 3. Promotions → Realtime Synchronization
+
+When a Supplier:
+
+* creates a Promotion,
+* edits a Promotion,
+* activates a Promotion,
+* deactivates a Promotion,
+* deletes a Promotion,
+* changes Promotion priority,
+* changes Promotion dates,
+
+the effects should immediately update everywhere they are used.
+
+This includes:
+
+* Shop Product Cards
+* Store Product Cards
+* Product Details
+* Pack Details
+* Flash
+* Prices
+* Promotion badges
+* "On Sale" indicators
+* Discounted prices
+* Supplier promotion sections
+* Any other promotion-dependent UI
+
+No refresh should be required.
+
+---
+
+# 4. Store Synchronization
+
+The Supplier's Store should always reflect the latest Supplier data in realtime.
+
+Whenever Products, Packs, or Promotions change, the Store should automatically update without requiring the Coffee Owner to reload or reopen the page.
+
+---
+
+# 5. Shop Synchronization
+
+The Shop marketplace should also update automatically whenever Supplier data changes.
+
+Products, Packs, promotions, pricing, stock, visibility, and badges should always remain synchronized in realtime.
+
+---
+
+# 6. Preserve Existing Behavior
+
+Do **not** modify:
+
+* Product logic
+* Pack logic
+* Promotion calculation
+* Store behavior
+* Marketplace comparison
+* Product Details workflow
+* Pack Details workflow
+* Flash
+* Favorites
+* Reviews
+* Cart
+* Orders
+* Existing UI
+* Existing design
+
+This task is only about completing the missing realtime synchronization.
+
+---
+
+# Final Verification
+
+Before considering the task complete, verify that:
+
+* ✅ New Products appear immediately in both the Shop and the Supplier's Store.
+* ✅ New Packs appear immediately everywhere Packs are displayed.
+* ✅ Promotion changes update instantly throughout the application.
+* ✅ Product Cards update automatically.
+* ✅ Pack Cards update automatically.
+* ✅ Product Details update automatically.
+* ✅ Pack Details update automatically.
+* ✅ Store pages update automatically.
+* ✅ Shop pages update automatically.
+* ✅ No manual refresh is required.
+* ✅ Existing functionality and design remain unchanged.

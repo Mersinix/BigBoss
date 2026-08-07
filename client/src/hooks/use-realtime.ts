@@ -16,6 +16,7 @@ const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
 const CURRENCY_EVENTS = ["currency_updated"];
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
 const PACK_EVENTS = ["pack_updated"];
+const PRODUCT_EVENTS = ["product_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
 const PROMOTION_EVENTS = ["promotion_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "order_deleted"];
@@ -26,6 +27,20 @@ function invalidateInventoryQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
   invalidateMarketplace(qc);
   invalidateStoreQueries(qc);
+}
+
+function invalidateProductQueries(qc: QueryClient) {
+  invalidateMarketplace(qc);
+  invalidatePackQueries(qc);
+  invalidateStoreQueries(qc);
+  qc.invalidateQueries({ queryKey: ["/api/marketplace/promotions"] });
+  qc.invalidateQueries({ queryKey: ["/api/favorites"] });
+  qc.invalidateQueries({ queryKey: ["/api/pack-favorites"] });
+  qc.invalidateQueries({ queryKey: ["/api/categories"] });
+  qc.invalidateQueries({ queryKey: ["/api/subcategories"] });
+  qc.invalidateQueries({ queryKey: ["/api/flavors"] });
+  qc.invalidateQueries({ queryKey: ["/api/sizes"] });
+  qc.invalidateQueries({ queryKey: ["/api/brands"] });
 }
 
 function invalidateStoreQueries(qc: QueryClient) {
@@ -104,6 +119,9 @@ export function useRealtime(userId?: number) {
           if (STORE_EVENTS.includes(event)) {
             invalidateStoreQueries(qc);
           }
+          if (PRODUCT_EVENTS.includes(event)) {
+            invalidateProductQueries(qc);
+          }
           if (PACK_EVENTS.includes(event)) {
             invalidatePackQueries(qc);
           }
@@ -113,6 +131,7 @@ export function useRealtime(userId?: number) {
           }
           if (PROMOTION_EVENTS.includes(event)) {
             invalidateMarketplace(qc);
+            qc.invalidateQueries({ queryKey: ["/api/marketplace/promotions"] });
             qc.invalidateQueries({ queryKey: ["/api/stores"] });
           }
           if (event === 'suborder_rejected') {

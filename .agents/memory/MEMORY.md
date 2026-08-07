@@ -8,3 +8,4 @@
 - [Pack feature schema decisions](pack-feature-schema.md) — onlyForMyProducts XOR onlyForPack enforced server-side; pack reviews reuse supplierProductReviews with reviewType='PACK' and packId; listingVariants on PackItemDetail for flavor distribution.
 - [Inventory module design](inventory-module.md) — stock lives on supplier_product_listings/variants (not products.stock); orders had no cancellation restock before this — now centralized in storage.updateOrderStatus.
 - [Variant aggregate-stock restock bug](variant-restock-bug.md) — when restoring stock after a SQL increment, re-read quantities fresh; don't add the delta again on top of the already-updated row or stock doubles.
+- [Catalog realtime synchronization](catalog-realtime-synchronization.md) — supplier catalog changes need both a server broadcast and explicit client invalidation for marketplace detail/promotion query families.

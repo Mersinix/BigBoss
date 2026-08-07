@@ -414,6 +414,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post(api.products.create.path, requireAdmin, async (req, res) => {
     try {
       const product = await storage.createProduct(req.body);
+      broadcast("product_updated", { productId: product.id });
       res.status(201).json(product);
     } catch (err) {
       res.status(500).json({ message: "Error" });
@@ -423,6 +424,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put(api.products.update.path, requireAdmin, async (req, res) => {
     try {
       const product = await storage.updateProduct(parseInt(req.params.id), req.body);
+      broadcast("product_updated", { productId: parseInt(req.params.id) });
       res.json(product);
     } catch (err) {
       res.status(400).json({ message: "Invalid" });
@@ -431,7 +433,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete(api.products.delete.path, requireAdmin, async (req, res) => {
     try {
-      await storage.deleteProduct(parseInt(req.params.id));
+      const productId = parseInt(req.params.id);
+      await storage.deleteProduct(productId);
+      broadcast("product_updated", { productId });
       res.status(204).send();
     } catch (err) {
       res.status(500).json({ message: "Error" });
@@ -478,6 +482,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         supplierId: null,
         isAdminProduct: true,
       });
+      broadcast("product_updated", { productId: product.id });
       res.status(201).json(product);
     } catch (err) {
       res.status(500).json({ message: "Error creating product" });
@@ -505,8 +510,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         updates.status = req.body.status;
       }
       const product = await storage.updateProduct(parseInt(req.params.id), updates);
-      // Broadcast marketplace update so clients reflect the new status immediately
-      broadcast("inventory_updated", { productId: parseInt(req.params.id) });
+      broadcast("product_updated", { productId: parseInt(req.params.id) });
       res.json(product);
     } catch (err) {
       res.status(400).json({ message: "Invalid" });
@@ -515,7 +519,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
     try {
-      await storage.deleteProduct(parseInt(req.params.id));
+      const productId = parseInt(req.params.id);
+      await storage.deleteProduct(productId);
+      broadcast("product_updated", { productId });
       res.json({ message: "Deleted" });
     } catch (err) {
       res.status(500).json({ message: "Error" });
@@ -534,6 +540,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const user = await storage.getUser(req.session.userId!);
       const product = await storage.approveSupplierProduct(parseInt(req.params.id), user!.id);
+      broadcast("product_updated", { productId: parseInt(req.params.id) });
       res.json(product);
     } catch { res.status(500).json({ message: "Error approving product" }); }
   });
@@ -552,13 +559,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (req.body.brandId !== undefined) updates.brandId = req.body.brandId ? parseInt(req.body.brandId) : null;
       if (req.body.flavorIds !== undefined) updates.flavorIds = Array.isArray(req.body.flavorIds) ? req.body.flavorIds.map(Number) : null;
       if (req.body.sizeIds !== undefined) updates.sizeIds = Array.isArray(req.body.sizeIds) ? req.body.sizeIds.map(Number) : null;
-      res.json(await storage.updateProduct(parseInt(req.params.id), updates));
+      const productId = parseInt(req.params.id);
+      const product = await storage.updateProduct(productId, updates);
+      broadcast("product_updated", { productId });
+      res.json(product);
     } catch { res.status(400).json({ message: "Invalid" }); }
   });
 
   app.delete("/api/admin/supplier-products/:id", requireAdmin, async (req, res) => {
     try {
-      await storage.deleteProduct(parseInt(req.params.id));
+      const productId = parseInt(req.params.id);
+      await storage.deleteProduct(productId);
+      broadcast("product_updated", { productId });
       res.json({ message: "Deleted" });
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -1566,6 +1578,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         supplierId: user!.id,
         createdByUserId: user!.id,
       });
+      broadcast("product_updated", { productId: product.id, supplierId: user!.id });
       res.status(201).json(product);
     } catch { res.status(500).json({ message: "Error creating product" }); }
   });
@@ -1587,6 +1600,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (req.body.sizeIds !== undefined) updates.sizeIds = Array.isArray(req.body.sizeIds) ? req.body.sizeIds.map(Number) : null;
       const updated = await storage.updateSupplierProduct(parseInt(req.params.id), user!.id, updates);
       if (!updated) return res.status(403).json({ message: "Cannot edit this product" });
+      broadcast("product_updated", { productId: parseInt(req.params.id), supplierId: user!.id });
       res.json(updated);
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -1596,6 +1610,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = await storage.getUser(req.session.userId!);
       const deleted = await storage.deleteSupplierProduct(parseInt(req.params.id), user!.id);
       if (!deleted) return res.status(403).json({ message: "Cannot delete this product" });
+      broadcast("product_updated", { productId: parseInt(req.params.id), supplierId: user!.id });
       res.json({ message: "Deleted" });
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -1663,6 +1678,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         })));
       }
 
+      broadcast("product_updated", { productId: body.productId, listingId: listing.id, supplierId: user!.id });
       res.status(201).json(listing);
     } catch (err) {
       if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
@@ -1713,6 +1729,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const [updated] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
+      broadcast("product_updated", { productId: listing.productId, listingId, supplierId: user!.id });
       res.json(updated ?? { id: listingId });
     } catch (err) {
       console.error(err);
@@ -1728,6 +1745,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!listing) return res.status(404).json({ message: "Not found" });
       if (listing.supplierId !== user!.id) return res.status(403).json({ message: "Forbidden" });
       await storage.deleteSupplierListing(listingId);
+      broadcast("product_updated", { productId: listing.productId, listingId, supplierId: user!.id });
       res.json({ message: "Removed" });
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -2531,12 +2549,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           quantity: z.number().min(0),
         }))
       }).parse(req.body);
-      res.json(await storage.saveVariants(listingId, variants.map(v => ({
+      const updated = await storage.saveVariants(listingId, variants.map(v => ({
         flavorId: v.flavorId ?? null,
         sizeId: v.sizeId ?? null,
         price: Math.round(v.price * 100),
         quantity: v.quantity,
-      }))));
+      })));
+      broadcast("product_updated", { productId: listing.productId, listingId, supplierId: user!.id });
+      res.json(updated);
     } catch (err) {
       if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
       else res.status(500).json({ message: "Error" });

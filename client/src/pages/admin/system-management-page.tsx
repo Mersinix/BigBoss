@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Megaphone, Coffee, Wrench, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign } from "lucide-react";
+import { Printer, Megaphone, Coffee, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
+import { useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
 import type { LandingConfig, HeroSlide } from "@shared/schema";
 
 // ── Service visibility ────────────────────────────────────────────────────────
@@ -21,6 +22,11 @@ const SERVICES: { key: ServiceKey; label: string; description: string; icon: any
   { key: "MARKETING",   label: "Marketing",    description: "Services MARKETING — agences et prestataires marketing.",   icon: Megaphone },
   { key: "BARISTA",     label: "Barista",      description: "Barista Academy & Marketplace Baristas.",                  icon: Coffee },
   { key: "MAINTENANCE", label: "Maintenance",  description: "Services MAINTENANCE — techniciens pour équipements café.", icon: Wrench },
+];
+
+const SERVICE_ORDER_CARDS: { id: MarketplaceServiceId; key?: ServiceKey; label: string; description: string; icon: any }[] = [
+  { id: "SHOP", key: undefined, label: "Shop", description: "Marketplace SHOP — produits professionnels pour les cafés.", icon: ShoppingBag },
+  ...SERVICES.map((service) => ({ id: service.key === "PRINTING" ? "PRINT" : service.key, key: service.key, label: service.label, description: service.description, icon: service.icon })) as any,
 ];
 
 const STATE_OPTIONS: { value: ServiceState; label: string; icon: any; badgeClass: string }[] = [
@@ -104,6 +110,7 @@ function LandingConfigSection() {
   const [marketingImage, setMarketingImage] = useState("");
   const [baristaAcademyImage, setBaristaAcademyImage] = useState("");
   const [baristaMarketplaceImage, setBaristaMarketplaceImage] = useState("");
+  const [maintenanceImage, setMaintenanceImage] = useState("");
   const [footerDescription, setFooterDescription] = useState("");
   const [footerEmail, setFooterEmail] = useState("");
   const [footerPhone, setFooterPhone] = useState("");
@@ -120,6 +127,7 @@ function LandingConfigSection() {
     setMarketingImage(cfg.marketingImage ?? "");
     setBaristaAcademyImage(cfg.baristaAcademyImage ?? "");
     setBaristaMarketplaceImage(cfg.baristaMarketplaceImage ?? "");
+    setMaintenanceImage(cfg.maintenanceImage ?? "");
     setFooterDescription(cfg.footerDescription ?? "");
     setFooterEmail(cfg.footerEmail ?? "");
     setFooterPhone(cfg.footerPhone ?? "");
@@ -135,6 +143,7 @@ function LandingConfigSection() {
         heroSlides: slides,
         shopImage, printImage, marketingImage,
         baristaAcademyImage, baristaMarketplaceImage,
+        maintenanceImage,
         footerDescription, footerEmail, footerPhone,
         footerFacebook, footerInstagram, footerTiktok,
       }),
@@ -198,6 +207,7 @@ function LandingConfigSection() {
                   <ImageInput label="Image — Section MARKETING" value={marketingImage} onChange={setMarketingImage} />
                   <ImageInput label="Image — Barista Academy" value={baristaAcademyImage} onChange={setBaristaAcademyImage} />
                   <ImageInput label="Image — Marketplace Barista" value={baristaMarketplaceImage} onChange={setBaristaMarketplaceImage} />
+                  <ImageInput label="Image — Maintenance" value={maintenanceImage} onChange={setMaintenanceImage} />
                 </div>
               </section>
 
@@ -346,6 +356,11 @@ export default function SystemManagementPage() {
   const queryClient = useQueryClient();
 
   const { data: states, isLoading } = useQuery<ServiceStatesMap>({ queryKey: ["/api/system-services"] });
+  const { order: savedOrder } = useServiceOrder();
+  const [serviceOrder, setServiceOrder] = useState<MarketplaceServiceId[]>(savedOrder);
+  const [draggedService, setDraggedService] = useState<MarketplaceServiceId | null>(null);
+
+  useEffect(() => setServiceOrder(savedOrder), [savedOrder.join("|")]);
 
   const updateState = useMutation({
     mutationFn: ({ service, state }: { service: ServiceKey; state: ServiceState }) =>
@@ -358,6 +373,29 @@ export default function SystemManagementPage() {
       toast({ variant: "destructive", title: "Failed to update service", description: "Please try again." });
     },
   });
+
+  const updateOrder = useMutation({
+    mutationFn: (order: MarketplaceServiceId[]) =>
+      apiRequest("PATCH", "/api/admin/system-service-order", { order }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/system-service-order"] });
+      toast({ title: "Service order updated" });
+    },
+    onError: () => toast({ variant: "destructive", title: "Failed to update service order" }),
+  });
+
+  const orderedCards = serviceOrder.map((id) => SERVICE_ORDER_CARDS.find((card) => card.id === id)).filter(Boolean) as typeof SERVICE_ORDER_CARDS;
+  const moveService = (target: MarketplaceServiceId) => {
+    if (!draggedService || draggedService === target) return;
+    const next = [...serviceOrder];
+    const from = next.indexOf(draggedService);
+    const to = next.indexOf(target);
+    next.splice(from, 1);
+    next.splice(to, 0, draggedService);
+    setServiceOrder(next);
+    updateOrder.mutate(next);
+    setDraggedService(null);
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -374,18 +412,19 @@ export default function SystemManagementPage() {
       {/* ── Service visibility ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {isLoading
-          ? Array.from({ length: 3 }).map((_, i) => (
+          ? Array.from({ length: SERVICE_ORDER_CARDS.length }).map((_, i) => (
               <Card key={i}><CardContent className="p-6"><Skeleton className="h-6 w-32 mb-3" /><Skeleton className="h-4 w-full mb-1" /><Skeleton className="h-4 w-2/3 mb-4" /><Skeleton className="h-9 w-full" /></CardContent></Card>
             ))
-          : SERVICES.map((svc) => {
-              const currentState: ServiceState = states?.[svc.key] ?? "VISIBLE";
+          : orderedCards.map((svc) => {
+              const currentState: ServiceState = svc.key ? (states?.[svc.key] ?? "VISIBLE") : "VISIBLE";
               const currentOption = STATE_OPTIONS.find((o) => o.value === currentState)!;
-              const isPending = updateState.isPending && updateState.variables?.service === svc.key;
+              const isPending = !!svc.key && updateState.isPending && updateState.variables?.service === svc.key;
               return (
-                <Card key={svc.key} data-testid={`card-service-${svc.key.toLowerCase()}`}>
+                <Card key={svc.id} draggable onDragStart={() => setDraggedService(svc.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => moveService(svc.id)} data-testid={`card-service-${svc.id.toLowerCase()}`}>
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
+                        <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" aria-label="Drag to reorder" />
                         <div className="bg-muted rounded-lg p-2.5"><svc.icon className="w-5 h-5 text-foreground/70" /></div>
                         <CardTitle className="text-base">{svc.label}</CardTitle>
                       </div>
@@ -397,7 +436,7 @@ export default function SystemManagementPage() {
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="flex flex-col gap-2">
-                      {STATE_OPTIONS.map((opt) => (
+                      {svc.key && STATE_OPTIONS.map((opt) => (
                         <Button key={opt.value} type="button" size="sm" variant={currentState === opt.value ? "default" : "outline"}
                           disabled={isPending} onClick={() => updateState.mutate({ service: svc.key, state: opt.value })}
                           className={`justify-start gap-2 w-full ${currentState === opt.value ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}`}

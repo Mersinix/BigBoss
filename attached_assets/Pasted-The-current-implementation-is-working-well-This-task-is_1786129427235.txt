@@ -1,0 +1,158 @@
+The current implementation is working well. This task is only about completing and synchronizing the **System Management** configuration.
+
+**Important:**
+
+* Do **not** redesign the page.
+* Do **not** change existing functionality that already works.
+* Do **not** modify business logic outside the requested scope.
+* Keep the existing UI and layout.
+* Continue from the current implementation.
+
+---
+
+# 1. Maintenance Service Visibility
+
+The **Maintenance** service must behave exactly like the other marketplace services.
+
+Currently:
+
+* **Visible** works correctly.
+* **Coming Soon** and **Hidden** do not.
+
+Make the Maintenance service follow exactly the same behavior as:
+
+* SHOP
+* PRINT
+* MARKETING
+* BARISTA
+
+When the administrator selects:
+
+* **Visible**
+* **Coming Soon**
+* **Hidden**
+
+the Maintenance service must update everywhere exactly like the other services.
+
+This includes every place where service visibility is used.
+
+---
+
+# 2. Global Service Order
+
+The administrator should be able to change the order of the marketplace services directly from **System Management**.
+
+The mapped service cards should become reorderable by drag-and-drop.
+
+The order chosen by the administrator becomes the global order for the entire platform.
+
+After changing the order, it should automatically be reflected everywhere the services are displayed.
+
+This includes (but is not limited to):
+
+* Landing Page service sections
+* Coffee Owner Shop service switcher
+* Favorites modal
+* Messages modal
+* Any service switcher
+* Any service navigation
+* Any other location displaying marketplace services
+
+The order should:
+
+* persist in the database
+* survive server restarts
+* update connected clients in realtime
+* require no page refresh
+
+Do not change the appearance of the service cards.
+
+---
+
+# 3. Landing Page Configuration
+
+The **Landing Page** configuration is missing the Maintenance section.
+
+Under:
+
+**Images des sections**
+
+add the missing configuration for the Maintenance section so it is managed exactly like the other services.
+
+It should support:
+
+* Maintenance section image
+* Editing the image URL
+* Saving the configuration
+* Loading the saved configuration
+* Displaying the configured image on the Landing Page
+
+Use the same behavior already implemented for:
+
+* SHOP
+* PRINT
+* MARKETING
+* Barista Academy
+* Marketplace Barista
+
+Do not redesign this section.
+
+Simply extend the existing configuration to include Maintenance.
+
+---
+
+# 4. Synchronization
+
+Verify that all configuration changes made from **System Management** are synchronized everywhere without requiring a refresh.
+
+This includes:
+
+* Service visibility
+* Service order
+* Landing Page section images
+* Maintenance image
+* Landing Page rendering
+* Shop service switcher
+* Favorites modal
+* Messages modal
+* Any other consumer of these settings
+
+All updates should propagate immediately to connected clients.
+
+---
+
+# Preserve Existing Behavior
+
+Do **not** modify:
+
+* Currency system
+* Landing Page design
+* Hero carousel
+* Footer configuration
+* Existing service behavior
+* Product logic
+* Store logic
+* Orders
+* Promotions
+* Packs
+* Flash
+* Favorites behavior
+* Any unrelated UI
+
+Only complete the missing System Management functionality.
+
+---
+
+# Final Verification
+
+Before considering the task complete, verify that:
+
+* ✅ Maintenance supports **Visible**, **Coming Soon**, and **Hidden** exactly like every other service.
+* ✅ The administrator can reorder the service cards by drag-and-drop.
+* ✅ The selected order becomes the global order everywhere in the application.
+* ✅ The service order is saved and persists after a server restart.
+* ✅ Connected clients receive service order changes in realtime.
+* ✅ The Landing Page configuration includes the missing Maintenance image section.
+* ✅ The configured Maintenance image is correctly displayed on the Landing Page.
+* ✅ All changes are synchronized without requiring a page refresh.
+* ✅ No unrelated functionality or design was modified.

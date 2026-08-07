@@ -31,7 +31,8 @@ import {
   type MarketplaceProduct, type MarketplaceListing, type MarketplaceVariant,
   type CreateOrderItem, type BillingInfo, type CreateOrderItemInput,
   type ShopFavoriteItem,
-  type ServiceKey, type ServiceState, type ServiceStatesMap,
+  type ServiceKey, type ServiceState, type ServiceStatesMap, type MarketplaceServiceId,
+  DEFAULT_SERVICE_ORDER,
   type SupplierStore, type InsertSupplierStore, type StoreCard, type StoreAdminRow, type StoreDetail,
   type SupplierProductReview,
   type Pack, type PackItem, type PackFavorite, type PackDetail, type PackItemDetail, type TaxonomyLabel,
@@ -179,6 +180,8 @@ export interface IStorage {
 
   // Platform services (System Management)
   getServiceStates(): Promise<ServiceStatesMap>;
+  getServiceOrder(): Promise<MarketplaceServiceId[]>;
+  setServiceOrder(order: MarketplaceServiceId[]): Promise<MarketplaceServiceId[]>;
   getLandingConfig(): Promise<LandingConfig>;
   updateLandingConfig(data: Partial<Omit<LandingConfig, "id" | "updatedAt">>): Promise<LandingConfig>;
   setServiceState(service: ServiceKey, state: ServiceState): Promise<ServiceStatesMap>;
@@ -2378,6 +2381,24 @@ export class DatabaseStorage implements IStorage {
       await db.insert(platformServices).values({ service, state });
     }
     return this.getServiceStates();
+  }
+
+  async getServiceOrder(): Promise<MarketplaceServiceId[]> {
+    const config = await this.getLandingConfig();
+    const configured = Array.isArray(config.serviceOrder) ? config.serviceOrder : [];
+    const valid = configured.filter((id): id is MarketplaceServiceId =>
+      (DEFAULT_SERVICE_ORDER as readonly string[]).includes(id),
+    );
+    return [...new Set(valid), ...DEFAULT_SERVICE_ORDER.filter((id) => !valid.includes(id))];
+  }
+
+  async setServiceOrder(order: MarketplaceServiceId[]): Promise<MarketplaceServiceId[]> {
+    const valid = order.length === DEFAULT_SERVICE_ORDER.length
+      && new Set(order).size === DEFAULT_SERVICE_ORDER.length
+      && order.every((id) => (DEFAULT_SERVICE_ORDER as readonly string[]).includes(id));
+    if (!valid) throw new Error("Invalid service order");
+    await this.updateLandingConfig({ serviceOrder: order });
+    return order;
   }
 
   // ── Supplier stores ─────────────────────────────────────────────────────────

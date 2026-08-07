@@ -28,6 +28,7 @@ import LocationPickerModal, { type PickedLocation } from "@/components/location-
 import { pickedToGeoLocation } from "@/store/search-location-store";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useServiceStates, ROLE_TO_SERVICE, type ServiceKey } from "@/hooks/use-service-states";
+import { sortServiceIds, useServiceOrder } from "@/hooks/use-service-order";
 
 // ── Language system ───────────────────────────────────────────────────────────
 
@@ -220,6 +221,7 @@ const DEFAULT_PRINT_IMG = "https://images.unsplash.com/photo-1588681664899-f142f
 const DEFAULT_MARKETING_IMG = "https://images.unsplash.com/photo-1611926653458-09294b3142bf?w=800&q=80";
 const DEFAULT_ACADEMY_IMG = "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=600&q=80";
 const DEFAULT_MARKETPLACE_IMG = "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=600&q=80";
+const DEFAULT_MAINTENANCE_IMG = "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&q=80";
 
 // ── Services ──────────────────────────────────────────────────────────────────
 
@@ -540,6 +542,7 @@ export default function LandingPage() {
   const loginForm = useForm({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
   const { states: serviceStates } = useServiceStates();
+  const { order: serviceOrder } = useServiceOrder();
 
   const { data: categories = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
   const { data: landingCfg } = useQuery<LandingConfig>({ queryKey: ["/api/landing-config"] });
@@ -691,7 +694,7 @@ export default function LandingPage() {
     return serviceStates[service] === "VISIBLE";
   });
 
-  const visibleServices = SERVICES.filter((svc) => !svc.service || serviceStates[svc.service] !== "HIDDEN");
+  const visibleServices = sortServiceIds(SERVICES, serviceOrder).filter((svc) => !svc.service || serviceStates[svc.service] !== "HIDDEN");
   const isPrintVisible = serviceStates.PRINTING !== "HIDDEN";
   const isMarketingVisible = serviceStates.MARKETING !== "HIDDEN";
   const isBaristaVisible = serviceStates.BARISTA !== "HIDDEN";
@@ -713,6 +716,7 @@ export default function LandingPage() {
   const marketingImg = landingCfg?.marketingImage || DEFAULT_MARKETING_IMG;
   const academyImg = landingCfg?.baristaAcademyImage || DEFAULT_ACADEMY_IMG;
   const marketplaceImg = landingCfg?.baristaMarketplaceImage || DEFAULT_MARKETPLACE_IMG;
+  const maintenanceImg = landingCfg?.maintenanceImage || DEFAULT_MAINTENANCE_IMG;
 
   // Footer data (admin-configured or defaults)
   const footerEmail = landingCfg?.footerEmail || "contact@bigbosscoffee.tn";
@@ -1041,7 +1045,7 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 gap-8 items-center">
               {/* Left: image */}
               <div className="order-2 md:order-1">
-                <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&q=80" alt="Maintenance" className="w-full h-72 object-cover rounded-2xl shadow-md" loading="lazy" />
+                <img src={maintenanceImg} alt="Maintenance" className="w-full h-72 object-cover rounded-2xl shadow-md" loading="lazy" />
               </div>
 
               {/* Right: specialties */}

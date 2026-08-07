@@ -216,7 +216,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/system-services/:service", requireAdmin, async (req, res) => {
     try {
       const service = req.params.service as string;
-      const VALID_SERVICES = ['PRINTING', 'MARKETING', 'BARISTA'];
+      const VALID_SERVICES = ['PRINTING', 'MARKETING', 'BARISTA', 'MAINTENANCE'];
       const VALID_STATES = ['VISIBLE', 'HIDDEN', 'COMING_SOON'];
       if (!VALID_SERVICES.includes(service)) return res.status(400).json({ message: "Invalid service" });
       const { state } = req.body;
@@ -226,6 +226,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(states);
     } catch (err) {
       res.status(500).json({ message: "Failed to update service state" });
+    }
+  });
+
+  app.get("/api/system-service-order", async (_req, res) => {
+    try {
+      res.json(await storage.getServiceOrder());
+    } catch {
+      res.status(500).json({ message: "Failed to load service order" });
+    }
+  });
+
+  app.patch("/api/admin/system-service-order", requireAdmin, async (req, res) => {
+    try {
+      const order = z.array(z.enum(['SHOP', 'PRINT', 'BARISTA', 'MARKETING', 'MAINTENANCE'])).parse(req.body?.order);
+      const saved = await storage.setServiceOrder(order as any);
+      broadcast("system_services_updated", { serviceOrder: saved });
+      res.json(saved);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid service order" });
+      res.status(500).json({ message: "Failed to update service order" });
     }
   });
 
@@ -263,6 +283,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/landing-config", requireAdmin, async (req, res) => {
     try {
       const config = await storage.updateLandingConfig(req.body);
+      broadcast("landing_config_updated", config);
       res.json(config);
     } catch (err) {
       res.status(500).json({ message: "Failed to update landing config" });

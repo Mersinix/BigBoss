@@ -13,6 +13,7 @@ const CATALOG_EVENTS = [
 
 const TAXONOMY_EVENTS = ["taxonomy_updated"];
 const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
+const LANDING_CONFIG_EVENTS = ["landing_config_updated"];
 const CURRENCY_EVENTS = ["currency_updated"];
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
 const PACK_EVENTS = ["pack_updated"];
@@ -112,6 +113,11 @@ export function useRealtime(userId?: number) {
           }
           if (SYSTEM_SERVICES_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/system-services"] });
+            qc.invalidateQueries({ queryKey: ["/api/system-service-order"] });
+            qc.invalidateQueries({ queryKey: ["/api/landing-config"] });
+          }
+          if (LANDING_CONFIG_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/landing-config"] });
           }
           if (CURRENCY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/system-currency"] });

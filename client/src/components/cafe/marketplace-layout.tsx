@@ -31,6 +31,7 @@ import {
 import { useFavorites, selectTotalFavCount, type MaintenanceFavItem } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates } from "@/hooks/use-service-states";
+import { sortServiceIds, useServiceOrder } from "@/hooks/use-service-order";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
@@ -390,6 +391,7 @@ const FAV_SERVICE_TO_KEY: Record<FavService,  "MAINTENANCE" | "PRINTING" | "BARI
 function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const [, navigate] = useLocation();
   const { states: serviceStates } = useServiceStates();
+  const { order: serviceOrder } = useServiceOrder();
   const isDark = useThemeStore((s) => s.isDark);
   const toggle = useThemeStore((s) => s.toggle);
   const [activeService, setActiveService] = useState<FavService>("SHOP");
@@ -422,7 +424,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   });
   const favStores = allStores.filter((s) => !!stores[s.id]);
 
-  const visibleFavServices = FAV_SERVICES.filter((s) => {
+  const visibleFavServices = sortServiceIds(FAV_SERVICES, serviceOrder).filter((s) => {
     const key = FAV_SERVICE_TO_KEY[s];
     return !key || serviceStates[key] !== "HIDDEN";
   });
@@ -854,7 +856,8 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { states: serviceStates } = useServiceStates();
-  const visibleServicesList = SERVICES_LIST.filter((s) => {
+  const { order: serviceOrder } = useServiceOrder();
+  const visibleServicesList = sortServiceIds(SERVICES_LIST, serviceOrder).filter((s) => {
     const key = SERVICE_ID_TO_KEY[s];
     return !key || serviceStates[key] !== "HIDDEN";
   });
@@ -1428,6 +1431,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const hydratePack = useFavorites((s) => s.hydratePack);
   const hydrateStores = useStoreFavorites((s) => s.hydrateStores);
   const { states: headerServiceStates } = useServiceStates();
+  const { order: headerServiceOrder } = useServiceOrder();
 
   const { data: favoritesData } = useQuery<ShopFavoriteItem[]>({
     queryKey: ["/api/favorites"],
@@ -1683,7 +1687,8 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
               { id: "barista", label: "BARISTA", icon: Coffee, href: "/barista", service: "BARISTA" as const },
               { id: "marketing", label: "MARKETING", icon: Megaphone, href: "/marketing", service: "MARKETING" as const },
               { id: "maintenance", label: "MAINTENANCE", icon: Wrench, href: "/maintenance", service: "MAINTENANCE" as const },
-            ].filter((svc) => !svc.service || headerServiceStates[svc.service] !== "HIDDEN").map((svc) => {
+            ].sort((a, b) => sortServiceIds([a.id, b.id], headerServiceOrder)[0] === a.id ? -1 : 1)
+              .filter((svc) => !svc.service || headerServiceStates[svc.service] !== "HIDDEN").map((svc) => {
               const isActive = location.startsWith("/" + svc.id) || (svc.href === "/products" && (location === "/products" || location.startsWith("/products")));
               return (
                 <Link key={svc.id} href={svc.href}>

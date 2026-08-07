@@ -13,6 +13,10 @@ export const userAccountStatusEnum = pgEnum('user_account_status', ['pending', '
 export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA', 'MAINTENANCE']);
 export const serviceStateEnum = pgEnum('service_state', ['VISIBLE', 'HIDDEN', 'COMING_SOON']);
 
+export const MARKETPLACE_SERVICE_IDS = ['SHOP', 'PRINT', 'BARISTA', 'MARKETING', 'MAINTENANCE'] as const;
+export type MarketplaceServiceId = typeof MARKETPLACE_SERVICE_IDS[number];
+export const DEFAULT_SERVICE_ORDER: MarketplaceServiceId[] = [...MARKETPLACE_SERVICE_IDS];
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
@@ -319,6 +323,8 @@ export const landingConfig = pgTable("landing_config", {
   marketingImage: text("marketing_image"),
   baristaAcademyImage: text("barista_academy_image"),
   baristaMarketplaceImage: text("barista_marketplace_image"),
+  maintenanceImage: text("maintenance_image"),
+  serviceOrder: jsonb("service_order").$type<MarketplaceServiceId[]>().default(DEFAULT_SERVICE_ORDER),
   footerDescription: text("footer_description"),
   footerEmail: text("footer_email"),
   footerPhone: text("footer_phone"),

@@ -442,6 +442,55 @@ export const packFavorites = pgTable("pack_favorites", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Maintenance marketplace profiles — the single public source of truth for
+// Maintenance accounts shown to Coffee Owners.
+export const maintenanceProfiles = pgTable("maintenance_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  jobTitle: text("job_title").notNull().default("Technicien de maintenance"),
+  profileType: text("profile_type").notNull().default("Freelance"),
+  categories: text("categories").array().notNull().default([]),
+  skills: text("skills").array().notNull().default([]),
+  certifications: text("certifications").array().notNull().default([]),
+  yearsExperience: integer("years_experience").notNull().default(0),
+  responseTime: text("response_time").notNull().default("< 24h"),
+  dailyRateInCents: integer("daily_rate_in_cents").notNull().default(0),
+  description: text("description").notNull().default(""),
+  portfolioImages: text("portfolio_images").array().notNull().default([]),
+  coverageArea: text("coverage_area").notNull().default(""),
+  workingDays: text("working_days").array().notNull().default([]),
+  startTime: text("start_time").notNull().default("08:00"),
+  endTime: text("end_time").notNull().default("18:00"),
+  isAvailable: boolean("is_available").notNull().default(true),
+  isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  rating: integer("rating").notNull().default(0),
+  reviewCount: integer("review_count").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const maintenanceFavorites = pgTable("maintenance_favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  maintenanceUserId: integer("maintenance_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const maintenanceReservations = pgTable("maintenance_reservations", {
+  id: serial("id").primaryKey(),
+  maintenanceUserId: integer("maintenance_user_id").notNull(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  service: text("service").notNull(),
+  date: text("date").notNull(),
+  time: text("time"),
+  location: text("location").notNull().default(""),
+  description: text("description").notNull().default(""),
+  category: text("category").notNull().default(""),
+  status: text("status").notNull().default("PENDING"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ── Promotions ───────────────────────────────────────────────────────────────
 
 export const promotionTypeEnum = pgEnum('promotion_type', [
@@ -710,6 +759,9 @@ export const insertSupplierProductReviewSchema = createInsertSchema(supplierProd
 export const insertPackSchema = createInsertSchema(packs).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPackItemSchema = createInsertSchema(packItems).omit({ id: true });
 export const insertPackFavoriteSchema = createInsertSchema(packFavorites).omit({ id: true, createdAt: true });
+export const insertMaintenanceProfileSchema = createInsertSchema(maintenanceProfiles).omit({ id: true, updatedAt: true });
+export const insertMaintenanceFavoriteSchema = createInsertSchema(maintenanceFavorites).omit({ id: true, createdAt: true });
+export const insertMaintenanceReservationSchema = createInsertSchema(maintenanceReservations).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });
@@ -787,6 +839,18 @@ export type PackItem = typeof packItems.$inferSelect;
 export type InsertPackItem = z.infer<typeof insertPackItemSchema>;
 
 export type PackFavorite = typeof packFavorites.$inferSelect;
+export type MaintenanceProfile = typeof maintenanceProfiles.$inferSelect;
+export type InsertMaintenanceProfile = z.infer<typeof insertMaintenanceProfileSchema>;
+export type MaintenanceFavorite = typeof maintenanceFavorites.$inferSelect;
+export type MaintenanceReservation = typeof maintenanceReservations.$inferSelect;
+export type MaintenanceMarketplaceCard = MaintenanceProfile & {
+  userId: number;
+  name: string;
+  phone: string | null;
+  location: string;
+  initials: string;
+};
+export type InsertMaintenanceReservation = z.infer<typeof insertMaintenanceReservationSchema>;
 export type InsertPackFavorite = z.infer<typeof insertPackFavoriteSchema>;
 
 export type Promotion = typeof promotions.$inferSelect;

@@ -8,6 +8,7 @@ import {
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
   landingConfig, packs, packItems, packFavorites, inventoryAdjustments, prospects,
+  maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
   orderReturns,
@@ -39,6 +40,8 @@ import {
   type CreatePackOrderItem, type ResolvedPackOrderItem,
   type InventoryItem, type InventoryVariantItem, type InventoryListResult, type InventoryStats, type InventoryFilters, type InventorySort, type InventoryAdjustmentWithVariant,
   type InventoryAdjustment, type StockStatus,
+  type MaintenanceProfile, type InsertMaintenanceProfile, type MaintenanceMarketplaceCard,
+  type MaintenanceReservation, type InsertMaintenanceReservation,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
 
@@ -187,6 +190,19 @@ export interface IStorage {
   setServiceState(service: ServiceKey, state: ServiceState): Promise<ServiceStatesMap>;
   getCurrency(): Promise<string>;
   setCurrency(symbol: string): Promise<string>;
+
+  // Maintenance marketplace
+  getMaintenanceProfiles(filters?: { search?: string; category?: string; profileType?: string; available?: boolean; location?: string }): Promise<MaintenanceMarketplaceCard[]>;
+  getMaintenanceCategories(): Promise<string[]>;
+  getMaintenanceProfile(userId: number): Promise<MaintenanceProfile>;
+  upsertMaintenanceProfile(userId: number, updates: Partial<InsertMaintenanceProfile>): Promise<MaintenanceProfile>;
+  getMaintenanceReservationsForProvider(userId: number): Promise<(MaintenanceReservation & { cafeOwner: string; ownerPhone: string | null })[]>;
+  getMaintenanceReservationsForOwner(userId: number): Promise<(MaintenanceReservation & { maintenanceName: string })[]>;
+  createMaintenanceReservation(data: InsertMaintenanceReservation): Promise<MaintenanceReservation>;
+  updateMaintenanceReservationStatus(id: number, providerId: number, status: string): Promise<MaintenanceReservation | undefined>;
+  getMaintenanceFavoritesByUser(userId: number): Promise<number[]>;
+  addMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
+  removeMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
 
   // Inventory
   getSupplierInventory(supplierId: number, filters?: InventoryFilters, sort?: InventorySort, page?: number, pageSize?: number): Promise<InventoryListResult>;

@@ -1,0 +1,802 @@
+# BigBossCoffee — Maintenance Marketplace ↔ Espace Maintenance Full Synchronization
+
+We now need to complete the synchronization between the **Coffee Owner Maintenance marketplace (`/maintenance`)** and the **Maintenance account / Espace Maintenance**.
+
+The goal is to transform the current Maintenance marketplace from partially static/demo data into a **fully real, database-backed, synchronized marketplace**, connected to the real Maintenance accounts, reservations, messages, favorites, availability, profiles, and realtime updates.
+
+## ⚠️ CRITICAL RULES — READ BEFORE MAKING ANY CHANGE
+
+Before changing any code, **first analyze the existing implementation and architecture of both sides**:
+
+* Coffee Owner → `/maintenance`
+* Maintenance account → `Espace Maintenance`
+* Existing authentication and roles
+* Existing database schema
+* Existing Maintenance APIs
+* Existing messages system
+* Existing favorites system
+* Existing reservation/booking system
+* Existing realtime synchronization mechanisms
+* Existing dark/light theme system
+* Existing service visibility/system management
+* Existing profile/account structures
+
+Do NOT start implementing immediately.
+
+First understand how the existing application already works and identify the existing patterns that should be reused.
+
+### VERY IMPORTANT
+
+* Do NOT redesign the application.
+* Do NOT change the existing design unless explicitly requested below.
+* Do NOT remove existing components or functionality.
+* Do NOT modify unrelated modules.
+* Do NOT change existing behavior that is already working.
+* Do NOT replace existing architecture unnecessarily.
+* Reuse existing database models, APIs, stores, hooks, realtime mechanisms, authentication, messaging, favorites, reservations, and UI patterns whenever they already exist.
+* If something already exists and works, extend it instead of creating a parallel implementation.
+* Do not introduce duplicate systems.
+* Do not create a second messaging system, favorite system, reservation system, profile system, etc.
+* Do not change the existing SHOP functionality.
+* Do not change PRINT, BARISTA, MARKETING, or other marketplace functionality.
+* Do not change the Maintenance design except for the specific visual synchronization requested below.
+* Preserve responsive behavior.
+* Preserve translations.
+* Preserve existing navigation.
+* Preserve existing permissions and authorization.
+* Preserve existing System Management service visibility behavior.
+
+### Required workflow
+
+**STEP 1 — AUDIT FIRST**
+
+Analyze the current implementation and determine:
+
+1. How Maintenance accounts are created and authenticated.
+2. What database models currently represent Maintenance users/accounts.
+3. How Maintenance profiles are stored.
+4. How Maintenance categories and skills are stored.
+5. How availability is stored.
+6. How Maintenance reservations/bookings are stored.
+7. How messages between users are stored and displayed.
+8. How favorites are currently implemented.
+9. How realtime updates are currently implemented elsewhere in the project.
+10. How the Coffee Owner `/maintenance` currently loads its data.
+11. Which parts of `/maintenance` are currently static/demo data.
+12. Which existing models/APIs can be reused.
+13. What database/schema changes are actually necessary.
+14. Whether the current Maintenance account already contains all information needed to populate the marketplace.
+
+Only after this audit should implementation begin.
+
+---
+
+# 1. Coffee Owner `/maintenance` — Hero Section
+
+Current hero:
+
+> BigBoss MAINTENANCE
+> Trouvez des techniciens certifiés pour la maintenance et réparation de vos équipements de café
+> 6 techniciens disponibles
+> 5 certifiés
+
+Keep the **exact same text/content**.
+
+However, make the Hero Section visually follow the **same design language as the SHOP Hero Section**:
+
+* Same type of background treatment.
+* Same background behavior.
+* Same icon treatment/color.
+* Same overall visual structure.
+* Same spacing and visual hierarchy.
+* Same responsive behavior.
+
+The text must remain the Maintenance text.
+
+Change:
+
+**BigBoss MAINTENANCE**
+
+so that **MAINTENANCE** uses the same accent/color treatment used for the corresponding highlighted part of the SHOP Hero.
+
+Do NOT redesign the Maintenance Hero beyond this requested synchronization with SHOP.
+
+The statistics must become **real dynamic values** based on actual Maintenance accounts/data rather than hardcoded values.
+
+For example:
+
+* Technicians available → calculated from real accounts/availability.
+* Certified technicians → calculated from real certification data.
+
+---
+
+# 2. Maintenance Filters
+
+Current filters:
+
+> Tous
+> ⚙️ Machines
+> 🔌 Infrastructure
+> 💻 Digital & IT
+> 🪑 Mobilier & Design
+> 🚿 Plomberie
+> ⚡ Électricité
+> ❄️ Climatisation
+> 🪵 Menuiserie
+>
+> Tous types
+> Toutes disponibilités
+> Toutes villes
+
+Make these filters visually and behaviorally consistent with the filters used by the **SHOP marketplace**.
+
+This means:
+
+* Same visual style.
+* Same spacing.
+* Same border/background behavior.
+* Same active/inactive state treatment.
+* Same responsive behavior.
+* Same scrolling behavior.
+* Same sticky/fixed behavior when scrolling.
+
+When the user scrolls down the Maintenance marketplace, the filters must remain fixed/sticky **the same way the SHOP filters do**.
+
+Do not redesign the filter system.
+
+Reuse the existing SHOP pattern where appropriate.
+
+### Important
+
+The categories must no longer depend on hardcoded frontend data.
+
+They must come from the real Maintenance category data used by the system/database.
+
+The filter results must operate on the real Maintenance accounts.
+
+---
+
+# 3. Real Maintenance Cards — Database Synchronization
+
+This is one of the most important changes.
+
+The Maintenance cards displayed in Coffee Owner `/maintenance` must become **real marketplace cards backed by the database**.
+
+They must represent real Maintenance accounts created through:
+
+**Espace Maintenance**
+
+For example, the current demo/static profiles such as:
+
+* Mohamed Gharbi
+* TechPro Services
+* Karim Ferjani
+* Design & Wood Studio
+* Amine Belhadj
+* CleanTech Maintenance
+
+must no longer be the source of marketplace data.
+
+These are currently demo/static data and must be replaced by real database records.
+
+A Maintenance account created through the real Maintenance account system must automatically become eligible to appear in the Coffee Owner Maintenance marketplace according to the existing account/profile/publication rules.
+
+The marketplace must display the real information belonging to the Maintenance account.
+
+This includes, where available:
+
+* Name
+* Profile picture / initials
+* Job title
+* Account/business type
+* Specialty
+* Categories
+* Skills
+* Rating
+* Review count
+* Location
+* Years of experience
+* Response time
+* Availability
+* Certifications
+* Description
+* Portfolio
+* Phone/contact information where appropriate
+* Coverage area
+* Working hours
+* Daily rate
+* Any other existing Maintenance profile information already supported by the system
+
+Do not invent fields unnecessarily.
+
+If the existing Maintenance account already stores a field, use it.
+
+If a required field genuinely does not exist anywhere, determine the minimal schema change required.
+
+---
+
+# 4. Espace Maintenance → Marketplace Synchronization
+
+The relationship must be:
+
+**Maintenance Account → Database → Coffee Owner `/maintenance`**
+
+The Coffee Owner marketplace must not maintain its own independent copy of Maintenance profiles.
+
+There must be one source of truth.
+
+When a Maintenance user updates their:
+
+* Profile
+* Name
+* Description
+* Skills
+* Categories
+* Certifications
+* Portfolio
+* Location
+* Coverage area
+* Working hours
+* Availability
+* Pricing
+* Profile image
+* Other marketplace-relevant information
+
+the Coffee Owner `/maintenance` must reflect those changes.
+
+No duplicated static profile data should remain in the frontend.
+
+---
+
+# 5. "Contacter" Button — Real Messaging
+
+The **Contacter** button on Maintenance cards/profile details must be connected to the existing real messaging system.
+
+It must NOT use:
+
+* fake messages
+* mock conversations
+* local-only state
+* static demo data
+
+When a Coffee Owner clicks:
+
+**Contacter**
+
+the conversation must use the project's existing messaging infrastructure.
+
+The Maintenance user must be able to see the real conversation inside **Espace Maintenance**.
+
+Messages sent by either side must remain synchronized.
+
+Reuse the existing messaging architecture already used elsewhere in BigBossCoffee.
+
+Do not create a second messaging system.
+
+---
+
+# 6. Favorites — Real Synchronization
+
+The Maintenance marketplace favorite functionality must become fully real and synchronized.
+
+When a Coffee Owner favorites a Maintenance professional:
+
+* Save it through the real existing favorites system.
+* The favorite must persist after refresh.
+* The favorite must be associated with the correct authenticated Coffee Owner.
+* The Maintenance profile must be the real database entity.
+* Removing the favorite must update the database.
+* Favorite state must remain synchronized across the relevant Coffee Owner interfaces.
+
+Reuse the existing Favorites architecture.
+
+Do not create a separate Maintenance-only favorites system if a global favorite system already exists.
+
+---
+
+# 7. "Réserver" — Real Maintenance Reservation System
+
+The **Réserver** button must be fully functional.
+
+A Coffee Owner must be able to make a real reservation/request with a Maintenance professional.
+
+The reservation must be stored in the real database and associated with:
+
+* Coffee Owner
+* Maintenance account/professional
+* Selected service/professional
+* Date
+* Time where applicable
+* Reservation status
+* Any existing booking information already supported by the project
+
+The Maintenance user must then see the real reservation inside:
+
+**Espace Maintenance**
+
+For example, the existing Maintenance dashboard currently shows:
+
+> Aujourd'hui 0
+> À venir 3
+> Passées 2
+>
+> Aucune réservation
+> Pas de réservation pour cette période.
+
+This must become real data.
+
+If a Coffee Owner creates a reservation, the Maintenance account must see it in its planning/reservation area.
+
+If the Maintenance user updates the reservation status or related information, the Coffee Owner side must reflect the change according to the existing reservation architecture.
+
+Reuse the existing reservation/booking architecture wherever possible.
+
+Do NOT create a parallel booking system specifically for Maintenance if an existing reservation architecture can be extended.
+
+---
+
+# 8. Reservation Synchronization
+
+The complete flow must work:
+
+**Coffee Owner**
+
+→ selects Maintenance professional
+→ clicks Réserver
+→ creates reservation
+→ reservation stored in database
+→ Maintenance account receives/loads reservation
+→ reservation appears in Espace Maintenance
+→ Maintenance user can manage it according to existing permissions/workflow
+
+And changes made from Espace Maintenance must correctly propagate back to the Coffee Owner side.
+
+Do not leave any part of the flow as demo/static behavior.
+
+---
+
+# 9. Dark Mode / Light Mode
+
+The `/maintenance` Coffee Owner page must correctly use the existing global theme system.
+
+When the user clicks the existing:
+
+**Dark / Light**
+
+button in the navigation bar:
+
+* Maintenance page must switch correctly.
+* Dark mode must remain the default.
+* Light mode must work correctly.
+* Hero section must adapt.
+* Filters must adapt.
+* Cards must adapt.
+* Profile/details views must adapt.
+* Buttons must adapt.
+* Empty states must adapt.
+* Modals must adapt.
+* All Maintenance-specific components must follow the same theme architecture used by the rest of the Coffee Owner application.
+
+Do NOT create a separate local dark-mode state.
+
+Use the existing global theme mechanism already used by the Coffee Owner application.
+
+Do not change the existing theme behavior elsewhere.
+
+---
+
+# 10. Realtime Synchronization
+
+Every relevant update made from **Espace Maintenance** must be reflected in Coffee Owner `/maintenance` in realtime, using the project's existing realtime architecture.
+
+Examples:
+
+### Profile
+
+Maintenance user updates profile → marketplace reflects update.
+
+### Availability
+
+Maintenance user changes availability → marketplace availability updates.
+
+### Categories
+
+Maintenance user changes categories → filtering and marketplace results update.
+
+### Pricing
+
+Maintenance user changes daily rate → marketplace displays updated price.
+
+### Portfolio
+
+Maintenance user updates portfolio → marketplace profile reflects it.
+
+### Certifications
+
+Maintenance user adds/removes certification → marketplace reflects it.
+
+### Reservations
+
+Reservation created/updated → relevant side receives the update.
+
+### Messages
+
+Message sent → relevant conversation updates.
+
+### Favorites
+
+Favorite changes → relevant Coffee Owner UI updates.
+
+Do not introduce unnecessary polling if the project already has a realtime mechanism.
+
+Reuse the project's existing realtime architecture.
+
+---
+
+# 11. REMOVE ALL STATIC MAINTENANCE DATA
+
+There must be **no hardcoded Maintenance marketplace profiles** remaining.
+
+The current code contains static data similar to:
+
+```ts
+const MAINTENANCE_CATEGORIES = [
+  ...
+];
+
+const AGENTS = [
+  ...
+];
+
+const TYPE_COLORS = {
+  ...
+};
+
+const TYPE_ICONS = {
+  ...
+};
+```
+
+The hardcoded:
+
+* Maintenance categories
+* Agent profiles
+* Names
+* Ratings
+* Review counts
+* Locations
+* Experience
+* Response times
+* Availability
+* Certifications
+* Prices
+* Descriptions
+* Portfolio images
+* Phone numbers
+* Coverage areas
+* Working hours
+
+must not be used as marketplace data anymore.
+
+Replace static business/profile data with real database-backed data.
+
+### Important distinction
+
+Do NOT blindly remove useful UI configuration.
+
+For example, if `TYPE_ICONS` is purely a visual mapping and is still required for the UI, it may remain if appropriate.
+
+The requirement is specifically:
+
+**No static business/profile/marketplace data.**
+
+Categories and marketplace information must come from the real system/database wherever they represent actual business data.
+
+---
+
+# 12. Database & Schema
+
+Review the existing database schema before modifying it.
+
+Determine the minimum schema changes required to support:
+
+* Maintenance account profiles
+* Maintenance categories
+* Skills
+* Certifications
+* Availability
+* Coverage areas
+* Portfolio
+* Pricing
+* Reservations
+* Favorites
+* Messaging
+* Ratings/reviews
+* Marketplace visibility
+
+Do not duplicate existing entities.
+
+If an existing model can represent the information, reuse it.
+
+Only add/modify schema where genuinely necessary.
+
+Ensure all relationships are correctly associated with the authenticated Maintenance account and Coffee Owner.
+
+---
+
+# 13. Authentication & Authorization
+
+Verify the complete authorization flow.
+
+A Maintenance user must only be able to manage their own:
+
+* Profile
+* Availability
+* Categories
+* Services
+* Portfolio
+* Reservations
+* Messages
+* Other permitted information
+
+A Coffee Owner must only be able to perform actions allowed by the existing marketplace permissions.
+
+Do not weaken existing authorization.
+
+Do not expose private Maintenance information that should remain private.
+
+The marketplace should only expose information intended to be public.
+
+---
+
+# 14. Existing Design Must Remain Intact
+
+This is extremely important.
+
+Apart from the specific changes requested in this task:
+
+**KEEP EVERYTHING AS IT IS.**
+
+Do not:
+
+* Redesign cards.
+* Redesign profile modal.
+* Redesign navigation.
+* Remove sections.
+* Remove existing components.
+* Remove existing buttons.
+* Change typography unnecessarily.
+* Change spacing unnecessarily.
+* Change animations unnecessarily.
+* Change routing unnecessarily.
+* Change other marketplace services.
+* Change SHOP.
+* Change PRINT.
+* Change BARISTA.
+* Change MARKETING.
+* Change unrelated admin functionality.
+* Change existing Maintenance account design unless required for synchronization.
+
+The goal is **functional/data synchronization**, not a redesign.
+
+---
+
+# 15. Preserve Existing Maintenance Account UI
+
+The existing **Espace Maintenance** interface should remain visually and functionally intact unless a minimal change is required to display the newly synchronized data.
+
+Do not redesign the dashboard.
+
+Do not remove:
+
+* Planning
+* Profil
+* Disponibilité
+* Today's reservations
+* Upcoming reservations
+* Past reservations
+* Existing navigation
+* Existing account functionality
+
+Only connect these existing interfaces to the real synchronized data where necessary.
+
+---
+
+# 16. Marketplace Visibility Rules
+
+Verify how Maintenance profiles become publicly visible.
+
+A Maintenance account should only appear in Coffee Owner `/maintenance` when it satisfies the project's existing marketplace/profile visibility rules.
+
+Do not expose incomplete/private accounts accidentally.
+
+If there is already a concept such as:
+
+* active account
+* profile completed
+* marketplace enabled
+* available for bookings
+* approved
+* visible
+
+reuse it.
+
+Do not invent a new visibility system if one already exists.
+
+---
+
+# 17. Statistics Must Be Dynamic
+
+The hero statistics:
+
+> 6 techniciens disponibles
+> 5 certifiés
+
+must no longer be hardcoded.
+
+Calculate them from real database information.
+
+The displayed values must update when Maintenance accounts change their:
+
+* availability
+* certifications
+* marketplace visibility
+
+---
+
+# 18. Verify the Entire Synchronization Chain
+
+Before considering the task complete, test the complete real flow.
+
+### Test A — Create Maintenance account
+
+Create a real Maintenance account.
+
+Verify it can appear in `/maintenance` according to visibility rules.
+
+### Test B — Profile update
+
+Update profile from Espace Maintenance.
+
+Verify `/maintenance` reflects it.
+
+### Test C — Availability
+
+Change availability.
+
+Verify marketplace filters/cards/statistics update.
+
+### Test D — Categories
+
+Change categories.
+
+Verify category filters and card results update.
+
+### Test E — Favorite
+
+Coffee Owner favorites Maintenance professional.
+
+Verify persistence and synchronization.
+
+### Test F — Messaging
+
+Coffee Owner clicks Contacter.
+
+Send a message.
+
+Verify Maintenance user receives it.
+
+Send reply.
+
+Verify Coffee Owner receives it.
+
+### Test G — Reservation
+
+Coffee Owner clicks Réserver.
+
+Create reservation.
+
+Verify it appears inside Espace Maintenance.
+
+### Test H — Reservation update
+
+Maintenance user updates/manages reservation.
+
+Verify Coffee Owner sees the correct state.
+
+### Test I — Realtime
+
+Change relevant Maintenance data.
+
+Verify the Coffee Owner marketplace updates without requiring unnecessary manual synchronization.
+
+### Test J — Theme
+
+Switch Dark → Light → Dark.
+
+Verify the complete `/maintenance` page behaves correctly.
+
+### Test K — Filters
+
+Verify:
+
+* Categories
+* Type
+* Availability
+* City
+
+all work against real data.
+
+### Test L — No static data
+
+Search the Maintenance marketplace implementation and verify there are no remaining hardcoded agent/profile/business datasets being used to populate marketplace cards.
+
+---
+
+# 19. Final Codebase Audit
+
+After implementation, perform a final audit of:
+
+* Database schema
+* API endpoints
+* Authentication
+* Authorization
+* Maintenance account
+* Coffee Owner `/maintenance`
+* Profiles
+* Categories
+* Filters
+* Availability
+* Favorites
+* Messages
+* Reservations
+* Reviews/ratings
+* Realtime updates
+* Dark/light mode
+* Responsive behavior
+* Existing marketplace services
+
+Make sure there are no duplicated systems, broken references, unused demo APIs, static marketplace datasets, or synchronization gaps.
+
+If something was already working and was not part of this task, leave it unchanged.
+
+## FINAL OBJECTIVE
+
+The final result must behave as a real two-sided marketplace:
+
+**Maintenance Account**
+
+→ creates/manages real Maintenance profile
+→ manages availability/categories/services/profile
+→ receives real messages
+→ receives/manages real reservations
+→ updates information
+
+↓
+
+**Database / Existing Backend Architecture**
+
+↓
+
+**Coffee Owner `/maintenance`**
+
+→ sees real Maintenance professionals
+→ filters real professionals
+→ favorites real professionals
+→ contacts real professionals
+→ books real professionals
+→ sees real-time updates
+
+And the reverse synchronization must work wherever the existing functionality requires it.
+
+Again:
+
+**DO NOT redesign the application.**
+
+**DO NOT remove existing functionality.**
+
+**DO NOT change unrelated parts.**
+
+**DO NOT replace working architecture unnecessarily.**
+
+**AUDIT FIRST → IDENTIFY EXISTING SYSTEMS → IMPLEMENT MINIMAL REQUIRED CHANGES → TEST FULL SYNCHRONIZATION → FINAL AUDIT.**

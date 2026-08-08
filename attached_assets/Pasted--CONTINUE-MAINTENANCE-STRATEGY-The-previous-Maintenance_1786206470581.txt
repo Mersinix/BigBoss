@@ -1,0 +1,119 @@
+# CONTINUE — MAINTENANCE STRATEGY
+
+The previous Maintenance synchronization task was interrupted because the Replit monthly quota was reached.
+
+The current work was committed under:
+
+**`MAINTENANCE STRATEGY`**
+
+Inside that commit you have:
+
+* The original task/specification:
+  **`Pasted--BigBossCoffee-Maintenance-Marketplace-Espace-Maintenan_1786188538713.txt`**
+* All files modified/created by the previous implementation attempt.
+
+## IMPORTANT — DO NOT START OVER
+
+This is a **continuation task**, not a new implementation.
+
+Before changing anything:
+
+### 1. Read the original prompt
+
+Read:
+
+**`Pasted--BigBossCoffee-Maintenance-Marketplace-Espace-Maintenan_1786188538713.txt`**
+
+This remains the complete source of truth for what the final result should be.
+
+### 2. Inspect the `MAINTENANCE STRATEGY` commit
+
+Carefully inspect the actual changes already made in that commit.
+
+Determine:
+
+* What has already been fully implemented.
+* What has been partially implemented.
+* Exactly where the previous implementation stopped.
+* What remains missing from the original specification.
+* Whether anything already implemented needs correction to actually work.
+
+**Do not assume anything is missing. Verify it from the code.**
+
+### 3. Continue from the existing implementation
+
+Continue the work **from the exact state of the `MAINTENANCE STRATEGY` commit**.
+
+Do NOT:
+
+* Reimplement completed features.
+* Replace completed code.
+* Create duplicate models.
+* Create duplicate APIs.
+* Create duplicate messaging/favorites/reservation systems.
+* Redesign existing UI.
+* Remove existing functionality.
+* Change unrelated modules.
+* Change SHOP, PRINT, BARISTA, MARKETING, or other working functionality.
+
+If something is already correctly implemented, **leave it exactly as it is**.
+
+Only implement what is still missing or incomplete according to the original prompt.
+
+### 4. Verify before modifying
+
+For each requirement from the original prompt, verify the current implementation first.
+
+If it is already working → **leave it unchanged**.
+
+If it is partially implemented → **complete it**.
+
+If it is missing → **implement it**.
+
+If it is implemented but incorrectly connected → **fix only the necessary part**.
+
+### 5. Pay special attention to the point where the previous agent stopped
+
+The previous agent had already:
+
+* Completed the architecture audit.
+* Identified the real Maintenance route.
+* Identified that the marketplace and Espace Maintenance were demo-backed.
+* Started creating the shared Maintenance persistence layer.
+* Started defining the Maintenance database tables.
+* Started implementing the server-side source of truth.
+* Started implementing Maintenance profiles/availability, reservations, favorites and marketplace APIs.
+
+The quota was reached during this implementation.
+
+**Do not recreate these parts blindly. Inspect what actually exists in the commit and continue from there.**
+
+### 6. Final verification
+
+Once the missing work is completed, verify the original prompt end-to-end and make sure the final implementation is genuinely synchronized between:
+
+**Espace Maintenance ↔ Database/Backend ↔ Coffee Owner `/maintenance`**
+
+Also verify there are no remaining static/demo Maintenance marketplace records being used where real database data should be used.
+
+### 7. Preserve the existing project
+
+The most important rule:
+
+**KEEP EVERYTHING THAT ALREADY WORKS.**
+
+No unnecessary redesign.
+
+No unnecessary refactoring.
+
+No removal of additional components.
+
+No changes to functionality that was not part of the original Maintenance synchronization task.
+
+No changes to the existing design unless explicitly required by the original prompt.
+
+### FINAL WORKFLOW
+
+**Read original prompt → Inspect `MAINTENANCE STRATEGY` → Identify exact stopping point → Continue only missing work → Verify everything → Stop.**
+
+Do not restart the task from zero.

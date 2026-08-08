@@ -339,6 +339,147 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Maintenance marketplace/profile/reservations ─────────────────────────
+
+  app.get("/api/maintenance/profiles", async (req: any, res) => {
+    try {
+      const available = req.query.available === undefined
+        ? undefined
+        : req.query.available === "true";
+      res.json(await storage.getMaintenanceProfiles({
+        search: typeof req.query.search === "string" ? req.query.search : undefined,
+        category: typeof req.query.category === "string" ? req.query.category : undefined,
+        profileType: typeof req.query.profileType === "string" ? req.query.profileType : undefined,
+        available,
+        location: typeof req.query.location === "string" ? req.query.location : undefined,
+      }));
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to load Maintenance profiles" });
+    }
+  });
+
+  app.get("/api/maintenance/categories", async (_req, res) => {
+    try {
+      res.json(await storage.getMaintenanceCategories());
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load Maintenance categories" });
+    }
+  });
+
+  app.get("/api/maintenance/profile/:userId", requireAuth, async (req: any, res) => {
+    const targetUserId = Number(req.params.userId);
+    const viewer = await storage.getUser(req.session.userId);
+    if (!viewer || (viewer.id !== targetUserId && !["ADMIN", "SUPER_ADMIN"].includes(viewer.role))) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const target = await storage.getUser(targetUserId);
+    if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Not found" });
+    res.json({ user: target, profile: await storage.getMaintenanceProfile(targetUserId) });
+  });
+
+  app.patch("/api/maintenance/profile", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    const body = z.object({
+      jobTitle: z.string().optional(),
+      profileType: z.string().optional(),
+      categories: z.array(z.string()).optional(),
+      skills: z.array(z.string()).optional(),
+      certifications: z.array(z.string()).optional(),
+      yearsExperience: z.number().int().min(0).optional(),
+      responseTime: z.string().optional(),
+      dailyRateInCents: z.number().int().min(0).optional(),
+      description: z.string().optional(),
+      portfolioImages: z.array(z.string()).optional(),
+      coverageArea: z.string().optional(),
+      marketplaceVisible: z.boolean().optional(),
+    }).parse(req.body);
+    const profile = await storage.upsertMaintenanceProfile(user.id, body);
+    broadcast("maintenance_updated", { userId: user.id, kind: "profile" });
+    res.json(profile);
+  });
+
+  app.patch("/api/maintenance/availability", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    const body = z.object({
+      workingDays: z.array(z.string()),
+      startTime: z.string(),
+      endTime: z.string(),
+      isAvailable: z.boolean().optional(),
+      isOnVacation: z.boolean(),
+    }).parse(req.body);
+    const profile = await storage.upsertMaintenanceProfile(user.id, {
+      ...body,
+      isAvailable: body.isAvailable ?? !body.isOnVacation,
+    });
+    broadcast("maintenance_updated", { userId: user.id, kind: "availability" });
+    res.json(profile);
+  });
+
+  app.get("/api/maintenance/reservations", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    if (user.role === "MAINTENANCE") return res.json(await storage.getMaintenanceReservationsForProvider(user.id));
+    if (user.role === "CAFE_OWNER") return res.json(await storage.getMaintenanceReservationsForOwner(user.id));
+    return res.status(403).json({ message: "Forbidden" });
+  });
+
+  app.post("/api/maintenance/reservations", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const body = z.object({
+      maintenanceUserId: z.number().int().positive(),
+      service: z.string().min(1),
+      date: z.string().min(1),
+      time: z.string().optional().nullable(),
+      location: z.string().default(""),
+      description: z.string().default(""),
+      category: z.string().default(""),
+    }).parse(req.body);
+    const profiles = await storage.getMaintenanceProfiles();
+    const provider = profiles.find((profile) => profile.userId === body.maintenanceUserId && profile.available);
+    if (!provider) return res.status(400).json({ message: "This Maintenance professional is not available" });
+    const reservation = await storage.createMaintenanceReservation({
+      ...body,
+      cafeOwnerId: user.id,
+      status: "PENDING",
+    });
+    broadcastToUsers([user.id, body.maintenanceUserId], "maintenance_reservation_updated", { reservationId: reservation.id });
+    res.status(201).json(reservation);
+  });
+
+  app.patch("/api/maintenance/reservations/:id/status", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    const status = z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "RESCHEDULED"]).parse(req.body?.status);
+    const updated = await storage.updateMaintenanceReservationStatus(Number(req.params.id), user.id, status);
+    if (!updated) return res.status(404).json({ message: "Reservation not found" });
+    broadcastToUsers([user.id, updated.cafeOwnerId], "maintenance_reservation_updated", { reservationId: updated.id });
+    res.json(updated);
+  });
+
+  app.get("/api/maintenance-favorites", requireAuth, async (req: any, res) => {
+    res.json(await storage.getMaintenanceFavoritesByUser(req.session.userId));
+  });
+
+  app.post("/api/maintenance-favorites", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const maintenanceUserId = Number(req.body?.maintenanceUserId);
+    if (!maintenanceUserId) return res.status(400).json({ message: "maintenanceUserId is required" });
+    await storage.addMaintenanceFavorite(user.id, maintenanceUserId);
+    broadcastToUsers([user.id], "maintenance_favorite_updated", { maintenanceUserId });
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete("/api/maintenance-favorites/:maintenanceUserId", requireAuth, async (req: any, res) => {
+    await storage.removeMaintenanceFavorite(req.session.userId, Number(req.params.maintenanceUserId));
+    broadcastToUsers([req.session.userId], "maintenance_favorite_updated", { maintenanceUserId: Number(req.params.maintenanceUserId) });
+    res.json({ ok: true });
+  });
+
   // ── Favorites (shop/product favorites, persisted per-user) ─────────────────
 
   app.get('/api/favorites', requireAuth, async (req: any, res) => {

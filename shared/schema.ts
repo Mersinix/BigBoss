@@ -849,6 +849,10 @@ export type MaintenanceMarketplaceCard = MaintenanceProfile & {
   phone: string | null;
   location: string;
   initials: string;
+  available: boolean;
+  type: string;
+  specialty: string;
+  workingHours: string;
 };
 export type InsertMaintenanceReservation = z.infer<typeof insertMaintenanceReservationSchema>;
 export type InsertPackFavorite = z.infer<typeof insertPackFavoriteSchema>;

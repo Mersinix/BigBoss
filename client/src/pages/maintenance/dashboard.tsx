@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCurrency } from "@/hooks/use-currency";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -35,70 +38,18 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-// ── Static / fake data ────────────────────────────────────────────────────────
-
-const FAKE_RESERVATIONS = [
-  {
-    id: 1,
-    cafeOwner: "Café des Arts",
-    ownerPhone: "+216 71 234 567",
-    service: "Réparation machine espresso",
-    date: "2026-07-28",
-    time: "09:00",
-    location: "Tunis, Lac 1",
-    description: "Machine DeLonghi en panne — ne chauffe plus. Urgent.",
-    status: "PENDING" as const,
-    category: "Machines",
-  },
-  {
-    id: 2,
-    cafeOwner: "Le Grand Café",
-    ownerPhone: "+216 71 345 678",
-    service: "Maintenance préventive réfrigérateur",
-    date: "2026-07-29",
-    time: "14:30",
-    location: "Tunis, Centre ville",
-    description: "Contrôle annuel du système de réfrigération.",
-    status: "CONFIRMED" as const,
-    category: "Machines",
-  },
-  {
-    id: 3,
-    cafeOwner: "Café Medina",
-    ownerPhone: "+216 71 456 789",
-    service: "Installation caméras de sécurité",
-    date: "2026-07-25",
-    time: "10:00",
-    location: "Tunis, Médina",
-    description: "Installation de 4 caméras IP + configuration NVR.",
-    status: "COMPLETED" as const,
-    category: "Digital & IT",
-  },
-  {
-    id: 4,
-    cafeOwner: "Café Riviera",
-    ownerPhone: "+216 71 567 890",
-    service: "Réparation système de ventilation",
-    date: "2026-08-05",
-    time: "08:00",
-    location: "La Marsa",
-    description: "Ventilation défaillante dans la cuisine. Bruit anormal depuis 2 jours.",
-    status: "PENDING" as const,
-    category: "Infrastructure",
-  },
-  {
-    id: 5,
-    cafeOwner: "Coffee House TN",
-    ownerPhone: "+216 71 678 901",
-    service: "Remise en état du moulin café",
-    date: "2026-07-20",
-    time: "11:00",
-    location: "Ariana",
-    description: "Moulin Mahlkönig EK43 — résidu de café, nettoyage complet.",
-    status: "CANCELLED" as const,
-    category: "Machines",
-  },
-];
+type MaintenanceReservationRow = {
+  id: number;
+  cafeOwner: string;
+  ownerPhone: string | null;
+  service: string;
+  date: string;
+  time: string | null;
+  location: string;
+  description: string;
+  status: string;
+  category: string;
+};
 
 const STATUS_META: Record<string, { label: string; color: string; icon: any }> = {
   PENDING:   { label: "En attente",  color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Clock },
@@ -135,7 +86,7 @@ function getTab(date: string): "today" | "upcoming" | "past" {
 // ── Reservation Card ──────────────────────────────────────────────────────────
 
 function ReservationCard({ res, onConfirm, onCancel, onReschedule }: {
-  res: typeof FAKE_RESERVATIONS[0];
+  res: MaintenanceReservationRow;
   onConfirm: (id: number) => void;
   onCancel: (id: number) => void;
   onReschedule: (id: number) => void;
@@ -189,42 +140,99 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule }: {
 export default function MaintenanceDashboard() {
   const { user } = useAuth();
   const currency = useCurrency();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"planning" | "profile" | "availability">("planning");
   const [planTab, setPlanTab] = useState<"today" | "upcoming" | "past">("upcoming");
-  const [reservations, setReservations] = useState(FAKE_RESERVATIONS);
+  const { data: reservations = [] } = useQuery<MaintenanceReservationRow[]>({
+    queryKey: ["/api/maintenance/reservations"],
+    enabled: user?.role === "MAINTENANCE",
+  });
+  const { data: profileData } = useQuery<{ user: any; profile: any }>({
+    queryKey: ["/api/maintenance/profile", user?.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/maintenance/profile/${user!.id}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to load profile");
+      return response.json();
+    },
+    enabled: !!user?.id,
+  });
+  const profile = profileData?.profile;
 
   // Profile state
   const [profileName, setProfileName] = useState(user?.name ?? "");
   const [jobTitle, setJobTitle] = useState("Technicien de maintenance");
-  const [bio, setBio] = useState("Spécialiste en maintenance d'équipements de café professionnels avec plus de 8 ans d'expérience.");
-  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>(["Machines à café", "Machines espresso", "Moulins à café"]);
-  const [selectedAreas, setSelectedAreas] = useState<string[]>(["Grand Tunis"]);
+  const [bio, setBio] = useState("");
+  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [agentType, setAgentType] = useState("Freelance");
   const [phone, setPhone] = useState(user?.phone ?? "");
-  const [dailyRate, setDailyRate] = useState("200");
+  const [dailyRate, setDailyRate] = useState("0");
   const [responseTime, setResponseTime] = useState("< 2h");
 
   // Availability state
-  const [workingDays, setWorkingDays] = useState<string[]>(["Lun", "Mar", "Mer", "Jeu", "Ven"]);
+  const [workingDays, setWorkingDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("18:00");
   const [isOnVacation, setIsOnVacation] = useState(false);
 
+  useEffect(() => {
+    if (!profileData) return;
+    const p = profileData.profile;
+    setProfileName(profileData.user?.name ?? user?.name ?? "");
+    setPhone(profileData.user?.phone ?? user?.phone ?? "");
+    setJobTitle(p.jobTitle);
+    setBio(p.description);
+    setSelectedSpecialties(p.skills ?? []);
+    setSelectedAreas(p.coverageArea ? p.coverageArea.split(",").map((v: string) => v.trim()).filter(Boolean) : []);
+    setAgentType(p.profileType);
+    setDailyRate(String((p.dailyRateInCents ?? 0) / 100));
+    setResponseTime(p.responseTime);
+    setWorkingDays(p.workingDays ?? []);
+    setStartTime(p.startTime);
+    setEndTime(p.endTime);
+    setIsOnVacation(p.isOnVacation);
+  }, [profileData, user?.name, user?.phone]);
+
   const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-  const filtered = reservations.filter((r) => getTab(r.date) === planTab);
+  const filtered = useMemo(() => reservations.filter((r) => getTab(r.date) === planTab), [reservations, planTab]);
   const todayCount = reservations.filter((r) => getTab(r.date) === "today").length;
   const upcomingCount = reservations.filter((r) => getTab(r.date) === "upcoming").length;
   const pendingCount = reservations.filter((r) => r.status === "PENDING").length;
 
+  const updateStatus = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiRequest("PATCH", `/api/maintenance/reservations/${id}/status`, { status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] }),
+    onError: (error: Error) => toast({ title: "Impossible de mettre à jour la réservation", description: error.message, variant: "destructive" }),
+  });
+  const saveProfile = useMutation({
+    mutationFn: () => apiRequest("PATCH", "/api/maintenance/profile", {
+      jobTitle, profileType: agentType, skills: selectedSpecialties,
+      categories: selectedSpecialties, description: bio,
+      coverageArea: selectedAreas.join(", "), dailyRateInCents: Math.round((parseFloat(dailyRate) || 0) * 100),
+      responseTime,
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] }); toast({ title: "Profil sauvegardé" }); },
+    onError: (error: Error) => toast({ title: "Impossible de sauvegarder le profil", description: error.message, variant: "destructive" }),
+  });
+  const saveAvailability = useMutation({
+    mutationFn: () => apiRequest("PATCH", "/api/maintenance/availability", {
+      workingDays, startTime, endTime, isOnVacation, isAvailable: !isOnVacation,
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] }); toast({ title: "Disponibilités sauvegardées" }); },
+    onError: (error: Error) => toast({ title: "Impossible de sauvegarder les disponibilités", description: error.message, variant: "destructive" }),
+  });
+
   const handleConfirm = (id: number) => {
-    setReservations((prev) => prev.map((r) => r.id === id ? { ...r, status: "CONFIRMED" as const } : r));
+    updateStatus.mutate({ id, status: "CONFIRMED" });
   };
   const handleCancel = (id: number) => {
-    setReservations((prev) => prev.map((r) => r.id === id ? { ...r, status: "CANCELLED" as const } : r));
+    updateStatus.mutate({ id, status: "CANCELLED" });
   };
   const handleReschedule = (id: number) => {
-    setReservations((prev) => prev.map((r) => r.id === id ? { ...r, status: "RESCHEDULED" as const } : r));
+    updateStatus.mutate({ id, status: "RESCHEDULED" });
   };
 
   const toggleSpecialty = (s: string) => {
@@ -453,7 +461,7 @@ export default function MaintenanceDashboard() {
               </CardContent>
             </Card>
 
-            <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5">
+            <Button onClick={() => saveProfile.mutate()} disabled={saveProfile.isPending} className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5">
               Sauvegarder le profil
             </Button>
           </div>
@@ -540,7 +548,7 @@ export default function MaintenanceDashboard() {
               </CardContent>
             </Card>
 
-            <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5">
+            <Button onClick={() => saveAvailability.mutate()} disabled={saveAvailability.isPending} className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5">
               Sauvegarder les disponibilités
             </Button>
           </div>

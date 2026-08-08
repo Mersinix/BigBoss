@@ -303,6 +303,15 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(user: InsertUser) {
     const [created] = await db.insert(users).values(user as any).returning();
+    // A Maintenance account gets its marketplace profile from the same
+    // registration record. The profile remains private until the account is
+    // approved, because marketplace queries filter by users.status.
+    if (created.role === "MAINTENANCE") {
+      await db.insert(maintenanceProfiles).values({
+        userId: created.id,
+        categories: created.maintenanceCategories ?? [],
+      }).onConflictDoNothing({ target: maintenanceProfiles.userId });
+    }
     return created;
   }
 
@@ -1246,6 +1255,152 @@ export class DatabaseStorage implements IStorage {
 
   async removeFavorite(userId: number, productId: number): Promise<void> {
     await db.delete(favorites).where(and(eq(favorites.userId, userId), eq(favorites.productId, productId)));
+  }
+
+  // ── Maintenance marketplace ───────────────────────────────────────────────
+
+  async getMaintenanceProfiles(filters?: {
+    search?: string;
+    category?: string;
+    profileType?: string;
+    available?: boolean;
+    location?: string;
+  }): Promise<MaintenanceMarketplaceCard[]> {
+    const rows = await db.select({ profile: maintenanceProfiles, user: users })
+      .from(maintenanceProfiles)
+      .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
+      .where(and(
+        eq(users.role, "MAINTENANCE" as any),
+        eq(users.status, "approved"),
+        eq(maintenanceProfiles.marketplaceVisible, true),
+      ));
+
+    const cards = rows.map(({ profile, user }) => {
+      const available = profile.isAvailable && !profile.isOnVacation;
+      const location = user.locationAddress ?? profile.coverageArea ?? "";
+      const workingHours = profile.workingDays.length
+        ? `${profile.workingDays.join(", ")} · ${profile.startTime}–${profile.endTime}`
+        : `${profile.startTime}–${profile.endTime}`;
+      return {
+        ...profile,
+        name: user.name,
+        phone: user.phone ?? null,
+        location,
+        initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+        available,
+        type: profile.profileType,
+        specialty: profile.categories[0] ?? "Maintenance",
+        workingHours,
+      } as MaintenanceMarketplaceCard;
+    });
+
+    const query = filters?.search?.trim().toLowerCase();
+    return cards.filter((card) => {
+      if (query) {
+        const haystack = [
+          card.name, card.jobTitle, card.description, card.location,
+          card.categories.join(" "), card.skills.join(" "), card.coverageArea,
+        ].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (filters?.category && !card.categories.some((c) => c.toLowerCase() === filters.category!.toLowerCase())) return false;
+      if (filters?.profileType && card.profileType !== filters.profileType) return false;
+      if (filters?.available !== undefined && card.available !== filters.available) return false;
+      if (filters?.location && card.location !== filters.location) return false;
+      return true;
+    });
+  }
+
+  async getMaintenanceCategories(): Promise<string[]> {
+    const rows = await db.select({ categories: maintenanceProfiles.categories })
+      .from(maintenanceProfiles)
+      .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
+      .where(and(
+        eq(users.role, "MAINTENANCE" as any),
+        eq(users.status, "approved"),
+        eq(maintenanceProfiles.marketplaceVisible, true),
+      ));
+    return Array.from(new Set(rows.flatMap((row) => row.categories))).sort((a, b) => a.localeCompare(b));
+  }
+
+  async getMaintenanceProfile(userId: number): Promise<MaintenanceProfile> {
+    const [profile] = await db.select().from(maintenanceProfiles)
+      .where(eq(maintenanceProfiles.userId, userId));
+    if (profile) return profile;
+    const [created] = await db.insert(maintenanceProfiles).values({ userId }).returning();
+    return created;
+  }
+
+  async upsertMaintenanceProfile(userId: number, updates: Partial<InsertMaintenanceProfile>): Promise<MaintenanceProfile> {
+    const current = await this.getMaintenanceProfile(userId);
+    const [updated] = await db.update(maintenanceProfiles)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(maintenanceProfiles.id, current.id))
+      .returning();
+    return updated;
+  }
+
+  async getMaintenanceReservationsForProvider(userId: number): Promise<(MaintenanceReservation & { cafeOwner: string; ownerPhone: string | null })[]> {
+    const rows = await db.select({ reservation: maintenanceReservations, owner: users })
+      .from(maintenanceReservations)
+      .innerJoin(users, eq(maintenanceReservations.cafeOwnerId, users.id))
+      .where(eq(maintenanceReservations.maintenanceUserId, userId))
+      .orderBy(asc(maintenanceReservations.date), asc(maintenanceReservations.time));
+    return rows.map(({ reservation, owner }) => ({
+      ...reservation,
+      cafeOwner: owner.name,
+      ownerPhone: owner.phone ?? null,
+    }));
+  }
+
+  async getMaintenanceReservationsForOwner(userId: number): Promise<(MaintenanceReservation & { maintenanceName: string })[]> {
+    const rows = await db.select({ reservation: maintenanceReservations, provider: users })
+      .from(maintenanceReservations)
+      .innerJoin(users, eq(maintenanceReservations.maintenanceUserId, users.id))
+      .where(eq(maintenanceReservations.cafeOwnerId, userId))
+      .orderBy(asc(maintenanceReservations.date), asc(maintenanceReservations.time));
+    return rows.map(({ reservation, provider }) => ({
+      ...reservation,
+      maintenanceName: provider.name,
+    }));
+  }
+
+  async createMaintenanceReservation(data: InsertMaintenanceReservation): Promise<MaintenanceReservation> {
+    const [created] = await db.insert(maintenanceReservations).values(data as any).returning();
+    return created;
+  }
+
+  async updateMaintenanceReservationStatus(id: number, providerId: number, status: string): Promise<MaintenanceReservation | undefined> {
+    const [updated] = await db.update(maintenanceReservations)
+      .set({ status, updatedAt: new Date() })
+      .where(and(
+        eq(maintenanceReservations.id, id),
+        eq(maintenanceReservations.maintenanceUserId, providerId),
+      ))
+      .returning();
+    return updated;
+  }
+
+  async getMaintenanceFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select({ maintenanceUserId: maintenanceFavorites.maintenanceUserId })
+      .from(maintenanceFavorites)
+      .where(eq(maintenanceFavorites.userId, userId));
+    return rows.map((row) => row.maintenanceUserId);
+  }
+
+  async addMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void> {
+    const [existing] = await db.select().from(maintenanceFavorites).where(and(
+      eq(maintenanceFavorites.userId, userId),
+      eq(maintenanceFavorites.maintenanceUserId, maintenanceUserId),
+    ));
+    if (!existing) await db.insert(maintenanceFavorites).values({ userId, maintenanceUserId });
+  }
+
+  async removeMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void> {
+    await db.delete(maintenanceFavorites).where(and(
+      eq(maintenanceFavorites.userId, userId),
+      eq(maintenanceFavorites.maintenanceUserId, maintenanceUserId),
+    ));
   }
 
   // ── Supplier variants ───────────────────────────────────────────────────────
@@ -3507,6 +3662,17 @@ export class DatabaseStorage implements IStorage {
           .where(and(eq(users.role, 'SUPPLIER' as any), eq(users.status, 'approved')));
         for (const s of allSuppliers) contactUserIds.add(s.id);
       }
+      // Maintenance professionals are contactable directly from the
+      // Maintenance marketplace, before an order exists.
+      const maintenance = await db.select({ userId: maintenanceProfiles.userId })
+        .from(maintenanceProfiles)
+        .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
+        .where(and(
+          eq(users.role, "MAINTENANCE" as any),
+          eq(users.status, "approved"),
+          eq(maintenanceProfiles.marketplaceVisible, true),
+        ));
+      for (const provider of maintenance) contactUserIds.add(provider.userId);
     } else if (me.role === 'SUPPLIER') {
       // Can message cafe owners from orders
       const supplierOrders = await db.select().from(orders).where(eq(orders.supplierId, userId));
@@ -3520,6 +3686,10 @@ export class DatabaseStorage implements IStorage {
       const delivOrders = await db.select().from(orders).where(eq(orders.deliveryId, userId));
       for (const o of delivOrders) contactUserIds.add(o.cafeId);
       // Also show all approved cafe owners
+      const allCafes = await db.select().from(users)
+        .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
+      for (const c of allCafes) contactUserIds.add(c.id);
+    } else if (me.role === 'MAINTENANCE') {
       const allCafes = await db.select().from(users)
         .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
       for (const c of allCafes) contactUserIds.add(c.id);

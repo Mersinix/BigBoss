@@ -84,6 +84,7 @@ interface FavoritesStore {
 
   hydrateShop: (items: ShopFavItem[]) => void;
   hydratePack: (ids: number[]) => void;
+  hydrateMaintenance: (ids: number[]) => void;
 }
 
 export const useFavorites = create<FavoritesStore>((set, get) => ({
@@ -170,12 +171,20 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     }),
 
   toggleMaintenance: (item) =>
-    set((s) => {
-      const next = { ...s.maintenance };
-      if (next[item.id]) delete next[item.id];
-      else next[item.id] = item;
-      return { maintenance: next };
-    }),
+    (() => {
+      const wasFav = !!get().maintenance[item.id];
+      set((s) => {
+        const next = { ...s.maintenance };
+        if (wasFav) delete next[item.id];
+        else next[item.id] = item;
+        return { maintenance: next };
+      });
+      if (wasFav) {
+        apiRequest("DELETE", `/api/maintenance-favorites/${item.id}`).catch(() => {});
+      } else {
+        apiRequest("POST", "/api/maintenance-favorites", { maintenanceUserId: item.id }).catch(() => {});
+      }
+    })(),
 
   removeShop: (id) => {
     set((s) => { const next = { ...s.shop }; delete next[id]; return { shop: next }; });
@@ -202,7 +211,30 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     set((s) => { const next = { ...s.marketing }; delete next[id]; return { marketing: next }; }),
 
   removeMaintenance: (id) =>
-    set((s) => { const next = { ...s.maintenance }; delete next[id]; return { maintenance: next }; }),
+    (() => {
+      set((s) => { const next = { ...s.maintenance }; delete next[id]; return { maintenance: next }; });
+      apiRequest("DELETE", `/api/maintenance-favorites/${id}`).catch(() => {});
+    })(),
+
+  hydrateMaintenance: (ids) =>
+    set((s) => {
+      const next = { ...s.maintenance };
+      for (const id of ids) {
+        if (!next[id]) {
+          next[id] = {
+            id,
+            name: "Maintenance",
+            initials: "M",
+            specialty: "Maintenance",
+            categories: [],
+            location: "",
+            rating: 0,
+            available: true,
+          };
+        }
+      }
+      return { maintenance: next };
+    }),
 }));
 
 export const selectTotalFavCount = (s: FavoritesStore) =>

@@ -3512,7 +3512,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Find an existing DIRECT conversation between two users, or create one. */
-  async findOrCreateDirectConversation(userId1: number, userId2: number): Promise<{ conversation: typeof conversations.$inferSelect; isNew: boolean }> {
+  async findOrCreateDirectConversation(userId1: number, userId2: number, service = 'SHOP'): Promise<{ conversation: typeof conversations.$inferSelect; isNew: boolean }> {
     // Find conversations where both users are participants
     const p1 = await db.select({ conversationId: conversationParticipants.conversationId })
       .from(conversationParticipants).where(eq(conversationParticipants.userId, userId1));
@@ -3524,7 +3524,11 @@ export class DatabaseStorage implements IStorage {
 
     if (sharedIds.length > 0) {
       const directConvs = await db.select().from(conversations)
-        .where(and(inArray(conversations.id, sharedIds), eq(conversations.type, 'DIRECT')));
+        .where(and(
+          inArray(conversations.id, sharedIds),
+          eq(conversations.type, 'DIRECT'),
+          eq(conversations.service, service),
+        ));
       if (directConvs.length > 0) {
         return { conversation: directConvs[0], isNew: false };
       }
@@ -3533,7 +3537,7 @@ export class DatabaseStorage implements IStorage {
     // Create new direct conversation
     const [conv] = await db.insert(conversations).values({
       type: 'DIRECT',
-      service: 'SHOP',
+      service,
       createdByUserId: userId1,
     }).returning();
 

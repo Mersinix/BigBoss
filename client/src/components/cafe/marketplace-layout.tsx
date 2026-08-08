@@ -896,6 +896,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
   const inputCls = dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 rounded-2xl" : "border-gray-200 rounded-2xl";
 
   // ── SHOP queries ──────────────────────────────────────────────────────────
+  const isRealMessagingService = service === "SHOP" || service === "MAINTENANCE";
   const { data: shopConversations = [], isLoading: shopConvsLoading } = useQuery<ConversationSummary[]>({
     queryKey: ["/api/messages/conversations"],
     queryFn: async () => {
@@ -904,7 +905,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
       return r.json();
     },
     refetchInterval: 30000,
-    enabled: service === "SHOP",
+    enabled: isRealMessagingService,
   });
 
   const { data: shopContacts = [] } = useQuery<EligibleContact[]>({
@@ -914,10 +915,11 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
-    enabled: service === "SHOP",
+    enabled: isRealMessagingService,
   });
 
-  const shopActiveConv = shopConversations.find(c => c.id === shopConvId) ?? null;
+  const realConversations = shopConversations.filter((c) => c.service === (service === "MAINTENANCE" ? "MAINTENANCE" : "SHOP"));
+  const shopActiveConv = realConversations.find(c => c.id === shopConvId) ?? null;
 
   const { data: shopMsgsData, isLoading: shopMsgsLoading } = useQuery<{ messages: ConversationMessageRow[] }>({
     queryKey: ["/api/messages/conversations", shopConvId, "messages"],
@@ -955,7 +957,10 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
 
   const newConvMutation = useMutation({
     mutationFn: (targetUserId: number) =>
-      apiRequest("POST", "/api/messages/conversations", { targetUserId }),
+      apiRequest("POST", "/api/messages/conversations", {
+        targetUserId,
+        service: service === "MAINTENANCE" ? "MAINTENANCE" : "SHOP",
+      }),
     onSuccess: (data: any) => {
       setShopConvId(data.conversation.id);
       setView("chat");
@@ -974,7 +979,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
     markReadMutation.mutate(id);
   };
 
-  const filteredShopConvs = shopConversations.filter(c => {
+  const filteredShopConvs = realConversations.filter(c => {
     const name = c.title ?? c.otherParticipants.map(p => p.name).join(", ");
     return name.toLowerCase().includes(shopSearch.toLowerCase());
   });
@@ -1064,7 +1069,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
       {/* ── Scrollable content ── */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-5 pb-5">
 
-        {service === "SHOP" ? (
+        {isRealMessagingService ? (
           <>
             {/* ── SHOP list view (real data) ── */}
             {view === "list" && (
@@ -1151,7 +1156,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
                     <span className={`font-semibold text-sm truncate ${textPrimary}`}>
                       {(shopActiveConv.title ?? shopActiveConv.otherParticipants.map(p => p.name).join(", ")) || "Unknown"}
                     </span>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg shrink-0 ${SERVICE_BADGE["SHOP"]}`}>SHOP</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg shrink-0 ${SERVICE_BADGE[service]}`}>{service}</span>
                   </div>
                 </div>
                 {/* Messages */}

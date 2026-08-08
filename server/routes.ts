@@ -3267,9 +3267,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   /** POST /api/messages/conversations — find or create a direct conversation */
   app.post("/api/messages/conversations", requireAuth, async (req: any, res) => {
-    const { targetUserId } = req.body;
+    const { targetUserId, service = "SHOP" } = req.body;
     if (!targetUserId || typeof targetUserId !== "number") {
       return res.status(400).json({ message: "targetUserId is required" });
+    }
+    if (typeof service !== "string" || !["SHOP", "MAINTENANCE"].includes(service)) {
+      return res.status(400).json({ message: "Invalid service" });
     }
     try {
       const userId: number = req.session.userId;
@@ -3283,7 +3286,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           return res.status(403).json({ message: "You are not authorized to message this user" });
         }
       }
-      const { conversation, isNew } = await storage.findOrCreateDirectConversation(userId, targetUserId);
+      const { conversation, isNew } = await storage.findOrCreateDirectConversation(userId, targetUserId, service);
       // Notify both participants immediately so the other side sees the conversation appear in real time
       broadcastToUsers([userId, targetUserId], "conversation_updated", { conversationId: conversation.id });
       res.json({ conversation, isNew });

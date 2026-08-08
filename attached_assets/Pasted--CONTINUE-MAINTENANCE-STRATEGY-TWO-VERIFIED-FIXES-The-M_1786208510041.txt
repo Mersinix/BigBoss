@@ -1,0 +1,352 @@
+# CONTINUE — MAINTENANCE STRATEGY TWO — VERIFIED FIXES
+
+The Maintenance implementation has already gone through two continuation passes:
+
+* **`MAINTENANCE STRATEGY`**
+* **`MAINTENANCE STRATEGY TWO`**
+
+The current repository contains the work from both passes.
+
+The previous continuation prompt and original specification are already available in the commits.
+
+## IMPORTANT
+
+I have now manually checked the current implementation.
+
+The Maintenance synchronization is partially working, but I found **4 concrete issues that are NOT correctly completed yet**.
+
+Your task now is to fix **ONLY these issues**, while preserving everything else that is already working.
+
+Do NOT restart the Maintenance implementation.
+
+Do NOT redo the completed backend/database work.
+
+Do NOT redesign unrelated parts.
+
+Do NOT remove existing functionality.
+
+---
+
+# 1. COFFEE OWNER — DARK MODE IS NOT YET CORRECTLY IMPLEMENTED
+
+The `/maintenance` Coffee Owner page still does not properly follow the global Coffee Owner dark/light theme strategy.
+
+This needs to be completed.
+
+The Maintenance marketplace must use the **same global theme mechanism and behavior as the other Coffee Owner marketplace pages**, especially SHOP.
+
+When the Coffee Owner clicks the existing Dark/Light button in the navbar:
+
+**Dark → Light**
+
+and:
+
+**Light → Dark**
+
+the entire `/maintenance` page must switch correctly.
+
+This must include all existing Maintenance UI:
+
+* Hero
+* Filters
+* Maintenance cards
+* Profile/details modal
+* Buttons
+* Badges
+* Availability indicators
+* Empty states
+* Reservation UI
+* Message UI
+* Any other Maintenance-specific components
+
+### Important
+
+Do NOT create a separate Maintenance theme system.
+
+Do NOT use an isolated local `isDark` state if the Coffee Owner application already has a global theme/store.
+
+Follow the same implementation strategy already used by the correctly synchronized Coffee Owner components.
+
+Dark mode must remain the default.
+
+Do not change the design itself.
+
+The goal is to make the existing Maintenance design correctly respond to the existing global theme.
+
+---
+
+# 2. MESSAGES — MAINTENANCE MUST HAVE ITS OWN SWITCHER SECTION
+
+Messaging itself is working, but it is currently appearing under the **SHOP switcher**.
+
+That is incorrect.
+
+The Maintenance messaging must be integrated into the **Maintenance service context**, not treated as SHOP messaging.
+
+## Coffee Owner side
+
+Inside the Coffee Owner Maintenance experience, when the user opens the existing Messages modal/chatbot:
+
+there should be a Maintenance section in the service switcher.
+
+The Coffee Owner must be able to:
+
+**Messages → Maintenance**
+
+and then see the available/relevant Maintenance professionals/agents they can communicate with.
+
+The Coffee Owner should be able to select a Maintenance agent and open the real conversation.
+
+The existing real messaging system is already working.
+
+**Do NOT create a new messaging system.**
+
+Reuse the existing messaging infrastructure.
+
+The required change is primarily the **service context/switcher and Maintenance participants**, so that Maintenance conversations appear under Maintenance instead of SHOP.
+
+### Expected concept
+
+The switcher should allow the Coffee Owner to distinguish conversations by marketplace/service, including:
+
+* SHOP
+* PRINT
+* BARISTA
+* MARKETING
+* **MAINTENANCE**
+
+The Maintenance section must show the relevant real Maintenance conversations/agents.
+
+Do not break the existing SHOP messaging.
+
+---
+
+## Maintenance account side
+
+The Maintenance user must also have the same existing messaging/chatbot experience appropriate for their account.
+
+Inside **Espace Maintenance**, the Maintenance user should be able to open the existing messages/chat interface and see conversations with their Coffee Owner clients.
+
+They must see the real conversations initiated from the Coffee Owner Maintenance marketplace.
+
+For example:
+
+**Coffee Owner → Maintenance agent → conversation**
+
+must be visible to the Maintenance user.
+
+The Maintenance user must be able to:
+
+* See clients/conversations
+* Open a conversation
+* Read messages
+* Send replies
+* Receive new messages
+
+Use the existing messaging system.
+
+Do not create a duplicate chat system.
+
+Do not make messages local/static.
+
+---
+
+# 3. ESPACE MAINTENANCE — REMOVE THE SIDEBAR
+
+The current **Espace Maintenance** still contains a sidebar that we no longer use.
+
+Remove the Maintenance sidebar from the Espace Maintenance interface.
+
+Do not remove the functionality contained inside the sidebar if any of it is still needed.
+
+Instead, reorganize the relevant account information into the existing Espace Maintenance main section.
+
+The top/account section should contain the Sign Out action.
+
+The Espace Maintenance area should have a structure similar to:
+
+**Espace Maintenance**
+
+**TechPro**
+
+**0**
+Aujourd'hui
+
+**2**
+À venir
+
+**0**
+En attente
+
+and:
+
+**Sign Out**
+
+must be available directly inside this Espace Maintenance section.
+
+The exact visual implementation should follow the existing Espace Maintenance design and remain clean/responsive.
+
+### Important
+
+Do NOT redesign the entire dashboard.
+
+The requested change is specifically:
+
+**Remove the unused sidebar and move Sign Out into the Espace Maintenance section.**
+
+Keep the existing:
+
+* Planning
+* Profil
+* Disponibilité
+* Today's statistics
+* Upcoming statistics
+* Pending statistics
+* Existing dashboard functionality
+
+---
+
+# 4. COFFEE OWNER `/maintenance` — HERO MUST MATCH SHOP DESIGN
+
+The Maintenance Hero is still not visually matching the SHOP Hero correctly.
+
+This needs to be fixed.
+
+The Maintenance Hero must use the **same Hero design/system as SHOP**.
+
+Do not create an approximate version.
+
+Inspect the actual SHOP Hero implementation and make the Maintenance Hero follow the same design structure.
+
+This includes the same:
+
+* Background treatment
+* Layout
+* Spacing
+* Visual hierarchy
+* Icon treatment
+* Icon color behavior
+* Container structure
+* Border/radius behavior where applicable
+* Responsive behavior
+* Dark/light behavior
+
+But keep the Maintenance-specific content.
+
+The Maintenance Hero text remains:
+
+**BigBoss MAINTENANCE**
+
+**Trouvez des techniciens certifiés pour la maintenance et réparation de vos équipements de café**
+
+The highlighted/accented part:
+
+**MAINTENANCE**
+
+must use the Maintenance color treatment requested previously.
+
+The statistics must remain real/dynamic.
+
+### Critical
+
+Do NOT modify the SHOP Hero.
+
+Use the existing SHOP Hero as the visual reference/source pattern and make `/maintenance` follow it.
+
+Do not redesign the Maintenance page beyond making its Hero consistent with SHOP.
+
+---
+
+# VERIFICATION BEFORE EDITING
+
+Before changing anything, inspect the current implementation from:
+
+**`MAINTENANCE STRATEGY TWO`**
+
+and verify exactly how these four areas currently work:
+
+1. Coffee Owner theme
+2. Messages switcher
+3. Espace Maintenance layout/sidebar
+4. SHOP Hero vs Maintenance Hero
+
+Then make the minimum required changes.
+
+---
+
+# DO NOT TOUCH WORKING MAINTENANCE FUNCTIONALITY
+
+Everything that is already working from the previous implementation must remain working, including:
+
+* Real Maintenance profiles
+* Database synchronization
+* Availability
+* Categories
+* Filters
+* Favorites
+* Reservations
+* Messaging backend
+* Realtime synchronization
+* Maintenance profile persistence
+* Maintenance dashboard persistence
+* Authentication
+* Authorization
+* Existing Maintenance marketplace functionality
+
+Only modify them if one of the four requested corrections directly requires it.
+
+---
+
+# FINAL CHECK
+
+After making the changes, verify these exact flows:
+
+### Dark mode
+
+Coffee Owner:
+
+**Dark → Light → Dark**
+
+and `/maintenance` correctly follows the global theme.
+
+### Messages
+
+Coffee Owner:
+
+**Messages → Maintenance → Maintenance agent → conversation**
+
+Maintenance user:
+
+**Espace Maintenance → Messages → Coffee Owner conversation**
+
+Both sides can read/send real messages.
+
+### Espace Maintenance
+
+No unused sidebar.
+
+Sign Out is available inside the Espace Maintenance section.
+
+Existing dashboard functionality remains intact.
+
+### Hero
+
+Compare `/maintenance` Hero directly against SHOP Hero.
+
+The Maintenance Hero should clearly use the same design system while retaining Maintenance content.
+
+---
+
+## FINAL RULE
+
+This is a **targeted correction pass**, not a new Maintenance implementation.
+
+**Inspect → Fix these 4 issues → Verify → Stop.**
+
+Do not restart previous work.
+
+Do not duplicate existing systems.
+
+Do not redesign unrelated components.
+
+Do not change working functionality.

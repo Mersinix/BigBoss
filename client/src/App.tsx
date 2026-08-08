@@ -180,6 +180,7 @@ function HomeRoute() {
   // Pending users of any role stay on the landing page (which shows the approval modal)
   if (needsApproval(user)) return <LandingPage />;
   if (user.role === "CAFE_OWNER") return <Redirect to="/products" />;
+  if (user.role === "MAINTENANCE") return <MaintenanceDashboard />;
   return (
     <DashboardLayout>
       <SmartDashboard />
@@ -307,7 +308,7 @@ function Router() {
 
       {/* ── Maintenance Agent routes ── */}
       <Route path="/maintenance-panel/:rest*">
-        {() => (<DashboardLayout><ProtectedRoute component={MaintenanceDashboard} allowedRoles={["MAINTENANCE"]} requireApproved /></DashboardLayout>)}
+        {() => (<ProtectedRoute component={MaintenanceDashboard} allowedRoles={["MAINTENANCE"]} requireApproved />)}
       </Route>
 
       {/* ── Service pages (publicly viewable, gated by System Management) ── */}

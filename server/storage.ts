@@ -3184,16 +3184,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllReviews(filters?: { reviewType?: string; reported?: boolean }): Promise<SupplierProductReview[]> {
-    let query = db.select().from(supplierProductReviews);
     const conditions: any[] = [];
     if (filters?.reviewType) conditions.push(eq(supplierProductReviews.reviewType, filters.reviewType));
     if (filters?.reported) conditions.push(sql`${supplierProductReviews.reportedAt} IS NOT NULL`);
-    if (conditions.length) {
-      return db.select().from(supplierProductReviews)
-        .where(conditions.length === 1 ? conditions[0] : and(...conditions))
-        .orderBy(desc(supplierProductReviews.createdAt));
-    }
-    return db.select().from(supplierProductReviews).orderBy(desc(supplierProductReviews.createdAt));
+    const rows = await db.select().from(supplierProductReviews)
+      .where(conditions.length ? (conditions.length === 1 ? conditions[0] : and(...conditions)) : undefined)
+      .orderBy(desc(supplierProductReviews.createdAt));
+
+    // Keep the Admin Maintenance Reviews view on the same user-backed source
+    // of truth as the Maintenance overview, without changing other review
+    // categories or their existing response shape.
+    const maintenanceIds = Array.from(new Set(rows
+      .filter((review) => review.reviewType === "MAINTENANCE")
+      .flatMap((review) => [review.maintenanceUserId, review.cafeId])
+      .filter((id): id is number => typeof id === "number")));
+    if (maintenanceIds.length === 0) return rows;
+    const relatedUsers = await db.select({ id: users.id, name: users.name })
+      .from(users)
+      .where(inArray(users.id, maintenanceIds));
+    const names = new Map(relatedUsers.map((user) => [user.id, user.name]));
+    return rows.map((review) => review.reviewType === "MAINTENANCE"
+      ? ({
+          ...review,
+          maintenanceName: names.get(review.maintenanceUserId ?? 0) ?? review.cafeName,
+          reviewerName: names.get(review.cafeId) ?? review.cafeName,
+        } as any)
+      : review);
   }
 
   async getExistingProductReview(productId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
@@ -3963,8 +3979,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Admin: list all conversations with a summary of participants. */
-  async adminGetAllConversations(): Promise<ConversationSummary[]> {
-    const convRows = await db.select().from(conversations).orderBy(desc(conversations.lastMessageAt));
+  async adminGetAllConversations(service?: string): Promise<ConversationSummary[]> {
+    const convRows = await db.select().from(conversations)
+      .where(service ? eq(conversations.service, service) : undefined)
+      .orderBy(desc(conversations.lastMessageAt));
     if (convRows.length === 0) return [];
 
     const allParticipants = await db.select({ cp: conversationParticipants, u: users })

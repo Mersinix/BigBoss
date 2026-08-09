@@ -15,6 +15,8 @@ import { Eye, EyeOff, Megaphone, MessageSquare, Users } from "lucide-react";
 import { MessagesPanel } from "@/components/messages/messages-panel";
 import type { ConversationSummary, EligibleContact } from "@shared/schema";
 
+const MESSAGE_SERVICES = ["SHOP", "MAINTENANCE", "BARISTA", "PRINT", "MARKETING"] as const;
+
 const ROLE_COLOR: Record<string, string> = {
   ADMIN:            "bg-red-100 text-red-700",
   SUPER_ADMIN:      "bg-red-100 text-red-700",
@@ -109,10 +111,11 @@ function BroadcastDialog({ contacts, onClose }: { contacts: EligibleContact[]; o
 function AllConversationsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [service, setService] = useState<(typeof MESSAGE_SERVICES)[number]>("SHOP");
   const { data: allConvs = [], isLoading } = useQuery<ConversationSummary[]>({
-    queryKey: ["/api/messages/admin/all"],
+    queryKey: ["/api/messages/admin/all", service],
     queryFn: async () => {
-      const r = await fetch("/api/messages/admin/all", { credentials: "include" });
+      const r = await fetch(`/api/messages/admin/all?service=${service}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -129,17 +132,23 @@ function AllConversationsTab() {
     onError: (err: any) => toast({ title: "Failed", description: err?.message, variant: "destructive" }),
   });
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  if (allConvs.length === 0) return (
-    <div className="p-12 text-center text-muted-foreground">
-      <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
-      <p>No conversations yet</p>
-    </div>
-  );
-
   return (
-    <div className="divide-y">
-      {allConvs.map(conv => {
+    <div>
+      <div className="border-b px-4 pt-3">
+        <Tabs value={service} onValueChange={(value) => setService(value as (typeof MESSAGE_SERVICES)[number])}>
+          <TabsList className="flex-wrap h-auto justify-start">
+            {MESSAGE_SERVICES.map((item) => (
+              <TabsTrigger key={item} value={item} className="text-xs">{item}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </div>
+      {isLoading ? <div className="p-6 text-sm text-muted-foreground">Loading…</div> : allConvs.length === 0 ? (
+        <div className="p-12 text-center text-muted-foreground">
+          <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>No {service} conversations yet</p>
+        </div>
+      ) : <div className="divide-y">{allConvs.map(conv => {
         const displayName = (conv.title ?? conv.otherParticipants.map(p => p.name).join(", ")) || "Unknown";
         const hiddenParticipants = conv.otherParticipants.filter(p => p.hiddenAt);
         const allHidden = conv.otherParticipants.length > 0 && hiddenParticipants.length === conv.otherParticipants.length;
@@ -196,7 +205,7 @@ function AllConversationsTab() {
             </div>
           </div>
         );
-      })}
+      })}</div>}
     </div>
   );
 }

@@ -1,0 +1,83 @@
+Continue the work from the existing commit:
+
+**`MAINTENANCE STRATEGY ADMIN`**
+
+The previous implementation was interrupted by the Replit quota limit before the task was fully finished.
+
+The commit already contains:
+
+* the previous Admin Maintenance prompt/specification
+* the files changed during the implementation
+* the work that was already completed
+
+### IMPORTANT — DO NOT REPEAT THE WORK
+
+First, read:
+
+1. The commit **`MAINTENANCE STRATEGY ADMIN`**
+2. The Maintenance Admin prompt/specification contained in that commit
+3. All files modified by that commit
+
+Then compare the requested specification against the **actual current implementation**.
+
+Determine precisely:
+
+* What is already fully implemented and working
+* What was partially implemented
+* What was started but not finished
+* What was not implemented because the quota was reached
+
+### THEN CONTINUE
+
+Implement **only what is still missing or incomplete**.
+
+Do NOT:
+
+* redo completed work
+* recreate existing APIs
+* recreate existing database models
+* recreate existing UI
+* duplicate existing functionality
+* redesign anything
+* remove anything that already works
+* modify unrelated modules
+
+If a requirement is already correctly implemented, **leave it exactly as it is**.
+
+Continue from the exact point where the previous implementation stopped.
+
+### IMPORTANT
+
+The previous agent had already started the implementation and reached the quota during the final part of the work.
+
+Therefore, do not treat the original prompt as a new task.
+
+Treat:
+
+**`MAINTENANCE STRATEGY ADMIN`**
+
+as the current implementation checkpoint.
+
+Your task is to **finish it**, not restart it.
+
+After completing the missing work:
+
+* run the relevant checks
+* verify the database/schema
+* verify the Admin UI
+* verify the Maintenance UI where affected
+* verify synchronization/realtime behavior
+* fix any errors introduced by your changes
+* verify that existing functionality was not broken
+
+If there are unrelated pre-existing errors, do not rewrite unrelated parts of the project to fix them.
+
+### FINAL RULE
+
+**READ → COMPARE → IDENTIFY THE GAP → CONTINUE → VERIFY**
+
+Do not repeat work that already exists in the commit.
+
+Do not stop at an audit.
+
+Actually implement and finish the remaining work.

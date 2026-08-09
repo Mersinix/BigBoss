@@ -71,6 +71,7 @@ function invalidateSupplierMappingQueries(qc: QueryClient) {
 
 function invalidateMessagingQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+  qc.invalidateQueries({ queryKey: ["/api/messages/admin/all"] });
   qc.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
 }
 
@@ -203,6 +204,7 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/maintenance/profile"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/reviews"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MAINTENANCE"] });
           }
         } catch {}
       };

@@ -453,6 +453,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       contactPhone: body.contactPhone || user.phone || "",
       status: "PENDING",
     });
+    broadcast("maintenance_reservation_updated", { reservationId: reservation.id });
     broadcastToUsers([user.id, body.maintenanceUserId], "maintenance_reservation_updated", { reservationId: reservation.id });
     res.status(201).json(reservation);
   });
@@ -470,6 +471,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       time: body.time,
     });
     if (!updated) return res.status(404).json({ message: "Reservation not found" });
+    broadcast("maintenance_reservation_updated", { reservationId: updated.id });
     broadcastToUsers([user.id, updated.cafeOwnerId], "maintenance_reservation_updated", { reservationId: updated.id });
     res.json(updated);
   });
@@ -3455,6 +3457,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const { conversation, isNew } = await storage.findOrCreateDirectConversation(userId, targetUserId, service);
       // Notify both participants immediately so the other side sees the conversation appear in real time
+      broadcast("conversation_updated", { conversationId: conversation.id, service });
       broadcastToUsers([userId, targetUserId], "conversation_updated", { conversationId: conversation.id });
       res.json({ conversation, isNew });
     } catch (err: any) {
@@ -3490,6 +3493,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const msg = await storage.sendMessage(convId, userId, content.trim());
       // Notify all participants via WebSocket
       const participantIds = await storage.getConversationParticipantIds(convId);
+      broadcast("new_message", { conversationId: convId, message: msg });
       broadcastToUsers(participantIds, "new_message", { conversationId: convId, message: msg });
       res.json(msg);
     } catch (err: any) {
@@ -3568,9 +3572,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   /** GET /api/messages/admin/all — admin: all conversations with participant summaries */
-  app.get("/api/messages/admin/all", requireAdmin, async (_req, res) => {
+  app.get("/api/messages/admin/all", requireAdmin, async (req, res) => {
     try {
-      const conversations = await storage.adminGetAllConversations();
+      const service = typeof req.query.service === "string" ? req.query.service : undefined;
+      if (service && !["SHOP", "MAINTENANCE", "BARISTA", "PRINT", "MARKETING"].includes(service)) {
+        return res.status(400).json({ message: "Invalid service" });
+      }
+      const conversations = await storage.adminGetAllConversations(service);
       res.json(conversations);
     } catch (err: any) {
       res.status(500).json({ message: err.message });

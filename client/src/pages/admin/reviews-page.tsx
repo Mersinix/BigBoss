@@ -66,8 +66,12 @@ export default function AdminReviewsPage() {
     onError: () => toast({ title: "Error resolving report", variant: "destructive" }),
   });
 
-  const displayed = showReportedOnly ? reviews.filter((r: any) => !!r.reportedAt) : reviews;
-  const reportedCount = reviews.filter((r: any) => !!r.reportedAt && !r.resolvedAt).length;
+  const displayed = activeTab === "maintenance" && showReportedOnly
+    ? reviews.filter((r: any) => !!r.reportedAt)
+    : reviews;
+  const reportedCount = activeTab === "maintenance"
+    ? reviews.filter((r: any) => !!r.reportedAt && !r.resolvedAt).length
+    : 0;
 
   // Stats
   const avg = reviews.length
@@ -144,7 +148,7 @@ export default function AdminReviewsPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-3">
+      {activeTab === "maintenance" && <div className="flex items-center gap-3">
         <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
           <input
             type="checkbox"
@@ -160,7 +164,7 @@ export default function AdminReviewsPage() {
             )}
           </span>
         </label>
-      </div>
+      </div>}
 
       {/* Review list */}
       {isLoading ? (
@@ -204,22 +208,22 @@ export default function AdminReviewsPage() {
                         </div>
                         <span className="text-xs text-muted-foreground">{formatDate(r.createdAt)}</span>
                       </div>
-                      {r.productName && (
+                      {(r.productName || activeTab === "maintenance") && (
                         <p className="text-xs text-muted-foreground mb-1.5">
-                           {activeTab === "maintenance" ? "Maintenance: " : "Product: "}
-                           <span className="font-medium text-foreground">{activeTab === "maintenance" ? (r.maintenanceName || "—") : r.productName}</span>
+                          {activeTab === "maintenance" ? "Maintenance: " : "Product: "}
+                          <span className="font-medium text-foreground">{activeTab === "maintenance" ? (r.maintenanceName || "—") : r.productName}</span>
                         </p>
                       )}
-                       {r.supplierId && activeTab === "supplier" && (
+                      {r.supplierId && activeTab === "supplier" && (
                         <p className="text-xs text-muted-foreground mb-1.5">
                           Supplier ID: <span className="font-medium text-foreground">#{r.supplierId}</span>
                         </p>
                       )}
-                       {activeTab === "maintenance" && (
-                         <p className="text-xs text-muted-foreground mb-1.5">
-                           Intervention: <span className="font-medium text-foreground">{r.reservationId ? `#${r.reservationId}` : "—"}</span>
-                         </p>
-                       )}
+                      {activeTab === "maintenance" && (
+                        <p className="text-xs text-muted-foreground mb-1.5">
+                          Intervention: <span className="font-medium text-foreground">{r.reservationId ? `#${r.reservationId}` : "—"}</span>
+                        </p>
+                      )}
                       <Stars rating={r.rating} />
                       {r.comment && (
                         <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{r.comment}</p>

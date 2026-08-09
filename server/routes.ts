@@ -443,6 +443,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profiles = await storage.getMaintenanceProfiles();
     const provider = profiles.find((profile) => profile.userId === body.maintenanceUserId && profile.available);
     if (!provider) return res.status(400).json({ message: "This Maintenance professional is not available" });
+    const competencies = new Set([...provider.categories, ...provider.skills]);
+    if (body.category && !competencies.has(body.category)) {
+      return res.status(400).json({ message: "Selected competency is not offered by this Maintenance professional" });
+    }
     const reservation = await storage.createMaintenanceReservation({
       ...body,
       cafeOwnerId: user.id,

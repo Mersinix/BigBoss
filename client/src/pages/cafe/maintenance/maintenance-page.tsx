@@ -12,6 +12,7 @@ import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -169,6 +170,7 @@ function AgentDetailModal({
 }) {
   const fmt = useFormatCurrency();
   const t = useTheme(isDark);
+  const queryClient = useQueryClient();
   const [booking, setBooking] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -179,9 +181,37 @@ function AgentDetailModal({
   const [urgency, setUrgency] = useState("NORMAL");
   const [contactPhone, setContactPhone] = useState("");
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
   const reviewsQuery = useQuery<any[]>({
     queryKey: ["/api/maintenance/reviews", agent?.userId],
     enabled: open && !!agent,
+  });
+  const { data: reservations = [] } = useQuery<any[]>({
+    queryKey: ["/api/maintenance/reservations"],
+    enabled: open && !!agent && !!user,
+  });
+  const eligibleReservations = reservations.filter((reservation) =>
+    reservation.maintenanceUserId === agent?.userId && reservation.status === "COMPLETED",
+  );
+  const reviewedReservationIds = new Set((reviewsQuery.data ?? []).map((review) => review.reservationId).filter(Boolean));
+  const reviewReservation = eligibleReservations.find((reservation) => !reviewedReservationIds.has(reservation.id));
+  const submitReview = useMutation({
+    mutationFn: () => {
+      if (!agent || !reviewReservation) throw new Error("Aucune intervention terminée à évaluer");
+      return apiRequest("POST", "/api/maintenance/reviews", {
+        maintenanceUserId: agent.userId,
+        reservationId: reviewReservation.id,
+        rating: reviewRating,
+        comment: reviewComment.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reviews", agent?.userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profiles"] });
+      setReviewComment("");
+      setReviewRating(5);
+    },
   });
   useEffect(() => {
     if (!booking) return;
@@ -231,6 +261,33 @@ function AgentDetailModal({
                <h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Avis ({reviewsQuery.data?.length ?? 0})</h3>
                {(reviewsQuery.data ?? []).length === 0 ? <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p> : <div className="space-y-2">{reviewsQuery.data!.slice(0, 4).map((review) => <div key={review.id} className={`${t.mutedBg} rounded-xl p-3`}><div className="flex items-center justify-between"><span className={`text-xs font-semibold ${t.textPrimary}`}>{review.cafeOwnerName || review.cafeName}</span><span className="text-amber-500 text-xs">{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</span></div>{review.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{review.comment}</p>}</div>)}</div>}
              </div>
+              {reviewReservation && (
+                <div className={`mb-4 ${t.mutedBg} rounded-xl p-3 space-y-2.5`}>
+                  <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Évaluer votre intervention</h3>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <button key={value} type="button" onClick={() => setReviewRating(value)} aria-label={`${value} étoiles`}>
+                        <Star className={`w-5 h-5 ${value <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+                      </button>
+                    ))}
+                  </div>
+                  <Textarea
+                    value={reviewComment}
+                    onChange={(event) => setReviewComment(event.target.value)}
+                    placeholder="Partagez votre expérience (facultatif)"
+                    rows={2}
+                    className={t.inputBg}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => submitReview.mutate()}
+                    disabled={submitReview.isPending}
+                    className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl"
+                  >
+                    {submitReview.isPending ? "Envoi…" : "Publier l'avis"}
+                  </Button>
+                </div>
+              )}
             {!booking ? (
                <div className={`border-t ${t.border} pt-4 flex items-center justify-between gap-3`}>
                  <div><p className={`text-xs ${t.textSubtle}`}>Tarif journalier</p><p className="font-bold text-xl text-orange-600">{fmt(agent.dailyRateInCents)}</p></div>
@@ -280,6 +337,15 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const hydrateMaintenance = useFavorites((s) => s.hydrateMaintenance);
 
   useEffect(() => { hydrateMaintenance(favoriteIds); }, [favoriteIds, hydrateMaintenance]);
+  const providerId = Number(new URLSearchParams(window.location.search).get("providerId"));
+  useEffect(() => {
+    if (!providerId || !profiles.length) return;
+    const provider = profiles.find((profile) => profile.userId === providerId);
+    if (provider) {
+      setSelectedAgent(provider);
+      setDetailOpen(true);
+    }
+  }, [profiles, providerId]);
   const allLocations = useMemo(() => Array.from(new Set(profiles.map((item) => item.location).filter(Boolean))).sort(), [profiles]);
   const filtered = useMemo(() => {
     let list = profiles;
@@ -292,8 +358,12 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     return list;
   }, [profiles, search, filterCategory, filterType, filterAvailability, filterLocation]);
   const reserve = useMutation({
-    mutationFn: ({ agent, data }: { agent: MaintenanceMarketplaceCard; data: { date: string; time: string; location: string; description: string } }) =>
-      apiRequest("POST", "/api/maintenance/reservations", { maintenanceUserId: agent.userId, service: agent.jobTitle, category: agent.specialty, ...data }),
+    mutationFn: ({ agent, data }: { agent: MaintenanceMarketplaceCard; data: { date: string; time: string; location: string; description: string; category: string; urgency: string; contactPhone: string } }) =>
+      apiRequest("POST", "/api/maintenance/reservations", {
+        maintenanceUserId: agent.userId,
+        service: agent.jobTitle,
+        ...data,
+      }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] }); setDetailOpen(false); toast({ title: "Demande envoyée", description: "Le technicien pourra maintenant la confirmer." }); },
     onError: (error: Error) => toast({ title: "Impossible d'envoyer la demande", description: error.message, variant: "destructive" }),
   });

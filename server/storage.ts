@@ -1279,14 +1279,36 @@ export class DatabaseStorage implements IStorage {
         eq(maintenanceProfiles.marketplaceVisible, true),
       ));
 
+    const maintenanceUserIds = rows.map(({ profile }) => profile.userId);
+    const reviewRows = maintenanceUserIds.length
+      ? await db.select({
+          maintenanceUserId: supplierProductReviews.maintenanceUserId,
+          rating: supplierProductReviews.rating,
+        }).from(supplierProductReviews).where(and(
+          eq(supplierProductReviews.reviewType, "MAINTENANCE"),
+          inArray(supplierProductReviews.maintenanceUserId as any, maintenanceUserIds),
+        ))
+      : [];
+    const reviewStats = new Map<number, { total: number; sum: number }>();
+    for (const review of reviewRows) {
+      if (!review.maintenanceUserId) continue;
+      const current = reviewStats.get(review.maintenanceUserId) ?? { total: 0, sum: 0 };
+      current.total += 1;
+      current.sum += review.rating;
+      reviewStats.set(review.maintenanceUserId, current);
+    }
+
     const cards = rows.map(({ profile, user }) => {
       const available = profile.isAvailable && !profile.isOnVacation;
       const location = user.locationAddress ?? profile.coverageArea ?? "";
+      const stats = reviewStats.get(profile.userId);
       const workingHours = profile.workingDays.length
         ? `${profile.workingDays.join(", ")} · ${profile.startTime}–${profile.endTime}`
         : `${profile.startTime}–${profile.endTime}`;
       return {
         ...profile,
+        rating: stats ? Math.round((stats.sum / stats.total) * 10) : 0,
+        reviewCount: stats?.total ?? 0,
         name: user.name,
         phone: user.phone ?? null,
         location,
@@ -1418,6 +1440,7 @@ export class DatabaseStorage implements IStorage {
         .set({ rating: data.rating, comment: data.comment ?? null, updatedAt: new Date() } as any)
         .where(eq(supplierProductReviews.id, existing.id))
         .returning();
+      await this.refreshMaintenanceReviewStats(data.maintenanceUserId);
       return { review, isUpdate: true };
     }
     const [review] = await db.insert(supplierProductReviews).values({
@@ -1435,7 +1458,19 @@ export class DatabaseStorage implements IStorage {
       packId: null,
       productName: null,
     } as any).returning();
+    await this.refreshMaintenanceReviewStats(data.maintenanceUserId);
     return { review, isUpdate: false };
+  }
+
+  private async refreshMaintenanceReviewStats(maintenanceUserId: number): Promise<void> {
+    const reviews = await this.getMaintenanceReviews(maintenanceUserId);
+    const reviewCount = reviews.length;
+    const rating = reviewCount
+      ? Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviewCount) * 10)
+      : 0;
+    await db.update(maintenanceProfiles)
+      .set({ rating, reviewCount, updatedAt: new Date() })
+      .where(eq(maintenanceProfiles.userId, maintenanceUserId));
   }
 
   async getMaintenanceAdminOverview(): Promise<any> {

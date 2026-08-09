@@ -22,7 +22,7 @@ const INVENTORY_EVENTS = ["inventory_updated"];
 const PROMOTION_EVENTS = ["promotion_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "order_deleted"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated"];
-const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated"];
+const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
 
 function invalidateInventoryQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
@@ -201,6 +201,8 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance-favorites"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/profile"] });
+            qc.invalidateQueries({ queryKey: ["/api/maintenance/reviews"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
           }
         } catch {}
       };

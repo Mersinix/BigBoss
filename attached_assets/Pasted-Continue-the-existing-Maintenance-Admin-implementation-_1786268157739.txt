@@ -1,0 +1,83 @@
+Continue the existing Maintenance Admin implementation from these two commits:
+
+**`MAINTENANCE STRATEGY ADMIN`**
+**`MAINTENANCE STRATEGY ADMIN TWO`**
+
+The work was interrupted again by the Replit quota limit.
+
+### IMPORTANT
+
+Do NOT restart the task.
+
+Do NOT repeat the previous implementation.
+
+Do NOT recreate anything that is already completed.
+
+First, inspect both commits and their changes:
+
+1. Read `MAINTENANCE STRATEGY ADMIN`.
+2. Read `MAINTENANCE STRATEGY ADMIN TWO`.
+3. Read the original specification/prompt contained in the commits.
+4. Compare the requested requirements against the **current code after both commits**.
+5. Identify only what is still missing, incomplete, broken, or insufficiently verified.
+
+The previous agent reported that the following areas had already been implemented and verified:
+
+* Admin Maintenance taxonomy management
+* Maintenance accounts/cards/details
+* Maintenance account filtering
+* Maintenance reservations
+* Maintenance Reviews
+* Reported review filtering
+* Admin service-scoped Messages
+* Maintenance review enrichment
+* Realtime invalidation for Admin changes
+* Build/runtime verification
+
+**Do not assume these need to be rebuilt. Verify them and leave them alone if they are correct.**
+
+### YOUR TASK
+
+Continue from the exact state of:
+
+**`MAINTENANCE STRATEGY ADMIN TWO`**
+
+and finish **only the remaining unfinished work** from the original specification.
+
+If there are no functional gaps, do not make unnecessary changes. Instead, perform a final verification of the affected flows and report the result.
+
+If you find incomplete work:
+
+* implement it
+* preserve the current design
+* preserve existing functionality
+* reuse the existing architecture
+* do not create duplicate systems
+* do not modify unrelated modules
+
+### VERY IMPORTANT
+
+The quota interruption happened during the final verification stage.
+
+So pay particular attention to anything that was **started but not actually verified or completed**, rather than assuming that everything described in the previous agent's final message is necessarily finished.
+
+Check the actual code, not the previous agent's report.
+
+After finishing:
+
+* run the relevant checks/build
+* verify the affected Admin screens
+* verify Maintenance/Coffee Owner synchronization where affected
+* verify realtime behavior
+* fix only errors caused by this task
+* do not rewrite unrelated pre-existing errors
+
+Do not stop at an audit.
+
+**If something is missing, implement it. If everything is already complete, verify it and leave the code unchanged.**
+
+Final workflow:
+
+**READ BOTH COMMITS → INSPECT CURRENT STATE → COMPARE WITH ORIGINAL SPEC → IDENTIFY ONLY REMAINING GAPS → IMPLEMENT → VERIFY**
+
+Do not redo completed work.

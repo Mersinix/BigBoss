@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Wrench, Users, Calendar, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
-  Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer,
+  Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -101,11 +101,18 @@ function AccountDetail({ account, onClose }: { account: any | null; onClose: () 
         <Info icon={Timer} label="Temps de réponse" value={account.responseTime} />
         <Info icon={Award} label="Expérience" value={`${account.yearsExperience} ans`} />
         <Info icon={Star} label="Évaluation" value={<><Stars value={account.rating} /> ({account.reviewCount} avis)</>} />
+        <Info icon={MapPin} label="Zone de couverture" value={account.coverageArea} />
         <div><p className="text-xs text-muted-foreground mb-1">Compétences / catégories</p><div className="flex flex-wrap gap-1">{[...(account.categories ?? []), ...(account.skills ?? [])].map((x: string) => <Badge key={x} variant="secondary" className="text-xs">{x}</Badge>)}</div></div>
         <div><p className="text-xs text-muted-foreground mb-1">Certifications</p><p>{(account.certifications ?? []).join(", ") || "—"}</p></div>
         <div className="sm:col-span-2"><p className="text-xs text-muted-foreground mb-1">Description</p><p className="whitespace-pre-wrap">{account.description || "—"}</p></div>
         <Info icon={Calendar} label="Jours et horaires" value={`${(account.workingDays ?? []).join(", ") || "—"} · ${account.startTime}–${account.endTime}`} />
         <Info icon={Wrench} label="Tarif journalier" value={`${((account.dailyRateInCents ?? 0) / 100).toFixed(2)} DT`} />
+        <div className="sm:col-span-2">
+          <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Image className="h-3.5 w-3.5" />Portfolio</p>
+          {(account.portfolioImages ?? []).length > 0
+            ? <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{account.portfolioImages.map((src: string, index: number) => <img key={`${src}-${index}`} src={src} alt={`Portfolio ${index + 1}`} className="h-24 w-full rounded-lg object-cover" />)}</div>
+            : <p>—</p>}
+        </div>
       </div>
     </DialogContent>
   </Dialog>;
@@ -123,13 +130,39 @@ export default function MaintenanceAdminPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [availability, setAvailability] = useState("all");
+  const [visibility, setVisibility] = useState("all");
+  const [profileType, setProfileType] = useState("all");
+  const [category, setCategory] = useState("all");
+  const [location, setLocation] = useState("all");
+  const [rating, setRating] = useState("all");
   const { data, isLoading } = useQuery<Overview>({ queryKey: ["/api/admin/maintenance"] });
-  const refresh = () => { qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] }); qc.invalidateQueries({ queryKey: ["/api/maintenance/categories"] }); };
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
+    qc.invalidateQueries({ queryKey: ["/api/maintenance/categories"] });
+    qc.invalidateQueries({ queryKey: ["/api/maintenance/taxonomy"] });
+  };
   const stats = data?.stats;
+  const filterOptions = useMemo(() => {
+    const accounts = data?.accounts ?? [];
+    return {
+      types: Array.from(new Set(accounts.map((a) => a.profileType).filter(Boolean))).sort(),
+      categories: Array.from(new Set(accounts.flatMap((a) => [...(a.categories ?? []), ...(a.skills ?? [])]))).sort(),
+      locations: Array.from(new Set(accounts.flatMap((a) => (a.coverageArea || a.location || "").split(",").map((x: string) => x.trim()).filter(Boolean)))).sort(),
+    };
+  }, [data?.accounts]);
   const accounts = useMemo(() => (data?.accounts ?? []).filter((a) => {
     const haystack = [a.name, a.jobTitle, a.location, a.coverageArea, ...(a.categories ?? []), ...(a.skills ?? [])].join(" ").toLowerCase();
-    return (!search || haystack.includes(search.toLowerCase())) && (status === "all" || a.status === status) && (availability === "all" || (availability === "available" ? a.available : !a.available));
-  }), [data?.accounts, search, status, availability]);
+    const zones = (a.coverageArea || a.location || "").split(",").map((x: string) => x.trim());
+    const accountRating = (a.rating ?? 0) / 10;
+    return (!search || haystack.includes(search.toLowerCase()))
+      && (status === "all" || a.status === status)
+      && (availability === "all" || (availability === "available" ? a.available : !a.available))
+      && (visibility === "all" || (visibility === "visible" ? a.marketplaceVisible : !a.marketplaceVisible))
+      && (profileType === "all" || a.profileType === profileType)
+      && (category === "all" || [...(a.categories ?? []), ...(a.skills ?? [])].includes(category))
+      && (location === "all" || zones.includes(location))
+      && (rating === "all" || (rating === "rated" ? accountRating > 0 : accountRating >= Number(rating)));
+  }), [data?.accounts, search, status, availability, visibility, profileType, category, location, rating]);
   const kpis = [
     ["Comptes Maintenance", stats?.totalAccounts ?? 0, Users], ["Actifs / approuvés", stats?.activeAccounts ?? 0, CheckCircle],
     ["Disponibles", stats?.availableAccounts ?? 0, Wrench], ["Réservations", stats?.totalReservations ?? 0, Calendar],
@@ -147,7 +180,16 @@ export default function MaintenanceAdminPage() {
         <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-base">Demandes par compétence</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{(data?.categories ?? []).map((row) => <Badge key={row.category} variant="secondary">{row.category} · {row.count}</Badge>)}</CardContent></Card>
       </TabsContent>
       <TabsContent value="accounts" className="mt-4 space-y-4">
-        <div className="flex flex-wrap gap-2"><div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un compte, une zone, une compétence…" /></div><Select value={status} onValueChange={setStatus}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Statut" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvé</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejeté</SelectItem></SelectContent></Select><Select value={availability} onValueChange={setAvailability}><SelectTrigger className="w-[160px]"><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes</SelectItem><SelectItem value="available">Disponibles</SelectItem><SelectItem value="unavailable">Indisponibles</SelectItem></SelectContent></Select></div>
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un compte, une zone, une compétence…" /></div>
+          <Select value={status} onValueChange={setStatus}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Statut" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvé</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejeté</SelectItem></SelectContent></Select>
+          <Select value={visibility} onValueChange={setVisibility}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Visibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes visibilités</SelectItem><SelectItem value="visible">Visible</SelectItem><SelectItem value="hidden">Masqué</SelectItem></SelectContent></Select>
+          <Select value={availability} onValueChange={setAvailability}><SelectTrigger className="w-[160px]"><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes disponibilités</SelectItem><SelectItem value="available">Disponibles</SelectItem><SelectItem value="unavailable">Indisponibles</SelectItem></SelectContent></Select>
+          <Select value={profileType} onValueChange={setProfileType}><SelectTrigger className="w-[140px]"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les types</SelectItem>{filterOptions.types.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Select value={category} onValueChange={setCategory}><SelectTrigger className="w-[180px]"><SelectValue placeholder="Compétence" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes compétences</SelectItem>{filterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Select value={location} onValueChange={setLocation}><SelectTrigger className="w-[160px]"><SelectValue placeholder="Zone" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les zones</SelectItem>{filterOptions.locations.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Select value={rating} onValueChange={setRating}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Note" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les notes</SelectItem><SelectItem value="rated">Avec avis</SelectItem><SelectItem value="4">4+ étoiles</SelectItem><SelectItem value="3">3+ étoiles</SelectItem></SelectContent></Select>
+        </div>
         {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{accounts.map((account) => <Card key={account.userId} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedAccount(account)}><CardContent className="p-4 space-y-3"><div className="flex items-start gap-3"><Avatar><AvatarFallback className="bg-orange-100 text-orange-700 font-bold">{account.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.jobTitle}</p></div><span className={`h-2.5 w-2.5 rounded-full mt-1 ${account.available ? "bg-green-500" : "bg-gray-300"}`} /></div><div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">{account.profileType}</Badge><Badge variant="outline" className="text-xs">{account.status}</Badge><span className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{account.location || "—"}</span></div><div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis · {account.yearsExperience} ans exp.</span></div><div className="flex flex-wrap gap-1">{(account.skills ?? []).slice(0, 4).map((x: string) => <span key={x} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{x}</span>)}</div></CardContent></Card>)}</div>}
       </TabsContent>
       <TabsContent value="reservations" className="mt-4"><Card><CardContent className="p-0 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Service / catégorie</th><th className="p-3">Date</th><th className="p-3">Statut</th><th className="p-3">Maintenance</th><th className="p-3">Coffee Owner</th><th className="p-3">Contact / lieu</th><th className="p-3">Besoin</th></tr></thead><tbody>{(data?.reservations ?? []).slice(0, 50).map((row) => <tr key={row.id} className="border-b last:border-0"><td className="p-3 font-medium">#{row.id}</td><td className="p-3">{row.service}<br /><span className="text-xs text-muted-foreground">{row.category || "—"} · {row.urgency}</span></td><td className="p-3">{row.date}<br />{row.time || "—"}</td><td className="p-3"><Badge variant="outline">{row.status}</Badge></td><td className="p-3">{row.maintenanceName}</td><td className="p-3">{row.cafeOwner}</td><td className="p-3">{row.ownerPhone || row.contactPhone || "—"}<br /><span className="text-xs text-muted-foreground">{row.location || "—"}</span></td><td className="p-3 max-w-[240px]">{row.description || "—"}</td></tr>)}</tbody></table>{!data?.reservations?.length && <p className="p-12 text-center text-muted-foreground">Aucune réservation.</p>}</CardContent></Card></TabsContent>

@@ -199,6 +199,7 @@ export function useRealtime(userId?: number) {
           if (MAINTENANCE_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/maintenance/profiles"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/categories"] });
+            qc.invalidateQueries({ queryKey: ["/api/maintenance/taxonomy"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance-favorites"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/profile"] });

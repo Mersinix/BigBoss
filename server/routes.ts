@@ -367,6 +367,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.get("/api/maintenance/taxonomy", async (_req, res) => {
+    try {
+      res.json(await storage.getAvailableMaintenanceTaxonomy());
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load Maintenance taxonomy" });
+    }
+  });
+
   app.get("/api/maintenance/profile/:userId", requireAuth, async (req: any, res) => {
     const targetUserId = Number(req.params.userId);
     const viewer = await storage.getUser(req.session.userId);

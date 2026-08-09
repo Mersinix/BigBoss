@@ -69,7 +69,7 @@ const STATUS_META: Record<string, { label: string; color: string; icon: any }> =
   RESCHEDULED: { label: "Reprogrammée", color: "bg-purple-100 text-purple-800 border-purple-200", icon: RotateCcw },
 };
 
-const MAINTENANCE_SPECIALTIES = [
+const DEFAULT_MAINTENANCE_SPECIALTIES = [
   "Machines à café", "Machines espresso", "Moulins à café", "Machines à glace",
   "Réfrigérateurs", "Congélateurs", "Lave-vaisselle", "Fours", "Mixeurs",
   "Électricité", "Plomberie", "Climatisation", "Ventilation",
@@ -77,7 +77,7 @@ const MAINTENANCE_SPECIALTIES = [
   "Mobilier", "Éclairage", "Signalétique", "Menuiserie", "Peinture",
 ];
 
-const COVERAGE_AREAS = [
+const DEFAULT_COVERAGE_AREAS = [
   "Grand Tunis", "Ariana", "Ben Arous", "La Manouba",
   "Sfax", "Sousse", "Monastir", "Mahdia",
   "Béja", "Bizerte", "Gabès", "Jendouba",
@@ -382,6 +382,11 @@ export default function MaintenanceDashboard() {
     },
     enabled: !!user?.id,
   });
+  const { data: taxonomy } = useQuery<{ competencies: { name: string }[]; zones: { name: string }[] }>({
+    queryKey: ["/api/maintenance/taxonomy"],
+  });
+  const maintenanceSpecialties = taxonomy?.competencies.map((item) => item.name) ?? DEFAULT_MAINTENANCE_SPECIALTIES;
+  const coverageAreas = taxonomy?.zones.map((item) => item.name) ?? DEFAULT_COVERAGE_AREAS;
   const profile = profileData?.profile;
 
   // Profile state
@@ -670,7 +675,7 @@ export default function MaintenanceDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-1.5">
-                  {MAINTENANCE_SPECIALTIES.map((s) => (
+                  {maintenanceSpecialties.map((s) => (
                     <button
                       key={s}
                       onClick={() => toggleSpecialty(s)}
@@ -693,7 +698,7 @@ export default function MaintenanceDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-1.5">
-                  {COVERAGE_AREAS.map((a) => (
+                  {coverageAreas.map((a) => (
                     <button
                       key={a}
                       onClick={() => toggleArea(a)}

@@ -1524,6 +1524,14 @@ export class DatabaseStorage implements IStorage {
     return { competencies, zones };
   }
 
+  async getAvailableMaintenanceTaxonomy(): Promise<{ competencies: MaintenanceCompetency[]; zones: MaintenanceZone[] }> {
+    const taxonomy = await this.getMaintenanceTaxonomy();
+    return {
+      competencies: taxonomy.competencies.filter((item) => item.isActive && !item.isFrozen),
+      zones: taxonomy.zones.filter((item) => item.isActive && !item.isFrozen),
+    };
+  }
+
   async createMaintenanceCompetency(name: string): Promise<MaintenanceCompetency> {
     const [created] = await db.insert(maintenanceCompetencies).values({ name: name.trim() }).returning();
     return created;

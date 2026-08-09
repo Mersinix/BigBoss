@@ -1,0 +1,867 @@
+# MAINTENANCE — ADMIN MANAGEMENT & REALTIME EXTENSION
+
+The current Maintenance implementation is already complete and working.
+
+This is a **new controlled extension** of the existing Maintenance system.
+
+Do NOT restart or rebuild the Maintenance implementation.
+
+Do NOT redo previous Maintenance work.
+
+Do NOT replace existing working systems.
+
+Do NOT redesign existing pages.
+
+The objective is to extend the existing **Admin** experience while keeping the existing Coffee Owner Maintenance and Espace Maintenance functionality exactly as it is.
+
+---
+
+# 1. FIRST — AUDIT THE CURRENT IMPLEMENTATION
+
+Before making any changes:
+
+Read and inspect the current Maintenance implementation and the existing Admin implementation.
+
+Verify the current state of:
+
+* Maintenance database/schema
+* Maintenance accounts
+* Maintenance profiles
+* Maintenance categories/competencies
+* Maintenance intervention reservations
+* Maintenance availability
+* Maintenance certifications
+* Maintenance reviews
+* Maintenance messaging
+* Maintenance favorites
+* Maintenance realtime synchronization
+* Admin Maintenance tab
+* Admin Reviews tab
+* Admin Messages tab
+
+Also inspect the existing Admin UI patterns for:
+
+* Tabs
+* Switchers
+* Cards
+* Filters
+* Tables
+* Modals
+* CRUD actions
+* Confirmation dialogs
+* Status controls
+* Analytics
+* Realtime updates
+
+Use the existing architecture and design patterns.
+
+Do not create parallel systems when an existing system can be extended.
+
+---
+
+# 2. IMPORTANT — PRESERVE EVERYTHING ALREADY WORKING
+
+The following must remain unchanged unless a direct dependency requires a modification:
+
+### Coffee Owner
+
+* `/maintenance`
+* Maintenance Hero
+* Maintenance filters
+* Maintenance cards
+* Maintenance profile modal
+* Favorites
+* Messages
+* Reservations / intervention requests
+* Reviews
+* Dark mode
+* Location handling
+* Phone handling
+* Availability
+* Realtime updates
+
+### Espace Maintenance
+
+* Dashboard
+* Planning
+* Profile
+* Availability
+* Certifications
+* Messages
+* Reservations
+* Reviews
+* Rescheduling
+* Completion
+* Realtime updates
+
+### Other marketplace services
+
+Do NOT modify unnecessarily:
+
+* SHOP
+* PRINT
+* BARISTA
+* MARKETING
+
+### Admin
+
+Do not remove existing Admin functionality.
+
+Do not change existing Product Reviews or Supplier Reviews behavior.
+
+Do not change existing Messages behavior except where required to introduce the requested service switcher.
+
+---
+
+# 3. ADMIN → MAINTENANCE TAB
+
+The existing Admin **Maintenance** tab currently contains information similar to:
+
+* Maintenance accounts
+* Active / approved
+* Available
+* Reservations
+* Pending
+* Completed
+* Cancelled
+* Average rating
+* Competencies requested
+* Maintenance accounts
+* Recent reservations
+
+Keep the current visual design and information.
+
+We now need to organize this page using a dedicated switcher.
+
+The Maintenance Admin page should have three main sections:
+
+### Switcher
+
+**Compétences demandées & Zones d'intervention**
+
+**Comptes Maintenance**
+
+**Réservations récentes**
+
+The switcher should follow the existing Admin design language.
+
+Do not redesign the page.
+
+Do not remove the existing summary information that is already useful.
+
+---
+
+# 4. ADMIN MAINTENANCE → COMPÉTENCES DEMANDÉES
+
+Inside:
+
+**Compétences demandées & Zones d'intervention**
+
+keep the existing:
+
+### Compétences demandées
+
+The Admin must be able to manage Maintenance competencies.
+
+Admin actions:
+
+* Add
+* Rename/Edit
+* Remove/Delete
+* Freeze/Unfreeze
+
+These must be real database-backed actions.
+
+No static competency list.
+
+The existing Maintenance marketplace and Maintenance accounts must remain synchronized with these competencies.
+
+If a competency is frozen:
+
+* It should no longer be available for inappropriate new selections.
+* Existing historical data must not be corrupted.
+* Existing reservations/reviews/history must remain valid.
+
+Do not delete historical information just because a competency is frozen or removed.
+
+Use the project's existing conventions for active/inactive/frozen taxonomy records.
+
+---
+
+# 5. ADMIN MAINTENANCE → ZONE D'INTERVENTION
+
+In the same section, add:
+
+### Zone d'intervention
+
+The Admin must be able to manage Maintenance intervention zones.
+
+Admin actions:
+
+* Add
+* Edit
+* Delete
+* Freeze/Unfreeze
+
+The Admin must also be able to see the existing intervention zones used by Maintenance accounts.
+
+The zone data must be real and synchronized.
+
+When a Maintenance account has a coverage/intervention zone, the Admin must see it.
+
+When Admin manages available zones, the Maintenance account and Coffee Owner marketplace must use the same source of truth where applicable.
+
+Do not create a second unrelated location/zone system if an existing suitable structure already exists.
+
+---
+
+# 6. ADMIN MAINTENANCE → COMPTES MAINTENANCE
+
+The existing Maintenance accounts should no longer be represented only as a simple table/list in this section.
+
+Display the Maintenance accounts as **real cards**, following the visual language already used by the Coffee Owner `/maintenance` cards.
+
+The Admin should be able to click any Maintenance account card.
+
+When clicked, Admin should see the complete information of that Maintenance account.
+
+The information should correspond to the real profile displayed to Coffee Owners at:
+
+**Coffee Owner → `/maintenance`**
+
+This includes, where available:
+
+* Name
+* Profile image/initials
+* Type
+* Job title
+* Specialty
+* Categories
+* Competencies
+* Skills
+* Rating
+* Review count
+* Location
+* Coverage area
+* Years of experience
+* Response time
+* Availability
+* Certifications
+* Description
+* Portfolio
+* Phone
+* Working hours
+* Daily rate
+* Marketplace visibility
+* Account status
+* Other real profile information already supported
+
+Do NOT create a different Admin version of the Maintenance profile data.
+
+The Admin should see the same underlying real Maintenance account information.
+
+---
+
+# 7. MAINTENANCE ACCOUNT FILTER BAR
+
+Inside:
+
+**Comptes Maintenance**
+
+add a filter bar.
+
+The Admin must be able to filter Maintenance accounts using the filters that are actually available from the existing data.
+
+Examples where supported:
+
+* Status
+* Visibility
+* Type
+* Availability
+* Category
+* Competency
+* Location / Zone
+* Rating
+* Other existing Maintenance account attributes
+
+Only expose filters backed by real data.
+
+Do not invent filters that have no meaningful data.
+
+The filter behavior should follow existing Admin filter patterns.
+
+---
+
+# 8. ADMIN → MAINTENANCE ACCOUNT DETAILS
+
+When Admin clicks a Maintenance card, open the appropriate existing detail/modal pattern.
+
+The information should be equivalent to the Maintenance profile that a Coffee Owner can see.
+
+Do not duplicate the data manually.
+
+The Admin view should always use the same real Maintenance source of truth.
+
+If the Maintenance agent changes:
+
+* Profile
+* Experience
+* Certifications
+* Categories
+* Skills
+* Availability
+* Pricing
+* Working hours
+* Coverage area
+
+the Admin should receive the updated information in realtime.
+
+---
+
+# 9. ADMIN MAINTENANCE → RÉSERVATIONS RÉCENTES
+
+Inside:
+
+**Réservations récentes**
+
+the Admin must be able to see complete Maintenance reservation information.
+
+Each reservation must expose:
+
+* ID
+* Service
+* Catégorie
+* Urgence
+* Date
+* Heure where applicable
+* Statut
+* Maintenance agent
+* Coffee Owner
+* Location
+* Phone
+* Need description
+* Any other existing reservation information
+
+The Admin must use the real reservation records.
+
+Do not use summarized/static data.
+
+Statuses must reflect the actual reservation state:
+
+* Pending
+* Confirmed
+* Rescheduled
+* Completed
+* Cancelled
+* Other existing valid statuses
+
+When a reservation changes from either:
+
+**Coffee Owner**
+
+or:
+
+**Maintenance account**
+
+the Admin reservation view must update accordingly.
+
+---
+
+# 10. ADMIN → REVIEWS TAB
+
+The existing Admin Reviews page currently contains:
+
+* Product Reviews
+* Supplier Reviews
+
+Add a third review category:
+
+### Maintenance Reviews
+
+The switcher should become:
+
+**Product Reviews**
+
+**Supplier Reviews**
+
+**Maintenance Reviews**
+
+Keep the existing Product Reviews and Supplier Reviews functionality exactly as it is.
+
+Do not redesign or break them.
+
+---
+
+# 11. ADMIN → MAINTENANCE REVIEWS
+
+Inside:
+
+**Maintenance Reviews**
+
+the Admin must be able to see all real Maintenance reviews.
+
+Each review should contain useful information such as:
+
+* Reviewer / Coffee Owner
+* Maintenance professional
+* Rating
+* Review/comment
+* Date
+* Related intervention/reservation where applicable
+* Report status
+* Other existing review information
+
+Use the actual Maintenance review data.
+
+No static reviews.
+
+---
+
+# 12. ADMIN → REPORTED MAINTENANCE REVIEWS
+
+Admin must be able to identify reported Maintenance reviews.
+
+Provide a way to:
+
+**Show only Reported**
+
+This filter must work only on Maintenance Reviews and must use the real report status.
+
+Admin must also be able to:
+
+**Delete a Maintenance review**
+
+using the existing Admin confirmation/action patterns.
+
+Do not delete unrelated Product Reviews or Supplier Reviews.
+
+Do not create a second review moderation architecture if the project already has an existing reporting/moderation system.
+
+---
+
+# 13. MAINTENANCE REVIEW SYNCHRONIZATION
+
+The review flow must remain synchronized between:
+
+**Coffee Owner**
+
+↕
+
+**Maintenance Account**
+
+↕
+
+**Admin**
+
+For example:
+
+Coffee Owner creates review
+
+↓
+
+Maintenance account sees review
+
+↓
+
+Admin Maintenance Reviews sees review
+
+If Maintenance reports review
+
+↓
+
+Admin sees it as reported
+
+If Admin deletes review
+
+↓
+
+The review disappears/updates appropriately for Maintenance and Coffee Owner.
+
+No manual refresh should be required where the existing realtime infrastructure supports it.
+
+---
+
+# 14. ADMIN → MESSAGES
+
+The current Admin Messages section must now contain a service switcher.
+
+Add:
+
+**SHOP**
+
+**MAINTENANCE**
+
+**BARISTA**
+
+**PRINT**
+
+**MARKETING**
+
+The purpose is to organize Admin conversations by marketplace/service.
+
+---
+
+# 15. ADMIN MESSAGES → SHOP
+
+When Admin selects:
+
+**SHOP**
+
+show only conversations belonging to SHOP.
+
+Do not show:
+
+* Maintenance
+* Barista
+* Print
+* Marketing
+
+conversations.
+
+---
+
+# 16. ADMIN MESSAGES → MAINTENANCE
+
+When Admin selects:
+
+**MAINTENANCE**
+
+show only Maintenance conversations.
+
+These should be the real conversations between:
+
+* Coffee Owners
+* Maintenance professionals
+
+The Admin should be able to see the actual conversation information already supported by the existing Admin messaging system.
+
+Do not create a separate Maintenance messaging system.
+
+Use the same real conversations with the correct service context.
+
+---
+
+# 17. ADMIN MESSAGES → BARISTA
+
+When Admin selects:
+
+**BARISTA**
+
+include the existing Barista messaging context:
+
+* Barista Academy
+* Marketplace Baristas
+
+Do not change the existing Barista messaging functionality.
+
+Only organize/filter it through the new switcher.
+
+---
+
+# 18. ADMIN MESSAGES → PRINT
+
+When Admin selects:
+
+**PRINT**
+
+show only PRINT conversations.
+
+Do not change PRINT messaging functionality.
+
+---
+
+# 19. ADMIN MESSAGES → MARKETING
+
+When Admin selects:
+
+**MARKETING**
+
+show only MARKETING conversations.
+
+Do not change MARKETING messaging functionality.
+
+---
+
+# 20. MESSAGE SERVICE ISOLATION
+
+The Admin message switcher must be based on the actual conversation/service context.
+
+The same conversation must not appear under multiple service tabs.
+
+For example:
+
+A Maintenance conversation must appear under:
+
+**MAINTENANCE**
+
+and not:
+
+**SHOP**
+
+unless the existing business model explicitly defines it as a shared conversation.
+
+Preserve the existing service-context architecture already implemented for Maintenance.
+
+---
+
+# 21. REALTIME SYNCHRONIZATION
+
+This requirement applies to the entire new Admin functionality.
+
+No manual refresh should be required for relevant changes.
+
+### Maintenance account changes
+
+Maintenance agent updates:
+
+* Profile
+* Experience
+* Certifications
+* Categories
+* Skills
+* Availability
+* Coverage zone
+* Pricing
+* Other marketplace information
+
+↓
+
+Admin Maintenance updates automatically.
+
+Coffee Owner `/maintenance` also continues to update automatically.
+
+---
+
+### Reservation changes
+
+Coffee Owner creates reservation.
+
+↓
+
+Maintenance sees it.
+
+↓
+
+Admin sees it.
+
+Maintenance reschedules.
+
+↓
+
+Coffee Owner updates.
+
+↓
+
+Admin updates.
+
+Maintenance completes.
+
+↓
+
+Coffee Owner updates.
+
+↓
+
+Admin updates.
+
+---
+
+### Review changes
+
+Coffee Owner creates review.
+
+↓
+
+Maintenance sees it.
+
+↓
+
+Admin sees it.
+
+Maintenance reports review.
+
+↓
+
+Admin sees report.
+
+Admin deletes review.
+
+↓
+
+Maintenance/Coffee Owner views update accordingly.
+
+---
+
+### Messages
+
+New messages should update the relevant Admin service tab in realtime.
+
+For example:
+
+Maintenance conversation receives a new message.
+
+↓
+
+Admin → Messages → Maintenance
+
+updates automatically.
+
+---
+
+# 22. DESIGN PRESERVATION
+
+This is extremely important.
+
+Do NOT change the existing design unless required by the new functionality.
+
+Use the current:
+
+* Admin colors
+* Typography
+* Cards
+* Tabs
+* Switchers
+* Modals
+* Buttons
+* Badges
+* Tables
+* Filters
+* Dark mode
+* Light mode
+* Spacing
+* Responsive behavior
+
+The new elements should look as if they were always part of the existing Admin application.
+
+Do not introduce a new visual system.
+
+---
+
+# 23. DO NOT MODIFY UNRELATED PARTS
+
+Do not modify:
+
+* Coffee Owner SHOP
+* Coffee Owner PRINT
+* Coffee Owner BARISTA
+* Coffee Owner MARKETING
+* Supplier
+* Delivery
+* Existing Product Reviews
+* Existing Supplier Reviews
+* Existing unrelated Admin modules
+
+unless a direct shared dependency requires a minimal change.
+
+If something does not need modification:
+
+**leave it exactly as it is.**
+
+---
+
+# 24. DATA / SOURCE OF TRUTH
+
+Everything must use real existing database data.
+
+No:
+
+* hardcoded Maintenance accounts
+* hardcoded competencies
+* hardcoded zones
+* hardcoded reservations
+* hardcoded reviews
+* hardcoded messages
+* fake analytics
+
+The database must remain the source of truth.
+
+---
+
+# 25. BEFORE IMPLEMENTATION
+
+Do not immediately start editing.
+
+First:
+
+1. Read the current Maintenance implementation.
+2. Read the current Admin Maintenance implementation.
+3. Read the current Admin Reviews implementation.
+4. Read the current Admin Messages implementation.
+5. Identify existing reusable components and patterns.
+6. Check the current database/schema.
+7. Check current Maintenance API/data flow.
+8. Check current service-context messaging.
+9. Check current realtime infrastructure.
+10. Verify what is already implemented.
+
+Then implement only what is actually missing.
+
+---
+
+# 26. FINAL VERIFICATION
+
+After implementation, verify all of the following.
+
+### Admin Maintenance
+
+* Switcher works.
+* Competencies management works.
+* Competency freeze/unfreeze works.
+* Competency rename works.
+* Competency add/delete works.
+* Intervention zones management works.
+* Zone freeze/unfreeze works.
+* Zone edit works.
+* Zone delete works.
+* Maintenance cards display real accounts.
+* Maintenance filters work.
+* Maintenance detail opens correctly.
+* Reservations display complete information.
+
+### Admin Reviews
+
+* Product Reviews still work.
+* Supplier Reviews still work.
+* Maintenance Reviews exists.
+* Maintenance Reviews show real reviews.
+* Reported filter works.
+* Admin can delete Maintenance reviews.
+
+### Admin Messages
+
+* SHOP filter works.
+* MAINTENANCE filter works.
+* BARISTA filter works.
+* PRINT filter works.
+* MARKETING filter works.
+* Conversations are correctly isolated by service.
+
+### Synchronization
+
+Verify changes propagate:
+
+**Coffee Owner ↔ Maintenance ↔ Admin**
+
+without unnecessary refreshes.
+
+---
+
+# FINAL RULE
+
+This is an extension of a working system.
+
+The priority is:
+
+**PRESERVE → AUDIT → EXTEND → SYNCHRONIZE → VERIFY**
+
+Not:
+
+**REBUILD → REDESIGN → REPLACE**
+
+Do not change anything that does not need to change.
+
+Do not remove additional parts.
+
+Do not alter existing functionality simply to implement the new Admin requirements.
+
+Make the smallest safe changes necessary to deliver the requested Admin Maintenance management, Maintenance Reviews management, service-separated Admin Messages, and complete realtime synchronization.

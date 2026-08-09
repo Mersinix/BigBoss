@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Star, Loader2, Package, Store, Flag, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Star, Loader2, Package, Store, Wrench, Flag, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -26,7 +26,7 @@ function formatDate(d: Date | string | null | undefined) {
   return new Date(d as any).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-type ReviewTab = "products" | "supplier";
+type ReviewTab = "products" | "supplier" | "maintenance";
 
 export default function AdminReviewsPage() {
   const { toast } = useToast();
@@ -35,7 +35,7 @@ export default function AdminReviewsPage() {
   const [showReportedOnly, setShowReportedOnly] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
-  const reviewType = activeTab === "products" ? "PRODUCT" : "SUPPLIER";
+  const reviewType = activeTab === "products" ? "PRODUCT" : activeTab === "supplier" ? "SUPPLIER" : "MAINTENANCE";
 
   const { data: reviews = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/reviews", reviewType],
@@ -47,7 +47,7 @@ export default function AdminReviewsPage() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/reviews/${id}`),
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/reviews/${id}?reviewType=${reviewType}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/reviews"] });
       invalidateMarketplace(qc);
@@ -58,7 +58,7 @@ export default function AdminReviewsPage() {
   });
 
   const resolveMut = useMutation({
-    mutationFn: (id: number) => apiRequest("PATCH", `/api/admin/reviews/${id}/resolve`),
+      mutationFn: (id: number) => apiRequest("PATCH", `/api/admin/reviews/${id}/resolve?reviewType=${reviewType}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/reviews"] });
       toast({ title: "Report resolved" });
@@ -116,7 +116,7 @@ export default function AdminReviewsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-xl p-1 bg-secondary/50 w-fit">
+      <div className="flex gap-1 rounded-xl p-1 bg-secondary/50 w-fit flex-wrap">
         <button
           onClick={() => setActiveTab("products")}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
@@ -132,6 +132,14 @@ export default function AdminReviewsPage() {
           }`}
         >
           <Store className="w-4 h-4" /> Supplier Reviews
+        </button>
+        <button
+          onClick={() => { setActiveTab("maintenance"); setShowReportedOnly(false); }}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+            activeTab === "maintenance" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Wrench className="w-4 h-4" /> Maintenance Reviews
         </button>
       </div>
 
@@ -198,14 +206,20 @@ export default function AdminReviewsPage() {
                       </div>
                       {r.productName && (
                         <p className="text-xs text-muted-foreground mb-1.5">
-                          Product: <span className="font-medium text-foreground">{r.productName}</span>
+                           {activeTab === "maintenance" ? "Maintenance: " : "Product: "}
+                           <span className="font-medium text-foreground">{activeTab === "maintenance" ? (r.maintenanceName || "—") : r.productName}</span>
                         </p>
                       )}
-                      {r.supplierId && activeTab === "supplier" && (
+                       {r.supplierId && activeTab === "supplier" && (
                         <p className="text-xs text-muted-foreground mb-1.5">
                           Supplier ID: <span className="font-medium text-foreground">#{r.supplierId}</span>
                         </p>
                       )}
+                       {activeTab === "maintenance" && (
+                         <p className="text-xs text-muted-foreground mb-1.5">
+                           Intervention: <span className="font-medium text-foreground">{r.reservationId ? `#${r.reservationId}` : "—"}</span>
+                         </p>
+                       )}
                       <Stars rating={r.rating} />
                       {r.comment && (
                         <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{r.comment}</p>

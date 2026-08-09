@@ -540,6 +540,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     catch { res.status(500).json({ message: "Failed to load Maintenance overview" }); }
   });
 
+  app.get("/api/admin/maintenance/taxonomy", requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getMaintenanceTaxonomy()); }
+    catch { res.status(500).json({ message: "Failed to load Maintenance taxonomy" }); }
+  });
+
+  app.post("/api/admin/maintenance/competencies", requireAdmin, async (req, res) => {
+    try {
+      const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
+      const item = await storage.createMaintenanceCompetency(name);
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.status(201).json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Competency already exists or is invalid" });
+    }
+  });
+
+  app.patch("/api/admin/maintenance/competencies/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const item = await storage.updateMaintenanceCompetency(Number(req.params.id), body);
+      if (!item) return res.status(404).json({ message: "Competency not found" });
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid competency" });
+    }
+  });
+
+  app.delete("/api/admin/maintenance/competencies/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteMaintenanceCompetency(Number(req.params.id));
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete competency" }); }
+  });
+
+  app.post("/api/admin/maintenance/zones", requireAdmin, async (req, res) => {
+    try {
+      const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
+      const item = await storage.createMaintenanceZone(name);
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.status(201).json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Zone already exists or is invalid" });
+    }
+  });
+
+  app.patch("/api/admin/maintenance/zones/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const item = await storage.updateMaintenanceZone(Number(req.params.id), body);
+      if (!item) return res.status(404).json({ message: "Zone not found" });
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid zone" });
+    }
+  });
+
+  app.delete("/api/admin/maintenance/zones/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteMaintenanceZone(Number(req.params.id));
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete zone" }); }
+  });
+
   app.get("/api/maintenance-favorites", requireAuth, async (req: any, res) => {
     res.json(await storage.getMaintenanceFavoritesByUser(req.session.userId));
   });
@@ -2664,7 +2743,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/admin/reviews", requireAdmin, async (req, res) => {
     try {
       const { reviewType } = req.query as Record<string, string>;
-      const reviews = await storage.getAllReviews({ reviewType });
+      const reviews = await storage.getAllReviews({ reviewType: reviewType || undefined });
       res.json(reviews);
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -2672,7 +2751,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Admin: delete a review
   app.delete("/api/admin/reviews/:id", requireAdmin, async (req, res) => {
     try {
-      await storage.deleteReview(parseInt(req.params.id));
+      const reviewType = typeof req.query.reviewType === "string" ? req.query.reviewType : undefined;
+      if (reviewType === "MAINTENANCE") {
+        const deleted = await storage.deleteMaintenanceReview(parseInt(req.params.id));
+        if (!deleted) return res.status(404).json({ message: "Maintenance review not found" });
+        broadcast("maintenance_review_updated", { reviewId: parseInt(req.params.id) });
+      } else {
+        await storage.deleteReview(parseInt(req.params.id));
+      }
       res.json({ message: "Deleted" });
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -2681,6 +2767,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/reviews/:id/resolve", requireAdmin, async (req, res) => {
     try {
       await storage.resolveReviewReport(parseInt(req.params.id));
+      if (req.query.reviewType === "MAINTENANCE") broadcast("maintenance_review_updated", { reviewId: parseInt(req.params.id) });
       res.json({ message: "Resolved" });
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -3351,7 +3438,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!targetUserId || typeof targetUserId !== "number") {
       return res.status(400).json({ message: "targetUserId is required" });
     }
-    if (typeof service !== "string" || !["SHOP", "MAINTENANCE"].includes(service)) {
+    if (typeof service !== "string" || !["SHOP", "MAINTENANCE", "BARISTA", "PRINT", "MARKETING"].includes(service)) {
       return res.status(400).json({ message: "Invalid service" });
     }
     try {

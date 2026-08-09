@@ -495,6 +495,27 @@ export const maintenanceReservations = pgTable("maintenance_reservations", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Admin-managed Maintenance taxonomy. Profile/reservation history keeps its
+// original text values, so freezing or removing a taxonomy item never
+// invalidates historical records.
+export const maintenanceCompetencies = pgTable("maintenance_competencies", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const maintenanceZones = pgTable("maintenance_zones", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ── Promotions ───────────────────────────────────────────────────────────────
 
 export const promotionTypeEnum = pgEnum('promotion_type', [
@@ -766,6 +787,8 @@ export const insertPackFavoriteSchema = createInsertSchema(packFavorites).omit({
 export const insertMaintenanceProfileSchema = createInsertSchema(maintenanceProfiles).omit({ id: true, updatedAt: true });
 export const insertMaintenanceFavoriteSchema = createInsertSchema(maintenanceFavorites).omit({ id: true, createdAt: true });
 export const insertMaintenanceReservationSchema = createInsertSchema(maintenanceReservations).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMaintenanceCompetencySchema = createInsertSchema(maintenanceCompetencies).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMaintenanceZoneSchema = createInsertSchema(maintenanceZones).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });
@@ -847,6 +870,8 @@ export type MaintenanceProfile = typeof maintenanceProfiles.$inferSelect;
 export type InsertMaintenanceProfile = z.infer<typeof insertMaintenanceProfileSchema>;
 export type MaintenanceFavorite = typeof maintenanceFavorites.$inferSelect;
 export type MaintenanceReservation = typeof maintenanceReservations.$inferSelect;
+export type MaintenanceCompetency = typeof maintenanceCompetencies.$inferSelect;
+export type MaintenanceZone = typeof maintenanceZones.$inferSelect;
 export type MaintenanceMarketplaceCard = MaintenanceProfile & {
   userId: number;
   name: string;

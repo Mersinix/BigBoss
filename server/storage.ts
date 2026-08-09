@@ -9,6 +9,7 @@ import {
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
   landingConfig, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
+  maintenanceCompetencies, maintenanceZones,
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
   orderReturns,
@@ -42,6 +43,7 @@ import {
   type InventoryAdjustment, type StockStatus,
   type MaintenanceProfile, type InsertMaintenanceProfile, type MaintenanceMarketplaceCard,
   type MaintenanceReservation, type InsertMaintenanceReservation,
+  type MaintenanceCompetency, type MaintenanceZone,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
 
@@ -203,7 +205,15 @@ export interface IStorage {
   getMaintenanceReviews(maintenanceUserId: number): Promise<SupplierProductReview[]>;
   getMaintenanceReviewForReservation(reservationId: number, cafeId: number): Promise<SupplierProductReview | undefined>;
   upsertMaintenanceReview(data: { maintenanceUserId: number; reservationId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string; cafeOwnerName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }>;
+  deleteMaintenanceReview(reviewId: number): Promise<boolean>;
   getMaintenanceAdminOverview(): Promise<any>;
+  getMaintenanceTaxonomy(): Promise<{ competencies: MaintenanceCompetency[]; zones: MaintenanceZone[] }>;
+  createMaintenanceCompetency(name: string): Promise<MaintenanceCompetency>;
+  updateMaintenanceCompetency(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceCompetency | undefined>;
+  deleteMaintenanceCompetency(id: number): Promise<void>;
+  createMaintenanceZone(name: string): Promise<MaintenanceZone>;
+  updateMaintenanceZone(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceZone | undefined>;
+  deleteMaintenanceZone(id: number): Promise<void>;
   getMaintenanceFavoritesByUser(userId: number): Promise<number[]>;
   addMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
   removeMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
@@ -1338,6 +1348,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMaintenanceCategories(): Promise<string[]> {
+    const taxonomy = await this.getMaintenanceTaxonomy();
+    const activeTaxonomy = taxonomy.competencies.filter((item) => item.isActive && !item.isFrozen);
+    if (activeTaxonomy.length) return activeTaxonomy.map((item) => item.name);
     const rows = await db.select({ categories: maintenanceProfiles.categories })
       .from(maintenanceProfiles)
       .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
@@ -1416,6 +1429,20 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(supplierProductReviews.createdAt));
   }
 
+  async deleteMaintenanceReview(reviewId: number): Promise<boolean> {
+    const [review] = await db.select({
+      id: supplierProductReviews.id,
+      maintenanceUserId: supplierProductReviews.maintenanceUserId,
+    }).from(supplierProductReviews).where(and(
+      eq(supplierProductReviews.id, reviewId),
+      eq(supplierProductReviews.reviewType, "MAINTENANCE"),
+    ));
+    if (!review) return false;
+    await db.delete(supplierProductReviews).where(eq(supplierProductReviews.id, reviewId));
+    if (review.maintenanceUserId) await this.refreshMaintenanceReviewStats(review.maintenanceUserId);
+    return true;
+  }
+
   async getMaintenanceReviewForReservation(reservationId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
     const [review] = await db.select().from(supplierProductReviews).where(and(
       eq(supplierProductReviews.reservationId as any, reservationId),
@@ -1473,7 +1500,64 @@ export class DatabaseStorage implements IStorage {
       .where(eq(maintenanceProfiles.userId, maintenanceUserId));
   }
 
+  private async seedMaintenanceTaxonomyIfEmpty(): Promise<void> {
+    const [competencyCount] = await db.select({ count: sql<number>`count(*)::int` }).from(maintenanceCompetencies);
+    if (!competencyCount || competencyCount.count === 0) {
+      const rows = await db.select({ categories: maintenanceProfiles.categories }).from(maintenanceProfiles);
+      const names = Array.from(new Set(rows.flatMap((row) => row.categories ?? []).map((name) => name.trim()).filter(Boolean)));
+      if (names.length) await db.insert(maintenanceCompetencies).values(names.map((name) => ({ name }))).onConflictDoNothing();
+    }
+    const [zoneCount] = await db.select({ count: sql<number>`count(*)::int` }).from(maintenanceZones);
+    if (!zoneCount || zoneCount.count === 0) {
+      const rows = await db.select({ coverageArea: maintenanceProfiles.coverageArea }).from(maintenanceProfiles);
+      const names = Array.from(new Set(rows.flatMap((row) => (row.coverageArea ?? "").split(",")).map((name) => name.trim()).filter(Boolean)));
+      if (names.length) await db.insert(maintenanceZones).values(names.map((name) => ({ name }))).onConflictDoNothing();
+    }
+  }
+
+  async getMaintenanceTaxonomy(): Promise<{ competencies: MaintenanceCompetency[]; zones: MaintenanceZone[] }> {
+    await this.seedMaintenanceTaxonomyIfEmpty();
+    const [competencies, zones] = await Promise.all([
+      db.select().from(maintenanceCompetencies).orderBy(asc(maintenanceCompetencies.name)),
+      db.select().from(maintenanceZones).orderBy(asc(maintenanceZones.name)),
+    ]);
+    return { competencies, zones };
+  }
+
+  async createMaintenanceCompetency(name: string): Promise<MaintenanceCompetency> {
+    const [created] = await db.insert(maintenanceCompetencies).values({ name: name.trim() }).returning();
+    return created;
+  }
+
+  async updateMaintenanceCompetency(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceCompetency | undefined> {
+    const [updated] = await db.update(maintenanceCompetencies)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .where(eq(maintenanceCompetencies.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMaintenanceCompetency(id: number): Promise<void> {
+    await db.delete(maintenanceCompetencies).where(eq(maintenanceCompetencies.id, id));
+  }
+
+  async createMaintenanceZone(name: string): Promise<MaintenanceZone> {
+    const [created] = await db.insert(maintenanceZones).values({ name: name.trim() }).returning();
+    return created;
+  }
+
+  async updateMaintenanceZone(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceZone | undefined> {
+    const [updated] = await db.update(maintenanceZones)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .where(eq(maintenanceZones.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMaintenanceZone(id: number): Promise<void> {
+    await db.delete(maintenanceZones).where(eq(maintenanceZones.id, id));
+  }
+
   async getMaintenanceAdminOverview(): Promise<any> {
+    const taxonomy = await this.getMaintenanceTaxonomy();
     const accounts = await db.select({ profile: maintenanceProfiles, user: users })
       .from(maintenanceProfiles)
       .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
@@ -1481,6 +1565,8 @@ export class DatabaseStorage implements IStorage {
     const reservations = await db.select().from(maintenanceReservations);
     const reviews = await db.select().from(supplierProductReviews)
       .where(eq(supplierProductReviews.reviewType, "MAINTENANCE"));
+    const allUsers = await db.select().from(users);
+    const userMap = new Map(allUsers.map((user) => [user.id, user]));
     const categoryCounts = new Map<string, number>();
     for (const row of accounts) for (const category of row.profile.categories) {
       categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
@@ -1499,9 +1585,31 @@ export class DatabaseStorage implements IStorage {
         averageRating,
       },
       categories: Array.from(categoryCounts, ([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
-      accounts: accounts.map(({ profile, user }) => ({ ...profile, name: user.name, email: user.email, status: user.status, location: user.locationAddress ?? profile.coverageArea })),
-      reservations,
-      reviews,
+      taxonomy,
+      accounts: accounts.map(({ profile, user }) => ({
+        ...profile,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        status: user.status,
+        location: user.locationAddress ?? profile.coverageArea,
+        available: profile.isAvailable && !profile.isOnVacation,
+        initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+      })),
+      reservations: reservations
+        .map((reservation) => ({
+          ...reservation,
+          maintenanceName: userMap.get(reservation.maintenanceUserId)?.name ?? "—",
+          cafeOwner: userMap.get(reservation.cafeOwnerId)?.name ?? "—",
+          ownerPhone: userMap.get(reservation.cafeOwnerId)?.phone ?? null,
+        }))
+        .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)),
+      reviews: reviews.map((review) => ({
+        ...review,
+        maintenanceName: userMap.get(review.maintenanceUserId ?? 0)?.name ?? "—",
+        reviewerName: userMap.get(review.cafeId)?.name ?? review.cafeName,
+      })),
     };
   }
 
@@ -3065,7 +3173,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteReview(reviewId: number): Promise<void> {
+    const [review] = await db.select({
+      maintenanceUserId: supplierProductReviews.maintenanceUserId,
+      reviewType: supplierProductReviews.reviewType,
+    }).from(supplierProductReviews).where(eq(supplierProductReviews.id, reviewId));
     await db.delete(supplierProductReviews).where(eq(supplierProductReviews.id, reviewId));
+    if (review?.reviewType === "MAINTENANCE" && review.maintenanceUserId) {
+      await this.refreshMaintenanceReviewStats(review.maintenanceUserId);
+    }
   }
 
   async getAllReviews(filters?: { reviewType?: string; reported?: boolean }): Promise<SupplierProductReview[]> {

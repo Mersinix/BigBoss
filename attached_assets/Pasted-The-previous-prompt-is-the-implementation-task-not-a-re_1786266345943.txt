@@ -1,0 +1,73 @@
+The previous prompt is the implementation task, not a request for analysis only.
+
+You have already read the specification and confirmed the scope.
+
+**NOW EXECUTE THE CHANGES.**
+
+Do not create another checkpoint without making the requested implementation.
+
+Start by auditing the current code only as much as necessary to identify what is already implemented, then immediately implement everything missing from the prompt.
+
+Important:
+
+* Do NOT redo completed Maintenance work.
+* Do NOT rebuild existing Maintenance functionality.
+* Do NOT redesign existing pages.
+* Do NOT remove existing features.
+* Do NOT modify unrelated modules.
+* Reuse the existing Maintenance database, APIs, components, Admin patterns, messaging architecture, and realtime infrastructure wherever they already exist.
+* Only add or modify what is required by the prompt.
+* Keep the current design exactly as it is unless a new UI element is explicitly required.
+* All new data must be real database-backed data, never static/demo data.
+* All relevant changes must remain synchronized between Admin, Coffee Owner, and Maintenance in realtime.
+
+### EXECUTION ORDER
+
+1. Inspect the current implementation and identify which requested items are already complete.
+2. Implement the missing **Admin → Maintenance** functionality.
+3. Implement competency management:
+
+   * Add
+   * Edit/Rename
+   * Delete
+   * Freeze/Unfreeze
+4. Implement intervention-zone management:
+
+   * Add
+   * Edit
+   * Delete
+   * Freeze/Unfreeze
+5. Implement Maintenance account cards.
+6. Implement Maintenance account filters.
+7. Implement the complete Maintenance account detail view using the same real source of truth as Coffee Owner `/maintenance`.
+8. Implement complete Admin Maintenance reservation information.
+9. Implement **Admin → Reviews → Maintenance Reviews**.
+10. Implement reported-review filtering.
+11. Implement Maintenance review deletion.
+12. Connect review synchronization between Coffee Owner, Maintenance, and Admin.
+13. Implement realtime synchronization for all relevant Maintenance changes.
+14. Preserve everything that is already working.
+
+### VERY IMPORTANT
+
+Do not stop after reading.
+
+Do not stop after creating a checkpoint.
+
+Do not just report what needs to be done.
+
+**Actually modify the code and implement the requested functionality.**
+
+After implementation:
+
+* Run the relevant type/build checks.
+* Verify the database/schema state.
+* Verify the actual Admin UI.
+* Verify the actual Maintenance UI.
+* Verify realtime behavior where applicable.
+* Fix any errors introduced by your changes.
+* Only then report what was completed and what, if anything, remains blocked.
+
+If you encounter an unrelated pre-existing error, do not rewrite unrelated code to fix it. Clearly separate it from the Maintenance work.
+
+The goal of this step is **implementation**, not another audit.

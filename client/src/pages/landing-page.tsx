@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { useThemeStore } from "@/store/theme-store";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -321,6 +321,45 @@ function MultiSelect({ label, options, selected, onChange }: { label: string; op
   );
 }
 
+// ── Shared presentational helpers ─────────────────────────────────────────────
+
+function SectionHeading({
+  icon: Icon, iconWrap, iconColor, title, description, badge, dk,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  iconWrap: string;
+  iconColor: string;
+  title: string;
+  description?: string;
+  badge?: ReactNode;
+  dk: (light: string, dark: string) => string;
+}) {
+  return (
+    <div className="text-center mb-10 md:mb-12">
+      <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 ${iconWrap}`}>
+        <Icon className={`w-6 h-6 ${iconColor}`} />
+      </div>
+      <h2 className={`text-3xl md:text-4xl font-bold mb-3 flex items-center justify-center gap-2.5 ${dk("text-gray-900", "text-white")}`}>
+        {title}
+        {badge}
+      </h2>
+      {description && (
+        <p className={`text-base md:text-lg max-w-xl mx-auto ${dk("text-gray-500", "text-gray-400")}`}>{description}</p>
+      )}
+    </div>
+  );
+}
+
+function FeatureChip({ icon, label, sublabel, dk }: { icon: ReactNode; label: string; sublabel?: string; dk: (light: string, dark: string) => string }) {
+  return (
+    <div className={`group flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 ${dk("bg-white border-gray-100 shadow-sm hover:shadow-lg hover:border-amber-200", "bg-gray-800/60 border-gray-700 hover:border-amber-800/60 hover:bg-gray-800")}`}>
+      <span className="text-2xl transition-transform duration-300 group-hover:scale-110">{icon}</span>
+      <span className={`text-xs font-semibold text-center leading-tight ${dk("text-gray-700", "text-gray-200")}`}>{label}</span>
+      {sublabel && <span className={`text-[11px] ${dk("text-gray-400", "text-gray-500")}`}>{sublabel}</span>}
+    </div>
+  );
+}
+
 // ── Role-specific forms ───────────────────────────────────────────────────────
 
 function CafeForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
@@ -575,6 +614,8 @@ export default function LandingPage() {
     setSlideIndex(idx);
     startTimer();
   };
+  const prevSlide = () => goToSlide((slideIndex - 1 + slides.length) % slides.length);
+  const nextSlide = () => goToSlide((slideIndex + 1) % slides.length);
 
   const openAuth = (tab: "login" | "register" = "login", role?: string) => {
     if (role) setSelectedRole(role);
@@ -735,14 +776,14 @@ export default function LandingPage() {
     <div className={`min-h-screen flex flex-col ${isDark ? "bg-gray-950 text-white" : "bg-white text-gray-900"}`} dir={isRtl ? "rtl" : "ltr"}>
 
       {/* ── Navbar ── */}
-      <nav className={`sticky top-0 z-50 border-b shadow-sm ${dk("bg-white border-gray-100", "bg-gray-900 border-gray-800")}`}>
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+      <nav className={`sticky top-0 z-50 backdrop-blur-xl border-b transition-colors ${dk("bg-white/85 border-gray-200/80", "bg-gray-950/85 border-gray-800/80")}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center">
+          <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
+            <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center shadow-md shadow-amber-500/25 transition-shadow group-hover:shadow-amber-500/40">
               <Coffee className="w-5 h-5 text-white" />
             </div>
-            <span className={`font-bold text-lg hidden sm:block ${dk("text-gray-900", "text-white")}`}>
+            <span className={`font-bold text-lg tracking-tight hidden sm:block ${dk("text-gray-900", "text-white")}`}>
               BigBoss<span className="text-amber-500">Coffee</span>
             </span>
           </Link>
@@ -752,7 +793,7 @@ export default function LandingPage() {
             {/* Dark mode toggle */}
             <button
               onClick={() => toggle()}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk("hover:bg-gray-100 text-gray-600", "hover:bg-gray-700 text-gray-300")}`}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${dk("hover:bg-gray-100 text-gray-600", "hover:bg-gray-800 text-gray-300")}`}
               aria-label="Toggle dark mode"
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -762,7 +803,7 @@ export default function LandingPage() {
             <div className="relative">
               <button
                 onClick={() => setLangOpen(!langOpen)}
-                className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-3 py-1.5 transition-colors ${dk("text-gray-700 border-gray-200 hover:border-amber-300", "text-gray-200 border-gray-700 hover:border-amber-400")}`}
+                className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-3 py-1.5 transition-colors ${dk("text-gray-700 border-gray-200 hover:border-amber-300", "text-gray-200 border-gray-700 hover:border-amber-500/60")}`}
                 aria-haspopup="listbox"
                 aria-expanded={langOpen}
               >
@@ -774,10 +815,10 @@ export default function LandingPage() {
                 <>
                   {/* Invisible backdrop to close on outside click */}
                   <div className="fixed inset-0 z-40" onClick={() => setLangOpen(false)} />
-                  <div className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-1 w-36 rounded-xl border shadow-lg overflow-hidden z-50 ${dk("bg-white border-gray-200", "bg-gray-800 border-gray-700")}`}>
+                  <div className={`absolute ${isRtl ? "left-0" : "right-0"} top-full mt-2 w-40 rounded-2xl border shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200 ${dk("bg-white border-gray-200", "bg-gray-800 border-gray-700")}`}>
                     {(["fr", "en", "tn"] as Lang[]).map((l) => (
                       <button key={l} onClick={() => { setLang(l); setLangOpen(false); }}
-                        className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${lang === l ? "bg-amber-500 text-white" : dk("hover:bg-gray-50 text-gray-700", "hover:bg-gray-700 text-gray-200")}`}>
+                        className={`w-full text-left px-3.5 py-2.5 text-sm transition-colors ${lang === l ? "bg-amber-500 text-white font-medium" : dk("hover:bg-gray-50 text-gray-700", "hover:bg-gray-700 text-gray-200")}`}>
                         {l === "fr" ? "🇫🇷 Français" : l === "en" ? "🇬🇧 English" : "🇹🇳 عربي تونسي"}
                       </button>
                     ))}
@@ -791,14 +832,14 @@ export default function LandingPage() {
               <div className="flex items-center gap-2">
                 <span className={`text-sm font-medium hidden sm:block ${dk("text-gray-700", "text-gray-200")}`}>{user.name}</span>
                 <Link href="/">
-                  <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white rounded-full">
+                  <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white rounded-full shadow-sm shadow-amber-500/20 px-5">
                     {t.dashboard}
                   </Button>
                 </Link>
               </div>
             ) : (
               <Button size="sm" data-testid="button-connexion" onClick={() => openAuth("login")}
-                className="bg-amber-500 hover:bg-amber-600 text-white rounded-full shadow-sm px-5">
+                className="bg-amber-500 hover:bg-amber-600 text-white rounded-full shadow-sm shadow-amber-500/20 px-5">
                 {t.connect}
               </Button>
             )}
@@ -807,35 +848,39 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero Carousel ── */}
-      <section className="relative overflow-hidden" style={{ minHeight: "380px" }}>
+      <section className="relative overflow-hidden flex items-center min-h-[520px] sm:min-h-[580px] md:min-h-[640px]">
         {/* Slide background */}
         {currentSlide.imageUrl && (
           <div
-            className="absolute inset-0 bg-cover bg-center transition-all duration-700"
+            key={slideIndex}
+            className="absolute inset-0 bg-cover bg-center animate-in fade-in duration-700"
             style={{ backgroundImage: `url('${currentSlide.imageUrl}')` }}
           />
         )}
-        {/* Amber overlay — preserves design language */}
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/90 via-amber-500/85 to-amber-600/90" />
+        {/* Rich editorial overlay — preserves amber design language, adds depth */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-amber-900/55 to-amber-600/75" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.35)_100%)]" />
 
         {/* Content */}
-        <div className="relative max-w-4xl mx-auto text-center px-4 pt-10 pb-16">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2 transition-all duration-500">
-            {currentSlide.title}
-          </h1>
-          <p className="text-amber-100 text-base md:text-lg mb-10 transition-all duration-500">
-            {currentSlide.description}
-          </p>
+        <div className="relative w-full max-w-4xl mx-auto text-center px-4 sm:px-6 py-16 md:py-20">
+          <div key={`copy-${slideIndex}`} className="animate-in fade-in slide-in-from-bottom-2 duration-700">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-white mb-4 leading-[1.08] drop-shadow-sm [text-wrap:balance]">
+              {currentSlide.title}
+            </h1>
+            <p className="text-amber-50/95 text-lg md:text-xl mb-12 max-w-2xl mx-auto leading-relaxed">
+              {currentSlide.description}
+            </p>
+          </div>
 
           {/* Service icons */}
-          <div className="flex justify-center gap-4 md:gap-8 mb-8">
+          <div className="flex justify-center flex-wrap gap-4 sm:gap-6 md:gap-8 mb-10">
             {visibleServices.map((svc) => {
               const comingSoon = svc.service ? serviceStates[svc.service] === "COMING_SOON" : false;
               return (
                 <button key={svc.id} data-testid={`button-service-${svc.id}`}
                   onClick={() => handleServiceClick(svc.href)}
-                  className="relative flex flex-col items-center gap-2 group transition-transform hover:-translate-y-1 cursor-pointer">
-                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white shadow-lg flex items-center justify-center group-hover:shadow-xl transition-shadow">
+                  className="relative flex flex-col items-center gap-2.5 group transition-transform duration-300 hover:-translate-y-1.5 cursor-pointer">
+                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white shadow-lg ring-4 ring-white/20 flex items-center justify-center transition-all duration-300 group-hover:shadow-2xl group-hover:ring-white/40 group-hover:scale-105">
                     <svc.icon className="w-7 h-7 md:w-9 md:h-9 text-amber-600" />
                   </div>
                   <span className="text-white text-xs md:text-sm font-semibold tracking-wide">{svc.label}</span>
@@ -847,14 +892,24 @@ export default function LandingPage() {
             })}
           </div>
 
-          {/* Carousel dots */}
+          {/* Carousel controls */}
           {slides.length > 1 && (
-            <div className="flex justify-center gap-2">
-              {slides.map((_, i) => (
-                <button key={i} onClick={() => goToSlide(i)}
-                  className={`transition-all rounded-full ${i === slideIndex ? "w-6 h-2 bg-white" : "w-2 h-2 bg-white/50 hover:bg-white/80"}`}
-                />
-              ))}
+            <div className="flex items-center justify-center gap-4">
+              <button onClick={prevSlide} aria-label="Previous slide"
+                className="hidden sm:flex w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 items-center justify-center text-white transition-colors">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex justify-center gap-2">
+                {slides.map((_, i) => (
+                  <button key={i} onClick={() => goToSlide(i)} aria-label={`Go to slide ${i + 1}`}
+                    className={`transition-all rounded-full ${i === slideIndex ? "w-6 h-2 bg-white" : "w-2 h-2 bg-white/50 hover:bg-white/80"}`}
+                  />
+                ))}
+              </div>
+              <button onClick={nextSlide} aria-label="Next slide"
+                className="hidden sm:flex w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 items-center justify-center text-white transition-colors">
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           )}
         </div>
@@ -865,43 +920,44 @@ export default function LandingPage() {
       {/* ── SHOP Section ── */}
       {activeCategories.length > 0 && (
         <section
-          className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
+          className={`py-16 md:py-20 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
           style={{ order: serviceOrder.indexOf("SHOP") }}
         >
           <div className="max-w-7xl mx-auto">
-            <h2 className={`text-2xl font-bold mb-3 text-center ${dk("text-gray-900", "text-white")}`}>
-              {t.shopTitle}
-            </h2>
-            <p className={`text-center mb-8 ${dk("text-gray-500", "text-gray-400")}`}>{t.shopDesc}</p>
+            <SectionHeading
+              icon={ShoppingBag}
+              iconWrap={dk("bg-amber-500/10", "bg-amber-500/15")}
+              iconColor="text-amber-600"
+              title={t.shopTitle}
+              description={t.shopDesc}
+              dk={dk}
+            />
 
-            <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-center">
               {/* Left: image */}
               <div className="order-2 md:order-1">
-                <img
-                  src={shopImg}
-                  alt="Shop"
-                  className="w-full h-72 object-cover rounded-2xl shadow-md"
-                  loading="lazy"
-                />
+                <div className="rounded-3xl overflow-hidden shadow-xl ring-1 ring-black/5">
+                  <img
+                    src={shopImg}
+                    alt="Shop"
+                    className="w-full h-72 md:h-80 object-cover transition-transform duration-700 hover:scale-105"
+                    loading="lazy"
+                  />
+                </div>
               </div>
 
               {/* Right: categories (no click) */}
               <div className="order-1 md:order-2">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-7">
                   {activeCategories.slice(0, 6).map((cat) => (
-                    <div key={cat.id}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${dk("bg-white border-gray-100 shadow-sm", "bg-gray-800 border-gray-700")}`}>
-                      <span className="text-2xl">{cat.icon || "📦"}</span>
-                      <span className={`text-xs font-semibold text-center leading-tight ${dk("text-gray-700", "text-gray-200")}`}>{cat.name}</span>
-                      {(cat.productCount ?? 0) > 0 && (
-                        <span className={`text-[11px] ${dk("text-gray-400", "text-gray-500")}`}>{cat.productCount} produit{cat.productCount !== 1 ? "s" : ""}</span>
-                      )}
-                    </div>
+                    <FeatureChip key={cat.id} icon={cat.icon || "📦"} label={cat.name}
+                      sublabel={(cat.productCount ?? 0) > 0 ? `${cat.productCount} produit${cat.productCount !== 1 ? "s" : ""}` : undefined}
+                      dk={dk} />
                   ))}
                 </div>
                 <Button onClick={() => openAuth("register", "CAFE_OWNER")}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-5 shadow-lg shadow-amber-200/50" data-testid="button-shop-cta">
-                  {t.shopCta} <ArrowRight className="w-4 h-4 ml-2" />
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-6 text-base font-semibold shadow-lg shadow-amber-500/25 group" data-testid="button-shop-cta">
+                  {t.shopCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                 </Button>
               </div>
             </div>
@@ -912,38 +968,38 @@ export default function LandingPage() {
       {/* ── PRINT Section ── */}
       {isPrintVisible && (
         <section
-          className={`py-14 px-4 ${dk("bg-white", "bg-gray-950")}`}
+          className={`py-16 md:py-20 px-4 ${dk("bg-white", "bg-gray-950")}`}
           style={{ order: serviceOrder.indexOf("PRINT") }}
         >
           <div className="max-w-7xl mx-auto">
-            <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
-              {t.printTitle}
-              {isPrintComingSoon && <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50 text-xs">Bientôt</Badge>}
-            </h2>
-            <p className={`text-center mb-8 ${dk("text-gray-500", "text-gray-400")}`}>{t.printDesc}</p>
+            <SectionHeading
+              icon={Printer}
+              iconWrap={dk("bg-blue-500/10", "bg-blue-500/15")}
+              iconColor="text-blue-600"
+              title={t.printTitle}
+              description={t.printDesc}
+              badge={isPrintComingSoon && <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50 text-xs">Bientôt</Badge>}
+              dk={dk}
+            />
 
-            <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-center">
               {/* Left: categories (no click) */}
               <div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-7">
                   {PRINT_CATEGORIES.slice(0, 6).map((cat) => (
-                    <div key={cat.id}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${dk("bg-white border-gray-100 shadow-sm", "bg-gray-800 border-gray-700")}`}>
-                      <span className="text-2xl">{cat.icon}</span>
-                      <span className={`text-xs font-semibold text-center leading-tight ${dk("text-gray-700", "text-gray-200")}`}>{cat.name}</span>
-                    </div>
+                    <FeatureChip key={cat.id} icon={cat.icon} label={cat.name} dk={dk} />
                   ))}
                 </div>
                 <Button onClick={() => openAuth("register", "PRINTER")}
-                  variant="outline" className={`w-full rounded-xl py-5 border-2 border-blue-300 text-blue-600 hover:bg-blue-50 ${isDark ? "hover:bg-blue-950 border-blue-700 text-blue-400" : ""}`}
+                  variant="outline" className={`w-full rounded-xl py-6 text-base font-semibold border-2 border-blue-300 text-blue-600 hover:bg-blue-50 group ${isDark ? "hover:bg-blue-950 border-blue-700 text-blue-400" : ""}`}
                   data-testid="button-print-cta">
-                  {t.printCta} <ArrowRight className="w-4 h-4 ml-2" />
+                  {t.printCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                 </Button>
               </div>
 
               {/* Right: image */}
-              <div>
-                <img src={printImg} alt="Print" className="w-full h-72 object-cover rounded-2xl shadow-md" loading="lazy" />
+              <div className="rounded-3xl overflow-hidden shadow-xl ring-1 ring-black/5">
+                <img src={printImg} alt="Print" className="w-full h-72 md:h-80 object-cover transition-transform duration-700 hover:scale-105" loading="lazy" />
               </div>
             </div>
           </div>
@@ -953,37 +1009,39 @@ export default function LandingPage() {
       {/* ── MARKETING Section ── */}
       {isMarketingVisible && (
         <section
-          className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
+          className={`py-16 md:py-20 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
           style={{ order: serviceOrder.indexOf("MARKETING") }}
         >
           <div className="max-w-7xl mx-auto">
-            <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
-              {t.marketingTitle}
-              {isMarketingComingSoon && <Badge variant="outline" className="border-purple-200 text-purple-600 bg-purple-50 text-xs">Bientôt</Badge>}
-            </h2>
-            <p className={`text-center mb-8 ${dk("text-gray-500", "text-gray-400")}`}>{t.marketingDesc}</p>
+            <SectionHeading
+              icon={Megaphone}
+              iconWrap={dk("bg-purple-500/10", "bg-purple-500/15")}
+              iconColor="text-purple-600"
+              title={t.marketingTitle}
+              description={t.marketingDesc}
+              badge={isMarketingComingSoon && <Badge variant="outline" className="border-purple-200 text-purple-600 bg-purple-50 text-xs">Bientôt</Badge>}
+              dk={dk}
+            />
 
-            <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-center">
               {/* Left: image */}
               <div className="order-2 md:order-1">
-                <img src={marketingImg} alt="Marketing" className="w-full h-72 object-cover rounded-2xl shadow-md" loading="lazy" />
+                <div className="rounded-3xl overflow-hidden shadow-xl ring-1 ring-black/5">
+                  <img src={marketingImg} alt="Marketing" className="w-full h-72 md:h-80 object-cover transition-transform duration-700 hover:scale-105" loading="lazy" />
+                </div>
               </div>
 
               {/* Right: categories (no click) */}
               <div className="order-1 md:order-2">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-7">
                   {MARKETING_SERVICES.slice(0, 6).map((svc) => (
-                    <div key={svc.id}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${dk("bg-white border-gray-100 shadow-sm", "bg-gray-800 border-gray-700")}`}>
-                      <span className="text-2xl">{svc.icon}</span>
-                      <span className={`text-xs font-semibold text-center leading-tight ${dk("text-gray-700", "text-gray-200")}`}>{svc.label}</span>
-                    </div>
+                    <FeatureChip key={svc.id} icon={svc.icon} label={svc.label} dk={dk} />
                   ))}
                 </div>
                 <Button onClick={() => openAuth("register", "MARKETING")}
-                  variant="outline" className={`w-full rounded-xl py-5 border-2 border-purple-300 text-purple-600 hover:bg-purple-50 ${isDark ? "hover:bg-purple-950 border-purple-700 text-purple-400" : ""}`}
+                  variant="outline" className={`w-full rounded-xl py-6 text-base font-semibold border-2 border-purple-300 text-purple-600 hover:bg-purple-50 group ${isDark ? "hover:bg-purple-950 border-purple-700 text-purple-400" : ""}`}
                   data-testid="button-marketing-cta">
-                  {t.marketingCta} <ArrowRight className="w-4 h-4 ml-2" />
+                  {t.marketingCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                 </Button>
               </div>
             </div>
@@ -994,18 +1052,22 @@ export default function LandingPage() {
       {/* ── BARISTA Section ── */}
       {isBaristaVisible && (
         <section
-          className={`py-14 px-4 ${dk("bg-white", "bg-gray-950")}`}
+          className={`py-16 md:py-20 px-4 ${dk("bg-white", "bg-gray-950")}`}
           style={{ order: serviceOrder.indexOf("BARISTA") }}
         >
           <div className="max-w-7xl mx-auto">
-            <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
-              {t.baristaTitle}
-              {isBaristaComingSoon && <Badge variant="outline" className="border-green-200 text-green-600 bg-green-50 text-xs">Bientôt</Badge>}
-            </h2>
+            <SectionHeading
+              icon={Coffee}
+              iconWrap={dk("bg-green-500/10", "bg-green-500/15")}
+              iconColor="text-green-600"
+              title={t.baristaTitle}
+              badge={isBaristaComingSoon && <Badge variant="outline" className="border-green-200 text-green-600 bg-green-50 text-xs">Bientôt</Badge>}
+              dk={dk}
+            />
 
             <div className="grid md:grid-cols-2 gap-6 mt-8">
               {/* Barista Academy card */}
-              <div className={`flex flex-col sm:flex-row gap-4 p-6 rounded-2xl border shadow-sm ${dk("bg-gradient-to-br from-green-50 to-emerald-50 border-green-100", "bg-green-950/30 border-green-900")}`}>
+              <div className={`group flex flex-col sm:flex-row gap-4 p-6 rounded-3xl border shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${dk("bg-gradient-to-br from-green-50 to-emerald-50 border-green-100", "bg-green-950/30 border-green-900")}`}>
                 <div className="flex-1">
                   <div className="w-12 h-12 bg-green-500/15 rounded-2xl flex items-center justify-center mb-3">
                     <Coffee className="w-6 h-6 text-green-600" />
@@ -1013,18 +1075,18 @@ export default function LandingPage() {
                   <h3 className={`text-lg font-bold mb-2 ${dk("text-gray-900", "text-white")}`}>{t.academyName}</h3>
                   <p className={`text-sm leading-relaxed mb-4 ${dk("text-gray-500", "text-gray-400")}`}>{t.academyDesc}</p>
                   <Button onClick={() => openAuth("register", "BARISTA_ACADEMY")}
-                    variant="outline" className="border-green-300 text-green-700 hover:bg-green-50 rounded-xl w-full" data-testid="button-barista-academy-cta">
-                    {t.academyCta} <ArrowRight className="w-4 h-4 ml-2" />
+                    variant="outline" className="border-green-300 text-green-700 hover:bg-green-50 rounded-xl w-full font-semibold group/btn" data-testid="button-barista-academy-cta">
+                    {t.academyCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
                   </Button>
                 </div>
                 {/* Contextual image — right on desktop, below on mobile */}
-                <div className="sm:w-36 sm:shrink-0">
-                  <img src={academyImg} alt="Barista Academy" className="w-full h-32 sm:h-full object-cover rounded-xl" loading="lazy" />
+                <div className="sm:w-36 sm:shrink-0 rounded-2xl overflow-hidden shadow-md">
+                  <img src={academyImg} alt="Barista Academy" className="w-full h-32 sm:h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
                 </div>
               </div>
 
               {/* Marketplace Baristas card */}
-              <div className={`flex flex-col sm:flex-row gap-4 p-6 rounded-2xl border shadow-sm ${dk("bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100", "bg-blue-950/30 border-blue-900")}`}>
+              <div className={`group flex flex-col sm:flex-row gap-4 p-6 rounded-3xl border shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${dk("bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100", "bg-blue-950/30 border-blue-900")}`}>
                 <div className="flex-1">
                   <div className="w-12 h-12 bg-blue-500/15 rounded-2xl flex items-center justify-center mb-3">
                     <Users className="w-6 h-6 text-blue-600" />
@@ -1032,13 +1094,13 @@ export default function LandingPage() {
                   <h3 className={`text-lg font-bold mb-2 ${dk("text-gray-900", "text-white")}`}>{t.marketplaceName}</h3>
                   <p className={`text-sm leading-relaxed mb-4 ${dk("text-gray-500", "text-gray-400")}`}>{t.marketplaceDesc}</p>
                   <Button onClick={() => openAuth("register", "BARISTA_MARKETPLACE")}
-                    variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl w-full" data-testid="button-barista-marketplace-cta">
-                    {t.marketplaceCta} <ArrowRight className="w-4 h-4 ml-2" />
+                    variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl w-full font-semibold group/btn" data-testid="button-barista-marketplace-cta">
+                    {t.marketplaceCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
                   </Button>
                 </div>
                 {/* Contextual image */}
-                <div className="sm:w-36 sm:shrink-0">
-                  <img src={marketplaceImg} alt="Barista Marketplace" className="w-full h-32 sm:h-full object-cover rounded-xl" loading="lazy" />
+                <div className="sm:w-36 sm:shrink-0 rounded-2xl overflow-hidden shadow-md">
+                  <img src={marketplaceImg} alt="Barista Marketplace" className="w-full h-32 sm:h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
                 </div>
               </div>
             </div>
@@ -1049,25 +1111,31 @@ export default function LandingPage() {
       {/* ── MAINTENANCE Section ── */}
       {isMaintenanceVisible && (
         <section
-          className={`py-14 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
+          className={`py-16 md:py-20 px-4 ${dk("bg-gray-50", "bg-gray-900")}`}
           style={{ order: serviceOrder.indexOf("MAINTENANCE") }}
         >
           <div className="max-w-7xl mx-auto">
-            <h2 className={`text-2xl font-bold mb-3 text-center flex items-center justify-center gap-2 ${dk("text-gray-900", "text-white")}`}>
-              {t.maintenanceTitle}
-              {isMaintenanceComingSoon && <Badge variant="outline" className="border-orange-200 text-orange-600 bg-orange-50 text-xs">Bientôt</Badge>}
-            </h2>
-            <p className={`text-center mb-8 ${dk("text-gray-500", "text-gray-400")}`}>{t.maintenanceDesc}</p>
+            <SectionHeading
+              icon={Wrench}
+              iconWrap={dk("bg-orange-500/10", "bg-orange-500/15")}
+              iconColor="text-orange-600"
+              title={t.maintenanceTitle}
+              description={t.maintenanceDesc}
+              badge={isMaintenanceComingSoon && <Badge variant="outline" className="border-orange-200 text-orange-600 bg-orange-50 text-xs">Bientôt</Badge>}
+              dk={dk}
+            />
 
-            <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-center">
               {/* Left: image */}
               <div className="order-2 md:order-1">
-                <img src={maintenanceImg} alt="Maintenance" className="w-full h-72 object-cover rounded-2xl shadow-md" loading="lazy" />
+                <div className="rounded-3xl overflow-hidden shadow-xl ring-1 ring-black/5">
+                  <img src={maintenanceImg} alt="Maintenance" className="w-full h-72 md:h-80 object-cover transition-transform duration-700 hover:scale-105" loading="lazy" />
+                </div>
               </div>
 
               {/* Right: specialties */}
               <div className="order-1 md:order-2">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-7">
                   {[
                     { icon: "⚙️", label: "Machines" },
                     { icon: "🔌", label: "Infrastructure" },
@@ -1076,17 +1144,13 @@ export default function LandingPage() {
                     { icon: "⚡", label: "Électricité" },
                     { icon: "🪑", label: "Mobilier" },
                   ].map((svc) => (
-                    <div key={svc.label}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${dk("bg-white border-gray-100 shadow-sm", "bg-gray-800 border-gray-700")}`}>
-                      <span className="text-2xl">{svc.icon}</span>
-                      <span className={`text-xs font-semibold text-center leading-tight ${dk("text-gray-700", "text-gray-200")}`}>{svc.label}</span>
-                    </div>
+                    <FeatureChip key={svc.label} icon={svc.icon} label={svc.label} dk={dk} />
                   ))}
                 </div>
                 <Button onClick={() => openAuth("register", "MAINTENANCE")}
-                  variant="outline" className={`w-full rounded-xl py-5 border-2 border-orange-300 text-orange-600 hover:bg-orange-50 ${isDark ? "hover:bg-orange-950 border-orange-700 text-orange-400" : ""}`}
+                  variant="outline" className={`w-full rounded-xl py-6 text-base font-semibold border-2 border-orange-300 text-orange-600 hover:bg-orange-50 group ${isDark ? "hover:bg-orange-950 border-orange-700 text-orange-400" : ""}`}
                   data-testid="button-maintenance-cta">
-                  {t.maintenanceCta} <ArrowRight className="w-4 h-4 ml-2" />
+                  {t.maintenanceCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                 </Button>
               </div>
             </div>
@@ -1096,22 +1160,23 @@ export default function LandingPage() {
       </div>
 
       {/* ── Why BigBossCoffee ── */}
-      <section className={`py-14 px-4 ${dk("bg-white", "bg-gray-900")}`}>
+      <section className={`py-16 md:py-20 px-4 ${dk("bg-white", "bg-gray-900")}`}>
         <div className="max-w-5xl mx-auto text-center">
-          <h2 className={`text-2xl font-bold mb-3 ${dk("text-gray-900", "text-white")}`}>{t.whyTitle}</h2>
-          <p className={`mb-10 max-w-xl mx-auto ${dk("text-gray-500", "text-gray-400")}`}>{t.whySubtitle}</p>
-          <div className="grid sm:grid-cols-3 gap-8">
+          <h2 className={`text-3xl md:text-4xl font-bold mb-3 ${dk("text-gray-900", "text-white")}`}>{t.whyTitle}</h2>
+          <p className={`text-base md:text-lg mb-12 max-w-xl mx-auto ${dk("text-gray-500", "text-gray-400")}`}>{t.whySubtitle}</p>
+          <div className="grid sm:grid-cols-3 gap-6 md:gap-8">
             {[
               { icon: CheckCircle, title: t.feat1Title, desc: t.feat1Desc },
               { icon: ShoppingBag,  title: t.feat2Title, desc: t.feat2Desc },
               { icon: ArrowRight,   title: t.feat3Title, desc: t.feat3Desc },
             ].map((item) => (
-              <div key={item.title} className={`flex flex-col items-center gap-3 p-6 rounded-2xl border ${dk("bg-amber-50 border-amber-100", "bg-amber-950/20 border-amber-900")}`}>
-                <div className="w-12 h-12 bg-amber-500/15 rounded-xl flex items-center justify-center">
-                  <item.icon className="w-6 h-6 text-amber-600" />
+              <div key={item.title}
+                className={`flex flex-col items-center gap-3 p-7 rounded-3xl border transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl ${dk("bg-amber-50/70 border-amber-100 hover:shadow-amber-200/40", "bg-amber-950/20 border-amber-900 hover:shadow-black/40")}`}>
+                <div className="w-14 h-14 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center shadow-md shadow-amber-500/25">
+                  <item.icon className="w-6 h-6 text-white" />
                 </div>
-                <h3 className={`font-bold ${dk("text-gray-900", "text-white")}`}>{item.title}</h3>
-                <p className={`text-sm ${dk("text-gray-500", "text-gray-400")}`}>{item.desc}</p>
+                <h3 className={`font-bold text-lg ${dk("text-gray-900", "text-white")}`}>{item.title}</h3>
+                <p className={`text-sm leading-relaxed ${dk("text-gray-500", "text-gray-400")}`}>{item.desc}</p>
               </div>
             ))}
           </div>
@@ -1119,48 +1184,50 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA ── */}
-      <section className="py-14 px-4 bg-amber-500">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-2xl font-bold text-white mb-3">{t.ctaTitle}</h2>
-          <p className="text-amber-100 mb-6">{t.ctaDesc}</p>
+      <section className="relative overflow-hidden py-16 md:py-20 px-4 bg-gradient-to-br from-amber-500 via-amber-500 to-amber-600">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_20%_20%,white,transparent_35%),radial-gradient(circle_at_80%_80%,white,transparent_35%)]" />
+        <div className="relative max-w-3xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">{t.ctaTitle}</h2>
+          <p className="text-amber-100 text-base md:text-lg mb-8 max-w-xl mx-auto">{t.ctaDesc}</p>
           <Button onClick={() => openAuth("register", "SUPPLIER")}
-            className="bg-white text-amber-600 hover:bg-amber-50 font-bold rounded-xl shadow-lg px-8" data-testid="button-become-supplier">
+            className="bg-white text-amber-600 hover:bg-amber-50 font-bold rounded-xl shadow-xl shadow-black/10 px-8 py-6 text-base" data-testid="button-become-supplier">
             {t.ctaBtn}
           </Button>
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="bg-gray-900 text-gray-300 pt-12 pb-6 px-4">
+      <footer className="relative bg-gray-900 text-gray-300 pt-16 pb-6 px-4">
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
         <div className="max-w-7xl mx-auto">
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-10 mb-12">
             {/* Brand */}
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
-                  <Coffee className="w-4 h-4 text-white" />
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center shadow-md shadow-amber-500/20">
+                  <Coffee className="w-[18px] h-[18px] text-white" />
                 </div>
-                <span className="font-bold text-white">BigBoss<span className="text-amber-500">Coffee</span></span>
+                <span className="font-bold text-white text-lg tracking-tight">BigBoss<span className="text-amber-500">Coffee</span></span>
               </div>
               <p className="text-sm text-gray-400 leading-relaxed">{footerDesc}</p>
-              <div className="flex gap-3 mt-4">
+              <div className="flex gap-2.5 mt-5">
                 {footerInstagram && (
-                  <a href={footerInstagram} target="_blank" rel="noopener noreferrer" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-amber-500 transition-colors"><Instagram className="w-4 h-4" /></a>
+                  <a href={footerInstagram} target="_blank" rel="noopener noreferrer" className="w-9 h-9 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:-translate-y-0.5 transition-all"><Instagram className="w-4 h-4" /></a>
                 )}
                 {footerFacebook && (
-                  <a href={footerFacebook} target="_blank" rel="noopener noreferrer" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-amber-500 transition-colors"><Facebook className="w-4 h-4" /></a>
+                  <a href={footerFacebook} target="_blank" rel="noopener noreferrer" className="w-9 h-9 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:-translate-y-0.5 transition-all"><Facebook className="w-4 h-4" /></a>
                 )}
                 {footerTiktok && (
-                  <a href={footerTiktok} target="_blank" rel="noopener noreferrer" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-amber-500 transition-colors">
+                  <a href={footerTiktok} target="_blank" rel="noopener noreferrer" className="w-9 h-9 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:-translate-y-0.5 transition-all">
                     <span className="text-xs font-bold">TK</span>
                   </a>
                 )}
                 {/* Show placeholder icons if no links configured */}
                 {!footerInstagram && !footerFacebook && !footerTiktok && (
                   <>
-                    <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-amber-500 transition-colors"><Instagram className="w-4 h-4" /></a>
-                    <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-amber-500 transition-colors"><Facebook className="w-4 h-4" /></a>
-                    <a href="#" className="w-8 h-8 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-amber-500 transition-colors"><span className="text-xs font-bold">TK</span></a>
+                    <a href="#" className="w-9 h-9 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:-translate-y-0.5 transition-all"><Instagram className="w-4 h-4" /></a>
+                    <a href="#" className="w-9 h-9 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:-translate-y-0.5 transition-all"><Facebook className="w-4 h-4" /></a>
+                    <a href="#" className="w-9 h-9 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:-translate-y-0.5 transition-all"><span className="text-xs font-bold">TK</span></a>
                   </>
                 )}
               </div>
@@ -1168,39 +1235,39 @@ export default function LandingPage() {
 
             {/* Services */}
             <div>
-              <h4 className="font-semibold text-white mb-4">{t.footerServices}</h4>
-              <ul className="space-y-2 text-sm">
-                <li><button onClick={() => handleServiceClick("/products")} className="hover:text-amber-400 transition-colors">{t.shopMarket}</button></li>
-                {isPrintVisible && <li><button onClick={() => handleServiceClick("/print")} className="hover:text-amber-400 transition-colors">{t.printMarket}</button></li>}
-                {isBaristaVisible && <li><button onClick={() => handleServiceClick("/barista")} className="hover:text-amber-400 transition-colors">{t.baristaService}</button></li>}
-                {isMarketingVisible && <li><button onClick={() => handleServiceClick("/marketing")} className="hover:text-amber-400 transition-colors">{t.marketingService}</button></li>}
-                {isMaintenanceVisible && <li><button onClick={() => handleServiceClick("/maintenance")} className="hover:text-amber-400 transition-colors">{t.maintenanceService}</button></li>}
+              <h4 className="font-semibold text-white mb-4 text-sm tracking-wide uppercase">{t.footerServices}</h4>
+              <ul className="space-y-2.5 text-sm">
+                <li><button onClick={() => handleServiceClick("/products")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.shopMarket}</button></li>
+                {isPrintVisible && <li><button onClick={() => handleServiceClick("/print")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.printMarket}</button></li>}
+                {isBaristaVisible && <li><button onClick={() => handleServiceClick("/barista")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.baristaService}</button></li>}
+                {isMarketingVisible && <li><button onClick={() => handleServiceClick("/marketing")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.marketingService}</button></li>}
+                {isMaintenanceVisible && <li><button onClick={() => handleServiceClick("/maintenance")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.maintenanceService}</button></li>}
               </ul>
             </div>
 
             {/* Liens utiles — registration links for all services */}
             <div>
-              <h4 className="font-semibold text-white mb-4">{t.footerLinks}</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-amber-400 transition-colors">{t.aboutLink}</a></li>
-                <li><button onClick={() => openAuth("register", "CAFE_OWNER")} className="hover:text-amber-400 transition-colors">{t.becomeCafe}</button></li>
-                <li><button onClick={() => openAuth("register", "SUPPLIER")} className="hover:text-amber-400 transition-colors">{t.becomeSupplier}</button></li>
-                {isPrintVisible && <li><button onClick={() => openAuth("register", "PRINTER")} className="hover:text-amber-400 transition-colors">{t.becomePrinter}</button></li>}
-                {isMarketingVisible && <li><button onClick={() => openAuth("register", "MARKETING")} className="hover:text-amber-400 transition-colors">{t.becomeMarketing}</button></li>}
-                {isBaristaVisible && <li><button onClick={() => openAuth("register", "BARISTA_ACADEMY")} className="hover:text-amber-400 transition-colors">{t.becomeBaristaAcademy}</button></li>}
-                {isBaristaVisible && <li><button onClick={() => openAuth("register", "BARISTA_MARKETPLACE")} className="hover:text-amber-400 transition-colors">{t.becomeBaristaMarketplace}</button></li>}
-                {isMaintenanceVisible && <li><button onClick={() => openAuth("register", "MAINTENANCE")} className="hover:text-amber-400 transition-colors">{t.becomeMaintenance}</button></li>}
-                <li><a href="#" className="hover:text-amber-400 transition-colors">{t.faq}</a></li>
+              <h4 className="font-semibold text-white mb-4 text-sm tracking-wide uppercase">{t.footerLinks}</h4>
+              <ul className="space-y-2.5 text-sm">
+                <li><a href="#" className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.aboutLink}</a></li>
+                <li><button onClick={() => openAuth("register", "CAFE_OWNER")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.becomeCafe}</button></li>
+                <li><button onClick={() => openAuth("register", "SUPPLIER")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.becomeSupplier}</button></li>
+                {isPrintVisible && <li><button onClick={() => openAuth("register", "PRINTER")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.becomePrinter}</button></li>}
+                {isMarketingVisible && <li><button onClick={() => openAuth("register", "MARKETING")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.becomeMarketing}</button></li>}
+                {isBaristaVisible && <li><button onClick={() => openAuth("register", "BARISTA_ACADEMY")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.becomeBaristaAcademy}</button></li>}
+                {isBaristaVisible && <li><button onClick={() => openAuth("register", "BARISTA_MARKETPLACE")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.becomeBaristaMarketplace}</button></li>}
+                {isMaintenanceVisible && <li><button onClick={() => openAuth("register", "MAINTENANCE")} className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.becomeMaintenance}</button></li>}
+                <li><a href="#" className="hover:text-amber-400 hover:translate-x-0.5 transition-all inline-block">{t.faq}</a></li>
               </ul>
             </div>
 
             {/* Contact */}
             <div>
-              <h4 className="font-semibold text-white mb-4">{t.footerContact}</h4>
-              <ul className="space-y-3 text-sm">
-                <li className="flex items-center gap-2"><Mail className="w-4 h-4 text-amber-500 shrink-0" />{footerEmail}</li>
-                <li className="flex items-center gap-2"><Phone className="w-4 h-4 text-amber-500 shrink-0" />{footerPhone}</li>
-                <li className="flex items-center gap-2"><MapPin className="w-4 h-4 text-amber-500 shrink-0" />Tunis, Tunisie</li>
+              <h4 className="font-semibold text-white mb-4 text-sm tracking-wide uppercase">{t.footerContact}</h4>
+              <ul className="space-y-3.5 text-sm">
+                <li className="flex items-center gap-2.5"><span className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center shrink-0"><Mail className="w-4 h-4 text-amber-500" /></span>{footerEmail}</li>
+                <li className="flex items-center gap-2.5"><span className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center shrink-0"><Phone className="w-4 h-4 text-amber-500" /></span>{footerPhone}</li>
+                <li className="flex items-center gap-2.5"><span className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center shrink-0"><MapPin className="w-4 h-4 text-amber-500" /></span>Tunis, Tunisie</li>
               </ul>
             </div>
           </div>
@@ -1252,7 +1319,7 @@ export default function LandingPage() {
           : "";
         return (
           <Dialog open={authModalOpen} onOpenChange={(open) => { setAuthModalOpen(open); }}>
-            <DialogContent className="sm:max-w-md w-full p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden max-h-[95vh]">
+            <DialogContent className="sm:max-w-md w-full p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl ring-1 ring-black/5 [&>button]:hidden max-h-[95vh]">
               <VisuallyHidden><DialogTitle>Bienvenue sur BigBossCoffee</DialogTitle></VisuallyHidden>
               <div className={`flex flex-col max-h-[95vh] overflow-hidden transition-colors duration-200 ${modalBg}`}>
 
@@ -1399,7 +1466,7 @@ export default function LandingPage() {
         const textMut  = dk ? "text-gray-400" : "text-gray-500";
         return (
           <Dialog open={roleSubModalOpen} onOpenChange={setRoleSubModalOpen}>
-            <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden max-h-[90vh]">
+            <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl ring-1 ring-black/5 [&>button]:hidden max-h-[90vh]">
               <div className={`flex flex-col max-h-[90vh] overflow-hidden ${modalBg}`}>
                 {/* Amber gradient header */}
                 <div className="bg-gradient-to-br from-amber-500 to-amber-600 px-5 pt-5 pb-4">
@@ -1474,7 +1541,7 @@ export default function LandingPage() {
         };
         return (
           <Dialog open={pendingApprovalModalOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-            <DialogContent className="sm:max-w-sm w-full p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+            <DialogContent className="sm:max-w-sm w-full p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl ring-1 ring-black/5 [&>button]:hidden">
               <VisuallyHidden><DialogTitle>Demande d'inscription reçue</DialogTitle></VisuallyHidden>
               <div className={`flex flex-col transition-colors duration-200 ${modalBg}`}>
                 {/* Amber gradient header */}

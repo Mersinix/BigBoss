@@ -65,6 +65,7 @@ import EarningsPage from "@/pages/admin/earnings-page";
 import SystemManagementPage from "@/pages/admin/system-management-page";
 import ProspectingPage from "@/pages/admin/prospecting-page";
 import AdminReviewsPage from "@/pages/admin/reviews-page";
+import AdminMaintenancePage from "@/pages/admin/maintenance-page";
 import ComingSoonPage from "@/pages/coming-soon-page";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -424,6 +425,9 @@ function Router() {
       </Route>
       <Route path="/admin/reviews">
         {() => (<DashboardLayout><ProtectedRoute component={AdminReviewsPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      <Route path="/admin/maintenance">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminMaintenancePage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
       <Route path="/admin/messages">
         {() => (<DashboardLayout><ProtectedRoute component={AdminMessagesPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}

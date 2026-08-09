@@ -55,6 +55,8 @@ type MaintenanceReservationRow = {
   description: string;
   status: string;
   category: string;
+  urgency?: string;
+  contactPhone?: string;
 };
 
 const STATUS_META: Record<string, { label: string; color: string; icon: any }> = {
@@ -91,11 +93,12 @@ function getTab(date: string): "today" | "upcoming" | "past" {
 
 // ── Reservation Card ──────────────────────────────────────────────────────────
 
-function ReservationCard({ res, onConfirm, onCancel, onReschedule }: {
+function ReservationCard({ res, onConfirm, onCancel, onReschedule, onComplete }: {
   res: MaintenanceReservationRow;
   onConfirm: (id: number) => void;
   onCancel: (id: number) => void;
   onReschedule: (id: number) => void;
+  onComplete: (id: number) => void;
 }) {
   const meta = STATUS_META[res.status] ?? STATUS_META.PENDING;
   const Icon = meta.icon;
@@ -113,10 +116,11 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule }: {
       <div className="flex flex-wrap gap-3 text-xs text-gray-500">
         <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-orange-500" />{res.date} à {res.time}</span>
         <span className="flex items-center gap-1"><MapPin className="w-3 h-3 text-orange-500" />{res.location}</span>
-        <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-orange-500" />{res.ownerPhone}</span>
+        <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-orange-500" />{res.contactPhone || res.ownerPhone || "—"}</span>
       </div>
       <p className="text-xs text-gray-600 bg-gray-50 rounded-xl px-3 py-2 leading-relaxed">{res.description}</p>
       <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-200 bg-orange-50">{res.category}</Badge>
+      {res.urgency && <Badge variant="outline" className={`text-[10px] ml-1 ${res.urgency === "URGENT" ? "text-red-600 border-red-200 bg-red-50" : "text-gray-600"}`}>Urgence: {res.urgency}</Badge>}
       {res.status === "PENDING" && (
         <div className="flex gap-2 pt-1">
           <Button size="sm" className="flex-1 h-8 text-xs bg-green-600 hover:bg-green-700 text-white rounded-xl" onClick={() => onConfirm(res.id)}>
@@ -132,7 +136,7 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule }: {
       )}
       {res.status === "CONFIRMED" && (
         <div className="flex gap-2 pt-1">
-          <Button size="sm" className="flex-1 h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
+          <Button size="sm" className="flex-1 h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl" onClick={() => onComplete(res.id)}>
             <CheckCircle className="w-3 h-3 mr-1" /> Marquer terminée
           </Button>
         </div>
@@ -373,8 +377,14 @@ export default function MaintenanceDashboard() {
     updateStatus.mutate({ id, status: "CANCELLED" });
   };
   const handleReschedule = (id: number) => {
-    updateStatus.mutate({ id, status: "RESCHEDULED" });
+    const reservation = reservations.find((row) => row.id === id);
+    if (!reservation) return;
+    const nextDate = window.prompt("Nouvelle date (AAAA-MM-JJ)", reservation.date);
+    if (!nextDate) return;
+    const nextTime = window.prompt("Nouvelle heure (HH:MM)", reservation.time ?? "");
+    updateStatus.mutate({ id, status: "RESCHEDULED", date: nextDate, time: nextTime || null } as any);
   };
+  const handleComplete = (id: number) => updateStatus.mutate({ id, status: "COMPLETED" });
 
   const toggleSpecialty = (s: string) => {
     setSelectedSpecialties((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -495,6 +505,7 @@ export default function MaintenanceDashboard() {
                     onConfirm={handleConfirm}
                     onCancel={handleCancel}
                     onReschedule={handleReschedule}
+                    onComplete={handleComplete}
                   />
                 ))}
               </div>

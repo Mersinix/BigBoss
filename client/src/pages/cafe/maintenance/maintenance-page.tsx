@@ -7,6 +7,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -163,7 +164,7 @@ function AgentDetailModal({
   open: boolean;
   onClose: () => void;
   onContact: (agent: MaintenanceMarketplaceCard) => void;
-  onReserve: (agent: MaintenanceMarketplaceCard, data: { date: string; time: string; location: string; description: string }) => void;
+  onReserve: (agent: MaintenanceMarketplaceCard, data: { date: string; time: string; location: string; description: string; category: string; urgency: string; contactPhone: string }) => void;
   isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
@@ -171,8 +172,23 @@ function AgentDetailModal({
   const [booking, setBooking] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [location, setLocation] = useState("");
+  const { user } = useAuth();
+  const [location, setLocation] = useState(user?.locationAddress ?? "");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState(agent?.categories?.[0] ?? "");
+  const [urgency, setUrgency] = useState("NORMAL");
+  const [contactPhone, setContactPhone] = useState("");
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const reviewsQuery = useQuery<any[]>({
+    queryKey: ["/api/maintenance/reviews", agent?.userId],
+    enabled: open && !!agent,
+  });
+  useEffect(() => {
+    if (!booking) return;
+    setLocation(user?.locationAddress ?? "");
+    setContactPhone(user?.phone ?? "");
+    setCategory(agent?.categories?.[0] ?? agent?.skills?.[0] ?? "");
+  }, [booking, user?.locationAddress, user?.phone, agent?.userId]);
   const faved = useFavorites((s) => agent ? !!s.maintenance[agent.userId] : false);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
   if (!agent) return null;
@@ -210,7 +226,11 @@ function AgentDetailModal({
              <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Catégories & Compétences</h3><div className="flex flex-wrap gap-1.5">{agent.categories.map((item) => <span key={item} className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}{agent.skills.map((item) => <span key={item} className={`text-[11px] px-2 py-0.5 rounded-full ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{item}</span>)}</div></div>
              {agent.certifications.length > 0 && <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 flex items-center gap-1 ${t.textPrimary}`}><Award className="w-3.5 h-3.5 text-amber-500" /> Certifications</h3><div className="flex flex-wrap gap-1.5">{agent.certifications.map((item) => <span key={item} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}</div></div>}
              <div className={`mb-4 ${t.mutedBg} rounded-xl p-3 space-y-2`}><h3 className={`font-semibold text-sm mb-2 ${t.textPrimary}`}>Infos pratiques</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />Zone d'intervention : {agent.coverageArea || agent.location || "—"}</div><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><Clock className="w-3.5 h-3.5 text-orange-500" />Horaires : {agent.workingHours}</div></div>
-            {agent.portfolioImages.length > 0 && <div className="mb-4"><h3 className="font-semibold text-sm mb-1.5">Portfolio</h3><div className="grid grid-cols-2 gap-2">{agent.portfolioImages.map((image, i) => <img key={i} src={image} alt={`Portfolio ${i + 1}`} className="w-full h-28 object-cover rounded-xl" />)}</div></div>}
+             {agent.portfolioImages.length > 0 && <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Portfolio</h3><div className="grid grid-cols-2 gap-2">{agent.portfolioImages.map((image, i) => <img key={i} src={image} alt={`Portfolio ${i + 1}`} className="w-full h-28 object-cover rounded-xl" />)}</div></div>}
+             <div className="mb-4">
+               <h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Avis ({reviewsQuery.data?.length ?? 0})</h3>
+               {(reviewsQuery.data ?? []).length === 0 ? <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p> : <div className="space-y-2">{reviewsQuery.data!.slice(0, 4).map((review) => <div key={review.id} className={`${t.mutedBg} rounded-xl p-3`}><div className="flex items-center justify-between"><span className={`text-xs font-semibold ${t.textPrimary}`}>{review.cafeOwnerName || review.cafeName}</span><span className="text-amber-500 text-xs">{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</span></div>{review.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{review.comment}</p>}</div>)}</div>}
+             </div>
             {!booking ? (
                <div className={`border-t ${t.border} pt-4 flex items-center justify-between gap-3`}>
                  <div><p className={`text-xs ${t.textSubtle}`}>Tarif journalier</p><p className="font-bold text-xl text-orange-600">{fmt(agent.dailyRateInCents)}</p></div>
@@ -219,10 +239,16 @@ function AgentDetailModal({
             ) : (
                <div className={`border-t ${t.border} pt-4 space-y-3`}>
                  <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Demander une intervention</h3>
-                <div className="grid grid-cols-2 gap-3"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
-                <Input placeholder="Lieu d'intervention" value={location} onChange={(e) => setLocation(e.target.value)} />
+                 <div className="grid grid-cols-2 gap-3"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
+                 <div className="grid grid-cols-2 gap-3">
+                   <Select value={category} onValueChange={setCategory}><SelectTrigger className={t.inputBg}><SelectValue placeholder="Compétence" /></SelectTrigger><SelectContent>{Array.from(new Set([...agent.categories, ...agent.skills])).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
+                   <Select value={urgency} onValueChange={setUrgency}><SelectTrigger className={t.inputBg}><SelectValue placeholder="Urgence" /></SelectTrigger><SelectContent><SelectItem value="LOW">Faible</SelectItem><SelectItem value="NORMAL">Normale</SelectItem><SelectItem value="HIGH">Élevée</SelectItem><SelectItem value="URGENT">Urgente</SelectItem></SelectContent></Select>
+                 </div>
+                 <div className="flex gap-2"><Input className="flex-1" placeholder="Lieu d'intervention" value={location} onChange={(e) => setLocation(e.target.value)} /><Button type="button" variant="outline" onClick={() => setLocationPickerOpen(true)}><MapPin className="w-4 h-4" /></Button></div>
+                 <Input placeholder="Téléphone pour cette intervention" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
                 <Input placeholder="Décrivez votre besoin" value={description} onChange={(e) => setDescription(e.target.value)} />
-                <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setBooking(false)}>Annuler</Button><Button disabled={!date} onClick={() => onReserve(agent, { date, time, location, description })} className="bg-orange-600 hover:bg-orange-700 text-white"><Send className="w-4 h-4 mr-1.5" />Envoyer la demande</Button></div>
+                 <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setBooking(false)}>Annuler</Button><Button disabled={!date || !category} onClick={() => onReserve(agent, { date, time, location, description, category, urgency, contactPhone })} className="bg-orange-600 hover:bg-orange-700 text-white"><Send className="w-4 h-4 mr-1.5" />Envoyer la demande</Button></div>
+                 <LocationPickerModal open={locationPickerOpen} onClose={() => setLocationPickerOpen(false)} mode="delivery" title="Choisir le lieu de l'intervention" initialAddress={location} onConfirm={(picked: PickedLocation) => { setLocation(picked.address); setLocationPickerOpen(false); }} />
               </div>
             )}
           </div>

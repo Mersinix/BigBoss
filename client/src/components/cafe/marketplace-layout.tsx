@@ -802,7 +802,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           maintenanceItems.length === 0 ? renderEmpty() : (
             <div className="space-y-2">
               {maintenanceItems.map((item) => (
-                <div key={item.id} className={`group flex items-center gap-3 border rounded-2xl p-3 ${cardBg}`}>
+                <button key={item.id} type="button" onClick={() => { navigate(`/maintenance?providerId=${item.id}`); onClose(); }} className={`group w-full text-left flex items-center gap-3 border rounded-2xl p-3 ${cardBg} hover:border-orange-300 transition-colors`}>
                   <Avatar className="w-9 h-9 shrink-0">
                     <AvatarFallback className={`${dk ? "bg-orange-900 text-orange-300" : "bg-orange-100 text-orange-700"} font-bold text-xs`}>{item.initials}</AvatarFallback>
                   </Avatar>
@@ -826,7 +826,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                     </button>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )

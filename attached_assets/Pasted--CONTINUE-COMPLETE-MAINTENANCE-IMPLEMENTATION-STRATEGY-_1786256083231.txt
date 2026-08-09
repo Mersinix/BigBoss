@@ -1,0 +1,911 @@
+# CONTINUE — COMPLETE MAINTENANCE IMPLEMENTATION — STRATEGY 1 → 2 → 3
+
+The Maintenance implementation has now gone through three interrupted implementation passes because the Replit quota was reached during each session.
+
+The three checkpoints are:
+
+**`MAINTENANCE STRATEGY`**
+
+**`MAINTENANCE STRATEGY TWO`**
+
+**`MAINTENANCE TRATEGY THREE`**
+
+The current repository contains the work from these successive checkpoints.
+
+There are also continuation prompts stored inside the commits.
+
+---
+
+# ⚠️ IMPORTANT — THIS IS NOT A NEW IMPLEMENTATION
+
+Do NOT restart the Maintenance implementation.
+
+Do NOT assume that everything claimed by the previous agents is actually complete.
+
+Do NOT blindly trust the previous agents' summaries.
+
+The task now is:
+
+**READ ALL THREE COMMITS → READ ALL PROMPTS → INSPECT THE ACTUAL CODE → VERIFY WHAT REALLY WORKS → IDENTIFY WHAT IS STILL MISSING → IMPLEMENT ONLY THE MISSING/BROKEN PARTS → TEST EVERYTHING**
+
+---
+
+# 1. READ ALL EXISTING PROMPTS FIRST
+
+Inspect the prompts stored in the commits.
+
+### First checkpoint
+
+Commit:
+
+**`MAINTENANCE STRATEGY`**
+
+Read:
+
+**`Pasted--BigBossCoffee-Maintenance-Marketplace-Espace-Maintenan_1786188538713.txt`**
+
+This is the original complete Maintenance synchronization specification.
+
+---
+
+### Second checkpoint
+
+Commit:
+
+**`MAINTENANCE STRATEGY TWO`**
+
+Read:
+
+**`Pasted--CONTINUE-MAINTENANCE-STRATEGY-The-previous-Maintenance_1786206470581.txt`**
+
+This contains the continuation instructions after the first quota interruption.
+
+---
+
+### Third checkpoint
+
+Commit:
+
+**`MAINTENANCE TRATEGY THREE`**
+
+Read:
+
+**`Pasted--CONTINUE-MAINTENANCE-STRATEGY-TWO-VERIFIED-FIXES-The-M_1786208510041.txt`**
+
+This contains the latest targeted fixes that were being implemented before the third quota interruption.
+
+---
+
+# 2. INSPECT THE THREE COMMITS
+
+Compare the implementation progression:
+
+**MAINTENANCE STRATEGY**
+
+↓
+
+**MAINTENANCE STRATEGY TWO**
+
+↓
+
+**MAINTENANCE TRATEGY THREE**
+
+Inspect the actual changed files in each commit.
+
+Determine:
+
+* What was added in Strategy 1.
+* What was added in Strategy 2.
+* What was added in Strategy 3.
+* What was modified repeatedly.
+* What is currently implemented.
+* What is partially implemented.
+* What is only visually implemented.
+* What is actually connected to the database.
+* What is actually synchronized.
+* What is still static/demo.
+* What is broken.
+* What was left unfinished when the quota stopped each previous run.
+
+Do NOT recreate anything that already exists.
+
+---
+
+# 3. CREATE AN INTERNAL COMPLETION CHECKLIST
+
+Before editing anything, compare the current implementation against:
+
+1. The original Maintenance specification.
+2. The two continuation prompts.
+3. The seven new issues listed below.
+
+For every requirement determine:
+
+* COMPLETE
+* PARTIAL
+* BROKEN
+* MISSING
+
+Then work only on:
+
+**PARTIAL + BROKEN + MISSING**
+
+If something is COMPLETE:
+
+**LEAVE IT ALONE.**
+
+---
+
+# 4. NEW REQUIREMENT — ADMIN → MAINTENANCE TAB
+
+Add a new dedicated **Maintenance** tab/section in the Admin area.
+
+The Admin must have a way to manage and monitor the Maintenance marketplace independently.
+
+The new Admin Maintenance section should provide useful global information such as:
+
+### Maintenance accounts
+
+Show the Maintenance accounts and relevant information, for example:
+
+* Number of Maintenance accounts
+* Active/inactive accounts
+* Profile information
+* Type
+* Location
+* Categories
+* Availability
+* Certifications
+* Rating/reviews
+* Marketplace visibility
+* Other useful information already available in the system
+
+### Reservations
+
+Admin should be able to see Maintenance reservation information, including useful statistics and reservation data.
+
+### Analytics
+
+Provide useful Maintenance marketplace analytics using the real database data.
+
+Examples of useful information:
+
+* Total Maintenance accounts
+* Active Maintenance accounts
+* Available Maintenance accounts
+* Total reservations
+* Pending reservations
+* Completed reservations
+* Cancelled reservations
+* Most requested categories
+* Most active Maintenance professionals
+* Average rating
+* Number of reviews
+* Other meaningful existing data
+
+Do not invent unnecessary analytics just for the sake of adding charts.
+
+Use real data.
+
+### Important
+
+Follow the existing Admin design and architecture.
+
+Do NOT redesign the Admin application.
+
+Do NOT create a separate unrelated dashboard architecture if the Admin already has established patterns for service-specific management.
+
+Reuse existing Admin components, layouts, permissions, tables, cards, tabs, analytics patterns, and API conventions where appropriate.
+
+---
+
+# 5. REVIEWS — COFFEE OWNER ↔ MAINTENANCE
+
+Reviews must become a real synchronized feature.
+
+## Coffee Owner side
+
+Inside each Maintenance profile/detail modal at:
+
+**Coffee Owner → `/maintenance`**
+
+the Coffee Owner must be able to see reviews for that Maintenance account.
+
+The Coffee Owner must also be able to submit a review for a Maintenance professional when the existing business rules allow it.
+
+The review should support the appropriate information already used by the project, such as:
+
+* Rating
+* Review/comment
+* Reviewer
+* Maintenance professional
+* Related reservation/intervention where appropriate
+* Date/status
+
+Do not create fake/static reviews.
+
+---
+
+## Maintenance account side
+
+The Maintenance professional must be able to see reviews about themselves inside:
+
+**Espace Maintenance**
+
+The reviews must be synchronized with the Coffee Owner side.
+
+When a Coffee Owner adds a review:
+
+**Coffee Owner → Database → Maintenance account**
+
+The Maintenance professional should see it without requiring an independent copy.
+
+---
+
+## Review reporting
+
+The Maintenance professional must also be able to **report a review**.
+
+Use the project's existing review/reporting architecture if one exists.
+
+Do not create a duplicate moderation/report system.
+
+If the project already has review reporting functionality elsewhere, extend/reuse it for Maintenance.
+
+---
+
+# 6. FAVORITES — MAINTENANCE FAVORITE MUST BE CLICKABLE
+
+The existing Favorite modal is working correctly.
+
+Do NOT redesign or replace it.
+
+There is only one missing behavior:
+
+When the Coffee Owner opens the Favorites modal and sees a favorited Maintenance professional, clicking that Maintenance favorite currently does not correctly navigate/open the corresponding Maintenance profile.
+
+Fix this.
+
+Expected behavior:
+
+**Coffee Owner → Favorites → Maintenance favorite → click → `/maintenance` → open/focus the selected Maintenance account**
+
+The clicked Maintenance professional must be the exact real database entity that was favorited.
+
+Do not create duplicate Maintenance favorite data.
+
+Use the existing Favorites architecture.
+
+Preserve the behavior of all other favorite types.
+
+---
+
+# 7. MESSAGES — PREVENT MAINTENANCE DISCUSSIONS FROM SHOP
+
+The Maintenance messaging integration is now working, but there is an important business-rule issue.
+
+Currently, Maintenance conversations can appear under the **SHOP** switcher.
+
+That must be prevented.
+
+## Coffee Owner → Messages → SHOP
+
+The Coffee Owner must **NOT** be able to create a Maintenance discussion from the SHOP service switcher.
+
+The SHOP messaging context should only allow SHOP conversations.
+
+A Maintenance conversation must only be created from:
+
+**Messages → MAINTENANCE**
+
+---
+
+## Coffee Owner → Messages → MAINTENANCE
+
+The Maintenance switcher must allow the Coffee Owner to:
+
+* See relevant Maintenance conversations
+* Add/start a Maintenance discussion
+* Select a real Maintenance professional
+* Open the real conversation
+* Send messages
+
+The existing real messaging infrastructure must remain unchanged.
+
+Only enforce the correct service context.
+
+---
+
+## Important
+
+Do not break existing SHOP conversations.
+
+Do not duplicate the messaging system.
+
+The service context must correctly distinguish:
+
+* SHOP
+* PRINT
+* BARISTA
+* MARKETING
+* MAINTENANCE
+
+according to the existing architecture.
+
+---
+
+# 8. RESERVATION / "DEMANDER UNE INTERVENTION"
+
+This is a very important workflow.
+
+At:
+
+**Coffee Owner → `/maintenance` → Maintenance profile/modal → Réserver / Demander une intervention**
+
+the Coffee Owner must be able to create a real Maintenance intervention request.
+
+The current reservation flow already has:
+
+* Need description
+* Date
+* Time
+
+Keep what already works.
+
+Add/fix the following.
+
+---
+
+## A. Urgency
+
+The Coffee Owner must be able to specify the urgency of the situation.
+
+This must be persisted with the reservation/request.
+
+Use an appropriate existing project pattern if one exists.
+
+Do not leave urgency as frontend-only state.
+
+---
+
+## B. Date and time
+
+Keep the existing working date/time behavior.
+
+Do not redesign it unnecessarily.
+
+Persist the selected date/time in the real reservation.
+
+---
+
+## C. Location
+
+The location should default to the **Coffee Owner's current/default address**.
+
+The Coffee Owner must be able to change the location.
+
+Use the existing Location Modal / Location Picker architecture already present in the Coffee Owner application.
+
+Expected behavior:
+
+**Default location = Coffee Owner saved address**
+
+but:
+
+**Coffee Owner can open Location Modal → choose/change location → reservation uses selected location**
+
+The selected location must be stored with the reservation.
+
+Do not modify the global Coffee Owner location system unnecessarily.
+
+---
+
+## D. Phone number
+
+The phone number should default to the **Coffee Owner's saved/default phone number**.
+
+The Coffee Owner must be able to change it before submitting the intervention.
+
+The final phone number used for the intervention must be persisted with the reservation.
+
+Do not modify the user's global phone number just because they changed the reservation phone.
+
+The reservation should keep the phone number actually supplied for that intervention.
+
+---
+
+## E. Category / Competence selection
+
+This is important.
+
+The Coffee Owner must select the intervention category/competence using a **picklist based on the selected Maintenance professional's real "Catégories & Compétences"**.
+
+Example:
+
+If the selected Maintenance professional has:
+
+* Électricité
+* Plomberie
+* Infrastructure
+
+the reservation picklist should be based on those real competencies.
+
+Do NOT show unrelated global Maintenance categories.
+
+Do NOT use static categories.
+
+The available choices must come from the selected Maintenance account's real database data.
+
+---
+
+## F. Need description
+
+The existing need-description functionality already works.
+
+Keep it.
+
+Do not remove or redesign it.
+
+---
+
+# 9. RESERVATION DATA MUST BE SYNCHRONIZED
+
+All of the following information submitted by the Coffee Owner must be available to the contacted Maintenance account:
+
+* Coffee Owner
+* Selected Maintenance professional
+* Urgency
+* Date
+* Time
+* Location
+* Phone number
+* Selected category/competence
+* Need description
+* Reservation status
+* Any other existing reservation information
+
+The Maintenance professional must see the actual request in:
+
+**Espace Maintenance → Planning**
+
+No information should be lost between the Coffee Owner reservation form and Maintenance dashboard.
+
+---
+
+# 10. ESPACE MAINTENANCE — PLANNING
+
+Inspect the current:
+
+**Espace Maintenance → Planning**
+
+The existing switcher includes:
+
+* Aujourd'hui
+* À venir
+* Passées
+* etc.
+
+There are currently two problems.
+
+### A. "Reprogrammée"
+
+The current **Reprogrammée** action/state has no meaningful behavior.
+
+Determine what the existing reservation architecture supports and make this action meaningful.
+
+It should allow the Maintenance professional to appropriately reschedule an intervention according to the existing reservation workflow.
+
+Do not add a completely new scheduling architecture.
+
+Reuse the current reservation system.
+
+---
+
+### B. "Marquer terminée"
+
+The **Marquer terminée** action currently does not work.
+
+Fix it.
+
+When the Maintenance professional marks an intervention as completed:
+
+* Update the real reservation status.
+* Persist it.
+* Update Espace Maintenance.
+* Update the Coffee Owner side.
+* Make it available for any downstream workflow that depends on completed interventions, including reviews if appropriate.
+
+Do not leave the status as local UI state.
+
+---
+
+# 11. ESPACE MAINTENANCE → PROFIL
+
+Inside:
+
+**Espace Maintenance → Profil**
+
+add/synchronize:
+
+**Expérience**
+
+The Maintenance professional should be able to enter their years of experience.
+
+Example:
+
+**0 ans Expérience**
+
+must be real persisted data, not a hardcoded value.
+
+The value must synchronize with the Coffee Owner Maintenance profile/modal.
+
+If the Maintenance professional changes:
+
+**0 ans → 10 ans**
+
+the Coffee Owner profile should eventually show:
+
+**10 ans**
+
+using the real database value.
+
+Do not create a duplicate profile field if an appropriate profile field already exists.
+
+---
+
+# 12. ESPACE MAINTENANCE → DISPONIBILITÉ
+
+The existing:
+
+**Mode Congé / Absence**
+
+does not currently work correctly and is not synchronized.
+
+Fix it.
+
+The Maintenance professional must be able to manage their availability/absence using the existing Espace Maintenance UI.
+
+The state must be persisted.
+
+The Coffee Owner marketplace must reflect the real availability state.
+
+Do not keep it as local frontend state.
+
+---
+
+# 13. CERTIFICATIONS
+
+Add real certification management to:
+
+**Espace Maintenance → Disponibilité / Profile area**
+
+according to the existing UI architecture.
+
+The Maintenance professional must be able to add **multiple certifications**.
+
+For example:
+
+* BTP Certified
+* DeLonghi Certified
+* Jura Certified
+* Daikin Certified
+* etc.
+
+The names must be real database records/data.
+
+The Maintenance professional must be able to manage their certifications.
+
+The Coffee Owner Maintenance profile/modal must display the real certifications of that Maintenance professional.
+
+Example:
+
+**Certifications**
+
+* BTP Certified
+* Other real certifications
+
+No static certification arrays.
+
+---
+
+# 14. REALTIME SYNCHRONIZATION — CRITICAL
+
+This is now a global requirement for the entire Maintenance system.
+
+Any relevant modification from either side must update the other side **without requiring a manual page refresh**.
+
+## Maintenance → Coffee Owner
+
+If the Maintenance professional changes:
+
+* Profile
+* Experience
+* Categories
+* Skills
+* Certifications
+* Availability
+* Congé/Absence
+* Pricing
+* Portfolio
+* Working hours
+* Coverage area
+* Other marketplace information
+
+the Coffee Owner Maintenance marketplace/profile must update in realtime.
+
+---
+
+## Coffee Owner → Maintenance
+
+If the Coffee Owner:
+
+* Creates reservation
+* Changes reservation information where allowed
+* Sends message
+* Creates review
+* Performs relevant marketplace actions
+
+the Maintenance account must receive the update in realtime.
+
+---
+
+## Reservation realtime
+
+For example:
+
+**Coffee Owner creates intervention**
+
+→ Maintenance Planning updates automatically.
+
+Then:
+
+**Maintenance marks intervention completed**
+
+→ Coffee Owner reservation state updates automatically.
+
+No manual refresh.
+
+---
+
+## Message realtime
+
+A message sent by either side must appear in the other side's conversation without requiring refresh.
+
+Reuse the existing realtime messaging architecture.
+
+---
+
+## Review realtime
+
+When a review is created or updated according to the existing review rules:
+
+**Coffee Owner → Maintenance account**
+
+and:
+
+**Maintenance account → relevant marketplace/profile**
+
+must update appropriately without requiring manual refresh.
+
+---
+
+# 15. ADMIN REALTIME / DATA CONSISTENCY
+
+The new Admin Maintenance section should also use the real database source of truth.
+
+If practical within the existing architecture, relevant Admin Maintenance statistics/data should update when Maintenance accounts, reservations, reviews, etc. change.
+
+Do not introduce unnecessary polling.
+
+Reuse existing realtime mechanisms.
+
+---
+
+# 16. DO NOT BREAK PREVIOUSLY COMPLETED WORK
+
+The following areas have already been implemented during the previous passes and must be preserved unless a direct dependency requires modification:
+
+* Real Maintenance profiles
+* Database persistence
+* Maintenance availability
+* Maintenance categories
+* Marketplace cards
+* Maintenance filters
+* Favorites
+* Maintenance messaging
+* Reservations
+* Espace Maintenance dashboard
+* Maintenance profile persistence
+* Realtime infrastructure
+* Coffee Owner theme work
+* Maintenance Hero work
+* Maintenance service context
+* Existing authentication/authorization
+
+However, **verify them rather than assuming they are perfect**, because this prompt also contains corrections discovered through manual testing.
+
+---
+
+# 17. VERIFY THE FOUR PREVIOUSLY REQUESTED FIXES
+
+From the previous pass, explicitly verify:
+
+### Dark mode
+
+Must work correctly on Coffee Owner `/maintenance`.
+
+### Messages
+
+Maintenance must have its own switcher context.
+
+Maintenance conversations must not be creatable from SHOP.
+
+Maintenance account must have access to its client conversations.
+
+### Espace Maintenance
+
+Unused sidebar removed.
+
+Sign Out available inside the Espace Maintenance section.
+
+### Hero
+
+Maintenance Hero must follow the actual SHOP Hero design pattern while retaining Maintenance content.
+
+---
+
+# 18. FINAL FULL AUDIT
+
+Before declaring the task complete, test the entire Maintenance lifecycle.
+
+### Account
+
+Maintenance account created.
+
+↓
+
+### Profile
+
+Profile updated.
+
+↓
+
+### Marketplace
+
+Coffee Owner sees real profile.
+
+↓
+
+### Favorite
+
+Coffee Owner favorites profile.
+
+↓
+
+### Favorite modal
+
+Click favorite → opens correct Maintenance profile.
+
+↓
+
+### Message
+
+Coffee Owner opens:
+
+**Messages → Maintenance**
+
+and starts conversation.
+
+↓
+
+### Maintenance
+
+Maintenance sees the conversation.
+
+↓
+
+### Reservation
+
+Coffee Owner selects:
+
+**Demander une intervention**
+
+↓
+
+Urgency
+Date
+Time
+Default address
+Optional changed location
+Default phone
+Optional changed phone
+Maintenance-specific category/competence
+Need description
+
+↓
+
+### Maintenance
+
+Request appears in Planning.
+
+↓
+
+### Reschedule
+
+Maintenance can reschedule.
+
+↓
+
+### Complete
+
+Maintenance marks intervention completed.
+
+↓
+
+### Coffee Owner
+
+Status updates.
+
+↓
+
+### Review
+
+Coffee Owner can review the Maintenance professional.
+
+↓
+
+### Maintenance
+
+Maintenance professional sees the review and can report it.
+
+↓
+
+### Admin
+
+Admin can see the Maintenance account/reservation/review/analytics information.
+
+---
+
+# 19. FINAL RULE
+
+There are now three historical implementation checkpoints.
+
+Use them as follows:
+
+**`MAINTENANCE STRATEGY`**
+
+→ original implementation checkpoint
+
+**`MAINTENANCE STRATEGY TWO`**
+
+→ continuation checkpoint
+
+**`MAINTENANCE TRATEGY THREE`**
+
+→ latest implementation checkpoint and current starting point
+
+The latest commit is the starting state.
+
+Do NOT roll back.
+
+Do NOT rebuild.
+
+Do NOT duplicate.
+
+Do NOT redesign.
+
+Do NOT remove working functionality.
+
+Do NOT change unrelated modules.
+
+Do NOT blindly trust previous implementation summaries.
+
+### Correct workflow:
+
+**READ ALL THREE PROMPTS → INSPECT ALL THREE IMPLEMENTATION STATES → AUDIT CURRENT CODE → TEST CURRENT BEHAVIOR → IDENTIFY ACTUAL GAPS → IMPLEMENT ONLY MISSING/BROKEN FEATURES → VERIFY REALTIME SYNCHRONIZATION → FINAL END-TO-END TEST**
+
+The final objective is a **fully real, database-backed, two-sided Maintenance marketplace** where:
+
+**Admin ↔ Maintenance Account ↔ Database ↔ Coffee Owner**
+
+remain synchronized in realtime.

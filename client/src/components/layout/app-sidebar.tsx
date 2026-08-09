@@ -10,7 +10,7 @@ import {
   Folder, Warehouse, ClipboardCheck, RotateCcw,
   MapPin, Wallet, Tag, Ticket, HelpCircle,
   Printer, Megaphone, GraduationCap, Image, Briefcase,
-  BookOpen, UserCheck, Sliders, Target
+   BookOpen, UserCheck, Sliders, Target, Wrench
 } from "lucide-react";
 import {
   Sidebar,
@@ -136,6 +136,7 @@ export function AppSidebar() {
             { title: "Notifications", url: "/admin/notifications", icon: Bell },
             { title: "Messages", url: "/admin/messages", icon: MessageCircle },
             { title: "Reviews", url: "/admin/reviews", icon: Star },
+            { title: "Maintenance", url: "/admin/maintenance", icon: Wrench },
             
           ],
         },

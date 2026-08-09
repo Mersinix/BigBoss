@@ -199,7 +199,11 @@ export interface IStorage {
   getMaintenanceReservationsForProvider(userId: number): Promise<(MaintenanceReservation & { cafeOwner: string; ownerPhone: string | null })[]>;
   getMaintenanceReservationsForOwner(userId: number): Promise<(MaintenanceReservation & { maintenanceName: string })[]>;
   createMaintenanceReservation(data: InsertMaintenanceReservation): Promise<MaintenanceReservation>;
-  updateMaintenanceReservationStatus(id: number, providerId: number, status: string): Promise<MaintenanceReservation | undefined>;
+  updateMaintenanceReservationStatus(id: number, providerId: number, status: string, schedule?: { date?: string; time?: string | null }): Promise<MaintenanceReservation | undefined>;
+  getMaintenanceReviews(maintenanceUserId: number): Promise<SupplierProductReview[]>;
+  getMaintenanceReviewForReservation(reservationId: number, cafeId: number): Promise<SupplierProductReview | undefined>;
+  upsertMaintenanceReview(data: { maintenanceUserId: number; reservationId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string; cafeOwnerName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }>;
+  getMaintenanceAdminOverview(): Promise<any>;
   getMaintenanceFavoritesByUser(userId: number): Promise<number[]>;
   addMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
   removeMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
@@ -1370,15 +1374,100 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateMaintenanceReservationStatus(id: number, providerId: number, status: string): Promise<MaintenanceReservation | undefined> {
+  async updateMaintenanceReservationStatus(id: number, providerId: number, status: string, schedule?: { date?: string; time?: string | null }): Promise<MaintenanceReservation | undefined> {
     const [updated] = await db.update(maintenanceReservations)
-      .set({ status, updatedAt: new Date() })
+      .set({ status, ...(schedule ?? {}), updatedAt: new Date() })
       .where(and(
         eq(maintenanceReservations.id, id),
         eq(maintenanceReservations.maintenanceUserId, providerId),
       ))
       .returning();
     return updated;
+  }
+
+  async getMaintenanceReviews(maintenanceUserId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.maintenanceUserId as any, maintenanceUserId),
+        eq(supplierProductReviews.reviewType, "MAINTENANCE"),
+      ))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getMaintenanceReviewForReservation(reservationId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
+    const [review] = await db.select().from(supplierProductReviews).where(and(
+      eq(supplierProductReviews.reservationId as any, reservationId),
+      eq(supplierProductReviews.cafeId, cafeId),
+      eq(supplierProductReviews.reviewType, "MAINTENANCE"),
+    ));
+    return review;
+  }
+
+  async upsertMaintenanceReview(data: {
+    maintenanceUserId: number;
+    reservationId: number;
+    cafeId: number;
+    rating: number;
+    comment?: string | null;
+    cafeName: string;
+    cafeOwnerName: string;
+  }): Promise<{ review: SupplierProductReview; isUpdate: boolean }> {
+    const existing = await this.getMaintenanceReviewForReservation(data.reservationId, data.cafeId);
+    if (existing) {
+      const [review] = await db.update(supplierProductReviews)
+        .set({ rating: data.rating, comment: data.comment ?? null, updatedAt: new Date() } as any)
+        .where(eq(supplierProductReviews.id, existing.id))
+        .returning();
+      return { review, isUpdate: true };
+    }
+    const [review] = await db.insert(supplierProductReviews).values({
+      reviewType: "MAINTENANCE",
+      maintenanceUserId: data.maintenanceUserId,
+      reservationId: data.reservationId,
+      cafeId: data.cafeId,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.cafeName,
+      cafeOwnerName: data.cafeOwnerName,
+      supplierId: null,
+      productId: null,
+      listingId: null,
+      packId: null,
+      productName: null,
+    } as any).returning();
+    return { review, isUpdate: false };
+  }
+
+  async getMaintenanceAdminOverview(): Promise<any> {
+    const accounts = await db.select({ profile: maintenanceProfiles, user: users })
+      .from(maintenanceProfiles)
+      .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
+      .where(eq(users.role, "MAINTENANCE" as any));
+    const reservations = await db.select().from(maintenanceReservations);
+    const reviews = await db.select().from(supplierProductReviews)
+      .where(eq(supplierProductReviews.reviewType, "MAINTENANCE"));
+    const categoryCounts = new Map<string, number>();
+    for (const row of accounts) for (const category of row.profile.categories) {
+      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+    }
+    const averageRating = reviews.length ? reviews.reduce((sum, row) => sum + row.rating, 0) / reviews.length : 0;
+    return {
+      stats: {
+        totalAccounts: accounts.length,
+        activeAccounts: accounts.filter(({ user }) => user.status === "approved").length,
+        availableAccounts: accounts.filter(({ user, profile }) => user.status === "approved" && profile.isAvailable && !profile.isOnVacation).length,
+        totalReservations: reservations.length,
+        pendingReservations: reservations.filter((row) => row.status === "PENDING").length,
+        completedReservations: reservations.filter((row) => row.status === "COMPLETED").length,
+        cancelledReservations: reservations.filter((row) => row.status === "CANCELLED").length,
+        reviewCount: reviews.length,
+        averageRating,
+      },
+      categories: Array.from(categoryCounts, ([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
+      accounts: accounts.map(({ profile, user }) => ({ ...profile, name: user.name, email: user.email, status: user.status, location: user.locationAddress ?? profile.coverageArea })),
+      reservations,
+      reviews,
+    };
   }
 
   async getMaintenanceFavoritesByUser(userId: number): Promise<number[]> {

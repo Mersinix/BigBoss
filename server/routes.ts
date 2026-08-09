@@ -437,6 +437,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       location: z.string().default(""),
       description: z.string().default(""),
       category: z.string().default(""),
+      urgency: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).default("NORMAL"),
+      contactPhone: z.string().default(""),
     }).parse(req.body);
     const profiles = await storage.getMaintenanceProfiles();
     const provider = profiles.find((profile) => profile.userId === body.maintenanceUserId && profile.available);
@@ -444,6 +446,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const reservation = await storage.createMaintenanceReservation({
       ...body,
       cafeOwnerId: user.id,
+      contactPhone: body.contactPhone || user.phone || "",
       status: "PENDING",
     });
     broadcastToUsers([user.id, body.maintenanceUserId], "maintenance_reservation_updated", { reservationId: reservation.id });
@@ -453,11 +456,84 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/maintenance/reservations/:id/status", requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
-    const status = z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "RESCHEDULED"]).parse(req.body?.status);
-    const updated = await storage.updateMaintenanceReservationStatus(Number(req.params.id), user.id, status);
+    const body = z.object({
+      status: z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "RESCHEDULED"]),
+      date: z.string().optional(),
+      time: z.string().nullable().optional(),
+    }).parse(req.body);
+    const updated = await storage.updateMaintenanceReservationStatus(Number(req.params.id), user.id, body.status, {
+      date: body.date,
+      time: body.time,
+    });
     if (!updated) return res.status(404).json({ message: "Reservation not found" });
     broadcastToUsers([user.id, updated.cafeOwnerId], "maintenance_reservation_updated", { reservationId: updated.id });
     res.json(updated);
+  });
+
+  app.get("/api/maintenance/reviews/:maintenanceUserId", async (req, res) => {
+    try {
+      res.json(await storage.getMaintenanceReviews(Number(req.params.maintenanceUserId)));
+    } catch { res.status(500).json({ message: "Failed to load Maintenance reviews" }); }
+  });
+
+  app.get("/api/maintenance/reviews/reservation/:reservationId", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const reservationId = Number(req.params.reservationId);
+    const ownerReviews = user.role === "CAFE_OWNER"
+      ? await storage.getMaintenanceReservationsForOwner(user.id)
+      : [];
+    const providerReviews = user.role === "MAINTENANCE"
+      ? await storage.getMaintenanceReservationsForProvider(user.id)
+      : [];
+    const owns = [...ownerReviews, ...providerReviews].some((row) => row.id === reservationId);
+    if (!owns) return res.status(403).json({ message: "Forbidden" });
+    res.json(user.role === "CAFE_OWNER"
+      ? await storage.getMaintenanceReviewForReservation(reservationId, user.id)
+      : null);
+  });
+
+  app.post("/api/maintenance/reviews", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER" || user.status !== "approved") {
+      return res.status(403).json({ message: "Only approved Coffee Owners can submit reviews" });
+    }
+    const body = z.object({
+      maintenanceUserId: z.number().int().positive(),
+      reservationId: z.number().int().positive(),
+      rating: z.number().int().min(1).max(5),
+      comment: z.string().max(2000).optional(),
+    }).parse(req.body);
+    const reservations = await storage.getMaintenanceReservationsForOwner(user.id);
+    const reservation = reservations.find((row) => row.id === body.reservationId);
+    if (!reservation || reservation.maintenanceUserId !== body.maintenanceUserId || reservation.status !== "COMPLETED") {
+      return res.status(400).json({ message: "Reviews are available after a completed intervention" });
+    }
+    const result = await storage.upsertMaintenanceReview({
+      ...body,
+      cafeId: user.id,
+      cafeName: user.name,
+      cafeOwnerName: user.name,
+    });
+    broadcast("maintenance_review_updated", { maintenanceUserId: body.maintenanceUserId, reservationId: body.reservationId });
+    res.status(result.isUpdate ? 200 : 201).json(result.review);
+  });
+
+  app.post("/api/maintenance/reviews/:id/report", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    const reviewId = Number(req.params.id);
+    const reviews = await storage.getMaintenanceReviews(user.id);
+    if (!reviews.some((review) => review.id === reviewId)) return res.status(404).json({ message: "Review not found" });
+    const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
+    await storage.reportReview(reviewId, reason);
+    broadcast("maintenance_review_updated", { maintenanceUserId: user.id, reviewId });
+    res.json({ ok: true });
+  });
+
+  app.get("/api/admin/maintenance", requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getMaintenanceAdminOverview()); }
+    catch { res.status(500).json({ message: "Failed to load Maintenance overview" }); }
   });
 
   app.get("/api/maintenance-favorites", requireAuth, async (req: any, res) => {

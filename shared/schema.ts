@@ -381,6 +381,8 @@ export const supplierProductReviews = pgTable("supplier_product_reviews", {
   productId: integer("product_id"),
   listingId: integer("listing_id"),
   packId: integer("pack_id"), // for PACK reviews
+  maintenanceUserId: integer("maintenance_user_id"), // for MAINTENANCE reviews
+  reservationId: integer("reservation_id"), // optional completed intervention link
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   cafeName: text("cafe_name").notNull().default(''),
@@ -486,6 +488,8 @@ export const maintenanceReservations = pgTable("maintenance_reservations", {
   location: text("location").notNull().default(""),
   description: text("description").notNull().default(""),
   category: text("category").notNull().default(""),
+  urgency: text("urgency").notNull().default("NORMAL"),
+  contactPhone: text("contact_phone").notNull().default(""),
   status: text("status").notNull().default("PENDING"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

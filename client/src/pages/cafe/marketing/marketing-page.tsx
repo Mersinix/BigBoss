@@ -3,6 +3,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import marketingHeroImg from "@assets/image_1780681027926.png";
 import { Link, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useThemeStore } from "@/store/theme-store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,8 @@ import {
   Users,
   Heart,
   Clock,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 
@@ -46,6 +49,20 @@ function useAccessLevel(): AccessLevel {
   if (["SUPER_ADMIN", "ADMIN", "SUPPLIER"].includes(user.role)) return "approved";
   if (user.role === "CAFE_OWNER" && (user as any).status === "approved") return "approved";
   return "pending";
+}
+
+function useTheme(isDark: boolean) {
+  return {
+    dk: isDark,
+    pageBg: isDark ? "bg-gray-900" : "bg-gray-50",
+    cardBg: isDark ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100",
+    textPrimary: isDark ? "text-white" : "text-gray-900",
+    textMuted: isDark ? "text-gray-400" : "text-gray-500",
+    textSubtle: isDark ? "text-gray-500" : "text-gray-400",
+    border: isDark ? "border-gray-700/60" : "border-gray-100",
+    mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
+    inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+  };
 }
 
 // ── Static Data ───────────────────────────────────────────────────────────────
@@ -309,13 +326,16 @@ function ProviderCard({
   accessLevel,
   user,
   onViewProfile,
+  isDark,
 }: {
   provider: Provider;
   accessLevel: AccessLevel;
   user: ReturnType<typeof useAuth>["user"];
   onViewProfile: (p: Provider) => void;
+  isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
+  const t = useTheme(isDark);
   const lowestPrice = Math.min(...provider.packages.map((p) => p.priceInCents));
   const faved = useFavorites((s) => !!s.marketing[provider.id]);
   const toggleMarketing = useFavorites((s) => s.toggleMarketing);
@@ -323,12 +343,12 @@ function ProviderCard({
   return (
     <div
       data-testid={`card-provider-${provider.id}`}
-      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
+      className={`group rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
     >
       {/* Portfolio preview strip */}
       <div className="h-20 grid grid-cols-3 gap-0.5 overflow-hidden">
         {provider.portfolioImages.slice(0, 3).map((img, i) => (
-          <div key={i} className="relative overflow-hidden bg-gray-100">
+          <div key={i} className={`relative overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-100"}`}>
             <img
               src={img}
               alt=""
@@ -355,7 +375,7 @@ function ProviderCard({
               >
                 {PROVIDER_TYPE_LABELS[provider.type]}
               </Badge>
-              <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
+                <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}>
                 <MapPin className="w-2.5 h-2.5" />
                 {provider.location}
               </span>
@@ -382,7 +402,7 @@ function ProviderCard({
 
         <div className="flex items-center gap-2">
           <StarRating rating={provider.rating} />
-          <span className="text-[11px] text-gray-400">({provider.reviewCount})</span>
+          <span className={`text-[11px] ${t.textSubtle}`}>({provider.reviewCount})</span>
         </div>
 
         <div className="flex flex-wrap gap-1">
@@ -391,7 +411,7 @@ function ProviderCard({
             return s ? (
               <span
                 key={sId}
-                className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded-full font-medium"
+                className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isDark ? "bg-purple-950/60 text-purple-300" : "bg-purple-50 text-purple-600"}`}
               >
                 {s.title.split(" ")[0]}
               </span>
@@ -399,11 +419,11 @@ function ProviderCard({
           })}
         </div>
 
-        <div className="mt-auto pt-2 border-t border-gray-50">
+        <div className={`mt-auto pt-2 border-t ${t.border}`}>
          
             <div className="space-y-2">
               <div>
-                <p className="text-[10px] text-gray-400">À partir de</p>
+                <p className={`text-[10px] ${t.textSubtle}`}>À partir de</p>
                 <p className="font-bold text-sm text-purple-600">
                   {fmt(lowestPrice)}/mois
                 </p>
@@ -610,6 +630,9 @@ function ProviderDetailDialog({
 export default function MarketingPage({ comingSoon = false }: { comingSoon?: boolean }) {
   const { user } = useAuth();
   const accessLevel = useAccessLevel();
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggleTheme = useThemeStore((s) => s.toggle);
+  const t = useTheme(isDark);
 
   const searchStr = useSearch();
   const initialService = new URLSearchParams(searchStr).get("service") ?? "";
@@ -656,28 +679,34 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-12 pb-16 px-4 overflow-hidden">
+      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
         {/* Background image */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
           style={{ backgroundImage: `url(${marketingHeroImg})` }}
         />
         {/* Dark overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/85 via-purple-800/80 to-violet-900/85" />
+        <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-purple-950/90" : "bg-gradient-to-br from-purple-600/90 via-purple-700/85 to-violet-700/90"}`} />
         {/* Content */}
-        <div className="relative max-w-3xl mx-auto text-center">
-          <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-            <Megaphone className="w-10 h-10 text-white" />
+        <div className="relative">
+          <div className="flex justify-end items-center gap-2 mb-9">
+            <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+          </div>
+          <div className="max-w-3xl mx-auto text-center">
+          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
+            <Megaphone className={`w-8 h-8 ${isDark ? "text-purple-400" : "text-white"}`} />
           </div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-            BigBoss <span className="text-purple-200">MARKETING</span>
+            BigBoss <span className={isDark ? "text-purple-400" : "text-purple-200"}>MARKETING</span>
           </h1>
-          <p className="text-purple-100 text-lg mb-6 max-w-xl mx-auto">
+          <p className={`text-base mb-4 max-w-xl mx-auto ${isDark ? "text-gray-400" : "text-purple-100"}`}>
             Boostez la visibilité de votre café avec des experts marketing dédiés à la restauration
           </p>
-          <div className="flex items-center justify-center gap-6 flex-wrap text-purple-100 text-sm">
+          <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${isDark ? "text-gray-400" : "text-purple-100"}`}>
             <span className="flex items-center gap-1.5">
               <Users className="w-4 h-4" />
               {PROVIDERS.length} prestataires
@@ -691,18 +720,19 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               Note moyenne 4.7/5
             </span>
           </div>
+          </div>
         </div>
       </section>
 
       {comingSoon ? (
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-5">
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${t.mutedBg}`}>
             <Clock className="w-8 h-8 text-purple-600" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2" data-testid="text-coming-soon-title">
+          <h2 className={`text-xl font-bold mb-2 ${t.textPrimary}`} data-testid="text-coming-soon-title">
             Bientôt disponible
           </h2>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">
+          <p className={`text-sm max-w-md mx-auto ${t.textMuted}`}>
             Ce service est en cours de préparation. Revenez bientôt pour le découvrir.
           </p>
         </div>
@@ -710,7 +740,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
       <>
       {/* ── Pending notice ──────────────────────────────────────────────── */}
       {accessLevel === "pending" && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
+        <div className={`${isDark ? "bg-amber-950/40 border-amber-900/60" : "bg-amber-50 border-amber-200"} border-b px-4 py-3`}>
           <div className="max-w-7xl mx-auto flex items-center gap-2 text-amber-800 text-sm font-medium">
             <CheckCircle className="w-4 h-4 shrink-0" />
             Votre compte est en attente d'approbation. Vous pourrez accéder aux tarifs et demander des devis une fois approuvé.
@@ -719,15 +749,15 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
       )}
 
       {/* ── Service strip + filters — sticky block ─────────────────── */}
-      <div className="bg-white sticky top-14 z-30 shadow-sm">
-        <div className="border-b border-gray-100">
+       <div className={`${t.cardBg} sticky top-14 z-30 shadow-sm`}>
+         <div className="border-b">
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex gap-1 overflow-x-auto py-3" style={{ scrollbarWidth: "none" }}>
               {/* All */}
               <button
                 onClick={() => setSelectedService("")}
                 data-testid="button-service-all"
-                className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === "" ? "bg-blue-600 text-white shadow-sm" : "hover:bg-gray-100 text-gray-600"}`}
+                 className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === "" ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
               >
                 <span className="text-lg">📢</span>
                 <span className="text-[11px] font-semibold leading-tight">All</span>
@@ -737,7 +767,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                   key={service.id}
                   onClick={() => setSelectedService(selectedService === service.id ? "" : service.id)}
                   data-testid={`button-service-cat-${service.id}`}
-                  className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === service.id ? "bg-blue-600 text-white shadow-sm" : "hover:bg-gray-100 text-gray-600"}`}
+                   className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === service.id ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
                 >
                   <span className="text-lg">{service.icon}</span>
                   <span className="text-[11px] font-semibold leading-tight line-clamp-1 max-w-[60px]">
@@ -749,16 +779,16 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
           </div>
         </div>
         {/* Filter bar */}
-        <div className="border-b border-gray-100 py-2 px-4">
+         <div className="border-b py-2 px-4">
           <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+             <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
             <div className="relative flex-1 min-w-[180px] max-w-xs">
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Rechercher un prestataire..."
-                className="h-7 text-xs pl-8 border-gray-200 bg-gray-50 rounded-full"
+                 className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
                 data-testid="input-provider-search"
               />
             </div>
@@ -766,7 +796,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               value={filterType || "__all__"}
               onValueChange={(v) => setFilterType(v === "__all__" ? "" : v)}
             >
-              <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[130px]" data-testid="select-provider-type">
+               <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-provider-type">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -780,7 +810,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               value={filterRating || "__all__"}
               onValueChange={(v) => setFilterRating(v === "__all__" ? "" : v)}
             >
-              <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[120px]" data-testid="select-provider-rating">
+               <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-provider-rating">
                 <SelectValue placeholder="Note min." />
               </SelectTrigger>
               <SelectContent>
@@ -794,7 +824,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               value={filterLocation || "__all__"}
               onValueChange={(v) => setFilterLocation(v === "__all__" ? "" : v)}
             >
-              <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[110px]" data-testid="select-provider-location">
+               <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`} data-testid="select-provider-location">
                 <SelectValue placeholder="Ville" />
               </SelectTrigger>
               <SelectContent>
@@ -817,15 +847,15 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* ── Providers ────────────────────────────────────────────────────── */}
         <section>
           {/* Active service filter pill */}
           {selectedService && (
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-xs text-gray-500">Service filtré :</span>
+               <span className={`text-xs ${t.textMuted}`}>Service filtré :</span>
               <button
-                className="flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full font-medium hover:bg-purple-200 transition-colors"
+                 className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${isDark ? "bg-purple-950/60 text-purple-300 hover:bg-purple-900/70" : "bg-purple-100 text-purple-700 hover:bg-purple-200"}`}
                 onClick={() => setSelectedService("")}
                 data-testid="button-clear-service-filter"
               >
@@ -837,9 +867,9 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
 
           {filteredProviders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-              <Users className="w-12 h-12 text-gray-200" />
-              <p className="font-semibold text-gray-700">Aucun prestataire trouvé</p>
-              <p className="text-sm text-gray-400">Essayez d'ajuster vos filtres.</p>
+               <Users className={`w-12 h-12 ${t.textSubtle}`} />
+               <p className={`font-semibold ${t.textPrimary}`}>Aucun prestataire trouvé</p>
+               <p className={`text-sm ${t.textMuted}`}>Essayez d'ajuster vos filtres.</p>
               <Button size="sm" variant="outline" onClick={resetFilters} data-testid="button-reset-empty">
                 Réinitialiser les filtres
               </Button>
@@ -853,6 +883,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                   accessLevel={accessLevel}
                   user={user}
                   onViewProfile={setActiveProvider}
+                  isDark={isDark}
                 />
               ))}
             </div>

@@ -3,6 +3,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import baristaHeroImg from "@assets/8d80708f-be87-4e8d-8805-f60e3c292914-1000x562.5-rjZKXkudAsN4bH_1780680229193.jpg";
 import { Link, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useThemeStore } from "@/store/theme-store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,8 @@ import {
   Users,
   CalendarDays,
   Heart,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 
@@ -44,6 +47,20 @@ function useAccessLevel(): AccessLevel {
   if (["SUPER_ADMIN", "ADMIN", "SUPPLIER"].includes(user.role)) return "approved";
   if (user.role === "CAFE_OWNER" && (user as any).status === "approved") return "approved";
   return "pending";
+}
+
+function useTheme(isDark: boolean) {
+  return {
+    dk: isDark,
+    pageBg: isDark ? "bg-gray-900" : "bg-gray-50",
+    cardBg: isDark ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100",
+    textPrimary: isDark ? "text-white" : "text-gray-900",
+    textMuted: isDark ? "text-gray-400" : "text-gray-500",
+    textSubtle: isDark ? "text-gray-500" : "text-gray-400",
+    border: isDark ? "border-gray-700/60" : "border-gray-100",
+    mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
+    inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+  };
 }
 
 // ── Static Data ───────────────────────────────────────────────────────────────
@@ -235,19 +252,22 @@ function TrainingCard({
   program,
   accessLevel,
   user,
+  isDark,
 }: {
   program: (typeof TRAINING_PROGRAMS)[0];
   accessLevel: AccessLevel;
   user: ReturnType<typeof useAuth>["user"];
+  isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
+  const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.academy[program.id]);
   const toggleAcademy = useFavorites((s) => s.toggleAcademy);
 
   return (
     <div
       data-testid={`card-training-${program.id}`}
-      className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
+      className={`group rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
     >
       <div className="h-16 bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center relative">
         <button
@@ -290,10 +310,10 @@ function TrainingCard({
           </Badge>
         </div>
 
-        <p className="text-xs text-gray-500 font-medium">{program.provider}</p>
-        <p className="text-xs text-gray-400 line-clamp-2">{program.description}</p>
+        <p className={`text-xs font-medium ${t.textMuted}`}>{program.provider}</p>
+        <p className={`text-xs line-clamp-2 ${t.textSubtle}`}>{program.description}</p>
 
-        <div className="flex items-center gap-3 text-[11px] text-gray-500">
+        <div className={`flex items-center gap-3 text-[11px] ${t.textMuted}`}>
           <StarRating rating={program.rating} />
           <span>({program.reviewCount})</span>
           <span className="flex items-center gap-0.5">
@@ -302,11 +322,11 @@ function TrainingCard({
           </span>
         </div>
 
-        <div className="mt-auto pt-2 border-t border-gray-50">
+        <div className={`mt-auto pt-2 border-t ${t.border}`}>
           
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] text-gray-400">Prix</p>
+                <p className={`text-[10px] ${t.textSubtle}`}>Prix</p>
                 <p className="font-bold text-sm text-green-600">
                   {fmt(program.priceInCents)}
                 </p>
@@ -332,19 +352,22 @@ function BaristaCard({
   barista,
   accessLevel,
   user,
+  isDark,
 }: {
   barista: (typeof BARISTAS)[0];
   accessLevel: AccessLevel;
   user: ReturnType<typeof useAuth>["user"];
+  isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
+  const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.baristaMarket[barista.id]);
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
 
   return (
     <div
       data-testid={`card-barista-${barista.id}`}
-      className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col"
+      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
     >
       <button
         className="absolute top-2 right-2 z-10 w-6 h-6 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
@@ -404,7 +427,7 @@ function BaristaCard({
           {barista.skills.map((skill) => (
             <span
               key={skill}
-              className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full font-medium"
+              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${t.mutedBg} ${t.textMuted}`}
             >
               {skill}
             </span>
@@ -412,17 +435,17 @@ function BaristaCard({
         </div>
 
         {barista.availableDays.length > 0 && (
-          <div className="flex items-center gap-1 text-[11px] text-gray-500">
+          <div className={`flex items-center gap-1 text-[11px] ${t.textMuted}`}>
             <CalendarDays className="w-3 h-3 shrink-0" />
             <span>{barista.availableDays.join(" · ")}</span>
           </div>
         )}
 
-        <div className="mt-auto pt-2 border-t border-gray-50">
+        <div className={`mt-auto pt-2 border-t ${t.border}`}>
          
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] text-gray-400">Tarif / jour</p>
+                <p className={`text-[10px] ${t.textSubtle}`}>Tarif / jour</p>
                 <p className="font-bold text-sm text-green-600">
                   {fmt(barista.dailyRateInCents)}
                 </p>
@@ -460,6 +483,9 @@ function BaristaCard({
 export default function BaristaPage({ comingSoon = false }: { comingSoon?: boolean }) {
   const { user } = useAuth();
   const accessLevel = useAccessLevel();
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggleTheme = useThemeStore((s) => s.toggle);
+  const t = useTheme(isDark);
 
   // Active tab — readable from ?tab= URL param
   const searchStr = useSearch();
@@ -547,28 +573,34 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-12 pb-16 px-4 overflow-hidden">
+      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
         {/* Background image */}
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
           style={{ backgroundImage: `url(${baristaHeroImg})` }}
         />
         {/* Dark overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-green-900/85 via-green-800/80 to-emerald-900/85" />
+        <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-green-950/90" : "bg-gradient-to-br from-green-600/90 via-green-700/85 to-emerald-700/90"}`} />
         {/* Content */}
-        <div className="relative max-w-3xl mx-auto text-center">
-          <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-            <Coffee className="w-10 h-10 text-white" />
+        <div className="relative">
+          <div className="flex justify-end items-center gap-2 mb-9">
+            <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+          </div>
+          <div className="max-w-3xl mx-auto text-center">
+          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
+            <Coffee className={`w-8 h-8 ${isDark ? "text-green-400" : "text-white"}`} />
           </div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-            BigBoss <span className="text-green-200">BARISTA</span>
+            BigBoss <span className={isDark ? "text-green-400" : "text-green-200"}>BARISTA</span>
           </h1>
-          <p className="text-green-100 text-lg mb-6 max-w-xl mx-auto">
+          <p className={`text-base mb-4 max-w-xl mx-auto ${isDark ? "text-gray-400" : "text-green-100"}`}>
             Trouvez, réservez et formez des baristas professionnels pour votre établissement
           </p>
-          <div className="flex items-center justify-center gap-6 flex-wrap text-green-100 text-sm">
+          <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${isDark ? "text-gray-400" : "text-green-100"}`}>
             <span className="flex items-center gap-1.5">
               <Users className="w-4 h-4" />
               {BARISTAS.length} baristas disponibles
@@ -582,18 +614,19 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
               {TRAINING_PROGRAMS.filter((p) => p.hasCertification).length} certifications
             </span>
           </div>
+          </div>
         </div>
       </section>
 
       {comingSoon ? (
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${t.mutedBg}`}>
             <Clock className="w-8 h-8 text-green-600" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2" data-testid="text-coming-soon-title">
+          <h2 className={`text-xl font-bold mb-2 ${t.textPrimary}`} data-testid="text-coming-soon-title">
             Bientôt disponible
           </h2>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">
+          <p className={`text-sm max-w-md mx-auto ${t.textMuted}`}>
             Ce service est en cours de préparation. Revenez bientôt pour le découvrir.
           </p>
         </div>
@@ -601,7 +634,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
       <>
       {/* ── Pending notice ──────────────────────────────────────────────── */}
       {accessLevel === "pending" && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
+        <div className={`${isDark ? "bg-amber-950/40 border-amber-900/60" : "bg-amber-50 border-amber-200"} border-b px-4 py-3`}>
           <div className="max-w-7xl mx-auto flex items-center gap-2 text-amber-800 text-sm font-medium">
             <CheckCircle className="w-4 h-4 shrink-0" />
             Votre compte est en attente d'approbation. Vous pourrez accéder aux tarifs et réservations une fois approuvé.
@@ -610,13 +643,13 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
       )}
 
       {/* ── Tab Switcher ────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 sticky top-14 z-30">
+      <div className={`${t.cardBg} border-b sticky top-14 z-30`}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex">
             <button
               onClick={() => setActiveTab("academy")}
               data-testid="tab-academy"
-              className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === "academy" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+               className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === "academy" ? "border-blue-600 text-blue-600" : `border-transparent ${t.textMuted} hover:text-blue-500`}`}
             >
               <GraduationCap className="w-4 h-4" />
               Barista Academy
@@ -624,7 +657,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
             <button
               onClick={() => setActiveTab("marketplace")}
               data-testid="tab-marketplace"
-              className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === "marketplace" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+               className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold border-b-2 transition-colors ${activeTab === "marketplace" ? "border-blue-600 text-blue-600" : `border-transparent ${t.textMuted} hover:text-blue-500`}`}
             >
               <Users className="w-4 h-4" />
               Marketplace Baristas
@@ -633,21 +666,21 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-10">
+       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* ── TAB 1: Training ─────────────────────────────────────────────── */}
         {activeTab === "academy" && (
         <section>
           {/* Training Filters */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-3 mb-5 shadow-sm">
+           <div className={`border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}>
             <div className="flex items-center gap-2 flex-wrap">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+               <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
               <div className="relative flex-1 min-w-[180px] max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                 <Input
                   value={trainingSearch}
                   onChange={(e) => setTrainingSearch(e.target.value)}
                   placeholder="Rechercher une formation..."
-                  className="h-7 text-xs pl-8 border-gray-200 bg-gray-50 rounded-full"
+                   className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
                   data-testid="input-training-search"
                 />
               </div>
@@ -655,7 +688,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={trainingLevel || "__all__"}
                 onValueChange={(v) => setTrainingLevel(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[120px]" data-testid="select-training-level">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-training-level">
                   <SelectValue placeholder="Niveau" />
                 </SelectTrigger>
                 <SelectContent>
@@ -669,7 +702,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={trainingCert || "__all__"}
                 onValueChange={(v) => setTrainingCert(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[130px]" data-testid="select-training-cert">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-training-cert">
                   <SelectValue placeholder="Certification" />
                 </SelectTrigger>
                 <SelectContent>
@@ -703,11 +736,12 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {filteredTraining.map((program) => (
-                <TrainingCard
+                 <TrainingCard
                   key={program.id}
                   program={program}
                   accessLevel={accessLevel}
                   user={user}
+                  isDark={isDark}
                 />
               ))}
             </div>
@@ -719,16 +753,16 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         {activeTab === "marketplace" && (
         <section>
           {/* Hiring Filters */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-3 mb-5 shadow-sm">
+           <div className={`border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}>
             <div className="flex items-center gap-2 flex-wrap">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+               <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
               <div className="relative flex-1 min-w-[180px] max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                 <Input
                   value={baristaSearch}
                   onChange={(e) => setBaristaSearch(e.target.value)}
                   placeholder="Nom ou compétence..."
-                  className="h-7 text-xs pl-8 border-gray-200 bg-gray-50 rounded-full"
+                   className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
                   data-testid="input-barista-search"
                 />
               </div>
@@ -736,7 +770,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={baristaLevel || "__all__"}
                 onValueChange={(v) => setBaristaLevel(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[120px]" data-testid="select-barista-level">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-barista-level">
                   <SelectValue placeholder="Niveau" />
                 </SelectTrigger>
                 <SelectContent>
@@ -750,7 +784,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={baristaAvailability || "__all__"}
                 onValueChange={(v) => setBaristaAvailability(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[130px]" data-testid="select-barista-availability">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-barista-availability">
                   <SelectValue placeholder="Disponibilité" />
                 </SelectTrigger>
                 <SelectContent>
@@ -763,7 +797,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={baristaSkill || "__all__"}
                 onValueChange={(v) => setBaristaSkill(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[120px]" data-testid="select-barista-skill">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-barista-skill">
                   <SelectValue placeholder="Compétence" />
                 </SelectTrigger>
                 <SelectContent>
@@ -777,7 +811,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={baristaLocation || "__all__"}
                 onValueChange={(v) => setBaristaLocation(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className="h-7 text-xs border-gray-200 bg-gray-50 rounded-full px-3 w-auto min-w-[110px]" data-testid="select-barista-location">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`} data-testid="select-barista-location">
                   <SelectValue placeholder="Ville" />
                 </SelectTrigger>
                 <SelectContent>
@@ -814,11 +848,12 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {filteredBaristas.map((barista) => (
-                <BaristaCard
+                 <BaristaCard
                   key={barista.id}
                   barista={barista}
                   accessLevel={accessLevel}
                   user={user}
+                  isDark={isDark}
                 />
               ))}
             </div>

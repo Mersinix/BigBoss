@@ -1,0 +1,224 @@
+The `/maintenance` Coffee Owner page is already working perfectly and should now be used as the **design reference** for the other marketplace services.
+
+I want to apply the **same design system and visual behavior** from:
+
+**Coffee Owner → Maintenance**
+
+to:
+
+* `/print`
+* `/barista`
+* `/marketing`
+
+### Important — do not change functionality
+
+This task is **ONLY a UI/design consistency update**.
+
+Do NOT change:
+
+* business logic
+* API behavior
+* data loading
+* filters functionality
+* navigation
+* permissions
+* service-specific functionality
+* existing actions
+* existing components' behavior
+* realtime synchronization
+* backend logic
+* database logic
+
+Everything that already works must continue working exactly as it does now.
+
+Use the existing `/maintenance` implementation as the visual reference and make the other three services look consistent with it.
+
+---
+
+## 1. Hero Section
+
+Make the Hero section of:
+
+* Print
+* Barista
+* Marketing
+
+visually match the existing Maintenance Hero section.
+
+Keep each service's:
+
+* existing content
+* title
+* description
+* images
+* service-specific information
+* existing actions
+
+Only adapt the **layout, spacing, typography, visual hierarchy, sizing, positioning, overlays, and overall presentation** to match Maintenance.
+
+Do not replace service content with Maintenance content.
+
+---
+
+## 2. Filter Bar
+
+Make the filter bar of:
+
+* Print
+* Barista
+* Marketing
+
+use the same visual design and interaction presentation as the Maintenance filter bar.
+
+The existing filters and their logic must remain exactly the same for each service.
+
+Do not add or remove filters unless they already exist for that service.
+
+Only make their:
+
+* layout
+* spacing
+* buttons
+* inputs
+* borders
+* backgrounds
+* sizing
+* positioning
+* visual states
+
+consistent with Maintenance.
+
+---
+
+## 3. Dark / Light Mode
+
+Maintenance already has the correct:
+
+* Dark mode as default
+* Light mode
+* theme-aware Hero
+* theme-aware filter bar
+* theme-aware page elements
+
+Apply the **same visual theme behavior** to:
+
+* Print
+* Barista
+* Marketing
+
+The pages must visually respond to the existing global theme exactly like Maintenance.
+
+Do not create a separate theme system.
+
+Do not modify the existing global theme behavior.
+
+Do not change the default theme.
+
+---
+
+## 4. Overall Page Consistency
+
+The final result should make:
+
+**Maintenance / Print / Barista / Marketing**
+
+feel like they belong to the same Coffee Owner marketplace application.
+
+Maintenance is the reference.
+
+Match its:
+
+* Hero proportions
+* page spacing
+* section spacing
+* filter-bar placement
+* card/list presentation where applicable
+* borders
+* rounded corners
+* typography hierarchy
+* dark/light backgrounds
+* visual density
+* responsive behavior
+* mobile behavior
+
+But keep each service's own existing content and functionality.
+
+---
+
+## 5. Preserve Service-Specific Differences
+
+Do NOT force identical content or identical functionality between the services.
+
+For example:
+
+* If Print has different filters, keep its filters.
+* If Barista has different sections, keep them.
+* If Marketing has different cards or data, keep them.
+* If a service has functionality that Maintenance does not have, keep it.
+
+The goal is:
+
+**same design language, not same functionality.**
+
+---
+
+## 6. Realtime / Synchronization
+
+Before and after making the changes, make sure the existing synchronization remains untouched.
+
+The following must continue working exactly as before:
+
+* service visibility
+* service ordering
+* realtime service configuration
+* service-specific data updates
+* theme synchronization
+* filters
+* navigation
+* all existing Coffee Owner behavior
+
+No refresh should become necessary because of this UI change.
+
+---
+
+## 7. Strict Scope
+
+Do not modify anything outside:
+
+* Coffee Owner → Print
+* Coffee Owner → Barista
+* Coffee Owner → Marketing
+
+Use **Coffee Owner → Maintenance** only as the design reference.
+
+Do not redesign Maintenance.
+
+Do not change the existing Maintenance implementation unless absolutely necessary for shared styling consistency, and if it already works correctly, leave it untouched.
+
+Do not remove any existing elements that were not explicitly requested.
+
+Do not change working designs outside these pages.
+
+Do not change backend code unless something absolutely requires it for the existing UI to continue functioning; this task should remain frontend/design-only.
+
+---
+
+## Final verification
+
+Before finishing, verify:
+
+* Maintenance remains unchanged and working.
+* Print has the same visual design language as Maintenance.
+* Barista has the same visual design language as Maintenance.
+* Marketing has the same visual design language as Maintenance.
+* Each service keeps its own existing content and functionality.
+* Existing filters still work exactly as before.
+* Dark mode works correctly.
+* Light mode works correctly.
+* Responsive/mobile layouts remain correct.
+* Realtime synchronization is unaffected.
+* No unrelated files/features were unnecessarily modified.
+
+The objective is simple:
+
+**Make Print, Barista, and Marketing look like Maintenance — without changing how they work.**

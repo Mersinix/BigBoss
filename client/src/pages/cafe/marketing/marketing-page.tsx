@@ -62,6 +62,9 @@ function useTheme(isDark: boolean) {
     border: isDark ? "border-gray-700/60" : "border-gray-100",
     mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    selectContent: isDark
+      ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
+      : "bg-white border-gray-200 text-gray-900",
   };
 }
 
@@ -471,24 +474,27 @@ function ProviderDetailDialog({
   onClose,
   accessLevel,
   user,
+  isDark,
 }: {
   provider: Provider | null;
   onClose: () => void;
   accessLevel: AccessLevel;
   user: ReturnType<typeof useAuth>["user"];
+  isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
+  const t = useTheme(isDark);
   if (!provider) return null;
   const hasAccess = accessLevel === "approved";
 
   return (
     <Dialog open={!!provider} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 rounded-2xl">
+      <DialogContent className={`max-w-2xl max-h-[90vh] overflow-y-auto p-0 rounded-2xl ${t.cardBg} ${t.textPrimary}`}>
         <VisuallyHidden><DialogTitle>{provider.name}</DialogTitle></VisuallyHidden>
         {/* Portfolio gallery */}
         <div className="h-48 grid grid-cols-3 gap-1 overflow-hidden rounded-t-2xl">
           {provider.portfolioImages.map((img, i) => (
-            <div key={i} className="relative overflow-hidden bg-gray-100">
+            <div key={i} className={`relative overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-100"}`}>
               <img src={img} alt="" className="w-full h-full object-cover" />
             </div>
           ))}
@@ -504,16 +510,16 @@ function ProviderDetailDialog({
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h2 className="font-bold text-lg text-gray-900">{provider.name}</h2>
+                <h2 className={`font-bold text-lg ${t.textPrimary}`}>{provider.name}</h2>
                 <div className="flex items-center gap-2 flex-wrap mt-0.5">
                   <Badge className={`text-xs border-0 px-2 ${PROVIDER_TYPE_COLORS[provider.type]}`}>
                     {PROVIDER_TYPE_LABELS[provider.type]}
                   </Badge>
-                  <span className="flex items-center gap-1 text-sm text-gray-500">
+                  <span className={`flex items-center gap-1 text-sm ${t.textMuted}`}>
                     <MapPin className="w-3 h-3" /> {provider.location}
                   </span>
                   <StarRating rating={provider.rating} />
-                  <span className="text-xs text-gray-400">({provider.reviewCount} avis)</span>
+                   <span className={`text-xs ${t.textSubtle}`}>({provider.reviewCount} avis)</span>
                 </div>
               </div>
             </div>
@@ -530,15 +536,15 @@ function ProviderDetailDialog({
 
           {/* Description */}
           <div>
-            <h3 className="font-semibold text-sm text-gray-700 mb-1 flex items-center gap-1.5">
+            <h3 className={`font-semibold text-sm ${t.textPrimary} mb-1 flex items-center gap-1.5`}>
               <FileText className="w-3.5 h-3.5 text-purple-500" /> À propos
             </h3>
-            <p className="text-sm text-gray-500">{provider.description}</p>
+            <p className={`text-sm ${t.textMuted}`}>{provider.description}</p>
           </div>
 
           {/* Services */}
           <div>
-            <h3 className="font-semibold text-sm text-gray-700 mb-2 flex items-center gap-1.5">
+            <h3 className={`font-semibold text-sm ${t.textPrimary} mb-2 flex items-center gap-1.5`}>
               <Users className="w-3.5 h-3.5 text-purple-500" /> Services proposés
             </h3>
             <div className="flex flex-wrap gap-1.5">
@@ -547,7 +553,7 @@ function ProviderDetailDialog({
                 return s ? (
                   <span
                     key={sId}
-                    className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-medium"
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium ${isDark ? "bg-purple-950/60 text-purple-300" : "bg-purple-50 text-purple-700"}`}
                   >
                     {s.title}
                   </span>
@@ -558,7 +564,7 @@ function ProviderDetailDialog({
 
           {/* Pricing packages */}
           <div>
-            <h3 className="font-semibold text-sm text-gray-700 mb-2 flex items-center gap-1.5">
+            <h3 className={`font-semibold text-sm ${t.textPrimary} mb-2 flex items-center gap-1.5`}>
               <ImageIcon className="w-3.5 h-3.5 text-purple-500" /> Forfaits &amp; tarifs
             </h3>
             
@@ -566,7 +572,7 @@ function ProviderDetailDialog({
                 {provider.packages.map((pkg, i) => (
                   <div
                     key={pkg.name}
-                    className={`rounded-xl border p-3 flex flex-col gap-2 ${i === 1 ? "border-purple-400 ring-1 ring-purple-200 bg-purple-50/50" : "border-gray-100 bg-white"}`}
+                    className={`rounded-xl border p-3 flex flex-col gap-2 ${i === 1 ? (isDark ? "border-purple-400 ring-1 ring-purple-800 bg-purple-950/40" : "border-purple-400 ring-1 ring-purple-200 bg-purple-50/50") : t.cardBg}`}
                     data-testid={`package-${provider.id}-${i}`}
                   >
                     {i === 1 && (
@@ -574,13 +580,13 @@ function ProviderDetailDialog({
                         Populaire
                       </Badge>
                     )}
-                    <p className="font-bold text-sm text-gray-900">{pkg.name}</p>
+                    <p className={`font-bold text-sm ${t.textPrimary}`}>{pkg.name}</p>
                     <p className="font-bold text-lg text-purple-600">
                       {fmt(pkg.priceInCents)}
                     </p>
                     <ul className="space-y-1">
                       {pkg.features.map((f) => (
-                        <li key={f} className="flex items-start gap-1 text-xs text-gray-500">
+                        <li key={f} className={`flex items-start gap-1 text-xs ${t.textMuted}`}>
                           <CheckCircle className="w-3 h-3 text-purple-500 shrink-0 mt-0.5" />
                           {f}
                         </li>
@@ -588,7 +594,7 @@ function ProviderDetailDialog({
                     </ul>
                     <Button
                       size="sm"
-                      className={`h-7 text-xs mt-auto rounded-lg ${i === 1 ? "bg-purple-600 hover:bg-purple-700 text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}
+                      className={`h-7 text-xs mt-auto rounded-lg ${i === 1 ? "bg-purple-600 hover:bg-purple-700 text-white" : isDark ? "bg-gray-700 hover:bg-gray-600 text-gray-100" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}
                       data-testid={`button-select-package-${provider.id}-${i}`}
                     >
                       Choisir ce forfait
@@ -601,11 +607,11 @@ function ProviderDetailDialog({
 
           {/* Actions */}
           {hasAccess && (
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
+            <div className={`flex gap-2 pt-2 border-t ${t.border}`}>
               <Link href="/cafe/messages" className="flex-1">
                 <Button
                   variant="outline"
-                  className="w-full border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl"
+                  className={`w-full rounded-xl ${isDark ? "border-gray-700 text-gray-200 hover:bg-gray-700" : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                   data-testid={`button-contact-detail-${provider.id}`}
                 >
                   <MessageCircle className="w-4 h-4 mr-1.5" /> Contacter
@@ -757,7 +763,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               <button
                 onClick={() => setSelectedService("")}
                 data-testid="button-service-all"
-                 className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === "" ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === "" ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
               >
                 <span className="text-lg">📢</span>
                 <span className="text-[11px] font-semibold leading-tight">All</span>
@@ -767,7 +773,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                   key={service.id}
                   onClick={() => setSelectedService(selectedService === service.id ? "" : service.id)}
                   data-testid={`button-service-cat-${service.id}`}
-                   className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === service.id ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === service.id ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
                 >
                   <span className="text-lg">{service.icon}</span>
                   <span className="text-[11px] font-semibold leading-tight line-clamp-1 max-w-[60px]">
@@ -799,7 +805,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-provider-type">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={t.selectContent}>
                 <SelectItem value="__all__">Tous types</SelectItem>
                 <SelectItem value="agency">Agence</SelectItem>
                 <SelectItem value="freelancer">Freelancer</SelectItem>
@@ -813,7 +819,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-provider-rating">
                 <SelectValue placeholder="Note min." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={t.selectContent}>
                 <SelectItem value="__all__">Toutes notes</SelectItem>
                 <SelectItem value="4.5">4.5+</SelectItem>
                 <SelectItem value="4.7">4.7+</SelectItem>
@@ -827,7 +833,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`} data-testid="select-provider-location">
                 <SelectValue placeholder="Ville" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={t.selectContent}>
                 <SelectItem value="__all__">Toutes villes</SelectItem>
                 {allLocations.map((loc) => (
                   <SelectItem key={loc} value={loc}>{loc}</SelectItem>
@@ -899,6 +905,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         onClose={() => setActiveProvider(null)}
         accessLevel={accessLevel}
         user={user}
+        isDark={isDark}
       />
     </div>
   );

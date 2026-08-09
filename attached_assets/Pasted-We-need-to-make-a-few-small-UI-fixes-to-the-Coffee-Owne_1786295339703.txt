@@ -1,0 +1,133 @@
+We need to make a few small UI fixes to the **Coffee Owner services**, based on the current implementation.
+
+Everything else is already working perfectly.
+
+**Do not redesign anything. Do not change functionality or business logic. Do not touch unrelated parts.**
+
+Use the existing **Maintenance** dark/light implementation as the reference.
+
+---
+
+## 1. Marketing + Print — Categories Filter
+
+At:
+
+* Coffee Owner → Marketing
+* Coffee Owner → Print
+
+the **Categories filter** currently displays the category text underneath the category icon.
+
+This must be corrected.
+
+The category icon and category text should be displayed **next to each other horizontally**, following the same visual behavior/presentation already used by the correct Maintenance implementation.
+
+Do not change:
+
+* category data
+* category filtering logic
+* available categories
+* filter behavior
+* ordering of the categories
+* responsive behavior except what is necessary to keep the icon + text together
+
+Only fix the visual layout so it is:
+
+**[icon] Category name**
+
+instead of:
+
+**[icon]**
+**Category name**
+
+---
+
+## 2. Marketing + Print + Barista — Dark Mode Filter Picklists
+
+The filter picklists/dropdowns currently remain **white** when the Coffee Owner is using Dark Mode.
+
+They must properly follow the application's Dark Mode.
+
+Apply the same dark appearance already used by the Maintenance service.
+
+In Dark Mode:
+
+* filter dropdown/picklist background must be dark
+* text must be appropriate for dark mode
+* borders must follow the existing dark-mode design
+* dropdown options must also remain readable and properly themed
+
+This applies to:
+
+* Marketing
+* Print
+* Barista
+
+In Light Mode, keep the existing light appearance.
+
+Do not create a new theme system. Use the existing global theme behavior.
+
+---
+
+## 3. Marketing + Print — Cards Opened in Dark Mode
+
+There is another issue in:
+
+* Coffee Owner → Marketing
+* Coffee Owner → Print
+
+When the Coffee Owner is using **Dark Mode** and clicks a mapped card, the related page/modal that opens is still using a **white/light design**.
+
+This must be corrected.
+
+When Dark Mode is active:
+
+* the opened related page must be dark
+* the opened modal must be dark
+* all relevant internal sections must follow the existing dark-mode design
+* text, backgrounds, borders, inputs, cards, etc. must remain readable and consistent
+
+Use the existing **Maintenance dark-mode implementation** and the already-correct Coffee Owner dark-mode system as the reference.
+
+When Light Mode is active, keep the Light Mode design.
+
+---
+
+## Important
+
+This is a **small corrective UI task**.
+
+Do NOT:
+
+* change APIs
+* change backend logic
+* change database logic
+* change filtering logic
+* change card behavior
+* change navigation
+* change service data
+* change realtime synchronization
+* remove existing components
+* redesign the pages
+* modify Maintenance unnecessarily
+* modify unrelated Coffee Owner services
+
+Only fix the three issues described above.
+
+---
+
+## Final verification
+
+After the changes, verify:
+
+1. Marketing category icon + text are horizontal.
+2. Print category icon + text are horizontal.
+3. Marketing filter picklists are dark in Dark Mode.
+4. Print filter picklists are dark in Dark Mode.
+5. Barista filter picklists are dark in Dark Mode.
+6. Marketing mapped-card pages/modals open correctly in Dark Mode.
+7. Print mapped-card pages/modals open correctly in Dark Mode.
+8. Light Mode still looks correct.
+9. Existing functionality and synchronization remain unchanged.
+10. Maintenance remains working exactly as before.
+
+Keep everything else exactly as it is.

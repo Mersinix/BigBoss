@@ -32,6 +32,9 @@ function useTheme(isDark: boolean) {
     border: isDark ? "border-gray-700/60" : "border-gray-100",
     mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    selectContent: isDark
+      ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
+      : "bg-white border-gray-200 text-gray-900",
   };
 }
 
@@ -43,7 +46,7 @@ function PrintCategoryStrip({ selected, onSelect, isDark }: { selected: string; 
         <div className="flex gap-1 overflow-x-auto py-3" style={{ scrollbarWidth: "none" }}>
           <button
             onClick={() => onSelect("")}
-            className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === "" ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === "" ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
             data-testid="button-print-cat-all"
           >
             <span className="text-lg"><Printer className="w-5 h-5" /></span>
@@ -53,7 +56,7 @@ function PrintCategoryStrip({ selected, onSelect, isDark }: { selected: string; 
             <button
               key={cat.id}
               onClick={() => onSelect(selected === cat.id ? "" : cat.id)}
-              className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === cat.id ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === cat.id ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
               data-testid={`button-print-cat-${cat.id}`}
             >
               <span className="text-lg">{cat.icon}</span>
@@ -207,7 +210,7 @@ function PrintFilterBar({ products, filters, onChange, onReset, categoryId, isDa
         {subCategories.length > 0 && (
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
-            <SelectContent>
+            <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sous-catégories</SelectItem>
               {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>)}
             </SelectContent>
@@ -216,7 +219,7 @@ function PrintFilterBar({ products, filters, onChange, onReset, categoryId, isDa
         {brands.length > 0 && (
           <Select value={filters.brandId || "__all__"} onValueChange={(v) => onChange("brandId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`}><SelectValue placeholder="Société d'impression" /></SelectTrigger>
-            <SelectContent>
+            <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sociétés</SelectItem>
               {brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
             </SelectContent>
@@ -225,7 +228,7 @@ function PrintFilterBar({ products, filters, onChange, onReset, categoryId, isDa
         {materials.length > 0 && (
           <Select value={filters.material || "__all__"} onValueChange={(v) => onChange("material", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`}><SelectValue placeholder="Matière" /></SelectTrigger>
-            <SelectContent>
+            <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes matières</SelectItem>
               {materials.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
@@ -234,7 +237,7 @@ function PrintFilterBar({ products, filters, onChange, onReset, categoryId, isDa
         {deliveryTimes.length > 0 && (
           <Select value={filters.deliveryTime || "__all__"} onValueChange={(v) => onChange("deliveryTime", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`}><SelectValue placeholder="Livraison" /></SelectTrigger>
-            <SelectContent>
+            <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes livraisons</SelectItem>
               {deliveryTimes.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
             </SelectContent>

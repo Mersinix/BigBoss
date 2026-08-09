@@ -60,6 +60,9 @@ function useTheme(isDark: boolean) {
     border: isDark ? "border-gray-700/60" : "border-gray-100",
     mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    selectContent: isDark
+      ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
+      : "bg-white border-gray-200 text-gray-900",
   };
 }
 
@@ -691,7 +694,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-training-level">
                   <SelectValue placeholder="Niveau" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Tous niveaux</SelectItem>
                   <SelectItem value="Beginner">Débutant</SelectItem>
                   <SelectItem value="Advanced">Avancé</SelectItem>
@@ -705,7 +708,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-training-cert">
                   <SelectValue placeholder="Certification" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Toutes formations</SelectItem>
                   <SelectItem value="yes">Avec certification</SelectItem>
                   <SelectItem value="no">Sans certification</SelectItem>
@@ -773,7 +776,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-barista-level">
                   <SelectValue placeholder="Niveau" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Tous niveaux</SelectItem>
                   <SelectItem value="Beginner">Débutant</SelectItem>
                   <SelectItem value="Advanced">Avancé</SelectItem>
@@ -787,7 +790,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-barista-availability">
                   <SelectValue placeholder="Disponibilité" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Toutes disponibilités</SelectItem>
                   <SelectItem value="available">Disponible</SelectItem>
                   <SelectItem value="unavailable">Indisponible</SelectItem>
@@ -800,7 +803,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-barista-skill">
                   <SelectValue placeholder="Compétence" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Toutes compétences</SelectItem>
                   {allSkills.map((s) => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -814,7 +817,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`} data-testid="select-barista-location">
                   <SelectValue placeholder="Ville" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Toutes villes</SelectItem>
                   {allLocations.map((loc) => (
                     <SelectItem key={loc} value={loc}>{loc}</SelectItem>

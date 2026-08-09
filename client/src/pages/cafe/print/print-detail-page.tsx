@@ -13,32 +13,45 @@ import {
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
+import { useThemeStore } from "@/store/theme-store";
 import {
   getPrintProduct, getPrintBrand, getPrintCategory, getPrintSubCategory,
   COLOR_SWATCHES, SIZE_OPTIONS,
 } from "@/data/print-data";
 
+function useTheme(isDark: boolean) {
+  return {
+    pageBg: isDark ? "bg-gray-900" : "bg-gray-50",
+    cardBg: isDark ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100",
+    textPrimary: isDark ? "text-white" : "text-gray-900",
+    textMuted: isDark ? "text-gray-400" : "text-gray-500",
+    textSubtle: isDark ? "text-gray-500" : "text-gray-400",
+    border: isDark ? "border-gray-700/60" : "border-gray-100",
+    mutedBg: isDark ? "bg-gray-700/60" : "bg-gray-50",
+  };
+}
+
 // ── Star Rating ───────────────────────────────────────────────────────────────
 
-function StarRating({ rating, count }: { rating: number; count: number }) {
+function StarRating({ rating, count, isDark }: { rating: number; count: number; isDark: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-0.5">
         {[1,2,3,4,5].map((s) => (
           <Star
             key={s}
-            className={`w-4 h-4 ${s <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-gray-200"}`}
+            className={`w-4 h-4 ${s <= Math.round(rating) ? "fill-amber-400 text-amber-400" : isDark ? "text-gray-600" : "text-gray-200"}`}
           />
         ))}
       </div>
-      <span className="text-sm text-gray-500">{rating.toFixed(1)} ({count} avis)</span>
+      <span className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>{rating.toFixed(1)} ({count} avis)</span>
     </div>
   );
 }
 
 // ── Color Swatch Selector ─────────────────────────────────────────────────────
 
-function ColorSelector({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ColorSelector({ label, value, onChange, isDark }: { label: string; value: string; onChange: (v: string) => void; isDark: boolean }) {
   return (
     <div className="space-y-2">
       <Label className="text-sm font-semibold flex items-center gap-1.5">
@@ -51,7 +64,7 @@ function ColorSelector({ label, value, onChange }: { label: string; value: strin
             title={c.name}
             onClick={() => onChange(c.value)}
             className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${
-              value === c.value ? "border-blue-600 scale-110 shadow-md" : "border-gray-200"
+              value === c.value ? "border-blue-600 scale-110 shadow-md" : isDark ? "border-gray-600" : "border-gray-200"
             }`}
             style={{ backgroundColor: c.value }}
             data-testid={`color-${c.name.toLowerCase()}`}
@@ -62,15 +75,15 @@ function ColorSelector({ label, value, onChange }: { label: string; value: strin
             type="color"
             value={value || "#1A1A1A"}
             onChange={(e) => onChange(e.target.value)}
-            className="w-7 h-7 rounded-full border-2 border-gray-200 cursor-pointer overflow-hidden p-0"
+            className={`w-7 h-7 rounded-full border-2 cursor-pointer overflow-hidden p-0 ${isDark ? "border-gray-600" : "border-gray-200"}`}
             title="Couleur personnalisée"
           />
-          <span className="text-xs text-gray-400">Personnalisé</span>
+          <span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>Personnalisé</span>
         </div>
       </div>
       {value && (
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <div className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: value }} />
+        <div className={`flex items-center gap-2 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+          <div className={`w-4 h-4 rounded-full border ${isDark ? "border-gray-600" : "border-gray-200"}`} style={{ backgroundColor: value }} />
           {COLOR_SWATCHES.find((c) => c.value === value)?.name ?? value}
         </div>
       )}
@@ -80,9 +93,10 @@ function ColorSelector({ label, value, onChange }: { label: string; value: strin
 
 // ── Size Matrix ───────────────────────────────────────────────────────────────
 
-function SizeMatrix({ sizeMatrix, onChange }: {
+function SizeMatrix({ sizeMatrix, onChange, isDark }: {
   sizeMatrix: Record<string, number>;
   onChange: (matrix: Record<string, number>) => void;
+  isDark: boolean;
 }) {
   const total = Object.values(sizeMatrix).reduce((s, v) => s + v, 0);
   return (
@@ -90,17 +104,17 @@ function SizeMatrix({ sizeMatrix, onChange }: {
       <Label className="text-sm font-semibold flex items-center gap-1.5">
         <Ruler className="w-3.5 h-3.5 text-blue-600" /> Quantité par taille
       </Label>
-      <div className="overflow-hidden rounded-xl border border-gray-200">
+      <div className={`overflow-hidden rounded-xl border ${isDark ? "border-gray-700" : "border-gray-200"}`}>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
+          <thead className={isDark ? "bg-gray-700/60" : "bg-gray-50"}>
             <tr>
-              <th className="text-left px-4 py-2.5 font-semibold text-gray-600">Taille</th>
-              <th className="text-left px-4 py-2.5 font-semibold text-gray-600">Quantité</th>
+              <th className={`text-left px-4 py-2.5 font-semibold ${isDark ? "text-gray-300" : "text-gray-600"}`}>Taille</th>
+              <th className={`text-left px-4 py-2.5 font-semibold ${isDark ? "text-gray-300" : "text-gray-600"}`}>Quantité</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {SIZE_OPTIONS.map((size) => (
-              <tr key={size} className="hover:bg-gray-50/50 transition-colors">
+              <tr key={size} className={`transition-colors ${isDark ? "hover:bg-gray-700/40" : "hover:bg-gray-50/50"}`}>
                 <td className="px-4 py-2.5">
                   <Badge variant="outline" className="font-bold text-xs">{size}</Badge>
                 </td>
@@ -117,10 +131,10 @@ function SizeMatrix({ sizeMatrix, onChange }: {
               </tr>
             ))}
           </tbody>
-          <tfoot className="bg-blue-50 border-t border-blue-100">
+          <tfoot className={isDark ? "bg-blue-950/40 border-t border-blue-900/60" : "bg-blue-50 border-t border-blue-100"}>
             <tr>
-              <td className="px-4 py-2.5 font-bold text-blue-700">Total</td>
-              <td className="px-4 py-2.5 font-bold text-blue-700" data-testid="text-total-qty">{total} pièce{total !== 1 ? "s" : ""}</td>
+              <td className="px-4 py-2.5 font-bold text-blue-400">Total</td>
+              <td className="px-4 py-2.5 font-bold text-blue-400" data-testid="text-total-qty">{total} pièce{total !== 1 ? "s" : ""}</td>
             </tr>
           </tfoot>
         </table>
@@ -131,11 +145,12 @@ function SizeMatrix({ sizeMatrix, onChange }: {
 
 // ── File Upload ───────────────────────────────────────────────────────────────
 
-function FileUploadArea({ fileName, previewUrl, onFile, onClear }: {
+function FileUploadArea({ fileName, previewUrl, onFile, onClear, isDark }: {
   fileName: string | null;
   previewUrl: string | null;
   onFile: (file: File, dataUrl: string) => void;
   onClear: () => void;
+  isDark: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -150,17 +165,17 @@ function FileUploadArea({ fileName, previewUrl, onFile, onClear }: {
   if (previewUrl && fileName) {
     const isPdf = fileName.toLowerCase().endsWith(".pdf");
     return (
-      <div className="border-2 border-blue-200 rounded-xl p-4 bg-blue-50">
+      <div className={`border-2 border-blue-400/40 rounded-xl p-4 ${isDark ? "bg-blue-950/40" : "bg-blue-50"}`}>
         <div className="flex items-start gap-3">
           {isPdf ? (
             <div className="w-16 h-16 bg-red-100 rounded-lg flex items-center justify-center shrink-0">
               <span className="text-red-500 font-bold text-xs">PDF</span>
             </div>
           ) : (
-            <img src={previewUrl} alt="Aperçu" className="w-16 h-16 rounded-lg object-cover border border-blue-200 shrink-0" />
+            <img src={previewUrl} alt="Aperçu" className="w-16 h-16 rounded-lg object-cover border border-blue-400/40 shrink-0" />
           )}
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-800 truncate">{fileName}</p>
+            <p className={`text-sm font-semibold truncate ${isDark ? "text-gray-100" : "text-gray-800"}`}>{fileName}</p>
             <p className="text-xs text-blue-600 mt-0.5">Fichier chargé avec succès</p>
             <button onClick={onClear} className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 mt-2">
               <X className="w-3 h-3" /> Supprimer
@@ -173,12 +188,12 @@ function FileUploadArea({ fileName, previewUrl, onFile, onClear }: {
 
   return (
     <div
-      className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer"
+      className={`border-2 border-dashed rounded-xl p-8 text-center hover:border-blue-400 transition-all cursor-pointer ${isDark ? "border-gray-600 hover:bg-blue-950/20" : "border-gray-300 hover:bg-blue-50/30"}`}
       onClick={() => inputRef.current?.click()}
     >
-      <Upload className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-      <p className="text-sm font-semibold text-gray-700 mb-1">Glissez ou cliquez pour uploader</p>
-      <p className="text-xs text-gray-400">PNG, JPG, SVG, PDF — max 10 Mo</p>
+      <Upload className={`w-8 h-8 mx-auto mb-3 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
+      <p className={`text-sm font-semibold mb-1 ${isDark ? "text-gray-200" : "text-gray-700"}`}>Glissez ou cliquez pour uploader</p>
+      <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>PNG, JPG, SVG, PDF — max 10 Mo</p>
       <input
         ref={inputRef}
         type="file"
@@ -197,6 +212,8 @@ export default function PrintDetailPage() {
   const params = useParams<{ productId: string }>();
   const { addPrintItem } = useCart();
   const { toast } = useToast();
+  const isDark = useThemeStore((s) => s.isDark);
+  const t = useTheme(isDark);
 
   const product = getPrintProduct(params.productId ?? "");
   const brand = product ? getPrintBrand(product.brandId) : null;
@@ -219,9 +236,9 @@ export default function PrintDetailPage() {
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4 px-4">
-        <Package className="w-16 h-16 text-gray-200" />
-        <p className="font-semibold text-gray-600">Service introuvable</p>
+      <div className={`min-h-screen ${t.pageBg} flex flex-col items-center justify-center gap-4 px-4`}>
+        <Package className={`w-16 h-16 ${t.textSubtle}`} />
+        <p className={`font-semibold ${t.textMuted}`}>Service introuvable</p>
         <Link href="/print">
           <Button variant="outline">Retour aux services PRINT</Button>
         </Link>
@@ -275,10 +292,10 @@ export default function PrintDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${t.pageBg}`}>
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Back */}
-        <Link href="/print" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors mb-6">
+        <Link href="/print" className={`inline-flex items-center gap-2 text-sm ${t.textMuted} hover:text-blue-600 transition-colors mb-6`}>
           <ArrowLeft className="w-4 h-4" />
           Retour aux services PRINT
         </Link>
@@ -287,12 +304,12 @@ export default function PrintDetailPage() {
           {/* ── Left: Product Info ── */}
           <div className="space-y-6">
             {/* Image */}
-            <div className="rounded-2xl overflow-hidden aspect-[4/3] bg-white border border-gray-100 shadow-sm">
+            <div className={`rounded-2xl overflow-hidden aspect-[4/3] border shadow-sm ${t.cardBg}`}>
               <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
             </div>
 
             {/* Info card */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+            <div className={`${t.cardBg} rounded-2xl border shadow-sm p-6 space-y-4`}>
               <div>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {category && (
@@ -301,23 +318,23 @@ export default function PrintDetailPage() {
                     </Badge>
                   )}
                   {subCategory && (
-                    <Badge variant="outline" className="text-gray-600">{subCategory.name}</Badge>
+                    <Badge variant="outline" className={t.textMuted}>{subCategory.name}</Badge>
                   )}
                 </div>
-                <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
-                <p className="text-gray-500 text-sm mt-2 leading-relaxed">{product.description}</p>
+                <h1 className={`text-2xl font-bold ${t.textPrimary}`}>{product.name}</h1>
+                <p className={`${t.textMuted} text-sm mt-2 leading-relaxed`}>{product.description}</p>
               </div>
 
-              <StarRating rating={product.rating} count={product.reviewCount} />
+              <StarRating rating={product.rating} count={product.reviewCount} isDark={isDark} />
 
               {brand && (
-                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className={`flex items-start gap-3 p-3 rounded-xl ${t.mutedBg}`}>
                   <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
                     <span className="text-white font-bold text-sm">{brand.name.charAt(0)}</span>
                   </div>
                   <div>
                     <p className="font-semibold text-sm">{brand.name}</p>
-                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                    <div className={`flex items-center gap-3 text-xs ${t.textMuted} mt-0.5`}>
                       <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{brand.location}</span>
                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Livraison {brand.deliveryTime}</span>
                     </div>
@@ -325,16 +342,16 @@ export default function PrintDetailPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between text-sm text-gray-500 pt-1">
+              <div className={`flex items-center justify-between text-sm ${t.textMuted} pt-1`}>
                 <span>Min. commande :</span>
-                <span className="font-semibold text-gray-700">{product.minQuantity} {product.priceUnit}(s)</span>
+                <span className={`font-semibold ${t.textPrimary}`}>{product.minQuantity} {product.priceUnit}(s)</span>
               </div>
             </div>
           </div>
 
           {/* ── Right: Customization ── */}
           <div className="space-y-5">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+            <div className={`${t.cardBg} rounded-2xl border shadow-sm p-6 space-y-6`}>
               <h2 className="font-bold text-lg flex items-center gap-2">
                 <Scissors className="w-5 h-5 text-blue-600" />
                 Personnalisation
@@ -345,7 +362,8 @@ export default function PrintDetailPage() {
                 <Label className="text-sm font-semibold flex items-center gap-1.5">
                   <FileImage className="w-3.5 h-3.5 text-blue-600" /> Logo / Fichier de design
                 </Label>
-                <FileUploadArea
+                  <FileUploadArea
+                    isDark={isDark}
                   fileName={uploadedFileName}
                   previewUrl={uploadedDataUrl}
                   onFile={(file, dataUrl) => {
@@ -359,8 +377,8 @@ export default function PrintDetailPage() {
               <Separator />
 
               {/* Colors */}
-              <ColorSelector label="Couleur principale" value={primaryColor} onChange={setPrimaryColor} />
-              <ColorSelector label="Couleur secondaire" value={secondaryColor} onChange={setSecondaryColor} />
+              <ColorSelector label="Couleur principale" value={primaryColor} onChange={setPrimaryColor} isDark={isDark} />
+              <ColorSelector label="Couleur secondaire" value={secondaryColor} onChange={setSecondaryColor} isDark={isDark} />
 
               {/* Material */}
               {product.materials.length > 0 && (
@@ -377,7 +395,7 @@ export default function PrintDetailPage() {
                           className={`px-3 py-1.5 rounded-full text-sm border transition-all ${
                             material === m
                               ? "bg-blue-600 text-white border-blue-600"
-                              : "border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600"
+                              : `${isDark ? "border-gray-700 text-gray-300 hover:border-blue-400" : "border-gray-200 text-gray-600 hover:border-blue-300"} hover:text-blue-600`
                           }`}
                         >
                           {m}
@@ -392,7 +410,7 @@ export default function PrintDetailPage() {
 
               {/* Sizes or General Quantity */}
               {product.hasSizes ? (
-                <SizeMatrix sizeMatrix={sizeMatrix} onChange={setSizeMatrix} />
+                <SizeMatrix sizeMatrix={sizeMatrix} onChange={setSizeMatrix} isDark={isDark} />
               ) : (
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-1.5">
@@ -401,7 +419,7 @@ export default function PrintDetailPage() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setGeneralQuantity((q) => Math.max(product.minQuantity, q - (product.minQuantity > 10 ? 10 : 1)))}
-                      className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors text-lg font-bold"
+                      className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
                       data-testid="button-qty-decrease"
                     >−</button>
                     <Input
@@ -414,13 +432,13 @@ export default function PrintDetailPage() {
                     />
                     <button
                       onClick={() => setGeneralQuantity((q) => q + (product.minQuantity > 10 ? 10 : 1))}
-                      className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors text-lg font-bold"
+                      className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
                       data-testid="button-qty-increase"
                     >+</button>
-                    <span className="text-sm text-gray-400">{product.priceUnit}(s)</span>
+                    <span className={`text-sm ${t.textSubtle}`}>{product.priceUnit}(s)</span>
                   </div>
                   {product.minQuantity > 1 && (
-                    <p className="text-xs text-gray-400">Min. {product.minQuantity} {product.priceUnit}(s)</p>
+                    <p className={`text-xs ${t.textSubtle}`}>Min. {product.minQuantity} {product.priceUnit}(s)</p>
                   )}
                 </div>
               )}
@@ -441,31 +459,31 @@ export default function PrintDetailPage() {
             </div>
 
             {/* Price Summary + CTA */}
-            <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-6 space-y-4 sticky top-6">
-              <h3 className="font-bold text-gray-900">Récapitulatif</h3>
+            <div className={`rounded-2xl border shadow-sm p-6 space-y-4 sticky top-6 ${isDark ? "bg-gray-800 border-blue-900/60" : "bg-white border-blue-100"}`}>
+              <h3 className={`font-bold ${t.textPrimary}`}>Récapitulatif</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between text-gray-600">
+                <div className={`flex justify-between ${t.textMuted}`}>
                   <span>Prix unitaire</span>
                   <span className="font-medium">{fmt(product.basePrice)} / {product.priceUnit}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
+                <div className={`flex justify-between ${t.textMuted}`}>
                   <span>Quantité</span>
                   <span className="font-medium">{totalQuantity} {product.priceUnit}(s)</span>
                 </div>
                 {material && (
-                  <div className="flex justify-between text-gray-600">
+                  <div className={`flex justify-between ${t.textMuted}`}>
                     <span>Matière</span>
                     <span className="font-medium">{material}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-gray-600">
+                <div className={`flex justify-between ${t.textMuted}`}>
                   <span>Livraison estimée</span>
                   <span className="font-medium flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" /> {product.deliveryTime}
                   </span>
                 </div>
-                <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
-                  <span className="font-bold text-gray-900">Sous-total</span>
+                <div className={`border-t pt-3 flex justify-between items-center ${t.border}`}>
+                  <span className={`font-bold ${t.textPrimary}`}>Sous-total</span>
                   <span className="text-xl font-bold text-blue-600">{fmt(subtotal)}</span>
                 </div>
               </div>

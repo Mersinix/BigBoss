@@ -1,0 +1,534 @@
+# MAINTENANCE — ESPACE MAINTENANCE & RESERVATION SYNCHRONIZATION UPDATE
+
+This is a **targeted continuation of the existing Maintenance implementation**.
+
+The current Maintenance marketplace, Espace Maintenance, reservations, reviews, messaging, Admin Maintenance, and realtime infrastructure already exist.
+
+**Do not rebuild any of those systems.**
+
+Before making changes, inspect the current implementation and verify what is already working. Then implement only the missing or incorrect behavior described below.
+
+---
+
+## 1. Espace Maintenance → SWITCHER RESPONSIVENESS
+
+Current Espace Maintenance switcher:
+
+**Planning | Profil | Disponibilité | Messages | Avis**
+
+Make this switcher **horizontally scrollable/responsive on mobile devices**.
+
+The goal is only to make all existing tabs accessible on smaller screens.
+
+Do not redesign the switcher.
+
+Do not remove any tab.
+
+Do not change its desktop appearance unnecessarily.
+
+Keep the existing:
+
+* Design
+* Spacing
+* Typography
+* Colors
+* Active state
+* Dark mode
+* Light mode
+
+Only improve its responsiveness/scrollability.
+
+---
+
+# 2. Espace Maintenance → PLANNING
+
+The Planning page currently has:
+
+**Aujourd'hui**
+
+**À venir**
+
+**Passées**
+
+Reservations are currently appearing incorrectly under **À venir**.
+
+They must be dispatched according to their actual reservation date/time:
+
+### Aujourd'hui
+
+Reservations whose scheduled date is today.
+
+### À venir
+
+Reservations whose scheduled date is after today.
+
+### Passées
+
+Reservations whose scheduled date is before today.
+
+This must use the real reservation date/time.
+
+Do not classify reservations based only on their status.
+
+For example:
+
+* A confirmed reservation scheduled today → **Aujourd'hui**
+* A confirmed reservation scheduled tomorrow → **À venir**
+* A completed/confirmed reservation from yesterday → **Passées**
+
+The date-based classification must remain correct regardless of the reservation status.
+
+Preserve the existing Planning design.
+
+---
+
+# 3. Espace Maintenance → PROFIL
+
+The Maintenance agent's Profile is missing information that already exists conceptually in the Maintenance marketplace.
+
+The Maintenance agent must be able to manage:
+
+### Certifications
+
+Allow the agent to add multiple certifications.
+
+They must appear in the Maintenance professional profile.
+
+### Portfolio
+
+Allow the agent to manage portfolio information/images according to the existing Maintenance marketplace structure.
+
+### Expérience
+
+Allow the agent to enter:
+
+**Expérience (ans)**
+
+The value must be persisted.
+
+---
+
+# 4. PROFILE INFORMATION SYNCHRONIZATION
+
+These profile fields must have **one real source of truth**.
+
+Information entered by the Maintenance agent in:
+
+**Espace Maintenance → Profil**
+
+must appear automatically wherever the Maintenance profile is displayed.
+
+In particular verify synchronization with:
+
+### Coffee Owner → `/maintenance`
+
+Maintenance professional modal/details:
+
+* Certifications
+* Portfolio
+* Expérience
+
+### Admin → Maintenance
+
+Maintenance account details:
+
+* Certifications
+* Portfolio
+* Expérience
+
+Do not create separate copies of these values for each interface.
+
+If the existing database already has some of these fields, reuse them.
+
+Only add what is genuinely missing.
+
+---
+
+# 5. Espace Maintenance → DISPONIBILITÉ
+
+There is an existing option:
+
+**Mode Congé / Absence**
+
+with the description:
+
+**Masque votre profil et stoppe les nouvelles réservations**
+
+This functionality is currently not correctly synchronized.
+
+When the Maintenance agent activates **Mode Congé / Absence**:
+
+### Coffee Owner
+
+The Maintenance professional must no longer appear as available for new Maintenance reservations according to the existing marketplace visibility rules.
+
+The profile should behave exactly according to the existing description:
+
+**Masque votre profil et stoppe les nouvelles réservations**
+
+### Admin
+
+Admin Maintenance information must reflect the Maintenance account's current availability/absence state.
+
+### Maintenance
+
+The agent must immediately see the current state in Espace Maintenance.
+
+### Realtime
+
+Changes must propagate without requiring manual refresh.
+
+Do not create a second availability system.
+
+Use the existing Maintenance availability/profile source of truth.
+
+---
+
+# 6. COFFEE OWNER → MY ACCOUNT → RESERVATIONS
+
+After a Coffee Owner makes a Maintenance reservation, the reservation must also appear inside the Coffee Owner's:
+
+**My Account**
+
+modal.
+
+The existing switcher should become:
+
+**Orders | Reservations | Dashboard | Settings**
+
+Add/enable the **Reservations** tab using the existing design language of My Account.
+
+The Coffee Owner must be able to see their real Maintenance reservations there.
+
+Do not break existing Orders, Dashboard, or Settings.
+
+---
+
+# 7. COFFEE OWNER → RESERVATIONS
+
+The Reservations tab must display the real Maintenance reservation data.
+
+It should use the existing reservation information already stored by the Maintenance system.
+
+The Coffee Owner should be able to understand:
+
+* Maintenance professional
+* Service/category
+* Scheduled date
+* Scheduled time
+* Location
+* Urgency
+* Status
+* Any relevant reservation information already supported by the system
+
+Do not invent duplicate reservation data.
+
+Use the existing Maintenance reservation source of truth.
+
+Preserve the existing My Account visual design.
+
+---
+
+# 8. MAINTENANCE → PLANNING → REPROGRAMMÉE
+
+When a Maintenance agent selects:
+
+**Reprogrammée**
+
+for a reservation:
+
+do not immediately change the reservation date silently.
+
+Instead, open a **calendar/date-time rescheduling modal**.
+
+The Maintenance agent must be able to select the proposed new:
+
+* Date
+* Time
+
+The agent confirms the proposed schedule.
+
+---
+
+# 9. RESCHEDULING WORKFLOW
+
+The rescheduling workflow must become:
+
+### Step 1 — Maintenance Agent
+
+Maintenance agent chooses:
+
+**Reprogrammée**
+
+↓
+
+Calendar/date-time modal opens.
+
+↓
+
+Agent selects a new date/time.
+
+↓
+
+Agent submits the proposed change.
+
+---
+
+### Step 2 — Coffee Owner
+
+The Coffee Owner receives the proposed modification.
+
+The original reservation must not simply be overwritten without confirmation.
+
+The Coffee Owner must be able to:
+
+**Confirmer la modification**
+
+or
+
+**Refuser la modification**
+
+---
+
+### Step 3 — Confirmation
+
+If Coffee Owner confirms:
+
+The reservation's scheduled date/time is updated to the proposed date/time.
+
+Both sides must see the updated reservation.
+
+---
+
+### Step 4 — Rejection
+
+If Coffee Owner rejects:
+
+The proposed date/time must not replace the existing confirmed reservation date/time.
+
+Both sides must see that the rescheduling request was rejected according to the existing reservation/status design.
+
+---
+
+# 10. REALTIME SYNCHRONIZATION
+
+All of the above must remain realtime.
+
+### Availability
+
+Maintenance agent changes:
+
+**Mode Congé / Absence**
+
+↓
+
+Coffee Owner and Admin update without refresh.
+
+### Profile
+
+Maintenance agent changes:
+
+* Certifications
+* Portfolio
+* Experience
+
+↓
+
+Coffee Owner and Admin see the updated information without refresh.
+
+### Reservation
+
+Maintenance agent proposes a new date/time.
+
+↓
+
+Coffee Owner receives the rescheduling request without refresh.
+
+Coffee Owner accepts/rejects.
+
+↓
+
+Maintenance agent sees the result without refresh.
+
+Do not require page refreshes.
+
+Reuse the existing realtime infrastructure.
+
+---
+
+# 11. DO NOT CHANGE EXISTING DESIGN
+
+Keep the current design exactly as much as possible.
+
+Do not redesign:
+
+* Espace Maintenance
+* Planning
+* Profil
+* Disponibilité
+* Messages
+* Avis
+* Maintenance marketplace
+* Maintenance cards
+* Maintenance detail modal
+* Admin Maintenance
+* My Account
+* Existing reservation UI
+
+Only add the missing controls, information, or states required by this specification.
+
+---
+
+# 12. DO NOT BREAK EXISTING FUNCTIONALITY
+
+Do not modify unrelated:
+
+* Shop
+* Supplier
+* Delivery
+* Print
+* Marketing
+* Barista
+* Existing Admin modules
+* Existing Reviews
+* Existing Messages
+
+unless a shared component genuinely needs a minimal change to support this requirement.
+
+If something already works correctly, leave it unchanged.
+
+---
+
+# 13. BEFORE IMPLEMENTATION
+
+First audit the current implementation.
+
+Specifically verify:
+
+* Existing Maintenance reservation model
+* Existing reservation statuses
+* Existing Planning tabs
+* Existing profile fields
+* Existing certifications/portfolio support
+* Existing availability/absence logic
+* Existing Coffee Owner My Account structure
+* Existing realtime events
+* Existing rescheduling implementation
+* Existing Admin Maintenance data
+* Existing `/maintenance` profile data
+
+Determine what is already implemented versus what is missing.
+
+Do not assume something is missing simply because it is described here.
+
+---
+
+# 14. FINAL VERIFICATION
+
+Before declaring completion, verify the complete synchronization chain.
+
+### Profile
+
+Maintenance Agent:
+
+Certification / Portfolio / Experience
+
+↓
+
+Coffee Owner `/maintenance`
+
+↓
+
+Admin Maintenance
+
+All updated without refresh.
+
+### Availability
+
+Maintenance Agent activates/deactivates:
+
+**Mode Congé / Absence**
+
+↓
+
+Coffee Owner visibility/reservation eligibility updates.
+
+↓
+
+Admin reflects the state.
+
+↓
+
+Maintenance interface reflects the state.
+
+No refresh required.
+
+### Reservation
+
+Coffee Owner creates Maintenance reservation.
+
+↓
+
+Maintenance Planning receives it.
+
+↓
+
+Coffee Owner My Account → Reservations receives it.
+
+### Rescheduling
+
+Maintenance proposes new date/time.
+
+↓
+
+Coffee Owner receives request.
+
+↓
+
+Accept:
+
+Both sides show new date/time.
+
+Reject:
+
+Original reservation remains unchanged.
+
+### Planning
+
+Reservations are correctly divided:
+
+**Aujourd'hui / À venir / Passées**
+
+based on the actual scheduled date.
+
+### Mobile
+
+Espace Maintenance switcher is usable on mobile through horizontal scrolling.
+
+---
+
+# FINAL RULE
+
+This is a **continuation**, not a new Maintenance implementation.
+
+Follow:
+
+**AUDIT CURRENT STATE → IDENTIFY ONLY THE GAPS → IMPLEMENT → SYNCHRONIZE → VERIFY**
+
+Do not redo completed work.
+
+Do not duplicate existing architecture.
+
+Do not redesign existing screens.
+
+Do not remove existing functionality.
+
+Do not modify unrelated parts.
+
+If a requested feature already works correctly, leave it unchanged.
+
+If something is incomplete, finish it completely and verify it across:
+
+**Maintenance Agent ↔ Coffee Owner ↔ Admin**
+
+with realtime updates and no manual refresh.

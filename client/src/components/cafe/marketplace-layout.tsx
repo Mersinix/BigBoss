@@ -927,7 +927,9 @@ function MessagesPanel({
     enabled: isRealMessagingService,
   });
 
-  const realConversations = shopConversations.filter((c) => c.service === (service === "MAINTENANCE" ? "MAINTENANCE" : "SHOP"));
+  // The API is service-scoped; keep the client-side guard exact as well so
+  // switching between real service tabs never leaks or hides conversations.
+  const realConversations = shopConversations.filter((c) => c.service === service);
   const shopActiveConv = realConversations.find(c => c.id === shopConvId) ?? null;
 
   const { data: shopMsgsData, isLoading: shopMsgsLoading } = useQuery<{ messages: ConversationMessageRow[] }>({

@@ -1,0 +1,125 @@
+Continue the messaging work from the existing checkpoint:
+
+**`MESSAGES WORKFOLW`**
+
+The previous implementation was interrupted by the Replit quota limit during the final verification stage.
+
+The commit contains:
+
+* The uploaded specification:
+  `Pasted--MESSAGES-SERVICE-SCOPED-CONVERSATIONS-MAINTENANCE-ADMI_1786361589735.txt`
+* All files modified during the implementation
+* The messaging/service-scoping work already completed
+
+### IMPORTANT — DO NOT RESTART THE TASK
+
+First read:
+
+1. Commit **`MESSAGES WORKFOLW`**
+2. The specification contained in that commit
+3. The actual files changed by that commit
+4. The current state of the project after that commit
+
+Then compare the specification against the **actual implementation**.
+
+The previous agent reported that the messaging functionality itself was implemented and type-checking was clean for the touched files.
+
+The remaining interruption happened during **runtime verification** because the development database was missing the existing `users.maintenance_categories` column.
+
+Therefore:
+
+### DO NOT REDO
+
+Do not recreate or rewrite:
+
+* Service-scoped messaging
+* Admin My Conversations switcher
+* Service-specific user filtering
+* Maintenance Admin messaging
+* Coffee Owner Maintenance Contact flow
+* Maintenance conversation deep-linking
+* Real conversations for PRINT / MARKETING / BARISTA
+* Existing messaging UI
+* Existing realtime messaging architecture
+
+If those parts are already correctly implemented, leave them unchanged.
+
+### CONTINUE FROM WHERE THE PREVIOUS AGENT STOPPED
+
+First determine the actual current state.
+
+Then finish whatever remains incomplete from the specification.
+
+In particular, complete the interrupted **database/runtime synchronization and verification** safely using the project's existing database/schema workflow.
+
+Do not bypass the database problem by weakening or removing existing Maintenance functionality.
+
+After the database is correctly synchronized, verify the actual running application and confirm that the messaging changes work with the real database.
+
+### VERIFY ALL IMPORTANT FLOWS
+
+#### Admin
+
+* My Conversations has:
+  SHOP / MAINTENANCE / PRINT / MARKETING / BARISTA
+* Selecting a service filters the New Conversation users correctly.
+* Admin can start a real conversation with users from the selected service.
+* Admin → Maintenance conversation is visible to the Maintenance agent.
+
+#### Coffee Owner
+
+* Maintenance card → Contact opens the exact selected Maintenance conversation.
+* It remains in the Maintenance context.
+* SHOP shows only Shop users.
+* MAINTENANCE shows only Maintenance users.
+* PRINT shows only Print users.
+* MARKETING shows only Marketing users.
+* BARISTA shows only Barista users.
+* Existing conversations still work.
+
+#### Maintenance
+
+* Maintenance agent receives Admin messages.
+* Maintenance agent can reply.
+* Coffee Owner messages arrive correctly.
+* Conversations update without manual refresh.
+
+#### Realtime
+
+Verify both directions:
+
+Admin ↔ Maintenance
+
+Coffee Owner ↔ Maintenance
+
+and verify that the existing other service conversations were not broken.
+
+### DATABASE
+
+The previous runtime verification was blocked by:
+
+`users.maintenance_categories` missing from the development database while it exists in the current schema.
+
+Use the project's established schema/database synchronization process to bring the development database in line with the current schema.
+
+Do not remove the column from the schema.
+
+Do not modify unrelated database structures.
+
+### FINAL RULE
+
+This is a **continuation**, not a new implementation.
+
+**READ COMMIT → READ SPEC → INSPECT ACTUAL CURRENT CODE → IDENTIFY ONLY REMAINING GAPS → COMPLETE THEM → DATABASE SYNC → RUNTIME VERIFICATION**
+
+Do not repeat completed work.
+
+Do not redesign anything.
+
+Do not change existing UI unless the specification requires it.
+
+Do not remove existing functionality.
+
+Do not touch unrelated modules.
+
+Do not stop at an audit — finish the remaining work and verify it.

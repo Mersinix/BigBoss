@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apiRequest } from "@/lib/queryClient";
+import type { MaintenanceMarketplaceCard } from "@shared/schema";
 
 export interface ShopFavItem {
   id: number;
@@ -85,6 +86,7 @@ interface FavoritesStore {
   hydrateShop: (items: ShopFavItem[]) => void;
   hydratePack: (ids: number[]) => void;
   hydrateMaintenance: (ids: number[]) => void;
+  syncMaintenance: (ids: number[], profiles: MaintenanceMarketplaceCard[]) => void;
 }
 
 export const useFavorites = create<FavoritesStore>((set, get) => ({
@@ -232,6 +234,27 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
             available: true,
           };
         }
+      }
+      return { maintenance: next };
+    }),
+
+  syncMaintenance: (ids, profiles) =>
+    set(() => {
+      const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
+      const next: Record<number, MaintenanceFavItem> = {};
+      for (const id of ids) {
+        const profile = profileMap.get(id);
+        if (!profile) continue;
+        next[id] = {
+          id: profile.userId,
+          name: profile.name,
+          initials: profile.initials,
+          specialty: profile.specialty,
+          categories: profile.categories,
+          location: profile.location,
+          rating: profile.rating / 10,
+          available: profile.available,
+        };
       }
       return { maintenance: next };
     }),

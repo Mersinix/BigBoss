@@ -39,7 +39,7 @@ import { useAccountOpenStore } from "@/store/account-open-store";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
-import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails } from "@shared/schema";
+import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
@@ -402,6 +402,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const {
     shop, print, academy, baristaMarket, marketing, maintenance, pack,
     removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removeMaintenance, removePack,
+    syncMaintenance,
   } = useFavorites();
   const { stores, toggleStore: toggleStoreFav } = useStoreFavorites();
 
@@ -424,6 +425,20 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
     enabled: storeFavIds.length > 0,
   });
   const favStores = allStores.filter((s) => !!stores[s.id]);
+
+  // Favorites persist as Maintenance account IDs. Resolve them against the
+  // live profiles so this modal never displays placeholder or stale agent data.
+  const { data: maintenanceFavoriteIds } = useQuery<number[]>({
+    queryKey: ["/api/maintenance-favorites"],
+  });
+  const { data: maintenanceProfiles = [], isLoading: maintenanceProfilesLoading } = useQuery<MaintenanceMarketplaceCard[]>({
+    queryKey: ["/api/maintenance/profiles"],
+    enabled: (maintenanceFavoriteIds?.length ?? 0) > 0,
+  });
+  useEffect(() => {
+    if (maintenanceFavoriteIds === undefined || maintenanceProfilesLoading) return;
+    syncMaintenance(maintenanceFavoriteIds, maintenanceProfiles);
+  }, [maintenanceFavoriteIds, maintenanceProfiles, maintenanceProfilesLoading, syncMaintenance]);
 
   const visibleFavServices = sortServiceIds(FAV_SERVICES, serviceOrder).filter((s) => {
     const key = FAV_SERVICE_TO_KEY[s];
@@ -821,7 +836,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                     <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
                     <button
                       className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
-                      onClick={() => removeMaintenance(item.id)}
+                      onClick={(event) => { event.stopPropagation(); removeMaintenance(item.id); }}
                       data-testid={`button-fav-remove-maintenance-${item.id}`}
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />

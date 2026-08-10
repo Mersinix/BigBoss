@@ -1,0 +1,65 @@
+We need one focused fix in the **Coffee Owner → My Favorites modal → Maintenance tab**.
+
+Everything else is already working correctly. **Do not redesign anything and do not change unrelated functionality.**
+
+### 1. Maintenance Favorites — Correct Information
+
+Inside:
+
+**Coffee Owner → My Favorites → Maintenance**
+
+make sure every mapped Maintenance favorite card displays the **correct information from the related Maintenance account/agent**.
+
+The card should use the real data belonging to the favorited Maintenance account, not stale, incomplete, or unrelated information.
+
+Keep the **existing Favorites modal design and card design exactly as they are**.
+
+Do not change the information structure unless necessary to correct the data being displayed.
+
+### 2. Maintenance Favorite Card → Correct Details Modal
+
+When the Coffee Owner clicks on any Maintenance favorite card:
+
+* it must open/redirect to the **correct Maintenance details modal**
+* the modal must correspond to the exact Maintenance account/agent represented by that card
+* all displayed details must belong to that same Maintenance account/agent
+
+### 3. No Refresh Required
+
+Currently, the behavior works only after refreshing the page.
+
+Fix this so the complete flow works **in real time without any page refresh**:
+
+**My Favorites → Maintenance tab → click favorite card → correct Maintenance modal opens immediately**
+
+The Coffee Owner should not need to refresh the browser, navigate away, or reload the page.
+
+Also make sure that:
+
+* adding/removing a Maintenance favorite remains synchronized
+* the Favorites modal updates immediately
+* clicking a newly added Maintenance favorite works immediately
+* clicking an existing Maintenance favorite works immediately
+* removing a favorite does not leave stale cards or stale modal data
+
+### Important
+
+Do NOT change:
+
+* Favorites modal design
+* Maintenance page design
+* Maintenance business logic
+* Maintenance filtering
+* Maintenance account data structure
+* other Favorites tabs
+* Shop / Print / Marketing / Barista behavior
+* existing modal designs
+* unrelated realtime functionality
+
+Only fix the **Maintenance Favorites data mapping, correct modal navigation, and no-refresh/realtime synchronization**.
+
+Before finishing, verify the complete flow from:
+
+**Maintenance account → Favorite → My Favorites → Maintenance tab → card → correct Maintenance details modal**
+
+and make sure it works immediately without a refresh while preserving everything else exactly as it currently is.

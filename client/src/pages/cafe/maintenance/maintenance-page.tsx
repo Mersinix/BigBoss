@@ -331,12 +331,15 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const [filterLocation, setFilterLocation] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<MaintenanceMarketplaceCard | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const { data: profiles = [] } = useQuery<MaintenanceMarketplaceCard[]>({ queryKey: ["/api/maintenance/profiles"] });
+  const { data: profiles = [], isLoading: profilesLoading } = useQuery<MaintenanceMarketplaceCard[]>({ queryKey: ["/api/maintenance/profiles"] });
   const { data: categories = [] } = useQuery<string[]>({ queryKey: ["/api/maintenance/categories"] });
   const { data: favoriteIds = [] } = useQuery<number[]>({ queryKey: ["/api/maintenance-favorites"], enabled: !!user && accessLevel === "approved" });
-  const hydrateMaintenance = useFavorites((s) => s.hydrateMaintenance);
+  const syncMaintenance = useFavorites((s) => s.syncMaintenance);
 
-  useEffect(() => { hydrateMaintenance(favoriteIds); }, [favoriteIds, hydrateMaintenance]);
+  useEffect(() => {
+    if (profilesLoading) return;
+    syncMaintenance(favoriteIds, profiles);
+  }, [favoriteIds, profiles, profilesLoading, syncMaintenance]);
   const providerId = Number(new URLSearchParams(window.location.search).get("providerId"));
   useEffect(() => {
     if (!providerId || !profiles.length) return;

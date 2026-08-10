@@ -3,7 +3,7 @@
  * panel. Used by Supplier, Admin, and Delivery pages (not by Cafe Owner, which
  * preserves its own service-tab structure).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -12,20 +12,34 @@ import { ConversationList } from "./conversation-list";
 import { ChatView } from "./chat-view";
 import type { ConversationSummary, ConversationMessageRow, EligibleContact } from "@shared/schema";
 
-export function MessagesPanel({ currentUserId, showRoleIndicator = true }: {
+export function MessagesPanel({
+  currentUserId,
+  showRoleIndicator = true,
+  service,
+  initialConversationId = null,
+}: {
   currentUserId: number;
   showRoleIndicator?: boolean;
+  service?: string;
+  initialConversationId?: number | null;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [activeConvId, setActiveConvId] = useState<number | null>(null);
+  const [activeConvId, setActiveConvId] = useState<number | null>(initialConversationId);
   const [input, setInput] = useState("");
-  const [view, setView] = useState<"list" | "chat">("list");
+  const [view, setView] = useState<"list" | "chat">(initialConversationId ? "chat" : "list");
+
+  useEffect(() => {
+    setActiveConvId(initialConversationId);
+    setView(initialConversationId ? "chat" : "list");
+    setInput("");
+  }, [service, initialConversationId]);
 
   const { data: conversations = [], isLoading: convsLoading } = useQuery<ConversationSummary[]>({
-    queryKey: ["/api/messages/conversations"],
+    queryKey: ["/api/messages/conversations", service ?? "ALL"],
     queryFn: async () => {
-      const r = await fetch("/api/messages/conversations", { credentials: "include" });
+      const query = service ? `?service=${encodeURIComponent(service)}` : "";
+      const r = await fetch(`/api/messages/conversations${query}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -33,9 +47,10 @@ export function MessagesPanel({ currentUserId, showRoleIndicator = true }: {
   });
 
   const { data: contacts = [] } = useQuery<EligibleContact[]>({
-    queryKey: ["/api/messages/eligible-contacts"],
+    queryKey: ["/api/messages/eligible-contacts", service ?? "ALL"],
     queryFn: async () => {
-      const r = await fetch("/api/messages/eligible-contacts", { credentials: "include" });
+      const query = service ? `?service=${encodeURIComponent(service)}` : "";
+      const r = await fetch(`/api/messages/eligible-contacts${query}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -72,7 +87,7 @@ export function MessagesPanel({ currentUserId, showRoleIndicator = true }: {
 
   const newConvMutation = useMutation({
     mutationFn: async (targetUserId: number) => {
-      const res = await apiRequest("POST", "/api/messages/conversations", { targetUserId });
+      const res = await apiRequest("POST", "/api/messages/conversations", { targetUserId, ...(service ? { service } : {}) });
       return res.json() as Promise<{ conversation: { id: number }; isNew: boolean }>;
     },
     onSuccess: (data) => {
@@ -80,7 +95,7 @@ export function MessagesPanel({ currentUserId, showRoleIndicator = true }: {
       setActiveConvId(convId);
       setView("chat");
       // Refetch immediately so the new conversation appears in the list
-      qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+       qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
     },
     onError: (err: any) => toast({ title: "Cannot start conversation", description: err?.message, variant: "destructive" }),
   });

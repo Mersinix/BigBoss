@@ -3435,7 +3435,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/messages/conversations", requireAuth, async (req: any, res) => {
     try {
       const userId: number = req.session.userId;
-      const conversations = await storage.getConversationsForUser(userId);
+      const service = typeof req.query.service === "string" ? req.query.service : undefined;
+      if (service && !["SHOP", "MAINTENANCE", "BARISTA", "PRINT", "MARKETING"].includes(service)) {
+        return res.status(400).json({ message: "Invalid service" });
+      }
+      const conversations = await storage.getConversationsForUser(userId, service);
       res.json(conversations);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -3455,13 +3459,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId: number = req.session.userId;
       const me = await storage.getUser(userId);
       if (!me) return res.status(401).json({ message: "User not found" });
-      // Authorization: verify eligibility (admins can message anyone)
-      const isAdmin = me.role === "ADMIN" || me.role === "SUPER_ADMIN";
-      if (!isAdmin) {
-        const eligible = await storage.getEligibleContacts(userId);
-        if (!eligible.some(c => c.id === targetUserId)) {
-          return res.status(403).json({ message: "You are not authorized to message this user" });
-        }
+      // Authorization: verify the target belongs to the selected service for
+      // every role, including Admin. This prevents cross-service conversations
+      // from being created by a forged targetUserId.
+      const eligible = await storage.getEligibleContacts(userId, service);
+      if (!eligible.some(c => c.id === targetUserId)) {
+        return res.status(403).json({ message: "You are not authorized to message this user in the selected service" });
       }
       const { conversation, isNew } = await storage.findOrCreateDirectConversation(userId, targetUserId, service);
       // Notify both participants immediately so the other side sees the conversation appear in real time
@@ -3525,7 +3528,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/messages/eligible-contacts", requireAuth, async (req: any, res) => {
     try {
       const userId: number = req.session.userId;
-      const contacts = await storage.getEligibleContacts(userId);
+      const service = typeof req.query.service === "string" ? req.query.service : undefined;
+      if (service && !["SHOP", "MAINTENANCE", "BARISTA", "PRINT", "MARKETING"].includes(service)) {
+        return res.status(400).json({ message: "Invalid service" });
+      }
+      const contacts = await storage.getEligibleContacts(userId, service);
       res.json(contacts);
     } catch (err: any) {
       res.status(500).json({ message: err.message });

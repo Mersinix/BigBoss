@@ -1,0 +1,544 @@
+# MESSAGES — SERVICE-SCOPED CONVERSATIONS & MAINTENANCE ADMIN MESSAGING
+
+The current Maintenance and messaging implementation is already working.
+
+This is a **controlled extension of the existing messaging system**.
+
+Do NOT rebuild the messaging system.
+
+Do NOT redesign the existing Messages UI.
+
+Do NOT modify unrelated functionality.
+
+Before changing anything, inspect the current implementation and verify what already exists. Then implement only the missing behavior described below.
+
+---
+
+# 1. ADMIN → MESSAGES → MY CONVERSATIONS
+
+The Admin currently has:
+
+**Messages → My Conversations**
+
+and:
+
+**Messages → All Conversations**
+
+The **All Conversations** page already has the service switcher:
+
+**SHOP / MAINTENANCE / PRINT / MARKETING / BARISTA**
+
+Add the **same switcher** to:
+
+**My Conversations**
+
+Use exactly the same existing design and behavior as the switcher already used by All Conversations.
+
+Do not create a different visual design.
+
+---
+
+# 2. ADMIN → MY CONVERSATIONS → SHOP
+
+When Admin selects:
+
+**SHOP**
+
+and clicks the **+** button to create a new conversation:
+
+the **New Conversation** modal must show only users belonging to the SHOP ecosystem.
+
+The Admin must be able to start a conversation with applicable SHOP users such as:
+
+* Coffee Owners
+* Suppliers
+* Delivery users/companies
+
+Do NOT show:
+
+* Maintenance users
+* Print users
+* Marketing users
+* Barista users
+
+The list must use the real existing user/account data.
+
+---
+
+# 3. ADMIN → MY CONVERSATIONS → MAINTENANCE
+
+When Admin selects:
+
+**MAINTENANCE**
+
+and clicks **+**:
+
+the New Conversation modal must show only real Maintenance users/accounts.
+
+The Admin must be able to select any applicable Maintenance user and start a conversation.
+
+Do NOT show users belonging exclusively to:
+
+* SHOP
+* PRINT
+* MARKETING
+* BARISTA
+
+The new conversation must be a real:
+
+**MAINTENANCE**
+
+conversation.
+
+It must be visible to the selected Maintenance user in their Espace Maintenance messaging area.
+
+---
+
+# 4. ADMIN → MY CONVERSATIONS → PRINT
+
+When Admin selects:
+
+**PRINT**
+
+and clicks **+**:
+
+show only users belonging to the PRINT ecosystem.
+
+The Admin must be able to select an applicable Print user and start a real Print conversation.
+
+Do not show users from other services.
+
+---
+
+# 5. ADMIN → MY CONVERSATIONS → BARISTA
+
+When Admin selects:
+
+**BARISTA**
+
+and clicks **+**:
+
+show only users belonging to the BARISTA ecosystem.
+
+This must cover the existing Barista context, including where applicable:
+
+* Barista Academy
+* Marketplace Baristas
+
+The Admin must be able to select applicable real users and start a conversation.
+
+Do not show users from unrelated services.
+
+---
+
+# 6. ADMIN → MY CONVERSATIONS → MARKETING
+
+When Admin selects:
+
+**MARKETING**
+
+and clicks **+**:
+
+show only users belonging to the MARKETING ecosystem.
+
+The Admin must be able to select an applicable real Marketing user and start a conversation.
+
+Do not show users from unrelated services.
+
+---
+
+# 7. SERVICE ISOLATION
+
+The service switcher and New Conversation modal must respect the selected service.
+
+For example:
+
+Admin selects:
+
+**SHOP**
+
+→ New Conversation
+
+→ only SHOP users.
+
+Admin selects:
+
+**MAINTENANCE**
+
+→ New Conversation
+
+→ only Maintenance users.
+
+Admin selects:
+
+**PRINT**
+
+→ only Print users.
+
+Admin selects:
+
+**MARKETING**
+
+→ only Marketing users.
+
+Admin selects:
+
+**BARISTA**
+
+→ only Barista users.
+
+Do not mix users between services.
+
+Use the existing service/context rules already implemented in the project.
+
+Do not create duplicate user classifications if the project already has the correct source of truth.
+
+---
+
+# 8. ADMIN → MAINTENANCE → Espace Maintenance
+
+There is currently an issue:
+
+**Maintenance agents cannot receive messages from Admin.**
+
+Find the reason using the current messaging implementation.
+
+Fix this so that:
+
+Admin → My Conversations → MAINTENANCE → + → select Maintenance agent → send message
+
+results in a real conversation that the selected Maintenance agent can see inside:
+
+**Espace Maintenance → Messages**
+
+The Maintenance agent must be able to:
+
+* Receive the Admin conversation
+* Open it
+* Read the messages
+* Reply to Admin
+* Continue the same conversation
+
+Do NOT create a separate Admin/Maintenance messaging system.
+
+It must use the existing real conversation architecture.
+
+---
+
+# 9. COFFEE OWNER → /MAINTENANCE → CONTACT
+
+At:
+
+**Coffee Owner → `/maintenance`**
+
+there are real Maintenance cards.
+
+When the Coffee Owner clicks the **Contact** icon/button on a Maintenance card:
+
+the user must be taken directly to the messaging interface for the **exact selected Maintenance account**.
+
+The selected Maintenance account must already be opened/selected.
+
+The Coffee Owner should be able to immediately type and send a message.
+
+---
+
+# 10. IMPORTANT — DO NOT REDIRECT TO SHOP
+
+Currently, clicking Contact from a Maintenance card incorrectly takes the Coffee Owner into the Shop messaging context.
+
+This must be fixed.
+
+When Contact is clicked from:
+
+**`/maintenance`**
+
+the user must remain in the Maintenance context.
+
+The resulting conversation must be:
+
+**service = MAINTENANCE**
+
+and the selected Maintenance professional must be the conversation participant.
+
+Do not redirect the user to the Shop service.
+
+Do not change the Shop contact behavior.
+
+---
+
+# 11. COFFEE OWNER → MESSAGES SWITCHER
+
+The Coffee Owner Messages modal already contains:
+
+**SHOP / MAINTENANCE / PRINT / MARKETING / BARISTA**
+
+Keep the existing switcher and design.
+
+The New Conversation **+** button must respect the selected service.
+
+---
+
+# 12. COFFEE OWNER → SHOP → +
+
+When Coffee Owner selects:
+
+**SHOP**
+
+and clicks **+**:
+
+show only users belonging to the SHOP ecosystem.
+
+The Coffee Owner must NOT see:
+
+* Maintenance users
+* Print users
+* Marketing users
+* Barista users
+
+The existing Shop users/conversations must continue working.
+
+Do not change the Shop messaging design.
+
+---
+
+# 13. COFFEE OWNER → MAINTENANCE → +
+
+When Coffee Owner selects:
+
+**MAINTENANCE**
+
+and clicks **+**:
+
+show only real Maintenance users.
+
+The Coffee Owner must be able to:
+
+* Browse/select a Maintenance professional
+* Start a Maintenance conversation
+* Send messages
+* Continue existing conversations
+
+No users from:
+
+* SHOP
+* PRINT
+* MARKETING
+* BARISTA
+
+should appear in this Maintenance user selection.
+
+---
+
+# 14. OTHER COFFEE OWNER SERVICES
+
+Preserve the same service isolation for:
+
+**PRINT**
+
+**MARKETING**
+
+**BARISTA**
+
+If their current service-specific user selection already works, do not modify it unnecessarily.
+
+Only make changes if required to ensure the same service-scoped behavior.
+
+---
+
+# 15. REALTIME SYNCHRONIZATION
+
+Verify that the messaging changes remain realtime.
+
+For example:
+
+### Admin → Maintenance
+
+Admin starts conversation with Maintenance agent.
+
+↓
+
+Maintenance agent sees the conversation without manual refresh.
+
+Admin sends message.
+
+↓
+
+Maintenance agent receives it realtime.
+
+Maintenance replies.
+
+↓
+
+Admin receives it realtime.
+
+---
+
+### Coffee Owner → Maintenance
+
+Coffee Owner clicks Contact on:
+
+**Maintenance Card A**
+
+↓
+
+Conversation opens for:
+
+**Maintenance A**
+
+not another Maintenance user.
+
+Coffee Owner sends message.
+
+↓
+
+Maintenance A receives it realtime.
+
+Maintenance A replies.
+
+↓
+
+Coffee Owner receives it realtime.
+
+---
+
+# 16. EXISTING CONVERSATIONS
+
+Do not break existing conversations.
+
+Existing conversations must continue to:
+
+* Open correctly
+* Display messages
+* Preserve participants
+* Preserve service context
+* Receive new messages
+* Update realtime
+
+Do not migrate or duplicate conversations unless the existing architecture genuinely requires it.
+
+---
+
+# 17. DESIGN PRESERVATION
+
+Do NOT redesign:
+
+* Admin Messages
+* My Conversations
+* All Conversations
+* Coffee Owner Messages
+* Maintenance Messages
+* New Conversation modal
+* Service switcher
+* Maintenance cards
+
+Use the existing:
+
+* Colors
+* Typography
+* Cards
+* Switchers
+* Tabs
+* Modals
+* Buttons
+* Badges
+* Dark mode
+* Light mode
+* Responsive behavior
+
+The new behavior should look exactly like the existing messaging system.
+
+---
+
+# 18. DO NOT MODIFY UNRELATED PARTS
+
+Do not modify unnecessarily:
+
+* SHOP marketplace
+* PRINT
+* BARISTA
+* MARKETING
+* Supplier
+* Delivery
+* Maintenance marketplace
+* Maintenance reservations
+* Maintenance reviews
+* Admin Reviews
+* Admin Maintenance
+* Other Admin modules
+
+Only touch shared messaging infrastructure where required for this task.
+
+---
+
+# 19. BEFORE IMPLEMENTATION
+
+First inspect the current code and determine:
+
+* How service context is currently stored.
+* How conversations are created.
+* How My Conversations differs from All Conversations.
+* How the New Conversation modal gets its users.
+* How Maintenance users are identified.
+* How Coffee Owner Contact currently opens messaging.
+* How realtime messaging is currently implemented.
+
+Do not assume the implementation is missing.
+
+Check the current code first.
+
+---
+
+# 20. FINAL VERIFICATION
+
+Before declaring completion, verify the actual behavior.
+
+### Admin
+
+* My Conversations has the service switcher.
+* SHOP + shows only Shop users.
+* MAINTENANCE + shows only Maintenance users.
+* PRINT + shows only Print users.
+* MARKETING + shows only Marketing users.
+* BARISTA + shows only Barista users.
+* Admin can message Maintenance agents.
+
+### Maintenance
+
+* Maintenance agent receives Admin messages.
+* Maintenance agent can reply.
+* Conversation is visible in Espace Maintenance.
+
+### Coffee Owner
+
+* Maintenance card Contact opens the correct Maintenance conversation.
+* It stays in Maintenance context.
+* Shop + does not show Maintenance/Print/Marketing/Barista users.
+* Maintenance + shows only Maintenance users.
+* Coffee Owner can message the selected Maintenance professional.
+
+### Realtime
+
+Verify messages appear on the other side without manual refresh.
+
+---
+
+# FINAL RULE
+
+This is a **targeted messaging correction and extension**.
+
+The workflow must be:
+
+**AUDIT CURRENT MESSAGING → IDENTIFY EXISTING SERVICE LOGIC → EXTEND IT → FIX ONLY THE GAPS → VERIFY BOTH SIDES → VERIFY REALTIME**
+
+Do not rebuild.
+
+Do not duplicate.
+
+Do not redesign.
+
+Do not remove existing functionality.
+
+Do not modify unrelated services.
+
+If something already works correctly, leave it unchanged.

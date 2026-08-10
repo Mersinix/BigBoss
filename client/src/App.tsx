@@ -136,8 +136,11 @@ function CafeOrdersRedirect() {
 function CafeMessagesRedirect() {
   const openChat = useAccountOpenStore((s) => s.openChat);
   const [, navigate] = useLocation();
+  const params = new URLSearchParams(window.location.search);
+  const service = params.get("service") || undefined;
+  const conversationId = Number(params.get("conversationId")) || null;
   useEffect(() => {
-    openChat();
+    openChat(service, conversationId);
     navigate("/products", { replace: true } as any);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return <Spinner />;

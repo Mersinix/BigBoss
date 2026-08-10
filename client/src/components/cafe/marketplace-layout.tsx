@@ -105,7 +105,8 @@ const SERVICE_BADGE: Record<ServiceId, string> = {
   MAINTENANCE: "bg-amber-100 text-amber-700",
 };
 
-// SHOP conversations are loaded from the real API — only PRINT/BARISTA/MARKETING/MAINTENANCE use fake data
+// Legacy placeholder threads retained only as a fallback for old cached UI
+// states; all service tabs now use the real conversation API.
 const fakeThreads: Thread[] = [
   { id: 4,  name: "ImprimTunis",          service: "PRINT",       lastMessage: "Your flyer proof is ready for review.", time: "30m ago",   unread: 1, messages: [{ from: "them", text: "Hello! Your flyer proof is ready.", time: "09:40 AM" }, { from: "me", text: "Can you adjust the font size?", time: "09:45 AM" }, { from: "them", text: "Of course! Updated version sent.", time: "09:50 AM" }] },
   { id: 5,  name: "PrintExpress Sfax",    service: "PRINT",       lastMessage: "Menu cards delivered, thank you!", time: "Mon",       unread: 0, messages: [{ from: "them", text: "Your menu cards have been delivered!", time: "Mon" }, { from: "me", text: "Perfect, thank you!", time: "Mon" }] },
@@ -851,7 +852,15 @@ const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "MAINTENANCE" | "BARISTA
 
 // ── Messages Panel (premium dark/light — mirrors FavoritesPanel design) ───────
 
-function MessagesPanel({ onClose }: { onClose: () => void }) {
+function MessagesPanel({
+  onClose,
+  initialService,
+  initialConversationId = null,
+}: {
+  onClose: () => void;
+  initialService?: ServiceId;
+  initialConversationId?: number | null;
+}) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -864,11 +873,11 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
 
   const isDark = useThemeStore((s) => s.isDark);
   const toggle = useThemeStore((s) => s.toggle);
-  const [service, setService] = useState<ServiceId>("SHOP");
+  const [service, setService] = useState<ServiceId>(initialService ?? "SHOP");
   const [view, setView] = useState<"list" | "chat">("list");
 
   // ── SHOP real data state ──────────────────────────────────────────────────
-  const [shopConvId, setShopConvId] = useState<number | null>(null);
+  const [shopConvId, setShopConvId] = useState<number | null>(initialConversationId);
   const [shopInput, setShopInput] = useState("");
   const [newConvOpen, setNewConvOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
@@ -896,11 +905,11 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
   const inputCls = dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 rounded-2xl" : "border-gray-200 rounded-2xl";
 
   // ── SHOP queries ──────────────────────────────────────────────────────────
-  const isRealMessagingService = service === "SHOP" || service === "MAINTENANCE";
+  const isRealMessagingService = true;
   const { data: shopConversations = [], isLoading: shopConvsLoading } = useQuery<ConversationSummary[]>({
-    queryKey: ["/api/messages/conversations"],
+    queryKey: ["/api/messages/conversations", service],
     queryFn: async () => {
-      const r = await fetch("/api/messages/conversations", { credentials: "include" });
+      const r = await fetch(`/api/messages/conversations?service=${encodeURIComponent(service)}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -909,9 +918,9 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
   });
 
   const { data: shopContacts = [] } = useQuery<EligibleContact[]>({
-    queryKey: ["/api/messages/eligible-contacts"],
+    queryKey: ["/api/messages/eligible-contacts", service],
     queryFn: async () => {
-      const r = await fetch("/api/messages/eligible-contacts", { credentials: "include" });
+      const r = await fetch(`/api/messages/eligible-contacts?service=${encodeURIComponent(service)}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed");
       return r.json();
     },
@@ -959,7 +968,7 @@ function MessagesPanel({ onClose }: { onClose: () => void }) {
     mutationFn: (targetUserId: number) =>
       apiRequest("POST", "/api/messages/conversations", {
         targetUserId,
-        service: service === "MAINTENANCE" ? "MAINTENANCE" : "SHOP",
+        service,
       }),
     onSuccess: (data: any) => {
       setShopConvId(data.conversation.id);
@@ -1496,10 +1505,20 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const [profileInitialTab, setProfileInitialTab] = useState<"orders" | "dashboard" | "settings" | null>(null);
   const [favOpen, setFavOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatInitialService, setChatInitialService] = useState<ServiceId | undefined>(undefined);
+  const [chatInitialConversationId, setChatInitialConversationId] = useState<number | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
 
   // Watch the account-open-store so external routes can trigger the profile panel or chat
-  const { shouldOpen, orderIdToOpen, initialTab, shouldOpenChat, clearOpen } = useAccountOpenStore();
+  const {
+    shouldOpen,
+    orderIdToOpen,
+    initialTab,
+    shouldOpenChat,
+    initialChatService,
+    initialConversationId,
+    clearOpen,
+  } = useAccountOpenStore();
   useEffect(() => {
     if (shouldOpen) {
       setProfileOpen(true);
@@ -1508,10 +1527,16 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
       clearOpen();
     }
     if (shouldOpenChat) {
+      setChatInitialService(
+        initialChatService === "SHOP" || initialChatService === "MAINTENANCE"
+          ? initialChatService
+          : undefined,
+      );
+      setChatInitialConversationId(initialConversationId);
       setChatOpen(true);
       clearOpen();
     }
-  }, [shouldOpen, shouldOpenChat]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shouldOpen, shouldOpenChat, initialChatService, initialConversationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cartCount = getTotalItemCount();
 
@@ -1734,7 +1759,14 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Floating Chat Button — authenticated only, draggable ── */}
       {user && hasCommercial && (
-        <DraggableChatButton onClick={() => setChatOpen(true)} isDark={isDark} />
+        <DraggableChatButton
+          onClick={() => {
+            setChatInitialService(undefined);
+            setChatInitialConversationId(null);
+            setChatOpen(true);
+          }}
+          isDark={isDark}
+        />
       )}
 
       {showSearchLocation && (
@@ -1774,9 +1806,23 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Chat Modal ── */}
       {user && hasCommercial && (
-        <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+        <Dialog
+          open={chatOpen}
+          onOpenChange={(open) => {
+            setChatOpen(open);
+            if (!open) {
+              setChatInitialService(undefined);
+              setChatInitialConversationId(null);
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-md h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
-            <MessagesPanel onClose={() => setChatOpen(false)} />
+            <MessagesPanel
+              key={`${chatInitialService ?? "SHOP"}-${chatInitialConversationId ?? "new"}`}
+              onClose={() => setChatOpen(false)}
+              initialService={chatInitialService}
+              initialConversationId={chatInitialConversationId}
+            />
           </DialogContent>
         </Dialog>
       )}

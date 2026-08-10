@@ -213,6 +213,7 @@ function AllConversationsTab() {
 export default function AdminMessagesPage() {
   const { user } = useAuth();
   const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [myService, setMyService] = useState<(typeof MESSAGE_SERVICES)[number]>("SHOP");
   const { data: contacts = [] } = useQuery<EligibleContact[]>({
     queryKey: ["/api/messages/eligible-contacts"],
     queryFn: async () => {
@@ -241,7 +242,18 @@ export default function AdminMessagesPage() {
         </TabsList>
 
         <TabsContent value="chat" className="mt-4">
-          {user && <MessagesPanel currentUserId={user.id} showRoleIndicator />}
+          <div className="border rounded-md overflow-hidden">
+            <div className="border-b px-4 pt-3">
+              <Tabs value={myService} onValueChange={(value) => setMyService(value as (typeof MESSAGE_SERVICES)[number])}>
+                <TabsList className="flex-wrap h-auto justify-start">
+                  {MESSAGE_SERVICES.map((item) => (
+                    <TabsTrigger key={item} value={item} className="text-xs">{item}</TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+            {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service={myService} />}
+          </div>
         </TabsContent>
 
         <TabsContent value="all" className="mt-4">

@@ -3716,13 +3716,16 @@ export class DatabaseStorage implements IStorage {
   // ── Messaging ──────────────────────────────────────────────────────────────
 
   /** Return all non-hidden conversations for a user, ordered by most recent activity. */
-  async getConversationsForUser(userId: number): Promise<ConversationSummary[]> {
+  async getConversationsForUser(userId: number, service?: string): Promise<ConversationSummary[]> {
     const participants = await db.select().from(conversationParticipants)
       .where(and(eq(conversationParticipants.userId, userId), isNull(conversationParticipants.hiddenAt)));
     if (participants.length === 0) return [];
 
     const convIds = participants.map(p => p.conversationId);
-    const convRows = await db.select().from(conversations).where(inArray(conversations.id, convIds))
+    const convRows = await db.select().from(conversations).where(and(
+      inArray(conversations.id, convIds),
+      ...(service ? [eq(conversations.service, service)] : []),
+    ))
       .orderBy(desc(conversations.lastMessageAt));
 
     // Fetch all participants for all conversations in one query
@@ -3900,14 +3903,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Return users a given user is allowed to start a conversation with based on order relationships. */
-  async getEligibleContacts(userId: number): Promise<EligibleContact[]> {
+  async getEligibleContacts(userId: number, service?: string): Promise<EligibleContact[]> {
     const [me] = await db.select().from(users).where(eq(users.id, userId));
     if (!me) return [];
 
     const isAdmin = me.role === 'ADMIN' || me.role === 'SUPER_ADMIN';
+    const serviceRoles: Record<string, string[]> = {
+      SHOP: ['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'DRIVER'],
+      MAINTENANCE: ['CAFE_OWNER', 'MAINTENANCE'],
+      PRINT: ['CAFE_OWNER', 'PRINTER'],
+      MARKETING: ['CAFE_OWNER', 'MARKETING'],
+      BARISTA: ['CAFE_OWNER', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE'],
+    };
+    const allowedServiceRoles = service ? serviceRoles[service] : undefined;
+
     if (isAdmin) {
-      // Admin can message everyone
-      const all = await db.select().from(users).where(ne(users.id, userId));
+      // Admin can message every real account in the selected service, but
+      // service selection is still enforced at the data boundary.
+      const adminAllowedRoles = service === "MAINTENANCE"
+        ? ["MAINTENANCE"]
+        : allowedServiceRoles;
+      const all = await db.select().from(users).where(and(
+        ne(users.id, userId),
+        ...(adminAllowedRoles ? [inArray(users.role, adminAllowedRoles as any)] : []),
+      ));
       return all.map(u => ({ id: u.id, name: u.name, role: u.role }));
     }
 
@@ -3940,6 +3959,16 @@ export class DatabaseStorage implements IStorage {
           eq(maintenanceProfiles.marketplaceVisible, true),
         ));
       for (const provider of maintenance) contactUserIds.add(provider.userId);
+      // Service-specific provider accounts are available before an order
+      // exists, just like Maintenance providers.
+      if (service && service !== "SHOP" && allowedServiceRoles) {
+        const providers = await db.select({ id: users.id }).from(users).where(and(
+          inArray(users.role, allowedServiceRoles as any),
+          eq(users.status, "approved"),
+          ne(users.role, "CAFE_OWNER" as any),
+        ));
+        for (const provider of providers) contactUserIds.add(provider.id);
+      }
     } else if (me.role === 'SUPPLIER') {
       // Can message cafe owners from orders
       const supplierOrders = await db.select().from(orders).where(eq(orders.supplierId, userId));
@@ -3962,16 +3991,31 @@ export class DatabaseStorage implements IStorage {
       for (const c of allCafes) contactUserIds.add(c.id);
     }
 
-    // Everyone can message admin users
-    const admins = await db.select().from(users)
-      .where(or(eq(users.role, 'ADMIN' as any), eq(users.role, 'SUPER_ADMIN' as any)));
-    for (const a of admins) contactUserIds.add(a.id);
+    // Existing behavior allows platform users to reach Admin in the default
+    // Shop context. Other service contexts remain service-isolated.
+    if (!service || service === "SHOP") {
+      const admins = await db.select().from(users)
+        .where(or(eq(users.role, 'ADMIN' as any), eq(users.role, 'SUPER_ADMIN' as any)));
+      for (const a of admins) contactUserIds.add(a.id);
+    }
 
     // Remove self from contact list
     contactUserIds.delete(userId);
 
     if (contactUserIds.size === 0) return [];
-    const contacts = await db.select().from(users).where(inArray(users.id, Array.from(contactUserIds)));
+    const roleCondition = allowedServiceRoles
+      ? (!isAdmin && service === "SHOP"
+        ? or(
+          inArray(users.role, allowedServiceRoles as any),
+          eq(users.role, "ADMIN" as any),
+          eq(users.role, "SUPER_ADMIN" as any),
+        )
+        : inArray(users.role, allowedServiceRoles as any))
+      : undefined;
+    const contacts = await db.select().from(users).where(and(
+      inArray(users.id, Array.from(contactUserIds)),
+      ...(roleCondition ? [roleCondition] : []),
+    ));
     return contacts.map(u => ({ id: u.id, name: u.name, role: u.role }));
   }
 

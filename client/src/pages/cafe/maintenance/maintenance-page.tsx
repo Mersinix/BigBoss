@@ -368,7 +368,14 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     onError: (error: Error) => toast({ title: "Impossible d'envoyer la demande", description: error.message, variant: "destructive" }),
   });
   const contact = async (agent: MaintenanceMarketplaceCard) => {
-      try { await apiRequest("POST", "/api/messages/conversations", { targetUserId: agent.userId, service: "MAINTENANCE" }); navigate("/cafe/messages"); }
+      try {
+        const response = await apiRequest("POST", "/api/messages/conversations", {
+          targetUserId: agent.userId,
+          service: "MAINTENANCE",
+        });
+        const conversation = await response.json() as { conversation: { id: number } };
+        navigate(`/cafe/messages?service=MAINTENANCE&conversationId=${conversation.conversation.id}`);
+      }
     catch (error) { toast({ title: "Contact impossible", description: error instanceof Error ? error.message : "Veuillez réessayer.", variant: "destructive" }); }
   };
   const hasFilters = !!(search || filterCategory || filterType || filterAvailability || filterLocation);

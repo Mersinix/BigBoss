@@ -202,6 +202,8 @@ export interface IStorage {
   getMaintenanceReservationsForOwner(userId: number): Promise<(MaintenanceReservation & { maintenanceName: string })[]>;
   createMaintenanceReservation(data: InsertMaintenanceReservation): Promise<MaintenanceReservation>;
   updateMaintenanceReservationStatus(id: number, providerId: number, status: string, schedule?: { date?: string; time?: string | null }): Promise<MaintenanceReservation | undefined>;
+  requestMaintenanceReschedule(id: number, providerId: number, proposedDate: string, proposedTime: string | null): Promise<MaintenanceReservation | undefined>;
+  respondToMaintenanceReschedule(id: number, ownerId: number, accepted: boolean): Promise<MaintenanceReservation | undefined>;
   getMaintenanceReviews(maintenanceUserId: number): Promise<SupplierProductReview[]>;
   getMaintenanceReviewForReservation(reservationId: number, cafeId: number): Promise<SupplierProductReview | undefined>;
   upsertMaintenanceReview(data: { maintenanceUserId: number; reservationId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string; cafeOwnerName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }>;
@@ -1287,6 +1289,7 @@ export class DatabaseStorage implements IStorage {
         eq(users.role, "MAINTENANCE" as any),
         eq(users.status, "approved"),
         eq(maintenanceProfiles.marketplaceVisible, true),
+       eq(maintenanceProfiles.isOnVacation, false),
       ));
 
     const maintenanceUserIds = rows.map(({ profile }) => profile.userId);
@@ -1416,6 +1419,44 @@ export class DatabaseStorage implements IStorage {
         eq(maintenanceReservations.id, id),
         eq(maintenanceReservations.maintenanceUserId, providerId),
       ))
+      .returning();
+    return updated;
+  }
+
+  async requestMaintenanceReschedule(id: number, providerId: number, proposedDate: string, proposedTime: string | null): Promise<MaintenanceReservation | undefined> {
+    const [updated] = await db.update(maintenanceReservations)
+      .set({
+        status: "RESCHEDULE_PENDING",
+        proposedDate,
+        proposedTime,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(maintenanceReservations.id, id),
+        eq(maintenanceReservations.maintenanceUserId, providerId),
+      ))
+      .returning();
+    return updated;
+  }
+
+  async respondToMaintenanceReschedule(id: number, ownerId: number, accepted: boolean): Promise<MaintenanceReservation | undefined> {
+    const [reservation] = await db.select().from(maintenanceReservations)
+      .where(and(
+        eq(maintenanceReservations.id, id),
+        eq(maintenanceReservations.cafeOwnerId, ownerId),
+        eq(maintenanceReservations.status, "RESCHEDULE_PENDING"),
+      ));
+    if (!reservation) return undefined;
+
+    const [updated] = await db.update(maintenanceReservations)
+      .set({
+        status: accepted ? "CONFIRMED" : "RESCHEDULE_REJECTED",
+        ...(accepted && reservation.proposedDate
+          ? { date: reservation.proposedDate, time: reservation.proposedTime }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(maintenanceReservations.id, id))
       .returning();
     return updated;
   }

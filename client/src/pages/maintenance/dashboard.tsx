@@ -59,6 +59,8 @@ type MaintenanceReservationRow = {
   category: string;
   urgency?: string;
   contactPhone?: string;
+  proposedDate?: string | null;
+  proposedTime?: string | null;
 };
 
 const STATUS_META: Record<string, { label: string; color: string; icon: any }> = {
@@ -67,29 +69,21 @@ const STATUS_META: Record<string, { label: string; color: string; icon: any }> =
   COMPLETED: { label: "Terminée",    color: "bg-green-100 text-green-800 border-green-200",    icon: CheckCircle },
   CANCELLED: { label: "Annulée",     color: "bg-red-100 text-red-800 border-red-200",          icon: XCircle },
   RESCHEDULED: { label: "Reprogrammée", color: "bg-purple-100 text-purple-800 border-purple-200", icon: RotateCcw },
+  RESCHEDULE_PENDING: { label: "Modification à confirmer", color: "bg-purple-100 text-purple-800 border-purple-200", icon: RotateCcw },
+  RESCHEDULE_REJECTED: { label: "Modification refusée", color: "bg-gray-100 text-gray-700 border-gray-200", icon: XCircle },
 };
-
-const DEFAULT_MAINTENANCE_SPECIALTIES = [
-  "Machines à café", "Machines espresso", "Moulins à café", "Machines à glace",
-  "Réfrigérateurs", "Congélateurs", "Lave-vaisselle", "Fours", "Mixeurs",
-  "Électricité", "Plomberie", "Climatisation", "Ventilation",
-  "Systèmes POS", "Réseaux WiFi", "Caméras de sécurité", "Téléviseurs",
-  "Mobilier", "Éclairage", "Signalétique", "Menuiserie", "Peinture",
-];
-
-const DEFAULT_COVERAGE_AREAS = [
-  "Grand Tunis", "Ariana", "Ben Arous", "La Manouba",
-  "Sfax", "Sousse", "Monastir", "Mahdia",
-  "Béja", "Bizerte", "Gabès", "Jendouba",
-];
 
 // ── Today's date helpers ──────────────────────────────────────────────────────
 
-const TODAY = "2026-07-27";
+function getToday() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
 
 function getTab(date: string): "today" | "upcoming" | "past" {
-  if (date === TODAY) return "today";
-  if (date > TODAY) return "upcoming";
+  const today = getToday();
+  if (date === today) return "today";
+  if (date > today) return "upcoming";
   return "past";
 }
 
@@ -123,6 +117,11 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule, onComplete }:
       <p className="text-xs text-gray-600 bg-gray-50 rounded-xl px-3 py-2 leading-relaxed">{res.description}</p>
       <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-200 bg-orange-50">{res.category}</Badge>
       {res.urgency && <Badge variant="outline" className={`text-[10px] ml-1 ${res.urgency === "URGENT" ? "text-red-600 border-red-200 bg-red-50" : "text-gray-600"}`}>Urgence: {res.urgency}</Badge>}
+      {res.status === "RESCHEDULE_PENDING" && res.proposedDate && (
+        <div className="rounded-xl bg-purple-50 border border-purple-100 px-3 py-2 text-xs text-purple-700">
+          Proposition envoyée : <strong>{res.proposedDate}{res.proposedTime ? ` à ${res.proposedTime}` : ""}</strong>. En attente de confirmation du Coffee Owner.
+        </div>
+      )}
       {res.status === "PENDING" && (
         <div className="flex gap-2 pt-1">
           <Button size="sm" className="flex-1 h-8 text-xs bg-green-600 hover:bg-green-700 text-white rounded-xl" onClick={() => onConfirm(res.id)}>
@@ -385,8 +384,8 @@ export default function MaintenanceDashboard() {
   const { data: taxonomy } = useQuery<{ competencies: { name: string }[]; zones: { name: string }[] }>({
     queryKey: ["/api/maintenance/taxonomy"],
   });
-  const maintenanceSpecialties = taxonomy?.competencies.map((item) => item.name) ?? DEFAULT_MAINTENANCE_SPECIALTIES;
-  const coverageAreas = taxonomy?.zones.map((item) => item.name) ?? DEFAULT_COVERAGE_AREAS;
+  const maintenanceSpecialties = taxonomy?.competencies.map((item) => item.name) ?? [];
+  const coverageAreas = taxonomy?.zones.map((item) => item.name) ?? [];
   const profile = profileData?.profile;
 
   // Profile state
@@ -399,6 +398,9 @@ export default function MaintenanceDashboard() {
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [dailyRate, setDailyRate] = useState("0");
   const [responseTime, setResponseTime] = useState("< 2h");
+  const [certifications, setCertifications] = useState<string[]>([]);
+  const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
+  const [yearsExperience, setYearsExperience] = useState("0");
 
   // Availability state
   const [workingDays, setWorkingDays] = useState<string[]>([]);
@@ -418,6 +420,9 @@ export default function MaintenanceDashboard() {
     setAgentType(p.profileType);
     setDailyRate(String((p.dailyRateInCents ?? 0) / 100));
     setResponseTime(p.responseTime);
+    setCertifications(p.certifications ?? []);
+    setPortfolioImages(p.portfolioImages ?? []);
+    setYearsExperience(String(p.yearsExperience ?? 0));
     setWorkingDays(p.workingDays ?? []);
     setStartTime(p.startTime);
     setEndTime(p.endTime);
@@ -443,8 +448,16 @@ export default function MaintenanceDashboard() {
       categories: selectedSpecialties, description: bio,
       coverageArea: selectedAreas.join(", "), dailyRateInCents: Math.round((parseFloat(dailyRate) || 0) * 100),
       responseTime,
+      certifications, portfolioImages,
+      yearsExperience: Math.max(0, parseInt(yearsExperience, 10) || 0),
     }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] }); toast({ title: "Profil sauvegardé" }); },
+    onSuccess: async () => {
+      if (profileName !== user?.name || phone !== user?.phone) {
+        await apiRequest("PATCH", "/api/auth/me/profile", { name: profileName, phone });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] });
+      toast({ title: "Profil sauvegardé" });
+    },
     onError: (error: Error) => toast({ title: "Impossible de sauvegarder le profil", description: error.message, variant: "destructive" }),
   });
   const saveAvailability = useMutation({
@@ -467,7 +480,7 @@ export default function MaintenanceDashboard() {
     const nextDate = window.prompt("Nouvelle date (AAAA-MM-JJ)", reservation.date);
     if (!nextDate) return;
     const nextTime = window.prompt("Nouvelle heure (HH:MM)", reservation.time ?? "");
-    updateStatus.mutate({ id, status: "RESCHEDULED", date: nextDate, time: nextTime || null } as any);
+    updateStatus.mutate({ id, status: "RESCHEDULE_PENDING", date: nextDate, time: nextTime || null } as any);
   };
   const handleComplete = (id: number) => updateStatus.mutate({ id, status: "COMPLETED" });
 

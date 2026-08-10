@@ -491,6 +491,8 @@ export const maintenanceReservations = pgTable("maintenance_reservations", {
   urgency: text("urgency").notNull().default("NORMAL"),
   contactPhone: text("contact_phone").notNull().default(""),
   status: text("status").notNull().default("PENDING"),
+  proposedDate: text("proposed_date"),
+  proposedTime: text("proposed_time"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

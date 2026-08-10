@@ -470,10 +470,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
     const body = z.object({
-      status: z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "RESCHEDULED"]),
+      status: z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "RESCHEDULED", "RESCHEDULE_PENDING"]),
       date: z.string().optional(),
       time: z.string().nullable().optional(),
     }).parse(req.body);
+    if (body.status === "RESCHEDULE_PENDING") {
+      if (!body.date) return res.status(400).json({ message: "A proposed date is required" });
+      const proposed = await storage.requestMaintenanceReschedule(Number(req.params.id), user.id, body.date, body.time ?? null);
+      if (!proposed) return res.status(404).json({ message: "Reservation not found" });
+      broadcast("maintenance_reservation_updated", { reservationId: proposed.id, kind: "reschedule_requested" });
+      broadcastToUsers([user.id, proposed.cafeOwnerId], "maintenance_reservation_updated", { reservationId: proposed.id, kind: "reschedule_requested" });
+      return res.json(proposed);
+    }
     const updated = await storage.updateMaintenanceReservationStatus(Number(req.params.id), user.id, body.status, {
       date: body.date,
       time: body.time,
@@ -481,6 +489,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!updated) return res.status(404).json({ message: "Reservation not found" });
     broadcast("maintenance_reservation_updated", { reservationId: updated.id });
     broadcastToUsers([user.id, updated.cafeOwnerId], "maintenance_reservation_updated", { reservationId: updated.id });
+    res.json(updated);
+  });
+
+  app.patch("/api/maintenance/reservations/:id/reschedule-response", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const body = z.object({ accepted: z.boolean() }).parse(req.body);
+    const updated = await storage.respondToMaintenanceReschedule(Number(req.params.id), user.id, body.accepted);
+    if (!updated) return res.status(404).json({ message: "Rescheduling request not found" });
+    broadcast("maintenance_reservation_updated", { reservationId: updated.id, kind: body.accepted ? "reschedule_accepted" : "reschedule_rejected" });
+    broadcastToUsers([user.id, updated.maintenanceUserId], "maintenance_reservation_updated", { reservationId: updated.id, kind: body.accepted ? "reschedule_accepted" : "reschedule_rejected" });
     res.json(updated);
   });
 

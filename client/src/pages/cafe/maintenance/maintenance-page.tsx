@@ -349,6 +349,11 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
       setDetailOpen(true);
     }
   }, [profiles, providerId]);
+  useEffect(() => {
+    if (!selectedAgent) return;
+    const freshAgent = profiles.find((profile) => profile.userId === selectedAgent.userId);
+    if (freshAgent && freshAgent !== selectedAgent) setSelectedAgent(freshAgent);
+  }, [profiles, selectedAgent?.userId]);
   const allLocations = useMemo(() => Array.from(new Set(profiles.map((item) => item.location).filter(Boolean))).sort(), [profiles]);
   const filtered = useMemo(() => {
     let list = profiles;

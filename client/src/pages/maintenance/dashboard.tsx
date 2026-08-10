@@ -44,6 +44,7 @@ import {
   ChevronLeft,
   LogOut,
   Flag,
+  X,
 } from "lucide-react";
 
 type MaintenanceReservationRow = {
@@ -401,6 +402,11 @@ export default function MaintenanceDashboard() {
   const [certifications, setCertifications] = useState<string[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
   const [yearsExperience, setYearsExperience] = useState("0");
+  const [certificationDraft, setCertificationDraft] = useState("");
+  const [portfolioDraft, setPortfolioDraft] = useState("");
+  const [rescheduleTarget, setRescheduleTarget] = useState<MaintenanceReservationRow | null>(null);
+  const [proposedDate, setProposedDate] = useState("");
+  const [proposedTime, setProposedTime] = useState("");
 
   // Availability state
   const [workingDays, setWorkingDays] = useState<string[]>([]);
@@ -437,9 +443,13 @@ export default function MaintenanceDashboard() {
   const pendingCount = reservations.filter((r) => r.status === "PENDING").length;
 
   const updateStatus = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
-      apiRequest("PATCH", `/api/maintenance/reservations/${id}/status`, { status }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] }),
+    mutationFn: ({ id, status, date, time }: { id: number; status: string; date?: string; time?: string | null }) =>
+      apiRequest("PATCH", `/api/maintenance/reservations/${id}/status`, { status, date, time }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
+      setRescheduleTarget(null);
+      toast({ title: "Réservation mise à jour" });
+    },
     onError: (error: Error) => toast({ title: "Impossible de mettre à jour la réservation", description: error.message, variant: "destructive" }),
   });
   const saveProfile = useMutation({
@@ -477,10 +487,18 @@ export default function MaintenanceDashboard() {
   const handleReschedule = (id: number) => {
     const reservation = reservations.find((row) => row.id === id);
     if (!reservation) return;
-    const nextDate = window.prompt("Nouvelle date (AAAA-MM-JJ)", reservation.date);
-    if (!nextDate) return;
-    const nextTime = window.prompt("Nouvelle heure (HH:MM)", reservation.time ?? "");
-    updateStatus.mutate({ id, status: "RESCHEDULE_PENDING", date: nextDate, time: nextTime || null } as any);
+    setRescheduleTarget(reservation);
+    setProposedDate(reservation.date);
+    setProposedTime(reservation.time ?? "");
+  };
+  const submitReschedule = () => {
+    if (!rescheduleTarget || !proposedDate) return;
+    updateStatus.mutate({
+      id: rescheduleTarget.id,
+      status: "RESCHEDULE_PENDING",
+      date: proposedDate,
+      time: proposedTime || null,
+    });
   };
   const handleComplete = (id: number) => updateStatus.mutate({ id, status: "COMPLETED" });
 
@@ -547,12 +565,12 @@ export default function MaintenanceDashboard() {
       {/* Tab navigation */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-30">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="flex gap-0">
+          <div className="flex gap-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-3.5 text-sm font-semibold border-b-2 transition-colors ${
+                className={`flex items-center gap-1.5 px-4 py-3.5 text-sm font-semibold border-b-2 transition-colors shrink-0 ${
                   activeTab === tab.key
                     ? "border-orange-600 text-orange-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
@@ -677,6 +695,85 @@ export default function MaintenanceDashboard() {
                 <div>
                   <Label className="text-xs text-gray-500">Biographie</Label>
                   <Textarea value={bio} onChange={(e) => setBio(e.target.value)} className="rounded-xl mt-0.5 resize-none" rows={3} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Certifications, portfolio and experience use the shared marketplace profile. */}
+            <Card className="rounded-2xl border-gray-100 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2"><Award className="w-4 h-4 text-orange-500" />Certifications & expérience</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-xs text-gray-500">Certifications</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      value={certificationDraft}
+                      onChange={(event) => setCertificationDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && certificationDraft.trim()) {
+                          event.preventDefault();
+                          setCertifications((current) => [...current, certificationDraft.trim()]);
+                          setCertificationDraft("");
+                        }
+                      }}
+                      placeholder="Ex. Certification SCA"
+                      className="h-9 rounded-xl"
+                    />
+                    <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!certificationDraft.trim()} onClick={() => {
+                      setCertifications((current) => [...current, certificationDraft.trim()]);
+                      setCertificationDraft("");
+                    }}>Ajouter</Button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {certifications.map((certification, index) => (
+                      <span key={`${certification}-${index}`} className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 text-xs">
+                        {certification}
+                        <button type="button" aria-label={`Supprimer ${certification}`} onClick={() => setCertifications((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Expérience (ans)</Label>
+                  <Input type="number" min="0" value={yearsExperience} onChange={(event) => setYearsExperience(event.target.value)} className="h-9 rounded-xl mt-1 max-w-[180px]" />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Portfolio (URL des images)</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      value={portfolioDraft}
+                      onChange={(event) => setPortfolioDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && portfolioDraft.trim()) {
+                          event.preventDefault();
+                          setPortfolioImages((current) => [...current, portfolioDraft.trim()]);
+                          setPortfolioDraft("");
+                        }
+                      }}
+                      placeholder="https://…"
+                      className="h-9 rounded-xl"
+                    />
+                    <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!portfolioDraft.trim()} onClick={() => {
+                      setPortfolioImages((current) => [...current, portfolioDraft.trim()]);
+                      setPortfolioDraft("");
+                    }}>Ajouter</Button>
+                  </div>
+                  {portfolioImages.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                      {portfolioImages.map((image, index) => (
+                        <div key={`${image}-${index}`} className="relative group">
+                          <img src={image} alt={`Portfolio ${index + 1}`} className="h-24 w-full rounded-xl object-cover bg-gray-100" />
+                          <button type="button" aria-label={`Supprimer l'image ${index + 1}`} onClick={() => setPortfolioImages((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -820,6 +917,32 @@ export default function MaintenanceDashboard() {
           </div>
         )}
       </div>
+      <Dialog open={rescheduleTarget !== null} onOpenChange={(open) => { if (!open) setRescheduleTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Proposer une nouvelle date</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500">
+            Le Coffee Owner devra confirmer cette modification. La date actuelle reste inchangée jusque-là.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="maintenance-proposed-date">Date proposée</Label>
+              <Input id="maintenance-proposed-date" type="date" value={proposedDate} onChange={(event) => setProposedDate(event.target.value)} className="mt-1 rounded-xl" />
+            </div>
+            <div>
+              <Label htmlFor="maintenance-proposed-time">Heure proposée</Label>
+              <Input id="maintenance-proposed-time" type="time" value={proposedTime} onChange={(event) => setProposedTime(event.target.value)} className="mt-1 rounded-xl" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleTarget(null)}>Annuler</Button>
+            <Button disabled={!proposedDate || updateStatus.isPending} onClick={submitReschedule} className="bg-orange-600 hover:bg-orange-700 text-white">
+              {updateStatus.isPending ? "Envoi…" : "Envoyer la proposition"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

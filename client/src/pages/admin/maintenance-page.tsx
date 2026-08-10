@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtime } from "@/hooks/use-realtime";
 
 type TaxonomyItem = { id: number; name: string; isActive: boolean; isFrozen: boolean };
 type Overview = {
@@ -125,6 +126,7 @@ function Info({ icon: Icon, label, value }: { icon: any; label: string; value: a
 export default function MaintenanceAdminPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  useRealtime();
   const [section, setSection] = useState("taxonomy");
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
   const [search, setSearch] = useState("");
@@ -136,6 +138,11 @@ export default function MaintenanceAdminPage() {
   const [location, setLocation] = useState("all");
   const [rating, setRating] = useState("all");
   const { data, isLoading } = useQuery<Overview>({ queryKey: ["/api/admin/maintenance"] });
+  useEffect(() => {
+    if (!selectedAccount) return;
+    const freshAccount = data?.accounts?.find((account) => account.userId === selectedAccount.userId);
+    if (freshAccount && freshAccount !== selectedAccount) setSelectedAccount(freshAccount);
+  }, [data?.accounts, selectedAccount?.userId]);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
     qc.invalidateQueries({ queryKey: ["/api/maintenance/categories"] });

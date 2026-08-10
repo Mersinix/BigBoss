@@ -1,0 +1,136 @@
+Continue the Maintenance synchronization work from the existing checkpoint:
+
+**`MAINTENANCE SYNCHRONIZATION`**
+
+The original prompt/specification is available in the commit:
+
+**`Add maintenance reservation synchronization documentation asset`**
+
+The previous implementation was interrupted by the Replit quota limit while finishing the UI and verification.
+
+### IMPORTANT — CONTINUE, DO NOT RESTART
+
+First:
+
+1. Read the original prompt from **`Add maintenance reservation synchronization documentation asset`**.
+2. Read the commit **`MAINTENANCE SYNCHRONIZATION`**.
+3. Inspect all files changed in that commit.
+4. Compare the original requirements with the **actual current implementation**.
+5. Use the previous agent's analysis/work as context, but verify everything directly in the code.
+
+The previous agent already confirmed that:
+
+* The existing backend Maintenance models are already in place.
+* Certifications, portfolio, experience, vacation state, and real reservations already exist.
+* Realtime infrastructure already exists.
+* The rescheduling backend was changed to use a pending proposal instead of overwriting the confirmed reservation.
+* The remaining work was mainly the corresponding UI wiring and final verification.
+
+The previous agent was interrupted immediately after editing:
+
+**`dashboard.tsx`**
+
+while finishing the corresponding screens.
+
+### DO NOT REDO COMPLETED WORK
+
+Do NOT recreate:
+
+* Maintenance profile models
+* Maintenance reservation models
+* Realtime infrastructure
+* Certifications storage
+* Portfolio storage
+* Experience storage
+* Vacation state
+* Reservation synchronization
+* Pending rescheduling proposal backend
+
+If these are already correctly implemented, leave them unchanged.
+
+### CONTINUE ONLY WHAT IS INCOMPLETE
+
+Finish whatever remains from the original specification, especially the parts that were being worked on when the quota was reached:
+
+* Espace Maintenance mobile-scrollable switcher
+* Planning date-based separation:
+
+  * Aujourd'hui
+  * À venir
+  * Passées
+* Maintenance Profil controls:
+
+  * Certifications
+  * Portfolio
+  * Expérience (ans)
+* Synchronization of those profile fields with Coffee Owner and Admin
+* Disponibilité → Mode Congé / Absence synchronization
+* Coffee Owner → My Account → Reservations
+* Maintenance rescheduling calendar/date-time UI
+* Coffee Owner accept/reject rescheduling flow
+* Realtime updates across Maintenance ↔ Coffee Owner ↔ Admin
+
+But **do not assume all of these are unfinished**. Check the actual implementation first and only complete the missing parts.
+
+### RESCHEDULING — IMPORTANT
+
+The intended workflow is:
+
+Maintenance agent:
+
+**Reprogrammée**
+
+→ choose proposed date/time
+
+→ submit proposal
+
+↓
+
+Coffee Owner receives the proposal
+
+→ **Confirm modification**
+
+OR
+
+→ **Reject modification**
+
+Only when the Coffee Owner confirms should the confirmed reservation date/time change.
+
+Do not revert the backend to the old behavior where the Maintenance agent directly overwrites the reservation schedule.
+
+### FINAL VERIFICATION
+
+After completing the missing work:
+
+* run the relevant type checks
+* run the build
+* verify the database/schema if necessary
+* verify the Maintenance UI
+* verify Coffee Owner My Account → Reservations
+* verify Admin synchronization
+* verify realtime behavior
+* verify rescheduling acceptance/rejection
+* verify vacation/absence visibility
+* verify mobile switcher behavior
+
+Check the complete flow:
+
+**Maintenance Agent ↔ Coffee Owner ↔ Admin**
+
+without requiring manual refresh.
+
+If there are unrelated pre-existing errors, do not rewrite unrelated parts of the project.
+
+### FINAL RULE
+
+**READ PROMPT → READ COMMIT → INSPECT CURRENT CODE → IDENTIFY WHAT IS ACTUALLY INCOMPLETE → FINISH ONLY THAT WORK → VERIFY EVERYTHING**
+
+Do not redo completed work.
+
+Do not redesign existing screens.
+
+Do not remove existing functionality.
+
+Do not modify unrelated modules.
+
+Do not stop at an analysis. **Actually finish the remaining implementation and verify it.**

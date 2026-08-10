@@ -24,7 +24,7 @@ import { useSearchLocationStore, formatLocationLabel, pickedToGeoLocation } from
 import {
   Coffee, MapPin, ChevronDown, ChevronLeft, ShoppingBag, Heart, MessageCircle,
   Search, LogOut, Settings, LayoutDashboard, Store, Send,
-  Star, Package, Trash2, CheckCircle, Clock, Box, Truck,
+  Star, Package, Trash2, CheckCircle, Clock, Calendar, Box, Truck,
   AlertCircle, DollarSign, ClipboardList, Phone, Globe, MapPinIcon, AlertTriangle,
   Printer, Megaphone, Wrench, User, GraduationCap, Sun, Moon, X, Plus, Loader2,
 } from "lucide-react";
@@ -132,16 +132,36 @@ function AccountPanel({
   onClose: () => void;
   onLogout: () => void;
   initialOrderId?: number | null;
-  initialTab?: "orders" | "dashboard" | "settings" | null;
+   initialTab?: "orders" | "reservations" | "dashboard" | "settings" | null;
 }) {
   const isDark = useThemeStore((s) => s.isDark);
   const toggle = useThemeStore((s) => s.toggle);
-  const [activeTab, setActiveTab] = useState<"orders" | "dashboard" | "settings">(initialTab ?? "orders");
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"orders" | "reservations" | "dashboard" | "settings">(initialTab ?? "orders");
   const { data: orders = [], isLoading: ordersLoading } = useOrders();
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
+  const { data: maintenanceReservations = [], isLoading: reservationsLoading } = useQuery<any[]>({
+    queryKey: ["/api/maintenance/reservations"],
+    enabled: !!user,
+  });
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
   const [notifs, setNotifs] = useState({ orderUpdates: true, promotions: false, newSuppliers: true });
   const fmt = useFormatCurrency();
+  const reservationStatus: Record<string, { label: string; color: string }> = {
+    PENDING: { label: "En attente", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+    CONFIRMED: { label: "Confirmée", color: "bg-blue-100 text-blue-800 border-blue-200" },
+    COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
+    CANCELLED: { label: "Annulée", color: "bg-red-100 text-red-800 border-red-200" },
+    RESCHEDULE_PENDING: { label: "Modification à confirmer", color: "bg-purple-100 text-purple-800 border-purple-200" },
+    RESCHEDULE_REJECTED: { label: "Modification refusée", color: "bg-gray-100 text-gray-700 border-gray-200" },
+  };
+  const respondToReschedule = useMutation({
+    mutationFn: ({ id, accepted }: { id: number; accepted: boolean }) =>
+      apiRequest("PATCH", `/api/maintenance/reservations/${id}/reschedule-response`, { accepted }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
+    },
+  });
 
   // Auto-open a specific order when directed from the checkout flow
   useEffect(() => {
@@ -186,6 +206,7 @@ function AccountPanel({
 
   const tabs = [
     { key: "orders" as const, label: "Orders", icon: ClipboardList },
+    { key: "reservations" as const, label: "Reservations", icon: Calendar },
     { key: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
     { key: "settings" as const, label: "Settings", icon: Settings },
   ];
@@ -236,12 +257,12 @@ function AccountPanel({
         </div>
 
         {/* Tab switcher */}
-        <div className={`flex gap-1 rounded-2xl p-1 ${switcherBg}`}>
+        <div className={`flex gap-1 rounded-2xl p-1 overflow-x-auto ${switcherBg}`} style={{ scrollbarWidth: "none" }}>
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-1 py-2 text-[11px] font-semibold rounded-xl transition-all ${activeTab === tab.key ? switcherActive : switcherInactive}`}
+              className={`flex-1 min-w-max flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-semibold rounded-xl transition-all ${activeTab === tab.key ? switcherActive : switcherInactive}`}
             >
               <tab.icon className="w-3 h-3" />{tab.label}
             </button>
@@ -284,6 +305,47 @@ function AccountPanel({
                           <span className={`text-sm font-bold ${dk ? "text-amber-400" : "text-amber-600"}`}>{fmt(order.totalAmount)}</span>
                         </div>
                       </button>
+                    );
+                  })}
+                </div>
+        )}
+        {/* MAINTENANCE RESERVATIONS */}
+        {activeTab === "reservations" && (
+          reservationsLoading
+            ? <div className="space-y-3 pt-2">{[...Array(2)].map((_, i) => <div key={i} className={`h-32 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}</div>
+            : maintenanceReservations.length === 0
+              ? <div className={`text-center py-16 ${textMuted}`}><Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className={`font-medium text-sm ${textPrimary}`}>No maintenance reservations yet</p></div>
+              : <div className="space-y-3 pt-2">
+                  {maintenanceReservations.map((reservation: any) => {
+                    const meta = reservationStatus[reservation.status] ?? reservationStatus.PENDING;
+                    return (
+                      <div key={reservation.id} className={`border rounded-2xl p-4 space-y-3 ${cardBg}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className={`font-semibold text-sm truncate ${textPrimary}`}>{reservation.maintenanceName || "Maintenance professional"}</p>
+                            <p className={`text-xs mt-0.5 ${textMuted}`}>{reservation.service} · {reservation.category || "—"}</p>
+                          </div>
+                          <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+                        </div>
+                        <div className={`grid grid-cols-2 gap-2 text-xs ${textMuted}`}>
+                          <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-amber-500" />{reservation.date}</span>
+                          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-amber-500" />{reservation.time || "—"}</span>
+                          <span className="flex items-center gap-1 col-span-2"><MapPin className="w-3 h-3 text-amber-500" />{reservation.location || "—"}</span>
+                        </div>
+                        <div className={`flex flex-wrap gap-2 text-[11px] ${textMuted}`}>
+                          <span>Urgence : {reservation.urgency || "NORMAL"}</span>
+                          {reservation.description && <span className="truncate">· {reservation.description}</span>}
+                        </div>
+                        {reservation.status === "RESCHEDULE_PENDING" && reservation.proposedDate && (
+                          <div className={`rounded-xl border px-3 py-2 text-xs ${dk ? "bg-purple-900/20 border-purple-800 text-purple-300" : "bg-purple-50 border-purple-100 text-purple-700"}`}>
+                            Le technicien propose le <strong>{reservation.proposedDate}</strong>{reservation.proposedTime ? ` à ${reservation.proposedTime}` : ""}.
+                            <div className="flex gap-2 mt-2">
+                              <Button size="sm" className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white" disabled={respondToReschedule.isPending} onClick={() => respondToReschedule.mutate({ id: reservation.id, accepted: true })}>Confirmer modification</Button>
+                              <Button size="sm" variant="outline" className="h-8 rounded-xl border-red-200 text-red-600" disabled={respondToReschedule.isPending} onClick={() => respondToReschedule.mutate({ id: reservation.id, accepted: false })}>Rejeter modification</Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -1519,7 +1581,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const t = useTheme(isDark);
 
   const [profileOpen, setProfileOpen] = useState(false);
-  const [profileInitialTab, setProfileInitialTab] = useState<"orders" | "dashboard" | "settings" | null>(null);
+  const [profileInitialTab, setProfileInitialTab] = useState<"orders" | "reservations" | "dashboard" | "settings" | null>(null);
   const [favOpen, setFavOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInitialService, setChatInitialService] = useState<ServiceId | undefined>(undefined);

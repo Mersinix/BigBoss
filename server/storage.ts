@@ -1454,6 +1454,8 @@ export class DatabaseStorage implements IStorage {
         ...(accepted && reservation.proposedDate
           ? { date: reservation.proposedDate, time: reservation.proposedTime }
           : {}),
+        proposedDate: null,
+        proposedTime: null,
         updatedAt: new Date(),
       })
       .where(eq(maintenanceReservations.id, id))

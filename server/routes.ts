@@ -1647,7 +1647,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
          ...subs.filter(s => s.status !== 'ACTIVE').map(s => ({ ...s, type: 'subcategory' })),
          ...flvs.filter(f => f.status !== 'ACTIVE').map(f => ({ ...f, type: 'flavor' })),
          ...szs.filter(s => s.status !== 'ACTIVE').map(s => ({ ...s, type: 'size' })),
-         ...brds.map(b => ({ ...b, type: 'brand' })),
+         ...brds.filter(b => b.status !== 'ACTIVE').map(b => ({ ...b, type: 'brand' })),
        ]);
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -1739,8 +1739,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const enrich = (items: any[], type: string) => items
         // Approved supplier taxonomy is now represented in Category
         // Management. Keep pending/rejected review history in this table;
-        // brands retain their existing visibility behavior.
-        .filter(item => !['category', 'subcategory', 'flavor', 'size'].includes(type) || item.status !== 'ACTIVE')
+        // Approved supplier taxonomy is represented in Category Management;
+        // pending/rejected rows remain here for review history.
+        .filter(item => item.status !== 'ACTIVE')
         .map(item => ({
           ...item, type,
           supplierName: item.createdByUserId ? (supplierMap.get(item.createdByUserId) ?? 'Unknown') : 'Unknown',

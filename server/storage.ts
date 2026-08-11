@@ -1883,7 +1883,10 @@ export class DatabaseStorage implements IStorage {
 
   async getBrands(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<BrandWithCount[]> {
     const all = filters?.includeAll
-      ? await db.select().from(brands)
+      ? await db.select().from(brands).where(or(
+          eq(brands.createdBySupplier, false),
+          and(eq(brands.status, 'ACTIVE'), eq(brands.isActive, true)),
+        ))
       : await db.select().from(brands).where(eq(brands.status, 'ACTIVE'));
     const prods = await db.select().from(products);
     const subs = await db.select().from(subCategories);

@@ -1,0 +1,47 @@
+Continue from the current implementation exactly as it is.
+
+Everything in **Admin > Categories > Supplier Categories** is already working correctly, and the previous synchronization rules were implemented for:
+
+* Category
+* Sub-category
+* Flavor
+* Size
+
+Now apply **the exact same behavior to Brand**.
+
+### Required change — Brand only
+
+At:
+
+**Admin Part > Categories Tab > Supplier Categories**
+
+When a supplier creates a **Brand** as a suggestion:
+
+1. **Pending Brand**
+
+   * It must appear in **Supplier Categories** as it does now.
+   * It must **NOT** appear in **Category Management** while its status is Pending.
+
+2. **Rejected Brand**
+
+   * It must remain visible in **Supplier Categories** with its Rejected status.
+   * It must **NOT** appear in **Category Management**.
+
+3. **Approved Brand**
+
+   * Once the Admin approves the Brand suggestion, it must be removed from the **Supplier Categories** table/list according to the existing behavior already implemented for Category / Sub-category / Flavor / Size.
+   * The approved Brand must then appear in **Category Management** and be available there as a normal approved Brand.
+
+### Important
+
+* Do **not** redesign anything.
+* Do **not** change the existing UI/design.
+* Do **not** change the existing approval/rejection actions.
+* Do **not** change the behavior of Category, Sub-category, Flavor, or Size.
+* Do **not** modify product, supplier, shop, store, promotion, pack, order, or other unrelated functionality.
+* Follow the **exact same synchronization logic already working for Category / Sub-category / Flavor / Size**, but apply it to Brand.
+* Make sure the behavior is synchronized everywhere and updates without requiring a manual page refresh if the existing implementation supports realtime updates.
+* Before making changes, inspect the current implementation and verify how the already-correct Category / Sub-category / Flavor / Size behavior works. Reuse the same existing behavior rather than creating a separate or inconsistent Brand implementation.
+* After the change, verify that there is no regression in the existing Supplier Categories and Category Management pages.
+
+Only make the changes necessary for **Brand**.

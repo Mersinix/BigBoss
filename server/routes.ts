@@ -1993,9 +1993,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const listingIds = listingRows.map((row) => row.id);
       const rows = listingIds.length
         ? await db.select({ id: packs.id, name: packs.name, isArchived: packs.isArchived })
-          .from(packItems)
-          .innerJoin(packs, eq(packItems.packId, packs.id))
-          .where(inArray(packItems.listingId, listingIds))
+          .from(packItemsTable)
+          .innerJoin(packs, eq(packItemsTable.packId, packs.id))
+          .where(inArray(packItemsTable.listingId, listingIds))
         : [];
       res.json({ packs: Array.from(new Map(rows.map((row) => [row.id, row])).values()) });
     } catch { res.status(500).json({ message: "Error" }); }
@@ -2099,9 +2099,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const listingUpdate: Record<string, any> = {};
+      const removingFromPackProducts = body.onlyForPack === false && body.onlyForMyProducts === true;
+      let archivedPackIds: number[] = [];
+      if (removingFromPackProducts) {
+        archivedPackIds = await storage.removeSupplierListingFromPacks(listingId);
+      }
       if (body.onlyForPack !== undefined) listingUpdate.onlyForPack = body.onlyForPack;
       if (body.onlyForMyProducts !== undefined) listingUpdate.onlyForMyProducts = body.onlyForMyProducts;
-      if (Object.keys(listingUpdate).length) {
+      if (Object.keys(listingUpdate).length && !removingFromPackProducts) {
         await db.update(supplierProductListings).set(listingUpdate).where(eq(supplierProductListings.id, listingId));
       }
 
@@ -2116,6 +2121,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const [updated] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
       broadcast("product_updated", { productId: listing.productId, listingId, supplierId: user!.id });
+      for (const packId of archivedPackIds) {
+        broadcast("pack_updated", { packId, supplierId: user!.id });
+      }
       res.json(updated ?? { id: listingId });
     } catch (err) {
       console.error(err);
@@ -2146,9 +2154,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!listing) return res.status(404).json({ message: "Not found" });
       if (listing.supplierId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
       const rows = await db.select({ id: packs.id, name: packs.name, isArchived: packs.isArchived })
-        .from(packItems)
-        .innerJoin(packs, eq(packItems.packId, packs.id))
-        .where(eq(packItems.listingId, listingId));
+        .from(packItemsTable)
+        .innerJoin(packs, eq(packItemsTable.packId, packs.id))
+        .where(eq(packItemsTable.listingId, listingId));
       res.json({ packs: rows });
     } catch { res.status(500).json({ message: "Error" }); }
   });

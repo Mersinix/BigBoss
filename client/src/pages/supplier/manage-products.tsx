@@ -8,6 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, Layers, LayoutGrid, LayoutList } from "lucide-react";
@@ -28,6 +32,7 @@ type AdminProductWithListing = ProductWithTaxonomy & {
 
 type SimpleFilters = { search: string; flavorId: string; sizeId: string; brandId: string };
 const EMPTY_SIMPLE: SimpleFilters = { search: "", flavorId: "", sizeId: "", brandId: "" };
+type PackUsage = { id: number; name: string; isArchived: boolean };
 
 // ── Taxonomy Badges ───────────────────────────────────────────────────────────
 
@@ -977,6 +982,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
   const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProd, setEditingProd] = useState<ProductWithTaxonomy | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string; packs: PackUsage[] } | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [filters, setFilters] = useState<NewProductFilters>(EMPTY_NEW_FILTERS);
 
@@ -992,6 +998,20 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
     },
     onError: () => toast({ title: "Error deleting product", variant: "destructive" }),
   });
+
+  const requestDelete = async (product: ProductWithTaxonomy) => {
+    try {
+      const res = await fetch(`/api/supplier/created-products/${product.id}/pack-usage`, { credentials: "include" });
+      const usage = res.ok ? await res.json() as { packs: PackUsage[] } : { packs: [] };
+      if (usage.packs.length > 0) {
+        setDeleteTarget({ id: product.id, name: product.name, packs: usage.packs });
+        return;
+      }
+      if (confirm(`Delete "${product.name}"?`)) deleteMut.mutate(product.id);
+    } catch {
+      toast({ title: "Unable to check Pack usage", variant: "destructive" });
+    }
+  };
 
   // Stats
   const totalCount = createdProducts.length;
@@ -1193,7 +1213,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
                       <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={() => { setEditingProd(p); setModalOpen(true); }} data-testid={`button-edit-sprod-${p.id}`}>
                         <Pencil className="w-3 h-3 mr-1" />Edit
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => { if (confirm(`Delete "${p.name}"?`)) deleteMut.mutate(p.id); }} data-testid={`button-delete-sprod-grid-${p.id}`}>
+                      <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => requestDelete(p)} data-testid={`button-delete-sprod-grid-${p.id}`}>
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </>
@@ -1239,9 +1259,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
                       </Button>
                     )}
                     {(p as any).status === 'PENDING' && (
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => {
-                        if (confirm(`Delete "${p.name}"?`)) deleteMut.mutate(p.id);
-                      }} data-testid={`button-delete-sprod-${p.id}`}>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestDelete(p)} data-testid={`button-delete-sprod-${p.id}`}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     )}
@@ -1262,6 +1280,30 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
           mappings={mappings}
         />
       )}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Product used in Pack(s)</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteTarget?.name}</strong> is currently used by one or more Packs.
+              Confirming removal will delete the product and move every affected Pack from New Packs to Old Packs.
+              Existing Pack history and orders will be preserved.
+              <span className="block mt-2 font-medium">
+                Affected Packs: {deleteTarget?.packs.map(pack => pack.name).join(", ")}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (deleteTarget) deleteMut.mutate(deleteTarget.id); setDeleteTarget(null); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete product and archive Packs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1626,6 +1668,7 @@ function MyProductsTab({
   const [editingListing, setEditingListing] = useState<SupplierListingWithProduct | null>(null);
 
   const { selectedCategoryId, selectedSubCategoryId, setSelectedCategory, setSelectedSubCategory } = useSupplierCategoryStore();
+  const [removeTarget, setRemoveTarget] = useState<{ id: number; name: string; packs: PackUsage[] } | null>(null);
 
   const hasMappings = mappings.length > 0;
 
@@ -1734,6 +1777,20 @@ function MyProductsTab({
     },
     onError: () => toast({ title: "Error removing", variant: "destructive" }),
   });
+
+  const requestRemove = async (listing: SupplierListingWithProduct) => {
+    try {
+      const res = await fetch(`/api/supplier/listings/${listing.id}/pack-usage`, { credentials: "include" });
+      const usage = res.ok ? await res.json() as { packs: PackUsage[] } : { packs: [] };
+      if (usage.packs.length > 0) {
+        setRemoveTarget({ id: listing.id, name: listing.product.name, packs: usage.packs });
+        return;
+      }
+      if (confirm(`Remove "${listing.product.name}" from your products?`)) removeMutation.mutate(listing.id);
+    } catch {
+      toast({ title: "Unable to check Pack usage", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -1919,9 +1976,7 @@ function MyProductsTab({
                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => {
-                          if (confirm(`Remove "${l.product.name}" from your products?`)) removeMutation.mutate(l.id);
-                        }} data-testid={`button-remove-listing-${l.id}`}>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestRemove(l)} data-testid={`button-remove-listing-${l.id}`}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </TableCell>
@@ -1943,6 +1998,30 @@ function MyProductsTab({
           onSuccess={() => { qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] }); invalidateMarketplace(qc); }}
         />
       )}
+      <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Product used in Pack(s)</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{removeTarget?.name}</strong> is currently used by one or more Packs.
+              Confirming removal will remove the product and move every affected Pack from New Packs to Old Packs.
+              Existing Pack history and orders will be preserved.
+              <span className="block mt-2 font-medium">
+                Affected Packs: {removeTarget?.packs.map(pack => pack.name).join(", ")}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (removeTarget) removeMutation.mutate(removeTarget.id); setRemoveTarget(null); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove product and archive Packs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

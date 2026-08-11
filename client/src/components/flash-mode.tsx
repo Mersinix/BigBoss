@@ -42,6 +42,9 @@ function getItemImages(item: FlashItem): string[] {
     if (p.imageUrl) return [p.imageUrl];
     return [];
   }
+  if (item.data.flashImageUrl) return [item.data.flashImageUrl];
+  const normalImages = (item.data.imageUrls ?? []).filter(Boolean);
+  if (normalImages.length > 0) return normalImages;
   return item.data.imageUrl ? [item.data.imageUrl] : [];
 }
 

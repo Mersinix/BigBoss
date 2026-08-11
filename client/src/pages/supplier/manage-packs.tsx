@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Package, Pencil, Trash2, Copy, Eye, EyeOff, Layers, ImageOff,
-  Archive, ArchiveRestore, Search, Calendar, BoxesIcon, Star
+  Archive, ArchiveRestore, Search, Calendar, BoxesIcon, Star, Zap
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -104,7 +104,14 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   const qc = useQueryClient();
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
-  const [imageUrl, setImageUrl] = useState(editing?.imageUrl ?? "");
+  const [imageUrls, setImageUrls] = useState<string[]>(
+    editing?.imageUrls?.length
+      ? editing.imageUrls
+      : editing?.imageUrl
+        ? [editing.imageUrl]
+        : [""],
+  );
+  const [flashImageUrl, setFlashImageUrl] = useState(editing?.flashImageUrl ?? "");
   const [expirationDate, setExpirationDate] = useState(editing?.expirationDate ? new Date(editing.expirationDate).toISOString().slice(0, 10) : "");
   const [items, setItems] = useState<PackItemDraft[]>(
     editing
@@ -149,6 +156,21 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
 
   const setPackVariantPrice = (listingId: number, variantId: number | null, packVariantPrice: string) => {
     setItems(prev => prev.map(i => (i.listingId === listingId && i.variantId === variantId) ? { ...i, packVariantPrice } : i));
+  };
+
+  const updateImageUrl = (index: number, value: string) => {
+    setImageUrls(prev => prev.map((url, i) => i === index ? value : url));
+  };
+
+  const addImageUrl = () => {
+    setImageUrls(prev => prev.length < 4 ? [...prev, ""] : prev);
+  };
+
+  const removeImageUrl = (index: number) => {
+    setImageUrls(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [""];
+    });
   };
 
   const preview = useMemo(() => {
@@ -199,7 +221,9 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       const body = {
         name,
         description: description || null,
-        imageUrl: imageUrl || null,
+        imageUrl: imageUrls.find(url => url.trim())?.trim() || null,
+        imageUrls: imageUrls.map(url => url.trim()).filter(Boolean),
+        flashImageUrl: flashImageUrl.trim() || null,
         price: autoPackPrice,
         // quantityAvailable is intentionally omitted — the server auto-computes it
         // from the selected variants' current stock.
@@ -247,8 +271,36 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
               <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What's included and why it's a good deal" />
             </div>
             <div>
-              <Label>Image URL</Label>
-              <Input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://…" data-testid="input-pack-image" />
+              <div className="flex items-center justify-between mb-1.5">
+                <Label>Pack images (up to 4)</Label>
+                <span className="text-xs text-muted-foreground">{imageUrls.length}/4</span>
+              </div>
+              <div className="space-y-2">
+                {imageUrls.map((url, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      value={url}
+                      onChange={e => updateImageUrl(index, e.target.value)}
+                      placeholder={`Image URL ${index + 1}`}
+                      data-testid={`input-pack-image-${index + 1}`}
+                    />
+                    {imageUrls.length > 1 && (
+                      <Button type="button" size="icon" variant="ghost" className="shrink-0 text-destructive" onClick={() => removeImageUrl(index)} aria-label={`Remove image ${index + 1}`}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {imageUrls.length < 4 && (
+                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addImageUrl} data-testid="button-add-pack-image">
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />Add image
+                </Button>
+              )}
+            </div>
+            <div>
+              <Label>FLASH Image URL</Label>
+              <Input value={flashImageUrl} onChange={e => setFlashImageUrl(e.target.value)} placeholder="https://…" data-testid="input-pack-flash-image" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -366,7 +418,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
             <Card>
               <CardContent className="p-4 space-y-3">
                 <div className="aspect-video bg-secondary rounded-lg overflow-hidden flex items-center justify-center">
-                  {imageUrl ? <img src={imageUrl} className="w-full h-full object-cover" /> : <ImageOff className="w-8 h-8 text-muted-foreground" />}
+                  {imageUrls.find(url => url.trim()) ? <img src={imageUrls.find(url => url.trim())} className="w-full h-full object-cover" /> : <ImageOff className="w-8 h-8 text-muted-foreground" />}
                 </div>
                 <div>
                   <p className="font-semibold">{name || "Pack name"}</p>
@@ -393,6 +445,17 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <Label className="block">Flash Live preview</Label>
+                <div className="aspect-[9/16] max-h-64 bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                  {flashImageUrl.trim()
+                    ? <img src={flashImageUrl.trim()} className="w-full h-full object-cover" alt="Flash preview" />
+                    : <Zap className="w-8 h-8 text-amber-400" />}
+                </div>
+                <p className="text-xs text-muted-foreground">This image is used only in Flash mode.</p>
               </CardContent>
             </Card>
           </div>
@@ -552,6 +615,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
   const [filterFlavor, setFilterFlavor] = useState("__all__");
   const [filterSize, setFilterSize] = useState("__all__");
   const [selected, setSelected] = useState<PackItemDraft[]>([]);
+  const [removeTarget, setRemoveTarget] = useState<{ listingId: number; name: string; packs: { id: number; name: string; isArchived: boolean }[] } | null>(null);
 
   // Clear the current selection whenever a Pack is successfully created,
   // so the supplier can immediately start selecting for a new one.
@@ -568,6 +632,16 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
     },
     onError: (err: any) => toast({ title: err?.message ?? "Error removing product", variant: "destructive" }),
   });
+
+  const requestRemoveFromPack = async (listing: SupplierListingWithProduct) => {
+    try {
+      const res = await fetch(`/api/supplier/listings/${listing.id}/pack-usage`, { credentials: "include" });
+      const usage = res.ok ? await res.json() as { packs: { id: number; name: string; isArchived: boolean }[] } : { packs: [] };
+      setRemoveTarget({ listingId: listing.id, name: listing.product.name, packs: usage.packs });
+    } catch {
+      toast({ title: "Unable to check Pack usage", variant: "destructive" });
+    }
+  };
 
   // Only pack-eligible listings (not onlyForMyProducts)
   const eligible = useMemo(() =>
@@ -743,30 +817,15 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                       {(listing as any).onlyForPack && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-0">Pack only</Badge>}
                     </div>
                   </div>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive shrink-0"
-                        data-testid={`button-remove-pack-product-${listing.id}`}
-                      >
-                        Remove
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Remove from Pack Products?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          "{listing.product.name}" will no longer be available for new Packs. It stays in My Products, and any Packs already created that include it are not affected.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => removeFromPack.mutate(listing.id)}>Remove</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => requestRemoveFromPack(listing)}
+                    data-testid={`button-remove-pack-product-${listing.id}`}
+                  >
+                    Remove
+                  </Button>
                 </div>
                 <div className="space-y-1.5 pl-10">
                   {groups.map(g => {
@@ -808,6 +867,33 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           })}
         </div>
       )}
+      <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {removeTarget?.packs.length ? "Product used in Pack(s)" : "Remove from Pack Products?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              "{removeTarget?.name}" will no longer be available for new Packs and will stay in My Products.
+              {removeTarget?.packs.length
+                ? <> Existing Packs using it will move from New Packs to Old Packs so their history is preserved.
+                    <span className="block mt-2 font-medium">
+                      Affected Packs: {removeTarget.packs.map(pack => pack.name).join(", ")}
+                    </span>
+                  </>
+                : " Existing Packs are not affected."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (removeTarget) removeFromPack.mutate(removeTarget.listingId); setRemoveTarget(null); }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

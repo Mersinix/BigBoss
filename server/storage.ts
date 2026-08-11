@@ -1720,7 +1720,13 @@ export class DatabaseStorage implements IStorage {
 
   async getCategories(opts?: { includeAll?: boolean }): Promise<CategoryWithCount[]> {
     const cats = opts?.includeAll
-      ? await db.select().from(categories).orderBy(asc(categories.displayOrder), asc(categories.id))
+      // Supplier suggestions become normal taxonomy rows when approved. Keep
+      // pending/rejected supplier rows out of Category Management while
+      // preserving the existing include-all behavior for admin-managed rows.
+      ? await db.select().from(categories).where(or(
+          eq(categories.createdBySupplier, false),
+          and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true)),
+        )).orderBy(asc(categories.displayOrder), asc(categories.id))
       : await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true))).orderBy(asc(categories.displayOrder), asc(categories.id));
     const subs = await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
     const prods = await db.select().from(products);
@@ -1761,8 +1767,14 @@ export class DatabaseStorage implements IStorage {
     let subs;
     if (opts?.includeAll) {
       subs = categoryId
-        ? await db.select().from(subCategories).where(eq(subCategories.categoryId, categoryId))
-        : await db.select().from(subCategories);
+        ? await db.select().from(subCategories).where(and(
+            eq(subCategories.categoryId, categoryId),
+            or(eq(subCategories.createdBySupplier, false), and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true))),
+          ))
+        : await db.select().from(subCategories).where(or(
+            eq(subCategories.createdBySupplier, false),
+            and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)),
+          ));
     } else {
       subs = categoryId
         ? await db.select().from(subCategories).where(and(eq(subCategories.categoryId, categoryId), eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)))
@@ -1801,7 +1813,10 @@ export class DatabaseStorage implements IStorage {
 
   async getFlavors(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<FlavorWithCount[]> {
     const all = filters?.includeAll
-      ? await db.select().from(flavors)
+      ? await db.select().from(flavors).where(or(
+          eq(flavors.createdBySupplier, false),
+          and(eq(flavors.status, 'ACTIVE'), eq(flavors.isActive, true)),
+        ))
       : await db.select().from(flavors).where(eq(flavors.status, 'ACTIVE'));
     const prods = await db.select().from(products);
     const subs = await db.select().from(subCategories);
@@ -1833,7 +1848,10 @@ export class DatabaseStorage implements IStorage {
 
   async getSizes(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<SizeWithCount[]> {
     const all = filters?.includeAll
-      ? await db.select().from(sizes)
+      ? await db.select().from(sizes).where(or(
+          eq(sizes.createdBySupplier, false),
+          and(eq(sizes.status, 'ACTIVE'), eq(sizes.isActive, true)),
+        ))
       : await db.select().from(sizes).where(eq(sizes.status, 'ACTIVE'));
     const prods = await db.select().from(products);
     const subs = await db.select().from(subCategories);

@@ -1638,13 +1638,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         db.select().from(sizes).where(eq(sizes.createdByUserId, user!.id)),
         db.select().from(brands).where(eq(brands.createdByUserId, user!.id)),
       ]);
-      res.json([
-        ...cats.map(c => ({ ...c, type: 'category' })),
-        ...subs.map(s => ({ ...s, type: 'subcategory' })),
-        ...flvs.map(f => ({ ...f, type: 'flavor' })),
-        ...szs.map(s => ({ ...s, type: 'size' })),
-        ...brds.map(b => ({ ...b, type: 'brand' })),
-      ]);
+       // Once approved, category/sub-category/flavor/size suggestions live in
+       // Category Management as regular taxonomy. Pending and rejected rows
+       // remain here so suppliers can see their review history. Brands retain
+       // the existing behavior.
+       res.json([
+         ...cats.filter(c => c.status !== 'ACTIVE').map(c => ({ ...c, type: 'category' })),
+         ...subs.filter(s => s.status !== 'ACTIVE').map(s => ({ ...s, type: 'subcategory' })),
+         ...flvs.filter(f => f.status !== 'ACTIVE').map(f => ({ ...f, type: 'flavor' })),
+         ...szs.filter(s => s.status !== 'ACTIVE').map(s => ({ ...s, type: 'size' })),
+         ...brds.map(b => ({ ...b, type: 'brand' })),
+       ]);
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -1732,10 +1736,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userIds = Array.from(new Set(allItems.map((r: any) => r.createdByUserId).filter(Boolean))) as number[];
       const supplierRows = userIds.length ? await db.select().from(users).where(inArray(users.id, userIds)) : [];
       const supplierMap = new Map(supplierRows.map(u => [u.id, u.name]));
-      const enrich = (items: any[], type: string) => items.map(item => ({
-        ...item, type,
-        supplierName: item.createdByUserId ? (supplierMap.get(item.createdByUserId) ?? 'Unknown') : 'Unknown',
-      }));
+      const enrich = (items: any[], type: string) => items
+        // Approved supplier taxonomy is now represented in Category
+        // Management. Keep pending/rejected review history in this table;
+        // brands retain their existing visibility behavior.
+        .filter(item => !['category', 'subcategory', 'flavor', 'size'].includes(type) || item.status !== 'ACTIVE')
+        .map(item => ({
+          ...item, type,
+          supplierName: item.createdByUserId ? (supplierMap.get(item.createdByUserId) ?? 'Unknown') : 'Unknown',
+        }));
       res.json([
         ...enrich(cats, 'category'), ...enrich(subs, 'subcategory'),
         ...enrich(flvs, 'flavor'), ...enrich(szs, 'size'), ...enrich(brds, 'brand'),
@@ -1771,7 +1780,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (name !== undefined) updates.name = name.trim();
       if (description !== undefined) updates.description = description?.trim() || null;
       if (icon !== undefined) updates.icon = icon?.trim() || null;
-      if (status !== undefined) updates.status = status;
+       if (status !== undefined) {
+         updates.status = status;
+         if (['PENDING', 'REJECTED'].includes(status)) updates.isActive = false;
+         if (status === 'ACTIVE') updates.isActive = true;
+       }
       if (type === 'subcategory' && categoryId !== undefined) updates.categoryId = parseInt(categoryId);
       if (type === 'size' && value !== undefined) updates.value = value?.trim() || null;
       if (['brand', 'flavor', 'size'].includes(type) && subCategoryIds !== undefined) updates.subCategoryIds = subCategoryIds;

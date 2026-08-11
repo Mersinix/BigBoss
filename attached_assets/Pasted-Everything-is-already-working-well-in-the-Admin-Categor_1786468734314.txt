@@ -1,0 +1,61 @@
+Everything is already working well in the **Admin → Categories → Supplier Categories** page. I only want to fix the synchronization/visibility rules between **Supplier Categories** and **Category Management**.
+
+Before making any changes, read and understand the existing implementation and check the current synchronization between these two pages. Then make only the changes described below.
+
+### Required changes
+
+#### 1. Approved supplier suggestions
+
+For supplier-created suggestions of these types:
+
+* Category
+* Sub-category
+* Flavor
+* Size
+
+When the Admin **approves** a supplier suggestion:
+
+* It must be **removed from the Supplier Categories table**.
+* It must appear in **Category Management** as an approved/active taxonomy item.
+* It must remain fully usable everywhere that normally consumes Category / Sub-category / Flavor / Size data.
+* The synchronization must happen immediately without requiring a page refresh.
+
+The Supplier Categories page should therefore represent suggestions that still require/recently had supplier-category review, while approved taxonomy items should live in Category Management.
+
+#### 2. Pending supplier suggestions
+
+For supplier-created suggestions of:
+
+* Category
+* Sub-category
+* Flavor
+* Size
+
+If the suggestion is still **Pending**:
+
+* It must **NOT appear in Category Management**.
+* It must remain visible in **Supplier Categories** with its current Pending status and existing actions.
+
+#### 3. Rejected suggestions
+
+Keep the existing rejected behavior unchanged unless it is directly required for the synchronization above.
+
+Rejected suggestions should continue to appear in **Supplier Categories** with their current status/history.
+
+### Important
+
+* **Do not redesign anything.**
+* **Do not change the existing UI/design/layout.**
+* **Do not remove any existing functionality or actions.**
+* **Do not change the behavior of Brand suggestions unless necessary; the requested synchronization rules specifically concern Category, Sub-category, Flavor and Size.**
+* Do not modify unrelated Category, Product, Supplier, Shop, Store, or other modules.
+* Preserve the current Admin workflow and existing status system.
+* Make sure the same underlying taxonomy item is not duplicated between **Supplier Categories** and **Category Management** after approval.
+* Check all existing consumers of these taxonomy records so approving a suggestion does not break existing mappings.
+* The result must update in **real time**, without requiring the Admin to manually refresh the page.
+
+After making the changes, verify the complete flow:
+
+**Supplier creates suggestion → Pending → visible only in Supplier Categories → Admin approves → immediately disappears from Supplier Categories → immediately appears in Category Management → remains available to the rest of the platform.**
+
+Keep everything else exactly as it is.

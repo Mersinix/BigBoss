@@ -1972,10 +1972,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/supplier/created-products/:id", requireApprovedSupplier, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
-      const deleted = await storage.deleteSupplierProduct(parseInt(req.params.id), user!.id);
-      if (!deleted) return res.status(403).json({ message: "Cannot delete this product" });
+      const result = await storage.deleteSupplierProduct(parseInt(req.params.id), user!.id);
+      if (!result.deleted) return res.status(403).json({ message: "Cannot delete this product" });
       broadcast("product_updated", { productId: parseInt(req.params.id), supplierId: user!.id });
-      res.json({ message: "Deleted" });
+      for (const packId of result.archivedPackIds) {
+        broadcast("pack_updated", { packId, supplierId: user!.id });
+      }
+      res.json({ message: "Deleted", archivedPackIds: result.archivedPackIds });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/supplier/created-products/:id/pack-usage", requireApprovedSupplier, async (req, res) => {
+    try {
+      const productId = parseInt(req.params.id);
+      const [product] = await db.select().from(products).where(eq(products.id, productId));
+      if (!product || product.createdByUserId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const listingRows = await db.select({ id: supplierProductListings.id })
+        .from(supplierProductListings)
+        .where(and(eq(supplierProductListings.productId, productId), eq(supplierProductListings.supplierId, req.session.userId)));
+      const listingIds = listingRows.map((row) => row.id);
+      const rows = listingIds.length
+        ? await db.select({ id: packs.id, name: packs.name, isArchived: packs.isArchived })
+          .from(packItems)
+          .innerJoin(packs, eq(packItems.packId, packs.id))
+          .where(inArray(packItems.listingId, listingIds))
+        : [];
+      res.json({ packs: Array.from(new Map(rows.map((row) => [row.id, row])).values()) });
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -2108,9 +2130,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
       if (!listing) return res.status(404).json({ message: "Not found" });
       if (listing.supplierId !== user!.id) return res.status(403).json({ message: "Forbidden" });
-      await storage.deleteSupplierListing(listingId);
+      const archivedPackIds = await storage.deleteSupplierListing(listingId);
       broadcast("product_updated", { productId: listing.productId, listingId, supplierId: user!.id });
-      res.json({ message: "Removed" });
+      for (const packId of archivedPackIds) {
+        broadcast("pack_updated", { packId, supplierId: user!.id });
+      }
+      res.json({ message: "Removed", archivedPackIds });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+  app.get("/api/supplier/listings/:id/pack-usage", requireApprovedSupplier, async (req, res) => {
+    try {
+      const listingId = parseInt(req.params.id);
+      const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
+      if (!listing) return res.status(404).json({ message: "Not found" });
+      if (listing.supplierId !== req.session.userId) return res.status(403).json({ message: "Forbidden" });
+      const rows = await db.select({ id: packs.id, name: packs.name, isArchived: packs.isArchived })
+        .from(packItems)
+        .innerJoin(packs, eq(packItems.packId, packs.id))
+        .where(eq(packItems.listingId, listingId));
+      res.json({ packs: rows });
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -2304,6 +2343,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     name: z.string().min(1),
     description: z.string().nullable().optional(),
     imageUrl: z.string().nullable().optional(),
+    imageUrls: z.array(z.string()).max(4).nullable().optional(),
+    flashImageUrl: z.string().nullable().optional(),
     price: z.number().min(0),
     quantityAvailable: z.number().min(0).optional(), // ignored — pack stock is auto-computed from variant stock
     expirationDate: z.string().nullable().optional(),
@@ -2345,6 +2386,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         name: body.name,
         description: body.description ?? null,
         imageUrl: body.imageUrl ?? null,
+        imageUrls: body.imageUrls ?? null,
+        flashImageUrl: body.flashImageUrl ?? null,
         price: priceCents,
         quantityAvailable: autoQuantity,
         expirationDate: body.expirationDate ? new Date(body.expirationDate) : null,
@@ -2391,6 +2434,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ...(body.name !== undefined && { name: body.name }),
         ...(body.description !== undefined && { description: body.description }),
         ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl }),
+        ...(body.imageUrls !== undefined && { imageUrls: body.imageUrls }),
+        ...(body.flashImageUrl !== undefined && { flashImageUrl: body.flashImageUrl }),
         ...(body.price !== undefined && { price: Math.round(body.price * 100) }),
         ...(autoQuantity !== undefined && { quantityAvailable: autoQuantity }),
         ...(body.expirationDate !== undefined && { expirationDate: body.expirationDate ? new Date(body.expirationDate) : null }),

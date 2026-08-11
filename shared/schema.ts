@@ -417,6 +417,10 @@ export const packs = pgTable("packs", {
   name: text("name").notNull(),
   description: text("description"),
   imageUrl: text("image_url"),
+  // Up to four normal Pack images. imageUrl remains the legacy primary image.
+  imageUrls: text("image_urls").array(),
+  // Separate image used only by Flash mode.
+  flashImageUrl: text("flash_image_url"),
   price: integer("price").notNull().default(0),
   quantityAvailable: integer("quantity_available").notNull().default(0),
   expirationDate: timestamp("expiration_date"),

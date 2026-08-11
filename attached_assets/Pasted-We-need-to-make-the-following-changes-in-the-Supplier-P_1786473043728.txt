@@ -1,0 +1,213 @@
+We need to make the following changes in the **Supplier → Products → Packs / My Products** area.
+
+Before making any changes, **inspect the existing implementation, database relationships, Pack logic, product deletion/removal logic, Pack status logic, image handling, and Flash modal logic**. Check how everything is currently synchronized with Shop, Store, Coffee Owner, Admin, and Supplier views.
+
+The existing work is already correct. **Do not redesign, refactor, or change anything that is not explicitly requested below. Preserve all existing functionality, business logic, UI design, filters, calculations, stock logic, Pack creation/editing behavior, promotions, and synchronization.**
+
+### 1. Supplier → Products → Packs → Pack Products
+
+Current page:
+
+**Products → Packs → Pack Products**
+
+When the supplier clicks **Remove** on a product:
+
+* If the product is **not used by any Pack**, keep the current removal behavior exactly as it is.
+* If the product is currently used by **one or more Packs**, the supplier must **NOT be able to remove it directly**.
+* Instead, open a confirmation modal.
+* The modal must clearly inform the supplier that this product is currently being used in one or more Packs.
+* The supplier can then confirm or cancel the removal.
+
+If the supplier confirms:
+
+* Remove the product from the supplier's active product listings into "Pack Products" page according to the existing deletion/removal behavior.
+* Every Pack that depends on that product must automatically be moved from **"New Packs"** to **"Old Packs"**.
+* The affected Packs must no longer appear in **New Packs**.
+* They must appear in **Old Packs**.
+* Preserve the Pack information and history; do not silently delete the Pack itself unless the existing Pack lifecycle already defines that behavior.
+* Make sure this is synchronized everywhere immediately without requiring a page refresh.
+
+If the supplier cancels the confirmation:
+
+* Do nothing.
+* Keep the product and all Packs unchanged.
+
+If the product is used in multiple Packs, **all affected Packs** must be moved to Old Packs.
+
+### 2. Supplier → Products → My Products
+
+Apply the same protection to the supplier's **My Products** page.
+
+When the supplier attempts to delete a product:
+
+* If the product is not used in any Pack, keep the existing delete behavior.
+* If the product is used in one or more Packs:
+
+  * Show a confirmation modal explaining that the product is currently used in Pack(s).
+  * Allow the supplier to cancel or confirm.
+* If confirmed:
+
+  * Perform the existing product deletion/removal.
+  * Move every Pack using that product from **New Packs** to **Old Packs**.
+  * Remove those Packs from New Packs immediately.
+  * Keep them available in Old Packs.
+  * Do not break historical Pack/order information.
+* If cancelled, nothing changes.
+
+The behavior must be consistent whether the supplier removes the product from:
+
+* **Pack Products**
+* **My Products**
+
+There should be no situation where deleting the same product through one page produces a different Pack lifecycle result than deleting it through the other page.
+
+### 3. Pack Edit Modal — Multiple Pack Images
+
+In the existing **Edit Pack** modal, we currently have:
+
+**Image URL**
+
+Change this Pack image section so the supplier can configure **multiple Pack images**, with a maximum of:
+
+**4 Pack images**
+
+The supplier should be able to enter/manage up to four image URLs.
+
+Important:
+
+* Maximum = 4 images.
+* Keep the existing Pack image functionality compatible with the current system.
+* Do not remove existing Pack images/data unexpectedly.
+* Preserve existing Pack previews and marketplace behavior.
+* The four images should belong to the Pack itself and be available wherever Pack images are already consumed.
+* Do not change the existing Pack card/modal design unless necessary to accommodate the additional image URLs.
+
+### 4. Separate FLASH Image URL
+
+Add another image field specifically for the **Flash** experience:
+
+**FLASH Image URL**
+
+This image is separate from the normal Pack images because the Flash modal uses different image dimensions/layout requirements.
+
+Therefore:
+
+* Normal Pack images must remain dedicated to the normal Pack/card/product experiences.
+* **FLASH Image URL** must be stored separately.
+* The Flash modal must use the Flash-specific image instead of using the normal Pack image.
+* Do not replace or remove the normal Pack images.
+
+### 5. Flash Live Preview
+
+Inside the existing **Edit Pack** modal, we currently have:
+
+**Live preview**
+
+Keep the existing Live preview exactly as it is.
+
+Directly underneath it, add another preview section specifically for the Flash image:
+
+**Flash Live preview**
+
+This preview should allow the supplier to immediately see how the configured **FLASH Image URL** will appear inside the Flash modal.
+
+The purpose is only to preview the Flash-specific image/layout.
+
+Do not change the existing normal Pack Live preview.
+
+The supplier should therefore have:
+
+**Live preview**
+→ previews the normal Pack
+
+**Flash Live preview**
+→ previews the Pack using the FLASH Image URL in the Flash presentation
+
+### 6. Data consistency and synchronization
+
+Verify all relationships between:
+
+* Supplier Product
+* Supplier Product Variant
+* Pack
+* Pack Items / Pack Components
+* Pack status
+* New Packs
+* Old Packs
+* Flash
+* Shop
+* Store
+* Coffee Owner
+* Orders
+
+When a product is removed/deleted:
+
+* All Packs depending on that product must be detected.
+* All affected Packs must transition from New Packs to Old Packs.
+* No unrelated Pack should be affected.
+* If a product is used by multiple Packs, every affected Pack must be handled.
+* Existing historical order/Pack information must remain intact.
+* Existing stock and Pack calculations must not be broken.
+
+### 7. Realtime behavior
+
+All changes must appear **immediately without requiring a page refresh** wherever the affected data is displayed.
+
+For example, after confirming deletion:
+
+* My Products updates.
+* Pack Products updates.
+* New Packs updates.
+* Old Packs updates.
+* Shop/Store data remains synchronized according to the existing architecture.
+* Flash data remains synchronized.
+* Any existing realtime listeners/invalidation mechanisms should continue working.
+
+Do not introduce a second conflicting synchronization mechanism if the project already has an existing realtime synchronization system.
+
+### 8. Important protection rules
+
+Do NOT:
+
+* Change the existing Pack creation workflow.
+* Change Pack price calculations.
+* Change Pack stock calculations.
+* Change Pack component/variant selection behavior.
+* Change product pricing.
+* Change product stock behavior.
+* Change promotion behavior.
+* Change order behavior.
+* Change Shop behavior unless required for the new Pack image/Flash image data.
+* Change Store behavior unless required for the new Pack image/Flash image data.
+* Change existing modal designs unnecessarily.
+* Remove existing fields or previews.
+* Remove Old Packs functionality.
+* Change unrelated pages/components.
+* Perform broad refactoring.
+
+### 9. Verification before finishing
+
+Before considering the task complete:
+
+1. Verify product removal from **Pack Products**.
+2. Verify product deletion from **My Products**.
+3. Test a product that is not used in any Pack.
+4. Test a product used in one Pack.
+5. Test a product used in multiple Packs.
+6. Verify the confirmation modal appears only when necessary.
+7. Verify Cancel leaves everything unchanged.
+8. Verify Confirm moves every affected Pack from New Packs → Old Packs.
+9. Verify unrelated Packs remain unchanged.
+10. Verify Old Packs still contain the affected Packs.
+11. Verify the four normal Pack image URLs work.
+12. Verify the maximum is 4 images.
+13. Verify FLASH Image URL is stored separately from normal Pack images.
+14. Verify normal Live preview still works.
+15. Verify Flash Live preview works.
+16. Verify Flash uses FLASH Image URL rather than the normal Pack image.
+17. Verify existing Pack images still work everywhere they already worked.
+18. Verify realtime updates without refresh.
+19. Check the complete synchronization between Supplier, Shop, Store, Coffee Owner, Flash, Packs, and Orders.
+20. Run the relevant type checks/tests/build validation and fix only issues caused by these changes.
+
+Most importantly: **the existing implementation is already working. Make this as a minimal, targeted extension. Do not change or redesign anything outside the requirements above.**

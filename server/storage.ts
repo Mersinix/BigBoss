@@ -130,8 +130,8 @@ export interface IStorage {
   getPackDetail(id: number): Promise<PackDetail | undefined>;
   computeAutoPackQuantity(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
   computePackItemsTotal(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
-  createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail>;
-  updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined>;
+  createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; imageUrls?: string[] | null; flashImageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail>;
+  updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; imageUrls: string[] | null; flashImageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined>;
   duplicatePack(id: number, supplierId: number): Promise<PackDetail | undefined>;
   deletePack(id: number): Promise<void>;
   getMarketplacePacks(filters?: { categoryId?: number; subCategoryId?: number; brandId?: number; flavorId?: number; sizeId?: number; supplierId?: number }): Promise<PackDetail[]>;
@@ -172,14 +172,15 @@ export interface IStorage {
   getSupplierListings(supplierId: number, filters?: { categoryId?: number; subCategoryId?: number; flavorId?: number; sizeId?: number; brandId?: number }): Promise<SupplierListingWithProduct[]>;
   createSupplierListing(data: Partial<InsertSupplierProductListing>): Promise<SupplierProductListing>;
   updateSupplierListing(id: number, updates: { price?: number; stock?: number; availableFlavorIds?: number[]; availableSizeIds?: number[]; availableBrandIds?: number[] }): Promise<SupplierProductListing>;
-  deleteSupplierListing(id: number): Promise<void>;
+  deleteSupplierListing(id: number): Promise<number[]>;
+  removeSupplierListingFromPacks(id: number): Promise<number[]>;
   getSupplierListingByProductId(supplierId: number, productId: number): Promise<SupplierProductListing | undefined>;
 
   // Supplier product workflow
   getSupplierCreatedProducts(supplierId: number): Promise<ProductWithTaxonomy[]>;
   createSupplierProduct(data: Partial<InsertProduct>): Promise<Product>;
   updateSupplierProduct(id: number, supplierId: number, updates: Partial<InsertProduct>): Promise<Product | undefined>;
-  deleteSupplierProduct(id: number, supplierId: number): Promise<boolean>;
+  deleteSupplierProduct(id: number, supplierId: number): Promise<{ deleted: boolean; archivedPackIds: number[] }>;
   getAdminSupplierProducts(): Promise<(ProductWithTaxonomy & { creatorName: string })[]>;
   approveSupplierProduct(id: number, adminId: number): Promise<Product>;
 
@@ -2117,9 +2118,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteSupplierListing(id: number) {
+    const affectedRows = await db.select({ packId: packItems.packId })
+      .from(packItems)
+      .innerJoin(packs, eq(packItems.packId, packs.id))
+      .where(and(eq(packItems.listingId, id), eq(packs.isArchived, false)));
+    const archivedPackIds = Array.from(new Set(affectedRows.map((row) => row.packId)));
+    if (archivedPackIds.length > 0) {
+      await db.update(packs)
+        .set({ isArchived: true, updatedAt: new Date() })
+        .where(inArray(packs.id, archivedPackIds));
+    }
     await db.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, id));
     await db.delete(inventoryAdjustments).where(eq(inventoryAdjustments.listingId, id));
     await db.delete(supplierProductListings).where(eq(supplierProductListings.id, id));
+    return archivedPackIds;
+  }
+
+  async removeSupplierListingFromPacks(id: number): Promise<number[]> {
+    const affectedRows = await db.select({ packId: packItems.packId })
+      .from(packItems)
+      .innerJoin(packs, eq(packItems.packId, packs.id))
+      .where(and(eq(packItems.listingId, id), eq(packs.isArchived, false)));
+    const archivedPackIds = Array.from(new Set(affectedRows.map((row) => row.packId)));
+    if (archivedPackIds.length > 0) {
+      await db.update(packs)
+        .set({ isArchived: true, updatedAt: new Date() })
+        .where(inArray(packs.id, archivedPackIds));
+    }
+    await db.update(supplierProductListings)
+      .set({ onlyForPack: false, onlyForMyProducts: true, updatedAt: new Date() })
+      .where(eq(supplierProductListings.id, id));
+    return archivedPackIds;
   }
 
   // ── Inventory ────────────────────────────────────────────────────────────────
@@ -2639,12 +2668,14 @@ export class DatabaseStorage implements IStorage {
     return detail;
   }
 
-  async createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail> {
+  async createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; imageUrls?: string[] | null; flashImageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail> {
     const [pack] = await db.insert(packs).values({
       supplierId,
       name: data.name,
       description: data.description ?? null,
       imageUrl: data.imageUrl ?? null,
+      imageUrls: data.imageUrls ?? null,
+      flashImageUrl: data.flashImageUrl ?? null,
       price: data.price,
       quantityAvailable: data.quantityAvailable,
       expirationDate: data.expirationDate ?? null,
@@ -2657,7 +2688,7 @@ export class DatabaseStorage implements IStorage {
     return detail;
   }
 
-  async updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined> {
+  async updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; imageUrls: string[] | null; flashImageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined> {
     const [existing] = await db.select().from(packs).where(and(eq(packs.id, id), eq(packs.supplierId, supplierId)));
     if (!existing) return undefined;
     const [updated] = await db.update(packs).set({ ...data, updatedAt: new Date() } as any).where(eq(packs.id, id)).returning();
@@ -2679,6 +2710,8 @@ export class DatabaseStorage implements IStorage {
       name: `${existing.name} (copy)`,
       description: existing.description,
       imageUrl: existing.imageUrl,
+      imageUrls: existing.imageUrls,
+      flashImageUrl: existing.flashImageUrl,
       price: existing.price,
       quantityAvailable: existing.quantityAvailable,
       expirationDate: existing.expirationDate,
@@ -2798,14 +2831,20 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSupplierProduct(id: number, supplierId: number) {
     const [p] = await db.select().from(products).where(eq(products.id, id));
-    if (!p || p.createdByUserId !== supplierId || p.status !== 'PENDING') return false;
-    const listings = await db.select({ id: supplierProductListings.id }).from(supplierProductListings).where(eq(supplierProductListings.productId, id));
+    if (!p || p.createdByUserId !== supplierId || p.status !== 'PENDING') {
+      return { deleted: false, archivedPackIds: [] };
+    }
+    const listings = await db.select({ id: supplierProductListings.id })
+      .from(supplierProductListings)
+      .where(and(eq(supplierProductListings.productId, id), eq(supplierProductListings.supplierId, supplierId)));
+    const archivedPackIds = new Set<number>();
     if (listings.length) {
-      await db.delete(supplierProductVariants).where(inArray(supplierProductVariants.listingId, listings.map(l => l.id)));
-      await db.delete(supplierProductListings).where(inArray(supplierProductListings.id, listings.map(l => l.id)));
+      for (const listing of listings) {
+        for (const packId of await this.deleteSupplierListing(listing.id)) archivedPackIds.add(packId);
+      }
     }
     await db.delete(products).where(eq(products.id, id));
-    return true;
+    return { deleted: true, archivedPackIds: Array.from(archivedPackIds) };
   }
 
   async getAdminSupplierProducts(): Promise<(ProductWithTaxonomy & { creatorName: string })[]> {

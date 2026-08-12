@@ -2575,10 +2575,12 @@ export class DatabaseStorage implements IStorage {
     const productMap = new Map(prods.map((p) => [p.id, p]));
 
     // A Pack component is valid only while its listing is visible, its product
-    // is active, and (when selected) its exact variant still exists. The
-    // onlyForMyProducts flag is also the persisted "removed from Packs" state.
-    // Prune invalid rows here so every Pack consumer gets the same result and
-    // stale rows do not remain in the relation after a read.
+    // is active, and its selected inventory slot is currently sellable. A
+    // zero-price or out-of-stock variant is no longer an active Pack choice,
+    // just like a missing/hidden product. The onlyForMyProducts flag is also
+    // the persisted "removed from Packs" state. Prune invalid rows here so
+    // every Pack consumer gets the same result and stale rows do not remain
+    // in the relation after a read.
     const validItems = allItems.filter((item) => {
       const listing = listingMap.get(item.listingId);
       const product = listing ? productMap.get(listing.productId) : undefined;
@@ -2586,9 +2588,10 @@ export class DatabaseStorage implements IStorage {
         return false;
       }
       if (item.variantId != null) {
-        return variantMap.get(item.variantId)?.listingId === item.listingId;
+        const variant = variantMap.get(item.variantId);
+        return variant?.listingId === item.listingId && variant.price > 0 && variant.quantity > 0;
       }
-      return !(variantsByListing.get(item.listingId)?.length);
+      return !(variantsByListing.get(item.listingId)?.length) && listing.price > 0 && listing.stock > 0;
     });
     const invalidItemIds = allItems
       .filter((item) => !validItems.some((valid) => valid.id === item.id))
@@ -2742,13 +2745,15 @@ export class DatabaseStorage implements IStorage {
     const productRows = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
     const productMap = new Map(productRows.map((product) => [product.id, product]));
 
+    const allVariants = await db.select().from(supplierProductVariants)
+      .where(inArray(supplierProductVariants.listingId, listingIds));
     const variantIds = items.map((item) => item.variantId).filter((id): id is number => id != null);
     const variantRows = variantIds.length
-      ? await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.id, variantIds))
+      ? allVariants.filter((variant) => variantIds.includes(variant.id))
       : [];
     const variantMap = new Map(variantRows.map((variant) => [variant.id, variant]));
     const variantsByListing = new Map<number, number>();
-    for (const variant of variantRows) {
+    for (const variant of allVariants) {
       variantsByListing.set(variant.listingId, (variantsByListing.get(variant.listingId) ?? 0) + 1);
     }
 
@@ -2756,8 +2761,11 @@ export class DatabaseStorage implements IStorage {
       const listing = listingMap.get(item.listingId);
       const product = listing ? productMap.get(listing.productId) : undefined;
       if (!listing || listing.visibility !== 'VISIBLE' || listing.onlyForMyProducts || product?.status !== 'ACTIVE') return false;
-      if (item.variantId != null) return variantMap.get(item.variantId)?.listingId === item.listingId;
-      return !variantsByListing.has(item.listingId);
+      if (item.variantId != null) {
+        const variant = variantMap.get(item.variantId);
+        return variant?.listingId === item.listingId && variant.price > 0 && variant.quantity > 0;
+      }
+      return !variantsByListing.has(item.listingId) && listing.price > 0 && listing.stock > 0;
     });
   }
 

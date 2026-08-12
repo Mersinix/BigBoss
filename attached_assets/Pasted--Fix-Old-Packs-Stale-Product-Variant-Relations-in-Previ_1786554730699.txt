@@ -1,0 +1,64 @@
+# Fix Old Packs — Stale Product/Variant Relations in Preview
+
+Supplier Part → Products → Packs → Old Packs → Edit Pack
+
+There is one remaining synchronization issue in the Pack Edit modal.
+
+I found that the **Live preview** can still display a product/variant that is no longer present in **“Variants in pack”**.
+
+Example:
+
+* A product/variant was previously included in the Pack.
+* That product/variant was later deleted, removed, deactivated, or became unavailable/end-of-stock.
+* The old relation still appears in the **Live preview** and is still included in the Pack calculation.
+* If the supplier selects/adds that product again, it appears **twice**: the old stale entry + the newly selected entry.
+
+### Required behavior
+
+1. **Live preview must contain ONLY the products/variants currently present in “Variants in pack”.**
+
+2. Any old/stale product or variant relation that is no longer active/selected must:
+
+   * disappear from the Live preview;
+   * no longer be included in the Pack price calculation;
+   * no longer be included in the Pack stock/availability calculation;
+   * no longer appear as an existing Pack item/relation.
+
+3. If the supplier adds that same product/variant again, it must appear **only once**.
+
+4. The supplier must be able to add the previously removed/deactivated product again normally, or replace it with another active product/variant.
+
+5. The Live preview and all automatic calculations must stay synchronized with the current **“Variants in pack”** selection at all times.
+
+6. Do not preserve stale legacy relations just because they existed previously. The current active Pack composition is the source of truth.
+
+7. Apply the same correction to the existing Pack editing flow without changing the current Pack design or unrelated Pack functionality.
+
+### Important
+
+Before making changes, inspect the existing implementation and synchronization between:
+
+* Old Packs
+* Edit Pack modal
+* Variants in pack
+* Live preview
+* Pack price calculation
+* Pack stock/availability calculation
+* Product/variant deletion, removal, deactivation, and re-addition
+
+Make the **smallest targeted change** necessary.
+
+Do not redesign anything.
+Do not remove existing functionality.
+Do not change unrelated Products, Packs, Shop, Flash, Orders, Promotions, or other supplier functionality.
+
+After the change, verify specifically this scenario:
+
+**Old product in Pack → product becomes inactive/removed/unavailable → Edit Pack → old product disappears from Variants/Preview/calculations → supplier adds the product again → product appears exactly once and is correctly included in Preview and calculations.**
+Now **execute the prompt above**.
+
+Do not only read or analyze it. Start implementing the requested changes in the codebase.
+
+First inspect the current implementation, then make the required changes, verify the affected Pack/Edit Pack/Preview/calculation flows, and complete the task fully.
+
+Do not stop at analysis or a plan. **Actually make the code changes and verify the result.**

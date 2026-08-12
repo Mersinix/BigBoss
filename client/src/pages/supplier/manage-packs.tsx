@@ -89,6 +89,18 @@ function usePacks() {
 
 type PackItemDraft = { listingId: number; variantId: number | null; quantity: number; packVariantPrice: string };
 
+function isCurrentPackItem(item: PackItemDraft, listings: SupplierListingWithProduct[]): boolean {
+  const listing = listings.find(l => l.id === item.listingId);
+  if (!listing || listing.visibility !== "VISIBLE" || (listing.product as any).status !== "ACTIVE" || (listing as any).onlyForMyProducts) {
+    return false;
+  }
+  if (item.variantId !== null) {
+    const variant = (listing.variants ?? []).find(v => v.id === item.variantId);
+    return !!variant && variant.price > 0 && variant.quantity > 0;
+  }
+  return (listing.variants ?? []).length === 0 && listing.price > 0 && listing.stock > 0;
+}
+
 // ── Pack Form Modal ───────────────────────────────────────────────────────────
 
 function PackFormModal({ open, onClose, editing, listings, preSelectedItems = [], onCreated }: {
@@ -142,6 +154,13 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     return base;
   }, [listings, preSelectedListingIds]);
 
+  // Inventory can change while the edit modal is open. Keep stale relations
+  // out of the preview, calculations, and the next save.
+  const currentItems = useMemo(
+    () => items.filter(item => isCurrentPackItem(item, listings)),
+    [items, listings],
+  );
+
   const toggleItem = (listingId: number, variantId: number | null, defaultPrice: number) => {
     setItems(prev => {
       const exists = prev.find(i => i.listingId === listingId && i.variantId === variantId);
@@ -182,7 +201,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     let individualTotal = 0;
     let packTotal = 0;
     let autoQuantity = Infinity;
-    const rows = items.map(it => {
+    const rows = currentItems.map(it => {
       const listing = listings.find(l => l.id === it.listingId);
       if (!listing) return null;
       const variant = it.variantId ? (listing.variants ?? []).find(v => v.id === it.variantId) : null;
@@ -206,11 +225,11 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       packTotal, // auto-computed total pack price in cents
       autoQuantity: isFinite(autoQuantity) ? autoQuantity : 0,
     };
-  }, [items, listings]);
+  }, [currentItems, listings]);
 
   // Auto-computed pack price from per-variant pack prices
   const autoPackPrice = preview.packTotal / 100; // in dollars
-  const priceError = preview.individualTotal > 0 && items.length > 0 && preview.packTotal >= preview.individualTotal
+  const priceError = preview.individualTotal > 0 && currentItems.length > 0 && preview.packTotal >= preview.individualTotal
     ? "Pack price must be lower than the total original price of the included products"
     : null;
 
@@ -230,7 +249,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
         // quantityAvailable is intentionally omitted — the server auto-computes it
         // from the selected variants' current stock.
         expirationDate: expirationDate || null,
-        items: items.map(i => ({
+        items: currentItems.map(i => ({
           listingId: i.listingId,
           variantId: i.variantId,
           quantity: i.quantity,
@@ -251,12 +270,12 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   });
 
   // Every selected variant must have its pack variant price filled (> 0)
-  const missingPriceCount = items.filter(i => !(parseFloat(i.packVariantPrice) > 0)).length;
+  const missingPriceCount = currentItems.filter(i => !(parseFloat(i.packVariantPrice) > 0)).length;
   const variantPriceError = missingPriceCount > 0
     ? `${missingPriceCount} selected variant${missingPriceCount > 1 ? "s are" : " is"} missing a Pack Variant Price`
     : null;
-  const canSave = name.trim().length > 0 && items.length >= 2 && !variantPriceError && !priceError && !expirationError;
-  // items.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
+  const canSave = name.trim().length > 0 && currentItems.length >= 2 && !variantPriceError && !priceError && !expirationError;
+  // currentItems.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -308,14 +327,14 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
               <div>
                 <Label>Pack price (auto)</Label>
                 <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm font-medium" data-testid="text-pack-auto-price">
-                  {items.length > 0 ? fmt(preview.packTotal) : "—"}
+                  {currentItems.length > 0 ? fmt(preview.packTotal) : "—"}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant pack prices below</p>
               </div>
               <div>
                 <Label>Packs available (stock)</Label>
                 <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm text-muted-foreground" data-testid="text-pack-auto-quantity">
-                  {items.length > 0 ? `${preview.autoQuantity} (auto)` : "—"}
+                  {currentItems.length > 0 ? `${preview.autoQuantity} (auto)` : "—"}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant stock</p>
               </div>
@@ -335,7 +354,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
             <div>
               <Label className="mb-2 block">
                 Variants in pack
-                {items.length < 2 && <span className="text-xs text-amber-600 ml-2">(select at least 2 variants)</span>}
+                {currentItems.length < 2 && <span className="text-xs text-amber-600 ml-2">(select at least 2 variants)</span>}
               </Label>
               <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
                 {usableListings.length === 0 && (

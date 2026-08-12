@@ -1,0 +1,62 @@
+Execute this change in the existing Supplier → Products → Packs → Old Packs → Edit Pack flow.
+
+### Required fix — Live Preview must match “Variants in pack” exactly
+
+In the **Edit Pack** modal, the **Live preview → Includes** section is currently showing variants that are not actually selected in **“Variants in pack”**.
+
+Example:
+
+In **Variants in pack**, the supplier currently has only:
+
+* `Lait demi ecrémé – Delice Holding`
+* `6-Pack`
+* `Cinnamon`
+* quantity `2`
+
+But the **Live preview → Includes** currently shows:
+
+* `1× FANTA 25cl (BLANC) — Gajou`
+* `2× Lait demi ecrémé – Delice Holding (Cinnamon) — 6-Pack`
+
+This is incorrect.
+
+### Correct behavior
+
+The **Includes** section of the Live preview must be a direct representation of the **currently selected variants in “Variants in pack”**.
+
+Therefore, in the example above, the preview must show ONLY:
+
+`2× Lait demi ecrémé – Delice Holding (Cinnamon) — 6-Pack`
+
+The unselected `FANTA 25cl (BLANC) — Gajou` must completely disappear.
+
+### Synchronization rules
+
+* Every selected variant in **Variants in pack** → appears in **Includes**.
+* Every unselected variant → does NOT appear in **Includes**.
+* If a variant is removed from **Variants in pack**, it must immediately disappear from the preview.
+* If a variant is added back, it must immediately appear in the preview.
+* The quantity shown in the preview must match the selected quantity.
+* Do not display previously selected/stale variants.
+* Do not display variants merely because they were historically part of the Pack.
+* The preview must use the exact same current variant selection that drives the Pack price and stock calculations.
+
+### Important
+
+Do not redesign the Edit Pack modal or Live Preview.
+
+Do not change any unrelated Pack, Product, Shop, Flash, Promotion, Order, or Supplier functionality.
+
+Keep the existing design and all existing behavior that is not part of this issue.
+
+Before finishing, test the complete synchronization:
+
+1. Open an existing Old Pack.
+2. Identify the variants currently selected under **Variants in pack**.
+3. Confirm that **Includes** contains exactly those variants and nothing else.
+4. Remove one selected variant → it disappears from Includes immediately.
+5. Add a variant → it appears exactly once.
+6. Change its quantity → the quantity in Includes updates accordingly.
+7. Confirm Pack price and stock remain synchronized with the same selected variants.
+
+**Do not stop at analysis. Execute the changes in the codebase and verify the result.**

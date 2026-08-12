@@ -161,6 +161,24 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     [items, listings],
   );
 
+  // The selector stores one representative variant per size group. An older
+  // Pack relation can still point at another active flavor in that group, so
+  // it must not appear selected or leak into the preview/calculations.
+  const selectedItems = useMemo(() => {
+    const selectedKeys = new Set(
+      usableListings.flatMap(listing =>
+        getVariantGroups(listing).map(group => `${listing.id}:${group.representativeId ?? "none"}`),
+      ),
+    );
+    const seenKeys = new Set<string>();
+    return currentItems.filter(item => {
+      const key = `${item.listingId}:${item.variantId ?? "none"}`;
+      if (!selectedKeys.has(key) || seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+  }, [currentItems, usableListings]);
+
   const toggleItem = (listingId: number, variantId: number | null, defaultPrice: number) => {
     setItems(prev => {
       const exists = prev.find(i => i.listingId === listingId && i.variantId === variantId);
@@ -201,7 +219,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     let individualTotal = 0;
     let packTotal = 0;
     let autoQuantity = Infinity;
-    const rows = currentItems.map(it => {
+    const rows = selectedItems.map(it => {
       const listing = listings.find(l => l.id === it.listingId);
       if (!listing) return null;
       const variant = it.variantId ? (listing.variants ?? []).find(v => v.id === it.variantId) : null;
@@ -225,11 +243,11 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       packTotal, // auto-computed total pack price in cents
       autoQuantity: isFinite(autoQuantity) ? autoQuantity : 0,
     };
-  }, [currentItems, listings]);
+  }, [selectedItems, listings]);
 
   // Auto-computed pack price from per-variant pack prices
   const autoPackPrice = preview.packTotal / 100; // in dollars
-  const priceError = preview.individualTotal > 0 && currentItems.length > 0 && preview.packTotal >= preview.individualTotal
+  const priceError = preview.individualTotal > 0 && selectedItems.length > 0 && preview.packTotal >= preview.individualTotal
     ? "Pack price must be lower than the total original price of the included products"
     : null;
 
@@ -249,7 +267,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
         // quantityAvailable is intentionally omitted — the server auto-computes it
         // from the selected variants' current stock.
         expirationDate: expirationDate || null,
-        items: currentItems.map(i => ({
+        items: selectedItems.map(i => ({
           listingId: i.listingId,
           variantId: i.variantId,
           quantity: i.quantity,
@@ -270,12 +288,12 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   });
 
   // Every selected variant must have its pack variant price filled (> 0)
-  const missingPriceCount = currentItems.filter(i => !(parseFloat(i.packVariantPrice) > 0)).length;
+  const missingPriceCount = selectedItems.filter(i => !(parseFloat(i.packVariantPrice) > 0)).length;
   const variantPriceError = missingPriceCount > 0
     ? `${missingPriceCount} selected variant${missingPriceCount > 1 ? "s are" : " is"} missing a Pack Variant Price`
     : null;
-  const canSave = name.trim().length > 0 && currentItems.length >= 2 && !variantPriceError && !priceError && !expirationError;
-  // currentItems.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
+  const canSave = name.trim().length > 0 && selectedItems.length >= 2 && !variantPriceError && !priceError && !expirationError;
+  // selectedItems.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -327,14 +345,14 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
               <div>
                 <Label>Pack price (auto)</Label>
                 <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm font-medium" data-testid="text-pack-auto-price">
-                  {currentItems.length > 0 ? fmt(preview.packTotal) : "—"}
+                  {selectedItems.length > 0 ? fmt(preview.packTotal) : "—"}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant pack prices below</p>
               </div>
               <div>
                 <Label>Packs available (stock)</Label>
                 <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm text-muted-foreground" data-testid="text-pack-auto-quantity">
-                  {currentItems.length > 0 ? `${preview.autoQuantity} (auto)` : "—"}
+                  {selectedItems.length > 0 ? `${preview.autoQuantity} (auto)` : "—"}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant stock</p>
               </div>
@@ -354,7 +372,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
             <div>
               <Label className="mb-2 block">
                 Variants in pack
-                {currentItems.length < 2 && <span className="text-xs text-amber-600 ml-2">(select at least 2 variants)</span>}
+                {selectedItems.length < 2 && <span className="text-xs text-amber-600 ml-2">(select at least 2 variants)</span>}
               </Label>
               <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
                 {usableListings.length === 0 && (

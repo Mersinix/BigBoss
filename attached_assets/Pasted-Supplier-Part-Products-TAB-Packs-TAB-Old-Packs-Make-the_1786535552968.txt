@@ -1,0 +1,41 @@
+Supplier Part > Products TAB > Packs TAB > Old Packs
+
+Make the following modification to the existing **Old Packs** behavior:
+
+When the Supplier opens **Edit Pack** from the **Old Packs** page, the Pack modal currently still shows products that are no longer active/available in the Pack's **Live preview → Includes** section.
+
+This should be corrected.
+
+Requirements:
+
+1. If a product/variant used by a Pack has been deleted, removed, or is no longer active, it must **no longer appear anywhere as an active Pack component**.
+2. In the **Old Packs → Edit Pack** modal, inactive/removed products must not remain in the Pack's product/component relation.
+3. In **Live preview → Includes**, show **only currently active products/variants** that are still valid members of the Pack.
+4. The Supplier must be able to remove obsolete/inactive Pack components from the Pack and then add new active products to the Pack.
+5. Do not recreate or restore deleted/inactive products just because they were previously part of the Pack.
+6. Keep all currently working Pack behavior unchanged:
+
+   * Pack pricing
+   * Pack stock calculation
+   * Pack images
+   * Flash image
+   * Variants / flavors / sizes
+   * Old Packs lifecycle
+   * New Packs behavior
+   * Product deletion/removal behavior
+   * Realtime synchronization
+7. Make sure the cleanup is synchronized everywhere the Pack is displayed, so obsolete products do not continue appearing in Pack details, previews, marketplace/store views, or other Pack-related interfaces.
+8. Preserve the existing UI/design. Do not redesign the modal or remove any existing functionality that is unrelated to this requirement.
+9. Before making changes, inspect the existing Pack/product relationship and deletion/removal logic and verify how inactive products are currently represented.
+10. After the changes, verify the complete flow:
+
+    * Product is active → appears in Pack.
+    * Product is removed/deleted/deactivated → no longer appears as an active Pack component.
+    * Old Pack opens correctly.
+    * Obsolete component can be removed.
+    * New active product can be added.
+    * Pack preview shows only valid active components.
+    * Existing Pack price/stock behavior remains correct.
+    * Changes synchronize without requiring a page refresh.
+
+Make only the changes necessary for this requirement and do not break or modify unrelated parts of the application.

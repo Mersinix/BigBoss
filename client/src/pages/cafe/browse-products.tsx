@@ -23,6 +23,7 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
+import { PackImageGallery } from "@/components/pack-image-gallery";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
@@ -582,18 +583,15 @@ export function PackCardTile({
       onClick={() => openPackQuickView(pack.id)}
     >
       {/* Image — aspect-[4/3], identical across all cards */}
-      <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.dk ? "bg-amber-900/20" : "bg-amber-50"}`}>
-        {pack.imageUrl ? (
-          <img
-            src={pack.imageUrl}
-            alt={pack.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Layers className={`w-10 h-10 ${t.dk ? "text-amber-800/60" : "text-amber-200"}`} />
-          </div>
-        )}
+       <div className={`relative overflow-hidden shrink-0 ${t.dk ? "bg-amber-900/20" : "bg-amber-50"}`}>
+         <PackImageGallery
+           imageUrl={pack.imageUrl}
+           imageUrls={pack.imageUrls}
+           alt={pack.name}
+           mainClassName={`aspect-[4/3] ${t.dk ? "bg-amber-900/20" : "bg-amber-50"} group-hover:scale-[1.02] transition-transform duration-300`}
+           thumbnailClassName="px-2 pb-1"
+           emptyClassName={t.dk ? "text-amber-800/60" : "text-amber-200"}
+         />
         {/* Pack badge */}
         <div className="absolute top-2 left-2">
           <Badge className="bg-amber-500/90 text-white text-[10px] font-semibold shadow-sm border-0 px-2 backdrop-blur-sm">

@@ -61,6 +61,22 @@ function getItemCategoryName(item: FlashItem): string | undefined {
   return item.data.categoryLabels[0]?.name ?? undefined;
 }
 
+function getItemTaxonomyLabels(item: FlashItem): { name: string; tone: "normal" | "accent" }[] {
+  if (item.kind === "product") {
+    const p = item.data;
+    return [
+      p.categoryLabel?.name ? { name: p.categoryLabel.name, tone: "normal" } : null,
+      p.subCategoryLabel?.name ? { name: p.subCategoryLabel.name, tone: "normal" } : null,
+      p.brandLabel?.name ? { name: p.brandLabel.name, tone: "accent" } : null,
+    ].filter((label): label is { name: string; tone: "normal" | "accent" } => !!label);
+  }
+  return [
+    ...item.data.categoryLabels.map(c => ({ name: c.name, tone: "normal" as const })),
+    ...item.data.subCategoryLabels.map(c => ({ name: c.name, tone: "normal" as const })),
+    ...item.data.brandLabels.map(c => ({ name: c.name, tone: "accent" as const })),
+  ];
+}
+
 // ── Content type options ──────────────────────────────────────────────────────
 
 const CONTENT_OPTIONS: {
@@ -485,23 +501,14 @@ export function FlashMode({
 
                 {/* Taxonomy pills */}
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {getItemCategoryName(current!) && (
-                    <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
-                      {getItemCategoryName(current!)}
+                  {getItemTaxonomyLabels(current!).map((label, index) => (
+                    <span
+                      key={`${label.name}-${index}`}
+                      className={`${label.tone === "accent" ? "bg-amber-500/80" : "bg-white/20"} backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full`}
+                    >
+                      {label.name}
                     </span>
-                  )}
-                  {current!.kind === "product" &&
-                    (current!.data as FlashProduct).subCategoryLabel?.name && (
-                      <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
-                        {(current!.data as FlashProduct).subCategoryLabel!.name}
-                      </span>
-                    )}
-                  {current!.kind === "product" &&
-                    (current!.data as FlashProduct).brandLabel?.name && (
-                      <span className="bg-amber-500/80 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
-                        {(current!.data as FlashProduct).brandLabel!.name}
-                      </span>
-                    )}
+                  ))}
                 </div>
               </div>
 

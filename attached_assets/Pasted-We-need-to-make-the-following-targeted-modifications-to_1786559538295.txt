@@ -1,0 +1,189 @@
+We need to make the following targeted modifications to the existing Supplier Packs and Coffee Owner Pack flows.
+
+Before making any changes, inspect the existing implementation and verify how Pack images, Pack variants/flavors, Pack previews, Flash, and Coffee Owner Pack modals are currently synchronized. Then execute the changes below.
+
+## 1. Pack multiple images — gallery behavior
+
+Supplier Part → Products → Packs → Edit Pack
+
+Packs can already have multiple images.
+
+In every place where a Pack with multiple images is displayed:
+
+* Show the Pack's multiple images as thumbnails/gallery images **under the main/big image**.
+* The currently selected/default image remains displayed as the big image.
+* When the user clicks any thumbnail, that image becomes the big/main image.
+* The selected image should update immediately without refresh.
+* Preserve the existing Pack image design and styling; only add the requested gallery interaction.
+
+This behavior must be synchronized everywhere the Pack is displayed, not only in the Supplier Edit Pack modal.
+
+### Coffee Owner side
+
+Apply the same Pack image gallery behavior to the Coffee Owner Pack modal.
+
+When the Coffee Owner opens a Pack:
+
+* Display the Pack's available images under the main image.
+* Allow the Coffee Owner to click any image.
+* The selected image becomes the large/main image.
+* Keep the existing Coffee Owner Pack modal design and functionality unchanged apart from this gallery behavior.
+
+The Supplier Pack images and Coffee Owner Pack images must use the same synchronized source of truth.
+
+---
+
+## 2. Pack variant flavors — show all available flavors
+
+There is currently a problem in the Pack preview where a variant displays only the **first available flavor**.
+
+Example:
+
+`BOGA Cider 25cl`
+
+`Gajou`
+
+`Citron (123) • Ananas (123) • BLANC (121)`
+
+The preview must not display only the first flavor.
+
+It must correctly represent all available flavors.
+
+---
+
+## 3. Supplier must select Pack flavors
+
+Supplier Part → Products → Packs → Edit Pack
+
+For each selected variant that has multiple available flavors:
+
+* All available flavors are currently selected by default.
+* Change this behavior.
+* The supplier must be able to select **one or more specific flavors** for that variant.
+* The supplier should be able to deselect flavors.
+* The selected flavors must be clearly represented in the Pack.
+* Only the selected flavors should belong to the Pack.
+* The Pack preview must display only the flavors currently selected for that variant.
+* Pack calculations and Pack relationships must remain synchronized with the actual selected variant/flavor combinations.
+
+Example:
+
+Available:
+
+`Citron • Ananas • BLANC`
+
+The supplier should be able to choose:
+
+`Citron • BLANC`
+
+and the Pack should then use/display only those two flavors.
+
+If the supplier selects only:
+
+`Ananas`
+
+then only `Ananas` should appear in the Pack preview.
+
+Do not assume that all available flavors belong to the Pack anymore.
+
+This must also remain synchronized when editing an existing Old Pack.
+
+---
+
+## 4. Supplier Flash Live Preview must match the Coffee Owner Flash modal
+
+Supplier Part → Products → Packs → Edit Pack → Flash Live Preview
+
+The **Flash Live Preview** must visually and functionally follow the existing **Flash modal used by the Coffee Owner**.
+
+Use the existing Coffee Owner Flash modal as the reference.
+
+The Supplier Flash Live Preview should have the same:
+
+* visual structure
+* icons
+* Pack/product presentation
+* mapped Category
+* mapped Sub-category
+* mapped Brand
+* filters
+* spacing
+* typography
+* badges
+* image behavior
+* general layout
+
+Do not create a new design.
+
+The purpose is to allow the Supplier to see an accurate preview of how the Pack will appear in Flash for the Coffee Owner.
+
+The preview must use the current Pack data, selected images, selected variants, selected flavors, pricing, promotions/status where applicable, and existing Flash information.
+
+---
+
+## 5. Synchronization requirements
+
+Before considering the task complete, verify synchronization across:
+
+**Supplier**
+
+* Pack Edit modal
+* Pack images
+* Variant selection
+* Flavor selection
+* Live Preview
+* Flash Live Preview
+
+**Coffee Owner**
+
+* Pack modal
+* Pack image gallery
+* Pack variants/flavors
+* Flash modal
+
+Changes must be reflected using the existing application synchronization behavior without requiring a manual page refresh where realtime behavior already exists.
+
+---
+
+## Important — do not break existing work
+
+Do NOT redesign existing components.
+
+Do NOT change unrelated functionality.
+
+Do NOT remove existing fields or features.
+
+Do NOT change:
+
+* Pack pricing logic unless required to correctly reflect selected flavors/variants
+* Pack stock logic unless required to correctly reflect selected flavors/variants
+* Orders
+* Products
+* Promotions
+* Shop
+* Supplier products
+* Coffee Owner marketplace behavior
+* Flash business logic
+
+Keep all existing designs exactly as they are unless explicitly mentioned above.
+
+Reuse the existing Coffee Owner Flash modal design rather than inventing a new one.
+
+Before editing, inspect the current implementation and identify all places where Pack images, variants, flavors, and Flash data are consumed so the behavior remains consistent everywhere.
+
+After implementation, test the complete flow:
+
+1. Create/edit a Pack with multiple images.
+2. Confirm all images appear as thumbnails under the main image.
+3. Click different thumbnails and confirm the main image changes.
+4. Open the same Pack from the Coffee Owner side and confirm the same image gallery is available.
+5. Select a variant with multiple flavors.
+6. Confirm flavors are no longer all forced to be selected.
+7. Select only specific flavors.
+8. Confirm only those flavors appear in the Pack preview.
+9. Save/edit the Pack and confirm the selected flavors remain synchronized.
+10. Confirm Flash Live Preview matches the Coffee Owner Flash modal in design and information.
+11. Confirm no duplicate/stale variants or flavors appear.
+12. Confirm no manual refresh is required where realtime synchronization already applies.
+
+**Execute the changes fully. Do not stop after reading or analyzing the requirements.**

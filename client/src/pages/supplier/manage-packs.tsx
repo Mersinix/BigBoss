@@ -23,6 +23,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import type { SupplierListingWithProduct, PackDetail } from "@shared/schema";
+import { FlashMode } from "@/components/flash-mode";
+import { PackImageGallery } from "@/components/pack-image-gallery";
 
 // ── Variant grouping helper ───────────────────────────────────────────────────
 // Groups individual flavor variants by size so the supplier works with
@@ -31,7 +33,7 @@ type VariantGroup = {
   key: string;
   sizeName: string | null;
   flavors: string[];
-  flavorDetails: { name: string; stock: number }[]; // per-flavor stock
+  flavorDetails: { id: number; name: string; stock: number }[]; // per-flavor stock
   price: number;
   totalStock: number;
   representativeId: number | null; // first variant's id, used as the pack item variantId
@@ -57,7 +59,7 @@ function getVariantGroups(listing: SupplierListingWithProduct): VariantGroup[] {
     const g = map.get(key)!;
     if (v.flavorName) {
       g.flavors.push(v.flavorName);
-      g.flavorDetails.push({ name: v.flavorName, stock: v.quantity });
+       if (v.flavorId != null) g.flavorDetails.push({ id: v.flavorId, name: v.flavorName, stock: v.quantity });
     }
   }
   return Array.from(map.values());
@@ -87,7 +89,7 @@ function usePacks() {
   return useQuery<PackDetail[]>({ queryKey: ["/api/supplier/packs"] });
 }
 
-type PackItemDraft = { listingId: number; variantId: number | null; quantity: number; packVariantPrice: string };
+type PackItemDraft = { listingId: number; variantId: number | null; flavorIds?: number[] | null; quantity: number; packVariantPrice: string };
 
 function isCurrentPackItem(item: PackItemDraft, listings: SupplierListingWithProduct[]): boolean {
   const listing = listings.find(l => l.id === item.listingId);
@@ -124,10 +126,11 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
         : [""],
   );
   const [flashImageUrl, setFlashImageUrl] = useState(editing?.flashImageUrl ?? "");
+  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
   const [expirationDate, setExpirationDate] = useState(editing?.expirationDate ? new Date(editing.expirationDate).toISOString().slice(0, 10) : "");
   const [items, setItems] = useState<PackItemDraft[]>(
     editing
-      ? editing.items.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity, packVariantPrice: i.packVariantPrice > 0 ? String(i.packVariantPrice / 100) : "" }))
+      ? editing.items.map(i => ({ listingId: i.listingId, variantId: i.variantId, flavorIds: i.flavorIds, quantity: i.quantity, packVariantPrice: i.packVariantPrice > 0 ? String(i.packVariantPrice / 100) : "" }))
       : preSelectedItems
   );
 
@@ -179,13 +182,13 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     });
   }, [currentItems, usableListings]);
 
-  const toggleItem = (listingId: number, variantId: number | null, defaultPrice: number) => {
+  const toggleItem = (listingId: number, variantId: number | null, defaultPrice: number, flavorIds: number[] = []) => {
     setItems(prev => {
       const exists = prev.find(i => i.listingId === listingId && i.variantId === variantId);
       if (exists) return prev.filter(i => !(i.listingId === listingId && i.variantId === variantId));
       // defaultPrice is the original variant price in cents; convert to dollars for the input
       const packVariantPrice = defaultPrice > 0 ? String((defaultPrice / 100).toFixed(2)) : "";
-      return [...prev, { listingId, variantId, quantity: 1, packVariantPrice }];
+      return [...prev, { listingId, variantId, flavorIds, quantity: 1, packVariantPrice }];
     });
   };
 
@@ -195,6 +198,18 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
 
   const setPackVariantPrice = (listingId: number, variantId: number | null, packVariantPrice: string) => {
     setItems(prev => prev.map(i => (i.listingId === listingId && i.variantId === variantId) ? { ...i, packVariantPrice } : i));
+  };
+
+  const toggleFlavor = (listingId: number, variantId: number | null, flavorId: number) => {
+    setItems(prev => prev.map(item => {
+      if (item.listingId !== listingId || item.variantId !== variantId) return item;
+      const group = listings.find(l => l.id === listingId)
+        ? getVariantGroups(listings.find(l => l.id === listingId)!).find(g => g.representativeId === variantId)
+        : undefined;
+      const current = item.flavorIds ?? group?.flavorDetails.map(f => f.id) ?? [];
+      const next = current.includes(flavorId) ? current.filter(id => id !== flavorId) : [...current, flavorId];
+      return { ...item, flavorIds: next };
+    }));
   };
 
   const updateImageUrl = (index: number, value: string) => {
@@ -222,9 +237,17 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     const rows = selectedItems.map(it => {
       const listing = listings.find(l => l.id === it.listingId);
       if (!listing) return null;
-      const variant = it.variantId ? (listing.variants ?? []).find(v => v.id === it.variantId) : null;
-      const unitPrice = variant ? variant.price : listing.price;
-      const availableQty = variant ? variant.quantity : listing.stock;
+       const variant = it.variantId != null ? (listing.variants ?? []).find(v => v.id === it.variantId) : null;
+       const sameGroup = variant
+         ? (listing.variants ?? []).filter(v => (v.sizeId ?? null) === (variant.sizeId ?? null) && v.price > 0 && v.quantity > 0)
+         : [];
+       const selectedVariants = it.flavorIds == null
+         ? sameGroup
+         : sameGroup.filter(v => v.flavorId != null && (it.flavorIds ?? []).includes(v.flavorId));
+       const unitPrice = variant
+         ? (selectedVariants.reduce((max, v) => Math.max(max, v.price), 0) || variant.price)
+         : listing.price;
+       const availableQty = variant ? selectedVariants.reduce((sum, v) => sum + v.quantity, 0) : listing.stock;
       individualTotal += unitPrice * it.quantity;
       const packVariantPriceCents = Math.round((parseFloat(it.packVariantPrice) || 0) * 100);
       packTotal += packVariantPriceCents * it.quantity;
@@ -232,7 +255,8 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       if (listing.product.categoryLabel) categoryNames.add(listing.product.categoryLabel.name);
       if (listing.product.subCategoryLabel) subCategoryNames.add(listing.product.subCategoryLabel.name);
       if (listing.product.brandLabel) brandNames.add(listing.product.brandLabel.name);
-      return { ...it, productName: listing.product.name, flavorName: variant?.flavorName, sizeName: variant?.sizeName, unitPrice, packVariantPriceCents };
+       const flavorNames = selectedVariants.map(v => v.flavorName).filter((n): n is string => !!n);
+       return { ...it, productName: listing.product.name, flavorName: flavorNames.length === 1 ? flavorNames[0] : undefined, flavorNames, sizeName: variant?.sizeName, unitPrice, packVariantPriceCents };
     }).filter(Boolean) as any[];
     return {
       rows,
@@ -244,6 +268,59 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       autoQuantity: isFinite(autoQuantity) ? autoQuantity : 0,
     };
   }, [selectedItems, listings]);
+
+  const flashPreviewPack = useMemo(() => ({
+    id: editing?.id ?? -1,
+    supplierId: editing?.supplierId ?? -1,
+    name: name || "Pack preview",
+    description: description || null,
+    imageUrl: imageUrls.find(url => url.trim())?.trim() || null,
+    imageUrls: imageUrls.map(url => url.trim()).filter(Boolean),
+    flashImageUrl: flashImageUrl.trim() || null,
+    price: preview.packTotal,
+    quantityAvailable: preview.autoQuantity,
+    expirationDate: expirationDate ? new Date(expirationDate) : null,
+    visibility: "VISIBLE" as const,
+    isArchived: false,
+    createdAt: null,
+    updatedAt: null,
+    supplierName: "Supplier",
+    supplierLat: null,
+    supplierLng: null,
+    supplierAvgRating: 0,
+    supplierReviewCount: 0,
+    items: preview.rows.map((row: any, index: number) => ({
+      id: index + 1,
+      listingId: row.listingId,
+      variantId: row.variantId,
+      flavorIds: row.flavorIds ?? null,
+      quantity: row.quantity,
+      packVariantPrice: row.packVariantPriceCents,
+      productId: row.productId ?? 0,
+      productName: row.productName,
+      productImageUrl: listings.find(l => l.id === row.listingId)?.product.imageUrl ?? null,
+      categoryId: null,
+      brandId: null,
+      flavorId: null,
+      flavorName: row.flavorName ?? null,
+      sizeId: null,
+      sizeName: row.sizeName ?? null,
+      unitPrice: row.unitPrice,
+      availableQuantity: 0,
+      listingVariants: [],
+    })),
+    categoryIds: [],
+    subCategoryIds: [],
+    brandIds: [],
+    categoryLabels: preview.categoryNames.map((label, index) => ({ id: index + 1, name: label })),
+    subCategoryLabels: preview.subCategoryNames.map((label, index) => ({ id: index + 1, name: label })),
+    brandLabels: preview.brandNames.map((label, index) => ({ id: index + 1, name: label })),
+    maxBuildable: preview.autoQuantity,
+    isAvailable: preview.autoQuantity > 0,
+    isExpired: false,
+    packReviewCount: 0,
+    packAvgRating: 0,
+  } as PackDetail), [editing?.id, editing?.supplierId, name, description, imageUrls, flashImageUrl, expirationDate, preview, listings]);
 
   // Auto-computed pack price from per-variant pack prices
   const autoPackPrice = preview.packTotal / 100; // in dollars
@@ -269,7 +346,8 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
         expirationDate: expirationDate || null,
         items: selectedItems.map(i => ({
           listingId: i.listingId,
-          variantId: i.variantId,
+           variantId: i.variantId,
+           flavorIds: i.flavorIds ?? null,
           quantity: i.quantity,
           packVariantPrice: parseFloat(i.packVariantPrice) || 0,
         })),
@@ -289,10 +367,16 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
 
   // Every selected variant must have its pack variant price filled (> 0)
   const missingPriceCount = selectedItems.filter(i => !(parseFloat(i.packVariantPrice) > 0)).length;
+  const missingFlavorCount = selectedItems.filter(i => {
+    const listing = listings.find(l => l.id === i.listingId);
+    const group = listing ? getVariantGroups(listing).find(g => g.representativeId === i.variantId) : undefined;
+    return !!group?.flavorDetails.length && (i.flavorIds ?? group.flavorDetails.map(f => f.id)).length === 0;
+  }).length;
   const variantPriceError = missingPriceCount > 0
     ? `${missingPriceCount} selected variant${missingPriceCount > 1 ? "s are" : " is"} missing a Pack Variant Price`
     : null;
-  const canSave = name.trim().length > 0 && selectedItems.length >= 2 && !variantPriceError && !priceError && !expirationError;
+  const flavorError = missingFlavorCount > 0 ? "Select at least one flavor for every selected variant group" : null;
+  const canSave = name.trim().length > 0 && selectedItems.length >= 2 && !variantPriceError && !flavorError && !priceError && !expirationError;
   // selectedItems.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
 
   return (
@@ -363,6 +447,9 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
             {priceError && (
               <p className="text-xs text-destructive -mt-2">{priceError}</p>
             )}
+            {flavorError && (
+              <p className="text-xs text-destructive -mt-2">{flavorError}</p>
+            )}
             <div>
               <Label>Expiration date (optional)</Label>
               <Input type="date" min={new Date().toISOString().slice(0, 10)} value={expirationDate} onChange={e => setExpirationDate(e.target.value)} data-testid="input-pack-expiration" />
@@ -392,11 +479,12 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                         {groups.map(g => {
                           const checked = items.some(i => i.listingId === listing.id && i.variantId === g.representativeId);
                           const item = items.find(i => i.listingId === listing.id && i.variantId === g.representativeId);
+                          const selectedFlavorIds = item?.flavorIds ?? g.flavorDetails.map(f => f.id);
                           return (
                             <div key={g.key} className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <label className="flex items-center gap-2 flex-1 cursor-pointer">
-                                  <input type="checkbox" checked={checked} onChange={() => toggleItem(listing.id, g.representativeId, g.price)} className="rounded" data-testid={`checkbox-pack-item-${listing.id}-${g.key}`} />
+                                  <input type="checkbox" checked={checked} onChange={() => toggleItem(listing.id, g.representativeId, g.price, g.flavorDetails.map(f => f.id))} className="rounded" data-testid={`checkbox-pack-item-${listing.id}-${g.key}`} />
                                   <span className="text-xs text-muted-foreground">
                                     {g.sizeName && <span className="font-medium">{g.sizeName}</span>}
                                     {g.flavorDetails.length > 0 ? (
@@ -419,18 +507,37 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                                 )}
                               </div>
                               {checked && (
-                                <div className="flex items-center gap-2 pl-5">
-                                  <span className="text-xs text-muted-foreground shrink-0">Pack price:</span>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step="0.01"
-                                    placeholder={String((g.price / 100).toFixed(2))}
-                                    value={item?.packVariantPrice ?? ""}
-                                    onChange={e => setPackVariantPrice(listing.id, g.representativeId, e.target.value)}
-                                    className="w-24 h-7 text-xs"
-                                    data-testid={`input-pack-variant-price-${listing.id}-${g.key}`}
-                                  />
+                                <div className="space-y-2 pl-5">
+                                  {g.flavorDetails.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      <span className="text-xs text-muted-foreground mr-1">Flavors:</span>
+                                      {g.flavorDetails.map(flavor => (
+                                        <label key={flavor.id} className="inline-flex items-center gap-1 text-xs cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedFlavorIds.includes(flavor.id)}
+                                            onChange={() => toggleFlavor(listing.id, g.representativeId, flavor.id)}
+                                            className="rounded"
+                                            data-testid={`checkbox-pack-flavor-${listing.id}-${flavor.id}`}
+                                          />
+                                          <span>{flavor.name}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground shrink-0">Pack price:</span>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      placeholder={String((g.price / 100).toFixed(2))}
+                                      value={item?.packVariantPrice ?? ""}
+                                      onChange={e => setPackVariantPrice(listing.id, g.representativeId, e.target.value)}
+                                      className="w-24 h-7 text-xs"
+                                      data-testid={`input-pack-variant-price-${listing.id}-${g.key}`}
+                                    />
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -456,9 +563,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
             <Label className="mb-2 block">Live preview</Label>
             <Card>
               <CardContent className="p-4 space-y-3">
-                <div className="aspect-video bg-secondary rounded-lg overflow-hidden flex items-center justify-center">
-                  {imageUrls.find(url => url.trim()) ? <img src={imageUrls.find(url => url.trim())} className="w-full h-full object-cover" /> : <ImageOff className="w-8 h-8 text-muted-foreground" />}
-                </div>
+                 <PackImageGallery imageUrls={imageUrls} alt={name || "Pack preview"} />
                 <div>
                   <p className="font-semibold">{name || "Pack name"}</p>
                   <p className="text-sm text-muted-foreground">{description || "Description…"}</p>
@@ -477,28 +582,39 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                 <div className="space-y-1 pt-2 border-t">
                   <p className="text-xs font-medium text-muted-foreground">Includes:</p>
                   {preview.rows.length === 0 && <p className="text-xs text-muted-foreground">Select products on the left</p>}
-                  {preview.rows.map((r, i) => (
+                   {preview.rows.map((r, i) => (
                     <div key={i} className="flex justify-between text-sm">
-                      <span>{r.quantity}× {r.productName}{r.flavorName ? ` (${r.flavorName})` : ""}{r.sizeName ? ` — ${r.sizeName}` : ""}</span>
+                       <span>{r.quantity}× {r.productName}{r.flavorNames?.length ? ` (${r.flavorNames.join(" • ")})` : ""}{r.sizeName ? ` — ${r.sizeName}` : ""}</span>
                       <span className="text-muted-foreground">{fmt(r.unitPrice * r.quantity)}</span>
                     </div>
                   ))}
                 </div>
+                 <Button type="button" variant="outline" className="w-full" onClick={() => setFlashPreviewOpen(true)}>
+                   <Zap className="w-4 h-4 mr-2" />Open Flash Live Preview
+                 </Button>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 space-y-3">
                 <Label className="block">Flash Live preview</Label>
-                <div className="aspect-[9/16] max-h-64 bg-black rounded-lg overflow-hidden flex items-center justify-center">
-                  {flashImageUrl.trim()
-                    ? <img src={flashImageUrl.trim()} className="w-full h-full object-cover" alt="Flash preview" />
-                    : <Zap className="w-8 h-8 text-amber-400" />}
-                </div>
-                <p className="text-xs text-muted-foreground">This image is used only in Flash mode.</p>
+                 <div className="aspect-[9/16] max-h-64 bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                   {flashImageUrl.trim() ? <img src={flashImageUrl.trim()} className="w-full h-full object-cover" alt="Flash preview" /> : <Zap className="w-8 h-8 text-amber-400" />}
+                 </div>
+                 <p className="text-xs text-muted-foreground">Uses the same Flash presentation, filters, badges, taxonomy, and image behavior as the Coffee Owner view.</p>
+                 <Button type="button" variant="outline" className="w-full" onClick={() => setFlashPreviewOpen(true)}>
+                   <Zap className="w-4 h-4 mr-2" />Open Flash Live Preview
+                 </Button>
               </CardContent>
             </Card>
           </div>
         </div>
+         <FlashMode
+           open={flashPreviewOpen}
+           onClose={() => setFlashPreviewOpen(false)}
+           products={[]}
+           packs={[flashPreviewPack]}
+           storeName="Flash Live Preview"
+         />
       </DialogContent>
     </Dialog>
   );
@@ -526,9 +642,7 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Pack Preview</DialogTitle></DialogHeader>
         <div className="space-y-4 mt-1">
-          <div className="aspect-video bg-secondary rounded-lg overflow-hidden flex items-center justify-center">
-            {pack.imageUrl ? <img src={pack.imageUrl} className="w-full h-full object-cover" alt={pack.name} /> : <ImageOff className="w-8 h-8 text-muted-foreground" />}
-          </div>
+           <PackImageGallery imageUrl={pack.imageUrl} imageUrls={pack.imageUrls} alt={pack.name} />
           <div>
             <h3 className="font-bold text-lg">{pack.name}</h3>
             {pack.description && <p className="text-sm text-muted-foreground mt-1">{pack.description}</p>}
@@ -956,11 +1070,15 @@ function ActivePackCard({ pack, onPreview }: {
       onClick={onPreview}
       data-testid={`card-pack-${pack.id}`}
     >
-      <div className="relative aspect-video bg-secondary overflow-hidden">
-        {pack.imageUrl
-          ? <img src={pack.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt={pack.name} />
-          : <div className="w-full h-full flex items-center justify-center"><Layers className="w-8 h-8 text-muted-foreground/40" /></div>
-        }
+       <div className="relative overflow-hidden">
+         <PackImageGallery
+           imageUrl={pack.imageUrl}
+           imageUrls={pack.imageUrls}
+           alt={pack.name}
+           mainClassName="aspect-video bg-secondary group-hover:scale-[1.02] transition-transform duration-300"
+           thumbnailClassName="px-1 pb-1"
+           emptyClassName="text-muted-foreground/40"
+         />
         <div className="absolute top-2 left-2 flex gap-1">
           <Badge variant={pack.visibility === "VISIBLE" ? "default" : "secondary"} className="text-[10px]">
             {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}

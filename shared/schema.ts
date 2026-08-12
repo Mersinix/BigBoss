@@ -436,6 +436,9 @@ export const packItems = pgTable("pack_items", {
   packId: integer("pack_id").notNull(),
   listingId: integer("listing_id").notNull(),
   variantId: integer("variant_id"),
+  // Selected flavor ids within the representative variant's size group.
+  // NULL keeps legacy Packs compatible by meaning "all flavors in the group".
+  flavorIds: integer("flavor_ids").array(),
   quantity: integer("quantity").notNull().default(1),
   packVariantPrice: integer("pack_variant_price").notNull().default(0),
 });
@@ -958,6 +961,7 @@ export type PackItemDetail = {
   id: number;
   listingId: number;
   variantId: number | null;
+  flavorIds: number[] | null;
   quantity: number;
   packVariantPrice: number; // per-variant pack price set by supplier (cents; 0 if not set)
   productId: number;

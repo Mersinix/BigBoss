@@ -128,11 +128,12 @@ export interface IStorage {
   // Packs
   getSupplierPacks(supplierId: number): Promise<PackDetail[]>;
   getPackDetail(id: number): Promise<PackDetail | undefined>;
-  computeAutoPackQuantity(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
-  computePackItemsTotal(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
+  computeAutoPackQuantity(items: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number }[]): Promise<number>;
+  computePackItemsTotal(items: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number }[]): Promise<number>;
   createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; imageUrls?: string[] | null; flashImageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail>;
-  updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; imageUrls: string[] | null; flashImageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined>;
-  validatePackItems(supplierId: number, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<boolean>;
+  createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; imageUrls?: string[] | null; flashImageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail>;
+  updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; imageUrls: string[] | null; flashImageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined>;
+  validatePackItems(supplierId: number, items: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number }[]): Promise<boolean>;
   duplicatePack(id: number, supplierId: number): Promise<PackDetail | undefined>;
   deletePack(id: number): Promise<void>;
   getMarketplacePacks(filters?: { categoryId?: number; subCategoryId?: number; brandId?: number; flavorId?: number; sizeId?: number; supplierId?: number }): Promise<PackDetail[]>;
@@ -653,10 +654,27 @@ export class DatabaseStorage implements IStorage {
       const affectedListingIds = new Set<number>();
       for (const comp of components) {
         const deductQty = comp.quantity * orderQty;
-        if (comp.variantId) {
-          await db.update(supplierProductVariants)
-            .set({ quantity: sql`GREATEST(${supplierProductVariants.quantity} - ${deductQty}, 0)` })
-            .where(eq(supplierProductVariants.id, comp.variantId));
+        if (comp.variantId != null) {
+          const representative = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, comp.variantId));
+          const selectedVariants = comp.flavorIds == null
+            ? representative
+            : await db.select().from(supplierProductVariants).where(and(
+                eq(supplierProductVariants.listingId, comp.listingId),
+                representative[0]?.sizeId == null ? isNull(supplierProductVariants.sizeId) : eq(supplierProductVariants.sizeId, representative[0].sizeId),
+              ));
+          const usableVariants = comp.flavorIds == null
+            ? selectedVariants
+            : selectedVariants.filter(v => v.flavorId != null && comp.flavorIds!.includes(v.flavorId));
+          let remaining = deductQty;
+          for (const variant of usableVariants) {
+            if (remaining <= 0) break;
+            const amount = Math.min(remaining, variant.quantity);
+            if (amount <= 0) continue;
+            await db.update(supplierProductVariants)
+              .set({ quantity: sql`GREATEST(${supplierProductVariants.quantity} - ${amount}, 0)` })
+              .where(eq(supplierProductVariants.id, variant.id));
+            remaining -= amount;
+          }
           affectedListingIds.add(comp.listingId);
         } else {
           await db.update(supplierProductListings)
@@ -707,10 +725,22 @@ export class DatabaseStorage implements IStorage {
     const affectedListingIds = new Set<number>();
     for (const comp of components) {
       const restoreQty = comp.quantity * orderQty;
-      if (comp.variantId) {
+      if (comp.variantId != null) {
+        const [representative] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, comp.variantId));
+        const selectedVariants = comp.flavorIds == null
+          ? (representative ? [representative] : [])
+          : await db.select().from(supplierProductVariants).where(and(
+              eq(supplierProductVariants.listingId, comp.listingId),
+              representative?.sizeId == null ? isNull(supplierProductVariants.sizeId) : eq(supplierProductVariants.sizeId, representative.sizeId),
+            ));
+        const usableVariants = comp.flavorIds == null
+          ? selectedVariants
+          : selectedVariants.filter(v => v.flavorId != null && comp.flavorIds!.includes(v.flavorId));
+        const restoreTarget = usableVariants[0];
+        if (!restoreTarget) continue;
         await db.update(supplierProductVariants)
           .set({ quantity: sql`${supplierProductVariants.quantity} + ${restoreQty}` })
-          .where(eq(supplierProductVariants.id, comp.variantId));
+          .where(eq(supplierProductVariants.id, restoreTarget.id));
         affectedListingIds.add(comp.listingId);
       } else {
         await db.update(supplierProductListings)
@@ -2570,6 +2600,19 @@ export class DatabaseStorage implements IStorage {
       if (!variantsByListing.has(v.listingId)) variantsByListing.set(v.listingId, []);
       variantsByListing.get(v.listingId)!.push(v);
     }
+    const selectedGroupVariants = (item: typeof allItems[number]) => {
+      const representative = item.variantId != null ? variantMap.get(item.variantId) : undefined;
+      const group = (variantsByListing.get(item.listingId) ?? []).filter((v) =>
+        representative
+          ? (v.sizeId ?? null) === (representative.sizeId ?? null)
+          : true,
+      );
+      // NULL is the legacy value and intentionally means all currently
+      // available flavors in this size group.
+      if (item.flavorIds == null) return group.filter((v) => v.price > 0 && v.quantity > 0);
+      const selected = new Set(item.flavorIds);
+      return group.filter((v) => v.flavorId != null && selected.has(v.flavorId) && v.price > 0 && v.quantity > 0);
+    };
     const productIds = Array.from(new Set(listings.map((l) => l.productId)));
     const prods = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
     const productMap = new Map(prods.map((p) => [p.id, p]));
@@ -2589,7 +2632,8 @@ export class DatabaseStorage implements IStorage {
       }
       if (item.variantId != null) {
         const variant = variantMap.get(item.variantId);
-        return variant?.listingId === item.listingId && variant.price > 0 && variant.quantity > 0;
+        if (!variant || variant.listingId !== item.listingId || variant.price <= 0) return false;
+        return selectedGroupVariants(item).length > 0;
       }
       return !(variantsByListing.get(item.listingId)?.length) && listing.price > 0 && listing.stock > 0;
     });
@@ -2647,7 +2691,10 @@ export class DatabaseStorage implements IStorage {
         const product = listing ? productMap.get(listing.productId) : undefined;
         const variant = it.variantId ? variantMap.get(it.variantId) : undefined;
         const unitPrice = variant ? variant.price : (listing?.price ?? 0);
-        const availableQuantity = variant ? variant.quantity : (listing?.stock ?? 0);
+        const selectedVariants = variant ? selectedGroupVariants(it) : [];
+        const availableQuantity = variant
+          ? selectedVariants.reduce((sum, v) => sum + v.quantity, 0)
+          : (listing?.stock ?? 0);
         if (product?.categoryId) categoryIds.add(product.categoryId);
         if (product?.subCategoryId) subCategoryIds.add(product.subCategoryId);
         if (product?.brandId) brandIds.add(product.brandId);
@@ -2656,10 +2703,7 @@ export class DatabaseStorage implements IStorage {
         // Variants of this listing that share the same size as the selected variant
         // (flavor distribution must stay within the supplier-created size group — never
         // mix flavors across sizes).
-        const sameGroupVariants = (variantsByListing.get(it.listingId) ?? []).filter((v) => {
-          if (!variant) return true;
-          return (v.sizeId ?? null) === (variant.sizeId ?? null);
-        });
+        const sameGroupVariants = selectedGroupVariants(it);
         const listingVariants: import('@shared/schema').PackVariantOption[] = sameGroupVariants.map((v) => ({
           variantId: v.id,
           flavorId: v.flavorId ?? null,
@@ -2673,6 +2717,7 @@ export class DatabaseStorage implements IStorage {
           id: it.id,
           listingId: it.listingId,
           variantId: it.variantId,
+          flavorIds: it.flavorIds ?? null,
           quantity: it.quantity,
           packVariantPrice: (it as any).packVariantPrice ?? 0,
           productId: product?.id ?? 0,
@@ -2734,7 +2779,7 @@ export class DatabaseStorage implements IStorage {
     return detail;
   }
 
-  async validatePackItems(supplierId: number, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<boolean> {
+  async validatePackItems(supplierId: number, items: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number }[]): Promise<boolean> {
     if (!items.length) return false;
     const listingIds = Array.from(new Set(items.map((item) => item.listingId)));
     const listings = await db.select().from(supplierProductListings).where(inArray(supplierProductListings.id, listingIds));
@@ -2752,9 +2797,10 @@ export class DatabaseStorage implements IStorage {
       ? allVariants.filter((variant) => variantIds.includes(variant.id))
       : [];
     const variantMap = new Map(variantRows.map((variant) => [variant.id, variant]));
-    const variantsByListing = new Map<number, number>();
+    const variantsByListing = new Map<number, typeof allVariants>();
     for (const variant of allVariants) {
-      variantsByListing.set(variant.listingId, (variantsByListing.get(variant.listingId) ?? 0) + 1);
+      if (!variantsByListing.has(variant.listingId)) variantsByListing.set(variant.listingId, []);
+      variantsByListing.get(variant.listingId)!.push(variant);
     }
 
     return items.every((item) => {
@@ -2763,13 +2809,26 @@ export class DatabaseStorage implements IStorage {
       if (!listing || listing.visibility !== 'VISIBLE' || listing.onlyForMyProducts || product?.status !== 'ACTIVE') return false;
       if (item.variantId != null) {
         const variant = variantMap.get(item.variantId);
-        return variant?.listingId === item.listingId && variant.price > 0 && variant.quantity > 0;
+        if (!variant || variant.listingId !== item.listingId || variant.price <= 0) return false;
+        if (item.flavorIds == null) {
+          return (variantsByListing.get(item.listingId) ?? []).some(v =>
+            (v.sizeId ?? null) === (variant.sizeId ?? null) && v.price > 0 && v.quantity > 0,
+          );
+        }
+        const selectedIds = new Set(item.flavorIds);
+        return item.flavorIds.length > 0 && (variantsByListing.get(item.listingId) ?? []).some(v =>
+          (v.sizeId ?? null) === (variant.sizeId ?? null) &&
+          v.flavorId != null &&
+          selectedIds.has(v.flavorId) &&
+          v.price > 0 &&
+          v.quantity > 0,
+        );
       }
       return !variantsByListing.has(item.listingId) && listing.price > 0 && listing.stock > 0;
     });
   }
 
-  async createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; imageUrls?: string[] | null; flashImageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail> {
+  async createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; imageUrls?: string[] | null; flashImageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail> {
     const [pack] = await db.insert(packs).values({
       supplierId,
       name: data.name,
@@ -2783,20 +2842,20 @@ export class DatabaseStorage implements IStorage {
       visibility: data.visibility ?? 'VISIBLE',
     }).returning();
     if (items.length) {
-      await db.insert(packItems).values(items.map((i) => ({ packId: pack.id, listingId: i.listingId, variantId: i.variantId ?? null, quantity: i.quantity, packVariantPrice: i.packVariantPrice ?? 0 })));
+      await db.insert(packItems).values(items.map((i) => ({ packId: pack.id, listingId: i.listingId, variantId: i.variantId ?? null, flavorIds: i.flavorIds ?? null, quantity: i.quantity, packVariantPrice: i.packVariantPrice ?? 0 })));
     }
     const [detail] = await this.buildPackDetails([pack]);
     return detail;
   }
 
-  async updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; imageUrls: string[] | null; flashImageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined> {
+  async updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; imageUrls: string[] | null; flashImageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined> {
     const [existing] = await db.select().from(packs).where(and(eq(packs.id, id), eq(packs.supplierId, supplierId)));
     if (!existing) return undefined;
     const [updated] = await db.update(packs).set({ ...data, updatedAt: new Date() } as any).where(eq(packs.id, id)).returning();
     if (items !== undefined) {
       await db.delete(packItems).where(eq(packItems.packId, id));
       if (items.length) {
-        await db.insert(packItems).values(items.map((i) => ({ packId: id, listingId: i.listingId, variantId: i.variantId ?? null, quantity: i.quantity, packVariantPrice: i.packVariantPrice ?? 0 })));
+        await db.insert(packItems).values(items.map((i) => ({ packId: id, listingId: i.listingId, variantId: i.variantId ?? null, flavorIds: i.flavorIds ?? null, quantity: i.quantity, packVariantPrice: i.packVariantPrice ?? 0 })));
       }
     }
     const [detail] = await this.buildPackDetails([updated]);
@@ -2817,7 +2876,7 @@ export class DatabaseStorage implements IStorage {
       quantityAvailable: existing.quantityAvailable,
       expirationDate: existing.expirationDate,
       visibility: existing.visibility === 'VISIBLE' ? 'HIDDEN' : existing.visibility,
-    }, existingItems.map((i) => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity, packVariantPrice: (i as any).packVariantPrice ?? 0 })));
+    }, existingItems.map((i) => ({ listingId: i.listingId, variantId: i.variantId, flavorIds: i.flavorIds, quantity: i.quantity, packVariantPrice: (i as any).packVariantPrice ?? 0 })));
   }
 
   async deletePack(id: number): Promise<void> {
@@ -2834,8 +2893,8 @@ export class DatabaseStorage implements IStorage {
     if (filters?.categoryId) details = details.filter((p) => p.categoryIds.includes(filters.categoryId!));
     if (filters?.subCategoryId) details = details.filter((p) => p.subCategoryIds.includes(filters.subCategoryId!));
     if (filters?.brandId) details = details.filter((p) => p.brandIds.includes(filters.brandId!));
-    if (filters?.flavorId) details = details.filter((p) => p.items.some((i) => i.flavorId === filters.flavorId));
-    if (filters?.sizeId) details = details.filter((p) => p.items.some((i) => i.sizeId === filters.sizeId));
+    if (filters?.flavorId) details = details.filter((p) => p.items.some((i) => i.flavorId === filters.flavorId || i.listingVariants.some((v) => v.flavorId === filters.flavorId)));
+    if (filters?.sizeId) details = details.filter((p) => p.items.some((i) => i.sizeId === filters.sizeId || i.listingVariants.some((v) => v.sizeId === filters.sizeId)));
     return details;
   }
 
@@ -2844,14 +2903,19 @@ export class DatabaseStorage implements IStorage {
     return this.buildPackDetails(rows);
   }
 
-  async computeAutoPackQuantity(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number> {
+  async computeAutoPackQuantity(items: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number }[]): Promise<number> {
     if (!items.length) return 0;
     let max = Infinity;
     for (const it of items) {
       let availableQty = 0;
-      if (it.variantId) {
-        const [variant] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, it.variantId));
-        availableQty = variant?.quantity ?? 0;
+      if (it.variantId != null) {
+        const [representative] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, it.variantId));
+        const group = await db.select().from(supplierProductVariants).where(and(
+          eq(supplierProductVariants.listingId, it.listingId),
+          representative?.sizeId == null ? isNull(supplierProductVariants.sizeId) : eq(supplierProductVariants.sizeId, representative.sizeId),
+        ));
+        const selected = it.flavorIds == null ? group : group.filter((v) => v.flavorId != null && it.flavorIds!.includes(v.flavorId));
+        availableQty = selected.reduce((sum, v) => sum + (v.price > 0 && v.quantity > 0 ? v.quantity : 0), 0);
       } else {
         const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, it.listingId));
         availableQty = listing?.stock ?? 0;
@@ -2862,13 +2926,20 @@ export class DatabaseStorage implements IStorage {
     return isFinite(max) ? max : 0;
   }
 
-  async computePackItemsTotal(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number> {
+  async computePackItemsTotal(items: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number }[]): Promise<number> {
     let total = 0;
     for (const it of items) {
       let unitPrice = 0;
-      if (it.variantId) {
-        const [variant] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, it.variantId));
-        unitPrice = variant?.price ?? 0;
+      if (it.variantId != null) {
+        const [representative] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, it.variantId));
+        const group = await db.select().from(supplierProductVariants).where(and(
+          eq(supplierProductVariants.listingId, it.listingId),
+          representative?.sizeId == null ? isNull(supplierProductVariants.sizeId) : eq(supplierProductVariants.sizeId, representative.sizeId),
+        ));
+        const selected = it.flavorIds == null ? group : group.filter((v) => v.flavorId != null && it.flavorIds!.includes(v.flavorId));
+        // A pack may be built from any selected flavor; use the highest
+        // selected original price for the discount safety check.
+        unitPrice = selected.reduce((maxPrice, v) => Math.max(maxPrice, v.price), 0);
       } else {
         const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, it.listingId));
         unitPrice = listing?.price ?? 0;

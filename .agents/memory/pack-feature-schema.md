@@ -26,6 +26,12 @@ Each pack item now carries `listingVariants: PackVariantOption[]` — all varian
 
 **Why:** Flavor distribution is a display-time choice; having all variant options pre-loaded in the pack payload avoids N+1 fetches in the modal.
 
+Supplier flavor selection is persisted on `pack_items.flavor_ids`. `NULL` preserves legacy Packs
+by meaning all flavors in the selected size group; a non-null array contains the allowed flavor ids.
+
+**Why:** Supplier-selected flavor subsets must survive variant-row recreation and stay consistent
+across supplier previews, Coffee Owner modals, stock calculations, and realtime marketplace data.
+
 ## Vite dep-optimization transient error
 
 When a new Radix UI package (e.g. `@radix-ui/react-alert-dialog`) is added and optimized for the first time, Vite reloads and produces a brief "Invalid hook call / Cannot read properties of null" error. This is transient — it resolves on the next page load. Not a real bug.

@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useThemeStore } from "@/store/theme-store";
+import { PackImageGallery } from "@/components/pack-image-gallery";
 import type { PackDetail, SupplierProductReview, PackVariantOption, ProductWithTaxonomy } from "@shared/schema";
 
 // ── Theme tokens (mirrors browse-products + store-detail-page) ────────────────
@@ -773,17 +774,14 @@ export function PackQuickViewModal() {
           ) : (
             <>
               {/* ── Hero image ─────────────────────────────────────────── */}
-              <div className={`relative aspect-[16/9] ${t.imgBg} overflow-hidden`}>
-                {pack.imageUrl ? (
-                  <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Layers className={`w-16 h-16 ${t.emptyIcon}`} />
-                  </div>
-                )}
-                {/* Gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
-              </div>
+              <PackImageGallery
+                imageUrl={pack.imageUrl}
+                imageUrls={pack.imageUrls}
+                alt={pack.name}
+                mainClassName={`relative aspect-[16/9] ${t.imgBg}`}
+                emptyClassName={t.emptyIcon}
+                thumbnailClassName="px-1"
+              />
 
               {/* ── Pack info section ──────────────────────────────────── */}
               <div className="px-5 pt-5 pb-4 space-y-3">
@@ -907,9 +905,12 @@ export function PackQuickViewModal() {
                             {/* Name + flavor */}
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm font-semibold truncate ${t.textPrimary}`}>{item.productName}</p>
-                              {(item.flavorName || item.sizeName) && (
+                              {(item.listingVariants.length > 0 || item.flavorName || item.sizeName) && (
                                 <p className={`text-xs mt-0.5 ${t.textMuted}`}>
-                                  {[item.flavorName, item.sizeName].filter(Boolean).join(" · ")}
+                                   {[
+                                     item.listingVariants.map(v => v.flavorName).filter((name): name is string => !!name).join(" • ") || item.flavorName,
+                                     item.sizeName,
+                                   ].filter(Boolean).join(" · ")}
                                 </p>
                               )}
                             </div>

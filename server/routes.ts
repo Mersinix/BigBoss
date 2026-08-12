@@ -2344,6 +2344,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const packItemSchema = z.object({
     listingId: z.number(),
     variantId: z.number().nullable().optional(),
+    flavorIds: z.array(z.number().int()).min(1).nullable().optional(),
     quantity: z.number().min(1),
     packVariantPrice: z.number().min(0).optional(),
   });
@@ -2423,10 +2424,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       // Price validation: needs the item list — use the incoming items if provided,
       // otherwise fall back to the pack's existing items.
-      let priceCheckItems: { listingId: number; variantId?: number | null; quantity: number }[] | undefined = body.items as any;
+      let priceCheckItems: { listingId: number; variantId?: number | null; flavorIds?: number[] | null; quantity: number }[] | undefined = body.items as any;
       if (!priceCheckItems && body.price !== undefined) {
         const existingItems = await db.select().from(packItemsTable).where(eq(packItemsTable.packId, packId));
-        priceCheckItems = existingItems.map(i => ({ listingId: i.listingId, variantId: i.variantId, quantity: i.quantity }));
+        priceCheckItems = existingItems.map(i => ({ listingId: i.listingId, variantId: i.variantId, flavorIds: i.flavorIds, quantity: i.quantity }));
       }
       const effectivePriceCents = body.price !== undefined ? Math.round(body.price * 100) : undefined;
       if (priceCheckItems && effectivePriceCents !== undefined) {

@@ -132,6 +132,7 @@ export interface IStorage {
   computePackItemsTotal(items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<number>;
   createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; imageUrls?: string[] | null; flashImageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail>;
   updatePack(id: number, supplierId: number, data: Partial<{ name: string; description: string | null; imageUrl: string | null; imageUrls: string[] | null; flashImageUrl: string | null; price: number; quantityAvailable: number; expirationDate: Date | null; visibility: 'VISIBLE' | 'HIDDEN'; isArchived: boolean }>, items?: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail | undefined>;
+  validatePackItems(supplierId: number, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<boolean>;
   duplicatePack(id: number, supplierId: number): Promise<PackDetail | undefined>;
   deletePack(id: number): Promise<void>;
   getMarketplacePacks(filters?: { categoryId?: number; subCategoryId?: number; brandId?: number; flavorId?: number; sizeId?: number; supplierId?: number }): Promise<PackDetail[]>;
@@ -1700,8 +1701,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async saveVariants(listingId: number, variants: { flavorId?: number | null; sizeId?: number | null; price: number; quantity: number }[]): Promise<SupplierVariantWithLabels[]> {
+    // Variant rows are recreated on every save. Keep Pack references attached to
+    // the same flavor/size slot when it still exists, and remove references to
+    // slots that were actually removed.
+    const previousVariants = await db.select().from(supplierProductVariants)
+      .where(eq(supplierProductVariants.listingId, listingId));
+    const previousVariantIds = previousVariants.map((v) => v.id);
+    const previousPackItems = previousVariantIds.length
+      ? await db.select().from(packItems).where(inArray(packItems.variantId, previousVariantIds))
+      : [];
+
     await db.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
     if (!variants.length) {
+      if (previousPackItems.length) {
+        await db.delete(packItems).where(inArray(packItems.id, previousPackItems.map((item) => item.id)));
+      }
       await db.update(supplierProductListings).set({ price: 0, stock: 0 }).where(eq(supplierProductListings.id, listingId));
       return [];
     }
@@ -1709,6 +1723,27 @@ export class DatabaseStorage implements IStorage {
     const aggPrice = Math.min(...inserted.map((v) => v.price));
     const aggStock = inserted.reduce((s, v) => s + v.quantity, 0);
     await db.update(supplierProductListings).set({ price: aggPrice, stock: aggStock }).where(eq(supplierProductListings.id, listingId));
+
+    const insertedBySlot = new Map(inserted.map((v) => [`${v.flavorId ?? "null"}:${v.sizeId ?? "null"}`, v]));
+    const previousById = new Map(previousVariants.map((v) => [v.id, v]));
+    for (const item of previousPackItems) {
+      const previous = previousById.get(item.variantId!);
+      const replacement = previous
+        ? insertedBySlot.get(`${previous.flavorId ?? "null"}:${previous.sizeId ?? "null"}`)
+        : undefined;
+      if (replacement) {
+        await db.update(packItems).set({ variantId: replacement.id }).where(eq(packItems.id, item.id));
+      } else {
+        await db.delete(packItems).where(eq(packItems.id, item.id));
+      }
+    }
+    // A listing that changes from a non-variant product to a variant product
+    // can no longer satisfy an old listing-level Pack component.
+    await db.delete(packItems).where(and(
+      eq(packItems.listingId, listingId),
+      isNull(packItems.variantId),
+    ));
+
     const tx = await buildTaxonomyCache();
     return inserted.map((v) => ({
       ...v,
@@ -2129,6 +2164,7 @@ export class DatabaseStorage implements IStorage {
         .where(inArray(packs.id, archivedPackIds));
     }
     await db.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, id));
+    await db.delete(packItems).where(eq(packItems.listingId, id));
     await db.delete(inventoryAdjustments).where(eq(inventoryAdjustments.listingId, id));
     await db.delete(supplierProductListings).where(eq(supplierProductListings.id, id));
     return archivedPackIds;
@@ -2145,6 +2181,7 @@ export class DatabaseStorage implements IStorage {
         .set({ isArchived: true, updatedAt: new Date() })
         .where(inArray(packs.id, archivedPackIds));
     }
+    await db.delete(packItems).where(eq(packItems.listingId, id));
     await db.update(supplierProductListings)
       .set({ onlyForPack: false, onlyForMyProducts: true, updatedAt: new Date() })
       .where(eq(supplierProductListings.id, id));
@@ -2489,9 +2526,11 @@ export class DatabaseStorage implements IStorage {
     } else if (action === 'show') {
       await db.update(supplierProductListings).set({ visibility: 'VISIBLE', updatedAt: new Date() }).where(inArray(supplierProductListings.id, ids));
     } else if (action === 'delete') {
-      await db.delete(supplierProductVariants).where(inArray(supplierProductVariants.listingId, ids));
-      await db.delete(inventoryAdjustments).where(inArray(inventoryAdjustments.listingId, ids));
-      await db.delete(supplierProductListings).where(inArray(supplierProductListings.id, ids));
+      // Use the single-listing deletion path so Pack relations are removed
+      // and affected Packs keep their existing archive behavior.
+      for (const listing of owned) {
+        await this.deleteSupplierListing(listing.id);
+      }
     } else if (action === 'setMinStock' && payload?.minStock !== undefined) {
       await db.update(supplierProductListings).set({ minStock: payload.minStock, updatedAt: new Date() }).where(inArray(supplierProductListings.id, ids));
     } else if (action === 'stock' && payload?.type && payload?.quantity !== undefined) {
@@ -2534,12 +2573,36 @@ export class DatabaseStorage implements IStorage {
     const productIds = Array.from(new Set(listings.map((l) => l.productId)));
     const prods = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
     const productMap = new Map(prods.map((p) => [p.id, p]));
+
+    // A Pack component is valid only while its listing is visible, its product
+    // is active, and (when selected) its exact variant still exists. The
+    // onlyForMyProducts flag is also the persisted "removed from Packs" state.
+    // Prune invalid rows here so every Pack consumer gets the same result and
+    // stale rows do not remain in the relation after a read.
+    const validItems = allItems.filter((item) => {
+      const listing = listingMap.get(item.listingId);
+      const product = listing ? productMap.get(listing.productId) : undefined;
+      if (!listing || listing.visibility !== 'VISIBLE' || listing.onlyForMyProducts || product?.status !== 'ACTIVE') {
+        return false;
+      }
+      if (item.variantId != null) {
+        return variantMap.get(item.variantId)?.listingId === item.listingId;
+      }
+      return !(variantsByListing.get(item.listingId)?.length);
+    });
+    const invalidItemIds = allItems
+      .filter((item) => !validItems.some((valid) => valid.id === item.id))
+      .map((item) => item.id);
+    if (invalidItemIds.length) {
+      await db.delete(packItems).where(inArray(packItems.id, invalidItemIds));
+    }
+
     const supplierIds = Array.from(new Set(rows.map((p) => p.supplierId)));
     const suppliers = supplierIds.length ? await db.select().from(users).where(inArray(users.id, supplierIds)) : [];
     const supplierMap = new Map(suppliers.map((u) => [u.id, { name: u.name, lat: u.locationLat ?? null, lng: u.locationLng ?? null }]));
     const tx = await buildTaxonomyCache();
     const itemsByPack = new Map<number, typeof allItems>();
-    for (const it of allItems) {
+    for (const it of validItems) {
       if (!itemsByPack.has(it.packId)) itemsByPack.set(it.packId, []);
       itemsByPack.get(it.packId)!.push(it);
     }
@@ -2666,6 +2729,36 @@ export class DatabaseStorage implements IStorage {
     if (!row) return undefined;
     const [detail] = await this.buildPackDetails([row]);
     return detail;
+  }
+
+  async validatePackItems(supplierId: number, items: { listingId: number; variantId?: number | null; quantity: number }[]): Promise<boolean> {
+    if (!items.length) return false;
+    const listingIds = Array.from(new Set(items.map((item) => item.listingId)));
+    const listings = await db.select().from(supplierProductListings).where(inArray(supplierProductListings.id, listingIds));
+    const listingMap = new Map(listings.map((listing) => [listing.id, listing]));
+    if (listings.length !== listingIds.length || listings.some((listing) => listing.supplierId !== supplierId)) return false;
+
+    const productIds = Array.from(new Set(listings.map((listing) => listing.productId)));
+    const productRows = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
+    const productMap = new Map(productRows.map((product) => [product.id, product]));
+
+    const variantIds = items.map((item) => item.variantId).filter((id): id is number => id != null);
+    const variantRows = variantIds.length
+      ? await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.id, variantIds))
+      : [];
+    const variantMap = new Map(variantRows.map((variant) => [variant.id, variant]));
+    const variantsByListing = new Map<number, number>();
+    for (const variant of variantRows) {
+      variantsByListing.set(variant.listingId, (variantsByListing.get(variant.listingId) ?? 0) + 1);
+    }
+
+    return items.every((item) => {
+      const listing = listingMap.get(item.listingId);
+      const product = listing ? productMap.get(listing.productId) : undefined;
+      if (!listing || listing.visibility !== 'VISIBLE' || listing.onlyForMyProducts || product?.status !== 'ACTIVE') return false;
+      if (item.variantId != null) return variantMap.get(item.variantId)?.listingId === item.listingId;
+      return !variantsByListing.has(item.listingId);
+    });
   }
 
   async createPack(supplierId: number, data: { name: string; description?: string | null; imageUrl?: string | null; imageUrls?: string[] | null; flashImageUrl?: string | null; price: number; quantityAvailable: number; expirationDate?: Date | null; visibility?: 'VISIBLE' | 'HIDDEN' }, items: { listingId: number; variantId?: number | null; quantity: number; packVariantPrice?: number }[]): Promise<PackDetail> {

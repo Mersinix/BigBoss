@@ -2378,9 +2378,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post('/api/supplier/packs', requireApprovedSupplier, async (req: any, res) => {
     try {
       const body = packBodySchema.parse(req.body);
-      for (const item of body.items) {
-        const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, item.listingId));
-        if (!listing || listing.supplierId !== req.session.userId) return res.status(403).json({ message: 'One of the selected products is not yours' });
+      if (!await storage.validatePackItems(req.session.userId, body.items)) {
+        return res.status(400).json({ message: 'One of the selected products or variants is no longer active' });
       }
       const expirationError = validatePackExpiration(body.expirationDate);
       if (expirationError) return res.status(400).json({ message: expirationError });
@@ -2414,9 +2413,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const packId = parseInt(req.params.id);
       const body = packBodySchema.partial().extend({ isArchived: z.boolean().optional() }).parse(req.body);
       if (body.items) {
-        for (const item of body.items) {
-          const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, item.listingId));
-          if (!listing || listing.supplierId !== req.session.userId) return res.status(403).json({ message: 'One of the selected products is not yours' });
+        if (!await storage.validatePackItems(req.session.userId, body.items)) {
+          return res.status(400).json({ message: 'One of the selected products or variants is no longer active' });
         }
       }
       if (body.expirationDate !== undefined) {

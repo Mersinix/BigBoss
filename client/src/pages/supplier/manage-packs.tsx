@@ -129,7 +129,9 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
 
   const usableListings = useMemo(() => {
     let base = listings.filter(l =>
-      (l.variants ?? []).some(v => v.price > 0 && v.quantity > 0) || (l.price > 0 && l.stock > 0)
+      l.visibility === "VISIBLE" &&
+      (l.product as any).status === "ACTIVE" &&
+      ((l.variants ?? []).some(v => v.price > 0 && v.quantity > 0) || (l.price > 0 && l.stock > 0))
     );
     // Exclude onlyForMyProducts listings from pack building
     base = base.filter(l => !(l as any).onlyForMyProducts);
@@ -645,7 +647,9 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
 
   // Only pack-eligible listings (not onlyForMyProducts)
   const eligible = useMemo(() =>
-    listings.filter(l => !(l as any).onlyForMyProducts &&
+    listings.filter(l => l.visibility === "VISIBLE" &&
+      (l.product as any).status === "ACTIVE" &&
+      !(l as any).onlyForMyProducts &&
       getVariantGroups(l).length > 0
     ), [listings]);
 

@@ -1,0 +1,63 @@
+The previous agent reached the usage limit before completing the task.
+
+The work is committed under **`PACK MODIFICATION FOUR`**.
+
+Please:
+
+1. Read the prompt **`Pasted-We-need-to-make-the-following-targeted-modifications-to_1786559538295.txt`** from that commit.
+2. Inspect all files changed by the previous agent in that commit.
+3. Determine exactly what has already been implemented and what remains incomplete.
+4. **Continue and execute the remaining requirements from the prompt.**
+5. Do not redo completed work or introduce duplicate implementations.
+6. Verify the complete Pack flow after finishing, especially:
+
+   * multiple Pack images/gallery
+   * selected flavors
+   * Pack preview synchronization
+   * Supplier Flash Live Preview
+   * Coffee Owner Pack modal
+   * synchronization between Supplier and Coffee Owner
+7. Do not stop at analysis or a plan. **Actually complete the implementation and verify it.**
+
+Keep all existing functionality and design that are not explicitly part of the requested changes.
+
+### Additional modification — Pack images should NOT appear on Pack cards
+
+The multiple Pack images/gallery implementation is working correctly, but the images should **only be displayed inside the Pack modal**, not on the Pack cards.
+
+#### Coffee Owner → Shop → Pack cards
+
+Remove the multiple Pack image/gallery mapping from the **mapped Pack cards** in the Shop.
+
+* Keep the existing Pack card design exactly as it is.
+* Do not display the Pack's multiple images/gallery on the card.
+* Keep the Pack's multiple images available inside the **Pack Modal**.
+* The Pack Modal should continue to support the full multiple-image gallery and allow the user to select any image as the main image.
+
+#### Supplier → Products → Packs → New Packs
+
+Remove the multiple Pack image/gallery mapping from the **mapped Pack cards** on the New Packs page.
+
+* Keep the existing Pack card design exactly as it is.
+* Do not display the multiple Pack images/gallery on the cards.
+* Keep all Pack images available inside the **Pack Edit/View Modal**.
+* The modal should continue to display the thumbnails/gallery under the main image and allow the supplier to select any image.
+
+### Important
+
+This is **only a display-location change**.
+
+Do not remove the multiple Pack images from the Pack data, database, API, or modal.
+
+The images must remain fully available and synchronized inside the Pack modals.
+
+Do not change any other Pack card information, layout, pricing, stock, promotions, variants, flavors, or existing functionality.
+
+After applying this change, verify that:
+
+* Shop Pack cards → **no multiple-image gallery**
+* Shop Pack Modal → **multiple-image gallery remains**
+* Supplier New Packs cards → **no multiple-image gallery**
+* Supplier Pack Modal → **multiple-image gallery remains**
+* Selecting a thumbnail inside either modal still changes the main image correctly
+* No existing Pack functionality is affected

@@ -1070,15 +1070,18 @@ function ActivePackCard({ pack, onPreview }: {
       onClick={onPreview}
       data-testid={`card-pack-${pack.id}`}
     >
-       <div className="relative overflow-hidden">
-         <PackImageGallery
-           imageUrl={pack.imageUrl}
-           imageUrls={pack.imageUrls}
-           alt={pack.name}
-           mainClassName="aspect-video bg-secondary group-hover:scale-[1.02] transition-transform duration-300"
-           thumbnailClassName="px-1 pb-1"
-           emptyClassName="text-muted-foreground/40"
-         />
+       <div className="relative aspect-video overflow-hidden bg-secondary">
+         {pack.imageUrl ? (
+           <img
+             src={pack.imageUrl}
+             alt={pack.name}
+             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+           />
+         ) : (
+           <div className="w-full h-full flex items-center justify-center">
+             <ImageOff className="w-8 h-8 text-muted-foreground/40" />
+           </div>
+         )}
         <div className="absolute top-2 left-2 flex gap-1">
           <Badge variant={pack.visibility === "VISIBLE" ? "default" : "secondary"} className="text-[10px]">
             {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}

@@ -309,47 +309,164 @@ function AccountPanel({
                   })}
                 </div>
         )}
+       
         {/* MAINTENANCE RESERVATIONS */}
         {activeTab === "reservations" && (
-          reservationsLoading
-            ? <div className="space-y-3 pt-2">{[...Array(2)].map((_, i) => <div key={i} className={`h-32 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}</div>
-            : maintenanceReservations.length === 0
-              ? <div className={`text-center py-16 ${textMuted}`}><Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className={`font-medium text-sm ${textPrimary}`}>No maintenance reservations yet</p></div>
-              : <div className="space-y-3 pt-2">
-                  {maintenanceReservations.map((reservation: any) => {
-                    const meta = reservationStatus[reservation.status] ?? reservationStatus.PENDING;
-                    return (
-                      <div key={reservation.id} className={`border rounded-2xl p-4 space-y-3 ${cardBg}`}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className={`font-semibold text-sm truncate ${textPrimary}`}>{reservation.maintenanceName || "Maintenance professional"}</p>
-                            <p className={`text-xs mt-0.5 ${textMuted}`}>{reservation.service} · {reservation.category || "—"}</p>
-                          </div>
-                          <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+          reservationsLoading ? (
+            <div className="space-y-3 pt-2">
+              {[...Array(2)].map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-32 rounded-2xl animate-pulse ${
+                    dk ? "bg-gray-800" : "bg-gray-100"
+                  }`}
+                />
+              ))}
+            </div>
+          ) : maintenanceReservations.length === 0 ? (
+            <div className={`text-center py-16 ${textMuted}`}>
+              <Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p className={`font-medium text-sm ${textPrimary}`}>
+                No maintenance reservations yet
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 pt-2">
+              {[...maintenanceReservations]
+                .sort((a: any, b: any) => {
+                  const dateA = new Date(
+                    `${a.date}T${a.time || "00:00"}`
+                  ).getTime();
+
+                  const dateB = new Date(
+                    `${b.date}T${b.time || "00:00"}`
+                  ).getTime();
+
+                  return dateB - dateA; // Newest → Oldest
+                })
+                .map((reservation: any) => {
+                  const meta =
+                    reservationStatus[reservation.status] ??
+                    reservationStatus.PENDING;
+
+                  return (
+                    <div
+                      key={reservation.id}
+                      className={`border rounded-2xl p-4 space-y-3 ${cardBg}`}
+                    >
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p
+                            className={`font-semibold text-sm truncate ${textPrimary}`}
+                          >
+                            {reservation.maintenanceName ||
+                              "Maintenance professional"}
+                          </p>
+
+                          <p className={`text-xs mt-0.5 ${textMuted}`}>
+                            {reservation.service} · {reservation.category || "—"}
+                          </p>
                         </div>
-                        <div className={`grid grid-cols-2 gap-2 text-xs ${textMuted}`}>
-                          <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-amber-500" />{reservation.date}</span>
-                          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-amber-500" />{reservation.time || "—"}</span>
-                          <span className="flex items-center gap-1 col-span-2"><MapPin className="w-3 h-3 text-amber-500" />{reservation.location || "—"}</span>
-                        </div>
-                        <div className={`flex flex-wrap gap-2 text-[11px] ${textMuted}`}>
-                          <span>Urgence : {reservation.urgency || "NORMAL"}</span>
-                          {reservation.description && <span className="truncate">· {reservation.description}</span>}
-                        </div>
-                        {reservation.status === "RESCHEDULE_PENDING" && reservation.proposedDate && (
-                          <div className={`rounded-xl border px-3 py-2 text-xs ${dk ? "bg-purple-900/20 border-purple-800 text-purple-300" : "bg-purple-50 border-purple-100 text-purple-700"}`}>
-                            Le technicien propose le <strong>{reservation.proposedDate}</strong>{reservation.proposedTime ? ` à ${reservation.proposedTime}` : ""}.
+
+                        <span
+                          className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}
+                        >
+                          {meta.label}
+                        </span>
+                      </div>
+
+                      {/* Date / Time / Location */}
+                      <div
+                        className={`grid grid-cols-2 gap-2 text-xs ${textMuted}`}
+                      >
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-amber-500" />
+                          {reservation.date}
+                        </span>
+
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-500" />
+                          {reservation.time || "—"}
+                        </span>
+
+                        <span className="flex items-center gap-1 col-span-2">
+                          <MapPin className="w-3 h-3 text-amber-500" />
+                          {reservation.location || "—"}
+                        </span>
+                      </div>
+
+                      {/* Urgency / Description */}
+                      <div
+                        className={`flex flex-wrap gap-2 text-[11px] ${textMuted}`}
+                      >
+                        <span>
+                          Urgence : {reservation.urgency || "NORMAL"}
+                        </span>
+
+                        {reservation.description && (
+                          <span className="truncate">
+                            · {reservation.description}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Reschedule Request */}
+                      {reservation.status === "RESCHEDULE_PENDING" &&
+                        reservation.proposedDate && (
+                          <div
+                            className={`rounded-xl border px-3 py-2 text-xs ${
+                              dk
+                                ? "bg-purple-900/20 border-purple-800 text-purple-300"
+                                : "bg-purple-50 border-purple-100 text-purple-700"
+                            }`}
+                          >
+                            Le technicien propose le{" "}
+                            <strong>{reservation.proposedDate}</strong>
+                            {reservation.proposedTime
+                              ? ` à ${reservation.proposedTime}`
+                              : ""}
+                            .
+
                             <div className="flex gap-2 mt-2">
-                              <Button size="sm" className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white" disabled={respondToReschedule.isPending} onClick={() => respondToReschedule.mutate({ id: reservation.id, accepted: true })}>Confirmer modification</Button>
-                              <Button size="sm" variant="outline" className="h-8 rounded-xl border-red-200 text-red-600" disabled={respondToReschedule.isPending} onClick={() => respondToReschedule.mutate({ id: reservation.id, accepted: false })}>Rejeter modification</Button>
+                              <Button
+                                size="sm"
+                                className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white"
+                                disabled={respondToReschedule.isPending}
+                                onClick={() =>
+                                  respondToReschedule.mutate({
+                                    id: reservation.id,
+                                    accepted: true,
+                                  })
+                                }
+                              >
+                                Confirmer modification
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-xl border-red-200 text-red-600"
+                                disabled={respondToReschedule.isPending}
+                                onClick={() =>
+                                  respondToReschedule.mutate({
+                                    id: reservation.id,
+                                    accepted: false,
+                                  })
+                                }
+                              >
+                                Rejeter modification
+                              </Button>
                             </div>
                           </div>
                         )}
-                      </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )
         )}
+        
         {/* Order Details Modal — rendered inside AccountPanel so it sits above the panel dialog */}
         <OrderDetailsModal
           open={!!detailOrder}

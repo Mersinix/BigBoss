@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
+import { useMessagingSettings } from "@/hooks/use-messaging-settings";
 import {
   Store, Package, ShoppingCart, LayoutDashboard,
   ClipboardList, Truck, Users, LogOut, Coffee,
@@ -68,6 +69,8 @@ const MESSAGES_URLS = new Set(["/admin/messages", "/cafe/messages", "/supplier/m
 
 export function AppSidebar() {
   const { user, logout } = useAuth();
+  const isAdmin = !!user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN");
+  const { settings: messagingSettings } = useMessagingSettings();
 
   const hasMessages = user && MESSAGES_URLS.has(
     user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? "/admin/messages"
@@ -75,7 +78,7 @@ export function AppSidebar() {
     : user.role === "SUPPLIER" ? "/supplier/messages"
     : (user.role === "DELIVERY_COMPANY" || user.role === "DRIVER") ? "/delivery/messages"
     : ""
-  );
+  ) && (isAdmin || messagingSettings.globalVisible);
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/messages/unread-count"],
@@ -91,8 +94,6 @@ export function AppSidebar() {
   const unreadCount = unreadData?.count ?? 0;
 
   if (!user) return null;
-
-  const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
 
   const getNavGroups = (): NavGroup[] => {
     if (isAdmin) {
@@ -413,7 +414,7 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="space-y-0.5">
-                {group.items.map((item) => (
+                {group.items.filter((item) => item.title !== "Messages" || isAdmin || messagingSettings.globalVisible).map((item) => (
                   <NavLink
                     key={item.title}
                     item={item}

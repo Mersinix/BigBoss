@@ -21,7 +21,7 @@ const PRODUCT_EVENTS = ["product_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
 const PROMOTION_EVENTS = ["promotion_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "order_deleted"];
-const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted"];
+const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
 
 function invalidateInventoryQueries(qc: QueryClient) {
@@ -192,6 +192,9 @@ export function useRealtime(userId?: number) {
           }
           if (MESSAGING_EVENTS.includes(event)) {
             invalidateMessagingQueries(qc);
+            if (event === "messages_settings_updated") {
+              qc.invalidateQueries({ queryKey: ["/api/messages/settings"] });
+            }
             // Invalidate the specific conversation's messages too
             if (data?.conversationId) {
               qc.invalidateQueries({ queryKey: ["/api/messages/conversations", data.conversationId, "messages"] });

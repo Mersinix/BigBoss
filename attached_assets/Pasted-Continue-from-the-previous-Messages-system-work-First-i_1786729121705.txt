@@ -1,0 +1,221 @@
+Continue from the previous Messages-system work.
+
+First inspect what was implemented in the previous task and verify it before making further changes.
+
+Do not redo working functionality. Do not redesign existing Messages interfaces. Preserve everything that already works.
+
+**Execute the requested changes completely. Do not stop after analysis.**
+
+---
+
+# 1. Coffee Owner → Messages
+
+Synchronize the Coffee Owner Messages modal with the messaging rules established for Shop and Maintenance.
+
+### Admin
+
+Always available.
+
+### Broadcasts
+
+Available according to the existing Broadcast system.
+
+### Supplier
+
+Visible/available only when there is an eligible active order.
+
+After order closure:
+
+* Conversation remains available for 30 minutes.
+* Then it is hidden and messaging is disabled.
+
+### Maintenance
+
+Apply the same rule using the existing Maintenance order/reservation lifecycle.
+
+Do not allow unrelated Suppliers or Maintenance providers to appear in the Coffee Owner's conversations.
+
+---
+
+# 2. Coffee Owner → New Conversation → "+" bug
+
+There is currently an error when the Coffee Owner creates a conversation.
+
+The user selects an allowed user and the conversation is actually created, but an error appears similar to:
+
+**Cannot start conversation / Cannot read property "id" of undefined**
+
+Fix this.
+
+Required behavior:
+
+1. Coffee Owner clicks "+"
+2. New Conversation opens.
+3. Coffee Owner selects an allowed user.
+4. Conversation is created.
+5. No error appears.
+6. Conversation immediately appears in the conversation list.
+
+Do not redesign the New Conversation UI.
+
+---
+
+# 3. Admin → System Management → Messages System
+
+Add a dedicated **Messages System** component inside:
+
+**Admin → System Management**
+
+It must follow the existing System Management design.
+
+The component should allow Admin to manage the available Messages-system controls from one place.
+
+## Global Messages visibility
+
+Add:
+
+* **Visible**
+* **Hidden**
+
+When Hidden:
+
+* Hide/disable the Messages system for affected users.
+* Hide Messages entry points where appropriate.
+* Users cannot start or access conversations through the hidden system.
+* Existing conversations/messages must NOT be deleted.
+* Admin must still be able to access/manage Messages.
+* Re-enabling Messages restores normal access.
+
+This is a visibility/access setting, **not deletion**.
+
+## Other Messages controls
+
+Where supported by the existing implementation, allow Admin to manage relevant messaging behavior such as:
+
+* Global Messages visibility
+* Supplier ↔ Coffee Owner messaging availability
+* Maintenance ↔ Coffee Owner messaging availability
+* Conversation lifecycle/expiration
+* Admin/Broadcast availability
+* Other real Messages configuration already supported
+
+Do not invent unnecessary settings.
+
+Persist these settings.
+
+Changes should synchronize in realtime wherever realtime configuration synchronization is supported.
+
+Do not let hiding Messages remove Admin's ability to manage Messages.
+
+---
+
+# 4. Professional messaging improvements
+
+Review the complete Messages system and safely improve anything necessary to make it reliable and professional without changing the existing design.
+
+Check:
+
+* Read/unread synchronization
+* Unread counts
+* Last-message synchronization
+* Realtime conversation updates
+* Duplicate conversations
+* Duplicate messages
+* Message ordering
+* Reconnection behavior
+* Stale conversation state
+* Timestamps
+* Notifications/badges
+* Users becoming ineligible for conversations
+* Empty states
+* Race conditions when creating conversations
+
+Only implement improvements that are genuinely useful and compatible with the existing architecture.
+
+Do not add unrelated features.
+
+---
+
+# 5. Final realtime verification
+
+Verify all affected roles together.
+
+### Admin
+
+Verify:
+
+* View conversations
+* Hide conversations
+* Delete conversations
+* Multi-select
+* CSV export
+* Date/month/date-range export
+* Correct exported data
+* Messages System visibility control
+* Hiding Messages does not delete data
+* Admin can still manage Messages
+* Re-enabling restores access
+
+### Supplier
+
+Verify:
+
+* Admin conversation always works.
+* Admin broadcasts work.
+* Coffee Owner conversations only exist when eligible.
+* 30-minute post-order period works.
+* Conversations disappear after expiration.
+* Messaging is blocked afterward.
+
+### Maintenance
+
+Verify the same lifecycle as Supplier ↔ Coffee Owner using Maintenance orders/reservations.
+
+### Coffee Owner
+
+Verify:
+
+* Admin conversation.
+* Broadcasts.
+* Supplier conversations only when eligible.
+* Maintenance conversations only when eligible.
+* 30-minute lifecycle.
+* "+" New Conversation works without the undefined-ID error.
+* New conversations appear immediately.
+
+### Realtime
+
+Test changes from different roles and verify that users do not need to refresh for:
+
+* New conversations
+* New messages
+* Conversation availability
+* Order status changes
+* Maintenance status changes
+* Conversation expiration
+* Broadcasts
+* Read/unread updates
+* Global Messages visibility changes
+* Conversation list updates
+
+---
+
+# IMPORTANT
+
+Before finishing:
+
+**Execute the changes, test them, and fix any problems discovered during verification.**
+
+Do not only read or analyze the task.
+
+Do not redesign existing Messages interfaces.
+
+Do not remove unrelated functionality.
+
+Do not change unrelated business logic.
+
+Preserve everything that already works.
+
+Priority:
+
+**Existing functionality → requested messaging rules → permissions/security → realtime synchronization → System Management controls → reliability.**

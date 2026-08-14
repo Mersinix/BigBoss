@@ -7,7 +7,7 @@ import {
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
-  landingConfig, packs, packItems, packFavorites, inventoryAdjustments, prospects,
+  landingConfig, messagingSettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones,
   promotions, promotionUsage,
@@ -193,6 +193,26 @@ export interface IStorage {
   getLandingConfig(): Promise<LandingConfig>;
   updateLandingConfig(data: Partial<Omit<LandingConfig, "id" | "updatedAt">>): Promise<LandingConfig>;
   setServiceState(service: ServiceKey, state: ServiceState): Promise<ServiceStatesMap>;
+  getMessagingSettings(): Promise<{
+    globalVisible: boolean;
+    supplierMessagingEnabled: boolean;
+    maintenanceMessagingEnabled: boolean;
+    broadcastsEnabled: boolean;
+    gracePeriodMinutes: number;
+  }>;
+  updateMessagingSettings(updates: Partial<{
+    globalVisible: boolean;
+    supplierMessagingEnabled: boolean;
+    maintenanceMessagingEnabled: boolean;
+    broadcastsEnabled: boolean;
+    gracePeriodMinutes: number;
+  }>): Promise<{
+    globalVisible: boolean;
+    supplierMessagingEnabled: boolean;
+    maintenanceMessagingEnabled: boolean;
+    broadcastsEnabled: boolean;
+    gracePeriodMinutes: number;
+  }>;
   getCurrency(): Promise<string>;
   setCurrency(symbol: string): Promise<string>;
 
@@ -3069,6 +3089,49 @@ export class DatabaseStorage implements IStorage {
     return this.getServiceStates();
   }
 
+  async getMessagingSettings() {
+    const [row] = await db.select().from(messagingSettings).limit(1);
+    if (row) {
+      return {
+        globalVisible: row.globalVisible,
+        supplierMessagingEnabled: row.supplierMessagingEnabled,
+        maintenanceMessagingEnabled: row.maintenanceMessagingEnabled,
+        broadcastsEnabled: row.broadcastsEnabled,
+        gracePeriodMinutes: row.gracePeriodMinutes,
+      };
+    }
+    const [created] = await db.insert(messagingSettings).values({}).returning();
+    return {
+      globalVisible: created.globalVisible,
+      supplierMessagingEnabled: created.supplierMessagingEnabled,
+      maintenanceMessagingEnabled: created.maintenanceMessagingEnabled,
+      broadcastsEnabled: created.broadcastsEnabled,
+      gracePeriodMinutes: created.gracePeriodMinutes,
+    };
+  }
+
+  async updateMessagingSettings(updates: Partial<{
+    globalVisible: boolean;
+    supplierMessagingEnabled: boolean;
+    maintenanceMessagingEnabled: boolean;
+    broadcastsEnabled: boolean;
+    gracePeriodMinutes: number;
+  }>) {
+    const current = await this.getMessagingSettings();
+    const next = {
+      ...current,
+      ...updates,
+      gracePeriodMinutes: Math.max(1, Math.min(240, Math.round(updates.gracePeriodMinutes ?? current.gracePeriodMinutes))),
+    };
+    const [row] = await db.select({ id: messagingSettings.id }).from(messagingSettings).limit(1);
+    if (row) {
+      await db.update(messagingSettings).set({ ...next, updatedAt: new Date() }).where(eq(messagingSettings.id, row.id));
+    } else {
+      await db.insert(messagingSettings).values(next);
+    }
+    return next;
+  }
+
   async getServiceOrder(): Promise<MarketplaceServiceId[]> {
     const config = await this.getLandingConfig();
     const configured = Array.isArray(config.serviceOrder) ? config.serviceOrder : [];
@@ -3997,12 +4060,16 @@ export class DatabaseStorage implements IStorage {
     const roles = new Map(people.map(p => [p.id, p.role]));
     const roleA = roles.get(userA);
     const roleB = roles.get(userB);
+    const settings = await this.getMessagingSettings();
+    const isAdminPair = roleA === "ADMIN" || roleA === "SUPER_ADMIN" || roleB === "ADMIN" || roleB === "SUPER_ADMIN";
+    if (!isAdminPair && !settings.globalVisible) return false;
 
-    if (roleA === "ADMIN" || roleA === "SUPER_ADMIN" || roleB === "ADMIN" || roleB === "SUPER_ADMIN") {
+    if (isAdminPair) {
       return true;
     }
 
     if (service === "SHOP" && ((roleA === "SUPPLIER" && roleB === "CAFE_OWNER") || (roleB === "SUPPLIER" && roleA === "CAFE_OWNER"))) {
+      if (!settings.supplierMessagingEnabled) return false;
       const supplierId = roleA === "SUPPLIER" ? userA : userB;
       const cafeId = roleA === "CAFE_OWNER" ? userA : userB;
       const directOrders = await db.select({ status: orders.status })
@@ -4017,6 +4084,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (service === "MAINTENANCE" && ((roleA === "MAINTENANCE" && roleB === "CAFE_OWNER") || (roleB === "MAINTENANCE" && roleA === "CAFE_OWNER"))) {
+      if (!settings.maintenanceMessagingEnabled) return false;
       const maintenanceUserId = roleA === "MAINTENANCE" ? userA : userB;
       const cafeOwnerId = roleA === "CAFE_OWNER" ? userA : userB;
       const reservations = await db.select({ status: maintenanceReservations.status })
@@ -4052,9 +4120,15 @@ export class DatabaseStorage implements IStorage {
     const [me, other] = await Promise.all([this.getUser(userId), this.getUser(otherId)]);
     if (!me || !other) return false;
     if (me.role === "ADMIN" || me.role === "SUPER_ADMIN" || other.role === "ADMIN" || other.role === "SUPER_ADMIN") return true;
+    const settings = await this.getMessagingSettings();
+    const meRole = me.role as string;
+    const otherRole = other.role as string;
+    const isAdminPair = meRole === "ADMIN" || meRole === "SUPER_ADMIN" || otherRole === "ADMIN" || otherRole === "SUPER_ADMIN";
+    if (!isAdminPair && !settings.globalVisible) return false;
+    if (!isAdminPair && (conversation.type as string) === "BROADCAST" && !settings.broadcastsEnabled) return false;
     if (await this.hasEligibleMessagingRelationship(userId, otherId, conversation.service)) return true;
     return !!conversation.relationshipClosedAt &&
-      Date.now() - conversation.relationshipClosedAt.getTime() <= 30 * 60 * 1000;
+      Date.now() - conversation.relationshipClosedAt.getTime() <= settings.gracePeriodMinutes * 60 * 1000;
   }
 
   /** Refresh the lifecycle timestamp used by the messaging grace period. */
@@ -4072,9 +4146,15 @@ export class DatabaseStorage implements IStorage {
     const relationshipActive = await this.hasEligibleMessagingRelationship(userA, userB, service);
     for (const [conversationId, count] of Array.from(counts.entries())) {
       if (count !== 2) continue;
-      await db.update(conversations)
-        .set({ relationshipClosedAt: relationshipActive ? null : new Date() })
-        .where(eq(conversations.id, conversationId));
+      if (relationshipActive) {
+        await db.update(conversations)
+          .set({ relationshipClosedAt: null })
+          .where(eq(conversations.id, conversationId));
+      } else {
+        await db.update(conversations)
+          .set({ relationshipClosedAt: new Date() })
+          .where(and(eq(conversations.id, conversationId), isNull(conversations.relationshipClosedAt)));
+      }
     }
   }
 

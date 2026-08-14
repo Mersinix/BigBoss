@@ -32,6 +32,7 @@ import { useFavorites, selectTotalFavCount, type MaintenanceFavItem } from "@/ho
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates } from "@/hooks/use-service-states";
 import { sortServiceIds, useServiceOrder } from "@/hooks/use-service-order";
+import { useMessagingSettings } from "@/hooks/use-messaging-settings";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
@@ -1275,11 +1276,13 @@ function MessagesPanel({
   });
 
   const newConvMutation = useMutation({
-    mutationFn: (targetUserId: number) =>
-      apiRequest("POST", "/api/messages/conversations", {
+    mutationFn: async (targetUserId: number) => {
+      const response = await apiRequest("POST", "/api/messages/conversations", {
         targetUserId,
         service,
-      }),
+      });
+      return response.json() as Promise<{ conversation: { id: number }; isNew: boolean }>;
+    },
     onSuccess: (data: any) => {
       setShopConvId(data.conversation.id);
       setView("chat");
@@ -1756,6 +1759,8 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const hydrateStores = useStoreFavorites((s) => s.hydrateStores);
   const { states: headerServiceStates } = useServiceStates();
   const { order: headerServiceOrder } = useServiceOrder();
+  const { settings: messagingSettings } = useMessagingSettings();
+  const messagesVisible = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || messagingSettings.globalVisible;
 
   const { data: favoritesData } = useQuery<ShopFavoriteItem[]>({
     queryKey: ["/api/favorites"],
@@ -2115,7 +2120,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ── Chat Modal ── */}
-      {user && hasCommercial && (
+      {user && hasCommercial && messagesVisible && (
         <Dialog
           open={chatOpen}
           onOpenChange={(open) => {

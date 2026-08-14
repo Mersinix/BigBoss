@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Megaphone, Coffee, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Printer, Megaphone, Coffee, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
@@ -34,6 +35,103 @@ const STATE_OPTIONS: { value: ServiceState; label: string; icon: any; badgeClass
   { value: "COMING_SOON", label: "Coming Soon",  icon: Clock,  badgeClass: "bg-amber-400 text-amber-700 border-amber-200" },
   { value: "HIDDEN",      label: "Hidden",       icon: EyeOff, badgeClass: "bg-gray-100 text-gray-600 border-gray-200" },
 ];
+
+type MessagingSettings = {
+  globalVisible: boolean;
+  supplierMessagingEnabled: boolean;
+  maintenanceMessagingEnabled: boolean;
+  broadcastsEnabled: boolean;
+  gracePeriodMinutes: number;
+};
+
+function MessagesSystemSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery<MessagingSettings>({ queryKey: ["/api/messages/settings"] });
+  const [local, setLocal] = useState<MessagingSettings | null>(null);
+
+  useEffect(() => {
+    if (settings) setLocal(settings);
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: (updates: Partial<MessagingSettings>) =>
+      apiRequest("PATCH", "/api/admin/messages/settings", updates),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      queryClient.setQueryData(["/api/messages/settings"], saved);
+      toast({ title: "Messages System updated" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Failed to update Messages System", description: error?.message }),
+  });
+
+  const value = local ?? settings;
+  const update = (field: keyof MessagingSettings, next: boolean | number) => {
+    if (!value) return;
+    setLocal({ ...value, [field]: next });
+    saveMutation.mutate({ [field]: next });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-blue-500/10 rounded-xl p-3"><MessageSquare className="w-5 h-5 text-blue-600" /></div>
+          <div>
+            <CardTitle className="text-base">Messages System</CardTitle>
+            <CardDescription className="pt-1">Control messaging availability without deleting conversations or messages.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!value ? <Skeleton className="h-20 w-full" /> : (
+          <>
+            {([
+              ["globalVisible", "Messages visibility", "Allow affected users to access Messages."],
+              ["supplierMessagingEnabled", "Supplier ↔ Coffee Owner", "Allow conversations for eligible active Shop orders."],
+              ["maintenanceMessagingEnabled", "Maintenance ↔ Coffee Owner", "Allow conversations for eligible active reservations."],
+              ["broadcastsEnabled", "Admin broadcasts", "Allow new broadcasts; existing broadcast data is preserved."],
+            ] as const).map(([field, label, description]) => (
+              <div key={field} className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div>
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                </div>
+                <Switch
+                  checked={value[field] as boolean}
+                  onCheckedChange={(checked) => update(field, checked)}
+                  disabled={saveMutation.isPending}
+                  aria-label={label}
+                />
+              </div>
+            ))}
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+              <div>
+                <p className="text-sm font-medium">Post-closure conversation window</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Minutes users may continue messaging after an order or reservation closes.</p>
+              </div>
+              <Input
+                type="number"
+                min={1}
+                max={240}
+                className="w-24"
+                value={value.gracePeriodMinutes}
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  if (Number.isInteger(next) && next >= 1 && next <= 240) update("gracePeriodMinutes", next);
+                }}
+                disabled={saveMutation.isPending}
+                aria-label="Post-closure conversation window in minutes"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Admins always retain access to manage Messages, including when visibility is hidden.</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 // ── Landing Page Config ───────────────────────────────────────────────────────
 
@@ -454,6 +552,9 @@ export default function SystemManagementPage() {
 
       {/* ── Global Currency ── */}
       <GlobalCurrencySection />
+
+      {/* ── Messages System ── */}
+      <MessagesSystemSection />
 
       {/* ── Landing Page Config ── */}
       <LandingConfigSection />

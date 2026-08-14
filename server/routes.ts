@@ -249,6 +249,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Messages System controls ───────────────────────────────────────────────
+
+  app.get("/api/messages/settings", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getMessagingSettings();
+      const user = await storage.getUser(req.session.userId);
+      // Admins always retain visibility of the management system.
+      if (user && !["ADMIN", "SUPER_ADMIN"].includes(user.role)) {
+        return res.json({ ...settings });
+      }
+      res.json(settings);
+    } catch {
+      res.status(500).json({ message: "Failed to load messaging settings" });
+    }
+  });
+
+  app.patch("/api/admin/messages/settings", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        globalVisible: z.boolean().optional(),
+        supplierMessagingEnabled: z.boolean().optional(),
+        maintenanceMessagingEnabled: z.boolean().optional(),
+        broadcastsEnabled: z.boolean().optional(),
+        gracePeriodMinutes: z.number().int().min(1).max(240).optional(),
+      }).strict().parse(req.body);
+      const settings = await storage.updateMessagingSettings(body);
+      broadcast("messages_settings_updated", settings);
+      res.json(settings);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid Messages System settings" });
+      res.status(500).json({ message: "Failed to update messaging settings" });
+    }
+  });
+
   // ── Currency ─────────────────────────────────────────────────────────────
 
   app.get("/api/system-currency", async (_req, res) => {
@@ -3670,6 +3704,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     try {
       const adminId: number = req.session.userId;
+      const settings = await storage.getMessagingSettings();
+      if (!settings.broadcastsEnabled) return res.status(403).json({ message: "Broadcasts are disabled" });
       const conv = await storage.createBroadcastConversation(adminId, title, targetUserIds);
       if (content?.trim()) {
         const msg = await storage.sendMessage(conv.id, adminId, content.trim());

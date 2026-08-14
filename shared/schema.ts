@@ -314,6 +314,19 @@ export const platformServices = pgTable("platform_services", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Admin-controlled messaging behavior. This is intentionally separate from
+// marketplace service visibility: hiding Messages must never delete data and
+// must not remove an admin's ability to manage it.
+export const messagingSettings = pgTable("messaging_settings", {
+  id: serial("id").primaryKey(),
+  globalVisible: boolean("global_visible").notNull().default(true),
+  supplierMessagingEnabled: boolean("supplier_messaging_enabled").notNull().default(true),
+  maintenanceMessagingEnabled: boolean("maintenance_messaging_enabled").notNull().default(true),
+  broadcastsEnabled: boolean("broadcasts_enabled").notNull().default(true),
+  gracePeriodMinutes: integer("grace_period_minutes").notNull().default(30),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Landing page configuration — admin-managed content for hero, sections & footer
 export const landingConfig = pgTable("landing_config", {
   id: serial("id").primaryKey(),

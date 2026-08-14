@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Eye, EyeOff, Megaphone, MessageSquare, Users } from "lucide-react";
+import { Download, Eye, EyeOff, Megaphone, MessageSquare, Trash2, Users } from "lucide-react";
 import { MessagesPanel } from "@/components/messages/messages-panel";
 import type { ConversationSummary, EligibleContact } from "@shared/schema";
 
@@ -112,6 +112,11 @@ function AllConversationsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [service, setService] = useState<(typeof MESSAGE_SERVICES)[number]>("SHOP");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [exportDate, setExportDate] = useState("");
+  const [exportMonth, setExportMonth] = useState("");
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
   const { data: allConvs = [], isLoading } = useQuery<ConversationSummary[]>({
     queryKey: ["/api/messages/admin/all", service],
     queryFn: async () => {
@@ -132,6 +137,50 @@ function AllConversationsTab() {
     onError: (err: any) => toast({ title: "Failed", description: err?.message, variant: "destructive" }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map(id => apiRequest("DELETE", `/api/messages/conversations/${id}`)));
+    },
+    onSuccess: (_, ids) => {
+      setSelectedIds(new Set());
+      toast({ title: `${ids.length} conversation${ids.length === 1 ? "" : "s"} deleted` });
+      qc.invalidateQueries({ queryKey: ["/api/messages/admin/all"] });
+      qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+    },
+    onError: (err: any) => toast({ title: "Delete failed", description: err?.message, variant: "destructive" }),
+  });
+
+  const exportCsv = async () => {
+    const params = new URLSearchParams({ service });
+    if (selectedIds.size > 0) params.set("ids", Array.from(selectedIds).join(","));
+    if (exportDate) params.set("date", exportDate);
+    else if (exportMonth) params.set("month", exportMonth);
+    else {
+      if (exportFrom) params.set("from", exportFrom);
+      if (exportTo) params.set("to", exportTo);
+    }
+    const response = await fetch(`/api/messages/admin/export?${params.toString()}`, { credentials: "include" });
+    if (!response.ok) {
+      toast({ title: "Export failed", variant: "destructive" });
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `conversations-${service.toLowerCase()}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const toggleSelected = (id: number) => setSelectedIds(previous => {
+    const next = new Set(previous);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allSelected = allConvs.length > 0 && allConvs.every(conv => selectedIds.has(conv.id));
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(allConvs.map(conv => conv.id)));
+
   return (
     <div>
       <div className="border-b px-4 pt-3">
@@ -142,6 +191,31 @@ function AllConversationsTab() {
             ))}
           </TabsList>
         </Tabs>
+      </div>
+      <div className="flex flex-wrap items-end gap-2 border-b px-4 py-3 bg-secondary/10">
+        <div className="flex items-center gap-2 mr-2">
+          <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all displayed conversations" />
+          <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
+        </div>
+        <Button size="sm" variant="outline" className="h-8 text-xs" disabled={selectedIds.size === 0 || deleteMutation.isPending} onClick={() => {
+          if (window.confirm(`Permanently delete ${selectedIds.size} selected conversation${selectedIds.size === 1 ? "" : "s"} and all messages?`)) {
+            deleteMutation.mutate(Array.from(selectedIds));
+          }
+        }}>
+          <Trash2 className="w-3 h-3 mr-1" />Delete selected
+        </Button>
+        <div className="h-5 w-px bg-border hidden md:block" />
+        <Label className="text-xs">Date</Label>
+        <Input type="date" value={exportDate} onChange={e => { setExportDate(e.target.value); setExportMonth(""); }} className="h-8 w-[145px] text-xs" />
+        <Label className="text-xs">Month</Label>
+        <Input type="month" value={exportMonth} onChange={e => { setExportMonth(e.target.value); setExportDate(""); }} className="h-8 w-[125px] text-xs" />
+        <Label className="text-xs">From</Label>
+        <Input type="date" value={exportFrom} onChange={e => { setExportFrom(e.target.value); setExportDate(""); setExportMonth(""); }} className="h-8 w-[135px] text-xs" />
+        <Label className="text-xs">To</Label>
+        <Input type="date" value={exportTo} onChange={e => { setExportTo(e.target.value); setExportDate(""); setExportMonth(""); }} className="h-8 w-[135px] text-xs" />
+        <Button size="sm" className="h-8 text-xs" onClick={() => exportCsv()}>
+          <Download className="w-3 h-3 mr-1" />Export CSV
+        </Button>
       </div>
       {isLoading ? <div className="p-6 text-sm text-muted-foreground">Loading…</div> : allConvs.length === 0 ? (
         <div className="p-12 text-center text-muted-foreground">
@@ -154,7 +228,8 @@ function AllConversationsTab() {
         const allHidden = conv.otherParticipants.length > 0 && hiddenParticipants.length === conv.otherParticipants.length;
         const someHidden = hiddenParticipants.length > 0 && !allHidden;
         return (
-          <div key={conv.id} className="flex items-start gap-3 p-4 hover:bg-secondary/20">
+           <div key={conv.id} className="flex items-start gap-3 p-4 hover:bg-secondary/20">
+             <Checkbox checked={selectedIds.has(conv.id)} onCheckedChange={() => toggleSelected(conv.id)} aria-label={`Select conversation ${conv.id}`} className="mt-1" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">{displayName}</span>

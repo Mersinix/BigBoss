@@ -1,0 +1,197 @@
+We need to make a targeted improvement to the platform's **Messages / Conversations system**.
+
+Before changing anything, inspect the existing Messages implementation across **Admin, Supplier, Coffee Owner, and Maintenance**. Check what already works and preserve it. Do not redesign the existing Messages UI, remove unrelated functionality, or change unrelated modules.
+
+**Do not only analyze this task. Execute the requested changes completely.**
+
+---
+
+## 1. Admin → Messages → All Conversations
+
+Admin should have full conversation management.
+
+### Delete
+
+Admin must be able to permanently delete any conversation while keeping all related data consistent.
+
+### Hide
+
+The existing **Hide Conversation** functionality already works. Keep it exactly as it is.
+
+### Multi-select
+
+Allow Admin to select:
+
+* One conversation
+* Multiple conversations
+* All displayed conversations when applicable
+
+### CSV export
+
+Admin must be able to export selected conversations as CSV.
+
+Include available information such as:
+
+* Conversation ID
+* Participants
+* Participant roles
+* Conversation type/context
+* Created date
+* Last activity
+* Message count
+* Messages/content
+* Sender
+* Message timestamps
+
+### Date/month export
+
+Admin must also be able to export conversations by:
+
+* Specific date
+* Date range
+* Month
+* Any selected period
+
+The export must respect the selected period and must not require manually selecting every conversation.
+
+---
+
+## 2. Supplier → Messages
+
+### Supplier ↔ Admin
+
+Supplier can always:
+
+* See the Admin conversation.
+* Communicate with Admin.
+* Receive Admin Broadcasts according to the existing Broadcast system.
+
+### Supplier ↔ Coffee Owner
+
+Supplier/Coffee Owner conversations must **not** be permanent.
+
+They are available only when there is an eligible **active/in-progress order** between them.
+
+Without an eligible order:
+
+* Neither side sees the other in Conversations.
+* Neither side can start a conversation.
+* Neither side can send messages.
+* Neither should appear as an available user in New Conversation.
+
+Do not only hide this in the frontend. Enforce the permission properly.
+
+---
+
+## 3. Supplier ↔ Coffee Owner lifecycle
+
+When an eligible order exists:
+
+* Conversation becomes available.
+* Both sides can communicate.
+* Existing realtime behavior continues.
+
+When the order is closed/completed:
+
+### 30-minute grace period
+
+Keep the conversation available for **30 minutes after closing**.
+
+After 30 minutes:
+
+* Hide it from Supplier.
+* Hide it from Coffee Owner.
+* Disable further messaging.
+* Remove them from each other's available conversation participants.
+
+Do NOT delete historical messages unless existing business logic requires it.
+
+Historical/admin access should remain possible where appropriate.
+
+---
+
+## 4. Maintenance messaging
+
+Apply the same strategy to:
+
+### Maintenance ↔ Coffee Owner
+
+They can communicate only when there is an eligible active/in-progress Maintenance order/reservation.
+
+Without an eligible relationship:
+
+* No conversation.
+* No messaging.
+* No New Conversation access between them.
+* Neither appears as an available participant.
+
+When the Maintenance order/reservation closes:
+
+* Keep conversation available for 30 minutes.
+* After 30 minutes hide it from both sides.
+* Disable further messaging.
+
+Use the existing Maintenance order/reservation lifecycle. Do not invent a separate lifecycle.
+
+---
+
+## 5. Supplier/Maintenance ↔ Admin
+
+Admin communication must remain available normally.
+
+Supplier and Maintenance providers can always:
+
+* See Admin conversation.
+* Message Admin.
+* Receive Admin Broadcasts.
+
+Do not let the order-based restrictions affect Admin conversations.
+
+---
+
+## 6. Security / backend consistency
+
+Verify that the restrictions cannot be bypassed by directly attempting to:
+
+* Start a conversation.
+* Send a message.
+* Access another participant's conversation.
+* Reopen an inactive conversation.
+* Continue messaging after the 30-minute period.
+* Create Supplier ↔ Coffee Owner conversations without an eligible order.
+* Create Maintenance ↔ Coffee Owner conversations without an eligible relationship.
+
+Frontend visibility alone is not sufficient.
+
+---
+
+## 7. Realtime behavior
+
+Verify realtime synchronization for:
+
+* Conversation creation
+* New messages
+* Conversation visibility
+* Order status changes
+* Order closure
+* Maintenance status changes
+* 30-minute expiration
+* Admin broadcasts
+* Conversation deletion
+* Conversation updates
+* Read/unread state
+* Conversation lists
+
+Users should not need to refresh when a change is expected to happen in realtime.
+
+---
+
+## Important
+
+Preserve the current design and all unrelated functionality.
+
+Do not redesign the Messages UI.
+
+Do not remove additional sections or controls.
+
+**Execute the changes and verify them before stopping.**

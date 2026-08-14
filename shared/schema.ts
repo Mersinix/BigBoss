@@ -606,6 +606,7 @@ export const conversations = pgTable("conversations", {
   service: text("service").notNull().default('SHOP'), // 'SHOP' only for now
   createdByUserId: integer("created_by_user_id").notNull(),
   lastMessageAt: timestamp("last_message_at").defaultNow(),
+  relationshipClosedAt: timestamp("relationship_closed_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1494,6 +1495,8 @@ export type ConversationSummary = {
   title: string | null;
   service: string;
   lastMessageAt: string;
+  createdAt?: string;
+  messageCount?: number;
   lastMessage: { content: string; senderId: number; senderName: string; createdAt: string } | null;
   unreadCount: number;
   /** Everyone in the conversation except the requesting user */

@@ -487,6 +487,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       time: body.time,
     });
     if (!updated) return res.status(404).json({ message: "Reservation not found" });
+    await storage.refreshMaintenanceMessagingState(updated.id);
     broadcast("maintenance_reservation_updated", { reservationId: updated.id });
     broadcastToUsers([user.id, updated.cafeOwnerId], "maintenance_reservation_updated", { reservationId: updated.id });
     res.json(updated);
@@ -498,6 +499,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const body = z.object({ accepted: z.boolean() }).parse(req.body);
     const updated = await storage.respondToMaintenanceReschedule(Number(req.params.id), user.id, body.accepted);
     if (!updated) return res.status(404).json({ message: "Rescheduling request not found" });
+    await storage.refreshMaintenanceMessagingState(updated.id);
     broadcast("maintenance_reservation_updated", { reservationId: updated.id, kind: body.accepted ? "reschedule_accepted" : "reschedule_rejected" });
     broadcastToUsers([user.id, updated.maintenanceUserId], "maintenance_reservation_updated", { reservationId: updated.id, kind: body.accepted ? "reschedule_accepted" : "reschedule_rejected" });
     res.json(updated);
@@ -1065,11 +1067,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(403).json({ message: 'Forbidden' });
       }
       const updated = await storage.updateOrderStatus(orderId, input.status, input.deliveryId);
+      await storage.refreshOrderMessagingState(orderId);
       if (order.status !== 'CANCELLED' && input.status === 'CANCELLED') {
         broadcast("inventory_updated", { orderId });
       }
       // Notify cafe owner of status change in real time
       broadcastToUsers([order.cafeId], 'order_status_changed', { orderId, status: input.status });
+      broadcast('order_status_changed', { orderId, status: input.status });
       res.json(updated);
     } catch (err) {
       res.status(400).json({ message: "Invalid request" });
@@ -1093,6 +1097,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const { status } = z.object({ status: z.string() }).parse(req.body);
       const updated = await storage.updateSubOrderStatus(subOrderId, status);
+      await storage.refreshOrderMessagingState(subOrder.orderId);
       // Notify cafe owner + supplier of suborder change
       const order = await storage.getOrder(subOrder.orderId);
       if (order) {
@@ -3602,6 +3607,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const convId = parseInt(req.params.id);
     try {
       const userId: number = req.session.userId;
+      if (!await storage.isParticipant(convId, userId)) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
       await storage.markConversationRead(convId, userId);
       res.json({ ok: true });
     } catch (err: any) {
@@ -3666,6 +3674,83 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const affectedIds = targetUserId ? [targetUserId] : await storage.getConversationParticipantIds(convId);
       broadcastToUsers(affectedIds, "conversation_updated", { conversationId: convId });
       res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** DELETE /api/messages/conversations/:id — admin permanently deletes a conversation and its messages */
+  app.delete("/api/messages/conversations/:id", requireAdmin, async (req: any, res) => {
+    const convId = parseInt(req.params.id);
+    if (!Number.isInteger(convId)) return res.status(400).json({ message: "Invalid conversation id" });
+    try {
+      const participantIds = await storage.deleteConversation(convId);
+      broadcast("conversation_deleted", { conversationId: convId });
+      broadcastToUsers(participantIds, "conversation_deleted", { conversationId: convId });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** GET /api/messages/admin/export — admin CSV export by selection or period */
+  app.get("/api/messages/admin/export", requireAdmin, async (req: any, res) => {
+    try {
+      const service = typeof req.query.service === "string" ? req.query.service : undefined;
+      const ids = typeof req.query.ids === "string"
+        ? req.query.ids.split(",").map(Number).filter(Number.isInteger)
+        : undefined;
+      let from: Date | undefined;
+      let to: Date | undefined;
+      const period = typeof req.query.date === "string" ? req.query.date
+        : typeof req.query.month === "string" ? req.query.month
+        : typeof req.query.from === "string" ? req.query.from : undefined;
+      const rawTo = typeof req.query.to === "string" ? req.query.to : undefined;
+      if (period) {
+        const parsed = new Date(period.length === 7 ? `${period}-01T00:00:00` : `${period}T00:00:00`);
+        if (Number.isNaN(parsed.getTime())) return res.status(400).json({ message: "Invalid export period" });
+        from = parsed;
+        if (period.length === 7) {
+          to = new Date(parsed.getFullYear(), parsed.getMonth() + 1, 1);
+          to.setMilliseconds(to.getMilliseconds() - 1);
+        } else {
+          to = new Date(parsed);
+          to.setDate(to.getDate() + 1);
+          to.setMilliseconds(to.getMilliseconds() - 1);
+        }
+      }
+      if (rawTo) {
+        const parsedTo = new Date(`${rawTo}T00:00:00`);
+        if (Number.isNaN(parsedTo.getTime())) return res.status(400).json({ message: "Invalid export end date" });
+        to = new Date(parsedTo);
+        to.setDate(to.getDate() + 1);
+        to.setMilliseconds(to.getMilliseconds() - 1);
+      }
+      const rows = await storage.getAdminConversationExport({ service, ids, from, to });
+      const csvEscape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      const header = [
+        "Conversation ID", "Participants", "Participant roles", "Conversation type",
+        "Service/context", "Created date", "Last activity", "Message count",
+        "Message ID", "Sender", "Sender role", "Message timestamp", "Message/content",
+      ];
+      const csvRows = [header, ...rows.map(row => [
+        row.conversation.id,
+        row.participants.map(p => p.name).join(" | "),
+        row.participants.map(p => p.role).join(" | "),
+        row.conversation.type,
+        row.conversation.service,
+        row.conversation.createdAt?.toISOString(),
+        row.conversation.lastMessageAt?.toISOString(),
+        rows.filter(r => r.conversation.id === row.conversation.id).length,
+        row.message?.id,
+        row.message?.senderName,
+        row.message?.senderRole,
+        row.message?.createdAt,
+        row.message?.content,
+      ])].map(row => row.map(csvEscape).join(",")).join("\r\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="conversations-${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(`\uFEFF${csvRows}`);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

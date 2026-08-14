@@ -3990,6 +3990,123 @@ export class DatabaseStorage implements IStorage {
 
   // ── Messaging ──────────────────────────────────────────────────────────────
 
+  private async hasEligibleMessagingRelationship(userA: number, userB: number, service: string): Promise<boolean> {
+    const people = await db.select({ id: users.id, role: users.role })
+      .from(users)
+      .where(inArray(users.id, [userA, userB]));
+    const roles = new Map(people.map(p => [p.id, p.role]));
+    const roleA = roles.get(userA);
+    const roleB = roles.get(userB);
+
+    if (roleA === "ADMIN" || roleA === "SUPER_ADMIN" || roleB === "ADMIN" || roleB === "SUPER_ADMIN") {
+      return true;
+    }
+
+    if (service === "SHOP" && ((roleA === "SUPPLIER" && roleB === "CAFE_OWNER") || (roleB === "SUPPLIER" && roleA === "CAFE_OWNER"))) {
+      const supplierId = roleA === "SUPPLIER" ? userA : userB;
+      const cafeId = roleA === "CAFE_OWNER" ? userA : userB;
+      const directOrders = await db.select({ status: orders.status })
+        .from(orders)
+        .where(and(eq(orders.supplierId, supplierId), eq(orders.cafeId, cafeId)));
+      const supplierSubOrders = await db.select({ status: subOrders.status })
+        .from(subOrders)
+        .innerJoin(orders, eq(subOrders.orderId, orders.id))
+        .where(and(eq(subOrders.supplierId, supplierId), eq(orders.cafeId, cafeId)));
+      const activeStatuses = new Set(["PENDING", "CONFIRMED", "PREPARING", "READY", "IN_DELIVERY"]);
+      return [...directOrders, ...supplierSubOrders].some(order => activeStatuses.has(order.status));
+    }
+
+    if (service === "MAINTENANCE" && ((roleA === "MAINTENANCE" && roleB === "CAFE_OWNER") || (roleB === "MAINTENANCE" && roleA === "CAFE_OWNER"))) {
+      const maintenanceUserId = roleA === "MAINTENANCE" ? userA : userB;
+      const cafeOwnerId = roleA === "CAFE_OWNER" ? userA : userB;
+      const reservations = await db.select({ status: maintenanceReservations.status })
+        .from(maintenanceReservations)
+        .where(and(
+          eq(maintenanceReservations.maintenanceUserId, maintenanceUserId),
+          eq(maintenanceReservations.cafeOwnerId, cafeOwnerId),
+        ));
+      const activeStatuses = new Set(["PENDING", "CONFIRMED", "RESCHEDULED", "RESCHEDULE_PENDING"]);
+      return reservations.some(reservation => activeStatuses.has(reservation.status));
+    }
+
+    return false;
+  }
+
+  /** True for admins and active relationship conversations, including the 30-minute grace window. */
+  async isConversationMessagingAllowed(conversationId: number, userId: number): Promise<boolean> {
+    const [conversation] = await db.select().from(conversations).where(eq(conversations.id, conversationId));
+    if (!conversation) return false;
+    const participantRows = await db.select({ userId: conversationParticipants.userId })
+      .from(conversationParticipants)
+      .where(and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.userId, userId),
+        isNull(conversationParticipants.hiddenAt),
+      ));
+    if (participantRows.length === 0) return false;
+    if (conversation.type !== "DIRECT") return true;
+
+    const participantIds = await this.getConversationParticipantIds(conversationId);
+    const otherId = participantIds.find(id => id !== userId);
+    if (!otherId) return false;
+    const [me, other] = await Promise.all([this.getUser(userId), this.getUser(otherId)]);
+    if (!me || !other) return false;
+    if (me.role === "ADMIN" || me.role === "SUPER_ADMIN" || other.role === "ADMIN" || other.role === "SUPER_ADMIN") return true;
+    if (await this.hasEligibleMessagingRelationship(userId, otherId, conversation.service)) return true;
+    return !!conversation.relationshipClosedAt &&
+      Date.now() - conversation.relationshipClosedAt.getTime() <= 30 * 60 * 1000;
+  }
+
+  /** Refresh the lifecycle timestamp used by the messaging grace period. */
+  async syncMessagingRelationship(userA: number, userB: number, service: string): Promise<void> {
+    const participantRows = await db.select({ conversationId: conversationParticipants.conversationId })
+      .from(conversationParticipants)
+      .innerJoin(conversations, eq(conversationParticipants.conversationId, conversations.id))
+      .where(and(
+        eq(conversations.type, "DIRECT"),
+        eq(conversations.service, service),
+        inArray(conversationParticipants.userId, [userA, userB]),
+      ));
+    const counts = new Map<number, number>();
+    for (const row of participantRows) counts.set(row.conversationId, (counts.get(row.conversationId) ?? 0) + 1);
+    const relationshipActive = await this.hasEligibleMessagingRelationship(userA, userB, service);
+    for (const [conversationId, count] of Array.from(counts.entries())) {
+      if (count !== 2) continue;
+      await db.update(conversations)
+        .set({ relationshipClosedAt: relationshipActive ? null : new Date() })
+        .where(eq(conversations.id, conversationId));
+    }
+  }
+
+  async refreshOrderMessagingState(orderId: number): Promise<void> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+    if (!order) return;
+    const related = await db.select({ supplierId: subOrders.supplierId })
+      .from(subOrders)
+      .where(eq(subOrders.orderId, orderId));
+    const supplierIds = new Set<number>(related.map(row => row.supplierId));
+    if (order.supplierId) supplierIds.add(order.supplierId);
+    for (const supplierId of Array.from(supplierIds)) {
+      await this.syncMessagingRelationship(order.cafeId, supplierId, "SHOP");
+    }
+  }
+
+  async refreshMaintenanceMessagingState(reservationId: number): Promise<void> {
+    const [reservation] = await db.select().from(maintenanceReservations)
+      .where(eq(maintenanceReservations.id, reservationId));
+    if (reservation) {
+      await this.syncMessagingRelationship(reservation.cafeOwnerId, reservation.maintenanceUserId, "MAINTENANCE");
+    }
+  }
+
+  async deleteConversation(conversationId: number): Promise<number[]> {
+    const participantIds = await this.getConversationParticipantIds(conversationId);
+    await db.delete(messages).where(eq(messages.conversationId, conversationId));
+    await db.delete(conversationParticipants).where(eq(conversationParticipants.conversationId, conversationId));
+    await db.delete(conversations).where(eq(conversations.id, conversationId));
+    return participantIds;
+  }
+
   /** Return all non-hidden conversations for a user, ordered by most recent activity. */
   async getConversationsForUser(userId: number, service?: string): Promise<ConversationSummary[]> {
     const participants = await db.select().from(conversationParticipants)
@@ -4002,15 +4119,21 @@ export class DatabaseStorage implements IStorage {
       ...(service ? [eq(conversations.service, service)] : []),
     ))
       .orderBy(desc(conversations.lastMessageAt));
+    const visibleConvRows = [];
+    for (const conv of convRows) {
+      if (await this.isConversationMessagingAllowed(conv.id, userId)) visibleConvRows.push(conv);
+    }
+    if (visibleConvRows.length === 0) return [];
 
     // Fetch all participants for all conversations in one query
+    const visibleIds = visibleConvRows.map(c => c.id);
     const allParticipants = await db.select({ cp: conversationParticipants, u: users })
       .from(conversationParticipants)
       .innerJoin(users, eq(conversationParticipants.userId, users.id))
-      .where(inArray(conversationParticipants.conversationId, convIds));
+      .where(inArray(conversationParticipants.conversationId, visibleIds));
 
     // Fetch last message per conversation
-    const lastMsgs = await db.select().from(messages).where(inArray(messages.conversationId, convIds))
+    const lastMsgs = await db.select().from(messages).where(inArray(messages.conversationId, visibleIds))
       .orderBy(desc(messages.createdAt));
 
     const userMap = new Map<number, { name: string; role: string }>();
@@ -4018,7 +4141,7 @@ export class DatabaseStorage implements IStorage {
 
     const myParticipantMap = new Map(participants.map(p => [p.conversationId, p]));
 
-    return convRows.map(conv => {
+    return visibleConvRows.map(conv => {
       const myParticipant = myParticipantMap.get(conv.id)!;
       const others = allParticipants
         .filter(r => r.cp.conversationId === conv.id && r.cp.userId !== userId)
@@ -4040,6 +4163,8 @@ export class DatabaseStorage implements IStorage {
         title: conv.title,
         service: conv.service,
         lastMessageAt: (conv.lastMessageAt ?? conv.createdAt)!.toISOString(),
+        createdAt: conv.createdAt!.toISOString(),
+        messageCount: lastMsgs.filter(m => m.conversationId === conv.id).length,
         lastMessage: lastMsg ? {
           content: lastMsg.content,
           senderId: lastMsg.senderId,
@@ -4098,7 +4223,7 @@ export class DatabaseStorage implements IStorage {
         eq(conversationParticipants.userId, userId),
         isNull(conversationParticipants.hiddenAt),
       ));
-    return !!row;
+    return !!row && await this.isConversationMessagingAllowed(conversationId, userId);
   }
 
   async getConversationParticipantIds(conversationId: number): Promise<number[]> {
@@ -4274,10 +4399,27 @@ export class DatabaseStorage implements IStorage {
       for (const a of admins) contactUserIds.add(a.id);
     }
 
-    // Remove self from contact list
+    // Supplier/café and Maintenance/café contacts are relationship-scoped.
+    // Keep legacy delivery and other service contact behavior unchanged.
     contactUserIds.delete(userId);
 
     if (contactUserIds.size === 0) return [];
+    const candidateUsers = await db.select({ id: users.id, role: users.role })
+      .from(users)
+      .where(inArray(users.id, Array.from(contactUserIds)));
+    const relationshipService = service ?? (me.role === "MAINTENANCE" ? "MAINTENANCE" : "SHOP");
+    const eligibleIds = new Set<number>();
+    for (const candidate of candidateUsers) {
+      const restrictedPair =
+        (me.role === "SUPPLIER" && candidate.role === "CAFE_OWNER") ||
+        (me.role === "CAFE_OWNER" && candidate.role === "SUPPLIER") ||
+        (me.role === "MAINTENANCE" && candidate.role === "CAFE_OWNER") ||
+        (me.role === "CAFE_OWNER" && candidate.role === "MAINTENANCE");
+      if (!restrictedPair || await this.hasEligibleMessagingRelationship(userId, candidate.id, relationshipService)) {
+        eligibleIds.add(candidate.id);
+      }
+    }
+    if (eligibleIds.size === 0) return [];
     const roleCondition = allowedServiceRoles
       ? (!isAdmin && service === "SHOP"
         ? or(
@@ -4288,7 +4430,7 @@ export class DatabaseStorage implements IStorage {
         : inArray(users.role, allowedServiceRoles as any))
       : undefined;
     const contacts = await db.select().from(users).where(and(
-      inArray(users.id, Array.from(contactUserIds)),
+      inArray(users.id, Array.from(eligibleIds)),
       ...(roleCondition ? [roleCondition] : []),
     ));
     return contacts.map(u => ({ id: u.id, name: u.name, role: u.role }));
@@ -4339,6 +4481,8 @@ export class DatabaseStorage implements IStorage {
         title: conv.title,
         service: conv.service,
         lastMessageAt: (conv.lastMessageAt ?? conv.createdAt)!.toISOString(),
+        createdAt: conv.createdAt!.toISOString(),
+        messageCount: lastMsgs.filter(m => m.conversationId === conv.id).length,
         lastMessage: lastMsg ? {
           content: lastMsg.content,
           senderId: lastMsg.senderId,
@@ -4349,6 +4493,67 @@ export class DatabaseStorage implements IStorage {
         otherParticipants: participants,
       } satisfies ConversationSummary;
     });
+  }
+
+  async getAdminConversationExport(filters: {
+    service?: string;
+    ids?: number[];
+    from?: Date;
+    to?: Date;
+  }): Promise<Array<{
+    conversation: typeof conversations.$inferSelect;
+    participants: Array<{ id: number; name: string; role: string }>;
+    message: ConversationMessageRow | null;
+  }>> {
+    const conditions = [];
+    if (filters.service) conditions.push(eq(conversations.service, filters.service));
+    if (filters.ids?.length) conditions.push(inArray(conversations.id, filters.ids));
+    if (filters.from) conditions.push(gte(conversations.lastMessageAt, filters.from));
+    if (filters.to) conditions.push(lte(conversations.lastMessageAt, filters.to));
+    const convRows = await db.select().from(conversations)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(conversations.lastMessageAt));
+    if (convRows.length === 0) return [];
+
+    const ids = convRows.map(c => c.id);
+    const participantRows = await db.select({ cp: conversationParticipants, u: users })
+      .from(conversationParticipants)
+      .innerJoin(users, eq(conversationParticipants.userId, users.id))
+      .where(inArray(conversationParticipants.conversationId, ids));
+    const messageRows = await db.select({ m: messages, u: users })
+      .from(messages)
+      .innerJoin(users, eq(messages.senderId, users.id))
+      .where(inArray(messages.conversationId, ids))
+      .orderBy(messages.createdAt);
+
+    return convRows.reduce<Array<{
+      conversation: typeof conversations.$inferSelect;
+      participants: Array<{ id: number; name: string; role: string }>;
+      message: ConversationMessageRow | null;
+    }>>((result, conversation) => {
+      const participants = participantRows
+        .filter(row => row.cp.conversationId === conversation.id)
+        .map(row => ({ id: row.u.id, name: row.u.name, role: row.u.role }));
+      const rows = messageRows.filter(row => row.m.conversationId === conversation.id);
+      if (rows.length === 0) {
+        result.push({ conversation, participants, message: null });
+      } else {
+        result.push(...rows.map(row => ({
+          conversation,
+          participants,
+          message: {
+            id: row.m.id,
+            conversationId: row.m.conversationId,
+            senderId: row.m.senderId,
+            senderName: row.u.name,
+            senderRole: row.u.role,
+            content: row.m.content,
+            createdAt: row.m.createdAt!.toISOString(),
+          },
+        })));
+      }
+      return result;
+    }, []);
   }
 
   async getUnreadMessageCount(userId: number): Promise<number> {

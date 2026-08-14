@@ -1,0 +1,142 @@
+We need to make the following targeted UI/behavior modifications in the Coffee Owner → My Favorites modal.
+
+Before making any changes, inspect the existing implementation and verify the current synchronization and modal-opening behavior. Reuse the existing designs and components wherever possible. Do not change unrelated functionality.
+
+## 1. Coffee Owner → My Favorites → SHOP → Products
+
+Keep the existing **Packs** and **Stores** tabs exactly as they are. Do not modify them.
+
+Only modify the **Products** tab mapped product cards.
+
+### Product card changes
+
+For the mapped Product cards:
+
+* Remove the **price** from the card completely.
+* Keep the product only if it is currently available from **at least one supplier**.
+* If the product has no available supplier anymore, it must not appear in Favorites → SHOP → Products.
+* The **favorite/heart icon must always be visible** on the product image.
+
+  * It must NOT only appear when hovering over the card.
+* Keep the existing product image and all other information that is not mentioned here.
+
+### Category / SubCategory / Brand
+
+The Product card's:
+
+**Category · SubCategory · Brand**
+
+must use the **same design, colors, typography, spacing, and visual treatment** already used for Category / SubCategory / Brand on the mapped Product cards in the main **Shop** part.
+
+Do not create a different design for Favorites.
+
+Use the existing Shop product-card design as the visual reference.
+
+Do not remove or change any other product-card information unless explicitly requested above.
+
+---
+
+## 2. Coffee Owner → My Favorites → MAINTENANCE
+
+There is currently a realtime interaction issue:
+
+* Clicking the first Maintenance card opens its correct modal.
+* Clicking another Maintenance card afterward does nothing.
+* After refreshing the page, the modal may then appear.
+
+Fix this behavior.
+
+### Required behavior
+
+Every time the Coffee Owner clicks any Maintenance card:
+
+* The correct Maintenance details modal must open immediately.
+* Clicking one Maintenance card and then another must correctly replace the currently opened modal with the newly selected Maintenance account.
+* The user must be able to click different Maintenance cards repeatedly without refreshing the page.
+* No manual page refresh should ever be required to open the correct Maintenance modal.
+
+Make sure the selected Maintenance account/state is correctly synchronized in realtime between:
+
+**Favorites → Maintenance card → Maintenance details modal**
+
+Do not break the existing Maintenance modal functionality.
+
+---
+
+## 3. Maintenance Favorite Cards — visual redesign
+
+Make the mapped Maintenance cards inside:
+
+**Coffee Owner → My Favorites → Maintenance**
+
+look more professional.
+
+Use the existing mapped card design from:
+
+**Coffee Owner → My Favorites → SHOP → Stores**
+
+as the visual reference.
+
+The Maintenance cards should follow the same overall visual language, structure, spacing, hierarchy, and professional appearance as the Store cards.
+
+### Important
+
+Do NOT display the Maintenance account's address on these Favorites cards.
+
+Keep the useful Maintenance information that already exists, but remove the address from the card.
+
+Do not redesign the Maintenance details modal.
+
+This change applies only to the **Maintenance cards inside My Favorites**.
+
+---
+
+## 4. Do not affect other functionality
+
+Keep everything else exactly as it currently works.
+
+Do NOT modify:
+
+* Shop main page
+* Shop mapped Product cards
+* Favorites → SHOP → Packs
+* Favorites → SHOP → Stores
+* Maintenance main page
+* Maintenance filters
+* Maintenance business logic
+* Maintenance booking/reservation logic
+* Reviews
+* Messaging
+* Product availability logic outside this Favorites view
+* Existing modal design unless explicitly mentioned above
+
+Do not remove additional information from the cards that was not requested.
+
+Do not change the overall design system.
+
+---
+
+## Verification before finishing
+
+After implementing the changes, verify the complete flow:
+
+### Favorites → SHOP → Products
+
+* Product prices are no longer displayed.
+* Products with at least one available supplier remain visible.
+* Products with no available supplier disappear.
+* Heart/favorite icon is always visible.
+* Category · SubCategory · Brand matches the Shop product-card design exactly.
+* Packs and Stores tabs remain unchanged.
+
+### Favorites → MAINTENANCE
+
+* First Maintenance card opens the correct modal.
+* Second Maintenance card opens its correct modal immediately.
+* Third/fourth/etc. cards also open correctly.
+* Switching between Maintenance cards does not require refresh.
+* No stale modal data remains from the previously selected card.
+* Maintenance cards no longer show addresses.
+* Maintenance cards visually follow the Favorites → SHOP → Stores card design.
+
+**Do not stop at analysis. Execute the changes fully and verify the result.**

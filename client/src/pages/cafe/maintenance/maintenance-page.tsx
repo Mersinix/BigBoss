@@ -318,7 +318,7 @@ function AgentDetailModal({
 export default function MaintenancePage({ comingSoon = false }: { comingSoon?: boolean }) {
   const { user } = useAuth();
   const accessLevel = useAccessLevel();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isDark = useThemeStore((s) => s.isDark);
@@ -340,7 +340,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     if (profilesLoading) return;
     syncMaintenance(favoriteIds, profiles);
   }, [favoriteIds, profiles, profilesLoading, syncMaintenance]);
-  const providerId = Number(new URLSearchParams(window.location.search).get("providerId"));
+  const providerId = Number(new URLSearchParams(location.split("?")[1] ?? "").get("providerId"));
   useEffect(() => {
     if (!providerId || !profiles.length) return;
     const provider = profiles.find((profile) => profile.userId === providerId);

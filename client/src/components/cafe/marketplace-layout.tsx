@@ -39,7 +39,7 @@ import { useAccountOpenStore } from "@/store/account-open-store";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
-import type { CategoryWithCount, ShopFavoriteItem, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard } from "@shared/schema";
+import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
@@ -605,6 +605,16 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   });
   const favStores = allStores.filter((s) => !!stores[s.id]);
 
+  // Resolve favorited products against the live marketplace. The marketplace
+  // response only includes products with at least one in-stock, visible
+  // supplier listing, and provides the same taxonomy labels as Shop.
+  const shopFavIds = Object.keys(shop).map(Number);
+  const { data: availableProducts = [], isLoading: productsLoading } = useQuery<MarketplaceProduct[]>({
+    queryKey: ["/api/marketplace"],
+    enabled: shopFavIds.length > 0,
+  });
+  const favProducts = availableProducts.filter((product) => !!shop[product.id]);
+
   // Favorites persist as Maintenance account IDs. Resolve them against the
   // live profiles so this modal never displays placeholder or stale agent data.
   const { data: maintenanceFavoriteIds } = useQuery<number[]>({
@@ -636,7 +646,6 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const dividerColor = dk ? "bg-gray-800" : "bg-gray-100";
   const skeletonBg = dk ? "bg-gray-800" : "bg-gray-100";
 
-  const shopItems = Object.values(shop);
   const printItems = Object.values(print);
   const academyItems = Object.values(academy);
   const baristaItems = Object.values(baristaMarket);
@@ -745,35 +754,55 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600" style={{ WebkitOverflowScrolling: "touch" }}>
         {/* SHOP — Products */}
         {activeService === "SHOP" && shopTab === "products" && (
-          shopItems.length === 0 ? renderEmpty() : (
+          shopFavIds.length === 0 ? renderEmpty() : productsLoading ? (
             <div className="grid grid-cols-2 gap-3">
-              {shopItems.map((item) => (
+              {shopFavIds.map((id) => <div key={id} className={`h-40 rounded-2xl animate-pulse ${skeletonBg}`} />)}
+            </div>
+          ) : favProducts.length === 0 ? renderEmpty() : (
+            <div className="grid grid-cols-2 gap-3">
+              {favProducts.map((product) => {
+                const categoryName = product.categoryLabel?.name ?? product.category ?? null;
+                const subCategoryName = product.subCategoryLabel?.name ?? null;
+                const brandName = product.brandLabel?.name ?? null;
+                const favoriteSupplier = shop[product.id]?.supplier;
+                return (
                 <div
-                  key={item.id}
+                  key={product.id}
                   className={`group border rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-shadow ${cardBg}`}
-                  onClick={() => openQuickView(item.id)}
-                  data-testid={`card-fav-shop-${item.id}`}
+                  onClick={() => openQuickView(product.id)}
+                  data-testid={`card-fav-shop-${product.id}`}
                 >
                   <div className="relative h-28">
-                    {item.image
-                      ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                    {product.imageUrl
+                      ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
                       : <div className={`w-full h-full ${dk ? "bg-gray-700" : "bg-gray-50"} flex items-center justify-center`}><Package className="w-8 h-8 text-gray-400 opacity-30" /></div>
                     }
                     <button
-                      className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => { e.stopPropagation(); removeShop(item.id); }}
-                      data-testid={`button-fav-remove-shop-${item.id}`}
+                      className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+                      onClick={(event) => { event.stopPropagation(); removeShop(product.id); }}
+                      data-testid={`button-fav-remove-shop-${product.id}`}
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                     </button>
                   </div>
-                  <div className="p-3">
-                    <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{item.name}</p>
-                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.supplier}</p>
-                    <p className={`text-sm font-bold mt-1 ${dk ? "text-blue-400" : "text-blue-600"}`}>{fmt(item.price)}</p>
+                  <div className="p-3 flex flex-col gap-1.5">
+                    <p className={`font-bold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{product.name}</p>
+                    {favoriteSupplier && <p className={`text-xs mt-0.5 ${textMuted}`}>{favoriteSupplier}</p>}
+                    {[categoryName, subCategoryName, brandName].some(Boolean) && (
+                      <div className={`mt-auto pt-1.5 border-t flex items-center gap-2 ${dk ? "border-gray-700" : "border-gray-100"}`}>
+                        <span className={`w-full min-w-0 text-[10px] px-1.5 py-0.5 rounded-md border truncate ${
+                          dk ? "bg-gray-700 text-rose-500 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"
+                        }`}>
+                          <span className={textPrimary}>
+                            {[categoryName, subCategoryName, brandName].filter(Boolean).join(" • ")}
+                          </span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )
         )}
@@ -995,10 +1024,24 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         {/* MAINTENANCE */}
         {activeService === "MAINTENANCE" && (
           maintenanceItems.length === 0 ? renderEmpty() : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {maintenanceItems.map((item) => (
-                <button key={item.id} type="button" onClick={() => { navigate(`/maintenance?providerId=${item.id}`); onClose(); }} className={`group w-full text-left flex items-center gap-3 border rounded-2xl p-3 ${cardBg} hover:border-orange-300 transition-colors`}>
-                  <Avatar className="w-9 h-9 shrink-0">
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => { navigate(`/maintenance?providerId=${item.id}`); onClose(); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      navigate(`/maintenance?providerId=${item.id}`);
+                      onClose();
+                    }
+                  }}
+                  className={`group flex items-center gap-3 border rounded-2xl p-3 cursor-pointer hover:shadow-lg hover:border-orange-300 transition-shadow ${cardBg}`}
+                  data-testid={`card-fav-maintenance-${item.id}`}
+                >
+                  <Avatar className="w-11 h-11 shrink-0">
                     <AvatarFallback className={`${dk ? "bg-orange-900 text-orange-300" : "bg-orange-100 text-orange-700"} font-bold text-xs`}>{item.initials}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
@@ -1006,22 +1049,24 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                       <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.available ? "bg-green-400" : "bg-gray-500"}`} />
                     </div>
-                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.specialty}</p>
-                    <p className={`text-xs flex items-center gap-1 mt-0.5 ${textMuted}`}>
-                      <MapPinIcon className="w-2.5 h-2.5" />{item.location}
-                    </p>
+                    <p className={`text-xs mt-0.5 truncate ${textMuted}`}>{item.specialty}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                      <span className="text-[11px] text-amber-400">{item.rating.toFixed(1)}</span>
+                      {item.categories.slice(0, 1).map((category) => (
+                        <span key={category} className={`text-[10px] px-1.5 py-0.5 rounded-full truncate ${dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{category}</span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
-                    <button
-                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
-                      onClick={(event) => { event.stopPropagation(); removeMaintenance(item.id); }}
-                      data-testid={`button-fav-remove-maintenance-${item.id}`}
-                    >
-                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                    </button>
-                  </div>
-                </button>
+                  <button
+                    className="p-1.5 rounded-xl hover:bg-rose-500/10 transition-colors shrink-0"
+                    onClick={(event) => { event.stopPropagation(); removeMaintenance(item.id); }}
+                    data-testid={`button-fav-remove-maintenance-${item.id}`}
+                    aria-label={`Remove ${item.name} from favorites`}
+                  >
+                    <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                  </button>
+                </div>
               ))}
             </div>
           )

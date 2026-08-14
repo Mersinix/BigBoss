@@ -158,14 +158,14 @@ function AgentCard({
   );
 }
 
-function AgentDetailModal({
+export function AgentDetailModal({
   agent, open, onClose, onContact, onReserve, isDark,
 }: {
   agent: MaintenanceMarketplaceCard | null;
   open: boolean;
   onClose: () => void;
   onContact: (agent: MaintenanceMarketplaceCard) => void;
-  onReserve: (agent: MaintenanceMarketplaceCard, data: { date: string; time: string; location: string; description: string; category: string; urgency: string; contactPhone: string }) => void;
+  onReserve: (agent: MaintenanceMarketplaceCard, data: MaintenanceReservationData) => void;
   isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
@@ -219,6 +219,17 @@ function AgentDetailModal({
     setContactPhone(user?.phone ?? "");
     setCategory(agent?.categories?.[0] ?? agent?.skills?.[0] ?? "");
   }, [booking, user?.locationAddress, user?.phone, agent?.userId]);
+  useEffect(() => {
+    setBooking(false);
+    setDate("");
+    setTime("");
+    setDescription("");
+    setLocation(user?.locationAddress ?? "");
+    setContactPhone(user?.phone ?? "");
+    setCategory(agent?.categories?.[0] ?? agent?.skills?.[0] ?? "");
+    setReviewComment("");
+    setReviewRating(5);
+  }, [agent?.userId]);
   const faved = useFavorites((s) => agent ? !!s.maintenance[agent.userId] : false);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
   if (!agent) return null;
@@ -243,7 +254,7 @@ function AgentDetailModal({
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available })} className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg} hover:bg-rose-50`}><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} /></button>
+                <button onClick={() => toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, skills: agent.skills, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available })} className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg} hover:bg-rose-50`}><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} /></button>
                 <button onClick={onClose} className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg}`}><X className={`w-4 h-4 ${t.textMuted}`} /></button>
               </div>
             </div>
@@ -315,6 +326,16 @@ function AgentDetailModal({
   );
 }
 
+export type MaintenanceReservationData = {
+  date: string;
+  time: string;
+  location: string;
+  description: string;
+  category: string;
+  urgency: string;
+  contactPhone: string;
+};
+
 export default function MaintenancePage({ comingSoon = false }: { comingSoon?: boolean }) {
   const { user } = useAuth();
   const accessLevel = useAccessLevel();
@@ -366,7 +387,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     return list;
   }, [profiles, search, filterCategory, filterType, filterAvailability, filterLocation]);
   const reserve = useMutation({
-    mutationFn: ({ agent, data }: { agent: MaintenanceMarketplaceCard; data: { date: string; time: string; location: string; description: string; category: string; urgency: string; contactPhone: string } }) =>
+    mutationFn: ({ agent, data }: { agent: MaintenanceMarketplaceCard; data: MaintenanceReservationData }) =>
       apiRequest("POST", "/api/maintenance/reservations", {
         maintenanceUserId: agent.userId,
         service: agent.jobTitle,

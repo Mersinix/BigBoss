@@ -1,0 +1,182 @@
+We need to make the following targeted fixes in the Coffee Owner → My Favorites area.
+
+Before editing, inspect the current implementation and verify the existing synchronization between Favorite cards and their detail modals. Then execute the changes completely. Do not only analyze or provide a plan.
+
+Do not change unrelated functionality or redesign anything that is not explicitly requested.
+
+## 1. Coffee Owner → My Favorites → MAINTENANCE → Maintenance modal
+
+The previous fix did NOT solve the problem.
+
+Currently, clicking a Maintenance favorite card does not reliably open the modal of the selected Maintenance agent — even after refreshing the page.
+
+### Required behavior
+
+When the Coffee Owner clicks **ANY** Maintenance card:
+
+* Immediately open the Maintenance details modal.
+* The modal must display the information belonging to **the exact Maintenance agent whose card was clicked**.
+* It must never display another Maintenance agent's information.
+* Clicking Maintenance Agent A → opens A.
+* Then clicking Maintenance Agent B → closes/replaces A and opens B.
+* Then clicking Maintenance Agent C → opens C.
+* This must continue to work for any number of Maintenance cards.
+* No page refresh must ever be required.
+* The behavior must work correctly on the first click after entering the Favorites modal.
+* It must also work when switching repeatedly between different Maintenance cards.
+
+Make sure the selected Maintenance agent and the modal state are correctly synchronized.
+
+Do not create a separate/different Maintenance modal design. Use the existing Maintenance details modal and make sure it receives the correct selected Maintenance account.
+
+### Important
+
+Do not consider this task complete merely because the modal opens.
+
+Verify that the **content inside the modal changes according to the card that was clicked**.
+
+For example:
+
+**Click Agent A → Modal shows Agent A**
+
+**Click Agent B → Modal shows Agent B**
+
+**Click Agent A again → Modal shows Agent A again**
+
+No stale data from the previously selected agent should remain.
+
+---
+
+## 2. Coffee Owner → My Favorites → MAINTENANCE → Maintenance cards → Skills
+
+The Maintenance cards currently show only the first skill.
+
+Change this behavior.
+
+The card should display **multiple available skills**, not only the first skill.
+
+### Required behavior
+
+* Display as many skills as reasonably fit on the available line.
+* Keep the skills on the same line.
+* Stop when the available horizontal space is reached.
+* If there are more skills than can fit, truncate the remaining content naturally with `...`.
+* Do NOT make the card taller just to display every skill.
+* Do not create multiple rows for the skills.
+* Keep the existing card dimensions and overall design.
+
+The goal is something similar to:
+
+`POS Systems · WiFi Networks · Security Cameras · TVs · Furniture...`
+
+rather than displaying only:
+
+`POS Systems`
+
+Keep the existing professional Store-card-inspired design.
+
+---
+
+## 3. Coffee Owner → My Favorites → SHOP → Stores → Product cards
+
+There is a small information/design issue in the Store cards.
+
+Currently, under the mapped product name, the card displays the **Category**.
+
+Remove the Category from these Store Product cards.
+
+### Keep
+
+Keep:
+
+* Product name
+* SubCategory
+* Brand
+* Existing price/information
+* Existing image
+* Existing favorite/action elements
+* Existing card structure and design
+
+### Change
+
+Remove only the **Category**.
+
+The remaining:
+
+**SubCategory · Brand**
+
+should remain on the same row/area.
+
+### Color requirement
+
+The **SubCategory** must use the **same color used for the Brand** in the mapped Product cards in the main Shop part.
+
+Use the existing Shop Product-card design as the exact visual reference.
+
+Do not invent a new color.
+
+The result should visually follow the Shop card's:
+
+**SubCategory · Brand**
+
+treatment, while Category is completely removed from the Store card.
+
+---
+
+## 4. Strict scope protection
+
+Do NOT change:
+
+* Main Shop product cards
+* Main Shop logic
+* Favorites → SHOP → Packs
+* Favorites → SHOP → Stores functionality
+* Product availability logic
+* Maintenance booking/reservation logic
+* Maintenance filters
+* Maintenance reviews
+* Maintenance messaging
+* Maintenance details modal design
+* Existing Store card functionality
+* Any unrelated components
+
+Only make the changes explicitly requested above.
+
+Do not remove additional information.
+Do not change existing business logic unless it is necessary to correctly select/open the requested Maintenance agent modal.
+Do not redesign existing components.
+
+---
+
+## Final verification
+
+Before considering the task complete, test these exact scenarios:
+
+### Maintenance modal
+
+1. Open My Favorites → Maintenance.
+2. Click Maintenance Agent A → verify the modal shows A.
+3. Close it.
+4. Click Maintenance Agent B → verify the modal shows B.
+5. Close it.
+6. Click Maintenance Agent C → verify the modal shows C.
+7. Switch repeatedly between A, B, and C.
+8. Verify every click opens the correct agent immediately.
+9. Refresh the page and repeat the test.
+10. Verify the first click after refresh also opens the correct agent.
+
+### Maintenance skills
+
+Verify that multiple skills are visible on the card, remain on one line, and use `...` when necessary.
+
+### Store Product cards
+
+Verify:
+
+* Category is removed.
+* SubCategory remains.
+* Brand remains.
+* SubCategory uses the same color as Brand from the main Shop Product cards.
+* Nothing else in the Store card has changed.
+
+**Execute the changes fully. Do not stop after reading/analyzing the code.**

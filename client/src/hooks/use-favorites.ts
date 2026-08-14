@@ -53,6 +53,7 @@ export interface MaintenanceFavItem {
   initials: string;
   specialty: string;
   categories: string[];
+  skills: string[];
   location: string;
   rating: number;
   available: boolean;
@@ -229,6 +230,7 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
             initials: "M",
             specialty: "Maintenance",
             categories: [],
+             skills: [],
             location: "",
             rating: 0,
             available: true,
@@ -251,6 +253,7 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
           initials: profile.initials,
           specialty: profile.specialty,
           categories: profile.categories,
+           skills: profile.skills,
           location: profile.location,
           rating: profile.rating / 10,
           available: profile.available,

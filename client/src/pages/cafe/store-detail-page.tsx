@@ -470,8 +470,8 @@ function StoreProductCard({
           {product.name}
         </h3>
         
-        {/* Category • Brand badge — same design and truncation as Shop */}
-        {(product.categoryLabel?.name || product.brandLabel?.name) && (
+        {/* SubCategory • Brand badge — same design and truncation as Shop */}
+        {(product.subCategoryLabel?.name || product.brandLabel?.name) && (
           <Badge
             className={`w-full min-w-0 text-[10px] px-1.5 py-0 border ${
               t.dk
@@ -480,9 +480,9 @@ function StoreProductCard({
             }`}
           >
             <span className="block min-w-0 truncate">
-              {product.categoryLabel?.name && (
-                <span className={`mr-0.5 ${t.textPrimary}`}>
-                  {product.categoryLabel.name} •
+              {product.subCategoryLabel?.name && (
+                <span className="mr-0.5">
+                  {product.subCategoryLabel.name} •
                 </span>
               )}
               {product.brandLabel?.name}

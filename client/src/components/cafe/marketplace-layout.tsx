@@ -39,6 +39,7 @@ import { useAccountOpenStore } from "@/store/account-open-store";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
+import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/maintenance/maintenance-page";
 import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard } from "@shared/schema";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
@@ -577,6 +578,8 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const [activeService, setActiveService] = useState<FavService>("SHOP");
   const [shopTab, setShopTab] = useState<ShopSubTab>("products");
   const [baristaTab, setBaristaTab] = useState<BaristaSubTab>("academy");
+  const [selectedMaintenanceAgent, setSelectedMaintenanceAgent] = useState<MaintenanceMarketplaceCard | null>(null);
+  const [maintenanceDetailOpen, setMaintenanceDetailOpen] = useState(false);
 
   const {
     shop, print, academy, baristaMarket, marketing, maintenance, pack,
@@ -628,6 +631,45 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
     if (maintenanceFavoriteIds === undefined || maintenanceProfilesLoading) return;
     syncMaintenance(maintenanceFavoriteIds, maintenanceProfiles);
   }, [maintenanceFavoriteIds, maintenanceProfiles, maintenanceProfilesLoading, syncMaintenance]);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const openMaintenanceDetail = (agentId: number) => {
+    const agent = maintenanceProfiles.find((profile) => profile.userId === agentId);
+    if (!agent) return;
+    setSelectedMaintenanceAgent(agent);
+    setMaintenanceDetailOpen(true);
+  };
+  const contactMaintenance = async (agent: MaintenanceMarketplaceCard) => {
+    try {
+      const response = await apiRequest("POST", "/api/messages/conversations", {
+        targetUserId: agent.userId,
+        service: "MAINTENANCE",
+      });
+      const conversation = await response.json() as { conversation: { id: number } };
+      setMaintenanceDetailOpen(false);
+      setSelectedMaintenanceAgent(null);
+      onClose();
+      navigate(`/cafe/messages?service=MAINTENANCE&conversationId=${conversation.conversation.id}`);
+    } catch (error) {
+      toast({ title: "Contact impossible", description: error instanceof Error ? error.message : "Veuillez réessayer.", variant: "destructive" });
+    }
+  };
+  const reserveMaintenance = useMutation({
+    mutationFn: ({ agent, data }: { agent: MaintenanceMarketplaceCard; data: MaintenanceReservationData }) =>
+      apiRequest("POST", "/api/maintenance/reservations", {
+        maintenanceUserId: agent.userId,
+        service: agent.jobTitle,
+        ...data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
+      setMaintenanceDetailOpen(false);
+      setSelectedMaintenanceAgent(null);
+      toast({ title: "Demande envoyée", description: "Le technicien pourra maintenant la confirmer." });
+    },
+    onError: (error: Error) => toast({ title: "Impossible d'envoyer la demande", description: error.message, variant: "destructive" }),
+  });
 
   const visibleFavServices = sortServiceIds(FAV_SERVICES, serviceOrder).filter((s) => {
     const key = FAV_SERVICE_TO_KEY[s];
@@ -1030,12 +1072,11 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   key={item.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => { navigate(`/maintenance?providerId=${item.id}`); onClose(); }}
+                  onClick={() => openMaintenanceDetail(item.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      navigate(`/maintenance?providerId=${item.id}`);
-                      onClose();
+                      openMaintenanceDetail(item.id);
                     }
                   }}
                   className={`group flex items-center gap-3 border rounded-2xl p-3 cursor-pointer hover:shadow-lg hover:border-orange-300 transition-shadow ${cardBg}`}
@@ -1053,9 +1094,9 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                     <div className="flex items-center gap-1.5 mt-1">
                       <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
                       <span className="text-[11px] text-amber-400">{item.rating.toFixed(1)}</span>
-                      {item.categories.slice(0, 1).map((category) => (
-                        <span key={category} className={`text-[10px] px-1.5 py-0.5 rounded-full truncate ${dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{category}</span>
-                      ))}
+                      <span className={`min-w-0 truncate text-[10px] ${dk ? "text-gray-300" : "text-gray-600"}`}>
+                        {(item.skills.length ? item.skills : item.categories).join(" · ")}
+                      </span>
                     </div>
                   </div>
                   <button
@@ -1073,6 +1114,17 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         )}
 
       </div>
+      <AgentDetailModal
+        agent={selectedMaintenanceAgent}
+        open={maintenanceDetailOpen}
+        onClose={() => {
+          setMaintenanceDetailOpen(false);
+          setSelectedMaintenanceAgent(null);
+        }}
+        onContact={contactMaintenance}
+        onReserve={(agent, data) => reserveMaintenance.mutate({ agent, data })}
+        isDark={dk}
+      />
     </div>
   );
 }

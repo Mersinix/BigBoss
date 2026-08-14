@@ -804,9 +804,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
             <div className="grid grid-cols-2 gap-3">
               {favProducts.map((product) => {
                 const categoryName = product.categoryLabel?.name ?? product.category ?? null;
-                const subCategoryName = product.subCategoryLabel?.name ?? null;
                 const brandName = product.brandLabel?.name ?? null;
-                const favoriteSupplier = shop[product.id]?.supplier;
                 return (
                 <div
                   key={product.id}
@@ -829,17 +827,36 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="p-3 flex flex-col gap-1.5">
                     <p className={`font-bold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{product.name}</p>
-                    {favoriteSupplier && <p className={`text-xs mt-0.5 ${textMuted}`}>{favoriteSupplier}</p>}
-                    {[categoryName, subCategoryName, brandName].some(Boolean) && (
-                      <div className={`mt-auto pt-1.5 border-t flex items-center gap-2 ${dk ? "border-gray-700" : "border-gray-100"}`}>
-                        <span className={`w-full min-w-0 text-[10px] px-1.5 py-0.5 rounded-md border truncate ${
-                          dk ? "bg-gray-700 text-rose-500 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"
-                        }`}>
+                    {[categoryName, brandName].some(Boolean) && (
+                    <div
+                      className={`mt-auto pt-1.5 border-t flex items-center gap-2 ${
+                        dk ? "border-gray-700" : "border-gray-100"
+                      }`}
+                    >
+                      <span
+                        className={`w-full min-w-0 text-[10px] px-1.5 py-0.5 rounded-md border truncate ${
+                          dk
+                            ? "bg-gray-700 border-gray-600"
+                            : "bg-gray-100 border-gray-200"
+                        }`}
+                      >
+                        {categoryName && (
                           <span className={textPrimary}>
-                            {[categoryName, subCategoryName, brandName].filter(Boolean).join(" • ")}
+                            {categoryName}
                           </span>
-                        </span>
-                      </div>
+                        )}
+
+                        {categoryName && brandName && (
+                          <span className={textPrimary}>{" • "}</span>
+                        )}
+
+                        {brandName && (
+                          <span className="text-rose-500">
+                            {brandName}
+                          </span>
+                        )}
+                      </span>
+                    </div>
                     )}
                   </div>
                 </div>

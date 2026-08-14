@@ -4104,28 +4104,44 @@ export class DatabaseStorage implements IStorage {
   async isConversationMessagingAllowed(conversationId: number, userId: number): Promise<boolean> {
     const [conversation] = await db.select().from(conversations).where(eq(conversations.id, conversationId));
     if (!conversation) return false;
-    const participantRows = await db.select({ userId: conversationParticipants.userId })
+    const participantRows = await db.select({
+      userId: conversationParticipants.userId,
+      hiddenAt: conversationParticipants.hiddenAt,
+    })
       .from(conversationParticipants)
       .where(and(
         eq(conversationParticipants.conversationId, conversationId),
         eq(conversationParticipants.userId, userId),
-        isNull(conversationParticipants.hiddenAt),
       ));
-    if (participantRows.length === 0) return false;
-    if (conversation.type !== "DIRECT") return true;
+    const membership = participantRows[0];
+    if (!membership) return false;
+
+    const me = await this.getUser(userId);
+    if (!me) return false;
+    const isAdmin = me.role === "ADMIN" || me.role === "SUPER_ADMIN";
+    // Admins retain access to manage and review Messages even when the
+    // platform-wide visibility setting is hidden. This also keeps an admin
+    // from locking themselves out after hiding a conversation for everyone.
+    if (isAdmin) return true;
+    if (membership.hiddenAt) return false;
+
+    const settings = await this.getMessagingSettings();
+    if (!settings.globalVisible) return false;
+
+    // Broadcast participants are governed by the broadcast setting rather
+    // than an order/reservation relationship.
+    if (conversation.type !== "DIRECT") {
+      return settings.broadcastsEnabled;
+    }
 
     const participantIds = await this.getConversationParticipantIds(conversationId);
     const otherId = participantIds.find(id => id !== userId);
     if (!otherId) return false;
-    const [me, other] = await Promise.all([this.getUser(userId), this.getUser(otherId)]);
-    if (!me || !other) return false;
-    if (me.role === "ADMIN" || me.role === "SUPER_ADMIN" || other.role === "ADMIN" || other.role === "SUPER_ADMIN") return true;
-    const settings = await this.getMessagingSettings();
+    const other = await this.getUser(otherId);
+    if (!other) return false;
+    if (other.role === "ADMIN" || other.role === "SUPER_ADMIN") return true;
     const meRole = me.role as string;
     const otherRole = other.role as string;
-    const isAdminPair = meRole === "ADMIN" || meRole === "SUPER_ADMIN" || otherRole === "ADMIN" || otherRole === "SUPER_ADMIN";
-    if (!isAdminPair && !settings.globalVisible) return false;
-    if (!isAdminPair && (conversation.type as string) === "BROADCAST" && !settings.broadcastsEnabled) return false;
     if (await this.hasEligibleMessagingRelationship(userId, otherId, conversation.service)) return true;
     return !!conversation.relationshipClosedAt &&
       Date.now() - conversation.relationshipClosedAt.getTime() <= settings.gracePeriodMinutes * 60 * 1000;
@@ -4272,40 +4288,46 @@ export class DatabaseStorage implements IStorage {
       throw new Error("These users are not eligible to message each other");
     }
 
-    // Find conversations where both users are participants
-    const p1 = await db.select({ conversationId: conversationParticipants.conversationId })
-      .from(conversationParticipants).where(eq(conversationParticipants.userId, userId1));
-    const p2 = await db.select({ conversationId: conversationParticipants.conversationId })
-      .from(conversationParticipants).where(eq(conversationParticipants.userId, userId2));
+    // Serialize the lookup/insert for this pair and service. Without the
+    // transaction-scoped advisory lock, two tabs can both miss the lookup and
+    // create duplicate direct conversations.
+    const pairKey = `${service}:${Math.min(userId1, userId2)}:${Math.max(userId1, userId2)}`;
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${pairKey}))`);
 
-    const ids1 = new Set(p1.map(r => r.conversationId));
-    const sharedIds = p2.filter(r => ids1.has(r.conversationId)).map(r => r.conversationId);
+      const p1 = await tx.select({ conversationId: conversationParticipants.conversationId })
+        .from(conversationParticipants).where(eq(conversationParticipants.userId, userId1));
+      const p2 = await tx.select({ conversationId: conversationParticipants.conversationId })
+        .from(conversationParticipants).where(eq(conversationParticipants.userId, userId2));
 
-    if (sharedIds.length > 0) {
-      const directConvs = await db.select().from(conversations)
-        .where(and(
-          inArray(conversations.id, sharedIds),
-          eq(conversations.type, 'DIRECT'),
-          eq(conversations.service, service),
-        ));
-      if (directConvs.length > 0) {
-        return { conversation: directConvs[0], isNew: false };
+      const ids1 = new Set(p1.map(r => r.conversationId));
+      const sharedIds = p2.filter(r => ids1.has(r.conversationId)).map(r => r.conversationId);
+
+      if (sharedIds.length > 0) {
+        const directConvs = await tx.select().from(conversations)
+          .where(and(
+            inArray(conversations.id, sharedIds),
+            eq(conversations.type, 'DIRECT'),
+            eq(conversations.service, service),
+          ));
+        if (directConvs.length > 0) {
+          return { conversation: directConvs[0], isNew: false };
+        }
       }
-    }
 
-    // Create new direct conversation
-    const [conv] = await db.insert(conversations).values({
-      type: 'DIRECT',
-      service,
-      createdByUserId: userId1,
-    }).returning();
+      const [conv] = await tx.insert(conversations).values({
+        type: 'DIRECT',
+        service,
+        createdByUserId: userId1,
+      }).returning();
 
-    await db.insert(conversationParticipants).values([
-      { conversationId: conv.id, userId: userId1 },
-      { conversationId: conv.id, userId: userId2 },
-    ]);
+      await tx.insert(conversationParticipants).values([
+        { conversationId: conv.id, userId: userId1 },
+        { conversationId: conv.id, userId: userId2 },
+      ]);
 
-    return { conversation: conv, isNew: true };
+      return { conversation: conv, isNew: true };
+    });
   }
 
   /** Check if userId is a non-hidden participant of conversationId. */
@@ -4404,6 +4426,8 @@ export class DatabaseStorage implements IStorage {
     if (!me) return [];
 
     const isAdmin = me.role === 'ADMIN' || me.role === 'SUPER_ADMIN';
+    const settings = await this.getMessagingSettings();
+    if (!isAdmin && !settings.globalVisible) return [];
     const serviceRoles: Record<string, string[]> = {
       SHOP: ['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'DRIVER'],
       MAINTENANCE: ['CAFE_OWNER', 'MAINTENANCE'],
@@ -4655,7 +4679,15 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(conversationParticipants.userId, userId), isNull(conversationParticipants.hiddenAt)));
     if (participants.length === 0) return 0;
 
-    const convIds = participants.map(p => p.conversationId);
+    const allowedConversationIds: number[] = [];
+    for (const participant of participants) {
+      if (await this.isConversationMessagingAllowed(participant.conversationId, userId)) {
+        allowedConversationIds.push(participant.conversationId);
+      }
+    }
+    if (allowedConversationIds.length === 0) return 0;
+
+    const convIds = allowedConversationIds;
     const allMessages = await db.select().from(messages).where(inArray(messages.conversationId, convIds));
 
     return allMessages.filter(m => {

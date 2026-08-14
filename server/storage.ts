@@ -4100,11 +4100,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteConversation(conversationId: number): Promise<number[]> {
-    const participantIds = await this.getConversationParticipantIds(conversationId);
-    await db.delete(messages).where(eq(messages.conversationId, conversationId));
-    await db.delete(conversationParticipants).where(eq(conversationParticipants.conversationId, conversationId));
-    await db.delete(conversations).where(eq(conversations.id, conversationId));
-    return participantIds;
+    return db.transaction(async (tx) => {
+      const participantRows = await tx.select({ userId: conversationParticipants.userId })
+        .from(conversationParticipants)
+        .where(eq(conversationParticipants.conversationId, conversationId));
+      const [conversation] = await tx.select({ id: conversations.id })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId));
+      if (!conversation) return [];
+
+      await tx.delete(messages).where(eq(messages.conversationId, conversationId));
+      await tx.delete(conversationParticipants).where(eq(conversationParticipants.conversationId, conversationId));
+      await tx.delete(conversations).where(eq(conversations.id, conversationId));
+      return participantRows.map(row => row.userId);
+    });
   }
 
   /** Return all non-hidden conversations for a user, ordered by most recent activity. */
@@ -4179,6 +4188,10 @@ export class DatabaseStorage implements IStorage {
 
   /** Find an existing DIRECT conversation between two users, or create one. */
   async findOrCreateDirectConversation(userId1: number, userId2: number, service = 'SHOP'): Promise<{ conversation: typeof conversations.$inferSelect; isNew: boolean }> {
+    if (userId1 === userId2 || !(await this.hasEligibleMessagingRelationship(userId1, userId2, service))) {
+      throw new Error("These users are not eligible to message each other");
+    }
+
     // Find conversations where both users are participants
     const p1 = await db.select({ conversationId: conversationParticipants.conversationId })
       .from(conversationParticipants).where(eq(conversationParticipants.userId, userId1));
@@ -4261,6 +4274,9 @@ export class DatabaseStorage implements IStorage {
 
   /** Persist a message and update conversation lastMessageAt. Returns the inserted message enriched with sender info. */
   async sendMessage(conversationId: number, senderId: number, content: string): Promise<ConversationMessageRow> {
+    if (!(await this.isConversationMessagingAllowed(conversationId, senderId))) {
+      throw new Error("Messaging is not available for this conversation");
+    }
     const [sender] = await db.select().from(users).where(eq(users.id, senderId));
     const [msg] = await db.insert(messages).values({ conversationId, senderId, content }).returning();
     await db.update(conversations).set({ lastMessageAt: msg.createdAt }).where(eq(conversations.id, conversationId));
@@ -4391,13 +4407,11 @@ export class DatabaseStorage implements IStorage {
       for (const c of allCafes) contactUserIds.add(c.id);
     }
 
-    // Existing behavior allows platform users to reach Admin in the default
-    // Shop context. Other service contexts remain service-isolated.
-    if (!service || service === "SHOP") {
-      const admins = await db.select().from(users)
-        .where(or(eq(users.role, 'ADMIN' as any), eq(users.role, 'SUPER_ADMIN' as any)));
-      for (const a of admins) contactUserIds.add(a.id);
-    }
+    // Admin support is available from every messaging service. The service
+    // restriction applies to provider/customer pairs, not support access.
+    const admins = await db.select().from(users)
+      .where(or(eq(users.role, 'ADMIN' as any), eq(users.role, 'SUPER_ADMIN' as any)));
+    for (const a of admins) contactUserIds.add(a.id);
 
     // Supplier/café and Maintenance/café contacts are relationship-scoped.
     // Keep legacy delivery and other service contact behavior unchanged.

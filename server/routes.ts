@@ -461,8 +461,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       contactPhone: body.contactPhone || user.phone || "",
       status: "PENDING",
     });
+    await storage.refreshMaintenanceMessagingState(reservation.id);
     broadcast("maintenance_reservation_updated", { reservationId: reservation.id });
     broadcastToUsers([user.id, body.maintenanceUserId], "maintenance_reservation_updated", { reservationId: reservation.id });
+    broadcastToUsers([user.id, body.maintenanceUserId], "conversation_updated", {
+      service: "MAINTENANCE",
+      reservationId: reservation.id,
+    });
     res.status(201).json(reservation);
   });
 
@@ -480,6 +485,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!proposed) return res.status(404).json({ message: "Reservation not found" });
       broadcast("maintenance_reservation_updated", { reservationId: proposed.id, kind: "reschedule_requested" });
       broadcastToUsers([user.id, proposed.cafeOwnerId], "maintenance_reservation_updated", { reservationId: proposed.id, kind: "reschedule_requested" });
+      broadcastToUsers([user.id, proposed.cafeOwnerId], "conversation_updated", {
+        service: "MAINTENANCE",
+        reservationId: proposed.id,
+      });
       return res.json(proposed);
     }
     const updated = await storage.updateMaintenanceReservationStatus(Number(req.params.id), user.id, body.status, {
@@ -490,6 +499,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     await storage.refreshMaintenanceMessagingState(updated.id);
     broadcast("maintenance_reservation_updated", { reservationId: updated.id });
     broadcastToUsers([user.id, updated.cafeOwnerId], "maintenance_reservation_updated", { reservationId: updated.id });
+    broadcastToUsers([user.id, updated.cafeOwnerId], "conversation_updated", {
+      service: "MAINTENANCE",
+      reservationId: updated.id,
+    });
     res.json(updated);
   });
 
@@ -502,6 +515,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     await storage.refreshMaintenanceMessagingState(updated.id);
     broadcast("maintenance_reservation_updated", { reservationId: updated.id, kind: body.accepted ? "reschedule_accepted" : "reschedule_rejected" });
     broadcastToUsers([user.id, updated.maintenanceUserId], "maintenance_reservation_updated", { reservationId: updated.id, kind: body.accepted ? "reschedule_accepted" : "reschedule_rejected" });
+      broadcastToUsers([user.id, updated.maintenanceUserId], "conversation_updated", {
+        service: "MAINTENANCE",
+        reservationId: updated.id,
+      });
     res.json(updated);
   });
 
@@ -1044,7 +1061,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Notify all involved suppliers about the new order
       const involvedSupplierIds = Array.from(new Set([...validatedItems.map(i => i.supplierId), ...(validatedPackItems ?? []).map(i => i.supplierId)]));
+      await storage.refreshOrderMessagingState(order.id);
       broadcastToUsers(involvedSupplierIds, 'order_created', { orderId: order.id, cafeId });
+      broadcastToUsers([cafeId, ...involvedSupplierIds], 'conversation_updated', { orderId: order.id, service: "SHOP" });
       broadcast('inventory_updated', { orderId: order.id });
 
       res.status(201).json({ ...order, promotionSavings: promoEval.totalDiscount });

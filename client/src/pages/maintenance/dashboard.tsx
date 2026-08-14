@@ -157,6 +157,7 @@ function MaintenanceMessages() {
   const { data: conversations = [], isLoading } = useQuery<ConversationSummary[]>({
     queryKey: ["/api/messages/conversations"],
     enabled: !!user,
+    refetchInterval: 30000,
   });
   const maintenanceConversations = conversations.filter((conversation) => conversation.service === "MAINTENANCE");
   const activeConversation = maintenanceConversations.find((conversation) => conversation.id === activeId) ?? null;

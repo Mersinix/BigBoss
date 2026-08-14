@@ -152,7 +152,10 @@ function AllConversationsTab() {
 
   const exportCsv = async () => {
     const params = new URLSearchParams({ service });
-    if (selectedIds.size > 0) params.set("ids", Array.from(selectedIds).join(","));
+    const hasPeriod = Boolean(exportDate || exportMonth || exportFrom || exportTo);
+    // A period export is intentionally independent of the current selection:
+    // it must include every conversation in that period.
+    if (!hasPeriod && selectedIds.size > 0) params.set("ids", Array.from(selectedIds).join(","));
     if (exportDate) params.set("date", exportDate);
     else if (exportMonth) params.set("month", exportMonth);
     else {
@@ -206,9 +209,9 @@ function AllConversationsTab() {
         </Button>
         <div className="h-5 w-px bg-border hidden md:block" />
         <Label className="text-xs">Date</Label>
-        <Input type="date" value={exportDate} onChange={e => { setExportDate(e.target.value); setExportMonth(""); }} className="h-8 w-[145px] text-xs" />
+        <Input type="date" value={exportDate} onChange={e => { setExportDate(e.target.value); setExportMonth(""); setExportFrom(""); setExportTo(""); }} className="h-8 w-[145px] text-xs" />
         <Label className="text-xs">Month</Label>
-        <Input type="month" value={exportMonth} onChange={e => { setExportMonth(e.target.value); setExportDate(""); }} className="h-8 w-[125px] text-xs" />
+        <Input type="month" value={exportMonth} onChange={e => { setExportMonth(e.target.value); setExportDate(""); setExportFrom(""); setExportTo(""); }} className="h-8 w-[125px] text-xs" />
         <Label className="text-xs">From</Label>
         <Input type="date" value={exportFrom} onChange={e => { setExportFrom(e.target.value); setExportDate(""); setExportMonth(""); }} className="h-8 w-[135px] text-xs" />
         <Label className="text-xs">To</Label>

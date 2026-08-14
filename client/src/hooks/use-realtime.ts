@@ -208,6 +208,7 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/maintenance/reviews"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MAINTENANCE"] });
+            invalidateMessagingQueries(qc);
           }
         } catch {}
       };

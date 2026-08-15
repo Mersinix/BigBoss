@@ -140,7 +140,11 @@ export const orders = pgTable("orders", {
   status: orderStatusEnum("status").notNull().default('PENDING'),
   totalAmount: integer("total_amount").notNull(),
   deliveryAddress: jsonb("delivery_address"),
+  deliveryMethod: text("delivery_method").notNull().default('DELIVERY_SERVICE'), // 'SELF_PICKUP' | 'DELIVERY_SERVICE'
+  deliveryFee: integer("delivery_fee").notNull().default(0),
   courierInstructions: text("courier_instructions"),
+  paymentMethod: text("payment_method").notNull().default('CASH_ON_DELIVERY'),
+  paymentStatus: text("payment_status").notNull().default('PENDING'),
   priority: text("priority").notNull().default('NORMAL'), // 'NORMAL' | 'HIGH' | 'URGENT'
   scheduledAt: timestamp("scheduled_at"),                 // null = immediate
   createdAt: timestamp("created_at").defaultNow(),
@@ -178,6 +182,7 @@ export const orderItems = pgTable("order_items", {
   totalPrice: integer("total_price"),
   flavorId: integer("flavor_id"),
   sizeId: integer("size_id"),
+  snapshot: jsonb("snapshot"),
 });
 
 // ── Returns ───────────────────────────────────────────────────────────────────
@@ -982,7 +987,11 @@ export type PackItemDetail = {
   productName: string;
   productImageUrl: string | null;
   categoryId: number | null;   // product's category — used for correct category→brand mapping on cards
+  subCategoryId: number | null;
   brandId: number | null;       // product's brand — used for correct category→brand mapping on cards
+  categoryName?: string | null;
+  subCategoryName?: string | null;
+  brandName?: string | null;
   flavorId: number | null;
   flavorName: string | null;
   sizeId: number | null;
@@ -1301,10 +1310,16 @@ export type CreateOrderItem = {
   productId: number;
   supplierId: number;
   supplierName: string;
+  productName?: string;
+  productImageUrl?: string | null;
+  productCategory?: string;
   flavorId?: number | null;
   sizeId?: number | null;
   flavorName?: string | null;
   sizeName?: string | null;
+  brandName?: string | null;
+  categoryName?: string | null;
+  subCategoryName?: string | null;
   quantity: number;
   unitPrice: number;
 };
@@ -1318,6 +1333,17 @@ export type CreatePackOrderItem = {
   packId: number;
   supplierId: number;
   quantity: number;
+  includedProducts?: Array<{
+    productId: number;
+    productName: string;
+    productImageUrl: string | null;
+    brandName: string | null;
+    categoryName: string | null;
+    subCategoryName: string | null;
+    flavorName: string | null;
+    sizeName: string | null;
+    quantity: number;
+  }>;
 };
 
 export type ResolvedPackOrderItem = {
@@ -1327,6 +1353,18 @@ export type ResolvedPackOrderItem = {
   supplierName: string;
   quantity: number;
   unitPrice: number;
+  packImageUrl: string | null;
+  includedProducts: Array<{
+    productId: number;
+    productName: string;
+    productImageUrl: string | null;
+    brandName: string | null;
+    categoryName: string | null;
+    subCategoryName: string | null;
+    flavorName: string | null;
+    sizeName: string | null;
+    quantity: number;
+  }>;
 };
 
 export type AddressDetails = {
@@ -1357,6 +1395,8 @@ export type CreateOrderRequest = {
   items: CreateOrderItem[];
   packItems?: CreatePackOrderItem[];
   deliveryAddress?: GeoLocation;
+  deliveryMethod?: 'SELF_PICKUP' | 'DELIVERY_SERVICE';
+  paymentMethod?: 'CASH_ON_DELIVERY' | 'CREDIT_CARD' | 'MOBILE_PAYMENT' | 'BANK_TRANSFER';
   courierInstructions?: string;
   priority?: OrderPriority;
   scheduledAt?: string; // ISO datetime string; undefined / null = immediate

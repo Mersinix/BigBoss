@@ -74,7 +74,17 @@ export interface IStorage {
   getOrder(id: number): Promise<OrderWithDetails | undefined>;
   resolveOrderItems(items: CreateOrderItemInput[]): Promise<CreateOrderItem[]>;
   resolvePackOrderItems(items: CreatePackOrderItem[]): Promise<ResolvedPackOrderItem[]>;
-  createOrder(cafeId: number, cartItems: CreateOrderItem[], opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[]; promotionResults?: import("@shared/schema").SupplierPromotionResult[] }): Promise<Order>;
+  createOrder(cafeId: number, cartItems: CreateOrderItem[], opts?: {
+    deliveryAddress?: import("@shared/schema").GeoLocation;
+    deliveryMethod?: 'SELF_PICKUP' | 'DELIVERY_SERVICE';
+    deliveryFee?: number;
+    paymentMethod?: string;
+    courierInstructions?: string;
+    packItems?: ResolvedPackOrderItem[];
+    promotionResults?: import("@shared/schema").SupplierPromotionResult[];
+    priority?: string;
+    scheduledAt?: Date;
+  }): Promise<Order>;
   canUserAccessOrder(userId: number, userRole: string, orderId: number): Promise<boolean>;
   updateOrderStatus(id: number, status: typeof orders.$inferSelect.status, deliveryId?: number): Promise<Order>;
   getReturns(filters?: { cafeId?: number; supplierId?: number }): Promise<OrderReturn[]>;
@@ -543,6 +553,15 @@ export class DatabaseStorage implements IStorage {
 
       const [product] = await db.select().from(products).where(eq(products.id, item.productId));
       if (!product?.isAdminProduct) throw new Error('Product is not available in marketplace');
+      const [category] = product.categoryId
+        ? await db.select().from(categories).where(eq(categories.id, product.categoryId))
+        : [];
+      const [subCategory] = product.subCategoryId
+        ? await db.select().from(subCategories).where(eq(subCategories.id, product.subCategoryId))
+        : [];
+      const [brand] = product.brandId
+        ? await db.select().from(brands).where(eq(brands.id, product.brandId))
+        : [];
 
       const variants = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.listingId, item.listingId));
       let unitPrice: number;
@@ -567,8 +586,15 @@ export class DatabaseStorage implements IStorage {
         supplierName: supplier?.name ?? item.supplierName ?? 'Unknown',
         flavorId: item.flavorId ?? null,
         sizeId: item.sizeId ?? null,
-        flavorName: item.flavorName ?? null,
-        sizeName: item.sizeName ?? null,
+        flavorName: item.flavorId != null
+          ? ((await db.select().from(flavors).where(eq(flavors.id, item.flavorId)))[0]?.name ?? item.flavorName ?? null)
+          : null,
+        sizeName: item.sizeId != null
+          ? ((await db.select().from(sizes).where(eq(sizes.id, item.sizeId)))[0]?.name ?? item.sizeName ?? null)
+          : null,
+        brandName: brand?.name ?? null,
+        categoryName: category?.name ?? product.category ?? null,
+        subCategoryName: subCategory?.name ?? null,
         quantity: item.quantity,
         unitPrice,
       });
@@ -589,6 +615,19 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`Insufficient stock for pack ${pack.name}`);
       }
       const [supplier] = await db.select().from(users).where(eq(users.id, pack.supplierId));
+      const includedProducts = item.includedProducts?.length
+        ? item.includedProducts.map((included) => ({ ...included }))
+        : detail.items.flatMap((included) => [{
+            productId: included.productId,
+            productName: included.productName,
+            productImageUrl: included.productImageUrl,
+            brandName: included.brandName,
+            categoryName: included.categoryName,
+            subCategoryName: included.subCategoryName,
+            flavorName: included.flavorName,
+            sizeName: included.sizeName,
+            quantity: included.quantity,
+          }]);
       resolved.push({
         packId: pack.id,
         packName: pack.name,
@@ -596,6 +635,8 @@ export class DatabaseStorage implements IStorage {
         supplierName: supplier?.name ?? 'Unknown',
         quantity: item.quantity,
         unitPrice: pack.price,
+        packImageUrl: pack.imageUrl ?? null,
+        includedProducts,
       });
     }
     return resolved;
@@ -910,7 +951,17 @@ export class DatabaseStorage implements IStorage {
   async createOrder(
     cafeId: number,
     cartItems: CreateOrderItem[],
-    opts?: { deliveryAddress?: import("@shared/schema").GeoLocation; courierInstructions?: string; packItems?: ResolvedPackOrderItem[]; promotionResults?: import("@shared/schema").SupplierPromotionResult[]; priority?: string; scheduledAt?: Date },
+    opts?: {
+      deliveryAddress?: import("@shared/schema").GeoLocation;
+      deliveryMethod?: 'SELF_PICKUP' | 'DELIVERY_SERVICE';
+      deliveryFee?: number;
+      paymentMethod?: string;
+      courierInstructions?: string;
+      packItems?: ResolvedPackOrderItem[];
+      promotionResults?: import("@shared/schema").SupplierPromotionResult[];
+      priority?: string;
+      scheduledAt?: Date;
+    },
   ): Promise<Order> {
     const packOrderItems = opts?.packItems ?? [];
     const promoResults = opts?.promotionResults ?? [];
@@ -931,7 +982,11 @@ export class DatabaseStorage implements IStorage {
       status: 'PENDING',
       totalAmount,
       deliveryAddress: opts?.deliveryAddress ?? null,
+      deliveryMethod: opts?.deliveryMethod ?? 'DELIVERY_SERVICE',
+      deliveryFee: opts?.deliveryFee ?? 0,
       courierInstructions: opts?.courierInstructions?.trim() || null,
+      paymentMethod: opts?.paymentMethod ?? 'CASH_ON_DELIVERY',
+      paymentStatus: 'PENDING',
       priority: (opts?.priority ?? 'NORMAL') as any,
       scheduledAt: opts?.scheduledAt ?? null,
     }).returning();
@@ -996,10 +1051,54 @@ export class DatabaseStorage implements IStorage {
         }
         const [so] = await db.insert(subOrders).values(subOrderData).returning();
         for (const item of supplierItems) {
-          await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, productId: item.productId, listingId: item.listingId, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity, flavorId: item.flavorId ?? null, sizeId: item.sizeId ?? null });
+          await db.insert(orderItems).values({
+            orderId: order.id,
+            subOrderId: so.id,
+            productId: item.productId,
+            listingId: item.listingId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.unitPrice * item.quantity,
+            flavorId: item.flavorId ?? null,
+            sizeId: item.sizeId ?? null,
+            snapshot: {
+              kind: "PRODUCT",
+              productId: item.productId,
+              productName: item.productName,
+              productImageUrl: (item as any).productImageUrl ?? null,
+              supplierName: item.supplierName,
+              brandName: item.brandName ?? null,
+              categoryName: item.categoryName ?? null,
+              subCategoryName: item.subCategoryName ?? null,
+              flavorName: item.flavorName ?? null,
+              sizeName: item.sizeName ?? null,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.unitPrice * item.quantity,
+            },
+          });
         }
         for (const item of supplierPackItems) {
-          await db.insert(orderItems).values({ orderId: order.id, subOrderId: so.id, packId: item.packId, packName: item.packName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.unitPrice * item.quantity });
+          await db.insert(orderItems).values({
+            orderId: order.id,
+            subOrderId: so.id,
+            packId: item.packId,
+            packName: item.packName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.unitPrice * item.quantity,
+            snapshot: {
+              kind: "PACK",
+              packId: item.packId,
+              packName: item.packName,
+              packImageUrl: item.packImageUrl,
+              supplierName: item.supplierName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.unitPrice * item.quantity,
+              includedProducts: item.includedProducts,
+            },
+          });
         }
       }
     }
@@ -2744,7 +2843,11 @@ export class DatabaseStorage implements IStorage {
           productName: product?.name ?? "Unknown product",
           productImageUrl: product?.imageUrl ?? null,
           categoryId: product?.categoryId ?? null,
+          subCategoryId: product?.subCategoryId ?? null,
           brandId: product?.brandId ?? null,
+          categoryName: product?.categoryId ? (tx.catMap.get(product.categoryId)?.name ?? null) : null,
+          subCategoryName: product?.subCategoryId ? (tx.subMap.get(product.subCategoryId)?.name ?? null) : null,
+          brandName: product?.brandId ? (tx.brdMap.get(product.brandId)?.name ?? null) : null,
           flavorId: variant?.flavorId ?? null,
           flavorName: variant?.flavorId ? (tx.flvMap.get(variant.flavorId)?.name ?? null) : null,
           sizeId: variant?.sizeId ?? null,

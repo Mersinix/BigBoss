@@ -204,6 +204,9 @@ export default function OrderDetailsModal({
           sizeId: item.sizeId ?? null,
           flavorName: item.flavorName ?? null,
           sizeName: item.sizeName ?? null,
+          brandName: item.brandName ?? null,
+          categoryName: item.categoryName ?? item.productCategory ?? null,
+          subCategoryName: item.subCategoryName ?? null,
           unitPrice: item.unitPrice,
           productName: item.productName ?? "",
           productImageUrl: item.productImageUrl ?? null,
@@ -219,7 +222,17 @@ export default function OrderDetailsModal({
           supplierId: pack.supplierId,
           supplierName: pack.supplierName ?? "",
           unitPrice: pack.unitPrice ?? 0,
-          includedProducts: pack.includedProducts ?? [],
+          includedProducts: (pack.includedProducts ?? []).map((item: any) => ({
+            productId: item.productId ?? 0,
+            productName: item.productName ?? "",
+            productImageUrl: item.productImageUrl ?? null,
+            brandName: item.brandName ?? null,
+            categoryName: item.categoryName ?? null,
+            subCategoryName: item.subCategoryName ?? null,
+            flavorName: item.flavorName ?? null,
+            sizeName: item.sizeName ?? null,
+            quantity: item.quantity ?? 0,
+          })),
         }, pack.quantity);
       }
 

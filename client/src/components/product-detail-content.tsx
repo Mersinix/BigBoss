@@ -107,7 +107,10 @@ function VariantRow({
     addItem({
       listingId: listing.id, flavorId: variant.flavorId, sizeId: variant.sizeId,
       productId: product.id, productName: product.name, productImageUrl: product.imageUrl ?? null,
-      productCategory: product.category ?? "", supplierId: listing.supplierId,
+      productCategory: product.category ?? "", brandName: product.brandLabel?.name ?? null,
+      categoryName: product.categoryLabel?.name ?? product.category ?? null,
+      subCategoryName: product.subCategoryLabel?.name ?? null,
+      supplierId: listing.supplierId,
       supplierName: listing.supplierName, flavorName: variant.flavorName ?? null,
       sizeName: variant.sizeName ?? null, unitPrice: promoPrice ?? variant.price,
     }, qty);

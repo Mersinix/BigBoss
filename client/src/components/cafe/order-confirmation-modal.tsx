@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Store, Layers, MapPin, Clock, AlertTriangle,
   Minus, Plus, Trash2, Zap, ArrowRight, Calendar, CheckCircle,
-  Sun, Moon, X,
+  Sun, Moon, X, Truck, Banknote, CreditCard, Smartphone, Landmark, Package,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useThemeStore } from "@/store/theme-store";
@@ -18,6 +18,8 @@ export type ConfirmOrderOpts = {
   modifiedPackItems: PackCartItem[];
   priority: OrderPriority;
   scheduledAt: string | undefined;
+  deliveryMethod: "SELF_PICKUP" | "DELIVERY_SERVICE";
+  paymentMethod: "CASH_ON_DELIVERY" | "CREDIT_CARD" | "MOBILE_PAYMENT" | "BANK_TRANSFER";
 };
 
 type Props = {
@@ -100,6 +102,8 @@ export default function OrderConfirmationModal({
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduledDate, setScheduledDate] = useState(""); // "YYYY-MM-DD"
   const [scheduledTime, setScheduledTime] = useState("09:00");
+  const [deliveryMethod, setDeliveryMethod] = useState<"SELF_PICKUP" | "DELIVERY_SERVICE">("DELIVERY_SERVICE");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH_ON_DELIVERY" | "CREDIT_CARD" | "MOBILE_PAYMENT" | "BANK_TRANSFER">("CASH_ON_DELIVERY");
 
   // Sync local state from props when modal opens
   useEffect(() => {
@@ -110,6 +114,8 @@ export default function OrderConfirmationModal({
       setIsScheduled(false);
       setScheduledDate("");
       setScheduledTime("09:00");
+      setDeliveryMethod("DELIVERY_SERVICE");
+      setPaymentMethod("CASH_ON_DELIVERY");
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -157,7 +163,7 @@ export default function OrderConfirmationModal({
     let scheduledAt: string | undefined;
     if (isScheduled && scheduledDate)
       scheduledAt = new Date(`${scheduledDate}T${scheduledTime || "09:00"}:00`).toISOString();
-    onConfirm({ modifiedItems: localItems, modifiedPackItems: localPackItems, priority, scheduledAt });
+    onConfirm({ modifiedItems: localItems, modifiedPackItems: localPackItems, priority, scheduledAt, deliveryMethod, paymentMethod });
   };
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -242,9 +248,19 @@ export default function OrderConfirmationModal({
                         key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`}
                         className="flex items-center gap-3 px-4 py-3"
                       >
+                        <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 bg-gray-700/60">
+                          {item.productImageUrl
+                            ? <img src={item.productImageUrl} alt="" className="w-full h-full object-cover" />
+                            : <Package className="w-4 h-4 m-3 text-gray-500" />}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{item.productName}</p>
-                          {variant && <p className={`text-xs mt-0.5 ${t.textMuted}`}>{variant}</p>}
+                          <div className={`flex flex-wrap gap-x-2 text-[10px] mt-0.5 ${t.textMuted}`}>
+                            {item.brandName && <span>Brand: {item.brandName}</span>}
+                            {item.categoryName && <span>Category: {item.categoryName}</span>}
+                            {item.subCategoryName && <span>SubCategory: {item.subCategoryName}</span>}
+                            {variant && <span>Variant: {variant}</span>}
+                          </div>
                           <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{fmt(item.unitPrice)} / unité</p>
                         </div>
                         <div className="flex items-center gap-2.5 shrink-0">
@@ -294,13 +310,33 @@ export default function OrderConfirmationModal({
                   <span className="font-semibold text-sm text-amber-500">{pack.supplierName} · Pack</span>
                 </div>
 
-                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex items-start gap-3 px-4 py-3">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-amber-500/10">
+                      {pack.packImageUrl
+                        ? <img src={pack.packImageUrl} alt="" className="w-full h-full object-cover" />
+                        : <Layers className="w-5 h-5 m-3 text-amber-500" />}
+                    </div>
                   <div className="flex-1 min-w-0">
                     <p className={`font-semibold text-sm ${t.textPrimary}`}>{pack.packName}</p>
+                      <p className={`text-[11px] mt-0.5 ${t.textMuted}`}>{pack.supplierName}</p>
                     {pack.includedProducts.length > 0 && (
-                      <p className={`text-xs mt-0.5 line-clamp-1 ${t.textMuted}`}>
-                        {pack.includedProducts.map(ip => `${ip.quantity}× ${ip.productName}`).join(", ")}
-                      </p>
+                        <div className={`mt-2 space-y-1.5 border-t pt-2 ${t.dk ? "border-amber-800/40" : "border-amber-200"}`}>
+                          {pack.includedProducts.map((ip, index) => (
+                            <div key={`${ip.productId}-${index}`} className="flex items-start gap-2">
+                              <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-gray-700/60">
+                                {ip.productImageUrl
+                                  ? <img src={ip.productImageUrl} alt="" className="w-full h-full object-cover" />
+                                  : <Package className="w-3 h-3 m-2 text-gray-500" />}
+                              </div>
+                              <div className="min-w-0">
+                                <p className={`text-[11px] font-semibold ${t.textPrimary}`}>{ip.quantity}× {ip.productName}</p>
+                                <p className={`text-[10px] ${t.textMuted}`}>
+                                  {[ip.brandName, ip.categoryName, ip.subCategoryName, ip.flavorName, ip.sizeName].filter(Boolean).join(" · ")}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                     )}
                     <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{fmt(pack.unitPrice)} / pack</p>
                   </div>
@@ -350,23 +386,77 @@ export default function OrderConfirmationModal({
             {/* ── Divider ── */}
             <div className={`h-px w-full ${t.dividerBg}`} />
 
-            {/* ── Delivery info ── */}
-            {deliveryAddress && (
-              <div className={`border rounded-2xl p-4 ${t.innerCard}`}>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
-                    <MapPin className="w-4 h-4 text-amber-500" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-xs font-semibold mb-1 ${t.textMuted}`}>Adresse de livraison</p>
-                    <p className={`text-sm font-medium ${t.textPrimary}`}>{deliveryAddress.address}</p>
-                    {courierInstructions && (
-                      <p className={`text-xs mt-1 ${t.textMuted}`}>Instructions : {courierInstructions}</p>
-                    )}
-                  </div>
-                </div>
+            {/* ── Delivery method ── */}
+            <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
+              <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
+                <Truck className="w-4 h-4 text-amber-500" />
+                Mode de livraison
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { value: "DELIVERY_SERVICE" as const, label: "Service de livraison", icon: Truck },
+                  { value: "SELF_PICKUP" as const, label: "Retrait sur place", icon: Store },
+                ]).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setDeliveryMethod(option.value)}
+                    className={`flex items-center gap-2 p-3 rounded-xl border text-left text-xs font-semibold transition-all ${t.segBtn(deliveryMethod === option.value)}`}
+                  >
+                    <option.icon className="w-4 h-4 shrink-0 text-amber-500" />
+                    {option.label}
+                  </button>
+                ))}
               </div>
-            )}
+              {deliveryMethod === "DELIVERY_SERVICE" ? (
+                deliveryAddress ? (
+                  <div className={`flex items-start gap-3 rounded-xl border p-3 ${t.cardBg}`}>
+                    <MapPin className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className={`text-[11px] font-semibold ${t.textMuted}`}>Adresse de livraison</p>
+                      <p className={`text-sm font-medium ${t.textPrimary}`}>{deliveryAddress.address}</p>
+                      {courierInstructions && <p className={`text-xs mt-1 ${t.textMuted}`}>Instructions : {courierInstructions}</p>}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-red-400">Une adresse de livraison est requise.</p>
+                )
+              ) : (
+                <p className={`text-xs ${t.textMuted}`}>Vous récupérerez la commande directement auprès du fournisseur. Aucune adresse de livraison ne sera utilisée.</p>
+              )}
+            </div>
+
+            {/* ── Payment method ── */}
+            <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
+              <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
+                <Banknote className="w-4 h-4 text-amber-500" />
+                Mode de paiement
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { value: "CASH_ON_DELIVERY" as const, label: "Paiement à la livraison", icon: Banknote, disabled: false },
+                  { value: "CREDIT_CARD" as const, label: "Carte bancaire", icon: CreditCard, disabled: true },
+                  { value: "MOBILE_PAYMENT" as const, label: "Paiement mobile", icon: Smartphone, disabled: true },
+                  { value: "BANK_TRANSFER" as const, label: "Virement bancaire", icon: Landmark, disabled: true },
+                ]).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={option.disabled}
+                    onClick={() => setPaymentMethod(option.value)}
+                    className={`relative flex items-center gap-2 p-3 rounded-xl border text-left text-xs font-semibold transition-all ${
+                      option.disabled
+                        ? (t.dk ? "border-gray-700/50 text-gray-600 bg-gray-800/40 cursor-not-allowed" : "border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed")
+                        : t.segBtn(paymentMethod === option.value)
+                    }`}
+                  >
+                    <option.icon className={`w-4 h-4 shrink-0 ${option.disabled ? "text-gray-600" : "text-amber-500"}`} />
+                    <span>{option.label}</span>
+                    {option.disabled && <span className="absolute right-2 top-1.5 text-[9px] uppercase tracking-wide text-gray-500">Bientôt</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* ── Priority ── */}
             <div className="space-y-2.5">

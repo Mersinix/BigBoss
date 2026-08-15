@@ -1,0 +1,414 @@
+We need to make a targeted improvement to the **Coffee Owner SHOP cart, order confirmation, and My Account → Orders experience**.
+
+Before making any changes, inspect the existing implementation and synchronization between:
+
+* SHOP mapped products
+* Supplier products / variants
+* Packs
+* Cart
+* Order creation
+* Order confirmation
+* Coffee Owner Orders
+* Supplier order information
+* Delivery information
+* Payment information
+
+First understand what is already working. **Do not redesign or modify anything that is not part of this request.**
+
+Do not change existing business logic unless it is necessary to support the requirements below.
+
+**Execute the changes completely. Do not only analyze or describe them.**
+
+---
+
+# 1. Coffee Owner → Votre panier → SHOP
+
+Currently cart items show only limited information.
+
+For **every product in the cart**, display all relevant product details:
+
+* Product name
+* Picture
+* Brand
+* Category
+* SubCategory
+* Selected flavor(s)
+* Selected size
+* Supplier/store
+* Quantity
+* Unit price
+* Total price
+
+The information must represent the **exact selected product variant**, not generic product information.
+
+If a product has multiple available flavors/sizes, show the ones actually selected by the Coffee Owner.
+
+Do not display unrelated variants.
+
+---
+
+# 2. Packs inside the cart
+
+For every Pack in the cart, display:
+
+* Pack name
+* Pack picture
+* Supplier/store
+* Quantity
+* Pack price
+
+And importantly:
+
+### Show the details of EVERY variant included in the Pack.
+
+For each Pack variant display its:
+
+* Product name
+* Picture when available
+* Brand
+* Category
+* SubCategory
+* Selected flavor(s)
+* Selected size
+* Quantity included in the Pack
+
+The information must correspond exactly to the Pack configuration currently used for that Pack.
+
+Do not show inactive/deleted variants as active Pack contents.
+
+---
+
+# 3. Cart → Passer commande → Récapitulatif de commande
+
+When the Coffee Owner clicks **Passer commande**, the confirmation modal must preserve and display the same complete product/Pack information.
+
+For products show:
+
+* Picture
+* Supplier
+* Product name
+* Brand
+* Category
+* SubCategory
+* Selected flavor
+* Selected size
+* Quantity
+* Unit price
+* Total
+
+For Packs show:
+
+* Pack picture
+* Supplier
+* Pack name
+* Quantity
+* Pack price
+* Every included Pack variant with its exact:
+
+  * Product
+  * Brand
+  * Category
+  * SubCategory
+  * Selected flavor(s)
+  * Selected size
+  * Included quantity
+
+The information shown here must match what was selected in the cart.
+
+Do not lose variant information between Cart → Confirmation → Order.
+
+---
+
+# 4. Delivery Method
+
+Add a **Delivery Method** selection to the order confirmation flow:
+
+### Self Pickup
+
+The Coffee Owner collects the order directly.
+
+### Delivery Service
+
+The order is delivered using the available delivery service.
+
+The selected method must be saved with the order and remain visible later in the order details.
+
+Do not break the existing delivery-address behavior.
+
+If Self Pickup is selected, handle the delivery information appropriately while preserving the existing address/order data where required by the current system.
+
+---
+
+# 5. Payment Method
+
+Add a **Payment Method** section.
+
+Available options:
+
+### Cash on Delivery
+
+Active and selectable.
+
+### Credit Card
+
+**Coming Soon — disabled/frozen.**
+
+### Mobile Payment
+
+**Coming Soon — disabled/frozen.**
+
+### Bank Transfer
+
+**Coming Soon — disabled/frozen.**
+
+Only **Cash on Delivery** should currently be usable.
+
+The disabled Coming Soon methods must remain visible but cannot be selected.
+
+Save the selected payment method with the order.
+
+---
+
+# 6. Coffee Owner → My Account → Orders
+
+Improve the existing order cards/details without removing anything that already works.
+
+Each order should expose complete information about:
+
+## Order Information
+
+Show relevant:
+
+* Order number
+* Order status
+* Creation date/time
+* Current status
+* Other existing order information
+
+---
+
+# 7. Order Progress
+
+Add an order-progress section inspired by the visual concept of **Salesforce Opportunity stages**.
+
+Stages:
+
+**Order Placed → Confirmed → Preparing → Ready for Delivery → Out for Delivery → Delivered**
+
+The current stage must be visually obvious.
+
+The progress must update according to the actual order status.
+
+Do not create a fake visual status independent from the real order status.
+
+If the existing system has additional statuses such as cancelled/rejected, preserve them and handle them appropriately without breaking the normal progression.
+
+---
+
+# 8. Customer Information
+
+Display the relevant customer information already available to the order, including:
+
+* Coffee/customer name
+* Existing customer information
+* Any other relevant information already stored
+
+Do not expose unnecessary private information.
+
+---
+
+# 9. Delivery Information
+
+Add a dedicated **Delivery Information** section containing relevant information such as:
+
+* Delivery method
+* Delivery address when applicable
+* Delivery service/driver when available
+* Delivery fee
+* Delivery instructions
+* Delivery status
+* Other existing delivery information
+
+For Self Pickup, clearly indicate that the order is for pickup.
+
+---
+
+# 10. Order Items
+
+Create/organize the order details so that all ordered items are clearly visible.
+
+### Products
+
+For every product:
+
+* Product picture
+* Product name
+* Supplier/store
+* Brand
+* Category
+* SubCategory
+* Selected flavor
+* Selected size
+* Quantity
+* Unit price
+* Total
+
+### Packs
+
+For every Pack:
+
+* Pack picture
+* Pack name
+* Supplier/store
+* Quantity
+* Pack price
+
+And underneath it, show **every included Pack variant** with:
+
+* Product picture when available
+* Product name
+* Brand
+* Category
+* SubCategory
+* Selected flavor(s)
+* Selected size
+* Included quantity
+
+The order must represent the exact state of the Pack at the time the order was placed.
+
+Do not rely on current catalog data in a way that could make historical orders change when products/Packs are later modified.
+
+---
+
+# 11. Delivery & Payment
+
+Add a dedicated section containing:
+
+### Delivery
+
+* Delivery Method
+* Delivery Fee
+* Address when applicable
+* Delivery instructions
+* Other existing delivery information
+
+### Payment
+
+* Payment Method
+* Payment status when available
+
+Also show:
+
+* Priority
+
+  * Normal
+  * High
+  * Urgent
+
+* Planning
+
+  * Immediate
+  * Scheduled
+
+Preserve the existing Priority and Planning behavior.
+
+---
+
+# 12. Order Summary
+
+Keep the existing order totals and improve the summary so it clearly shows:
+
+* Products subtotal
+* Packs subtotal
+* Delivery fee
+* Any existing applicable fees/discounts
+* Final total
+
+The calculation must remain consistent with the actual order.
+
+Do not change existing pricing or promotion logic unless required to correctly display the information.
+
+---
+
+# 13. Synchronization and historical accuracy
+
+This is very important.
+
+The information selected when the Coffee Owner places the order must remain correctly associated with that order.
+
+Verify synchronization across:
+
+**Product → Variant → Cart → Confirmation → Order → Coffee Owner Orders**
+
+and:
+
+**Pack → Pack Variants → Cart → Confirmation → Order → Coffee Owner Orders**
+
+Also verify:
+
+**Delivery Method → Order**
+
+and:
+
+**Payment Method → Order**
+
+The Coffee Owner should not need to refresh to see the correct newly-created order/details where the existing application supports realtime updates.
+
+Historical orders must continue showing the correct ordered information even if the supplier later:
+
+* Changes a product
+* Changes a variant
+* Removes a product
+* Changes Pack contents
+* Archives a Pack
+* Changes prices
+* Changes stock
+
+---
+
+# 14. Preserve existing functionality
+
+This is a targeted enhancement.
+
+**Do NOT:**
+
+* Redesign the existing application.
+* Change unrelated UI.
+* Remove existing order actions.
+* Remove Cancel.
+* Remove Reorder.
+* Remove Close.
+* Remove existing delivery functionality.
+* Remove existing pricing/promotion behavior.
+* Change Supplier/Admin order behavior unless required for synchronization.
+* Change unrelated SHOP functionality.
+* Remove existing sections that were not mentioned here.
+
+Keep the current design language and improve the existing components rather than replacing them with a completely different design.
+
+---
+
+# 15. Final verification
+
+Before finishing, verify the complete flow:
+
+**Coffee Owner selects product → selects variant → adds to cart → cart displays exact details → Passer commande → confirmation displays exact details → selects delivery method → selects payment method → confirms order → order appears in My Account → order details display complete information → order progress works.**
+
+Also test:
+
+* Product with flavor + size
+* Product with different supplier
+* Pack containing multiple products
+* Pack containing multiple variants
+* Pack with selected flavors
+* Delivery Service
+* Self Pickup
+* Cash on Delivery
+* Disabled Coming Soon payment methods
+* Existing promotion/pricing behavior
+* Existing order cancellation/reorder behavior
+* Historical order information
+
+If you find existing synchronization problems while implementing this task, fix only problems directly related to this requested flow.
+
+**Do not stop at analysis. Execute the changes, test them, and finish the complete requested implementation.**

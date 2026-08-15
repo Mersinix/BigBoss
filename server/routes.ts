@@ -1025,7 +1025,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }).optional(),
       }).optional();
 
-      const { items, packItems, deliveryAddress, courierInstructions, priority, scheduledAt } = z.object({
+      const { items, packItems, deliveryAddress, deliveryMethod, paymentMethod, courierInstructions, priority, scheduledAt } = z.object({
         items: z.array(z.object({
           listingId: z.number(),
           productId: z.number(),
@@ -1042,8 +1042,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           packId: z.number(),
           supplierId: z.number(),
           quantity: z.number().min(1),
+          includedProducts: z.array(z.object({
+            productId: z.number(),
+            productName: z.string(),
+            productImageUrl: z.string().nullable(),
+            brandName: z.string().nullable(),
+            categoryName: z.string().nullable(),
+            subCategoryName: z.string().nullable(),
+            flavorName: z.string().nullable(),
+            sizeName: z.string().nullable(),
+            quantity: z.number().min(1),
+          })).optional(),
         })).optional(),
         deliveryAddress: deliveryAddressSchema,
+        deliveryMethod: z.enum(["SELF_PICKUP", "DELIVERY_SERVICE"]).default("DELIVERY_SERVICE"),
+        paymentMethod: z.enum(["CASH_ON_DELIVERY", "CREDIT_CARD", "MOBILE_PAYMENT", "BANK_TRANSFER"]).default("CASH_ON_DELIVERY"),
         courierInstructions: z.string().max(500).optional(),
         priority: z.enum(['NORMAL', 'HIGH', 'URGENT']).optional(),
         scheduledAt: z.string().datetime().optional(),
@@ -1079,6 +1092,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const order = await storage.createOrder(cafeId, validatedItems, {
         deliveryAddress: normalizedDelivery,
+        deliveryMethod,
+        paymentMethod,
         courierInstructions,
         packItems: validatedPackItems,
         promotionResults: promoEval.bySupplier,

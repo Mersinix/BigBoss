@@ -659,7 +659,12 @@ export function PackQuickViewModal() {
       const allocs = flavorSelections[item.id];
       if (!allocs) {
         return [{
+          productId: item.productId,
           productName: item.productName,
+          productImageUrl: item.productImageUrl ?? null,
+          brandName: item.brandName ?? null,
+          categoryName: item.categoryName ?? null,
+          subCategoryName: item.subCategoryName ?? null,
           flavorName: item.flavorName,
           sizeName: item.sizeName,
           quantity: item.quantity,
@@ -668,7 +673,12 @@ export function PackQuickViewModal() {
       return allocs
         .filter(a => a.quantity > 0)
         .map(a => ({
+          productId: item.productId,
           productName: item.productName,
+          productImageUrl: item.productImageUrl ?? null,
+          brandName: item.brandName ?? null,
+          categoryName: item.categoryName ?? null,
+          subCategoryName: item.subCategoryName ?? null,
           flavorName: a.flavorName,
           sizeName: a.sizeName,
           quantity: a.quantity,

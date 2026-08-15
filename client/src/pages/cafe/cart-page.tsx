@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
-  Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck, Sun, Moon
+  Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck, Sun, Moon,
+  CreditCard, Banknote, Smartphone, Landmark
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +42,8 @@ export default function CartPage() {
   const [customDeliveryAddress, setCustomDeliveryAddress] = useState<GeoLocation | null>(null);
   const [courierInstructions, setCourierInstructions] = useState("");
   const [deliveryPickerOpen, setDeliveryPickerOpen] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<"SELF_PICKUP" | "DELIVERY_SERVICE">("DELIVERY_SERVICE");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH_ON_DELIVERY" | "CREDIT_CARD" | "MOBILE_PAYMENT" | "BANK_TRANSFER">("CASH_ON_DELIVERY");
   const isDark = useThemeStore((s) => s.isDark);
   const toggle = useThemeStore((s) => s.toggle);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -100,7 +103,7 @@ export default function CartPage() {
   // Open the confirmation modal (with address validation)
   const handleOpenConfirm = () => {
     if (!hasShop) return;
-    if (!activeDeliveryAddress) {
+    if (deliveryMethod === "DELIVERY_SERVICE" && !activeDeliveryAddress) {
       toast({
         title: "Adresse de livraison requise",
         description: savedAccountAddress
@@ -132,8 +135,11 @@ export default function CartPage() {
         packId: p.packId,
         supplierId: p.supplierId,
         quantity: p.quantity,
+          includedProducts: p.includedProducts,
       })),
-      deliveryAddress: activeDeliveryAddress!,
+      deliveryAddress: deliveryMethod === "DELIVERY_SERVICE" ? activeDeliveryAddress! : undefined,
+      deliveryMethod,
+      paymentMethod,
       courierInstructions: courierInstructions.trim() || undefined,
       priority: opts.priority,
       scheduledAt: opts.scheduledAt,
@@ -251,7 +257,12 @@ export default function CartPage() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className={`font-medium text-sm truncate ${textPrimary}`}>{item.productName}</p>
-                                {variantLabel && <p className={`text-xs truncate ${textMuted}`}>{variantLabel}</p>}
+                                <div className={`flex flex-wrap gap-x-2 gap-y-0.5 text-xs mt-0.5 ${textMuted}`}>
+                                  {item.brandName && <span>Brand: {item.brandName}</span>}
+                                  {item.categoryName && <span>Category: {item.categoryName}</span>}
+                                  {item.subCategoryName && <span>SubCategory: {item.subCategoryName}</span>}
+                                  {variantLabel && <span>Variant: {variantLabel}</span>}
+                                </div>
                                 <p className={`text-xs ${textMuted}`}>{fmt(item.unitPrice)} chacun</p>
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <div className={`flex items-center border rounded-xl overflow-hidden ${borderClr}`}>
@@ -293,11 +304,25 @@ export default function CartPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`font-medium text-sm truncate ${textPrimary}`}>{pack.packName}</p>
-                          <p className={`text-xs ${textMuted}`}>{fmt(pack.unitPrice)} le pack</p>
+                           <p className={`text-xs ${textMuted}`}>{pack.supplierName} · {fmt(pack.unitPrice)} le pack</p>
                           {pack.includedProducts.length > 0 && (
-                            <p className={`text-xs mt-0.5 line-clamp-1 ${textMuted}`}>
-                              {pack.includedProducts.map((ip) => `${ip.quantity}× ${ip.productName}`).join(", ")}
-                            </p>
+                             <div className={`mt-3 space-y-2 border-t pt-2 ${dk ? "border-amber-500/20" : "border-amber-100"}`}>
+                               {pack.includedProducts.map((ip, index) => (
+                                 <div key={`${ip.productId}-${index}`} className="flex items-start gap-2">
+                                   <div className={`w-9 h-9 rounded-lg overflow-hidden shrink-0 ${imgBg}`}>
+                                     {ip.productImageUrl
+                                       ? <img src={ip.productImageUrl} alt="" className="w-full h-full object-cover" />
+                                       : <Package className={`w-4 h-4 m-2 ${textMuted}`} />}
+                                   </div>
+                                   <div className="min-w-0 flex-1">
+                                     <p className={`text-xs font-semibold ${textPrimary}`}>{ip.quantity}× {ip.productName}</p>
+                                     <p className={`text-[10px] leading-4 ${textMuted}`}>
+                                       {[ip.brandName, ip.categoryName, ip.subCategoryName, ip.flavorName, ip.sizeName].filter(Boolean).join(" · ")}
+                                     </p>
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
                           )}
                           <div className="flex items-center gap-2 mt-2">
                             <div className={`flex items-center border rounded-xl overflow-hidden ${borderClr}`}>

@@ -11,6 +11,9 @@ export interface CartItem {
   productName: string;
   productImageUrl: string | null;
   productCategory: string;
+  brandName: string | null;
+  categoryName: string | null;
+  subCategoryName: string | null;
   supplierId: number;
   supplierName: string;
   flavorName: string | null;
@@ -52,7 +55,12 @@ export interface PrintCartItem {
 // only for display (receipt/cart breakdown), not as separate cart lines.
 
 export interface PackCartItemProduct {
+  productId: number;
   productName: string;
+  productImageUrl: string | null;
+  brandName: string | null;
+  categoryName: string | null;
+  subCategoryName: string | null;
   flavorName: string | null;
   sizeName: string | null;
   quantity: number;

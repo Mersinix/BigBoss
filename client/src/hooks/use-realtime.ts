@@ -159,6 +159,9 @@ export function useRealtime(userId?: number) {
                 productName: item.productName ?? '',
                 productImageUrl: item.productImageUrl ?? null,
                 productCategory: item.productCategory ?? '',
+                brandName: item.brandName ?? null,
+                categoryName: item.categoryName ?? item.productCategory ?? null,
+                subCategoryName: item.subCategoryName ?? null,
               }, item.quantity);
             }
             for (const pack of (data?.packItems ?? [])) {

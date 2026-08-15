@@ -42,8 +42,6 @@ export default function CartPage() {
   const [customDeliveryAddress, setCustomDeliveryAddress] = useState<GeoLocation | null>(null);
   const [courierInstructions, setCourierInstructions] = useState("");
   const [deliveryPickerOpen, setDeliveryPickerOpen] = useState(false);
-  const [deliveryMethod, setDeliveryMethod] = useState<"SELF_PICKUP" | "DELIVERY_SERVICE">("DELIVERY_SERVICE");
-  const [paymentMethod, setPaymentMethod] = useState<"CASH_ON_DELIVERY" | "CREDIT_CARD" | "MOBILE_PAYMENT" | "BANK_TRANSFER">("CASH_ON_DELIVERY");
   const isDark = useThemeStore((s) => s.isDark);
   const toggle = useThemeStore((s) => s.toggle);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -103,7 +101,12 @@ export default function CartPage() {
   // Open the confirmation modal (with address validation)
   const handleOpenConfirm = () => {
     if (!hasShop) return;
-    if (deliveryMethod === "DELIVERY_SERVICE" && !activeDeliveryAddress) {
+    setConfirmOpen(true);
+  };
+
+  // Called when user clicks "Confirmer" inside the modal
+  const handleConfirmOrder = (opts: ConfirmOrderOpts) => {
+    if (opts.deliveryMethod === "DELIVERY_SERVICE" && !activeDeliveryAddress) {
       toast({
         title: "Adresse de livraison requise",
         description: savedAccountAddress
@@ -113,11 +116,6 @@ export default function CartPage() {
       });
       return;
     }
-    setConfirmOpen(true);
-  };
-
-  // Called when user clicks "Confirmer" inside the modal
-  const handleConfirmOrder = (opts: ConfirmOrderOpts) => {
     const request: CreateOrderRequest = {
       items: opts.modifiedItems.map((i) => ({
         listingId: i.listingId,
@@ -137,9 +135,9 @@ export default function CartPage() {
         quantity: p.quantity,
           includedProducts: p.includedProducts,
       })),
-      deliveryAddress: deliveryMethod === "DELIVERY_SERVICE" ? activeDeliveryAddress! : undefined,
-      deliveryMethod,
-      paymentMethod,
+      deliveryAddress: opts.deliveryMethod === "DELIVERY_SERVICE" ? activeDeliveryAddress! : undefined,
+      deliveryMethod: opts.deliveryMethod,
+      paymentMethod: opts.paymentMethod,
       courierInstructions: courierInstructions.trim() || undefined,
       priority: opts.priority,
       scheduledAt: opts.scheduledAt,

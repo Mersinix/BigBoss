@@ -47,6 +47,15 @@ const SUBORDER_STATUS: Record<string, { label: string; badgeDk: string; badgeLt:
 // Statuses where the cafe owner can still cancel
 const CANCELLABLE_STATUSES = new Set(["PENDING"]);
 
+const ORDER_PROGRESS_STAGES = [
+  { status: "PENDING", label: "Order Placed", icon: Clock },
+  { status: "CONFIRMED", label: "Confirmed", icon: CheckCircle2 },
+  { status: "PREPARING", label: "Preparing", icon: Box },
+  { status: "READY", label: "Ready for Delivery", icon: Package },
+  { status: "IN_DELIVERY", label: "Out for Delivery", icon: Truck },
+  { status: "DELIVERED", label: "Delivered", icon: CheckCircle2 },
+] as const;
+
 // ── Design system (mirrors pack-quick-view-modal) ─────────────────────────────
 
 function useTheme(isDark: boolean) {
@@ -96,10 +105,21 @@ function usePackComposition(packId: number | null) {
   });
 }
 
-function PackCompositionView({ packId, quantity, t }: { packId: number; quantity: number; t: ReturnType<typeof useTheme> }) {
+function PackCompositionView({
+  packId,
+  quantity,
+  snapshot,
+  t,
+}: {
+  packId: number;
+  quantity: number;
+  snapshot?: any;
+  t: ReturnType<typeof useTheme>;
+}) {
   const { data: composition, isLoading } = usePackComposition(packId);
+  const historicalComposition = Array.isArray(snapshot?.includedProducts) ? snapshot.includedProducts : null;
 
-  if (isLoading) {
+  if (!historicalComposition && isLoading) {
     return (
       <div className={`mt-2 rounded-xl p-3 space-y-1.5 ${t.innerCard} border`}>
         {[1, 2].map(i => (
@@ -109,7 +129,8 @@ function PackCompositionView({ packId, quantity, t }: { packId: number; quantity
     );
   }
 
-  if (!composition?.length) return null;
+  const rows = historicalComposition ?? composition ?? [];
+  if (!rows.length) return null;
 
   return (
     <div className={`mt-2 rounded-xl p-3 border ${t.innerCard}`}>
@@ -117,13 +138,30 @@ function PackCompositionView({ packId, quantity, t }: { packId: number; quantity
         Composition du pack × {quantity}
       </p>
       <div className="space-y-2">
-        {composition.map((comp, i) => {
-          const totalQty = comp.quantity * quantity;
+        {rows.map((comp: any, i: number) => {
+          // Stored order snapshots already contain the exact included quantity
+          // captured at checkout. Legacy orders use live composition rows, where
+          // quantity is per pack and must still be multiplied.
+          const totalQty = historicalComposition ? comp.quantity : comp.quantity * quantity;
           return (
             <div key={i} className={`flex items-start gap-2 text-xs ${t.textPrimary}`}>
               <ChevronRight className={`w-3 h-3 mt-0.5 shrink-0 ${t.textSubtle}`} />
               <div className="flex-1 min-w-0">
-                <span className="font-medium">{comp.productName}</span>
+                <div className="flex items-start gap-2">
+                  {comp.productImageUrl && (
+                    <img
+                      src={comp.productImageUrl}
+                      alt=""
+                      className="w-7 h-7 rounded-lg object-cover shrink-0"
+                    />
+                  )}
+                  <span className="font-medium">{comp.productName}</span>
+                </div>
+                {(comp.brandName || comp.categoryName || comp.subCategoryName) && (
+                  <p className={`mt-1 text-[10px] ${t.textSubtle}`}>
+                    {[comp.brandName, comp.categoryName, comp.subCategoryName].filter(Boolean).join(" · ")}
+                  </p>
+                )}
                 {(comp.flavorName || comp.sizeName) && (
                   <span className={`ml-1.5 ${t.textMuted}`}>
                     {comp.flavorName && <span>Saveur: <b>{comp.flavorName}</b></span>}
@@ -288,6 +326,19 @@ export default function OrderDetailsModal({
 
   const subOrders  = order.subOrders ?? [];
   const hasSubOrders = subOrders.length > 0;
+  const currentProgressIndex = ORDER_PROGRESS_STAGES.findIndex((stage) => stage.status === order.status);
+  const deliveryMethod = (order as any).deliveryMethod ?? "DELIVERY_SERVICE";
+  const paymentMethod = (order as any).paymentMethod ?? "CASH_ON_DELIVERY";
+  const paymentStatus = (order as any).paymentStatus ?? "PENDING";
+  const deliveryFee = Number((order as any).deliveryFee ?? 0);
+  const deliveryLabel = deliveryMethod === "SELF_PICKUP" ? "Self Pickup" : "Delivery Service";
+  const paymentLabel = paymentMethod === "CASH_ON_DELIVERY"
+    ? "Cash on Delivery"
+    : paymentMethod === "CREDIT_CARD"
+      ? "Credit Card"
+      : paymentMethod === "MOBILE_PAYMENT"
+        ? "Mobile Payment"
+        : "Bank Transfer";
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -419,6 +470,89 @@ export default function OrderDetailsModal({
               </div>
             )}
 
+            {/* ── Order progress ── */}
+            <div className={`border rounded-2xl p-4 ${t.innerCard}`}>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <p className={`text-sm font-semibold ${t.textPrimary}`}>Order progress</p>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] rounded-lg ${t.badge(order.status, STATUS_META)}`}
+                >
+                  {statusMeta.label}
+                </Badge>
+              </div>
+              {order.status === "CANCELLED" ? (
+                <div className="flex items-center gap-2 text-sm text-red-400">
+                  <AlertCircle className="w-4 h-4" />
+                  This order was cancelled.
+                </div>
+              ) : (
+                <div className="flex items-start overflow-x-auto pb-1">
+                  {ORDER_PROGRESS_STAGES.map((stage, index) => {
+                    const StageIcon = stage.icon;
+                    const complete = currentProgressIndex >= index;
+                    const current = currentProgressIndex === index;
+                    return (
+                      <div key={stage.status} className="flex items-start min-w-[92px] flex-1">
+                        <div className="flex flex-col items-center min-w-[72px]">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
+                            complete
+                              ? (current ? "bg-amber-500 border-amber-400 text-white ring-2 ring-amber-500/25" : "bg-amber-500/20 border-amber-500 text-amber-400")
+                              : (t.dk ? "bg-gray-800 border-gray-700 text-gray-500" : "bg-gray-50 border-gray-200 text-gray-400")
+                          }`}>
+                            <StageIcon className="w-3.5 h-3.5" />
+                          </div>
+                          <span className={`text-[10px] text-center leading-tight mt-1.5 ${current ? "font-bold text-amber-500" : t.textMuted}`}>
+                            {stage.label}
+                          </span>
+                        </div>
+                        {index < ORDER_PROGRESS_STAGES.length - 1 && (
+                          <div className={`h-0.5 flex-1 mt-4 min-w-[14px] ${currentProgressIndex > index ? "bg-amber-500" : (t.dk ? "bg-gray-700" : "bg-gray-200")}`} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Delivery & payment information ── */}
+            <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
+              <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
+                <Truck className="w-4 h-4 text-amber-500" />
+                Delivery & payment
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className={`rounded-xl border p-3 ${t.cardBg}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Delivery</p>
+                  <p className={`text-sm font-semibold mt-1 ${t.textPrimary}`}>{deliveryLabel}</p>
+                  {deliveryMethod === "SELF_PICKUP" ? (
+                    <p className={`text-xs mt-1 ${t.textMuted}`}>Order collected directly from the supplier.</p>
+                  ) : (
+                    <>
+                      {deliveryAddress && <p className={`text-xs mt-1 ${t.textMuted}`}>{deliveryAddress.address}</p>}
+                      <p className={`text-xs mt-1 ${t.textMuted}`}>Status: {statusMeta.label}</p>
+                    </>
+                  )}
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>Delivery fee: {fmt(deliveryFee)}</p>
+                  {order.delivery?.name && <p className={`text-xs mt-1 ${t.textMuted}`}>Driver: {order.delivery.name}</p>}
+                </div>
+                <div className={`rounded-xl border p-3 ${t.cardBg}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Payment</p>
+                  <p className={`text-sm font-semibold mt-1 ${t.textPrimary}`}>{paymentLabel}</p>
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>Status: {paymentStatus}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className={`rounded-lg px-2.5 py-1 ${t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
+                  Priority: {priorityMeta.label}
+                </span>
+                <span className={`rounded-lg px-2.5 py-1 ${t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
+                  Planning: {scheduledAt ? "Scheduled" : "Immediate"}
+                </span>
+              </div>
+            </div>
+
             {/* ── SubOrders by supplier ── */}
             {hasSubOrders ? (
               <div className="space-y-3">
@@ -443,25 +577,45 @@ export default function OrderDetailsModal({
                       {/* Item rows */}
                       <div className={`divide-y ${t.rowDivide}`}>
                         {(sub.items ?? []).map((item: any, idx: number) => {
-                          const variant = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
+                          const snapshot = item.snapshot as any;
                           const isPackItem = !!item.packId;
+                          const productSnapshot = snapshot?.kind === "PRODUCT" ? snapshot : null;
+                          const packSnapshot = snapshot?.kind === "PACK" ? snapshot : null;
+                          const variant = [
+                            productSnapshot?.flavorName ?? item.flavorName,
+                            productSnapshot?.sizeName ?? item.sizeName,
+                          ].filter(Boolean).join(" · ");
+                          const itemName = isPackItem
+                            ? (packSnapshot?.packName ?? item.packName ?? "Pack")
+                            : (productSnapshot?.productName ?? item.product?.name ?? "Product");
+                          const itemImage = isPackItem
+                            ? packSnapshot?.packImageUrl
+                            : (productSnapshot?.productImageUrl ?? item.product?.imageUrl);
                           return (
                             <div key={idx} className="px-4 py-3">
                               <div className="flex items-start gap-2.5">
-                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                                  isPackItem
-                                    ? "bg-amber-500/15"
-                                    : (t.dk ? "bg-gray-700" : "bg-gray-100")
+                                <div className={`w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 mt-0.5 ${
+                                  isPackItem ? "bg-amber-500/15" : (t.dk ? "bg-gray-700" : "bg-gray-100")
                                 }`}>
-                                  {isPackItem
-                                    ? <Layers className="w-3 h-3 text-amber-500" />
-                                    : <Box className={`w-3 h-3 ${t.textMuted}`} />
-                                  }
+                                  {itemImage
+                                    ? <img src={itemImage} alt="" className="w-full h-full object-cover" />
+                                    : isPackItem
+                                      ? <Layers className="w-4 h-4 text-amber-500" />
+                                      : <Box className={`w-4 h-4 ${t.textMuted}`} />}
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <p className={`font-medium text-sm ${t.textPrimary}`}>
-                                    {isPackItem ? item.packName : item.product?.name}
+                                    {itemName}
                                   </p>
+                                  {!isPackItem && (
+                                    <p className={`text-[10px] mt-0.5 ${t.textMuted}`}>
+                                      {[
+                                        productSnapshot?.brandName,
+                                        productSnapshot?.categoryName,
+                                        productSnapshot?.subCategoryName,
+                                      ].filter(Boolean).join(" · ")}
+                                    </p>
+                                  )}
                                   {variant && !isPackItem && (
                                     <p className={`text-xs mt-0.5 ${t.textMuted}`}>{variant}</p>
                                   )}
@@ -469,6 +623,7 @@ export default function OrderDetailsModal({
                                     <PackCompositionView
                                       packId={item.packId}
                                       quantity={item.quantity}
+                                      snapshot={packSnapshot}
                                       t={t}
                                     />
                                   )}
@@ -512,17 +667,39 @@ export default function OrderDetailsModal({
               /* Fallback: flat items when no subOrders */
               <div className={`border rounded-2xl overflow-hidden ${t.cardBg}`}>
                 <div className={`divide-y ${t.rowDivide}`}>
-                  {(order.items ?? []).map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between px-4 py-3 gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold w-6 ${t.textMuted}`}>{item.quantity}×</span>
-                        <span className={`font-medium text-sm ${t.textPrimary}`}>{item.product?.name}</span>
+                  {(order.items ?? []).map((item: any, idx: number) => {
+                    const snapshot = item.snapshot as any;
+                    const isPackItem = !!item.packId;
+                    const itemName = isPackItem
+                      ? (snapshot?.packName ?? item.packName ?? "Pack")
+                      : (snapshot?.productName ?? item.product?.name ?? "Product");
+                    const image = isPackItem
+                      ? snapshot?.packImageUrl
+                      : (snapshot?.productImageUrl ?? item.product?.imageUrl);
+                    return (
+                      <div key={idx} className="flex items-center justify-between px-4 py-3 gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shrink-0 ${t.dk ? "bg-gray-700" : "bg-gray-100"}`}>
+                            {image
+                              ? <img src={image} alt="" className="w-full h-full object-cover" />
+                              : isPackItem ? <Layers className="w-4 h-4 text-amber-500" /> : <Box className={`w-4 h-4 ${t.textMuted}`} />}
+                          </div>
+                          <div className="min-w-0">
+                            <span className={`text-xs font-bold ${t.textMuted}`}>{item.quantity}× </span>
+                            <span className={`font-medium text-sm ${t.textPrimary}`}>{itemName}</span>
+                            {!isPackItem && (
+                              <p className={`text-[10px] truncate ${t.textMuted}`}>
+                                {[snapshot?.brandName, snapshot?.categoryName, snapshot?.subCategoryName, snapshot?.flavorName, snapshot?.sizeName].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`text-sm shrink-0 ${t.textMuted}`}>
+                          {fmt((item.unitPrice ?? 0) * item.quantity)}
+                        </span>
                       </div>
-                      <span className={`text-sm ${t.textMuted}`}>
-                        {fmt((item.unitPrice ?? 0) * item.quantity)}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

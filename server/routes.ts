@@ -1062,6 +1062,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         scheduledAt: z.string().datetime().optional(),
       }).parse(req.body);
 
+      if (paymentMethod !== "CASH_ON_DELIVERY") {
+        return res.status(400).json({ message: "Only cash on delivery is currently available." });
+      }
+      if (deliveryMethod === "DELIVERY_SERVICE" && !deliveryAddress) {
+        return res.status(400).json({ message: "A delivery address is required for delivery service." });
+      }
+
       const validatedItems = await storage.resolveOrderItems(items);
       const validatedPackItems = packItems?.length ? await storage.resolvePackOrderItems(packItems) : [];
       if (!validatedItems.length && !validatedPackItems.length) {

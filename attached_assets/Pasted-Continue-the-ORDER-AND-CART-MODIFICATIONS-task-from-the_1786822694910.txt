@@ -1,0 +1,102 @@
+Continue the **ORDER AND CART MODIFICATIONS** task from the latest commit **"ORDER AND CART MODIFICATIONS TWO"**.
+
+The previous work was split across these two commits:
+
+* **ORDER AND CART MODIFICATIONS**
+* **ORDER AND CART MODIFICATIONS TWO**
+
+The original task prompt is already available in the commit as:
+
+**`Pasted-We-need-to-make-a-targeted-improvement-to-the-Coffee-Ow_1786820235114.txt`**
+
+Please:
+
+1. Read the original prompt from the commit.
+2. Inspect the changes from **both commits**.
+3. Determine exactly what has already been completed and what is still missing.
+4. **Execute and finish all remaining parts of the original task.**
+5. Do not redo correctly implemented work.
+6. Preserve the existing design, business logic, and unrelated functionality.
+7. Verify the complete Cart → Checkout → Order → My Account → Order Details flow.
+8. Verify synchronization, historical order data, product/variant details, Pack details, delivery method, payment method, order progress, and existing order actions.
+9. Fix only issues related to this task.
+10. Do not stop at analysis or tell me what should be done — **actually implement the remaining work and finish the task.**
+
+The previous agent already performed substantial implementation and verification, so carefully build on the current state rather than starting over.
+
+
+### ADDITIONAL REQUIREMENT — ORDER PROGRESS PER SUB-ORDER
+
+There is one important correction to the previous Order/Cart task.
+
+A single Coffee Owner order can contain products/Packs from **multiple suppliers**, therefore it can contain multiple **SubOrders**, and each SubOrder can have its own status.
+
+For example:
+
+* **Ooredoo** → En attente
+* **Café Bondin** → En préparation
+
+Currently the Order Details view displays only one global **Order Progress**, which is incorrect for multi-supplier orders.
+
+### Required behavior
+
+Inside **My Account → Orders → Order Details**, the **Order Progress must be displayed separately for EACH SubOrder / Supplier**.
+
+For every supplier section, show:
+
+**Supplier name**
+
+**Current status**
+
+**Order Progress**
+
+**Order Placed → Confirmed → Preparing → Ready for Delivery → Out for Delivery → Delivered**
+
+The progress indicator must reflect the **actual status of that specific SubOrder**.
+
+For example:
+
+**Ooredoo**
+
+* Status: En attente
+* Order Progress:
+
+  * Order Placed ← current stage
+  * Confirmed
+  * Preparing
+  * Ready for Delivery
+  * Out for Delivery
+  * Delivered
+
+**Café Bondin**
+
+* Status: En préparation
+* Order Progress:
+
+  * Order Placed
+  * Confirmed
+  * Preparing ← current stage
+  * Ready for Delivery
+  * Out for Delivery
+  * Delivered
+
+Do NOT show one global progress indicator for the entire order when multiple suppliers/sub-orders have different statuses.
+
+The Coffee Owner must be able to clearly understand the progress of **each supplier's part of the order independently**.
+
+This must remain synchronized with the actual SubOrder status updates in realtime.
+
+Do not change the existing order status logic. Simply make the existing progress display correctly represent each SubOrder.
+
+Keep the existing design and order-detail structure. Only adjust the progress placement/behavior necessary for this requirement.
+
+Also make sure this works for:
+
+* One supplier → one SubOrder
+* Multiple suppliers → multiple SubOrders
+* Different statuses between suppliers
+* Status changes after the order was created
+* Realtime status updates
+* Existing Cancel / Reorder / Close actions
+
+This requirement is an addition to the original **ORDER AND CART MODIFICATIONS** task. Implement it together with the remaining work from that task.

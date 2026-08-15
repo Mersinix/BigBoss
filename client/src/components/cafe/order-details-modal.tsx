@@ -470,51 +470,56 @@ export default function OrderDetailsModal({
               </div>
             )}
 
-            {/* ── Order progress ── */}
-            <div className={`border rounded-2xl p-4 ${t.innerCard}`}>
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <p className={`text-sm font-semibold ${t.textPrimary}`}>Order progress</p>
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] rounded-lg ${t.badge(order.status, STATUS_META)}`}
-                >
-                  {statusMeta.label}
-                </Badge>
-              </div>
-              {order.status === "CANCELLED" ? (
-                <div className="flex items-center gap-2 text-sm text-red-400">
-                  <AlertCircle className="w-4 h-4" />
-                  This order was cancelled.
+            {/* ── Order progress ──
+                Sub-orders have independent statuses, so their progress is
+                rendered inside each supplier section below. Keep this
+                order-level track only for legacy orders without sub-orders. */}
+            {!hasSubOrders && (
+              <div className={`border rounded-2xl p-4 ${t.innerCard}`}>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <p className={`text-sm font-semibold ${t.textPrimary}`}>Order progress</p>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] rounded-lg ${t.badge(order.status, STATUS_META)}`}
+                  >
+                    {statusMeta.label}
+                  </Badge>
                 </div>
-              ) : (
-                <div className="flex items-start overflow-x-auto pb-1">
-                  {ORDER_PROGRESS_STAGES.map((stage, index) => {
-                    const StageIcon = stage.icon;
-                    const complete = currentProgressIndex >= index;
-                    const current = currentProgressIndex === index;
-                    return (
-                      <div key={stage.status} className="flex items-start min-w-[92px] flex-1">
-                        <div className="flex flex-col items-center min-w-[72px]">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
-                            complete
-                              ? (current ? "bg-amber-500 border-amber-400 text-white ring-2 ring-amber-500/25" : "bg-amber-500/20 border-amber-500 text-amber-400")
-                              : (t.dk ? "bg-gray-800 border-gray-700 text-gray-500" : "bg-gray-50 border-gray-200 text-gray-400")
-                          }`}>
-                            <StageIcon className="w-3.5 h-3.5" />
+                {order.status === "CANCELLED" ? (
+                  <div className="flex items-center gap-2 text-sm text-red-400">
+                    <AlertCircle className="w-4 h-4" />
+                    This order was cancelled.
+                  </div>
+                ) : (
+                  <div className="flex items-start overflow-x-auto pb-1">
+                    {ORDER_PROGRESS_STAGES.map((stage, index) => {
+                      const StageIcon = stage.icon;
+                      const complete = currentProgressIndex >= index;
+                      const current = currentProgressIndex === index;
+                      return (
+                        <div key={stage.status} className="flex items-start min-w-[92px] flex-1">
+                          <div className="flex flex-col items-center min-w-[72px]">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
+                              complete
+                                ? (current ? "bg-amber-500 border-amber-400 text-white ring-2 ring-amber-500/25" : "bg-amber-500/20 border-amber-500 text-amber-400")
+                                : (t.dk ? "bg-gray-800 border-gray-700 text-gray-500" : "bg-gray-50 border-gray-200 text-gray-400")
+                            }`}>
+                              <StageIcon className="w-3.5 h-3.5" />
+                            </div>
+                            <span className={`text-[10px] text-center leading-tight mt-1.5 ${current ? "font-bold text-amber-500" : t.textMuted}`}>
+                              {stage.label}
+                            </span>
                           </div>
-                          <span className={`text-[10px] text-center leading-tight mt-1.5 ${current ? "font-bold text-amber-500" : t.textMuted}`}>
-                            {stage.label}
-                          </span>
+                          {index < ORDER_PROGRESS_STAGES.length - 1 && (
+                            <div className={`h-0.5 flex-1 mt-4 min-w-[14px] ${currentProgressIndex > index ? "bg-amber-500" : (t.dk ? "bg-gray-700" : "bg-gray-200")}`} />
+                          )}
                         </div>
-                        {index < ORDER_PROGRESS_STAGES.length - 1 && (
-                          <div className={`h-0.5 flex-1 mt-4 min-w-[14px] ${currentProgressIndex > index ? "bg-amber-500" : (t.dk ? "bg-gray-700" : "bg-gray-200")}`} />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Delivery & payment information ── */}
             <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
@@ -572,6 +577,52 @@ export default function OrderDetailsModal({
                         <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${subStatusBadge}`}>
                           {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
                         </span>
+                      </div>
+
+                      {/* Each supplier/sub-order progresses independently. */}
+                      <div className={`px-4 py-3 border-b ${t.dk ? "border-gray-700/50" : "border-gray-100"}`}>
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <p className={`text-xs font-semibold ${t.textPrimary}`}>Order progress</p>
+                          <span className={`text-[10px] font-medium ${t.textMuted}`}>
+                            {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
+                          </span>
+                        </div>
+                        {sub.status === "CANCELLED" ? (
+                          <div className="flex items-center gap-2 text-xs text-red-400">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            This supplier order was cancelled.
+                          </div>
+                        ) : (
+                          <div className="flex items-start overflow-x-auto pb-1">
+                            {ORDER_PROGRESS_STAGES.map((stage, index) => {
+                              const StageIcon = stage.icon;
+                              const subProgressIndex = ORDER_PROGRESS_STAGES.findIndex(
+                                (progressStage) => progressStage.status === sub.status,
+                              );
+                              const complete = subProgressIndex >= index;
+                              const current = subProgressIndex === index;
+                              return (
+                                <div key={stage.status} className="flex items-start min-w-[92px] flex-1">
+                                  <div className="flex flex-col items-center min-w-[72px]">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
+                                      complete
+                                        ? (current ? "bg-amber-500 border-amber-400 text-white ring-2 ring-amber-500/25" : "bg-amber-500/20 border-amber-500 text-amber-400")
+                                        : (t.dk ? "bg-gray-800 border-gray-700 text-gray-500" : "bg-gray-50 border-gray-200 text-gray-400")
+                                    }`}>
+                                      <StageIcon className="w-3.5 h-3.5" />
+                                    </div>
+                                    <span className={`text-[10px] text-center leading-tight mt-1.5 ${current ? "font-bold text-amber-500" : t.textMuted}`}>
+                                      {stage.label}
+                                    </span>
+                                  </div>
+                                  {index < ORDER_PROGRESS_STAGES.length - 1 && (
+                                    <div className={`h-0.5 flex-1 mt-4 min-w-[14px] ${subProgressIndex > index ? "bg-amber-500" : (t.dk ? "bg-gray-700" : "bg-gray-200")}`} />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       {/* Item rows */}

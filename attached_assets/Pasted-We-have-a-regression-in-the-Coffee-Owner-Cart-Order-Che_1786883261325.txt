@@ -1,0 +1,55 @@
+We have a regression in the **Coffee Owner → Cart → Order Checkout** flow.
+
+When the Coffee Owner reaches **Récapitulatif de commande** and clicks **Confirmer la commande**, the request fails:
+
+`POST /api/orders 400`
+`{"message":"Required"}`
+
+The checkout summary is correctly displaying the products, variants, Pack details, delivery method, payment method, priority, planning, totals, etc. The problem is specifically that the final order submission is being rejected by the API.
+
+### Task
+
+Trace the complete flow:
+
+**Cart → Récapitulatif de commande → Confirmer la commande → POST /api/orders → Order/SubOrders creation**
+
+Find exactly which required value is missing, incorrectly named, incorrectly mapped, or not synchronized between the checkout UI and the API.
+
+Then **fix the actual issue** so the order can be successfully created.
+
+Important:
+
+* Do NOT remove the backend validation.
+* Do NOT make required fields optional just to bypass the error.
+* Do NOT hardcode missing values.
+* Make the checkout payload and backend contract correctly synchronized.
+* Preserve all the order/cart modifications already implemented.
+* Preserve product and Pack snapshots.
+* Preserve selected flavors, sizes, taxonomy information, and Pack variant details.
+* Preserve delivery method.
+* Preserve payment method.
+* Preserve priority.
+* Preserve planning/scheduling.
+* Preserve supplier SubOrders.
+* Preserve per-SubOrder order progress.
+* Preserve realtime synchronization.
+* Preserve existing cancellation/reorder behavior.
+* Do not change the existing UI/design unless absolutely required for the fix.
+
+Also verify that the fix works with the exact type of checkout shown here:
+
+* Multiple products from different suppliers.
+* Multiple selected variants/flavors.
+* Multiple Packs.
+* Delivery Service.
+* Cash on Delivery.
+* Priority.
+* Immediate planning.
+
+After fixing it, perform an end-to-end verification of:
+
+**Add items → Cart → Checkout Summary → Confirm Order → POST /api/orders → Order created → Supplier SubOrders created → My Account → Order Details**
+
+Do not just analyze the problem or tell me what is wrong.
+
+**Execute the fix and verify that the order can actually be created successfully.**

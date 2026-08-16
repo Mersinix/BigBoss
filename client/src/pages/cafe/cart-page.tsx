@@ -45,6 +45,7 @@ export default function CartPage() {
   const isDark = useThemeStore((s) => s.isDark);
   const toggle = useThemeStore((s) => s.toggle);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isPreparingOrder, setIsPreparingOrder] = useState(false);
   const fmt = useFormatCurrency();
 
   // ── Theme tokens ─────────────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ export default function CartPage() {
   };
 
   // Called when user clicks "Confirmer" inside the modal
-  const handleConfirmOrder = (opts: ConfirmOrderOpts) => {
+  const handleConfirmOrder = async (opts: ConfirmOrderOpts) => {
     if (opts.deliveryMethod === "DELIVERY_SERVICE" && !activeDeliveryAddress) {
       toast({
         title: "Adresse de livraison requise",
@@ -116,6 +117,100 @@ export default function CartPage() {
       });
       return;
     }
+
+    if (createOrder.isPending || isPreparingOrder) return;
+
+    // Cart state is persisted locally. Entries created before the richer Pack
+    // snapshot fields were introduced can still be present, so hydrate only
+    // incomplete Pack rows from the authoritative marketplace detail endpoint
+    // before sending the strictly validated order payload.
+    setIsPreparingOrder(true);
+    let normalizedPackItems = opts.modifiedPackItems;
+    try {
+      normalizedPackItems = await Promise.all(opts.modifiedPackItems.map(async (pack) => {
+        const isComplete = pack.includedProducts.every((product) =>
+          Number.isInteger(product.productId) &&
+          product.productId > 0 &&
+          typeof product.productName === "string" &&
+          product.productImageUrl !== undefined &&
+          product.brandName !== undefined &&
+          product.categoryName !== undefined &&
+          product.subCategoryName !== undefined &&
+          product.flavorName !== undefined &&
+          product.sizeName !== undefined &&
+          Number.isInteger(product.quantity) &&
+          product.quantity > 0
+        );
+        if (isComplete || pack.includedProducts.length === 0) return pack;
+
+        const response = await fetch(`/api/marketplace/packs/${pack.packId}`, { credentials: "include" });
+        if (!response.ok) throw new Error(`Impossible de synchroniser le Pack « ${pack.packName} »`);
+        const detail = await response.json() as {
+          items?: Array<{
+            productId: number;
+            productName: string;
+            productImageUrl: string | null;
+            brandName?: string | null;
+            categoryName?: string | null;
+            subCategoryName?: string | null;
+            flavorName: string | null;
+            sizeName: string | null;
+            listingVariants?: Array<{
+              flavorName: string | null;
+              sizeName: string | null;
+            }>;
+          }>;
+        };
+        const detailItems = detail.items ?? [];
+        const hydrated = pack.includedProducts.map((product) => {
+          const source = detailItems
+            .filter((item) => item.productName === product.productName)
+            .find((item) => {
+              const variants = [
+                { flavorName: item.flavorName, sizeName: item.sizeName },
+                ...(item.listingVariants ?? []),
+              ];
+              return variants.some((variant) =>
+                (variant.flavorName ?? null) === (product.flavorName ?? null) &&
+                (variant.sizeName ?? null) === (product.sizeName ?? null)
+              );
+            }) ?? detailItems.find((item) => item.productName === product.productName);
+          if (!source) throw new Error(`Le produit « ${product.productName} » du Pack n'est plus disponible`);
+          const selectedVariant = [
+            {
+              flavorName: source.flavorName,
+              sizeName: source.sizeName,
+            },
+            ...(source.listingVariants ?? []),
+          ].find((variant) =>
+            (variant.flavorName ?? null) === (product.flavorName ?? null) &&
+            (variant.sizeName ?? null) === (product.sizeName ?? null)
+          );
+          return {
+            productId: source.productId,
+            productName: source.productName,
+            productImageUrl: source.productImageUrl ?? null,
+            brandName: source.brandName ?? null,
+            categoryName: source.categoryName ?? null,
+            subCategoryName: source.subCategoryName ?? null,
+            flavorName: selectedVariant?.flavorName ?? product.flavorName ?? source.flavorName ?? null,
+            sizeName: selectedVariant?.sizeName ?? product.sizeName ?? source.sizeName ?? null,
+            quantity: product.quantity,
+          };
+        });
+        return { ...pack, includedProducts: hydrated };
+      }));
+    } catch (error: any) {
+      setIsPreparingOrder(false);
+      toast({
+        title: "Synchronisation du panier impossible",
+        description: error?.message ?? "Actualisez le Pack puis réessayez.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsPreparingOrder(false);
+
     const request: CreateOrderRequest = {
       items: opts.modifiedItems.map((i) => ({
         listingId: i.listingId,
@@ -129,11 +224,11 @@ export default function CartPage() {
         quantity: i.quantity,
         unitPrice: i.unitPrice,
       })),
-      packItems: opts.modifiedPackItems.map((p) => ({
+       packItems: normalizedPackItems.map((p) => ({
         packId: p.packId,
         supplierId: p.supplierId,
         quantity: p.quantity,
-          includedProducts: p.includedProducts,
+         includedProducts: p.includedProducts,
       })),
       deliveryAddress: opts.deliveryMethod === "DELIVERY_SERVICE" ? activeDeliveryAddress! : undefined,
       deliveryMethod: opts.deliveryMethod,
@@ -637,7 +732,7 @@ export default function CartPage() {
         deliveryAddress={activeDeliveryAddress}
         courierInstructions={courierInstructions}
         promoEval={promoEval}
-        isSubmitting={createOrder.isPending}
+        isSubmitting={createOrder.isPending || isPreparingOrder}
         onConfirm={handleConfirmOrder}
       />
     </div>

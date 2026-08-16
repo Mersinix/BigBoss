@@ -1,0 +1,203 @@
+Continue the unfinished work from the commit:
+
+**`ORDER ERROR /api/orders`**
+
+The original task prompt is already inside that commit:
+
+**`Pasted-We-have-a-regression-in-the-Coffee-Owner-Cart-Order-Che_1786883261325.txt`**
+
+Please read the prompt and inspect the updated files in the commit before doing anything.
+
+The previous agent already traced the issue and identified the regression as a **checkout payload contract mismatch involving Pack `includedProducts` data from persisted/legacy cart entries**. The API validation must remain strict.
+
+The previous agent already started the fix in **`cart-page.tsx`**, including hydration of incomplete Pack data from the authoritative marketplace Pack data. The last unfinished step was tightening the matching so repeated products with different **sizes/flavors/variants** resolve to the exact selected variant instead of the first product with the same name.
+
+### Continue from exactly where the previous agent stopped.
+
+* Do not redo completed work.
+* Inspect the existing changes first.
+* Complete whatever is still unfinished.
+* Keep backend validation strict.
+* Do not make required API fields optional.
+* Do not hardcode values or bypass validation.
+* Preserve all existing Cart, Checkout, Product, Pack, Variant, Order and SubOrder behavior.
+* Preserve all previously implemented order snapshots, delivery/payment information, supplier SubOrders, per-SubOrder progress, realtime synchronization, cancellation and reorder functionality.
+* Do not change the design unless absolutely necessary.
+
+### Final verification
+
+Verify the complete flow:
+
+**Coffee Owner → Cart → Checkout Summary → Confirm Order → POST `/api/orders` → Order created successfully → Supplier SubOrders created → My Account → Order Details**
+
+Test specifically with:
+
+* multiple suppliers
+* multiple products
+* different flavors
+* different sizes
+* multiple Packs
+* Pack variants with selected flavors
+* repeated product names with different variants
+* Delivery Service
+* Cash on Delivery
+* priority
+* immediate planning
+
+The original error:
+
+`POST /api/orders 400 {"message":"Required"}`
+
+must be completely resolved.
+
+Do not only analyze or summarize. **Execute the remaining work, verify it, and finish the implementation.**
+
+
+### Additional required modification — Pack flavor distribution synchronization
+
+There is one more important synchronization requirement to add to the same task.
+
+The Pack detail page already has the correct **“Choose your flavor distribution”** functionality:
+
+> Distribute the quantities across available flavors for each product.
+
+For example, when adding **FANTA PACK MAGIC**, the Coffee Owner can distribute the Pack quantities as:
+
+* FANTA ×1 → Citron · Gajou
+* Boisson Coffee WaW ×1 → Ananas · Stika
+* FANTA 25cl ×2 → Citron · Gajou
+* FANTA 25cl ×1 → BLANC · Stika
+
+This selected flavor distribution must be treated as the **actual selected Pack configuration** and must remain synchronized throughout the entire flow.
+
+### 1. Coffee Owner → Cart
+
+When the Pack is added to the cart, the cart must display **exactly the selected flavor distribution from the Pack detail page**.
+
+Do not recalculate it, reset it, show all available flavors, or replace it with the first available flavor.
+
+For example:
+
+**FANTA PACK MAGIC**
+
+* 1× FANTA
+  Fanta · مشروبات · Gazouz · **Citron · Gajou**
+* 1× Boisson Coffee WaW
+  Chwips · مشروبات · Gazouz · **Ananas · Stika**
+* 2× FANTA 25cl
+  Fanta · مشروبات · Gazouz · **Citron · Gajou**
+* 1× FANTA 25cl
+  Fanta · مشروبات · Gazouz · **BLANC · Stika**
+
+The quantities and selected flavor/size combinations must exactly match the distribution chosen by the Coffee Owner.
+
+This information must also survive:
+
+* cart persistence
+* page refresh
+* quantity changes
+* checkout
+* order creation
+
+### 2. Cart → Checkout / Récapitulatif de commande
+
+When the Coffee Owner clicks **Passer commande**, the checkout summary must display the exact same Pack composition and flavor distribution.
+
+The Pack should not lose or regenerate its selected flavors between Cart and Checkout.
+
+The Pack summary must continue showing each included product with:
+
+* quantity
+* product name
+* brand
+* category
+* subcategory
+* selected flavor(s)
+* selected size
+* the exact selected flavor distribution
+
+### 3. Checkout → Order creation
+
+When the Coffee Owner confirms the order, the selected Pack flavor distribution must be persisted as part of the order snapshot.
+
+The order must contain the **historical selected Pack configuration**, not only the original Pack definition.
+
+This is important because the Pack or its products may later change.
+
+Do not rely on the current/live Pack data to reconstruct the historical order.
+
+### 4. Coffee Owner → My Account → Orders → Order Details
+
+The Order Details modal must display the **exact same Pack flavor distribution that was selected when the order was placed**.
+
+For example:
+
+**FANTA PACK MAGIC**
+
+Composition du pack ×1
+
+**FANTA**
+Fanta · مشروبات · Gazouz
+Saveur: **Citron** · Taille: **Gajou**
+×1
+
+**Boisson Coffee WaW**
+Chwips · مشروبات · Gazouz
+Saveur: **Ananas** · Taille: **Stika**
+×1
+
+**FANTA 25cl**
+Fanta · مشروبات · Gazouz
+Saveur: **Citron** · Taille: **Gajou**
+×2
+
+**FANTA 25cl**
+Fanta · مشروبات · Gazouz
+Saveur: **BLANC** · Taille: **Stika**
+×1
+
+The Order Details modal must not show:
+
+* the first available flavor only
+* all available flavors
+* the current Pack flavor configuration
+* duplicated/stale variants
+* a different distribution from what the customer selected
+
+### 5. Important synchronization rule
+
+There must be **one consistent selected Pack configuration** throughout:
+
+**Pack Detail → Cart → Checkout → Order Snapshot → My Account Order Details**
+
+The selected flavor distribution must never be lost or transformed between these stages.
+
+This must work for:
+
+* multiple included products
+* multiple quantities of the same product
+* multiple flavors
+* multiple sizes
+* the same product appearing more than once in a Pack with different flavor/size combinations
+* different suppliers
+* persisted carts
+* page refreshes
+* historical orders
+
+### 6. Preserve the existing implementation
+
+The existing **Choose your flavor distribution** functionality is already working correctly on the Pack detail page.
+
+Do NOT redesign or remove it.
+
+Do NOT change the existing Pack UI or other unrelated functionality.
+
+Only make the necessary synchronization changes so the selected distribution becomes the authoritative configuration used by Cart, Checkout and Order Details.
+
+Also preserve all previous requirements from this task, especially the strict `/api/orders` validation and the Pack hydration fix already started in `cart-page.tsx`.
+
+After implementing, verify the complete flow with the FANTA PACK MAGIC example:
+
+**Pack Detail → choose distribution → Add to Cart → Cart → Checkout → Confirm Order → My Account → Order Details**
+
+Confirm that the exact same quantities, flavors, sizes, product metadata and Pack composition are displayed at every stage.

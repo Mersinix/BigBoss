@@ -128,7 +128,8 @@ export default function CartPage() {
     let normalizedPackItems = opts.modifiedPackItems;
     try {
       normalizedPackItems = await Promise.all(opts.modifiedPackItems.map(async (pack) => {
-        const isComplete = pack.includedProducts.every((product) =>
+        const includedProducts = Array.isArray(pack.includedProducts) ? pack.includedProducts : [];
+        const isComplete = includedProducts.every((product) =>
           Number.isInteger(product.productId) &&
           product.productId > 0 &&
           typeof product.productName === "string" &&
@@ -141,7 +142,9 @@ export default function CartPage() {
           Number.isInteger(product.quantity) &&
           product.quantity > 0
         );
-        if (isComplete || pack.includedProducts.length === 0) return pack;
+        if (isComplete || includedProducts.length === 0) {
+          return { ...pack, includedProducts };
+        }
 
         const response = await fetch(`/api/marketplace/packs/${pack.packId}`, { credentials: "include" });
         if (!response.ok) throw new Error(`Impossible de synchroniser le Pack « ${pack.packName} »`);
@@ -162,29 +165,37 @@ export default function CartPage() {
           }>;
         };
         const detailItems = detail.items ?? [];
-        const hydrated = pack.includedProducts.map((product) => {
-          const source = detailItems
-            .filter((item) => item.productName === product.productName)
-            .find((item) => {
-              const variants = [
-                { flavorName: item.flavorName, sizeName: item.sizeName },
-                ...(item.listingVariants ?? []),
-              ];
-              return variants.some((variant) =>
-                (variant.flavorName ?? null) === (product.flavorName ?? null) &&
-                (variant.sizeName ?? null) === (product.sizeName ?? null)
-              );
-            }) ?? detailItems.find((item) => item.productName === product.productName);
-          if (!source) throw new Error(`Le produit « ${product.productName} » du Pack n'est plus disponible`);
-          const selectedVariant = [
-            {
-              flavorName: source.flavorName,
-              sizeName: source.sizeName,
-            },
-            ...(source.listingVariants ?? []),
-          ].find((variant) =>
-            (variant.flavorName ?? null) === (product.flavorName ?? null) &&
-            (variant.sizeName ?? null) === (product.sizeName ?? null)
+        const hydrated = includedProducts.map((product) => {
+          // A pack can contain the same product more than once. Match the
+          // product identity first, then the exact selected flavor/size pair;
+          // matching by name alone can replace a persisted variant with the
+          // first row returned by the live pack detail.
+          const sameProduct = detailItems.filter((item) =>
+            Number.isInteger(product.productId) && product.productId > 0
+              ? item.productId === product.productId
+              : item.productName === product.productName
+          );
+          const hasRecordedVariant = product.flavorName !== undefined || product.sizeName !== undefined;
+          const selectedFlavor = product.flavorName ?? null;
+          const selectedSize = product.sizeName ?? null;
+          const getVariants = (item: typeof detailItems[number]) => [
+            { flavorName: item.flavorName, sizeName: item.sizeName },
+            ...(item.listingVariants ?? []),
+          ];
+          const source = sameProduct.find((item) =>
+            getVariants(item).some((variant) =>
+              (variant.flavorName ?? null) === selectedFlavor &&
+              (variant.sizeName ?? null) === selectedSize
+            )
+          ) ?? (!hasRecordedVariant ? sameProduct[0] : undefined);
+          if (!source) {
+            throw new Error(
+              `La variante « ${product.productName }${product.flavorName ? ` · ${product.flavorName}` : ""}${product.sizeName ? ` · ${product.sizeName}` : ""} » du Pack n'est plus disponible`
+            );
+          }
+          const selectedVariant = getVariants(source).find((variant) =>
+            (variant.flavorName ?? null) === selectedFlavor &&
+            (variant.sizeName ?? null) === selectedSize
           );
           return {
             productId: source.productId,

@@ -894,12 +894,19 @@ export class DatabaseStorage implements IStorage {
           packName: pack.name,
           packImageUrl: pack.imageUrl ?? null,
           supplierName: detail?.supplierName ?? '',
-          includedProducts: (detail?.items ?? []).map((pi: any) => ({
-            productName: pi.productName ?? pi.product?.name ?? '',
-            flavorName: pi.flavorName ?? null,
-            sizeName: pi.sizeName ?? null,
-            quantity: pi.quantity ?? 1,
-          })),
+          includedProducts: (item.snapshot as any)?.kind === "PACK" && Array.isArray((item.snapshot as any).includedProducts)
+            ? (item.snapshot as any).includedProducts
+            : (detail?.items ?? []).map((pi: any) => ({
+                productId: pi.productId ?? 0,
+                productName: pi.productName ?? pi.product?.name ?? '',
+                productImageUrl: pi.productImageUrl ?? null,
+                brandName: pi.brandName ?? null,
+                categoryName: pi.categoryName ?? null,
+                subCategoryName: pi.subCategoryName ?? null,
+                flavorName: pi.flavorName ?? null,
+                sizeName: pi.sizeName ?? null,
+                quantity: pi.quantity ?? 1,
+              })),
           unitPrice: pack.price ?? 0,
         } as any);
         continue;
@@ -922,6 +929,20 @@ export class DatabaseStorage implements IStorage {
 
       const [product] = await db.select().from(products).where(eq(products.id, item.productId));
       if (!product?.isAdminProduct || product.status !== 'ACTIVE') { unavailable.push({ name: product?.name ?? '', reason: 'Product no longer available' }); continue; }
+      const [category] = product.categoryId ? await db.select().from(categories).where(eq(categories.id, product.categoryId)) : [];
+      const [subCategory] = product.subCategoryId ? await db.select().from(subCategories).where(eq(subCategories.id, product.subCategoryId)) : [];
+      const [brand] = product.brandId ? await db.select().from(brands).where(eq(brands.id, product.brandId)) : [];
+      const snapshot = item.snapshot as any;
+      const baseItem = {
+        productName: product.name,
+        productImageUrl: product.imageUrl ?? null,
+        productCategory: product.category ?? '',
+        brandName: snapshot?.brandName ?? brand?.name ?? null,
+        categoryName: snapshot?.categoryName ?? category?.name ?? product.category ?? null,
+        subCategoryName: snapshot?.subCategoryName ?? subCategory?.name ?? null,
+        flavorName: snapshot?.flavorName ?? (item as any).flavorName ?? null,
+        sizeName: snapshot?.sizeName ?? (item as any).sizeName ?? null,
+      };
 
       const [supplier] = await db.select().from(users).where(eq(users.id, listing.supplierId));
       const variants = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
@@ -933,18 +954,18 @@ export class DatabaseStorage implements IStorage {
           if (variant.quantity === 0) { unavailable.push({ name: product.name, reason: 'Out of stock' }); continue; }
           unavailable.push({ name: product.name, reason: `Only ${variant.quantity} available` });
           // Add with reduced quantity
-          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, flavorName: (item as any).flavorName, sizeName: (item as any).sizeName, quantity: variant.quantity, unitPrice: variant.price, productName: product.name, productImageUrl: product.imageUrl ?? null, productCategory: product.category ?? '' } as any);
+          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, ...baseItem, quantity: variant.quantity, unitPrice: variant.price } as any);
           continue;
         }
-        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, flavorName: (item as any).flavorName, sizeName: (item as any).sizeName, quantity: item.quantity, unitPrice: variant.price, productName: product.name, productImageUrl: product.imageUrl ?? null, productCategory: product.category ?? '' } as any);
+        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: item.flavorId, sizeId: item.sizeId, ...baseItem, quantity: item.quantity, unitPrice: variant.price } as any);
       } else {
         if (listing.stock < item.quantity) {
           if (listing.stock === 0) { unavailable.push({ name: product.name, reason: 'Out of stock' }); continue; }
           unavailable.push({ name: product.name, reason: `Only ${listing.stock} available` });
-          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, quantity: listing.stock, unitPrice: listing.price, productName: product.name, productImageUrl: product.imageUrl ?? null, productCategory: product.category ?? '' } as any);
+          items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, ...baseItem, quantity: listing.stock, unitPrice: listing.price } as any);
           continue;
         }
-        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, quantity: item.quantity, unitPrice: listing.price, productName: product.name, productImageUrl: product.imageUrl ?? null, productCategory: product.category ?? '' } as any);
+        items.push({ listingId, productId: item.productId, supplierId: listing.supplierId, supplierName: supplier?.name ?? '', flavorId: null, sizeId: null, ...baseItem, quantity: item.quantity, unitPrice: listing.price } as any);
       }
     }
 

@@ -13,7 +13,9 @@ import {
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
   orderReturns,
+  deliveries,
   type OrderReturn, type InsertOrderReturn,
+  type Delivery, type DeliveryStatus, type DeliveryMode, type DeliveryWithDetails, type DeliveryOrderItemDetail, type GeoLocation,
   type LandingConfig, type Prospect, type InsertProspect, type ProspectStats,
   type ConversationSummary, type ConversationDetail, type ConversationMessageRow, type EligibleContact,
   type InsertUser, type User,
@@ -90,6 +92,21 @@ export interface IStorage {
   getReturns(filters?: { cafeId?: number; supplierId?: number }): Promise<OrderReturn[]>;
   createReturn(data: InsertOrderReturn): Promise<OrderReturn>;
   updateReturnStatus(id: number, status: string, supplierNotes?: string): Promise<OrderReturn>;
+
+  // Deliveries — one per sub_order. See shared/schema.ts "Deliveries" section.
+  createDeliveryForSubOrder(subOrderId: number): Promise<Delivery | null>;
+  dispatchDelivery(deliveryId: number, supplierId: number, mode: DeliveryMode): Promise<Delivery>;
+  cancelActiveDeliveryForSubOrder(subOrderId: number): Promise<Delivery | null>;
+  getDeliveries(userId: number, role: string): Promise<DeliveryWithDetails[]>;
+  getDelivery(id: number): Promise<DeliveryWithDetails | undefined>;
+  canUserAccessDelivery(userId: number, role: string, deliveryId: number): Promise<boolean>;
+  acceptDelivery(deliveryId: number, deliveryCompanyId: number): Promise<Delivery>;
+  assignDriver(deliveryId: number, actingUser: { id: number; role: string }, driverId: number): Promise<Delivery>;
+  updateDeliveryStatus(deliveryId: number, actingUser: { id: number; role: string }, newStatus: DeliveryStatus): Promise<Delivery>;
+  getDriversForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number): Promise<User[]>;
+  createDriverForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number, data: { name: string; email: string; password: string; phone?: string | null }): Promise<User>;
+  getApprovedDeliveryCompanyIds(): Promise<number[]>;
+  getActiveDeliveryForSubOrder(subOrderId: number): Promise<Delivery | undefined>;
 
   // Marketplace (cafe browsing)
   getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string; supplierId?: number }): Promise<MarketplaceProduct[]>;
@@ -468,15 +485,25 @@ export class DatabaseStorage implements IStorage {
 
   // ── Orders ──────────────────────────────────────────────────────────────────
 
-  async getOrders(filters?: { cafeId?: number; supplierId?: number; deliveryId?: number }): Promise<OrderWithDetails[]> {
+  async getOrders(filters?: { cafeId?: number; supplierId?: number; driverId?: number; deliveryCompanyId?: number }): Promise<OrderWithDetails[]> {
     const allOrders = await db.select().from(orders);
     const allItems = await db.select().from(orderItems);
     const allProducts = await db.select().from(products);
     const allUsers = await db.select().from(users);
     const allSubOrders = await db.select().from(subOrders);
+    const allDeliveries = await db.select().from(deliveries);
 
     const userMap = new Map(allUsers.map((u) => [u.id, u]));
     const productMap = new Map(allProducts.map((p) => [p.id, p]));
+    const deliveriesBySubOrder = new Map<number, typeof allDeliveries>();
+    for (const d of allDeliveries) {
+      if (!deliveriesBySubOrder.has(d.subOrderId)) deliveriesBySubOrder.set(d.subOrderId, []);
+      deliveriesBySubOrder.get(d.subOrderId)!.push(d);
+    }
+    // The single active (non-CANCELLED) delivery for a sub-order, if any — mirrors the DB's
+    // partial unique index (deliveries_sub_order_active_unique in shared/schema.ts).
+    const activeDeliveryFor = (subOrderId: number) =>
+      (deliveriesBySubOrder.get(subOrderId) ?? []).find((d) => d.status !== 'CANCELLED') ?? null;
 
     let filtered = allOrders;
     if (filters?.cafeId) filtered = filtered.filter((o) => o.cafeId === filters.cafeId);
@@ -484,18 +511,43 @@ export class DatabaseStorage implements IStorage {
       const supplierSubOrderIds = allSubOrders.filter((so) => so.supplierId === filters.supplierId).map((so) => so.orderId);
       filtered = filtered.filter((o) => supplierSubOrderIds.includes(o.id) || o.supplierId === filters.supplierId);
     }
-    if (filters?.deliveryId) filtered = filtered.filter((o) => o.deliveryId === filters.deliveryId);
+    // Delivery-role scoping is driven by real deliveries rows (never by order.status alone —
+    // see canUserAccessOrder below for why the previous status-based check was unsafe).
+    if (filters?.driverId) {
+      const driverOrderIds = new Set(allDeliveries.filter((d) => d.driverId === filters.driverId).map((d) => d.orderId));
+      filtered = filtered.filter((o) => driverOrderIds.has(o.id));
+    }
+    if (filters?.deliveryCompanyId) {
+      const companyOrderIds = new Set(allDeliveries.filter((d) => d.deliveryCompanyId === filters.deliveryCompanyId).map((d) => d.orderId));
+      filtered = filtered.filter((o) => companyOrderIds.has(o.id));
+    }
 
     return filtered.map((order) => {
       const cafe = userMap.get(order.cafeId);
       const supplier = order.supplierId ? userMap.get(order.supplierId) : null;
-      const delivery = order.deliveryId ? userMap.get(order.deliveryId) : null;
+      // Legacy/unused column — see shared/schema.ts orders.deliveryId comment. Never written
+      // by any code path; kept only so existing consumers of OrderWithDetails.delivery don't break.
+      const legacyDeliveryUser = order.deliveryId ? userMap.get(order.deliveryId) : null;
 
-      // Build all subOrders for this order, each with its own scoped items
-      let orderSubOrders = allSubOrders.filter((so) => so.orderId === order.id).map((so) => ({
-        ...so,
-        items: allItems.filter((i) => i.subOrderId === so.id).map((i) => ({ ...i, product: (i.productId != null ? productMap.get(i.productId) : undefined) ?? {} as Product })),
-      }));
+      // Build all subOrders for this order, each with its own scoped items + its own delivery
+      let orderSubOrders = allSubOrders.filter((so) => so.orderId === order.id).map((so) => {
+        const delivery = activeDeliveryFor(so.id);
+        const deliveryCompany = delivery?.deliveryCompanyId ? userMap.get(delivery.deliveryCompanyId) : null;
+        const driver = delivery?.driverId ? userMap.get(delivery.driverId) : null;
+        return {
+          ...so,
+          items: allItems.filter((i) => i.subOrderId === so.id).map((i) => ({ ...i, product: (i.productId != null ? productMap.get(i.productId) : undefined) ?? {} as Product })),
+          delivery: delivery ? {
+            id: delivery.id,
+            status: delivery.status,
+            deliveryCompany: deliveryCompany ? { id: deliveryCompany.id, name: deliveryCompany.name } : null,
+            driver: driver ? { id: driver.id, name: driver.name, phone: driver.phone } : null,
+            pickedUpAt: delivery.pickedUpAt,
+            inTransitAt: delivery.inTransitAt,
+            deliveredAt: delivery.deliveredAt,
+          } : null,
+        };
+      });
 
       // When filtering by supplierId, restrict subOrders to only that supplier's own.
       // This prevents one supplier from seeing another supplier's items or sub-totals.
@@ -504,7 +556,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Top-level items: scoped to this supplier's subOrders when supplierId filter is active;
-      // full order items for cafe owners, admins, and delivery users.
+      // full order items for cafe owners and admins.
       const supplierSubOrderIds = filters?.supplierId
         ? new Set(orderSubOrders.map((so) => so.id))
         : null;
@@ -516,7 +568,7 @@ export class DatabaseStorage implements IStorage {
         ...order,
         cafe: { id: order.cafeId, name: cafe?.name ?? "Unknown" },
         supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
-        delivery: delivery ? { id: delivery.id, name: delivery.name } : undefined,
+        delivery: legacyDeliveryUser ? { id: legacyDeliveryUser.id, name: legacyDeliveryUser.name } : undefined,
         items,
         subOrders: orderSubOrders,
       };
@@ -536,8 +588,18 @@ export class DatabaseStorage implements IStorage {
     if (userRole === 'SUPPLIER') {
       return order.supplierId === userId || (order.subOrders ?? []).some((so) => so.supplierId === userId);
     }
+    // Delivery Company / Driver: access is based on an actual delivery relationship to this
+    // order (a delivery row they own/are assigned to), never on order.status alone. The
+    // previous implementation granted access to ANY order in READY/IN_DELIVERY/DELIVERED —
+    // a cross-tenant data leak. "Available" (unclaimed) deliveries are visible through
+    // GET /api/deliveries instead, which exposes only delivery-scoped fields, not the full
+    // order (cafe identity, all items across every supplier).
     if (userRole === 'DRIVER' || userRole === 'DELIVERY_COMPANY') {
-      return order.deliveryId === userId || ['READY', 'IN_DELIVERY', 'DELIVERED'].includes(order.status);
+      const [row] = await db.select({ id: deliveries.id }).from(deliveries).where(and(
+        eq(deliveries.orderId, orderId),
+        userRole === 'DRIVER' ? eq(deliveries.driverId, userId) : eq(deliveries.deliveryCompanyId, userId),
+      )).limit(1);
+      return !!row;
     }
     return false;
   }
@@ -649,59 +711,168 @@ export class DatabaseStorage implements IStorage {
     // Read existing status so we can detect confirmation transitions
     const [existing] = await db.select().from(subOrders).where(eq(subOrders.id, subOrderId));
     if (!existing) throw new Error('SubOrder not found');
-    const [updated] = await db.update(subOrders).set({ status }).where(eq(subOrders.id, subOrderId)).returning();
-    if (!updated) throw new Error('SubOrder not found');
 
-    // Deduct pack component variant/flavor stock the first time a suborder is confirmed.
-    // Regular (non-pack) item stock is already deducted at order creation; pack components
-    // are deducted here so the correct Variant+Flavor quantities decrease on approval.
     const CONFIRMED_STATUSES = new Set(['CONFIRMED', 'APPROVED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
     const wasAlreadyConfirmed = CONFIRMED_STATUSES.has(existing.status ?? '');
     const isNowConfirmed = CONFIRMED_STATUSES.has(status);
+
+    // ── Atomic: sub-order status write + Delivery creation/cancellation + order
+    // aggregation. Wrapped in one transaction so "sub-order is READY but no Delivery
+    // exists" (or "order aggregate didn't advance") can never be observed by a concurrent
+    // reader — see shared/schema.ts "Deliveries" section and the sync spec's transaction
+    // requirement.
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx.update(subOrders).set({ status }).where(eq(subOrders.id, subOrderId)).returning();
+      if (!row) throw new Error('SubOrder not found');
+
+      // Shop → Delivery hand-off: a sub-order reaching READY creates exactly one Delivery.
+      // createDeliveryForSubOrder is idempotent (DB-level ON CONFLICT DO NOTHING against the
+      // active-delivery partial unique index), so firing this twice — e.g. a duplicate
+      // client retry — can never create a second Delivery for the same sub-order.
+      if (existing.status !== 'READY' && status === 'READY') {
+        await this.createDeliveryForSubOrder(subOrderId, tx);
+      }
+      // A supplier rejecting/cancelling a sub-order that already has an active (unclaimed or
+      // in-progress-but-not-yet-picked-up) Delivery must not leave that Delivery dangling
+      // against a cancelled order (orphan-delivery prevention).
+      if (status === 'CANCELLED') {
+        await this.cancelActiveDeliveryForSubOrder(subOrderId, tx);
+      }
+
+      await this.recomputeOrderAggregateStatus(existing.orderId, tx);
+      return row;
+    });
+
+    // Pack-component stock adjustments intentionally run outside the transaction above,
+    // in the same relative order as before this change — unrelated to Delivery sync, and
+    // left as-is so existing stock behavior is not altered.
+    // Deduct pack component variant/flavor stock the first time a suborder is confirmed.
+    // Regular (non-pack) item stock is already deducted at order creation; pack components
+    // are deducted here so the correct Variant+Flavor quantities decrease on approval.
     if (!wasAlreadyConfirmed && isNowConfirmed) {
       await this.deductPackComponentStock(subOrderId);
     }
-
     // Restore pack component stock + packs.quantityAvailable when a previously-confirmed
     // sub-order is cancelled (e.g. supplier rejects after accepting).
     if (wasAlreadyConfirmed && status === 'CANCELLED') {
       await this.restoreSubOrderPackStock(subOrderId);
     }
 
-    // ── Propagate aggregate status to the parent order ────────────────────────
-    // The parent order.status must always reflect the current collective state of
-    // its sub-orders so that every card, badge, and modal header shows a consistent
-    // value without requiring separate per-role status derivation on the frontend.
-    //
-    // Aggregation rule:
-    //   • If ALL sub-orders are CANCELLED → parent = CANCELLED
-    //   • Otherwise rank non-cancelled sub-orders by progress and use the MINIMUM
-    //     (least-advanced) status as the parent status — the order is only as far
-    //     along as its slowest active supplier.
+    return updated;
+  }
+
+  /**
+   * Recomputes and writes the parent order's aggregate status from its sub-orders.
+   * Aggregation rule (unchanged from the original single-writer implementation):
+   *   • If ALL sub-orders are CANCELLED → parent = CANCELLED
+   *   • Otherwise use the MINIMUM (least-advanced) status among non-cancelled sub-orders —
+   *     the order is only as far along as its slowest active supplier.
+   * Shared by updateSubOrderStatus() and updateDeliveryStatus() so both the supplier-driven
+   * path (sub-order → order) and the delivery-driven path (delivery → sub-order → order)
+   * write through the exact same aggregation logic — this is the fix for the one-way
+   * desync identified in SHOP_DELIVERY_SYNCHRONIZATION_ANALYSIS.md §7.2/§19.
+   */
+  private async recomputeOrderAggregateStatus(orderId: number, client: any = db): Promise<string> {
     const STATUS_RANK: Record<string, number> = {
       PENDING: 0, CONFIRMED: 1, PREPARING: 2,
       READY: 3, IN_DELIVERY: 4, DELIVERED: 5,
     };
-    const siblings = await db.select().from(subOrders).where(eq(subOrders.orderId, existing.orderId));
-    const active = siblings.filter((s) => s.status !== 'CANCELLED');
+    const siblings = await client.select().from(subOrders).where(eq(subOrders.orderId, orderId));
+    const active = siblings.filter((s: SubOrder) => s.status !== 'CANCELLED');
     let aggregateStatus: string;
     if (active.length === 0) {
-      // Every sub-order is cancelled → cancel the whole order
       aggregateStatus = 'CANCELLED';
     } else {
-      // Use the least-advanced status among active (non-cancelled) sub-orders
-      const minRank = active.reduce((min, s) => {
+      const minRank = active.reduce((min: number, s: SubOrder) => {
         const rank = STATUS_RANK[s.status ?? 'PENDING'] ?? 0;
         return rank < min ? rank : min;
       }, Infinity);
       aggregateStatus = Object.keys(STATUS_RANK).find((k) => STATUS_RANK[k] === minRank) ?? 'PENDING';
     }
-    await db.update(orders)
-      .set({ status: aggregateStatus as any })
-      .where(eq(orders.id, existing.orderId));
-    // ── End aggregate propagation ─────────────────────────────────────────────
+    await client.update(orders).set({ status: aggregateStatus as any }).where(eq(orders.id, orderId));
+    return aggregateStatus;
+  }
 
+  /**
+   * Idempotently creates the single Delivery for a sub-order once it reaches READY.
+   * Returns null (no-op) when: the order is SELF_PICKUP (no courier needed), the sub-order/
+   * order can't be found, or a delivery already exists for this sub-order (DB-level
+   * ON CONFLICT DO NOTHING against the active-delivery partial unique index — safe against
+   * concurrent/duplicate calls without needing an app-level lock).
+   */
+  async createDeliveryForSubOrder(subOrderId: number, client: any = db): Promise<Delivery | null> {
+    const [subOrder] = await client.select().from(subOrders).where(eq(subOrders.id, subOrderId));
+    if (!subOrder) return null;
+    const [order] = await client.select().from(orders).where(eq(orders.id, subOrder.orderId));
+    if (!order) return null;
+    if (order.deliveryMethod !== 'DELIVERY_SERVICE') return null;
+
+    const [supplier] = await client.select().from(users).where(eq(users.id, subOrder.supplierId));
+    // Snapshot the supplier's current account location as the pickup point — a supplier
+    // changing their profile address later must never rewrite an already-created Delivery.
+    const pickupAddress: GeoLocation = {
+      address: supplier?.locationAddress ?? '',
+      lat: supplier?.locationLat ?? '',
+      lng: supplier?.locationLng ?? '',
+      placeId: supplier?.locationPlaceId ?? '',
+      details: (supplier?.locationDetails as GeoLocation['details']) ?? undefined,
+    };
+    const destinationAddress = (order.deliveryAddress as GeoLocation | null) ?? undefined;
+
+    const [created] = await client.insert(deliveries).values({
+      subOrderId,
+      orderId: order.id,
+      supplierId: subOrder.supplierId,
+      cafeId: order.cafeId,
+      // Created PENDING — the supplier must dispatch it (choose Delivery Company or its own
+      // drivers) before it becomes visible/actionable to anyone else. See dispatchDelivery().
+      status: 'PENDING',
+      pickupAddress,
+      destinationAddress,
+      // Snapshot orders.deliveryFee as-is (always 0 today — no fee algorithm exists yet;
+      // see SHOP_DELIVERY_SYNCHRONIZATION_ANALYSIS.md §6/§9). Preserves whatever value the
+      // order already carries rather than inventing pricing.
+      deliveryFee: order.deliveryFee ?? 0,
+    }).onConflictDoNothing().returning();
+
+    return created ?? null;
+  }
+
+  /**
+   * The supplier's dispatch decision for a PENDING delivery — either publish it to the
+   * Delivery Company queue (→ AVAILABLE, existing accept/assign flow unchanged) or operate it
+   * directly with the supplier's own drivers (→ ACCEPTED immediately; no company acceptance
+   * step, since the supplier IS the operator — see SHOP_DELIVERY_V2 spec §25). Atomic
+   * compare-and-swap on (id, supplierId=caller, status=PENDING) — reuses the same Delivery
+   * row, never creates a second one.
+   */
+  async dispatchDelivery(deliveryId: number, supplierId: number, mode: DeliveryMode): Promise<Delivery> {
+    const updates: any = { deliveryMode: mode };
+    if (mode === 'DELIVERY_COMPANY') {
+      updates.status = 'AVAILABLE';
+    } else {
+      updates.status = 'ACCEPTED';
+      updates.acceptedAt = new Date();
+    }
+    const [updated] = await db.update(deliveries)
+      .set(updates)
+      .where(and(eq(deliveries.id, deliveryId), eq(deliveries.supplierId, supplierId), eq(deliveries.status, 'PENDING')))
+      .returning();
+    if (!updated) throw new Error('Delivery is not awaiting dispatch, or does not belong to you');
     return updated;
+  }
+
+  /** Cancels the active (non-terminal) delivery for a sub-order, if one exists. Orphan-delivery guard. */
+  async cancelActiveDeliveryForSubOrder(subOrderId: number, client: any = db): Promise<Delivery | null> {
+    const [cancelled] = await client.update(deliveries)
+      .set({ status: 'CANCELLED', cancelledAt: new Date() })
+      .where(and(
+        eq(deliveries.subOrderId, subOrderId),
+        ne(deliveries.status, 'CANCELLED'),
+        ne(deliveries.status, 'DELIVERED'),
+      ))
+      .returning();
+    return cancelled ?? null;
   }
 
   /** Deducts variant/flavor stock for every pack item in a sub-order on first confirmation. */
@@ -848,14 +1019,305 @@ export class DatabaseStorage implements IStorage {
 
   /**
    * Cascade-delete an order and all dependent records:
-   * promotionUsage → orderReturns → orderItems → subOrders → orders
+   * promotionUsage → orderReturns → deliveries → orderItems → subOrders → orders
    */
   async deleteOrder(orderId: number): Promise<void> {
     await db.delete(promotionUsage).where(eq(promotionUsage.orderId, orderId));
     await db.delete(orderReturns).where(eq(orderReturns.orderId, orderId));
+    await db.delete(deliveries).where(eq(deliveries.orderId, orderId)); // orphan-delivery guard
     await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
     await db.delete(subOrders).where(eq(subOrders.orderId, orderId));
     await db.delete(orders).where(eq(orders.id, orderId));
+  }
+
+  // ── Deliveries ────────────────────────────────────────────────────────────────
+  // One row per sub_order (see shared/schema.ts). Status transitions are validated against
+  // DELIVERY_TRANSITIONS below and are applied with an atomic, ownership-scoped
+  // UPDATE ... WHERE (compare-and-swap on the current status + owner id) rather than a
+  // read-then-write pair, so two concurrent accept/assign/status calls cannot both succeed.
+
+  // PENDING can resolve either to AVAILABLE (dispatched to the Delivery Company queue) or
+  // straight to ACCEPTED (dispatched to the supplier's own drivers — no company acceptance
+  // step needed since the supplier is the operator). See dispatchDelivery().
+  private readonly DELIVERY_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus[]> = {
+    PENDING: ['AVAILABLE', 'ACCEPTED', 'CANCELLED'],
+    AVAILABLE: ['ACCEPTED', 'CANCELLED'],
+    ACCEPTED: ['ASSIGNED', 'CANCELLED'],
+    ASSIGNED: ['PICKED_UP', 'CANCELLED'],
+    PICKED_UP: ['IN_TRANSIT'],
+    IN_TRANSIT: ['DELIVERED'],
+    DELIVERED: [],
+    CANCELLED: [],
+  };
+
+  private buildDeliveryItemDetails(items: OrderItem[]): DeliveryOrderItemDetail[] {
+    return items.map((item) => {
+      const snap = (item.snapshot ?? {}) as any;
+      const isPack = item.packId != null;
+      return {
+        id: item.id,
+        productName: isPack ? (item.packName ?? snap.packName ?? 'Pack') : (snap.productName ?? 'Product'),
+        flavorName: snap.flavorName ?? null,
+        sizeName: snap.sizeName ?? null,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice ?? item.unitPrice * item.quantity,
+        packName: isPack ? (item.packName ?? snap.packName ?? null) : null,
+      };
+    });
+  }
+
+  private toDeliveryWithDetails(row: Delivery, users_: User[], orders_: Order[], subOrders_: SubOrder[], orderItems_: OrderItem[]): DeliveryWithDetails {
+    const userMap = new Map(users_.map((u) => [u.id, u]));
+    const order = orders_.find((o) => o.id === row.orderId);
+    const subOrder = subOrders_.find((s) => s.id === row.subOrderId);
+    const cafe = userMap.get(row.cafeId);
+    const supplier = userMap.get(row.supplierId);
+    const company = row.deliveryCompanyId ? userMap.get(row.deliveryCompanyId) : undefined;
+    const driver = row.driverId ? userMap.get(row.driverId) : undefined;
+    const itemsForThisSubOrder = orderItems_.filter((i) => i.subOrderId === row.subOrderId);
+    const allItemsForOrder = orderItems_.filter((i) => i.orderId === row.orderId);
+    return {
+      ...row,
+      order: {
+        id: order?.id ?? row.orderId,
+        status: order?.status ?? '',
+        totalAmount: order?.totalAmount ?? 0,
+        createdAt: order?.createdAt ?? null,
+        itemCount: allItemsForOrder.length,
+      },
+      subOrder: { id: subOrder?.id ?? row.subOrderId, status: subOrder?.status ?? '', supplierName: subOrder?.supplierName ?? supplier?.name ?? 'Unknown', subtotal: subOrder?.subtotal ?? 0 },
+      cafe: { id: row.cafeId, name: cafe?.name ?? 'Unknown', phone: cafe?.phone ?? null, locationAddress: cafe?.locationAddress ?? null },
+      supplier: { id: row.supplierId, name: supplier?.name ?? 'Unknown', phone: supplier?.phone ?? null, locationAddress: supplier?.locationAddress ?? null, locationLat: supplier?.locationLat ?? null, locationLng: supplier?.locationLng ?? null },
+      deliveryCompany: company ? { id: company.id, name: company.name } : null,
+      driver: driver ? { id: driver.id, name: driver.name, phone: driver.phone, locationLat: driver.locationLat ?? null, locationLng: driver.locationLng ?? null } : null,
+      items: this.buildDeliveryItemDetails(itemsForThisSubOrder),
+    };
+  }
+
+  /**
+   * Role-scoped delivery list.
+   *   DRIVER            → deliveries assigned to that driver
+   *   DELIVERY_COMPANY   → deliveries it owns (accepted/assigned/completed by it) PLUS the
+   *                        open AVAILABLE pool it can still accept from (see
+   *                        SHOP_DELIVERY_SYNCHRONIZATION_ANALYSIS.md §35 — no zone/territory
+   *                        model exists yet, so "eligible" = every approved delivery company;
+   *                        this is the documented extension point for future zone dispatch)
+   *   SUPPLIER          → its own deliveries (read-only status visibility)
+   *   CAFE_OWNER        → deliveries for its own orders (read-only status visibility)
+   *   ADMIN/SUPER_ADMIN → all (oversight)
+   */
+  async getDeliveries(userId: number, role: string): Promise<DeliveryWithDetails[]> {
+    let rows: Delivery[];
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
+      rows = await db.select().from(deliveries);
+    } else if (role === 'DRIVER') {
+      rows = await db.select().from(deliveries).where(eq(deliveries.driverId, userId));
+    } else if (role === 'DELIVERY_COMPANY') {
+      rows = await db.select().from(deliveries).where(or(eq(deliveries.deliveryCompanyId, userId), eq(deliveries.status, 'AVAILABLE')));
+    } else if (role === 'SUPPLIER') {
+      rows = await db.select().from(deliveries).where(eq(deliveries.supplierId, userId));
+    } else if (role === 'CAFE_OWNER') {
+      rows = await db.select().from(deliveries).where(eq(deliveries.cafeId, userId));
+    } else {
+      return [];
+    }
+    if (rows.length === 0) return [];
+    const orderIds = Array.from(new Set(rows.map((r) => r.orderId)));
+    const subOrderIds = Array.from(new Set(rows.map((r) => r.subOrderId)));
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeId, r.supplierId, r.deliveryCompanyId, r.driverId].filter((x): x is number => x != null))));
+    const [ordersRows, subOrdersRows, usersRows, orderItemsRows] = await Promise.all([
+      orderIds.length ? db.select().from(orders).where(inArray(orders.id, orderIds)) : Promise.resolve([]),
+      subOrderIds.length ? db.select().from(subOrders).where(inArray(subOrders.id, subOrderIds)) : Promise.resolve([]),
+      userIds.length ? db.select().from(users).where(inArray(users.id, userIds)) : Promise.resolve([]),
+      orderIds.length ? db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds)) : Promise.resolve([]),
+    ]);
+    return rows
+      .map((r) => this.toDeliveryWithDetails(r, usersRows, ordersRows, subOrdersRows, orderItemsRows))
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+  }
+
+  async getDelivery(id: number): Promise<DeliveryWithDetails | undefined> {
+    const [row] = await db.select().from(deliveries).where(eq(deliveries.id, id));
+    if (!row) return undefined;
+    const [[order], [subOrder], usersRows, orderItemsRows] = await Promise.all([
+      db.select().from(orders).where(eq(orders.id, row.orderId)),
+      db.select().from(subOrders).where(eq(subOrders.id, row.subOrderId)),
+      db.select().from(users).where(inArray(users.id, [row.cafeId, row.supplierId, row.deliveryCompanyId, row.driverId].filter((x): x is number => x != null))),
+      db.select().from(orderItems).where(eq(orderItems.orderId, row.orderId)),
+    ]);
+    return this.toDeliveryWithDetails(row, usersRows, order ? [order] : [], subOrder ? [subOrder] : [], orderItemsRows);
+  }
+
+  /**
+   * Access control for a single delivery. Never uses order status as a proxy for
+   * authorization (that was the IDOR identified in the pre-implementation analysis).
+   */
+  async canUserAccessDelivery(userId: number, role: string, deliveryId: number): Promise<boolean> {
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return true;
+    const [row] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
+    if (!row) return false;
+    if (role === 'DRIVER') return row.driverId === userId;
+    if (role === 'DELIVERY_COMPANY') return row.deliveryCompanyId === userId || row.status === 'AVAILABLE';
+    if (role === 'SUPPLIER') return row.supplierId === userId;
+    if (role === 'CAFE_OWNER') return row.cafeId === userId;
+    return false;
+  }
+
+  /** AVAILABLE → ACCEPTED. Atomic compare-and-swap: fails (0 rows) if another company already accepted it. */
+  async acceptDelivery(deliveryId: number, deliveryCompanyId: number): Promise<Delivery> {
+    const [updated] = await db.update(deliveries)
+      .set({ status: 'ACCEPTED', deliveryCompanyId, acceptedAt: new Date() })
+      .where(and(eq(deliveries.id, deliveryId), eq(deliveries.status, 'AVAILABLE')))
+      .returning();
+    if (!updated) throw new Error('Delivery is no longer available');
+    return updated;
+  }
+
+  /**
+   * ACCEPTED → ASSIGNED. Works for both delivery modes:
+   *   deliveryMode = DELIVERY_COMPANY → caller must be the accepting company; driver must
+   *     belong to that same company (driver.deliveryCompanyId).
+   *   deliveryMode = SUPPLIER → caller must be the owning supplier; driver must belong to
+   *     that same supplier (driver.supplierId).
+   * Atomic compare-and-swap on (id, status=ACCEPTED, owner-matches-caller) so two concurrent
+   * assign calls can't both succeed, and so a caller can never assign a delivery it doesn't
+   * own regardless of which mode it's in.
+   */
+  async assignDriver(deliveryId: number, actingUser: { id: number; role: string }, driverId: number): Promise<Delivery> {
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
+    if (!delivery) throw new Error('Delivery not found');
+    const [driver] = await db.select().from(users).where(eq(users.id, driverId));
+    if (!driver || driver.role !== 'DRIVER') throw new Error('Invalid driver');
+
+    let ownerCondition;
+    if (delivery.deliveryMode === 'SUPPLIER') {
+      if (actingUser.role !== 'SUPPLIER' || delivery.supplierId !== actingUser.id) {
+        throw new Error('Only the operating supplier can assign a driver to this delivery');
+      }
+      if (driver.supplierId !== actingUser.id) {
+        throw new Error('Driver does not belong to your supplier account');
+      }
+      ownerCondition = eq(deliveries.supplierId, actingUser.id);
+    } else {
+      if (actingUser.role !== 'DELIVERY_COMPANY' || delivery.deliveryCompanyId !== actingUser.id) {
+        throw new Error('Only the accepting delivery company can assign a driver to this delivery');
+      }
+      if (driver.deliveryCompanyId !== actingUser.id) {
+        throw new Error('Driver does not belong to your company');
+      }
+      ownerCondition = eq(deliveries.deliveryCompanyId, actingUser.id);
+    }
+
+    const [updated] = await db.update(deliveries)
+      .set({ status: 'ASSIGNED', driverId, assignedAt: new Date() })
+      .where(and(eq(deliveries.id, deliveryId), eq(deliveries.status, 'ACCEPTED'), ownerCondition))
+      .returning();
+    if (!updated) throw new Error('Delivery is not assignable (not accepted by you, or already assigned)');
+    return updated;
+  }
+
+  /**
+   * Driver-driven PICKED_UP → IN_TRANSIT → DELIVERED, or a CANCELLED intervention by the
+   * owning Delivery Company / Admin. Validates the transition graph, role, and ownership,
+   * then applies an atomic compare-and-swap. On DELIVERED, propagates the sub-order to
+   * DELIVERED and re-runs the existing order aggregation — the fix for the one-way
+   * sub-order→order desync (never the reverse) identified in the pre-implementation
+   * analysis. On PICKED_UP/IN_TRANSIT, propagates the sub-order to IN_DELIVERY.
+   */
+  async updateDeliveryStatus(deliveryId: number, actingUser: { id: number; role: string }, newStatus: DeliveryStatus): Promise<Delivery> {
+    const [current] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
+    if (!current) throw new Error('Delivery not found');
+
+    const allowed = this.DELIVERY_TRANSITIONS[current.status as DeliveryStatus] ?? [];
+    if (!allowed.includes(newStatus)) {
+      throw new Error(`Cannot move a delivery from ${current.status} to ${newStatus}`);
+    }
+
+    const isDriverStep = ['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(newStatus);
+    if (isDriverStep) {
+      if (actingUser.role !== 'DRIVER' || current.driverId !== actingUser.id) {
+        throw new Error('Only the assigned driver can advance this delivery');
+      }
+    } else if (newStatus === 'CANCELLED') {
+      const isOwningCompany = actingUser.role === 'DELIVERY_COMPANY' && current.deliveryCompanyId === actingUser.id;
+      const isOwningSupplier = actingUser.role === 'SUPPLIER' && current.supplierId === actingUser.id;
+      const isAdmin = actingUser.role === 'ADMIN' || actingUser.role === 'SUPER_ADMIN';
+      if (!isOwningCompany && !isOwningSupplier && !isAdmin) {
+        throw new Error('Only the operating supplier/delivery company or an admin can cancel this delivery');
+      }
+    }
+
+    const timestampField: Partial<Record<DeliveryStatus, string>> = {
+      PICKED_UP: 'pickedUpAt', IN_TRANSIT: 'inTransitAt', DELIVERED: 'deliveredAt', CANCELLED: 'cancelledAt',
+    };
+    const updates: any = { status: newStatus };
+    const field = timestampField[newStatus];
+    if (field) updates[field] = new Date();
+
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx.update(deliveries)
+        .set(updates)
+        .where(and(eq(deliveries.id, deliveryId), eq(deliveries.status, current.status)))
+        .returning();
+      if (!row) throw new Error('Delivery status changed concurrently — please retry');
+
+      // Delivery status drives the customer-facing sub-order/order status — never the
+      // other way around, and never by writing orders.status directly (that recreates the
+      // exact desync the pre-implementation analysis found).
+      if (newStatus === 'PICKED_UP' || newStatus === 'IN_TRANSIT') {
+        await tx.update(subOrders).set({ status: 'IN_DELIVERY' }).where(eq(subOrders.id, row.subOrderId));
+        await this.recomputeOrderAggregateStatus(row.orderId, tx);
+      } else if (newStatus === 'DELIVERED') {
+        await tx.update(subOrders).set({ status: 'DELIVERED' }).where(eq(subOrders.id, row.subOrderId));
+        await this.recomputeOrderAggregateStatus(row.orderId, tx);
+      }
+      // CANCELLED intentionally does NOT touch the sub-order — the supplier's own READY
+      // sub-order is unaffected by a courier-side cancellation; a new Delivery can be
+      // created for it later (the partial unique index allows this).
+
+      return row;
+    });
+
+    return updated;
+  }
+
+  /**
+   * Driver roster for either kind of operator. A DRIVER belongs to exactly one owner
+   * (users.deliveryCompanyId XOR users.supplierId, enforced by a DB CHECK constraint — see
+   * shared/schema.ts) so this single method serves both the Delivery Company "Drivers" page
+   * and the Supplier "Drivers" tab without a second Driver system.
+   */
+  async getDriversForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number): Promise<User[]> {
+    const ownerCondition = ownerType === 'SUPPLIER' ? eq(users.supplierId, ownerId) : eq(users.deliveryCompanyId, ownerId);
+    return db.select().from(users).where(and(eq(users.role, 'DRIVER'), ownerCondition));
+  }
+
+  async createDriverForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number, data: { name: string; email: string; password: string; phone?: string | null }): Promise<User> {
+    const existing = await this.getUserByEmail(data.email);
+    if (existing) throw new Error('Email already exists');
+    return this.createUser({
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      role: 'DRIVER',
+      status: 'approved', // vetted by the owning operator, not the platform admin
+      phone: data.phone ?? null,
+      deliveryCompanyId: ownerType === 'DELIVERY_COMPANY' ? ownerId : null,
+      supplierId: ownerType === 'SUPPLIER' ? ownerId : null,
+    } as any);
+  }
+
+  /** The current active (non-CANCELLED) delivery for a sub-order, if any. Used by route
+   * handlers to know whether/what to broadcast right after a status transition. */
+  async getActiveDeliveryForSubOrder(subOrderId: number): Promise<Delivery | undefined> {
+    const rows = await db.select().from(deliveries).where(eq(deliveries.subOrderId, subOrderId));
+    return rows.find((d) => d.status !== 'CANCELLED');
+  }
+
+  async getApprovedDeliveryCompanyIds(): Promise<number[]> {
+    const rows = await db.select({ id: users.id }).from(users).where(and(eq(users.role, 'DELIVERY_COMPANY'), eq(users.status, 'approved')));
+    return rows.map((r) => r.id);
   }
 
   /**

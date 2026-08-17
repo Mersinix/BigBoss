@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useOrders, useUpdateOrderStatus, useDeleteOrder } from "@/hooks/use-orders";
+import { useOrders, useDeleteOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -88,7 +88,6 @@ export default function OrdersPage() {
   const { toast } = useToast();
   const fmt = useFormatCurrency();
   const { data: orders = [], isLoading } = useOrders();
-  const updateStatus = useUpdateOrderStatus();
   const deleteOrder = useDeleteOrder();
 
   const [view, setView] = useState<"today" | "future" | "old">("today");
@@ -102,7 +101,6 @@ export default function OrdersPage() {
 
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
   const isSupplier = user?.role === "SUPPLIER";
-  const isDelivery = user?.role === "DELIVERY_COMPANY" || user?.role === "DRIVER";
 
   // Split orders by time view
   const filteredByView = useMemo(() => {
@@ -142,10 +140,6 @@ export default function OrdersPage() {
   const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setSupplierSearch(""); setProductSearch(""); setDateFilter(""); };
   const hasFilters = statusFilter !== "ALL" || cafeSearch || supplierSearch || productSearch || dateFilter;
 
-  const handleStatusChange = (orderId: number, status: string) => {
-    updateStatus.mutate({ id: orderId, status: status as any });
-  };
-
   const views = [
     { id: "today",  label: "Aujourd'hui",  icon: Clock,    count: orders.filter(o => isToday(o.createdAt) && !isFuture(o) && !["DELIVERED","CANCELLED"].includes(o.status)).length },
     { id: "future", label: "Futures",      icon: Calendar, count: orders.filter(o => isFuture(o) && !["DELIVERED","CANCELLED"].includes(o.status)).length },
@@ -160,7 +154,7 @@ export default function OrdersPage() {
     <div className="flex flex-col gap-5 p-6">
       <div>
         <h1 className="text-2xl font-bold">
-          {isAdmin ? "Gestion des Commandes" : isDelivery ? "Tableau de Livraison" : "Mes Commandes"}
+          {isAdmin ? "Gestion des Commandes" : "Mes Commandes"}
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">Suivez et gérez le cycle de vie des commandes.</p>
       </div>
@@ -303,17 +297,6 @@ export default function OrdersPage() {
                     <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
                       <p className="font-bold text-amber-500 text-lg">{fmt(order.totalAmount)}</p>
                       <div className="flex gap-2 flex-wrap justify-end">
-                        {/* Delivery status control */}
-                        {isDelivery && (order.status === "READY" || order.status === "IN_DELIVERY") && (
-                          <Select defaultValue={order.status} onValueChange={(val) => handleStatusChange(order.id, val)}>
-                            <SelectTrigger className="h-7 w-[160px] text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="READY" className="text-xs">En attente de collecte</SelectItem>
-                              <SelectItem value="IN_DELIVERY" className="text-xs">En transit</SelectItem>
-                              <SelectItem value="DELIVERED" className="text-xs font-bold text-green-700">Marquer livré</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
                         <Button size="sm" variant="ghost" className="h-7 text-xs text-primary" onClick={() => setSelectedOrder(order)}>
                           Détails
                         </Button>

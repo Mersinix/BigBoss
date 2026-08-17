@@ -1,5 +1,5 @@
-import { pgTable, text, serial, integer, timestamp, pgEnum, boolean, jsonb } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, text, serial, integer, timestamp, pgEnum, boolean, jsonb, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -8,6 +8,17 @@ export const userRoleEnum = pgEnum('user_role', [
   'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'
 ]);
 export const orderStatusEnum = pgEnum('order_status', ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'IN_DELIVERY', 'DELIVERED', 'CANCELLED']);
+// Physical delivery lifecycle — separate from orderStatusEnum. orders.status/sub_orders.status
+// remain the customer-facing aggregate; deliveryStatusEnum is the source of truth for the
+// courier-side lifecycle of a single sub-order's delivery. PENDING is reserved for a future
+// pre-publish step (e.g. zone-restricted dispatch) and is not used by the current flow, which
+// creates deliveries directly in AVAILABLE.
+export const deliveryStatusEnum = pgEnum('delivery_status', [
+  'PENDING', 'AVAILABLE', 'ACCEPTED', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'
+]);
+// Who operates the delivery. Null while PENDING (not yet dispatched by the supplier — see
+// deliveries.deliveryMode below); set once the supplier dispatches it.
+export const deliveryModeEnum = pgEnum('delivery_mode', ['DELIVERY_COMPANY', 'SUPPLIER']);
 export const listingVisibilityEnum = pgEnum('listing_visibility', ['VISIBLE', 'HIDDEN']);
 export const userAccountStatusEnum = pgEnum('user_account_status', ['pending', 'approved', 'rejected']);
 export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA', 'MAINTENANCE']);
@@ -36,8 +47,20 @@ export const users = pgTable("users", {
   locationLng: text("location_lng"),
   locationPlaceId: text("location_place_id"),
   locationDetails: jsonb("location_details"),
+  // A DRIVER account belongs to exactly one operator — a DELIVERY_COMPANY (deliveryCompanyId)
+  // or a SUPPLIER (supplierId), never both (enforced by a DB CHECK constraint, see migration
+  // 0006_delivery_v2.sql). Null for every other role.
+  deliveryCompanyId: integer("delivery_company_id"),
+  // Set only on DRIVER accounts owned directly by a supplier's own delivery operation
+  // (as opposed to a DELIVERY_COMPANY's fleet). References another users.id with role SUPPLIER.
+  supplierId: integer("supplier_id"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  driverSingleOwnerCheck: check(
+    "users_driver_single_owner_check",
+    sql`NOT (${table.deliveryCompanyId} IS NOT NULL AND ${table.supplierId} IS NOT NULL)`,
+  ),
+}));
 
 // Products — admin-created catalog items (isAdminProduct=true) or legacy supplier products
 export const products = pgTable("products", {
@@ -136,6 +159,11 @@ export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   cafeId: integer("cafe_id").notNull(),
   supplierId: integer("supplier_id"),
+  // @deprecated Legacy/unused. References users.id, never a delivery record (see
+  // ordersRelations.delivery below). No code path writes this column — real driver/delivery
+  // company assignment now lives on deliveries.driverId / deliveries.deliveryCompanyId
+  // (one row per sub_order). Kept as-is (not repurposed, not dropped) to avoid a breaking
+  // schema change; do not use for new delivery logic.
   deliveryId: integer("delivery_id"),
   status: orderStatusEnum("status").notNull().default('PENDING'),
   totalAmount: integer("total_amount").notNull(),
@@ -208,6 +236,99 @@ export const orderReturns = pgTable("order_returns", {
   requestedAt: timestamp("requested_at").defaultNow().notNull(),
   processedAt: timestamp("processed_at"),
 });
+
+// ── Deliveries ───────────────────────────────────────────────────────────────
+// One Delivery per sub_order (not per order): a single Shop order can span multiple
+// suppliers with different physical pickup points, so each supplier's sub-order gets its
+// own, independently-tracked delivery. The Coffee Owner still experiences one Shop order;
+// orders/sub_orders remain the customer-facing source of truth (see storage.ts aggregation).
+export const deliveries = pgTable("deliveries", {
+  id: serial("id").primaryKey(),
+  subOrderId: integer("sub_order_id").notNull(),
+  orderId: integer("order_id").notNull(),
+  // Denormalized from the sub-order/order at creation time so delivery-scoped queries
+  // (by supplier, by cafe) never need to join back through sub_orders/orders.
+  supplierId: integer("supplier_id").notNull(),
+  cafeId: integer("cafe_id").notNull(),
+  // Who is operating this delivery — DELIVERY_COMPANY (goes through the accept/assign queue)
+  // or SUPPLIER (the supplier assigns straight from its own driver roster, no acceptance
+  // step). Null while status = PENDING, i.e. created but not yet dispatched by the supplier.
+  deliveryMode: deliveryModeEnum("delivery_mode"),
+  // Null until a Delivery Company accepts it (deliveryMode = DELIVERY_COMPANY only).
+  deliveryCompanyId: integer("delivery_company_id"),
+  driverId: integer("driver_id"),
+  // Created PENDING (awaiting the supplier's dispatch decision); the supplier then dispatches
+  // to either DELIVERY_COMPANY (→ AVAILABLE, enters the existing accept/assign queue) or
+  // SUPPLIER (→ ACCEPTED directly — the supplier is its own operator, no acceptance needed).
+  status: deliveryStatusEnum("status").notNull().default('PENDING'),
+  // Snapshots taken at creation time — deliberately NOT foreign keys to live location data.
+  // A supplier changing their profile address, or a cafe's account location changing, must
+  // never rewrite the pickup/destination of a delivery that is already in progress or history.
+  pickupAddress: jsonb("pickup_address").$type<GeoLocation>().notNull(),
+  destinationAddress: jsonb("destination_address").$type<GeoLocation>(),
+  // Snapshot of orders.deliveryFee at creation time. No fee-calculation algorithm exists yet
+  // (see orders.deliveryFee — always 0 today); this column exists so a real algorithm can be
+  // introduced later without another schema change.
+  deliveryFee: integer("delivery_fee").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  acceptedAt: timestamp("accepted_at"),
+  assignedAt: timestamp("assigned_at"),
+  pickedUpAt: timestamp("picked_up_at"),
+  inTransitAt: timestamp("in_transit_at"),
+  deliveredAt: timestamp("delivered_at"),
+  cancelledAt: timestamp("cancelled_at"),
+}, (table) => ({
+  subOrderIdx: index("deliveries_sub_order_idx").on(table.subOrderId),
+  orderIdx: index("deliveries_order_idx").on(table.orderId),
+  deliveryCompanyIdx: index("deliveries_delivery_company_idx").on(table.deliveryCompanyId),
+  driverIdx: index("deliveries_driver_idx").on(table.driverId),
+  statusIdx: index("deliveries_status_idx").on(table.status),
+  // A sub-order may accumulate a CANCELLED delivery and later get a fresh one, but it may
+  // never have two simultaneously-active (non-CANCELLED) deliveries — partial unique index.
+  oneActiveDeliveryPerSubOrder: uniqueIndex("deliveries_sub_order_active_unique")
+    .on(table.subOrderId)
+    .where(sql`${table.status} <> 'CANCELLED'`),
+}));
+
+export const deliveriesRelations = relations(deliveries, ({ one }) => ({
+  subOrder: one(subOrders, { fields: [deliveries.subOrderId], references: [subOrders.id] }),
+  order: one(orders, { fields: [deliveries.orderId], references: [orders.id] }),
+  supplier: one(users, { fields: [deliveries.supplierId], references: [users.id], relationName: 'supplierDeliveries' }),
+  cafe: one(users, { fields: [deliveries.cafeId], references: [users.id], relationName: 'cafeDeliveries' }),
+  deliveryCompany: one(users, { fields: [deliveries.deliveryCompanyId], references: [users.id], relationName: 'companyDeliveries' }),
+  driver: one(users, { fields: [deliveries.driverId], references: [users.id], relationName: 'driverDeliveries' }),
+}));
+
+export type Delivery = typeof deliveries.$inferSelect;
+export type DeliveryStatus = 'PENDING' | 'AVAILABLE' | 'ACCEPTED' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+export type DeliveryMode = 'DELIVERY_COMPANY' | 'SUPPLIER';
+
+export type DeliveryOrderItemDetail = {
+  id: number;
+  productName: string;
+  flavorName: string | null;
+  sizeName: string | null;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  packName?: string | null;
+};
+
+// Full detail payload — deliberately includes everything a Supplier / Delivery Company /
+// Driver / Admin needs to decide on or perform a delivery without a second fetch (order
+// items, cafe + supplier contact info, live driver/supplier coordinates for the navigation
+// map). Built from the existing orders/order_items/users relationships in storage.ts —
+// nothing here is duplicated/stored on the deliveries row itself beyond the pickup/
+// destination snapshots that already existed.
+export type DeliveryWithDetails = Delivery & {
+  order: { id: number; status: string; totalAmount: number; createdAt: Date | null; itemCount: number };
+  subOrder: { id: number; status: string; supplierName: string; subtotal: number };
+  cafe: { id: number; name: string; phone: string | null; locationAddress: string | null };
+  supplier: { id: number; name: string; phone: string | null; locationAddress: string | null; locationLat: string | null; locationLng: string | null };
+  deliveryCompany: { id: number; name: string } | null;
+  driver: { id: number; name: string; phone: string | null; locationLat: string | null; locationLng: string | null } | null;
+  items: DeliveryOrderItemDetail[];
+};
 
 // ── Category System ──────────────────────────────────────────────────────────
 
@@ -646,7 +767,7 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   supplierProducts: many(products, { relationName: 'supplierProducts' }),
   cafeOrders: many(orders, { relationName: 'cafeOrders' }),
   supplierOrders: many(orders, { relationName: 'supplierOrders' }),
@@ -654,6 +775,15 @@ export const usersRelations = relations(users, ({ many }) => ({
   supplierCategories: many(supplierCategories),
   supplierSubCategories: many(supplierSubCategories),
   supplierProductListings: many(supplierProductListings),
+  // Delivery domain
+  drivers: many(users, { relationName: 'companyDrivers' }),
+  deliveryCompany: one(users, { fields: [users.deliveryCompanyId], references: [users.id], relationName: 'companyDrivers' }),
+  ownSupplierDrivers: many(users, { relationName: 'supplierOwnDrivers' }),
+  ownerSupplier: one(users, { fields: [users.supplierId], references: [users.id], relationName: 'supplierOwnDrivers' }),
+  supplierDeliveries: many(deliveries, { relationName: 'supplierDeliveries' }),
+  cafeDeliveries: many(deliveries, { relationName: 'cafeDeliveries' }),
+  companyDeliveries: many(deliveries, { relationName: 'companyDeliveries' }),
+  driverDeliveries: many(deliveries, { relationName: 'driverDeliveries' }),
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({
@@ -687,11 +817,13 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   delivery: one(users, { fields: [orders.deliveryId], references: [users.id], relationName: 'deliveryOrders' }),
   items: many(orderItems),
   subOrders: many(subOrders),
+  deliveries: many(deliveries),
 }));
 
 export const subOrdersRelations = relations(subOrders, ({ one, many }) => ({
   order: one(orders, { fields: [subOrders.orderId], references: [orders.id] }),
   items: many(orderItems),
+  deliveries: many(deliveries),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
@@ -1296,8 +1428,23 @@ export type MarketplaceProduct = ProductWithTaxonomy & {
 
 // ── Sub-Order Rich Type ───────────────────────────────────────────────────────
 
+// Lightweight delivery summary embedded on a sub-order for Coffee Owner / Supplier order
+// views. Distinct from the legacy, unused `OrderWithDetails.delivery` field below (which
+// resolves orders.deliveryId — a user, not a delivery record; see shared/schema.ts orders
+// table comment). This is the real, per-sub-order delivery.
+export type SubOrderDeliverySummary = {
+  id: number;
+  status: DeliveryStatus;
+  deliveryCompany: { id: number; name: string } | null;
+  driver: { id: number; name: string; phone: string | null } | null;
+  pickedUpAt: Date | null;
+  inTransitAt: Date | null;
+  deliveredAt: Date | null;
+};
+
 export type SubOrderWithItems = SubOrder & {
   items: (OrderItem & { product: Product; flavorName?: string | null; sizeName?: string | null })[];
+  delivery?: SubOrderDeliverySummary | null;
 };
 
 // ── Request / Response Types ─────────────────────────────────────────────────

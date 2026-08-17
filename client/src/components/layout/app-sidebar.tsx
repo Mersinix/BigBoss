@@ -232,7 +232,6 @@ export function AppSidebar() {
           label: "CUSTOMERS",
           items: [
             { title: "Cafes", url: "/supplier/cafes", icon: Coffee },
-            { title: "Drivers", url: "/supplier/drivers", icon: Truck },
             { title: "Delivery Status", url: "/supplier/delivery-status", icon: MapPin },
           ],
         },
@@ -248,13 +247,28 @@ export function AppSidebar() {
       ];
     }
 
-    if (user.role === "DELIVERY_COMPANY" || user.role === "DRIVER") {
+    if (user.role === "DELIVERY_COMPANY") {
       return [
         {
           label: "MAIN",
           items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
-            { title: "Active Deliveries", url: "/orders", icon: Truck },
+            { title: "Available Deliveries", url: "/delivery/available", icon: Package },
+            { title: "My Deliveries", url: "/delivery/my-deliveries", icon: Truck },
+            { title: "Drivers", url: "/delivery/drivers", icon: Users },
+            { title: "Messages", url: "/delivery/messages", icon: MessageCircle },
+          ],
+        },
+      ];
+    }
+
+    if (user.role === "DRIVER") {
+      return [
+        {
+          label: "MAIN",
+          items: [
+            { title: "Dashboard", url: "/", icon: LayoutDashboard },
+            { title: "My Deliveries", url: "/delivery/deliveries", icon: Truck },
             { title: "Messages", url: "/delivery/messages", icon: MessageCircle },
           ],
         },

@@ -66,6 +66,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     next();
   };
 
+  const requireApprovedDeliveryCompany = async (req: any, res: any, next: any) => {
+    if (!req.session.userId) return res.status(401).json({ message: 'Unauthorized' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DELIVERY_COMPANY' || user.status !== 'approved') {
+      return res.status(403).json({ message: 'Only approved delivery companies can perform this action' });
+    }
+    (req as any).deliveryCompany = user;
+    next();
+  };
+
+  const requireDriver = async (req: any, res: any, next: any) => {
+    if (!req.session.userId) return res.status(401).json({ message: 'Unauthorized' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DRIVER' || user.status !== 'approved') {
+      return res.status(403).json({ message: 'Only drivers can perform this action' });
+    }
+    (req as any).driver = user;
+    next();
+  };
+
   async function hasCommercialAccess(req: any): Promise<boolean> {
     if (!req.session?.userId) return false;
     const u = await storage.getUser(req.session.userId);
@@ -79,6 +99,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return { ...pub, listings: [], bestPrice: null, supplierCount: 0 };
   }
 
+  // NOTE: DRIVER/DELIVERY_COMPANY intentionally have no branch here. Delivery-stage status
+  // changes (READY→IN_DELIVERY→DELIVERED) are no longer made through this endpoint — they go
+  // through PATCH /api/deliveries/:id/status, which is ownership-checked against the
+  // deliveries table (see storage.updateDeliveryStatus) and propagates back into sub_orders/
+  // orders via the shared aggregation logic. Routing delivery roles through here previously
+  // let any driver/delivery company mutate any order in READY/IN_DELIVERY state — see
+  // SHOP_DELIVERY_SYNCHRONIZATION_ANALYSIS.md §9.4.
   function canUpdateOrderStatus(user: { id: number; role: string }, order: any, newStatus: string): boolean {
     // Admin has read-only access to orders; status management is Supplier-only
     if (user.role === 'CAFE_OWNER') {
@@ -88,10 +115,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const involved = order.supplierId === user.id || order.subOrders?.some((so: any) => so.supplierId === user.id);
       if (!involved) return false;
       return ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'CANCELLED'].includes(newStatus);
-    }
-    if (user.role === 'DRIVER' || user.role === 'DELIVERY_COMPANY') {
-      return ['READY', 'IN_DELIVERY', 'DELIVERED'].includes(newStatus)
-        && ['READY', 'IN_DELIVERY'].includes(order.status);
     }
     return false;
   }
@@ -986,7 +1009,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let filters: any = {};
       if (user?.role === 'CAFE_OWNER') filters.cafeId = user.id;
       if (user?.role === 'SUPPLIER') filters.supplierId = user.id;
-      if (user?.role === 'DRIVER') filters.deliveryId = user.id;
+      // Delivery roles are scoped by real deliveries rows, not order status — see
+      // storage.getOrders(). DELIVERY_COMPANY previously had no branch here at all and
+      // received every order in the system (SHOP_DELIVERY_SYNCHRONIZATION_ANALYSIS.md §9.1);
+      // DRIVER's old filter (orders.deliveryId) was dead code (§9.2) since that column is
+      // never written.
+      if (user?.role === 'DRIVER') filters.driverId = user.id;
+      if (user?.role === 'DELIVERY_COMPANY') filters.deliveryCompanyId = user.id;
       res.json(await storage.getOrders(filters));
     } catch (e) {
       res.status(500).json({ message: "Error fetching orders" });
@@ -1170,9 +1199,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (user.role === 'SUPPLIER' && subOrder.supplierId !== user.id) {
         return res.status(403).json({ message: 'Forbidden' });
       }
-      const { status } = z.object({ status: z.string() }).parse(req.body);
+      // Once a Delivery has taken a sub-order to DELIVERED (or it's CANCELLED), it's terminal
+      // from this endpoint's perspective — no further supplier/admin edits here.
+      if (['DELIVERED', 'CANCELLED'].includes(subOrder.status ?? '')) {
+        return res.status(409).json({ message: `Sub-order is already ${subOrder.status} and cannot be changed` });
+      }
+      // IN_DELIVERY / DELIVERED are intentionally excluded here — those are now written only
+      // by storage.updateDeliveryStatus() (via PATCH /api/deliveries/:id/status), the single
+      // source of truth for the physical delivery lifecycle. Letting a supplier (or admin)
+      // set them directly on the sub-order would create the exact "conflicting status writer"
+      // the sync spec prohibits — a supplier could self-report a delivery that was never
+      // created, accepted, or completed by an actual courier.
+      const { status } = z.object({
+        status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'CANCELLED']),
+      }).parse(req.body);
+      const becameReady = subOrder.status !== 'READY' && status === 'READY';
       const updated = await storage.updateSubOrderStatus(subOrderId, status);
       await storage.refreshOrderMessagingState(subOrder.orderId);
+
+      // Shop → Delivery hand-off: the delivery is created PENDING here — not yet visible to
+      // any Delivery Company (see storage.createDeliveryForSubOrder). Only the supplier is
+      // notified that a dispatch decision is waiting; the company-wide notification happens
+      // later, at PATCH /api/deliveries/:id/dispatch, only if the supplier chooses that mode.
+      if (becameReady) {
+        const created = await storage.getActiveDeliveryForSubOrder(subOrderId);
+        if (created) {
+          broadcastToUsers([subOrder.supplierId], 'delivery_created', { deliveryId: created.id, subOrderId, orderId: subOrder.orderId, status: created.status });
+        }
+      }
       // Notify cafe owner + supplier of suborder change
       const order = await storage.getOrder(subOrder.orderId);
       if (order) {
@@ -1207,7 +1261,228 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       res.json(updated);
     } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: err.message ?? 'Invalid request' });
+    }
+  });
+
+  // ── Deliveries ─────────────────────────────────────────────────────────────
+  // Delivery-stage status changes (accept/assign/pickup/in-transit/delivered/cancel) go
+  // through this namespace, not PATCH /api/orders/:id/status. See canUpdateOrderStatus above.
+
+  app.get('/api/deliveries', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      res.json(await storage.getDeliveries(user.id, user.role));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching deliveries' });
+    }
+  });
+
+  app.get('/api/deliveries/:id', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const deliveryId = parseInt(req.params.id);
+      const canAccess = await storage.canUserAccessDelivery(user.id, user.role, deliveryId);
+      if (!canAccess) return res.status(403).json({ message: 'Forbidden' });
+      const delivery = await storage.getDelivery(deliveryId);
+      if (!delivery) return res.status(404).json({ message: 'Not found' });
+      res.json(delivery);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching delivery' });
+    }
+  });
+
+  // Manual/recovery creation — Admin only. Normal creation is automatic and idempotent
+  // (storage.createDeliveryForSubOrder, invoked when a sub-order reaches READY). This exists
+  // as an oversight tool for a stuck sub-order, and reuses the exact same idempotent method,
+  // so it cannot bypass business rules (READY + DELIVERY_SERVICE) or create a duplicate.
+  app.post('/api/deliveries', requireAdmin, async (req, res) => {
+    try {
+      const { subOrderId } = z.object({ subOrderId: z.number() }).parse(req.body);
+      const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, subOrderId));
+      if (!subOrder) return res.status(404).json({ message: 'Sub-order not found' });
+      if (subOrder.status !== 'READY') return res.status(400).json({ message: 'Sub-order is not READY' });
+      const created = await storage.createDeliveryForSubOrder(subOrderId);
+      if (!created) return res.status(409).json({ message: 'A delivery already exists for this sub-order, or the order is self-pickup' });
+      // Created PENDING — notify the supplier that a dispatch decision is waiting (mirrors the
+      // automatic READY→PENDING path; no Delivery Company is notified until dispatch).
+      broadcastToUsers([subOrder.supplierId], 'delivery_created', { deliveryId: created.id, subOrderId, orderId: subOrder.orderId, status: created.status });
+      res.status(201).json(created);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error creating delivery' });
+    }
+  });
+
+  // Supplier's dispatch decision for a PENDING delivery — Delivery Company queue, or the
+  // supplier's own drivers. See storage.dispatchDelivery().
+  app.patch('/api/deliveries/:id/dispatch', requireApprovedSupplier, async (req: any, res) => {
+    try {
+      const deliveryId = parseInt(req.params.id);
+      const supplier = req.session.userId!;
+      const { mode } = z.object({ mode: z.enum(['DELIVERY_COMPANY', 'SUPPLIER']) }).parse(req.body);
+      const updated = await storage.dispatchDelivery(deliveryId, supplier, mode);
+      const delivery = await storage.getDelivery(deliveryId);
+      if (mode === 'DELIVERY_COMPANY') {
+        // Only now does the delivery become visible to Delivery Companies.
+        const companyIds = await storage.getApprovedDeliveryCompanyIds();
+        broadcastToUsers(companyIds, 'delivery_created', { deliveryId, status: updated.status });
+      }
+      if (delivery) {
+        broadcastToUsers([delivery.cafeId, delivery.supplierId], 'delivery_status_changed', {
+          deliveryId, status: updated.status, orderId: delivery.orderId, subOrderId: delivery.subOrderId,
+        });
+      }
+      broadcast('delivery_status_changed', { deliveryId, status: updated.status });
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(409).json({ message: err.message ?? 'Unable to dispatch delivery' });
+    }
+  });
+
+  app.patch('/api/deliveries/:id/accept', requireApprovedDeliveryCompany, async (req: any, res) => {
+    try {
+      const deliveryId = parseInt(req.params.id);
+      const company = req.deliveryCompany;
+      const updated = await storage.acceptDelivery(deliveryId, company.id);
+      const delivery = await storage.getDelivery(deliveryId);
+      broadcastToUsers([company.id], 'delivery_accepted', { deliveryId, status: updated.status });
+      // Minimal global ping so every connected delivery-company dashboard removes it from
+      // its "available" pool in realtime — no addresses/customer info in the payload.
+      broadcast('delivery_status_changed', { deliveryId, status: updated.status });
+      if (delivery) {
+        broadcastToUsers([delivery.cafeId, delivery.supplierId], 'delivery_status_changed', {
+          deliveryId, status: updated.status, orderId: delivery.orderId, subOrderId: delivery.subOrderId,
+        });
+      }
+      res.json(updated);
+    } catch (err: any) {
+      res.status(409).json({ message: err.message ?? 'Unable to accept delivery' });
+    }
+  });
+
+  // Either operator can assign — a Delivery Company assigning one of its own drivers, or a
+  // Supplier assigning one of its own drivers (for its SUPPLIER-mode deliveries). Ownership is
+  // fully re-verified inside storage.assignDriver() against the delivery's actual
+  // deliveryMode/owner id — the route only checks that the caller is one of the two eligible
+  // roles, never trusting an id the frontend sends.
+  app.patch('/api/deliveries/:id/assign', requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      if (!['DELIVERY_COMPANY', 'SUPPLIER'].includes(user.role)) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      const deliveryId = parseInt(req.params.id);
+      const { driverId } = z.object({ driverId: z.number() }).parse(req.body);
+      const updated = await storage.assignDriver(deliveryId, { id: user.id, role: user.role }, driverId);
+      const delivery = await storage.getDelivery(deliveryId);
+      broadcastToUsers([driverId, user.id], 'delivery_assigned', { deliveryId, status: updated.status, driverId });
+      broadcast('delivery_status_changed', { deliveryId, status: updated.status });
+      if (delivery) {
+        broadcastToUsers([delivery.cafeId, delivery.supplierId], 'delivery_status_changed', {
+          deliveryId, status: updated.status, orderId: delivery.orderId, subOrderId: delivery.subOrderId,
+        });
+      }
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(409).json({ message: err.message ?? 'Unable to assign driver' });
+    }
+  });
+
+  app.patch('/api/deliveries/:id/status', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const deliveryId = parseInt(req.params.id);
+      const { status } = z.object({
+        status: z.enum(['PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED']),
+      }).parse(req.body);
+      const updated = await storage.updateDeliveryStatus(deliveryId, { id: user.id, role: user.role }, status);
+      const delivery = await storage.getDelivery(deliveryId);
+      if (delivery) {
+        await storage.refreshOrderMessagingState(delivery.orderId);
+        const recipients = [delivery.cafeId, delivery.supplierId, delivery.driverId, delivery.deliveryCompanyId]
+          .filter((x): x is number => x != null);
+        broadcastToUsers(recipients, 'delivery_status_changed', {
+          deliveryId, status: updated.status, orderId: delivery.orderId, subOrderId: delivery.subOrderId,
+        });
+        // Minimal global ping — keeps admin oversight + other delivery-company/driver tabs
+        // in sync without exposing address/customer data to everyone.
+        broadcast('delivery_status_changed', { deliveryId, status: updated.status });
+        // Sub-order/order aggregates changed as a side effect of updateDeliveryStatus — echo
+        // the existing events the Coffee Owner / Supplier UIs already listen for.
+        if (['PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(status)) {
+          broadcastToUsers([delivery.cafeId], 'order_status_changed', { orderId: delivery.orderId });
+          broadcast('suborder_status_changed', { orderId: delivery.orderId, subOrderId: delivery.subOrderId });
+          if (status === 'DELIVERED') {
+            broadcast('inventory_updated', { orderId: delivery.orderId, subOrderId: delivery.subOrderId });
+          }
+        }
+      }
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(409).json({ message: err.message ?? 'Unable to update delivery status' });
+    }
+  });
+
+  // ── Driver rosters ────────────────────────────────────────────────────────────
+  // A Driver belongs to exactly one operator — a Delivery Company OR a Supplier (never both;
+  // enforced by a DB CHECK constraint on users, see shared/schema.ts). Both operator types
+  // manage their own roster through the same underlying storage methods
+  // (getDriversForOwner/createDriverForOwner) via two thin, separately-authorized route
+  // groups — one Driver system, two ownership paths. This replaces the earlier
+  // supplier/drivers-page.tsx mock, which incorrectly implied suppliers managed a
+  // Delivery-Company-style fleet with no real ownership model behind it.
+
+  const driverRosterSchema = z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+    password: z.string().min(6),
+    phone: z.string().optional().nullable(),
+  });
+
+  app.get('/api/delivery-company/drivers', requireApprovedDeliveryCompany, async (req: any, res) => {
+    try {
+      res.json(await storage.getDriversForOwner('DELIVERY_COMPANY', req.deliveryCompany.id));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching drivers' });
+    }
+  });
+
+  app.post('/api/delivery-company/drivers', requireApprovedDeliveryCompany, async (req: any, res) => {
+    try {
+      const data = driverRosterSchema.parse(req.body);
+      const driver = await storage.createDriverForOwner('DELIVERY_COMPANY', req.deliveryCompany.id, data);
+      res.status(201).json(driver);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error creating driver' });
+    }
+  });
+
+  app.get('/api/supplier/drivers', requireApprovedSupplier, async (req, res) => {
+    try {
+      res.json(await storage.getDriversForOwner('SUPPLIER', req.session.userId!));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching drivers' });
+    }
+  });
+
+  app.post('/api/supplier/drivers', requireApprovedSupplier, async (req, res) => {
+    try {
+      const data = driverRosterSchema.parse(req.body);
+      const driver = await storage.createDriverForOwner('SUPPLIER', req.session.userId!, data);
+      res.status(201).json(driver);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error creating driver' });
     }
   });
 

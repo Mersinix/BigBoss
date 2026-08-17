@@ -18,7 +18,7 @@ declare global {
   }
 }
 
-function loadGoogleMapsScript(): Promise<void> {
+export function loadGoogleMapsScript(): Promise<void> {
   return new Promise((resolve) => {
     if (window.__gmapsLoaded) { resolve(); return; }
     if (!window.__gmapsCallbacks) window.__gmapsCallbacks = [];

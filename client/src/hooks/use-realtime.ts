@@ -21,6 +21,7 @@ const PRODUCT_EVENTS = ["product_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
 const PROMOTION_EVENTS = ["promotion_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "order_deleted"];
+const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
 
@@ -192,6 +193,11 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/orders"] });
             qc.invalidateQueries({ queryKey: ["/api/returns"] });
             invalidateMessagingQueries(qc);
+          }
+          if (DELIVERY_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
+            // Delivery status changes propagate into sub-order/order aggregates.
+            qc.invalidateQueries({ queryKey: ["/api/orders"] });
           }
           if (MESSAGING_EVENTS.includes(event)) {
             invalidateMessagingQueries(qc);

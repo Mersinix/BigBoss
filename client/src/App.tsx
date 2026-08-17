@@ -19,7 +19,6 @@ import InventoryPage from "@/pages/supplier/inventory-page";
 import OrderRequestsPage from "@/pages/supplier/order-requests-page";
 import SupplierOrdersPage from "@/pages/supplier/orders-page";
 import ReturnsPage from "@/pages/supplier/returns-page";
-import DriversPage from "@/pages/supplier/drivers-page";
 import DeliveryStatusPage from "@/pages/supplier/delivery-status-page";
 import FinanceAnalyticsPage from "@/pages/supplier/finance-analytics-page";
 import PayoutsPage from "@/pages/supplier/payouts-page";
@@ -39,6 +38,13 @@ import MarketingPage from "@/pages/cafe/marketing/marketing-page";
 import SupplierMessagesPage from "@/pages/supplier/messages-page";
 import AdminMessagesPage from "@/pages/admin/messages-page";
 import DeliveryMessagesPage from "@/pages/delivery/messages-page";
+import DeliveryDashboard from "@/pages/delivery/dashboard";
+import AvailableDeliveriesPage from "@/pages/delivery/available-deliveries-page";
+import MyDeliveriesPage from "@/pages/delivery/my-deliveries-page";
+import DeliveryCompanyDriversPage from "@/pages/delivery/drivers-page";
+import DriverDeliveriesPage from "@/pages/delivery/driver-deliveries-page";
+import SupplierMyDeliveriesPage from "@/pages/supplier/my-deliveries-page";
+import SupplierDeliveryDriversPage from "@/pages/supplier/delivery-drivers-page";
 
 // New role dashboards
 import PrinterDashboard from "@/pages/printer/dashboard";
@@ -172,7 +178,23 @@ function SmartDashboard() {
   if (user?.role === "BARISTA_ACADEMY") return <BaristaAcademyDashboard />;
   if (user?.role === "BARISTA_MARKETPLACE") return <BaristaMarketplaceDashboard />;
   if (user?.role === "MAINTENANCE") return <MaintenanceDashboard />;
+  if (user?.role === "DELIVERY_COMPANY" || user?.role === "DRIVER") return <DeliveryDashboard />;
   return <Dashboard />;
+}
+
+// /delivery/my-deliveries and /delivery/drivers are shared routes: a Driver belongs to
+// exactly one operator (Delivery Company or Supplier — see users.deliveryCompanyId /
+// users.supplierId), and each operator gets its own page at the same URL rather than a
+// second set of routes. Mirrors the SmartDashboard role-branch pattern above.
+function MyDeliveriesRoute() {
+  const { user } = useAuth();
+  if (user?.role === "SUPPLIER") return <SupplierMyDeliveriesPage />;
+  return <MyDeliveriesPage />;
+}
+function DriversRoute() {
+  const { user } = useAuth();
+  if (user?.role === "SUPPLIER") return <SupplierDeliveryDriversPage />;
+  return <DeliveryCompanyDriversPage />;
 }
 
 // ── Home route logic ──────────────────────────────────────────────────────────
@@ -249,9 +271,6 @@ function Router() {
       </Route>
       <Route path="/supplier/returns">
         {() => (<DashboardLayout><ProtectedRoute component={ReturnsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
-      </Route>
-      <Route path="/supplier/drivers">
-        {() => (<DashboardLayout><ProtectedRoute component={DriversPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/delivery-status">
         {() => (<DashboardLayout><ProtectedRoute component={DeliveryStatusPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
@@ -436,7 +455,23 @@ function Router() {
         {() => (<DashboardLayout><ProtectedRoute component={AdminMessagesPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
 
-      {/* ── Delivery / Driver routes ── */}
+      {/* ── Delivery Company routes ── */}
+      <Route path="/delivery/available">
+        {() => (<DashboardLayout><ProtectedRoute component={AvailableDeliveriesPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/delivery/my-deliveries">
+        {() => (<DashboardLayout><ProtectedRoute component={MyDeliveriesRoute} allowedRoles={["DELIVERY_COMPANY", "SUPPLIER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/delivery/drivers">
+        {() => (<DashboardLayout><ProtectedRoute component={DriversRoute} allowedRoles={["DELIVERY_COMPANY", "SUPPLIER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+
+      {/* ── Driver routes ── */}
+      <Route path="/delivery/deliveries">
+        {() => (<DashboardLayout><ProtectedRoute component={DriverDeliveriesPage} allowedRoles={["DRIVER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+
+      {/* ── Shared Delivery Company / Driver routes ── */}
       <Route path="/delivery/messages">
         {() => (<DashboardLayout><ProtectedRoute component={DeliveryMessagesPage} allowedRoles={["DELIVERY_COMPANY", "DRIVER"]} requireApproved /></DashboardLayout>)}
       </Route>

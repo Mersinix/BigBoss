@@ -27,8 +27,11 @@ const STATUS_META: Record<string, { label: string; badgeDk: string; badgeLt: str
   CANCELLED:   { label: "Annulée",         badgeDk: "bg-red-500/20 text-red-300 border-red-500/30",           badgeLt: "bg-red-100 text-red-800 border-red-200",           icon: AlertCircle },
 };
 
-// All forward-moving statuses available to the supplier for each current state.
-// Giving the full forward chain lets the supplier skip steps when needed (e.g. direct to Delivered).
+// Forward-moving statuses available to the supplier for each current state. The supplier's
+// authority stops at READY — once a sub-order is READY, a Delivery is created and the
+// physical delivery lifecycle (picked up / in transit / delivered) is owned entirely by the
+// assigned Delivery Company / Driver via /api/deliveries/*, not by the supplier. See
+// SHOP_DELIVERY_SYNCHRONIZATION_IMPLEMENTATION.md.
 const SUPPLIER_NEXT_STATUSES: Record<string, { value: string; label: string; variant: "default" | "destructive" | "outline" }[]> = {
   PENDING: [
     { value: "CONFIRMED",   label: "Accepter",                   variant: "default" },
@@ -37,25 +40,26 @@ const SUPPLIER_NEXT_STATUSES: Record<string, { value: string; label: string; var
   CONFIRMED: [
     { value: "PREPARING",   label: "Commencer la préparation",   variant: "default" },
     { value: "READY",       label: "Marquer comme prête",        variant: "default" },
-    { value: "IN_DELIVERY", label: "En cours de livraison",      variant: "default" },
-    { value: "DELIVERED",   label: "Marquer comme livrée",       variant: "default" },
     { value: "CANCELLED",   label: "Annuler",                    variant: "destructive" },
   ],
   PREPARING: [
     { value: "READY",       label: "Marquer comme prête",        variant: "default" },
-    { value: "IN_DELIVERY", label: "En cours de livraison",      variant: "default" },
-    { value: "DELIVERED",   label: "Marquer comme livrée",       variant: "default" },
     { value: "CANCELLED",   label: "Annuler",                    variant: "destructive" },
   ],
-  READY: [
-    { value: "IN_DELIVERY", label: "En cours de livraison",      variant: "default" },
-    { value: "DELIVERED",   label: "Marquer comme livrée",       variant: "default" },
-  ],
-  IN_DELIVERY: [
-    { value: "DELIVERED",   label: "Marquer comme livrée",       variant: "default" },
-  ],
+  READY: [],
+  IN_DELIVERY: [],
   DELIVERED:   [],
   CANCELLED:   [],
+};
+
+const DELIVERY_STATUS_META: Record<string, { label: string; badgeDk: string; badgeLt: string }> = {
+  AVAILABLE: { label: "En attente de collecte", badgeDk: "bg-amber-500/20 text-amber-300", badgeLt: "bg-amber-100 text-amber-800" },
+  ACCEPTED:  { label: "Prise en charge",         badgeDk: "bg-blue-500/20 text-blue-300",   badgeLt: "bg-blue-100 text-blue-800" },
+  ASSIGNED:  { label: "Chauffeur assigné",       badgeDk: "bg-indigo-500/20 text-indigo-300", badgeLt: "bg-indigo-100 text-indigo-800" },
+  PICKED_UP: { label: "Collectée",               badgeDk: "bg-purple-500/20 text-purple-300", badgeLt: "bg-purple-100 text-purple-800" },
+  IN_TRANSIT:{ label: "En transit",              badgeDk: "bg-purple-500/20 text-purple-300", badgeLt: "bg-purple-100 text-purple-800" },
+  DELIVERED: { label: "Livrée",                  badgeDk: "bg-green-500/20 text-green-300", badgeLt: "bg-green-100 text-green-800" },
+  CANCELLED: { label: "Livraison annulée",       badgeDk: "bg-red-500/20 text-red-300",     badgeLt: "bg-red-100 text-red-800" },
 };
 
 // ── Theme helper ─────────────────────────────────────────────────────────────
@@ -355,6 +359,32 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                   <div className={`px-4 py-2.5 border-t flex justify-between items-center ${isDark ? "border-gray-700/50" : "border-gray-100"}`}>
                     <span className={`text-xs font-medium ${t.textMuted}`}>Sous-total</span>
                     <span className={`font-bold text-sm ${t.textPrimary}`}>{fmt(subOrder.subtotal)}</span>
+                  </div>
+                )}
+
+                {/* Delivery — read-only status of this sub-order's Delivery, once one exists
+                    (created automatically when the sub-order reaches READY). The supplier
+                    tracks it here but all actions (accept/assign/pickup/deliver) happen on
+                    the Delivery Company / Driver side via /api/deliveries/*. */}
+                {(subOrder as any)?.delivery && (
+                  <div className={`px-4 py-3 border-t flex items-start gap-3 ${isDark ? "border-gray-700/50 bg-gray-800/40" : "border-gray-100 bg-gray-50/60"}`}>
+                    <div className="w-8 h-8 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
+                      <Truck className="w-4 h-4 text-indigo-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs font-semibold ${t.textMuted}`}>Livraison</span>
+                        <Badge variant="outline" className={`text-[11px] px-2 py-0.5 rounded-lg border-0 ${t.badge((subOrder as any).delivery.status, DELIVERY_STATUS_META)}`}>
+                          {DELIVERY_STATUS_META[(subOrder as any).delivery.status]?.label ?? (subOrder as any).delivery.status}
+                        </Badge>
+                      </div>
+                      {(subOrder as any).delivery.deliveryCompany && (
+                        <p className={`text-xs mt-1 ${t.textPrimary}`}>Transporteur: {(subOrder as any).delivery.deliveryCompany.name}</p>
+                      )}
+                      {(subOrder as any).delivery.driver && (
+                        <p className={`text-xs ${t.textPrimary}`}>Chauffeur: {(subOrder as any).delivery.driver.name}</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

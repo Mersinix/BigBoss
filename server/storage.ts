@@ -1357,7 +1357,16 @@ export class DatabaseStorage implements IStorage {
           packImageUrl: pack.imageUrl ?? null,
           supplierName: detail?.supplierName ?? '',
           includedProducts: (item.snapshot as any)?.kind === "PACK" && Array.isArray((item.snapshot as any).includedProducts)
-            ? (item.snapshot as any).includedProducts
+            // The stored snapshot holds the FINAL total across every pack in that historical
+            // order (item.quantity packs) — see cart-page.tsx's order-submission comment.
+            // The cart's PackCartItemProduct.quantity invariant is per-ONE-pack, so divide
+            // back down before handing this to the client to re-insert into the cart;
+            // addPackItem() will re-multiply by item.quantity via the cart's own display/
+            // submission logic. Floors at 1 so a zero-division edge case can't drop a row.
+            ? (item.snapshot as any).includedProducts.map((included: any) => ({
+                ...included,
+                quantity: Math.max(1, Math.round((included.quantity ?? 1) / (item.quantity || 1))),
+              }))
             : (detail?.items ?? []).map((pi: any) => ({
                 productId: pi.productId ?? 0,
                 productName: pi.productName ?? pi.product?.name ?? '',
@@ -1367,7 +1376,7 @@ export class DatabaseStorage implements IStorage {
                 subCategoryName: pi.subCategoryName ?? null,
                 flavorName: pi.flavorName ?? null,
                 sizeName: pi.sizeName ?? null,
-                quantity: pi.quantity ?? 1,
+                quantity: pi.quantity ?? 1, // already per-one-pack (live pack recipe)
               })),
           unitPrice: pack.price ?? 0,
         } as any);

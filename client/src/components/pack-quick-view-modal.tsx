@@ -655,9 +655,22 @@ export function PackQuickViewModal() {
 
   const handleAddToCart = () => {
     if (!pack) return;
+    // includedProducts is stored on the cart's PackCartItem as the PER-ONE-PACK
+    // distribution — the same invariant amount regardless of how many packs are in the
+    // cart. The cart/checkout/order-summary UIs derive the displayed and submitted
+    // quantities as (this base quantity × the pack's own cart quantity), so this base must
+    // never itself already be multiplied by `qty`.
+    //
+    // The flavor allocation UI above (flavorSelections) targets `item.quantity * qty` —
+    // i.e. the total across all `qty` packs being added right now — because that's the
+    // natural unit for manually splitting stock-limited variants across a multi-pack
+    // purchase. Dividing by `qty` here converts that total back down to the per-one-pack
+    // base. When qty === 1 (the default, and by far the most common flow) this is a no-op.
     const includedProducts = pack.items.flatMap(item => {
       const allocs = flavorSelections[item.id];
       if (!allocs) {
+        // No manual allocation needed (0 or 1 in-stock variant) — item.quantity is already
+        // the pack's per-one-pack recipe amount, independent of qty.
         return [{
           productId: item.productId,
           productName: item.productName,
@@ -681,7 +694,7 @@ export function PackQuickViewModal() {
           subCategoryName: item.subCategoryName ?? null,
           flavorName: a.flavorName,
           sizeName: a.sizeName,
-          quantity: a.quantity,
+          quantity: Math.max(1, Math.round(a.quantity / qty)),
         }));
     });
 

@@ -63,6 +63,13 @@ export interface PackCartItemProduct {
   subCategoryName: string | null;
   flavorName: string | null;
   sizeName: string | null;
+  /**
+   * Quantity for ONE pack — invariant regardless of PackCartItem.quantity (how many packs
+   * are in the cart). Every consumer (cart page, checkout summary, order submission) must
+   * derive the displayed/total quantity as `quantity * packCartItem.quantity` rather than
+   * reading this value directly as a total. This is what lets +/- on the pack's own
+   * quantity multiply every included distribution without ever touching this array.
+   */
   quantity: number;
 }
 

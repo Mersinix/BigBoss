@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { OrderWithDetails } from "@shared/schema";
+import { groupPackIncludedProducts } from "@/lib/pack-grouping";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
 
@@ -144,48 +145,54 @@ function PackCompositionView({
   const rows = historicalComposition ?? composition ?? [];
   if (!rows.length) return null;
 
+  // Stored order snapshots already contain the exact included quantity captured at
+  // checkout (already resolved to the total across every pack purchased — see
+  // PackCartItemProduct/cart-page.tsx). Legacy orders (created before that snapshot field
+  // existed) fall back to live composition rows, where quantity is per-one-pack and must
+  // still be multiplied by the ordered pack quantity.
+  const multiplier = historicalComposition ? 1 : quantity;
+  const groups = groupPackIncludedProducts(rows, multiplier);
+
   return (
     <div className={`mt-2 rounded-xl p-3 border ${t.innerCard}`}>
       <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textSubtle}`}>
         Composition du pack × {quantity}
       </p>
-      <div className="space-y-2">
-        {rows.map((comp: any, i: number) => {
-          // Stored order snapshots already contain the exact included quantity
-          // captured at checkout. Legacy orders use live composition rows, where
-          // quantity is per pack and must still be multiplied.
-          const totalQty = historicalComposition ? comp.quantity : comp.quantity * quantity;
-          return (
-            <div key={i} className={`flex items-start gap-2 text-xs ${t.textPrimary}`}>
-              <ChevronRight className={`w-3 h-3 mt-0.5 shrink-0 ${t.textSubtle}`} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start gap-2">
-                  {comp.productImageUrl && (
-                    <img
-                      src={comp.productImageUrl}
-                      alt=""
-                      className="w-7 h-7 rounded-lg object-cover shrink-0"
-                    />
-                  )}
-                  <span className="font-medium">{comp.productName}</span>
-                </div>
-                {(comp.brandName || comp.categoryName || comp.subCategoryName) && (
-                  <p className={`mt-1 text-[10px] ${t.textSubtle}`}>
-                    {[comp.brandName, comp.categoryName, comp.subCategoryName].filter(Boolean).join(" · ")}
-                  </p>
+      <div className="space-y-2.5">
+        {groups.map((group) => (
+          <div key={group.productId} className={`flex items-start gap-2 text-xs ${t.textPrimary}`}>
+            <ChevronRight className={`w-3 h-3 mt-0.5 shrink-0 ${t.textSubtle}`} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-2">
+                {group.productImageUrl && (
+                  <img
+                    src={group.productImageUrl}
+                    alt=""
+                    className="w-7 h-7 rounded-lg object-cover shrink-0"
+                  />
                 )}
-                {(comp.flavorName || comp.sizeName) && (
-                  <span className={`ml-1.5 ${t.textMuted}`}>
-                    {comp.flavorName && <span>Saveur: <b>{comp.flavorName}</b></span>}
-                    {comp.flavorName && comp.sizeName && <span className="mx-1">·</span>}
-                    {comp.sizeName && <span>Taille: <b>{comp.sizeName}</b></span>}
-                  </span>
-                )}
+                <span className="font-medium">{group.productName}</span>
               </div>
-              <span className={`font-bold shrink-0 ${t.textMuted}`}>×{totalQty}</span>
+              {(group.brandName || group.categoryName || group.subCategoryName) && (
+                <p className={`mt-1 text-[10px] ${t.textSubtle}`}>
+                  {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
+                </p>
+              )}
+              <div className="mt-1 space-y-0.5">
+                {group.distributions.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <span className={t.textMuted}>
+                      {d.flavorName && <span>Saveur: <b>{d.flavorName}</b></span>}
+                      {d.flavorName && d.sizeName && <span className="mx-1">·</span>}
+                      {d.sizeName && <span>Taille: <b>{d.sizeName}</b></span>}
+                    </span>
+                    <span className={`font-bold shrink-0 ${t.textMuted}`}>×{d.quantity}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </div>
   );

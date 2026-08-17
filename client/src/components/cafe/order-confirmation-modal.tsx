@@ -10,6 +10,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { useThemeStore } from "@/store/theme-store";
 import type { CartItem, PackCartItem } from "@/hooks/use-cart";
 import type { CartPromotionEvaluation, GeoLocation, OrderPriority } from "@shared/schema";
+import { groupPackIncludedProducts } from "@/lib/pack-grouping";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -320,19 +321,28 @@ export default function OrderConfirmationModal({
                     <p className={`font-semibold text-sm ${t.textPrimary}`}>{pack.packName}</p>
                       <p className={`text-[11px] mt-0.5 ${t.textMuted}`}>{pack.supplierName}</p>
                     {pack.includedProducts.length > 0 && (
-                        <div className={`mt-2 space-y-1.5 border-t pt-2 ${t.dk ? "border-amber-800/40" : "border-amber-200"}`}>
-                          {pack.includedProducts.map((ip, index) => (
-                            <div key={`${ip.productId}-${index}`} className="flex items-start gap-2">
+                        <div className={`mt-2 space-y-2 border-t pt-2 ${t.dk ? "border-amber-800/40" : "border-amber-200"}`}>
+                          {groupPackIncludedProducts(pack.includedProducts, pack.quantity).map((group) => (
+                            <div key={group.productId} className="flex items-start gap-2">
                               <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-gray-700/60">
-                                {ip.productImageUrl
-                                  ? <img src={ip.productImageUrl} alt="" className="w-full h-full object-cover" />
+                                {group.productImageUrl
+                                  ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
                                   : <Package className="w-3 h-3 m-2 text-gray-500" />}
                               </div>
                               <div className="min-w-0">
-                                <p className={`text-[11px] font-semibold ${t.textPrimary}`}>{ip.quantity}× {ip.productName}</p>
-                                <p className={`text-[10px] ${t.textMuted}`}>
-                                  {[ip.brandName, ip.categoryName, ip.subCategoryName, ip.flavorName, ip.sizeName].filter(Boolean).join(" · ")}
-                                </p>
+                                <p className={`text-[11px] font-semibold ${t.textPrimary}`}>{group.productName}</p>
+                                {(group.brandName || group.categoryName || group.subCategoryName) && (
+                                  <p className={`text-[10px] ${t.textMuted}`}>
+                                    {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
+                                  </p>
+                                )}
+                                <div className="mt-0.5 space-y-0.5">
+                                  {group.distributions.map((d, i) => (
+                                    <p key={i} className={`text-[10px] ${t.textMuted}`}>
+                                      {d.quantity}× {[d.flavorName, d.sizeName].filter(Boolean).join(" · ")}
+                                    </p>
+                                  ))}
+                                </div>
                               </div>
                             </div>
                           ))}

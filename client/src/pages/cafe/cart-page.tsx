@@ -23,6 +23,7 @@ import LocationPickerModal, { type PickedLocation } from "@/components/location-
 import { userToAccountAddress, pickedToGeoLocation } from "@/store/search-location-store";
 import OrderConfirmationModal, { type ConfirmOrderOpts } from "@/components/cafe/order-confirmation-modal";
 import { useAccountOpenStore } from "@/store/account-open-store";
+import { groupPackIncludedProducts } from "@/lib/pack-grouping";
 
 export default function CartPage() {
   const {
@@ -239,7 +240,10 @@ export default function CartPage() {
         packId: p.packId,
         supplierId: p.supplierId,
         quantity: p.quantity,
-         includedProducts: p.includedProducts,
+         // Cart items store the per-ONE-pack distribution (see PackCartItemProduct);
+         // resolve to the actual total being ordered here, once, right before submission —
+         // this is what gets snapshotted on the order and must reflect p.quantity packs.
+         includedProducts: p.includedProducts.map((ip) => ({ ...ip, quantity: ip.quantity * p.quantity })),
       })),
       deliveryAddress: opts.deliveryMethod === "DELIVERY_SERVICE" ? activeDeliveryAddress! : undefined,
       deliveryMethod: opts.deliveryMethod,
@@ -410,19 +414,28 @@ export default function CartPage() {
                           <p className={`font-medium text-sm truncate ${textPrimary}`}>{pack.packName}</p>
                            <p className={`text-xs ${textMuted}`}>{pack.supplierName} · {fmt(pack.unitPrice)} le pack</p>
                           {pack.includedProducts.length > 0 && (
-                             <div className={`mt-3 space-y-2 border-t pt-2 ${dk ? "border-amber-500/20" : "border-amber-100"}`}>
-                               {pack.includedProducts.map((ip, index) => (
-                                 <div key={`${ip.productId}-${index}`} className="flex items-start gap-2">
+                             <div className={`mt-3 space-y-2.5 border-t pt-2 ${dk ? "border-amber-500/20" : "border-amber-100"}`}>
+                               {groupPackIncludedProducts(pack.includedProducts, pack.quantity).map((group) => (
+                                 <div key={group.productId} className="flex items-start gap-2">
                                    <div className={`w-9 h-9 rounded-lg overflow-hidden shrink-0 ${imgBg}`}>
-                                     {ip.productImageUrl
-                                       ? <img src={ip.productImageUrl} alt="" className="w-full h-full object-cover" />
+                                     {group.productImageUrl
+                                       ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
                                        : <Package className={`w-4 h-4 m-2 ${textMuted}`} />}
                                    </div>
                                    <div className="min-w-0 flex-1">
-                                     <p className={`text-xs font-semibold ${textPrimary}`}>{ip.quantity}× {ip.productName}</p>
-                                     <p className={`text-[10px] leading-4 ${textMuted}`}>
-                                       {[ip.brandName, ip.categoryName, ip.subCategoryName, ip.flavorName, ip.sizeName].filter(Boolean).join(" · ")}
-                                     </p>
+                                     <p className={`text-xs font-semibold ${textPrimary}`}>{group.productName}</p>
+                                     {(group.brandName || group.categoryName || group.subCategoryName) && (
+                                       <p className={`text-[10px] leading-4 ${textMuted}`}>
+                                         {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
+                                       </p>
+                                     )}
+                                     <div className="mt-0.5 space-y-0.5">
+                                       {group.distributions.map((d, i) => (
+                                         <p key={i} className={`text-[10px] leading-4 ${textMuted}`}>
+                                           {d.quantity}× {[d.flavorName, d.sizeName].filter(Boolean).join(" · ")}
+                                         </p>
+                                       ))}
+                                     </div>
                                    </div>
                                  </div>
                                ))}

@@ -105,7 +105,24 @@ export function AppSidebar() {
             { title: "System Management", url: "/admin/system-management", icon: Sliders },
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
              { title: "Analytics", url: "/admin/analytics", icon: BarChart2 },
+             { title: "Earnings", url: "/admin/earnings", icon: TrendingUp },
              
+          ],
+        },
+        {
+          label: "MANAGEMENT",
+          items: [
+           
+            { title: "Notifications", url: "/admin/notifications", icon: Bell },
+            { title: "Messages", url: "/admin/messages", icon: MessageCircle },
+            { title: "Reviews", url: "/admin/reviews", icon: Star },            
+          ],
+        },
+        {
+          label: "SERVICES",
+          items: [
+            { title: "Maintenance", url: "/admin/maintenance", icon: Wrench },
+            
           ],
         },
         {
@@ -126,68 +143,13 @@ export function AppSidebar() {
             { title: "Orders", url: "/orders", icon: ClipboardList },
             { title: "Invoices", url: "/admin/invoices", icon: FileText },
             { title: "Payments", url: "/admin/payments", icon: DollarSign },
-            { title: "Earnings", url: "/admin/earnings", icon: TrendingUp },
-           
-          ],
-        },
-        {
-          label: "MANAGEMENT",
-          items: [
-           
-            { title: "Notifications", url: "/admin/notifications", icon: Bell },
-            { title: "Messages", url: "/admin/messages", icon: MessageCircle },
-            { title: "Reviews", url: "/admin/reviews", icon: Star },
-            { title: "Maintenance", url: "/admin/maintenance", icon: Wrench },
             
+           
           ],
         },
-       
+        
       ];
     }
-
-    // if (user.role === "CAFE_OWNER") {
-    //   return [
-    //     {
-    //       label: "MAIN",
-    //       items: [
-    //         { title: "Dashboard", url: "/", icon: LayoutDashboard },
-    //       ],
-    //     },
-    //     {
-    //       label: "MARKETPLACE",
-    //       items: [
-    //         { title: "Browse Products", url: "/products", icon: Store },
-    //         { title: "Cart", url: "/cart", icon: ShoppingCart },
-    //         { title: "Suppliers", url: "/cafe/suppliers", icon: Package },
-    //       ],
-    //     },
-    //     {
-    //       label: "ORDERS",
-    //       items: [
-    //         { title: "My Orders", url: "/cafe/orders", icon: ClipboardList },
-    //       ],
-    //     },
-    //     {
-    //       label: "ENGAGEMENT",
-    //       items: [
-    //         { title: "Favorites", url: "/cafe/favorites", icon: Star },
-    //         { title: "Messages", url: "/cafe/messages", icon: MessageCircle },
-    //       ],
-    //     },
-    //     {
-    //       label: "INSIGHTS",
-    //       items: [
-    //         { title: "Analytics", url: "/cafe/analytics", icon: BarChart2 },
-    //       ],
-    //     },
-    //     {
-    //       label: "ACCOUNT",
-    //       items: [
-    //         { title: "Settings", url: "/cafe/settings", icon: Settings },
-    //       ],
-    //     },
-    //   ];
-    // }
 
     if (user.role === "SUPPLIER") {
       return [
@@ -205,8 +167,9 @@ export function AppSidebar() {
         {
           label: "ORDERS",
           items: [
-            { title: "Orders", url: "/orders", icon: ClipboardList },
             { title: "Order Requests", url: "/supplier/order-requests", icon: ClipboardCheck },
+            { title: "Orders", url: "/orders", icon: ClipboardList },
+            { title: "Order Delivery", url: "/supplier/delivery-status", icon: MapPin },
             { title: "Returns", url: "/supplier/returns", icon: RotateCcw },
           ],
         },
@@ -232,7 +195,7 @@ export function AppSidebar() {
           label: "CUSTOMERS",
           items: [
             { title: "Cafes", url: "/supplier/cafes", icon: Coffee },
-            { title: "Delivery Status", url: "/supplier/delivery-status", icon: MapPin },
+            
           ],
         },
         

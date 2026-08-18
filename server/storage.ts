@@ -10,6 +10,7 @@ import {
   landingConfig, messagingSettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones,
+  baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions,
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
   orderReturns,
@@ -46,6 +47,10 @@ import {
   type MaintenanceProfile, type InsertMaintenanceProfile, type MaintenanceMarketplaceCard,
   type MaintenanceReservation, type InsertMaintenanceReservation,
   type MaintenanceCompetency, type MaintenanceZone,
+  type BaristaSkill, type BaristaMarketplaceProfile, type InsertBaristaMarketplaceProfile,
+  type BaristaMarketplaceRequest, type BaristaMarketplaceMission,
+  type BaristaMarketplaceCard, type BaristaRequestWithParties, type BaristaMissionWithParties,
+  type BaristaRequestStatus, type BaristaMissionStatus,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
 
@@ -269,6 +274,30 @@ export interface IStorage {
   getMaintenanceFavoritesByUser(userId: number): Promise<number[]>;
   addMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
   removeMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
+
+  // Barista Marketplace
+  getBaristaSkills(activeOnly?: boolean): Promise<BaristaSkill[]>;
+  createBaristaSkill(name: string): Promise<BaristaSkill>;
+  updateBaristaSkill(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaSkill | undefined>;
+  deleteBaristaSkill(id: number): Promise<void>;
+  getBaristaMarketplaceProfile(userId: number): Promise<BaristaMarketplaceProfile>;
+  upsertBaristaMarketplaceProfile(userId: number, updates: Partial<InsertBaristaMarketplaceProfile>): Promise<BaristaMarketplaceProfile>;
+  getBaristaMarketplaceProfiles(filters?: { search?: string; level?: string; skill?: string; city?: string; available?: boolean }): Promise<BaristaMarketplaceCard[]>;
+  getBaristaMarketplaceCard(userId: number): Promise<BaristaMarketplaceCard | undefined>;
+  getBaristaRequestsForBarista(userId: number): Promise<BaristaRequestWithParties[]>;
+  getBaristaRequestsForOwner(userId: number): Promise<BaristaRequestWithParties[]>;
+  getBaristaRequestById(id: number): Promise<BaristaMarketplaceRequest | undefined>;
+  createBaristaRequest(cafeOwnerId: number, data: { baristaUserId: number; missionType: string; message: string; proposedRateInCents?: number | null; startDate: string; endDate?: string | null }): Promise<BaristaMarketplaceRequest>;
+  updateBaristaRequestStatus(requestId: number, actingUser: { id: number; role: string }, newStatus: BaristaRequestStatus, extra?: { cancelReason?: string }): Promise<{ request: BaristaMarketplaceRequest; mission: BaristaMarketplaceMission | null }>;
+  getBaristaMissionsForBarista(userId: number): Promise<BaristaMissionWithParties[]>;
+  getBaristaMissionsForOwner(userId: number): Promise<BaristaMissionWithParties[]>;
+  getBaristaMissionById(id: number): Promise<BaristaMarketplaceMission | undefined>;
+  updateBaristaMissionStatus(missionId: number, actingUser: { id: number; role: string }, newStatus: BaristaMissionStatus): Promise<BaristaMarketplaceMission>;
+  getBaristaReviews(baristaUserId: number): Promise<SupplierProductReview[]>;
+  getBaristaReviewForMission(missionId: number, cafeId: number): Promise<SupplierProductReview | undefined>;
+  upsertBaristaReview(data: { baristaUserId: number; missionId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string; cafeOwnerName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }>;
+  getBaristaRevenueSummary(baristaUserId: number): Promise<{ totalEarnedCents: number; completedMissions: number; currentMonthCents: number; currentMonthMissions: number; history: { month: string; totalCents: number; missions: number }[] }>;
+  refreshBaristaMessagingState(requestId: number): Promise<void>;
 
   // Inventory
   getSupplierInventory(supplierId: number, filters?: InventoryFilters, sort?: InventorySort, page?: number, pageSize?: number): Promise<InventoryListResult>;
@@ -2330,6 +2359,499 @@ export class DatabaseStorage implements IStorage {
       eq(maintenanceFavorites.userId, userId),
       eq(maintenanceFavorites.maintenanceUserId, maintenanceUserId),
     ));
+  }
+
+  // ── Barista Marketplace ──────────────────────────────────────────────────────
+  // Mirrors the Maintenance section above field-for-field: a public profile,
+  // request lifecycle, mission derived from an accepted request, and reviews
+  // reusing supplierProductReviews (reviewType='BARISTA_MARKETPLACE') exactly
+  // like Maintenance did with 'MAINTENANCE'. Rating/reviewCount are always
+  // computed live from reviews (never a stored aggregate) — see
+  // BARISTA_MARKETPLACE_IMPLEMENTATION_REPORT.md for the reasoning.
+
+  // ── Skills taxonomy ──
+  async getBaristaSkills(activeOnly = false): Promise<BaristaSkill[]> {
+    const rows = await db.select().from(baristaSkills).orderBy(asc(baristaSkills.name));
+    return activeOnly ? rows.filter((s) => s.isActive && !s.isFrozen) : rows;
+  }
+
+  async createBaristaSkill(name: string): Promise<BaristaSkill> {
+    const [created] = await db.insert(baristaSkills).values({ name: name.trim() }).returning();
+    return created;
+  }
+
+  async updateBaristaSkill(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaSkill | undefined> {
+    const [updated] = await db.update(baristaSkills)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .where(eq(baristaSkills.id, id)).returning();
+    return updated;
+  }
+
+  async deleteBaristaSkill(id: number): Promise<void> {
+    await db.delete(baristaSkills).where(eq(baristaSkills.id, id));
+  }
+
+  // ── Profile ──
+  async getBaristaMarketplaceProfile(userId: number): Promise<BaristaMarketplaceProfile> {
+    const [profile] = await db.select().from(baristaMarketplaceProfiles).where(eq(baristaMarketplaceProfiles.userId, userId));
+    if (profile) return profile;
+    const [created] = await db.insert(baristaMarketplaceProfiles).values({ userId }).onConflictDoNothing().returning();
+    if (created) return created;
+    // Lost a create race — re-read.
+    const [existing] = await db.select().from(baristaMarketplaceProfiles).where(eq(baristaMarketplaceProfiles.userId, userId));
+    return existing!;
+  }
+
+  async upsertBaristaMarketplaceProfile(userId: number, updates: Partial<InsertBaristaMarketplaceProfile>): Promise<BaristaMarketplaceProfile> {
+    const current = await this.getBaristaMarketplaceProfile(userId);
+    const [updated] = await db.update(baristaMarketplaceProfiles)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(baristaMarketplaceProfiles.id, current.id))
+      .returning();
+    return updated;
+  }
+
+  /** Live rating/reviewCount for one Barista — shared by the list builder and single-card reads. */
+  private async computeBaristaReviewStats(baristaUserIds: number[]): Promise<Map<number, { rating: number; reviewCount: number }>> {
+    if (!baristaUserIds.length) return new Map();
+    const reviewRows = await db.select({
+      baristaMarketplaceUserId: supplierProductReviews.baristaMarketplaceUserId,
+      rating: supplierProductReviews.rating,
+    }).from(supplierProductReviews).where(and(
+      eq(supplierProductReviews.reviewType, "BARISTA_MARKETPLACE"),
+      inArray(supplierProductReviews.baristaMarketplaceUserId as any, baristaUserIds),
+    ));
+    const sums = new Map<number, { total: number; sum: number }>();
+    for (const row of reviewRows) {
+      if (!row.baristaMarketplaceUserId) continue;
+      const current = sums.get(row.baristaMarketplaceUserId) ?? { total: 0, sum: 0 };
+      current.total += 1;
+      current.sum += row.rating;
+      sums.set(row.baristaMarketplaceUserId, current);
+    }
+    const result = new Map<number, { rating: number; reviewCount: number }>();
+    for (const [userId, stats] of Array.from(sums.entries())) {
+      result.set(userId, { rating: Math.round((stats.sum / stats.total) * 10), reviewCount: stats.total });
+    }
+    return result;
+  }
+
+  /** Public marketplace listing — mirrors getMaintenanceProfiles() exactly. */
+  async getBaristaMarketplaceProfiles(filters?: {
+    search?: string; level?: string; skill?: string; city?: string; available?: boolean;
+  }): Promise<BaristaMarketplaceCard[]> {
+    const rows = await db.select({ profile: baristaMarketplaceProfiles, user: users })
+      .from(baristaMarketplaceProfiles)
+      .innerJoin(users, eq(baristaMarketplaceProfiles.userId, users.id))
+      .where(and(
+        eq(users.role, "BARISTA_MARKETPLACE" as any),
+        eq(users.status, "approved"),
+        eq(baristaMarketplaceProfiles.marketplaceVisible, true),
+      ));
+
+    const userIds = rows.map(({ profile }) => profile.userId);
+    const statsMap = await this.computeBaristaReviewStats(userIds);
+
+    // "Available" on the public list means: not manually toggled off, not on vacation,
+    // and not mid-mission right now (today falls within an ACTIVE mission's date range).
+    // Fine-grained "are you free for MY specific dates" is checked server-side at request
+    // creation/acceptance time (see createBaristaRequest/acceptBaristaRequest), not here.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const activeMissions = userIds.length
+      ? await db.select({ baristaUserId: baristaMarketplaceMissions.baristaUserId, startDate: baristaMarketplaceMissions.startDate, endDate: baristaMarketplaceMissions.endDate })
+        .from(baristaMarketplaceMissions)
+        .where(and(
+          inArray(baristaMarketplaceMissions.baristaUserId, userIds),
+          eq(baristaMarketplaceMissions.status, "ACTIVE"),
+        ))
+      : [];
+    const busyToday = new Set(
+      activeMissions.filter((m) => m.startDate <= todayStr && (m.endDate ?? m.startDate) >= todayStr).map((m) => m.baristaUserId),
+    );
+
+    const cards = rows.map(({ profile, user }) => {
+      const stats = statsMap.get(profile.userId);
+      const available = profile.isAvailable && !profile.isOnVacation && !busyToday.has(profile.userId);
+      return {
+        ...profile,
+        userId: user.id,
+        name: user.name,
+        phone: user.phone ?? null,
+        initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+        location: user.locationAddress ?? profile.city ?? "",
+        available,
+        rating: stats?.rating ?? 0,
+        reviewCount: stats?.reviewCount ?? 0,
+      } as BaristaMarketplaceCard;
+    });
+
+    const query = filters?.search?.trim().toLowerCase();
+    return cards.filter((card) => {
+      if (query) {
+        const haystack = [card.name, card.bio, card.location, card.skills.join(" ")].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (filters?.level && card.level !== filters.level) return false;
+      if (filters?.skill && !card.skills.some((s) => s.toLowerCase() === filters.skill!.toLowerCase())) return false;
+      if (filters?.city && card.location.toLowerCase() !== filters.city.toLowerCase()) return false;
+      if (filters?.available !== undefined && card.available !== filters.available) return false;
+      return true;
+    });
+  }
+
+  async getBaristaMarketplaceCard(userId: number): Promise<BaristaMarketplaceCard | undefined> {
+    const [row] = await db.select({ profile: baristaMarketplaceProfiles, user: users })
+      .from(baristaMarketplaceProfiles)
+      .innerJoin(users, eq(baristaMarketplaceProfiles.userId, users.id))
+      .where(eq(baristaMarketplaceProfiles.userId, userId));
+    if (!row) return undefined;
+    const stats = (await this.computeBaristaReviewStats([userId])).get(userId);
+    return {
+      ...row.profile,
+      userId: row.user.id,
+      name: row.user.name,
+      phone: row.user.phone ?? null,
+      initials: row.user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+      location: row.user.locationAddress ?? row.profile.city ?? "",
+      available: row.profile.isAvailable && !row.profile.isOnVacation,
+      rating: stats?.rating ?? 0,
+      reviewCount: stats?.reviewCount ?? 0,
+    };
+  }
+
+  // ── Requests ──
+  private attachRequestParties(rows: BaristaMarketplaceRequest[], userMap: Map<number, User>): BaristaRequestWithParties[] {
+    return rows.map((r) => ({
+      ...r,
+      cafeOwnerName: userMap.get(r.cafeOwnerId)?.name ?? "—",
+      cafeOwnerPhone: userMap.get(r.cafeOwnerId)?.phone ?? null,
+      baristaName: userMap.get(r.baristaUserId)?.name ?? "—",
+      baristaPhone: userMap.get(r.baristaUserId)?.phone ?? null,
+    }));
+  }
+
+  async getBaristaRequestsForBarista(userId: number): Promise<BaristaRequestWithParties[]> {
+    const rows = await db.select().from(baristaMarketplaceRequests)
+      .where(eq(baristaMarketplaceRequests.baristaUserId, userId))
+      .orderBy(desc(baristaMarketplaceRequests.createdAt));
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.baristaUserId])));
+    const userMap = new Map((await db.select().from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u]));
+    return this.attachRequestParties(rows, userMap);
+  }
+
+  async getBaristaRequestsForOwner(userId: number): Promise<BaristaRequestWithParties[]> {
+    const rows = await db.select().from(baristaMarketplaceRequests)
+      .where(eq(baristaMarketplaceRequests.cafeOwnerId, userId))
+      .orderBy(desc(baristaMarketplaceRequests.createdAt));
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.baristaUserId])));
+    const userMap = new Map((await db.select().from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u]));
+    return this.attachRequestParties(rows, userMap);
+  }
+
+  async getBaristaRequestById(id: number): Promise<BaristaMarketplaceRequest | undefined> {
+    const [row] = await db.select().from(baristaMarketplaceRequests).where(eq(baristaMarketplaceRequests.id, id));
+    return row;
+  }
+
+  async createBaristaRequest(cafeOwnerId: number, data: {
+    baristaUserId: number; missionType: string; message: string;
+    proposedRateInCents?: number | null; startDate: string; endDate?: string | null;
+  }): Promise<BaristaMarketplaceRequest> {
+    const [target] = await db.select().from(users).where(eq(users.id, data.baristaUserId));
+    if (!target || target.role !== "BARISTA_MARKETPLACE" || target.status !== "approved") {
+      throw new Error("This Barista is not available for recruitment");
+    }
+    if (target.id === cafeOwnerId) throw new Error("You cannot recruit yourself");
+    const profile = await this.getBaristaMarketplaceProfile(data.baristaUserId);
+    if (!profile.marketplaceVisible) throw new Error("This Barista is not currently visible on the marketplace");
+
+    // Duplicate-active-request guard: one cafe may not have more than one
+    // open (PENDING/DISCUSSION) request against the same Barista at a time.
+    const existingActive = await db.select().from(baristaMarketplaceRequests).where(and(
+      eq(baristaMarketplaceRequests.cafeOwnerId, cafeOwnerId),
+      eq(baristaMarketplaceRequests.baristaUserId, data.baristaUserId),
+      inArray(baristaMarketplaceRequests.status, ["PENDING", "DISCUSSION"]),
+    ));
+    if (existingActive.length > 0) {
+      throw new Error("You already have an open request with this Barista");
+    }
+
+    const [created] = await db.insert(baristaMarketplaceRequests).values({
+      cafeOwnerId,
+      baristaUserId: data.baristaUserId,
+      missionType: data.missionType,
+      message: data.message,
+      proposedRateInCents: data.proposedRateInCents ?? profile.dailyRateInCents,
+      startDate: data.startDate,
+      endDate: data.endDate ?? null,
+      status: "PENDING",
+    }).returning();
+    return created;
+  }
+
+  /** True if [startA,endA] and [startB,endB] (inclusive, endDate may equal startDate) overlap. */
+  private dateRangesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
+    return startA <= endB && startB <= endA;
+  }
+
+  private readonly BARISTA_REQUEST_TRANSITIONS: Record<BaristaRequestStatus, BaristaRequestStatus[]> = {
+    PENDING: ["DISCUSSION", "ACCEPTED", "REJECTED", "CANCELLED"],
+    DISCUSSION: ["ACCEPTED", "REJECTED", "CANCELLED"],
+    ACCEPTED: ["COMPLETED"],
+    REJECTED: [],
+    CANCELLED: [],
+    COMPLETED: [],
+  };
+
+  /**
+   * Applies a request status transition with full ownership + state-machine enforcement.
+   * ACCEPTED atomically creates the mission (transaction) after checking the Barista has
+   * no overlapping UPCOMING/ACTIVE mission for the requested dates — this is the
+   * server-side overlap guard; the frontend never decides this.
+   */
+  async updateBaristaRequestStatus(
+    requestId: number,
+    actingUser: { id: number; role: string },
+    newStatus: BaristaRequestStatus,
+    extra?: { cancelReason?: string },
+  ): Promise<{ request: BaristaMarketplaceRequest; mission: BaristaMarketplaceMission | null }> {
+    const [current] = await db.select().from(baristaMarketplaceRequests).where(eq(baristaMarketplaceRequests.id, requestId));
+    if (!current) throw new Error("Request not found");
+
+    const allowed = this.BARISTA_REQUEST_TRANSITIONS[current.status as BaristaRequestStatus] ?? [];
+    if (!allowed.includes(newStatus)) {
+      throw new Error(`Cannot move a request from ${current.status} to ${newStatus}`);
+    }
+
+    const isBaristaStep = ["DISCUSSION", "ACCEPTED", "REJECTED"].includes(newStatus);
+    if (isBaristaStep) {
+      if (actingUser.role !== "BARISTA_MARKETPLACE" || current.baristaUserId !== actingUser.id) {
+        throw new Error("Only the recruited Barista can respond to this request");
+      }
+    } else if (newStatus === "CANCELLED") {
+      if (actingUser.role !== "CAFE_OWNER" || current.cafeOwnerId !== actingUser.id) {
+        throw new Error("Only the requesting café can cancel this request");
+      }
+    }
+
+    if (newStatus === "ACCEPTED") {
+      const endDate = current.endDate ?? current.startDate;
+      const overlapping = await db.select().from(baristaMarketplaceMissions).where(and(
+        eq(baristaMarketplaceMissions.baristaUserId, current.baristaUserId),
+        inArray(baristaMarketplaceMissions.status, ["UPCOMING", "ACTIVE"]),
+      ));
+      const conflict = overlapping.find((m) => this.dateRangesOverlap(current.startDate, endDate, m.startDate, m.endDate ?? m.startDate));
+      if (conflict) {
+        throw new Error(`You already have a mission booked from ${conflict.startDate} to ${conflict.endDate ?? conflict.startDate}`);
+      }
+    }
+
+    return db.transaction(async (tx) => {
+      const updates: any = { status: newStatus, updatedAt: new Date() };
+      if (["ACCEPTED", "REJECTED"].includes(newStatus)) updates.respondedAt = new Date();
+      if (newStatus === "CANCELLED" && extra?.cancelReason) updates.cancelReason = extra.cancelReason;
+
+      const [row] = await tx.update(baristaMarketplaceRequests)
+        .set(updates)
+        .where(and(eq(baristaMarketplaceRequests.id, requestId), eq(baristaMarketplaceRequests.status, current.status)))
+        .returning();
+      if (!row) throw new Error("Request status changed concurrently — please retry");
+
+      let mission: BaristaMarketplaceMission | null = null;
+      if (newStatus === "ACCEPTED") {
+        const [createdMission] = await tx.insert(baristaMarketplaceMissions).values({
+          requestId: row.id,
+          cafeOwnerId: row.cafeOwnerId,
+          baristaUserId: row.baristaUserId,
+          missionType: row.missionType,
+          rateInCents: row.proposedRateInCents ?? 0,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          status: "UPCOMING",
+        }).onConflictDoNothing().returning(); // requestId is unique — idempotent against duplicate accept calls
+        mission = createdMission ?? null;
+      }
+
+      return { request: row, mission };
+    });
+  }
+
+  // ── Missions ──
+  private attachMissionParties(rows: BaristaMarketplaceMission[], userMap: Map<number, User>): BaristaMissionWithParties[] {
+    return rows.map((m) => ({
+      ...m,
+      cafeOwnerName: userMap.get(m.cafeOwnerId)?.name ?? "—",
+      baristaName: userMap.get(m.baristaUserId)?.name ?? "—",
+    }));
+  }
+
+  async getBaristaMissionsForBarista(userId: number): Promise<BaristaMissionWithParties[]> {
+    const rows = await db.select().from(baristaMarketplaceMissions)
+      .where(eq(baristaMarketplaceMissions.baristaUserId, userId))
+      .orderBy(desc(baristaMarketplaceMissions.createdAt));
+    const userIds = Array.from(new Set(rows.flatMap((m) => [m.cafeOwnerId, m.baristaUserId])));
+    const userMap = new Map((await db.select().from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u]));
+    return this.attachMissionParties(rows, userMap);
+  }
+
+  async getBaristaMissionsForOwner(userId: number): Promise<BaristaMissionWithParties[]> {
+    const rows = await db.select().from(baristaMarketplaceMissions)
+      .where(eq(baristaMarketplaceMissions.cafeOwnerId, userId))
+      .orderBy(desc(baristaMarketplaceMissions.createdAt));
+    const userIds = Array.from(new Set(rows.flatMap((m) => [m.cafeOwnerId, m.baristaUserId])));
+    const userMap = new Map((await db.select().from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u]));
+    return this.attachMissionParties(rows, userMap);
+  }
+
+  async getBaristaMissionById(id: number): Promise<BaristaMarketplaceMission | undefined> {
+    const [row] = await db.select().from(baristaMarketplaceMissions).where(eq(baristaMarketplaceMissions.id, id));
+    return row;
+  }
+
+  private readonly BARISTA_MISSION_TRANSITIONS: Record<BaristaMissionStatus, BaristaMissionStatus[]> = {
+    UPCOMING: ["ACTIVE", "CANCELLED"],
+    ACTIVE: ["COMPLETED", "CANCELLED"],
+    COMPLETED: [],
+    CANCELLED: [],
+  };
+
+  async updateBaristaMissionStatus(missionId: number, actingUser: { id: number; role: string }, newStatus: BaristaMissionStatus): Promise<BaristaMarketplaceMission> {
+    const [current] = await db.select().from(baristaMarketplaceMissions).where(eq(baristaMarketplaceMissions.id, missionId));
+    if (!current) throw new Error("Mission not found");
+
+    const allowed = this.BARISTA_MISSION_TRANSITIONS[current.status as BaristaMissionStatus] ?? [];
+    if (!allowed.includes(newStatus)) {
+      throw new Error(`Cannot move a mission from ${current.status} to ${newStatus}`);
+    }
+
+    const isBarista = actingUser.role === "BARISTA_MARKETPLACE" && current.baristaUserId === actingUser.id;
+    const isOwner = actingUser.role === "CAFE_OWNER" && current.cafeOwnerId === actingUser.id;
+    if (newStatus === "CANCELLED") {
+      if (!isBarista && !isOwner) throw new Error("Only the Barista or the requesting café can cancel this mission");
+      if (isOwner && current.status !== "UPCOMING") throw new Error("The café can only cancel a mission that hasn't started yet");
+    } else {
+      // ACTIVE / COMPLETED — only the Barista performing the work advances these.
+      if (!isBarista) throw new Error("Only the assigned Barista can update this mission's progress");
+    }
+
+    const updates: any = { status: newStatus };
+    if (newStatus === "COMPLETED") updates.completedAt = new Date();
+    if (newStatus === "CANCELLED") updates.cancelledAt = new Date();
+
+    const [updated] = await db.update(baristaMarketplaceMissions)
+      .set(updates)
+      .where(and(eq(baristaMarketplaceMissions.id, missionId), eq(baristaMarketplaceMissions.status, current.status)))
+      .returning();
+    if (!updated) throw new Error("Mission status changed concurrently — please retry");
+
+    // Mirror the completion back onto the originating request for historical accuracy —
+    // the request row is otherwise terminal at ACCEPTED (see BARISTA_REQUEST_TRANSITIONS).
+    if (newStatus === "COMPLETED") {
+      await db.update(baristaMarketplaceRequests)
+        .set({ status: "COMPLETED", updatedAt: new Date() })
+        .where(and(eq(baristaMarketplaceRequests.id, updated.requestId), eq(baristaMarketplaceRequests.status, "ACCEPTED")));
+    }
+
+    return updated;
+  }
+
+  // ── Reviews (reuses supplierProductReviews, reviewType='BARISTA_MARKETPLACE') ──
+  async getBaristaReviews(baristaUserId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.baristaMarketplaceUserId as any, baristaUserId),
+        eq(supplierProductReviews.reviewType, "BARISTA_MARKETPLACE"),
+      ))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getBaristaReviewForMission(missionId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
+    const [review] = await db.select().from(supplierProductReviews).where(and(
+      eq(supplierProductReviews.baristaMissionId as any, missionId),
+      eq(supplierProductReviews.cafeId, cafeId),
+      eq(supplierProductReviews.reviewType, "BARISTA_MARKETPLACE"),
+    ));
+    return review;
+  }
+
+  async upsertBaristaReview(data: {
+    baristaUserId: number; missionId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string; cafeOwnerName: string;
+  }): Promise<{ review: SupplierProductReview; isUpdate: boolean }> {
+    const existing = await this.getBaristaReviewForMission(data.missionId, data.cafeId);
+    if (existing) {
+      const [review] = await db.update(supplierProductReviews)
+        .set({ rating: data.rating, comment: data.comment ?? null, updatedAt: new Date() } as any)
+        .where(eq(supplierProductReviews.id, existing.id))
+        .returning();
+      return { review, isUpdate: true };
+    }
+    const [review] = await db.insert(supplierProductReviews).values({
+      reviewType: "BARISTA_MARKETPLACE",
+      baristaMarketplaceUserId: data.baristaUserId,
+      baristaMissionId: data.missionId,
+      cafeId: data.cafeId,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.cafeName,
+      cafeOwnerName: data.cafeOwnerName,
+      supplierId: null, productId: null, listingId: null, packId: null, productName: null,
+    } as any).returning();
+    return { review, isUpdate: false };
+  }
+
+  // ── Revenue (read-only aggregation over completed missions — no payment system exists) ──
+  async getBaristaRevenueSummary(baristaUserId: number): Promise<{
+    totalEarnedCents: number;
+    completedMissions: number;
+    currentMonthCents: number;
+    currentMonthMissions: number;
+    history: { month: string; totalCents: number; missions: number }[];
+  }> {
+    const completed = await db.select().from(baristaMarketplaceMissions).where(and(
+      eq(baristaMarketplaceMissions.baristaUserId, baristaUserId),
+      eq(baristaMarketplaceMissions.status, "COMPLETED"),
+    ));
+    const now = new Date();
+    const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonthKey = monthKey(now);
+
+    const byMonth = new Map<string, { totalCents: number; missions: number }>();
+    let currentMonthCents = 0;
+    let currentMonthMissions = 0;
+    for (const m of completed) {
+      const completedAt = m.completedAt ?? m.createdAt ?? now;
+      const key = monthKey(new Date(completedAt));
+      const bucket = byMonth.get(key) ?? { totalCents: 0, missions: 0 };
+      bucket.totalCents += m.rateInCents;
+      bucket.missions += 1;
+      byMonth.set(key, bucket);
+      if (key === currentMonthKey) { currentMonthCents += m.rateInCents; currentMonthMissions += 1; }
+    }
+
+    // Last 6 months, oldest first, zero-filled for months with no completed missions.
+    const history: { month: string; totalCents: number; missions: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = monthKey(d);
+      const bucket = byMonth.get(key);
+      history.push({ month: key, totalCents: bucket?.totalCents ?? 0, missions: bucket?.missions ?? 0 });
+    }
+
+    return {
+      totalEarnedCents: completed.reduce((s, m) => s + m.rateInCents, 0),
+      completedMissions: completed.length,
+      currentMonthCents,
+      currentMonthMissions,
+      history,
+    };
+  }
+
+  // ── Messaging integration ──
+  async refreshBaristaMessagingState(requestId: number): Promise<void> {
+    const [request] = await db.select().from(baristaMarketplaceRequests).where(eq(baristaMarketplaceRequests.id, requestId));
+    if (request) {
+      await this.syncMessagingRelationship(request.cafeOwnerId, request.baristaUserId, "BARISTA");
+    }
   }
 
   // ── Supplier variants ───────────────────────────────────────────────────────
@@ -4693,6 +5215,19 @@ export class DatabaseStorage implements IStorage {
         ));
       const activeStatuses = new Set(["PENDING", "CONFIRMED", "RESCHEDULED", "RESCHEDULE_PENDING"]);
       return reservations.some(reservation => activeStatuses.has(reservation.status));
+    }
+
+    if (service === "BARISTA" && ((roleA === "BARISTA_MARKETPLACE" && roleB === "CAFE_OWNER") || (roleB === "BARISTA_MARKETPLACE" && roleA === "CAFE_OWNER"))) {
+      const baristaUserId = roleA === "BARISTA_MARKETPLACE" ? userA : userB;
+      const cafeOwnerId = roleA === "CAFE_OWNER" ? userA : userB;
+      const requests = await db.select({ status: baristaMarketplaceRequests.status })
+        .from(baristaMarketplaceRequests)
+        .where(and(
+          eq(baristaMarketplaceRequests.baristaUserId, baristaUserId),
+          eq(baristaMarketplaceRequests.cafeOwnerId, cafeOwnerId),
+        ));
+      const activeStatuses = new Set(["PENDING", "DISCUSSION", "ACCEPTED"]);
+      return requests.some(request => activeStatuses.has(request.status));
     }
 
     return false;

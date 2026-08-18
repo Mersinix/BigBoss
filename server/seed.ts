@@ -18,6 +18,7 @@ import {
   categories,
   products,
   landingConfig,
+  baristaSkills,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -286,6 +287,20 @@ export async function seedDatabase(): Promise<void> {
   if (lcRows.length === 0) {
     await db.insert(landingConfig).values({}).execute();
     console.log("✅ [seed] Landing config initialized");
+  }
+
+  // ── Barista Marketplace skills taxonomy — runs unconditionally (unlike the
+  // block above, which only seeds a brand-new empty database) so this ships
+  // correctly to an already-populated database like this one. Idempotent via
+  // onConflictDoNothing on the unique `name` column.
+  const existingSkills = await db.select().from(baristaSkills).limit(1);
+  if (existingSkills.length === 0) {
+    const BARISTA_SPECIALTIES = [
+      "Espresso", "Latte Art", "Cold Brew", "Brewing Methods",
+      "Formation barista", "Sensory Training", "Coffee Roasting", "Machine Maintenance",
+    ];
+    await db.insert(baristaSkills).values(BARISTA_SPECIALTIES.map((name) => ({ name }))).onConflictDoNothing();
+    console.log("✅ [seed] Barista Marketplace skills taxonomy initialized");
   }
 
   console.log("[seed] Database already populated — skipping seed");

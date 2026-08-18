@@ -29,6 +29,15 @@ const MARKETING_CATS = ["Réseaux sociaux","Vidéo","Photographie","SEO","Public
 const BARISTA_SPECIALTIES = ["Espresso","Latte Art","Cold Brew","Brewing Methods","Formation barista","Sensory Training","Coffee Roasting","Machine Maintenance"];
 const MAINTENANCE_CATS = ["Machines à café","Machines espresso","Moulins à café","Machines à glace","Réfrigérateurs","Lave-vaisselle","Fours","Mixeurs","Électricité","Plomberie","Climatisation","Ventilation","Systèmes POS","Réseaux WiFi","Caméras sécurité","Mobilier","Éclairage","Menuiserie","Peinture","Signalétique"];
 
+// Single source of truth for Barista skill names, fetched from the Barista
+// Marketplace taxonomy table. BARISTA_SPECIALTIES is kept only as a fallback
+// so this admin screen keeps working if the fetch hasn't resolved yet.
+function useBaristaSkillOptions(): string[] {
+  const { data } = useQuery<{ name: string; isActive: boolean }[]>({ queryKey: ["/api/admin/barista/skills"] });
+  const active = data?.filter((s) => s.isActive).map((s) => s.name);
+  return active && active.length > 0 ? active : BARISTA_SPECIALTIES;
+}
+
 // ── Styling helpers ────────────────────────────────────────────────────────────
 
 const roleColors: Record<string, string> = {
@@ -100,6 +109,7 @@ function UserDetailDialog({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const baristaSkillOptions = useBaristaSkillOptions();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState({
     name: "", email: "", phone: "", locationAddress: "",
@@ -240,7 +250,7 @@ function UserDetailDialog({
               selected={form.marketingCategories} onChange={v => setForm(f => ({ ...f, marketingCategories: v }))} />
           )}
           {(user.role === "BARISTA_ACADEMY" || user.role === "BARISTA_MARKETPLACE") && (
-            <MultiChip label="Spécialités" options={BARISTA_SPECIALTIES}
+            <MultiChip label="Spécialités" options={baristaSkillOptions}
               selected={form.categories} onChange={v => setForm(f => ({ ...f, categories: v }))} />
           )}
           {user.role === "MAINTENANCE" && (
@@ -322,6 +332,7 @@ function UserDetailDialog({
 
 function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
   const { toast } = useToast();
+  const baristaSkillOptions = useBaristaSkillOptions();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState("CAFE_OWNER");
   const [form, setForm] = useState({
@@ -507,7 +518,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
               selected={form.marketingCategories} onChange={v => setForm(f => ({ ...f, marketingCategories: v }))} />
           )}
           {(role === "BARISTA_ACADEMY" || role === "BARISTA_MARKETPLACE") && (
-            <MultiChip label="Spécialités" options={BARISTA_SPECIALTIES}
+            <MultiChip label="Spécialités" options={baristaSkillOptions}
               selected={form.categories} onChange={v => setForm(f => ({ ...f, categories: v }))} />
           )}
           {role === "MAINTENANCE" && (

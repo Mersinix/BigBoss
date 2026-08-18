@@ -24,6 +24,15 @@ const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
+const BARISTA_EVENTS = [
+  "barista_profile_updated",
+  "barista_request_created",
+  "barista_request_status_changed",
+  "barista_mission_created",
+  "barista_mission_status_changed",
+  "barista_review_created",
+  "barista_taxonomy_updated",
+];
 
 function invalidateInventoryQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
@@ -221,6 +230,19 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MAINTENANCE"] });
             invalidateMessagingQueries(qc);
+          }
+          if (BARISTA_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/barista/profiles"] });
+            qc.invalidateQueries({ queryKey: ["/api/barista/skills"] });
+            qc.invalidateQueries({ queryKey: ["/api/barista/requests"] });
+            qc.invalidateQueries({ queryKey: ["/api/barista/missions"] });
+            qc.invalidateQueries({ queryKey: ["/api/barista/revenue"] });
+            qc.invalidateQueries({ queryKey: ["/api/barista/reviews"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/barista/profile") });
+            qc.invalidateQueries({ queryKey: ["/api/admin/barista/skills"] });
+            if (event === "barista_request_created" || event === "barista_request_status_changed") {
+              invalidateMessagingQueries(qc);
+            }
           }
         } catch {}
       };

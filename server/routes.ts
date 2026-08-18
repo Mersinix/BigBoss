@@ -744,6 +744,259 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── Barista Marketplace ──────────────────────────────────────────────────────
+  // Mirrors the Maintenance route section above endpoint-for-endpoint. See
+  // BARISTA_MARKETPLACE_IMPLEMENTATION_REPORT.md for the full endpoint inventory.
+
+  app.get("/api/barista/skills", async (_req, res) => {
+    try { res.json(await storage.getBaristaSkills(true)); }
+    catch { res.status(500).json({ message: "Failed to load Barista skills" }); }
+  });
+
+  app.get("/api/barista/profiles", async (req: any, res) => {
+    try {
+      const available = req.query.available === undefined ? undefined : req.query.available === "true";
+      res.json(await storage.getBaristaMarketplaceProfiles({
+        search: typeof req.query.search === "string" ? req.query.search : undefined,
+        level: typeof req.query.level === "string" ? req.query.level : undefined,
+        skill: typeof req.query.skill === "string" ? req.query.skill : undefined,
+        city: typeof req.query.city === "string" ? req.query.city : undefined,
+        available,
+      }));
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to load Barista profiles" });
+    }
+  });
+
+  app.get("/api/barista/profile/:userId", requireAuth, async (req: any, res) => {
+    const targetUserId = Number(req.params.userId);
+    const viewer = await storage.getUser(req.session.userId);
+    if (!viewer || (viewer.id !== targetUserId && !["ADMIN", "SUPER_ADMIN"].includes(viewer.role))) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const target = await storage.getUser(targetUserId);
+    if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Not found" });
+    res.json({ user: target, profile: await storage.getBaristaMarketplaceProfile(targetUserId) });
+  });
+
+  app.patch("/api/barista/profile", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    try {
+      const body = z.object({
+        level: z.enum(["BEGINNER", "ADVANCED", "EXPERT"]).optional(),
+        bio: z.string().max(2000).optional(),
+        skills: z.array(z.string()).optional(),
+        dailyRateInCents: z.number().int().min(0).optional(),
+        city: z.string().max(120).optional(),
+        marketplaceVisible: z.boolean().optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertBaristaMarketplaceProfile(user.id, body);
+      broadcast("barista_profile_updated", { userId: user.id, kind: "profile" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid profile data" });
+    }
+  });
+
+  app.patch("/api/barista/availability", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    try {
+      const body = z.object({
+        availableDays: z.array(z.string()),
+        isAvailable: z.boolean().optional(),
+        isOnVacation: z.boolean(),
+      }).parse(req.body);
+      const profile = await storage.upsertBaristaMarketplaceProfile(user.id, {
+        ...body,
+        isAvailable: body.isAvailable ?? !body.isOnVacation,
+      });
+      broadcast("barista_profile_updated", { userId: user.id, kind: "availability" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid availability data" });
+    }
+  });
+
+  app.get("/api/barista/requests", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    if (user.role === "BARISTA_MARKETPLACE") return res.json(await storage.getBaristaRequestsForBarista(user.id));
+    if (user.role === "CAFE_OWNER") return res.json(await storage.getBaristaRequestsForOwner(user.id));
+    return res.status(403).json({ message: "Forbidden" });
+  });
+
+  app.post("/api/barista/requests", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const body = z.object({
+        baristaUserId: z.number().int().positive(),
+        missionType: z.string().min(1).max(200),
+        message: z.string().max(2000).default(""),
+        proposedRateInCents: z.number().int().min(0).optional().nullable(),
+        startDate: z.string().min(1),
+        endDate: z.string().optional().nullable(),
+      }).parse(req.body);
+      const user = await storage.getUser(req.session.userId!);
+      const request = await storage.createBaristaRequest(user!.id, body);
+      await storage.refreshBaristaMessagingState(request.id);
+      broadcastToUsers([request.baristaUserId], "barista_request_created", { requestId: request.id });
+      broadcastToUsers([request.cafeOwnerId, request.baristaUserId], "conversation_updated", { service: "BARISTA", requestId: request.id });
+      res.status(201).json(request);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? "Unable to create request" });
+    }
+  });
+
+  app.patch("/api/barista/requests/:id/status", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      const body = z.object({
+        status: z.enum(["DISCUSSION", "ACCEPTED", "REJECTED", "CANCELLED"]),
+        cancelReason: z.string().max(500).optional(),
+      }).parse(req.body);
+      const { request, mission } = await storage.updateBaristaRequestStatus(
+        Number(req.params.id), { id: user.id, role: user.role }, body.status, { cancelReason: body.cancelReason },
+      );
+      await storage.refreshBaristaMessagingState(request.id);
+      const recipients = [request.cafeOwnerId, request.baristaUserId];
+      broadcastToUsers(recipients, "barista_request_status_changed", { requestId: request.id, status: request.status });
+      broadcast("barista_request_status_changed", { requestId: request.id, status: request.status });
+      broadcastToUsers(recipients, "conversation_updated", { service: "BARISTA", requestId: request.id });
+      if (mission) {
+        broadcastToUsers(recipients, "barista_mission_created", { missionId: mission.id, requestId: request.id });
+      }
+      res.json({ request, mission });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(409).json({ message: err.message ?? "Unable to update request" });
+    }
+  });
+
+  app.get("/api/barista/missions", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    if (user.role === "BARISTA_MARKETPLACE") return res.json(await storage.getBaristaMissionsForBarista(user.id));
+    if (user.role === "CAFE_OWNER") return res.json(await storage.getBaristaMissionsForOwner(user.id));
+    return res.status(403).json({ message: "Forbidden" });
+  });
+
+  app.patch("/api/barista/missions/:id/status", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      const { status } = z.object({ status: z.enum(["ACTIVE", "COMPLETED", "CANCELLED"]) }).parse(req.body);
+      const mission = await storage.updateBaristaMissionStatus(Number(req.params.id), { id: user.id, role: user.role }, status);
+      const recipients = [mission.cafeOwnerId, mission.baristaUserId];
+      broadcastToUsers(recipients, "barista_mission_status_changed", { missionId: mission.id, status: mission.status });
+      broadcast("barista_mission_status_changed", { missionId: mission.id, status: mission.status });
+      res.json(mission);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(409).json({ message: err.message ?? "Unable to update mission" });
+    }
+  });
+
+  app.get("/api/barista/reviews/:baristaUserId", async (req, res) => {
+    try { res.json(await storage.getBaristaReviews(Number(req.params.baristaUserId))); }
+    catch { res.status(500).json({ message: "Failed to load Barista reviews" }); }
+  });
+
+  app.get("/api/barista/reviews/mission/:missionId", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const missionId = Number(req.params.missionId);
+    const mission = await storage.getBaristaMissionById(missionId);
+    if (!mission) return res.status(404).json({ message: "Mission not found" });
+    const owns = (user.role === "CAFE_OWNER" && mission.cafeOwnerId === user.id) ||
+      (user.role === "BARISTA_MARKETPLACE" && mission.baristaUserId === user.id);
+    if (!owns) return res.status(403).json({ message: "Forbidden" });
+    res.json(user.role === "CAFE_OWNER" ? (await storage.getBaristaReviewForMission(missionId, user.id)) ?? null : null);
+  });
+
+  app.post("/api/barista/reviews", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER" || user.status !== "approved") {
+      return res.status(403).json({ message: "Only approved Coffee Owners can submit reviews" });
+    }
+    try {
+      const body = z.object({
+        baristaUserId: z.number().int().positive(),
+        missionId: z.number().int().positive(),
+        rating: z.number().int().min(1).max(5),
+        comment: z.string().max(2000).optional(),
+      }).parse(req.body);
+      const mission = await storage.getBaristaMissionById(body.missionId);
+      if (!mission || mission.cafeOwnerId !== user.id || mission.baristaUserId !== body.baristaUserId || mission.status !== "COMPLETED") {
+        return res.status(400).json({ message: "Reviews are only available after a completed mission" });
+      }
+      const result = await storage.upsertBaristaReview({
+        ...body, cafeId: user.id, cafeName: user.name, cafeOwnerName: user.name,
+      });
+      broadcast("barista_review_created", { baristaUserId: body.baristaUserId, missionId: body.missionId });
+      res.status(result.isUpdate ? 200 : 201).json(result.review);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? "Unable to submit review" });
+    }
+  });
+
+  app.get("/api/barista/revenue", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    try { res.json(await storage.getBaristaRevenueSummary(user.id)); }
+    catch { res.status(500).json({ message: "Failed to load revenue" }); }
+  });
+
+  // ── Barista Marketplace: admin skills taxonomy (mirrors admin/maintenance/competencies) ──
+
+  app.get("/api/admin/barista/skills", requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getBaristaSkills(false)); }
+    catch { res.status(500).json({ message: "Failed to load Barista skills" }); }
+  });
+
+  app.post("/api/admin/barista/skills", requireAdmin, async (req, res) => {
+    try {
+      const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
+      const item = await storage.createBaristaSkill(name);
+      broadcast("barista_taxonomy_updated", {});
+      res.status(201).json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Skill already exists or is invalid" });
+    }
+  });
+
+  app.patch("/api/admin/barista/skills/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const item = await storage.updateBaristaSkill(Number(req.params.id), body);
+      if (!item) return res.status(404).json({ message: "Skill not found" });
+      broadcast("barista_taxonomy_updated", {});
+      res.json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid skill" });
+    }
+  });
+
+  app.delete("/api/admin/barista/skills/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteBaristaSkill(Number(req.params.id));
+      broadcast("barista_taxonomy_updated", {});
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete skill" }); }
+  });
+
   // ── Favorites (shop/product favorites, persisted per-user) ─────────────────
 
   app.get('/api/favorites', requireAuth, async (req: any, res) => {

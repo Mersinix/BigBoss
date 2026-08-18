@@ -51,6 +51,11 @@ import PrinterDashboard from "@/pages/printer/dashboard";
 import MarketingDashboard from "@/pages/marketing/dashboard";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
 import BaristaMarketplaceDashboard from "@/pages/barista-marketplace/dashboard";
+import BaristaMarketplaceProfilePage from "@/pages/barista-marketplace/profile";
+import BaristaMarketplaceRequestsPage from "@/pages/barista-marketplace/requests";
+import BaristaMarketplaceMissionsPage from "@/pages/barista-marketplace/missions";
+import BaristaMarketplaceRevenuePage from "@/pages/barista-marketplace/revenue";
+import BaristaMarketplaceSettingsPage from "@/pages/barista-marketplace/settings";
 import MaintenanceDashboard from "@/pages/maintenance/dashboard";
 import MaintenancePage from "@/pages/cafe/maintenance/maintenance-page";
 
@@ -325,8 +330,23 @@ function Router() {
       </Route>
 
       {/* ── Barista Marketplace routes ── */}
-      <Route path="/barista-marketplace/:rest*">
+      <Route path="/barista-marketplace">
         {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceDashboard} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/barista-marketplace/profile">
+        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceProfilePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/barista-marketplace/requests">
+        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceRequestsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/barista-marketplace/missions">
+        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceMissionsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/barista-marketplace/revenue">
+        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceRevenuePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/barista-marketplace/settings">
+        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceSettingsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       {/* ── Maintenance Agent routes ── */}

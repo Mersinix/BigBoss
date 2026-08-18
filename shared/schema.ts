@@ -515,13 +515,15 @@ export const supplierStores = pgTable("supplier_stores", {
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id"), // nullable for product-level reviews
-  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK'
+  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE'
   cafeId: integer("cafe_id").notNull(),
   productId: integer("product_id"),
   listingId: integer("listing_id"),
   packId: integer("pack_id"), // for PACK reviews
   maintenanceUserId: integer("maintenance_user_id"), // for MAINTENANCE reviews
   reservationId: integer("reservation_id"), // optional completed intervention link
+  baristaMarketplaceUserId: integer("barista_marketplace_user_id"), // for BARISTA_MARKETPLACE reviews
+  baristaMissionId: integer("barista_mission_id"), // completed mission this review is for
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   cafeName: text("cafe_name").notNull().default(''),
@@ -542,6 +544,139 @@ export const storeFavorites = pgTable("store_favorites", {
   storeId: integer("store_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// ── Barista Marketplace ─────────────────────────────────────────────────────
+// Mirrors the Maintenance marketplace pattern (maintenanceProfiles/
+// maintenanceReservations above) field-for-field, adapted to Barista semantics:
+// a public marketplace profile, an admin-managed skills taxonomy (replacing the
+// two independently-hardcoded BARISTA_SPECIALTIES lists), a recruitment request
+// lifecycle, and a mission created only from an accepted request. Reviews reuse
+// supplierProductReviews (reviewType='BARISTA_MARKETPLACE') exactly like
+// Maintenance did, rather than a new review table.
+
+export const baristaLevelEnum = pgEnum('barista_level', ['BEGINNER', 'ADVANCED', 'EXPERT']);
+export const baristaRequestStatusEnum = pgEnum('barista_request_status', [
+  'PENDING', 'DISCUSSION', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED',
+]);
+export const baristaMissionStatusEnum = pgEnum('barista_mission_status', [
+  'UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED',
+]);
+
+// Admin-managed skills taxonomy — single source of truth for Barista Marketplace
+// skills, replacing the hardcoded BARISTA_SPECIALTIES copies in landing-page.tsx and
+// admin/users-page.tsx. Mirrors maintenanceCompetencies exactly.
+export const baristaSkills = pgTable("barista_skills", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Public marketplace profile — one per BARISTA_MARKETPLACE user. users.name/phone/
+// locationAddress remain the canonical source for identity/contact/location; this
+// table only stores fields the generic users table has no place for.
+export const baristaMarketplaceProfiles = pgTable("barista_marketplace_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  level: baristaLevelEnum("level").notNull().default('BEGINNER'),
+  bio: text("bio").notNull().default(""),
+  skills: text("skills").array().notNull().default([]),
+  dailyRateInCents: integer("daily_rate_in_cents").notNull().default(0),
+  // Explicit short display city (e.g. "Tunis"), independent of the full geocoded
+  // users.locationAddress — mirrors maintenanceProfiles.coverageArea.
+  city: text("city").notNull().default(""),
+  // Weekly recurring availability, e.g. ['Lun','Mar','Mer'] — matches the labels
+  // already used across the app's date displays.
+  availableDays: text("available_days").array().notNull().default([]),
+  isAvailable: boolean("is_available").notNull().default(true),
+  isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Recruitment request — Café Owner → Barista. One row per request; a mission is
+// created only once a request reaches ACCEPTED (see baristaMarketplaceMissions).
+export const baristaMarketplaceRequests = pgTable("barista_marketplace_requests", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  baristaUserId: integer("barista_user_id").notNull(),
+  missionType: text("mission_type").notNull().default(""), // e.g. "Barista temps plein", free text like maintenance's `service` field
+  message: text("message").notNull().default(""),
+  proposedRateInCents: integer("proposed_rate_in_cents"), // nullable — falls back to the barista's current daily rate if unset
+  startDate: text("start_date").notNull(), // matches maintenanceReservations' text-based date convention
+  endDate: text("end_date"), // nullable — single-day requests need only startDate
+  status: baristaRequestStatusEnum("status").notNull().default('PENDING'),
+  cancelReason: text("cancel_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  respondedAt: timestamp("responded_at"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  cafeOwnerIdx: index("barista_requests_cafe_owner_idx").on(table.cafeOwnerId),
+  baristaUserIdx: index("barista_requests_barista_user_idx").on(table.baristaUserId),
+  statusIdx: index("barista_requests_status_idx").on(table.status),
+}));
+
+// Mission — created exactly once, when a request is accepted (storage enforces this
+// server-side; see storage.acceptBaristaRequest). requestId is unique so a request
+// can never produce two missions.
+export const baristaMarketplaceMissions = pgTable("barista_marketplace_missions", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull().unique(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  baristaUserId: integer("barista_user_id").notNull(),
+  missionType: text("mission_type").notNull().default(""),
+  rateInCents: integer("rate_in_cents").notNull().default(0),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date"),
+  status: baristaMissionStatusEnum("status").notNull().default('UPCOMING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  cancelledAt: timestamp("cancelled_at"),
+}, (table) => ({
+  cafeOwnerIdx: index("barista_missions_cafe_owner_idx").on(table.cafeOwnerId),
+  baristaUserIdx: index("barista_missions_barista_user_idx").on(table.baristaUserId),
+  statusIdx: index("barista_missions_status_idx").on(table.status),
+}));
+
+export type BaristaLevel = 'BEGINNER' | 'ADVANCED' | 'EXPERT';
+export type BaristaRequestStatus = 'PENDING' | 'DISCUSSION' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
+export type BaristaMissionStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+
+export type BaristaSkill = typeof baristaSkills.$inferSelect;
+export type BaristaMarketplaceProfile = typeof baristaMarketplaceProfiles.$inferSelect;
+export type InsertBaristaMarketplaceProfile = typeof baristaMarketplaceProfiles.$inferInsert;
+export type BaristaMarketplaceRequest = typeof baristaMarketplaceRequests.$inferSelect;
+export type InsertBaristaMarketplaceRequest = typeof baristaMarketplaceRequests.$inferInsert;
+export type BaristaMarketplaceMission = typeof baristaMarketplaceMissions.$inferSelect;
+
+// Public marketplace card — what /barista actually renders. Rating/reviewCount are
+// always computed live from supplierProductReviews (mirrors getMaintenanceProfiles'
+// approach exactly) rather than stored, so there is never a stale aggregate to
+// forget to update.
+export type BaristaMarketplaceCard = BaristaMarketplaceProfile & {
+  userId: number;
+  name: string;
+  phone: string | null;
+  initials: string;
+  location: string;
+  available: boolean;
+  rating: number; // 0-50, i.e. x10 (mirrors maintenanceProfiles.rating convention)
+  reviewCount: number;
+};
+
+export type BaristaRequestWithParties = BaristaMarketplaceRequest & {
+  cafeOwnerName: string;
+  cafeOwnerPhone: string | null;
+  baristaName: string;
+  baristaPhone: string | null;
+};
+
+export type BaristaMissionWithParties = BaristaMarketplaceMission & {
+  cafeOwnerName: string;
+  baristaName: string;
+};
 
 // ── Packs ────────────────────────────────────────────────────────────────────
 // A Pack bundles one or more of a supplier's own product listings into a single
@@ -949,6 +1084,10 @@ export const insertMaintenanceFavoriteSchema = createInsertSchema(maintenanceFav
 export const insertMaintenanceReservationSchema = createInsertSchema(maintenanceReservations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMaintenanceCompetencySchema = createInsertSchema(maintenanceCompetencies).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMaintenanceZoneSchema = createInsertSchema(maintenanceZones).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertBaristaSkillSchema = createInsertSchema(baristaSkills).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertBaristaMarketplaceProfileSchema = createInsertSchema(baristaMarketplaceProfiles).omit({ id: true, updatedAt: true });
+export const insertBaristaMarketplaceRequestSchema = createInsertSchema(baristaMarketplaceRequests).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });

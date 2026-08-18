@@ -472,9 +472,18 @@ function MarketingForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void;
   );
 }
 
+// Single source of truth for Barista skill names — fetched from the Barista
+// Marketplace taxonomy table (server/storage.ts getBaristaSkills). BARISTA_SPECIALTIES
+// remains as a fallback so registration keeps working if the fetch hasn't resolved yet.
+function useBaristaSkillOptions(): string[] {
+  const { data } = useQuery<{ name: string }[]>({ queryKey: ["/api/barista/skills"] });
+  return data && data.length > 0 ? data.map((s) => s.name) : BARISTA_SPECIALTIES;
+}
+
 function BaristaAcademyForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
   const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
   const [specialties, setSpecialties] = useState<string[]>([]);
+  const specialtyOptions = useBaristaSkillOptions();
   const doSubmit = (d: any) => onSubmit({ ...d, categories: specialties });
   return (
     <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
@@ -488,7 +497,7 @@ function BaristaAcademyForm({ onSubmit, isLoading }: { onSubmit: (data: any) => 
         <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <MultiSelect label="Spécialités enseignées" options={BARISTA_SPECIALTIES} selected={specialties} onChange={setSpecialties} />
+      <MultiSelect label="Spécialités enseignées" options={specialtyOptions} selected={specialties} onChange={setSpecialties} />
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
@@ -498,6 +507,7 @@ function BaristaAcademyForm({ onSubmit, isLoading }: { onSubmit: (data: any) => 
 function BaristaMarketplaceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
   const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
   const [specialties, setSpecialties] = useState<string[]>([]);
+  const specialtyOptions = useBaristaSkillOptions();
   const doSubmit = (d: any) => onSubmit({ ...d, categories: specialties });
   return (
     <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
@@ -511,7 +521,7 @@ function BaristaMarketplaceForm({ onSubmit, isLoading }: { onSubmit: (data: any)
         <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <MultiSelect label="Compétences / spécialités" options={BARISTA_SPECIALTIES} selected={specialties} onChange={setSpecialties} />
+      <MultiSelect label="Compétences / spécialités" options={specialtyOptions} selected={specialties} onChange={setSpecialties} />
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>

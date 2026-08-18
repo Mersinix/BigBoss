@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertUserSchema, insertProductSchema, products, users, orders, deliveries } from './schema';
+import { insertUserSchema, insertProductSchema, products, users, orders, deliveries, baristaMarketplaceRequests, baristaMarketplaceMissions } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -266,6 +266,112 @@ export const api = {
         201: z.custom<typeof users.$inferSelect>(),
         400: errorSchemas.validation,
       }
+    },
+  },
+  barista: {
+    skills: {
+      method: 'GET' as const,
+      path: '/api/barista/skills' as const,
+      responses: { 200: z.array(z.custom<any>()) },
+    },
+    profiles: {
+      method: 'GET' as const,
+      path: '/api/barista/profiles' as const,
+      responses: { 200: z.array(z.custom<any>()) }, // BaristaMarketplaceCard[]
+    },
+    profile: {
+      method: 'PATCH' as const,
+      path: '/api/barista/profile' as const,
+      input: z.object({
+        level: z.enum(['BEGINNER', 'ADVANCED', 'EXPERT']).optional(),
+        bio: z.string().optional(),
+        skills: z.array(z.string()).optional(),
+        dailyRateInCents: z.number().int().min(0).optional(),
+        city: z.string().optional(),
+        marketplaceVisible: z.boolean().optional(),
+      }),
+      responses: { 200: z.custom<any>() },
+    },
+    availability: {
+      method: 'PATCH' as const,
+      path: '/api/barista/availability' as const,
+      input: z.object({
+        availableDays: z.array(z.string()),
+        isAvailable: z.boolean().optional(),
+        isOnVacation: z.boolean(),
+      }),
+      responses: { 200: z.custom<any>() },
+    },
+    requests: {
+      list: {
+        method: 'GET' as const,
+        path: '/api/barista/requests' as const,
+        responses: { 200: z.array(z.custom<typeof baristaMarketplaceRequests.$inferSelect>()) },
+      },
+      create: {
+        method: 'POST' as const,
+        path: '/api/barista/requests' as const,
+        input: z.object({
+          baristaUserId: z.number(),
+          missionType: z.string(),
+          message: z.string().optional(),
+          proposedRateInCents: z.number().optional().nullable(),
+          startDate: z.string(),
+          endDate: z.string().optional().nullable(),
+        }),
+        responses: {
+          201: z.custom<typeof baristaMarketplaceRequests.$inferSelect>(),
+          400: errorSchemas.validation,
+        },
+      },
+      updateStatus: {
+        method: 'PATCH' as const,
+        path: '/api/barista/requests/:id/status' as const,
+        input: z.object({
+          status: z.enum(['DISCUSSION', 'ACCEPTED', 'REJECTED', 'CANCELLED']),
+          cancelReason: z.string().optional(),
+        }),
+        responses: { 200: z.custom<any>(), 409: errorSchemas.validation },
+      },
+    },
+    missions: {
+      list: {
+        method: 'GET' as const,
+        path: '/api/barista/missions' as const,
+        responses: { 200: z.array(z.custom<typeof baristaMarketplaceMissions.$inferSelect>()) },
+      },
+      updateStatus: {
+        method: 'PATCH' as const,
+        path: '/api/barista/missions/:id/status' as const,
+        input: z.object({ status: z.enum(['ACTIVE', 'COMPLETED', 'CANCELLED']) }),
+        responses: {
+          200: z.custom<typeof baristaMarketplaceMissions.$inferSelect>(),
+          409: errorSchemas.validation,
+        },
+      },
+    },
+    reviews: {
+      list: {
+        method: 'GET' as const,
+        path: '/api/barista/reviews/:baristaUserId' as const,
+        responses: { 200: z.array(z.custom<any>()) },
+      },
+      create: {
+        method: 'POST' as const,
+        path: '/api/barista/reviews' as const,
+        input: z.object({
+          baristaUserId: z.number(),
+          missionId: z.number(),
+          rating: z.number().min(1).max(5),
+          comment: z.string().optional(),
+        }),
+        responses: { 201: z.custom<any>(), 400: errorSchemas.validation },
+      },
+    },
+    revenue: {
+      method: 'GET' as const,
+      path: '/api/barista/revenue' as const,
+      responses: { 200: z.custom<any>() },
     },
   },
 };

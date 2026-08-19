@@ -1,0 +1,160 @@
+We need to make two targeted modifications to the existing **Supplier → Categories** system.
+
+Before changing anything, inspect the current Categories implementation and verify the synchronization between:
+
+**Admin Categories → Supplier Categories → Supplier Products → Supplier Store / mapped categories**
+
+Do not change anything that is not required by this request. Preserve the existing design, behavior, approval system, product synchronization, sub-category logic, and all other existing functionality.
+
+---
+
+# 1. Supplier → Categories → Add Category
+
+Current modal:
+
+**Add Categories**
+
+Select categories to request. New requests require admin approval.
+
+[Category cards]
+
+The Supplier must **NOT see or be able to request a category that currently has no related Products in the Admin catalog**.
+
+### Required behavior
+
+In **Supplier → Categories → Add Category**:
+
+* Only display categories that have at least **one related active/available Admin Product**.
+* A category with zero related products must not appear in the modal.
+* The Supplier must not be able to select/request such an empty category through another path either.
+* Existing approval/request behavior must remain exactly the same for categories that do have related products.
+* Do not change the category card design.
+* Do not change the Admin category system.
+* Do not delete categories from the Admin catalog because they currently have no products.
+* This restriction applies only to what the Supplier can see/request.
+
+The filtering must use the same authoritative product/category relationship already used by the existing Supplier Product synchronization.
+
+---
+
+# 2. Supplier → Categories → My Categories → Category ordering
+
+Current page:
+
+**Categories**
+
+**My Categories / Category Requests**
+
+The Supplier currently sees mapped category cards such as:
+
+* النظافة
+* ديكور
+* آلات
+* Dairy & Alternatives
+* Tea & Herbal
+* Syrups & Flavors
+* BeIN
+* Snacks & Food
+* قهوي
+* مشروبات
+* العاب
+* شيشا
+
+The Supplier should now be able to **reorder these mapped category cards manually**.
+
+### Required behavior
+
+The Supplier must be able to:
+
+* Hold/drag a category card.
+* Move it before or after any other category.
+* Drop it at the desired position.
+* The new order must be saved.
+* The order must persist after refresh.
+* The order must persist after logout/login.
+* The order must remain synchronized with the Supplier's Store.
+
+### Important synchronization requirement
+
+If the Supplier changes the order of categories in:
+
+**Supplier → Categories → My Categories**
+
+the same order must be used in the Supplier's **Store / mapped categories**.
+
+For example, if the current order is:
+
+**Category A → Category B → Category C**
+
+and the Supplier moves **Category A** before another category so the resulting order becomes:
+
+**Category B → Category A → Category C**
+
+then the Supplier Store must use exactly:
+
+**Category B → Category A → Category C**
+
+Do not create two independent ordering systems.
+
+The Supplier Categories page and Supplier Store must use the same saved category ordering.
+
+---
+
+# 3. Preserve everything else
+
+This is a targeted modification.
+
+DO NOT change:
+
+* Category design
+* Category cards design
+* Sub-category design
+* Product design
+* Product synchronization
+* Admin category management
+* Admin approval workflow
+* Category Requests
+* Freeze / Remove behavior
+* Manage Category Selection behavior
+* Existing Supplier Store design
+* Existing mapped product behavior
+* Existing category/sub-category relationships
+* Existing realtime synchronization
+* Any unrelated Supplier functionality
+
+Do not remove existing components or information.
+
+Do not redesign the page.
+
+Only add:
+
+1. **Product-based filtering in Add Category**
+2. **Supplier-controlled category ordering synchronized with Supplier Store**
+
+---
+
+# 4. Final verification
+
+Before considering the work complete, verify:
+
+### Add Category
+
+* Category with products → visible.
+* Category without products → not visible.
+* Supplier cannot request an empty category.
+* Existing request/approval flow still works.
+
+### Category ordering
+
+* Drag Category A below/above another category.
+* Refresh → order remains.
+* Logout/login → order remains.
+* Open Supplier Store → exact same order is displayed.
+* Change the order again → Store updates to the new order.
+* Verify the order is persisted and not merely local UI state.
+
+### Regression check
+
+Verify that existing Supplier Categories, Products, Store, Admin Categories, approvals, sub-categories, and realtime synchronization continue working exactly as before.
+
+Do not modify any other behavior or visual design unless it is strictly required for these two changes.

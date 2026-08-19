@@ -10,3 +10,4 @@
 - [Variant aggregate-stock restock bug](variant-restock-bug.md) — when restoring stock after a SQL increment, re-read quantities fresh; don't add the delta again on top of the already-updated row or stock doubles.
 - [Catalog realtime synchronization](catalog-realtime-synchronization.md) — supplier catalog changes need both a server broadcast and explicit client invalidation for marketplace detail/promotion query families.
 - [Maintenance taxonomy provisioning](maintenance-taxonomy-provisioning.md) — Maintenance admin taxonomy tables must exist in the Helium DB before taxonomy/profile synchronization endpoints can serve data.
+- [Supplier category ordering](supplier-category-order.md) — Supplier Categories and Store mapped categories share one persisted mapping order.

@@ -24,7 +24,7 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { FlashMode } from "@/components/flash-mode";
 import { PackCardTile } from "@/pages/cafe/browse-products";
-import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount } from "@shared/schema";
+import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount, ListingPromotion } from "@shared/schema";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -589,6 +589,30 @@ export default function StoreDetailPage() {
 
   const products = store?.products ?? [];
 
+  const listingIds = useMemo(
+    () => products.map((product) => (product as any).listingId).filter((id): id is number => typeof id === "number"),
+    [products],
+  );
+  const { data: listingPromotions = [] } = useQuery<ListingPromotion[]>({
+    queryKey: ["/api/marketplace/promotions", listingIds.join(",")],
+    queryFn: async () => {
+      if (!listingIds.length) return [];
+      const res = await fetch(`/api/marketplace/promotions?listingIds=${listingIds.join(",")}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: listingIds.length > 0,
+  });
+  const flashProducts = useMemo(() => {
+    const promotedListings = new Set(listingPromotions.map((promo) => promo.listingId));
+    return products.map((product) => ({
+      ...product,
+      hasPromo: typeof (product as any).listingId === "number"
+        ? promotedListings.has((product as any).listingId)
+        : false,
+    }));
+  }, [products, listingPromotions]);
+
   const { data: allCategories = [] } = useQuery<CategoryWithCount[]>({
     queryKey: ["/api/categories"],
   });
@@ -715,7 +739,7 @@ export default function StoreDetailPage() {
           <ChevronLeft className="w-4.5 h-4.5 text-white" />
         </button>
 
-        {/* Top-right cluster: Dark/Light toggle + Flash + Favorite */}
+         {/* Top-right cluster: Dark/Light toggle + Flash + Favorite */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
           <button
             onClick={() => toggle()}
@@ -972,10 +996,9 @@ export default function StoreDetailPage() {
       <FlashMode
         open={flashOpen}
         onClose={() => setFlashOpen(false)}
-        products={products as any[]}
+        products={flashProducts as any[]}
         packs={storePacks}
         storeName={store.name}
-        supplierId={store.supplierId}
       />
     </div>
   );

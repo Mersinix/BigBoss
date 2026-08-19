@@ -422,6 +422,7 @@ export const supplierCategories = pgTable("supplier_categories", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id").notNull(),
   categoryId: integer("category_id").notNull(),
+  displayOrder: integer("display_order").notNull().default(0),
   mappingStatus: text("mapping_status").notNull().default('APPROVED'),
   isFrozen: boolean("is_frozen").notNull().default(false),
 });

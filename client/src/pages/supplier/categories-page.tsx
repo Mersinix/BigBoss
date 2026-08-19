@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Check, Layers, ChevronDown, ChevronUp, RefreshCw, Pencil, Trash2, SendHorizonal, MousePointerClick, Package, Snowflake } from "lucide-react";
+import { Plus, Search, Check, Layers, ChevronDown, ChevronUp, RefreshCw, Pencil, Trash2, SendHorizonal, MousePointerClick, Package, Snowflake, GripVertical } from "lucide-react";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import type { QueryClient } from "@tanstack/react-query";
 
@@ -43,7 +43,7 @@ function CategorySelectModal({
 }) {
   const [search, setSearch] = useState("");
   const [local, setLocal] = useState<number[]>([]);
-  const available = allCategories.filter(c => !mappedIds.includes(c.id));
+  const available = allCategories.filter(c => c.productCount > 0 && !mappedIds.includes(c.id));
   const filtered = available.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
   const toggle = (id: number) => setLocal(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -73,7 +73,7 @@ function CategorySelectModal({
               </button>
             );
           })}
-          {filtered.length === 0 && <div className="col-span-2 text-center py-8 text-muted-foreground text-sm">{available.length === 0 ? "All categories are already mapped." : "No categories match your search."}</div>}
+           {filtered.length === 0 && <div className="col-span-2 text-center py-8 text-muted-foreground text-sm">{available.length === 0 ? "No categories with available products to add." : "No categories match your search."}</div>}
         </div>
         <div className="flex items-center justify-between pt-2 border-t">
           <span className="text-sm text-muted-foreground">{local.length} selected</span>
@@ -96,6 +96,7 @@ function CategoryMappingCard({
   isSelected, onSelect,
   selectedSubCategoryId, onSelectSubCategory,
   onFreeze, onRemove, isActionPending,
+  onDragStart, onDragOver, onDrop,
 }: {
   mapping: SupplierCategoryMapping;
   onSubToggle: (subId: number, checked: boolean) => void;
@@ -107,6 +108,9 @@ function CategoryMappingCard({
   onFreeze: () => void;
   onRemove: () => void;
   isActionPending: boolean;
+  onDragStart?: () => void;
+  onDragOver?: (event: React.DragEvent) => void;
+  onDrop?: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const { category, subCategories, selectedSubCategoryIds, mappingStatus, isFrozen } = mapping;
@@ -120,6 +124,10 @@ function CategoryMappingCard({
 
   return (
     <Card
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       className={`overflow-hidden transition-all ${borderClass} ${isSelected ? "ring-1 ring-primary shadow-sm" : "hover:border-primary/30"}`}
       data-testid={`card-category-${category.id}`}
     >
@@ -130,6 +138,7 @@ function CategoryMappingCard({
             onClick={onSelect}
             data-testid={`button-select-category-${category.id}`}
           >
+            <GripVertical className="w-4 h-4 text-muted-foreground/60 shrink-0 cursor-grab" aria-label="Drag to reorder" />
             <span className="text-2xl">{category.icon || "📦"}</span>
             <div>
               <p className="font-semibold text-base">{category.name}</p>
@@ -204,11 +213,27 @@ function MyCategoriesSection() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const [orderedMappings, setOrderedMappings] = useState<SupplierCategoryMapping[]>([]);
+  const [draggedCategoryId, setDraggedCategoryId] = useState<number | null>(null);
 
   const { selectedCategoryId, selectedSubCategoryId, setSelectedCategory, setSelectedSubCategory } = useSupplierCategoryStore();
 
   const { data: allCats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
   const { data: mappings = [], isLoading } = useQuery<SupplierCategoryMapping[]>({ queryKey: ["/api/supplier/categories"] });
+  useEffect(() => setOrderedMappings(mappings), [mappings]);
+
+  const saveOrder = useMutation({
+    mutationFn: (categoryIds: number[]) => apiRequest("PATCH", "/api/supplier/categories/order", { categoryIds }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/supplier/categories"] });
+      invalidateMarketplace(qc);
+      toast({ title: "Category order saved" });
+    },
+    onError: () => {
+      setOrderedMappings(mappings);
+      toast({ title: "Error saving category order", variant: "destructive" });
+    },
+  });
 
   const saveCategories = useMutation({
     mutationFn: (categoryIds: number[]) => apiRequest("POST", "/api/supplier/categories", { categoryIds }),
@@ -246,11 +271,11 @@ function MyCategoriesSection() {
     saveSubCategories.mutate(newIds);
   };
 
-  const selectedCatIds = mappings.map(m => m.category.id);
+  const selectedCatIds = orderedMappings.map(m => m.category.id);
 
   // Show all categories the supplier has selected — no product-based filtering here.
   // The supplier selects categories first, then adds products under them.
-  const filteredMappings = mappings;
+  const filteredMappings = orderedMappings;
 
   const handleSelectCategory = (id: number) => {
     setSelectedCategory(id);
@@ -314,7 +339,7 @@ function MyCategoriesSection() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {filteredMappings.map(mapping => (
+           {filteredMappings.map(mapping => (
             <CategoryMappingCard
               key={mapping.category.id}
               mapping={mapping}
@@ -327,6 +352,20 @@ function MyCategoriesSection() {
               onFreeze={() => freezeCategory.mutate({ categoryId: mapping.category.id, isFrozen: !mapping.isFrozen })}
               onRemove={() => removeCategory.mutate(mapping.category.id)}
               isActionPending={freezeCategory.isPending || removeCategory.isPending}
+              onDragStart={() => setDraggedCategoryId(mapping.category.id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (draggedCategoryId == null || draggedCategoryId === mapping.category.id) return;
+                const next = [...orderedMappings];
+                const from = next.findIndex((m) => m.category.id === draggedCategoryId);
+                const to = next.findIndex((m) => m.category.id === mapping.category.id);
+                if (from < 0 || to < 0) return;
+                const [moved] = next.splice(from, 1);
+                next.splice(to, 0, moved);
+                setDraggedCategoryId(null);
+                setOrderedMappings(next);
+                saveOrder.mutate(next.map((m) => m.category.id));
+              }}
             />
           ))}
           <Button variant="outline" onClick={() => setModalOpen(true)} className="gap-2" data-testid="button-manage-categories"><Plus className="w-4 h-4" />Manage Category Selection</Button>

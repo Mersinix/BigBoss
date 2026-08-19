@@ -196,6 +196,7 @@ export interface IStorage {
   getAdminSupplierCategoryOverview(supplierId: number): Promise<AdminSupplierCategoryOverview>;
   setSupplierCategories(supplierId: number, categoryIds: number[]): Promise<void>;
   addSupplierCategories(supplierId: number, categoryIds: number[], status?: 'APPROVED' | 'PENDING'): Promise<void>;
+  reorderSupplierCategories(supplierId: number, categoryIds: number[]): Promise<void>;
   removeSupplierCategory(supplierId: number, categoryId: number): Promise<void>;
   setSupplierCategoryFrozen(supplierId: number, categoryId: number, isFrozen: boolean): Promise<void>;
   approveSupplierCategoryMapping(supplierId: number, categoryId: number): Promise<void>;
@@ -2958,10 +2959,11 @@ export class DatabaseStorage implements IStorage {
       : await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true))).orderBy(asc(categories.displayOrder), asc(categories.id));
     const subs = await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
     const prods = await db.select().from(products);
+    const availableAdminProducts = prods.filter((p) => p.isAdminProduct && p.status === 'ACTIVE');
     return cats.map((c) => ({
       ...c,
       subCategoryCount: subs.filter((s) => s.categoryId === c.id).length,
-      productCount: prods.filter((p) => p.categoryId === c.id).length,
+      productCount: availableAdminProducts.filter((p) => p.categoryId === c.id).length,
     }));
   }
 
@@ -3147,21 +3149,23 @@ export class DatabaseStorage implements IStorage {
   async getSupplierCategoryMappings(supplierId: number, options?: { approvedOnly?: boolean }): Promise<SupplierCategoryMapping[]> {
     const allCats = await db.select().from(categories).where(and(eq(categories.status, 'ACTIVE'), eq(categories.isActive, true)));
     const allSubs = await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
-    const supplierCats = await db.select().from(supplierCategories).where(eq(supplierCategories.supplierId, supplierId));
+    const supplierCats = await db.select().from(supplierCategories)
+      .where(eq(supplierCategories.supplierId, supplierId))
+      .orderBy(asc(supplierCategories.displayOrder), asc(supplierCategories.id));
     const supplierSubs = await db.select().from(supplierSubCategories).where(eq(supplierSubCategories.supplierId, supplierId));
     const catMeta = new Map(supplierCats.map((sc) => [sc.categoryId, sc]));
 
-    return allCats
-      .filter((cat) => catMeta.has(cat.id))
-      .filter((cat) => {
-        const meta = catMeta.get(cat.id)!;
+    const catById = new Map(allCats.map((cat) => [cat.id, cat]));
+    return supplierCats
+      .map((meta) => ({ meta, cat: catById.get(meta.categoryId) }))
+      .filter((entry): entry is { meta: typeof supplierCats[number]; cat: typeof allCats[number] } => !!entry.cat)
+      .filter(({ meta }) => {
         if (options?.approvedOnly) {
           return meta.mappingStatus === 'APPROVED' && !meta.isFrozen;
         }
         return true;
       })
-      .map((cat) => {
-        const meta = catMeta.get(cat.id)!;
+      .map(({ meta, cat }) => {
         return {
           category: cat,
           subCategories: allSubs.filter((s) => s.categoryId === cat.id),
@@ -3188,14 +3192,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addSupplierCategories(supplierId: number, categoryIds: number[], status: 'APPROVED' | 'PENDING' = 'PENDING') {
+    const availableCategories = await db.select({ categoryId: products.categoryId })
+      .from(products)
+      .where(and(eq(products.isAdminProduct, true), eq(products.status, 'ACTIVE')));
+    const availableCategoryIds = new Set(availableCategories.map((row) => row.categoryId).filter((id): id is number => id != null));
+    if (categoryIds.some((id) => !availableCategoryIds.has(id))) {
+      throw new Error("Supplier categories must have an active Admin Product");
+    }
     const existing = await db.select().from(supplierCategories).where(eq(supplierCategories.supplierId, supplierId));
     const existingIds = new Set(existing.map((e) => e.categoryId));
     const newIds = categoryIds.filter((id) => !existingIds.has(id));
     if (newIds.length) {
+      const nextOrder = existing.reduce((max, row) => Math.max(max, row.displayOrder ?? 0), -1) + 1;
       await db.insert(supplierCategories).values(
-        newIds.map((categoryId) => ({ supplierId, categoryId, mappingStatus: status, isFrozen: false })),
+        newIds.map((categoryId, index) => ({ supplierId, categoryId, displayOrder: nextOrder + index, mappingStatus: status, isFrozen: false })),
       );
     }
+  }
+
+  async reorderSupplierCategories(supplierId: number, categoryIds: number[]) {
+    const existing = await db.select().from(supplierCategories)
+      .where(eq(supplierCategories.supplierId, supplierId));
+    const existingIds = new Set(existing.map((row) => row.categoryId));
+    if (categoryIds.length !== existing.length || categoryIds.some((id) => !existingIds.has(id))) {
+      throw new Error("Category order must contain exactly the supplier's mapped categories");
+    }
+    await Promise.all(categoryIds.map((categoryId, index) =>
+      db.update(supplierCategories)
+        .set({ displayOrder: index })
+        .where(and(eq(supplierCategories.supplierId, supplierId), eq(supplierCategories.categoryId, categoryId)))
+    ));
   }
 
   async removeSupplierCategory(supplierId: number, categoryId: number) {

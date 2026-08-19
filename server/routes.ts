@@ -2458,6 +2458,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(400).json({ message: "Invalid" }); }
   });
 
+  app.patch("/api/supplier/categories/order", requireApprovedSupplier, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      const { categoryIds } = z.object({ categoryIds: z.array(z.number()).min(0) }).parse(req.body);
+      await storage.reorderSupplierCategories(user!.id, categoryIds);
+      broadcast("supplier_mapping_changed", { supplierId: user!.id, categoryOrder: categoryIds });
+      res.json({ success: true });
+    } catch { res.status(400).json({ message: "Invalid category order" }); }
+  });
+
   app.patch("/api/supplier/categories/:categoryId/freeze", requireApprovedSupplier, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);

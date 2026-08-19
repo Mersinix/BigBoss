@@ -294,6 +294,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         globalVisible: z.boolean().optional(),
         supplierMessagingEnabled: z.boolean().optional(),
         maintenanceMessagingEnabled: z.boolean().optional(),
+        baristaMessagingEnabled: z.boolean().optional(),
         broadcastsEnabled: z.boolean().optional(),
         gracePeriodMinutes: z.number().int().min(1).max(240).optional(),
       }).strict().parse(req.body);
@@ -741,6 +742,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/maintenance-favorites/:maintenanceUserId", requireAuth, async (req: any, res) => {
     await storage.removeMaintenanceFavorite(req.session.userId, Number(req.params.maintenanceUserId));
     broadcastToUsers([req.session.userId], "maintenance_favorite_updated", { maintenanceUserId: Number(req.params.maintenanceUserId) });
+    res.json({ ok: true });
+  });
+
+  // ── Barista Marketplace favorites — mirrors maintenance-favorites endpoint-for-endpoint ──
+
+  app.get("/api/barista-favorites", requireAuth, async (req: any, res) => {
+    res.json(await storage.getBaristaFavoritesByUser(req.session.userId));
+  });
+
+  app.post("/api/barista-favorites", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const baristaUserId = Number(req.body?.baristaUserId);
+    if (!baristaUserId) return res.status(400).json({ message: "baristaUserId is required" });
+    await storage.addBaristaFavorite(user.id, baristaUserId);
+    broadcastToUsers([user.id], "barista_favorite_updated", { baristaUserId });
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete("/api/barista-favorites/:baristaUserId", requireAuth, async (req: any, res) => {
+    await storage.removeBaristaFavorite(req.session.userId, Number(req.params.baristaUserId));
+    broadcastToUsers([req.session.userId], "barista_favorite_updated", { baristaUserId: Number(req.params.baristaUserId) });
     res.json({ ok: true });
   });
 

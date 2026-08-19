@@ -448,6 +448,7 @@ export const messagingSettings = pgTable("messaging_settings", {
   globalVisible: boolean("global_visible").notNull().default(true),
   supplierMessagingEnabled: boolean("supplier_messaging_enabled").notNull().default(true),
   maintenanceMessagingEnabled: boolean("maintenance_messaging_enabled").notNull().default(true),
+  baristaMessagingEnabled: boolean("barista_messaging_enabled").notNull().default(true),
   broadcastsEnabled: boolean("broadcasts_enabled").notNull().default(true),
   gracePeriodMinutes: integer("grace_period_minutes").notNull().default(30),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -594,6 +595,16 @@ export const baristaMarketplaceProfiles = pgTable("barista_marketplace_profiles"
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
   marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Barista favorites — mirrors maintenanceFavorites exactly (same shape, same
+// dedicated-table pattern) so Coffee Owner favorites persist and stay in sync
+// with the public /barista marketplace.
+export const baristaMarketplaceFavorites = pgTable("barista_marketplace_favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  baristaUserId: integer("barista_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Recruitment request — Café Owner → Barista. One row per request; a mission is
@@ -1088,6 +1099,7 @@ export const insertMaintenanceZoneSchema = createInsertSchema(maintenanceZones).
 export const insertBaristaSkillSchema = createInsertSchema(baristaSkills).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertBaristaMarketplaceProfileSchema = createInsertSchema(baristaMarketplaceProfiles).omit({ id: true, updatedAt: true });
 export const insertBaristaMarketplaceRequestSchema = createInsertSchema(baristaMarketplaceRequests).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertBaristaMarketplaceFavoriteSchema = createInsertSchema(baristaMarketplaceFavorites).omit({ id: true, createdAt: true });
 
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });

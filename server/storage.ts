@@ -10,7 +10,7 @@ import {
   landingConfig, messagingSettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones,
-  baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions,
+  baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
   orderReturns,
@@ -298,6 +298,9 @@ export interface IStorage {
   upsertBaristaReview(data: { baristaUserId: number; missionId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string; cafeOwnerName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }>;
   getBaristaRevenueSummary(baristaUserId: number): Promise<{ totalEarnedCents: number; completedMissions: number; currentMonthCents: number; currentMonthMissions: number; history: { month: string; totalCents: number; missions: number }[] }>;
   refreshBaristaMessagingState(requestId: number): Promise<void>;
+  getBaristaFavoritesByUser(userId: number): Promise<number[]>;
+  addBaristaFavorite(userId: number, baristaUserId: number): Promise<void>;
+  removeBaristaFavorite(userId: number, baristaUserId: number): Promise<void>;
 
   // Inventory
   getSupplierInventory(supplierId: number, filters?: InventoryFilters, sort?: InventorySort, page?: number, pageSize?: number): Promise<InventoryListResult>;
@@ -2854,6 +2857,29 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // ── Favorites — mirrors the Maintenance favorites methods exactly ──
+  async getBaristaFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select({ baristaUserId: baristaMarketplaceFavorites.baristaUserId })
+      .from(baristaMarketplaceFavorites)
+      .where(eq(baristaMarketplaceFavorites.userId, userId));
+    return rows.map((row) => row.baristaUserId);
+  }
+
+  async addBaristaFavorite(userId: number, baristaUserId: number): Promise<void> {
+    const [existing] = await db.select().from(baristaMarketplaceFavorites).where(and(
+      eq(baristaMarketplaceFavorites.userId, userId),
+      eq(baristaMarketplaceFavorites.baristaUserId, baristaUserId),
+    ));
+    if (!existing) await db.insert(baristaMarketplaceFavorites).values({ userId, baristaUserId });
+  }
+
+  async removeBaristaFavorite(userId: number, baristaUserId: number): Promise<void> {
+    await db.delete(baristaMarketplaceFavorites).where(and(
+      eq(baristaMarketplaceFavorites.userId, userId),
+      eq(baristaMarketplaceFavorites.baristaUserId, baristaUserId),
+    ));
+  }
+
   // ── Supplier variants ───────────────────────────────────────────────────────
 
   async getVariantsByListingId(listingId: number): Promise<SupplierVariantWithLabels[]> {
@@ -4216,6 +4242,7 @@ export class DatabaseStorage implements IStorage {
         globalVisible: row.globalVisible,
         supplierMessagingEnabled: row.supplierMessagingEnabled,
         maintenanceMessagingEnabled: row.maintenanceMessagingEnabled,
+        baristaMessagingEnabled: row.baristaMessagingEnabled,
         broadcastsEnabled: row.broadcastsEnabled,
         gracePeriodMinutes: row.gracePeriodMinutes,
       };
@@ -4225,6 +4252,7 @@ export class DatabaseStorage implements IStorage {
       globalVisible: created.globalVisible,
       supplierMessagingEnabled: created.supplierMessagingEnabled,
       maintenanceMessagingEnabled: created.maintenanceMessagingEnabled,
+      baristaMessagingEnabled: created.baristaMessagingEnabled,
       broadcastsEnabled: created.broadcastsEnabled,
       gracePeriodMinutes: created.gracePeriodMinutes,
     };
@@ -4234,6 +4262,7 @@ export class DatabaseStorage implements IStorage {
     globalVisible: boolean;
     supplierMessagingEnabled: boolean;
     maintenanceMessagingEnabled: boolean;
+    baristaMessagingEnabled: boolean;
     broadcastsEnabled: boolean;
     gracePeriodMinutes: number;
   }>) {
@@ -5218,6 +5247,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (service === "BARISTA" && ((roleA === "BARISTA_MARKETPLACE" && roleB === "CAFE_OWNER") || (roleB === "BARISTA_MARKETPLACE" && roleA === "CAFE_OWNER"))) {
+      if (!settings.baristaMessagingEnabled) return false;
       const baristaUserId = roleA === "BARISTA_MARKETPLACE" ? userA : userB;
       const cafeOwnerId = roleA === "CAFE_OWNER" ? userA : userB;
       const requests = await db.select({ status: baristaMarketplaceRequests.status })
@@ -5639,6 +5669,10 @@ export class DatabaseStorage implements IStorage {
         .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
       for (const c of allCafes) contactUserIds.add(c.id);
     } else if (me.role === 'MAINTENANCE') {
+      const allCafes = await db.select().from(users)
+        .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
+      for (const c of allCafes) contactUserIds.add(c.id);
+    } else if (me.role === 'BARISTA_MARKETPLACE') {
       const allCafes = await db.select().from(users)
         .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
       for (const c of allCafes) contactUserIds.add(c.id);

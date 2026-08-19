@@ -334,36 +334,8 @@ export function AppSidebar() {
       ];
     }
 
-    if (user.role === "BARISTA_MARKETPLACE") {
-      return [
-        {
-          label: "MAIN",
-          items: [
-            { title: "Dashboard", url: "/", icon: LayoutDashboard },
-          ],
-        },
-        {
-          label: "MON PROFIL",
-          items: [
-            { title: "Profil public", url: "/barista-marketplace/profile", icon: UserCheck },
-            { title: "Demandes", url: "/barista-marketplace/requests", icon: Briefcase },
-            { title: "Missions", url: "/barista-marketplace/missions", icon: ClipboardList },
-          ],
-        },
-        {
-          label: "FINANCE",
-          items: [
-            { title: "Revenus", url: "/barista-marketplace/revenue", icon: DollarSign },
-          ],
-        },
-        {
-          label: "ACCOUNT",
-          items: [
-            { title: "Settings", url: "/barista-marketplace/settings", icon: Settings },
-          ],
-        },
-      ];
-    }
+    // Barista Marketplace no longer uses this sidebar — its account uses
+    // BaristaAccountShell's top tab switcher instead (see App.tsx routes).
 
     return [];
   };

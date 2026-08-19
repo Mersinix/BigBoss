@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { apiRequest } from "@/lib/queryClient";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
+import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 
 export interface ShopFavItem {
   id: number;
@@ -88,6 +89,8 @@ interface FavoritesStore {
   hydratePack: (ids: number[]) => void;
   hydrateMaintenance: (ids: number[]) => void;
   syncMaintenance: (ids: number[], profiles: MaintenanceMarketplaceCard[]) => void;
+  hydrateBaristaMarket: (ids: number[]) => void;
+  syncBaristaMarket: (ids: number[], profiles: BaristaMarketplaceCard[]) => void;
 }
 
 export const useFavorites = create<FavoritesStore>((set, get) => ({
@@ -158,12 +161,20 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     }),
 
   toggleBaristaMarket: (item) =>
-    set((s) => {
-      const next = { ...s.baristaMarket };
-      if (next[item.id]) delete next[item.id];
-      else next[item.id] = item;
-      return { baristaMarket: next };
-    }),
+    (() => {
+      const wasFav = !!get().baristaMarket[item.id];
+      set((s) => {
+        const next = { ...s.baristaMarket };
+        if (wasFav) delete next[item.id];
+        else next[item.id] = item;
+        return { baristaMarket: next };
+      });
+      if (wasFav) {
+        apiRequest("DELETE", `/api/barista-favorites/${item.id}`).catch(() => {});
+      } else {
+        apiRequest("POST", "/api/barista-favorites", { baristaUserId: item.id }).catch(() => {});
+      }
+    })(),
 
   toggleMarketing: (item) =>
     set((s) => {
@@ -208,7 +219,10 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     set((s) => { const next = { ...s.academy }; delete next[id]; return { academy: next }; }),
 
   removeBaristaMarket: (id) =>
-    set((s) => { const next = { ...s.baristaMarket }; delete next[id]; return { baristaMarket: next }; }),
+    (() => {
+      set((s) => { const next = { ...s.baristaMarket }; delete next[id]; return { baristaMarket: next }; });
+      apiRequest("DELETE", `/api/barista-favorites/${id}`).catch(() => {});
+    })(),
 
   removeMarketing: (id) =>
     set((s) => { const next = { ...s.marketing }; delete next[id]; return { marketing: next }; }),
@@ -260,6 +274,45 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
         };
       }
       return { maintenance: next };
+    }),
+
+  hydrateBaristaMarket: (ids) =>
+    set((s) => {
+      const next = { ...s.baristaMarket };
+      for (const id of ids) {
+        if (!next[id]) {
+          next[id] = {
+            id,
+            name: "Barista",
+            initials: "B",
+            skills: [],
+            location: "",
+            rating: 0,
+            available: true,
+          };
+        }
+      }
+      return { baristaMarket: next };
+    }),
+
+  syncBaristaMarket: (ids, profiles) =>
+    set(() => {
+      const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
+      const next: Record<number, BaristaMktFavItem> = {};
+      for (const id of ids) {
+        const profile = profileMap.get(id);
+        if (!profile) continue;
+        next[id] = {
+          id: profile.userId,
+          name: profile.name,
+          initials: profile.initials,
+          skills: profile.skills,
+          location: profile.location,
+          rating: profile.rating / 10,
+          available: profile.available,
+        };
+      }
+      return { baristaMarket: next };
     }),
 }));
 

@@ -56,6 +56,9 @@ import BaristaMarketplaceRequestsPage from "@/pages/barista-marketplace/requests
 import BaristaMarketplaceMissionsPage from "@/pages/barista-marketplace/missions";
 import BaristaMarketplaceRevenuePage from "@/pages/barista-marketplace/revenue";
 import BaristaMarketplaceSettingsPage from "@/pages/barista-marketplace/settings";
+import BaristaMarketplaceMessagesPage from "@/pages/barista-marketplace/messages";
+import BaristaMarketplaceReviewsPage from "@/pages/barista-marketplace/reviews";
+import { BaristaAccountShell } from "@/components/layout/barista-account-shell";
 import MaintenanceDashboard from "@/pages/maintenance/dashboard";
 import MaintenancePage from "@/pages/cafe/maintenance/maintenance-page";
 
@@ -212,6 +215,7 @@ function HomeRoute() {
   if (needsApproval(user)) return <LandingPage />;
   if (user.role === "CAFE_OWNER") return <Redirect to="/products" />;
   if (user.role === "MAINTENANCE") return <MaintenanceDashboard />;
+  if (user.role === "BARISTA_MARKETPLACE") return <Redirect to="/barista-marketplace" />;
   return (
     <DashboardLayout>
       <SmartDashboard />
@@ -329,24 +333,30 @@ function Router() {
         {() => (<DashboardLayout><ProtectedRoute component={BaristaAcademyDashboard} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></DashboardLayout>)}
       </Route>
 
-      {/* ── Barista Marketplace routes ── */}
+      {/* ── Barista Marketplace routes — top switcher shell instead of the sidebar, see barista-account-shell.tsx ── */}
       <Route path="/barista-marketplace">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceDashboard} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceDashboard} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/profile">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceProfilePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceProfilePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/requests">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceRequestsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceRequestsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/missions">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceMissionsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceMissionsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/revenue">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceRevenuePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceRevenuePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
+      </Route>
+      <Route path="/barista-marketplace/messages">
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceMessagesPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
+      </Route>
+      <Route path="/barista-marketplace/reviews">
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceReviewsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/settings">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaMarketplaceSettingsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></DashboardLayout>)}
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceSettingsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
 
       {/* ── Maintenance Agent routes ── */}

@@ -4,6 +4,7 @@ export type MessagingSettings = {
   globalVisible: boolean;
   supplierMessagingEnabled: boolean;
   maintenanceMessagingEnabled: boolean;
+  baristaMessagingEnabled: boolean;
   broadcastsEnabled: boolean;
   gracePeriodMinutes: number;
 };
@@ -12,6 +13,7 @@ export const DEFAULT_MESSAGING_SETTINGS: MessagingSettings = {
   globalVisible: true,
   supplierMessagingEnabled: true,
   maintenanceMessagingEnabled: true,
+  baristaMessagingEnabled: true,
   broadcastsEnabled: true,
   gracePeriodMinutes: 30,
 };

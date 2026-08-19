@@ -42,6 +42,7 @@ import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
 import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/maintenance/maintenance-page";
 import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard } from "@shared/schema";
+import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
@@ -585,7 +586,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const {
     shop, print, academy, baristaMarket, marketing, maintenance, pack,
     removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removeMaintenance, removePack,
-    syncMaintenance,
+    syncMaintenance, syncBaristaMarket,
   } = useFavorites();
   const { stores, toggleStore: toggleStoreFav } = useStoreFavorites();
 
@@ -632,6 +633,20 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
     if (maintenanceFavoriteIds === undefined || maintenanceProfilesLoading) return;
     syncMaintenance(maintenanceFavoriteIds, maintenanceProfiles);
   }, [maintenanceFavoriteIds, maintenanceProfiles, maintenanceProfilesLoading, syncMaintenance]);
+
+  // Favorites persist as Barista Marketplace account IDs. Resolve them against
+  // the live profiles, mirroring the Maintenance favorites sync above exactly.
+  const { data: baristaFavoriteIds } = useQuery<number[]>({
+    queryKey: ["/api/barista-favorites"],
+  });
+  const { data: baristaProfiles = [], isLoading: baristaProfilesLoading } = useQuery<BaristaMarketplaceCard[]>({
+    queryKey: ["/api/barista/profiles"],
+    enabled: (baristaFavoriteIds?.length ?? 0) > 0,
+  });
+  useEffect(() => {
+    if (baristaFavoriteIds === undefined || baristaProfilesLoading) return;
+    syncBaristaMarket(baristaFavoriteIds, baristaProfiles);
+  }, [baristaFavoriteIds, baristaProfiles, baristaProfilesLoading, syncBaristaMarket]);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();

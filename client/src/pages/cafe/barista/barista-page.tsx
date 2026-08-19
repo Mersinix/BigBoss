@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import baristaHeroImg from "@assets/8d80708f-be87-4e8d-8805-f60e3c292914-1000x562.5-rjZKXkudAsN4bH_1780680229193.jpg";
 import { Link, useSearch, useLocation } from "wouter";
@@ -571,6 +572,17 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
 
   const { data: profiles = [], isLoading: profilesLoading, isError: profilesError } = useBaristaProfiles();
   const { data: skillOptions = [] } = useBaristaSkills();
+
+  // Hydrate favorite hearts from the database, mirroring maintenance-page.tsx's pattern.
+  const { data: favoriteIds = [] } = useQuery<number[]>({
+    queryKey: ["/api/barista-favorites"],
+    enabled: !!user && accessLevel === "approved",
+  });
+  const syncBaristaMarket = useFavorites((s) => s.syncBaristaMarket);
+  useEffect(() => {
+    if (profilesLoading) return;
+    syncBaristaMarket(favoriteIds, profiles);
+  }, [favoriteIds, profiles, profilesLoading, syncBaristaMarket]);
 
   const filteredTraining = useMemo(() => {
     let list = TRAINING_PROGRAMS;

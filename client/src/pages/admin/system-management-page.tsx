@@ -40,6 +40,7 @@ type MessagingSettings = {
   globalVisible: boolean;
   supplierMessagingEnabled: boolean;
   maintenanceMessagingEnabled: boolean;
+  baristaMessagingEnabled: boolean;
   broadcastsEnabled: boolean;
   gracePeriodMinutes: number;
 };
@@ -91,6 +92,7 @@ function MessagesSystemSection() {
               ["globalVisible", "Messages visibility", "Allow affected users to access Messages."],
               ["supplierMessagingEnabled", "Supplier ↔ Coffee Owner", "Allow conversations for eligible active Shop orders."],
               ["maintenanceMessagingEnabled", "Maintenance ↔ Coffee Owner", "Allow conversations for eligible active reservations."],
+              ["baristaMessagingEnabled", "Barista ↔ Coffee Owner", "Allow conversations for eligible active Barista Marketplace requests."],
               ["broadcastsEnabled", "Admin broadcasts", "Allow new broadcasts; existing broadcast data is preserved."],
             ] as const).map(([field, label, description]) => (
               <div key={field} className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">

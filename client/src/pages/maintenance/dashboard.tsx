@@ -542,7 +542,8 @@ export default function MaintenanceDashboard() {
               disabled={isLoggingOut}
               className="text-white hover:bg-white/15 hover:text-white rounded-xl text-xs"
             >
-              <LogOut className="w-4 h-4 mr-1.5" />Se déconnecter
+              <LogOut className="w-4 h-4 mr-1.5" />
+              <span className="hidden sm:inline">Se déconnecter</span>
             </Button>
           </div>
         </div>

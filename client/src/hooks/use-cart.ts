@@ -64,11 +64,8 @@ export interface PackCartItemProduct {
   flavorName: string | null;
   sizeName: string | null;
   /**
-   * Quantity for ONE pack — invariant regardless of PackCartItem.quantity (how many packs
-   * are in the cart). Every consumer (cart page, checkout summary, order submission) must
-   * derive the displayed/total quantity as `quantity * packCartItem.quantity` rather than
-   * reading this value directly as a total. This is what lets +/- on the pack's own
-   * quantity multiply every included distribution without ever touching this array.
+   * Quantity in the current cart line's distribution. The sum of the selected
+   * distributions is kept synchronized with PackCartItem.quantity.
    */
   quantity: number;
 }
@@ -82,6 +79,35 @@ export interface PackCartItem {
   unitPrice: number;
   quantity: number;
   includedProducts: PackCartItemProduct[];
+}
+
+function distributionKey(item: Pick<PackCartItemProduct, 'productId' | 'flavorName' | 'sizeName'>): string {
+  return `${item.productId}-${item.flavorName ?? ""}-${item.sizeName ?? ""}`;
+}
+
+function resizePackDistribution(
+  products: PackCartItemProduct[],
+  oldPackQuantity: number,
+  newPackQuantity: number,
+): PackCartItemProduct[] {
+  if (products.length === 0 || oldPackQuantity === newPackQuantity) return products;
+  const oldTotal = products.reduce((sum, product) => sum + product.quantity, 0);
+  const unitsPerPack = Math.max(1, Math.round(oldTotal / Math.max(1, oldPackQuantity)));
+  const target = unitsPerPack * newPackQuantity;
+  let delta = target - oldTotal;
+  const resized = products.map(product => ({ ...product }));
+
+  if (delta > 0) {
+    resized[0].quantity += delta;
+  } else if (delta < 0) {
+    for (const product of resized) {
+      if (delta === 0) break;
+      const remove = Math.min(product.quantity, -delta);
+      product.quantity -= remove;
+      delta += remove;
+    }
+  }
+  return resized.filter(product => product.quantity > 0);
 }
 
 // ── Combined cart state ───────────────────────────────────────────────────────
@@ -206,7 +232,20 @@ export const useCart = create<CartState>()(
         set((state) => {
           const existing = state.packItems.find(i => i.packId === itemData.packId);
           if (existing) {
-            return { packItems: state.packItems.map(i => i.packId === itemData.packId ? { ...i, quantity: i.quantity + quantity } : i) };
+            const merged = [...existing.includedProducts];
+            for (const product of itemData.includedProducts) {
+              const existingProduct = merged.find(item => distributionKey(item) === distributionKey(product));
+              if (existingProduct) {
+                existingProduct.quantity += product.quantity;
+              } else {
+                merged.push({ ...product });
+              }
+            }
+            return {
+              packItems: state.packItems.map(i => i.packId === itemData.packId
+                ? { ...i, quantity: i.quantity + quantity, includedProducts: merged }
+                : i),
+            };
           }
           return { packItems: [...state.packItems, { ...itemData, quantity }] };
         });
@@ -220,7 +259,13 @@ export const useCart = create<CartState>()(
         set((state) => ({
           packItems: quantity <= 0
             ? state.packItems.filter(i => i.packId !== packId)
-            : state.packItems.map(i => i.packId === packId ? { ...i, quantity } : i),
+            : state.packItems.map(i => i.packId === packId
+              ? {
+                  ...i,
+                  quantity,
+                  includedProducts: resizePackDistribution(i.includedProducts, i.quantity, quantity),
+                }
+              : i),
         }));
       },
 

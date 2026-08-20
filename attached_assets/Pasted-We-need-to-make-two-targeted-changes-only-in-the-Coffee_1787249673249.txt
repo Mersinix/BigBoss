@@ -1,0 +1,486 @@
+We need to make **two targeted changes only in the Coffee Owner part of BigBossCoffee**.
+
+**IMPORTANT — BEFORE MODIFYING ANYTHING:**
+
+First, thoroughly inspect the existing implementation and understand the complete synchronization between:
+
+* Pack details / pack purchase flow
+* Pack variant-distribution selection
+* Cart state
+* Cart persistence
+* Product variants
+* Supplier/product relationships
+* Quantity changes
+* Increment/decrement behavior
+* Delete behavior
+* Any API/backend/database synchronization involved in these flows
+
+Check both frontend and backend behavior before making changes.
+
+Do **not** assume the current cart representation is correct. Reproduce the described cases and identify exactly where the selected pack variants or product variants are being incorrectly transformed when entering the cart.
+
+After understanding the existing flow, implement ONLY the changes described below.
+
+---
+
+# 1. FIX PACK VARIANT DISTRIBUTION IN THE COFFEE OWNER CART
+
+Current behavior:
+
+The Coffee Owner purchases a pack such as:
+
+**CHICHA PACK**
+
+Café Bondin
+د.ت70.00 per pack
+
+Included products:
+
+**CHICHA**
+
+* CHIKH · شيشا · chicha
+* Quantity selected according to pack quantity
+
+**FANTA 25cl**
+
+* Ananas · Gajou
+* Citron · Gajou
+* BLANC · Gajou
+
+The Coffee Owner chooses the flavor distribution for the FANTA product.
+
+For example:
+
+### Pack quantity = 3
+
+The Coffee Owner selects:
+
+* 1 × Ananas
+* 1 × Citron
+* 1 × BLANC
+
+This is correct.
+
+But currently, after adding the pack to the cart, the cart incorrectly transforms the selected distribution into:
+
+* 3 × Ananas
+* 3 × Citron
+* 3 × BLANC
+
+This is WRONG.
+
+The cart must preserve the **exact variant distribution selected by the Coffee Owner**.
+
+So for 3 packs, the cart must display:
+
+**FANTA 25cl**
+
+Fanta · مشروبات · Gazouz
+
+* 1× Ananas · Gajou
+* 1× Citron · Gajou
+* 1× BLANC · Gajou
+
+with the pack quantity shown as:
+
+**3**
+
+---
+
+### Second example
+
+If the Coffee Owner buys **4 packs** and selects:
+
+* 2 × Ananas
+* 1 × Citron
+* 1 × BLANC
+
+Then the cart MUST display:
+
+**FANTA 25cl**
+
+* 2× Ananas · Gajou
+* 1× Citron · Gajou
+* 1× BLANC · Gajou
+
+and the pack quantity:
+
+**4**
+
+It must NOT transform this into:
+
+* 4 × Ananas
+* 4 × Citron
+* 4 × BLANC
+
+---
+
+### Important rule
+
+The pack quantity and the variant-distribution quantities are two different concepts.
+
+For a pack quantity of `N`, the sum of the selected variant quantities for each configurable included product must equal `N`.
+
+The cart must preserve these exact quantities.
+
+Do NOT automatically multiply every selected variant quantity by the pack quantity.
+
+The cart should represent:
+
+**Pack quantity = number of complete packs**
+
+while the included-product variant quantities represent:
+
+**how those packs were distributed among the available variants.**
+
+---
+
+## Cart increment/decrement behavior for packs
+
+When the Coffee Owner increments the pack quantity in the cart:
+
+Example:
+
+Current:
+
+**3 packs**
+
+FANTA:
+
+* 1 × Ananas
+* 1 × Citron
+* 1 × BLANC
+
+When increasing to **4 packs**, the variant distribution must remain logically consistent and must NOT simply duplicate every variant into 4.
+
+The expected result for this specific existing distribution should become:
+
+* 2 × Ananas
+* 1 × Citron
+* 1 × BLANC
+
+Total = 4.
+
+In other words, when the pack quantity changes, preserve the existing distribution as much as possible and add/remove the minimum necessary quantity from the distribution instead of multiplying every variant quantity.
+
+Similarly, when decrementing:
+
+Current:
+
+**4 packs**
+
+* 2 × Ananas
+* 1 × Citron
+* 1 × BLANC
+
+When decrementing to **3 packs**, the distribution should become:
+
+* 1 × Ananas
+* 1 × Citron
+* 1 × BLANC
+
+Total = 3.
+
+Do not reset the distribution unnecessarily.
+
+The system should always keep the selected distribution synchronized with the pack quantity.
+
+---
+
+# 2. GROUP THE SAME PRODUCT FROM THE SAME SUPPLIER IN THE COFFEE OWNER CART
+
+There is another cart issue.
+
+Currently, if the Coffee Owner adds the **same product from the same supplier** multiple times with different variants, the cart creates multiple separate product entries.
+
+For example, currently the cart may show:
+
+**Al-Khalil Coffee**
+
+**د.ت1332.00**
+
+### Robusta Dark Roast Beans 1kg
+
+Brand: Lavazza
+Category: قهوي
+SubCategory: Robusta Beans
+
+**Variant: Vanilla · 1kg Bag**
+
+د.ت333.00 chacun
+
+Quantity: 1
+
+---
+
+Then another completely separate cart product:
+
+### Robusta Dark Roast Beans 1kg
+
+Brand: Lavazza
+Category: قهوي
+SubCategory: Robusta Beans
+
+**Variant: Vanilla · 500g Bag**
+
+د.ت444.00 chacun
+
+Quantity: 1
+
+---
+
+Then another separate product:
+
+### Robusta Dark Roast Beans 1kg
+
+Brand: Lavazza
+Category: قهوي
+SubCategory: Robusta Beans
+
+**Variant: Vanilla · Espresso Shot**
+
+د.ت555.00 chacun
+
+Quantity: 1
+
+---
+
+This is NOT the desired cart structure.
+
+If the product is the same product and comes from the same supplier, it must appear **only once** in the cart.
+
+The different variants must be grouped underneath that single product entry.
+
+The desired structure is:
+
+**Al-Khalil Coffee**
+
+**د.ت1332.00**
+
+### Robusta Dark Roast Beans 1kg
+
+Brand: Lavazza
+Category: قهوي
+SubCategory: Robusta Beans
+
+**Variant: Vanilla · 1kg Bag**
+
+د.ت333.00 chacun
+
+Quantity controls:
+
+`−   1   +`
+
+Delete button for this variant.
+
+---
+
+**Variant: Vanilla · 500g Bag**
+
+د.ت444.00 chacun
+
+Quantity controls:
+
+`−   1   +`
+
+Delete button for this variant.
+
+---
+
+**Variant: Vanilla · Espresso Shot**
+
+د.ت555.00 chacun
+
+Quantity controls:
+
+`−   1   +`
+
+Delete button for this variant.
+
+---
+
+Total:
+
+**د.ت1332.00**
+
+---
+
+## Important grouping rule
+
+The grouping should happen only when the items represent the **same underlying product from the same supplier**.
+
+Different suppliers must remain separate.
+
+Different products must remain separate.
+
+Do not accidentally merge unrelated products simply because they have the same name.
+
+The grouping must respect the existing product/supplier identity and variant structure already used by the application.
+
+---
+
+# Variant controls
+
+Inside the grouped product:
+
+Each variant must have its own:
+
+* quantity
+* decrement button
+* increment button
+* delete button
+
+Changing one variant's quantity must affect **only that variant**.
+
+For example:
+
+If:
+
+* 1kg Bag = 1
+* 500g Bag = 1
+* Espresso Shot = 1
+
+and the Coffee Owner increments 500g Bag:
+
+* 1kg Bag = 1
+* 500g Bag = 2
+* Espresso Shot = 1
+
+Do NOT change the other variants.
+
+If the Coffee Owner deletes the 500g Bag variant, only that variant should disappear. The parent product must remain in the cart as long as at least one variant remains.
+
+If the last remaining variant of a product is deleted, then the entire product entry should be removed from the cart.
+
+The cart total must always update correctly after every variant quantity change or deletion.
+
+---
+
+# Synchronization requirements
+
+Before considering this complete, verify the entire synchronization chain.
+
+The selected pack variant distribution must remain correct:
+
+**Pack selection → pack quantity → variant distribution → cart → quantity changes → cart persistence → checkout/order data**
+
+Likewise, for normal products:
+
+**Product selection → supplier → product identity → variant → cart grouping → variant quantity changes → cart persistence → checkout/order data**
+
+Make sure the changes do not introduce duplicate cart records, incorrect quantities, incorrect totals, or incorrect checkout/order information.
+
+If the cart is persisted through local state, API, database, or another existing mechanism, preserve the existing architecture and synchronization behavior.
+
+Do not create a parallel cart system.
+
+Do not introduce a second source of truth.
+
+---
+
+# VERY IMPORTANT — PRESERVE THE EXISTING UI/UX
+
+Do NOT redesign anything.
+
+Do NOT change the existing visual design.
+
+Do NOT change colors.
+
+Do NOT change typography.
+
+Do NOT change spacing.
+
+Do NOT change cards.
+
+Do NOT change buttons except where necessary to support the requested per-variant controls.
+
+Do NOT remove existing information.
+
+Do NOT remove existing functionality.
+
+Do NOT modify unrelated Coffee Owner pages.
+
+Do NOT modify Supplier, Admin, Delivery, Barista, Maintenance, Print, Marketing, or other modules unless a backend synchronization dependency absolutely requires it.
+
+Do NOT refactor unrelated code.
+
+Do NOT replace existing components unnecessarily.
+
+Keep the current design exactly as it is and integrate the requested behavior into the existing UI.
+
+The goal is to **fix the cart data structure and synchronization while preserving the current interface**.
+
+---
+
+# Required testing before finishing
+
+Test at minimum:
+
+### Pack tests
+
+1. Add 1 pack.
+2. Add 3 packs with:
+
+   * 1 Ananas
+   * 1 Citron
+   * 1 BLANC
+3. Add 4 packs with:
+
+   * 2 Ananas
+   * 1 Citron
+   * 1 BLANC
+4. Increment 3 → 4.
+5. Decrement 4 → 3.
+6. Verify the selected distribution is preserved correctly.
+7. Refresh/reload and verify the cart remains correct if the current system persists cart data.
+8. Verify the total price remains correct.
+
+### Normal product variant tests
+
+1. Add the same product from the same supplier with 3 different variants.
+2. Verify it appears as ONE product in the cart.
+3. Verify all 3 variants appear underneath it.
+4. Increment only the first variant.
+5. Verify only the first variant changes.
+6. Decrement only the second variant.
+7. Verify only the second variant changes.
+8. Delete the third variant.
+9. Verify the first two variants remain.
+10. Delete all variants one by one.
+11. Verify the parent product disappears only after its final variant is removed.
+12. Verify cart totals after every operation.
+13. Verify checkout/order data still contains the correct variant quantities.
+
+### Regression testing
+
+After implementing the changes, verify that existing cart functionality that was not mentioned here still works exactly as before.
+
+Especially verify:
+
+* Different suppliers remain separated.
+* Different products remain separated.
+* Product prices remain correct.
+* Pack prices remain correct.
+* Cart totals remain correct.
+* Existing cart UI remains unchanged.
+* Existing checkout flow remains unchanged.
+* Existing order creation remains unchanged.
+* Existing stock/availability validation remains unchanged.
+
+---
+
+## Final instruction
+
+First **inspect and understand the existing implementation and synchronization**.
+
+Then make the **minimum necessary changes** to solve these two problems.
+
+Do not make unrelated improvements.
+
+Do not redesign anything.
+
+Do not remove anything that was not explicitly requested.
+
+Do not break existing functionality.
+
+After implementation, test the complete flow and confirm that the pack variant distribution and grouped product variants remain synchronized from selection all the way through cart and checkout.

@@ -25,6 +25,21 @@ import OrderConfirmationModal, { type ConfirmOrderOpts } from "@/components/cafe
 import { useAccountOpenStore } from "@/store/account-open-store";
 import { groupPackIncludedProducts } from "@/lib/pack-grouping";
 
+function groupCartProducts(items: import("@/hooks/use-cart").CartItem[]) {
+  const groups: Array<{ product: import("@/hooks/use-cart").CartItem; variants: import("@/hooks/use-cart").CartItem[] }> = [];
+  const byProduct = new Map<number, number>();
+  for (const item of items) {
+    const existingIndex = byProduct.get(item.productId);
+    if (existingIndex === undefined) {
+      byProduct.set(item.productId, groups.length);
+      groups.push({ product: item, variants: [item] });
+    } else {
+      groups[existingIndex].variants.push(item);
+    }
+  }
+  return groups;
+}
+
 export default function CartPage() {
   const {
     items, updateQuantity, removeItem, clearCart, getTotal, getItemsBySupplier,
@@ -240,10 +255,9 @@ export default function CartPage() {
         packId: p.packId,
         supplierId: p.supplierId,
         quantity: p.quantity,
-         // Cart items store the per-ONE-pack distribution (see PackCartItemProduct);
-         // resolve to the actual total being ordered here, once, right before submission —
-         // this is what gets snapshotted on the order and must reflect p.quantity packs.
-         includedProducts: p.includedProducts.map((ip) => ({ ...ip, quantity: ip.quantity * p.quantity })),
+          // Pack cart lines already store the exact current distribution for the
+          // selected number of packs.
+          includedProducts: p.includedProducts,
       })),
       deliveryAddress: opts.deliveryMethod === "DELIVERY_SERVICE" ? activeDeliveryAddress! : undefined,
       deliveryMethod: opts.deliveryMethod,
@@ -352,41 +366,45 @@ export default function CartPage() {
                         <span className={`text-sm font-medium shrink-0 ${textPrimary}`}>{fmt(supplierTotal)}</span>
                       </div>
                       <div className={`divide-y ${divideClr}`}>
-                        {group.items.map((item) => {
-                          const variantLabel = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
-                          return (
-                            <div key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`} className="flex gap-3 p-3 sm:p-4" data-testid={`cart-item-${item.listingId}`}>
-                              <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
-                                {item.productImageUrl ? (
-                                  <img src={item.productImageUrl} className="w-full h-full object-cover" alt="" />
-                                ) : (
-                                  <div className={`w-full h-full flex items-center justify-center text-xs ${textMuted}`}>—</div>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className={`font-medium text-sm truncate ${textPrimary}`}>{item.productName}</p>
-                                <div className={`flex flex-wrap gap-x-2 gap-y-0.5 text-xs mt-0.5 ${textMuted}`}>
-                                  {item.brandName && <span>Brand: {item.brandName}</span>}
-                                  {item.categoryName && <span>Category: {item.categoryName}</span>}
-                                  {item.subCategoryName && <span>SubCategory: {item.subCategoryName}</span>}
-                                  {variantLabel && <span>Variant: {variantLabel}</span>}
-                                </div>
-                                <p className={`text-xs ${textMuted}`}>{fmt(item.unitPrice)} chacun</p>
-                                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                  <div className={`flex items-center border rounded-xl overflow-hidden ${borderClr}`}>
-                                    <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, Math.max(1, item.quantity - 1))} data-testid={`button-decrease-${item.listingId}`}><Minus className={`w-3 h-3 ${textMuted}`} /></button>
-                                    <span className={`px-2 sm:px-3 text-sm font-medium w-7 sm:w-8 text-center ${textPrimary}`}>{item.quantity}</span>
-                                    <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, item.quantity + 1)} data-testid={`button-increase-${item.listingId}`}><Plus className={`w-3 h-3 ${textMuted}`} /></button>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
-                                <p className={`font-bold text-sm ${textPrimary}`}>{fmt(item.unitPrice * item.quantity)}</p>
-                                <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removeItem(item.listingId, item.flavorId, item.sizeId)} data-testid={`button-remove-${item.listingId}`}><Trash2 className="w-4 h-4" /></button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                         {groupCartProducts(group.items).map(({ product, variants }) => (
+                           <div key={`product-${product.productId}`} className="flex gap-3 p-3 sm:p-4" data-testid={`cart-product-${product.productId}`}>
+                             <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
+                               {product.productImageUrl ? (
+                                 <img src={product.productImageUrl} className="w-full h-full object-cover" alt="" />
+                               ) : (
+                                 <div className={`w-full h-full flex items-center justify-center text-xs ${textMuted}`}>—</div>
+                               )}
+                             </div>
+                             <div className="flex-1 min-w-0">
+                               <p className={`font-medium text-sm truncate ${textPrimary}`}>{product.productName}</p>
+                               <div className={`flex flex-wrap gap-x-2 gap-y-0.5 text-xs mt-0.5 ${textMuted}`}>
+                                 {product.brandName && <span>Brand: {product.brandName}</span>}
+                                 {product.categoryName && <span>Category: {product.categoryName}</span>}
+                                 {product.subCategoryName && <span>SubCategory: {product.subCategoryName}</span>}
+                               </div>
+                               <div className="mt-2 space-y-2">
+                                 {variants.map((item) => {
+                                   const variantLabel = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
+                                   return (
+                                     <div key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`} className="flex items-center gap-2 min-w-0">
+                                       <div className="flex-1 min-w-0">
+                                         {variantLabel && <p className={`text-xs truncate ${textMuted}`}>Variant: {variantLabel}</p>}
+                                         <p className={`text-xs ${textMuted}`}>{fmt(item.unitPrice)} chacun</p>
+                                       </div>
+                                       <div className={`flex items-center border rounded-xl overflow-hidden shrink-0 ${borderClr}`}>
+                                         <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, Math.max(1, item.quantity - 1))} data-testid={`button-decrease-${item.listingId}`}><Minus className={`w-3 h-3 ${textMuted}`} /></button>
+                                         <span className={`px-2 sm:px-3 text-sm font-medium w-7 sm:w-8 text-center ${textPrimary}`}>{item.quantity}</span>
+                                         <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, item.quantity + 1)} data-testid={`button-increase-${item.listingId}`}><Plus className={`w-3 h-3 ${textMuted}`} /></button>
+                                       </div>
+                                       <span className={`font-bold text-xs min-w-[52px] text-right ${textPrimary}`}>{fmt(item.unitPrice * item.quantity)}</span>
+                                       <button className={`transition-colors ${textMuted} hover:text-red-500 shrink-0`} onClick={() => removeItem(item.listingId, item.flavorId, item.sizeId)} data-testid={`button-remove-${item.listingId}`}><Trash2 className="w-4 h-4" /></button>
+                                     </div>
+                                   );
+                                 })}
+                               </div>
+                             </div>
+                           </div>
+                         ))}
                       </div>
                     </div>
                   );
@@ -415,7 +433,7 @@ export default function CartPage() {
                            <p className={`text-xs ${textMuted}`}>{pack.supplierName} · {fmt(pack.unitPrice)} le pack</p>
                           {pack.includedProducts.length > 0 && (
                              <div className={`mt-3 space-y-2.5 border-t pt-2 ${dk ? "border-amber-500/20" : "border-amber-100"}`}>
-                               {groupPackIncludedProducts(pack.includedProducts, pack.quantity).map((group) => (
+                                {groupPackIncludedProducts(pack.includedProducts).map((group) => (
                                  <div key={group.productId} className="flex items-start gap-2">
                                    <div className={`w-9 h-9 rounded-lg overflow-hidden shrink-0 ${imgBg}`}>
                                      {group.productImageUrl

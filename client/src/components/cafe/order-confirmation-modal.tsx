@@ -322,7 +322,7 @@ export default function OrderConfirmationModal({
                       <p className={`text-[11px] mt-0.5 ${t.textMuted}`}>{pack.supplierName}</p>
                     {pack.includedProducts.length > 0 && (
                         <div className={`mt-2 space-y-2 border-t pt-2 ${t.dk ? "border-amber-800/40" : "border-amber-200"}`}>
-                          {groupPackIncludedProducts(pack.includedProducts, pack.quantity).map((group) => (
+                           {groupPackIncludedProducts(pack.includedProducts).map((group) => (
                             <div key={group.productId} className="flex items-start gap-2">
                               <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-gray-700/60">
                                 {group.productImageUrl

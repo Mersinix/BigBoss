@@ -525,7 +525,7 @@ export default function MaintenanceDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-orange-600 to-amber-600 px-4 py-5 md:py-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
@@ -545,27 +545,12 @@ export default function MaintenanceDashboard() {
               <LogOut className="w-4 h-4 mr-1.5" />Se déconnecter
             </Button>
           </div>
-
-          {/* KPI strip */}
-          <div className="grid grid-cols-3 gap-3 mt-4">
-            {[
-              { label: "Aujourd'hui", value: todayCount, icon: Calendar, color: "text-amber-200" },
-              { label: "À venir", value: upcomingCount, icon: Clock, color: "text-blue-200" },
-              { label: "En attente", value: pendingCount, icon: AlertCircle, color: "text-red-200" },
-            ].map((kpi) => (
-              <div key={kpi.label} className="bg-white/10 rounded-2xl p-3 text-center backdrop-blur-sm">
-                <kpi.icon className={`w-4 h-4 mx-auto mb-1 ${kpi.color}`} />
-                <p className="font-bold text-white text-xl">{kpi.value}</p>
-                <p className="text-orange-100 text-[11px]">{kpi.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
       {/* Tab navigation */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-30">
-        <div className="max-w-4xl mx-auto px-4">
+        <div className="max-w-5xl mx-auto px-4">
           <div className="flex gap-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {tabs.map((tab) => (
               <button
@@ -583,7 +568,7 @@ export default function MaintenanceDashboard() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
 
         {/* ── MESSAGES ── */}
         {activeTab === "messages" && <MaintenanceMessages />}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useThemeStore } from "@/store/theme-store";
 import { useCart } from "@/hooks/use-cart";
+import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { usePromotionEvaluation } from "@/hooks/use-promotion-evaluation";
@@ -13,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
   Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck, Sun, Moon,
-  CreditCard, Banknote, Smartphone, Landmark
+  CreditCard, Banknote, Smartphone, Landmark, Pencil
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
@@ -24,29 +25,16 @@ import { userToAccountAddress, pickedToGeoLocation } from "@/store/search-locati
 import OrderConfirmationModal, { type ConfirmOrderOpts } from "@/components/cafe/order-confirmation-modal";
 import { useAccountOpenStore } from "@/store/account-open-store";
 import { groupPackIncludedProducts } from "@/lib/pack-grouping";
-
-function groupCartProducts(items: import("@/hooks/use-cart").CartItem[]) {
-  const groups: Array<{ product: import("@/hooks/use-cart").CartItem; variants: import("@/hooks/use-cart").CartItem[] }> = [];
-  const byProduct = new Map<number, number>();
-  for (const item of items) {
-    const existingIndex = byProduct.get(item.productId);
-    if (existingIndex === undefined) {
-      byProduct.set(item.productId, groups.length);
-      groups.push({ product: item, variants: [item] });
-    } else {
-      groups[existingIndex].variants.push(item);
-    }
-  }
-  return groups;
-}
+import { groupCartProducts } from "@/lib/cart-grouping";
 
 export default function CartPage() {
   const {
     items, updateQuantity, removeItem, clearCart, getTotal, getItemsBySupplier,
     printItems, removePrintItem, clearPrintItems, getPrintTotal,
-    packItems, updatePackQuantity, removePackItem, clearPackItems, getPackTotal,
+    packItems, removePackItem, getPackTotal,
   } = useCart();
   const { user } = useAuth();
+  const openPackForEdit = usePackQuickView((s) => s.openForEdit);
   const createOrder = useCreateOrder();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -269,8 +257,20 @@ export default function CartPage() {
     createOrder.mutate(request, {
       onSuccess: (newOrder: any) => {
         toast({ title: "Commande envoyée !", description: "Vos commandes ont été transmises aux fournisseurs." });
-        clearCart();
-        clearPackItems();
+        // The order is created from an independent draft (see
+        // OrderConfirmationModal), which may itself be a subset of the Cart —
+        // the Coffee Owner can remove items from the draft before confirming,
+        // and those stay in the Cart untouched. Only once the backend has
+        // confirmed the order do we remove exactly the items that were
+        // actually submitted (opts.modifiedItems / opts.modifiedPackItems)
+        // from the real, persisted Cart — never the whole cart, and never
+        // before this onSuccess callback runs.
+        for (const item of opts.modifiedItems) {
+          removeItem(item.listingId, item.flavorId, item.sizeId);
+        }
+        for (const pack of opts.modifiedPackItems) {
+          removePackItem(pack.packId);
+        }
         setCourierInstructions("");
         setCustomDeliveryAddress(null);
         setConfirmOpen(false);
@@ -460,11 +460,13 @@ export default function CartPage() {
                              </div>
                           )}
                           <div className="flex items-center gap-2 mt-2">
-                            <div className={`flex items-center border rounded-xl overflow-hidden ${borderClr}`}>
-                              <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updatePackQuantity(pack.packId, Math.max(1, pack.quantity - 1))} data-testid={`button-decrease-pack-${pack.packId}`}><Minus className={`w-3 h-3 ${textMuted}`} /></button>
-                              <span className={`px-2 sm:px-3 text-sm font-medium w-7 sm:w-8 text-center ${textPrimary}`}>{pack.quantity}</span>
-                              <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updatePackQuantity(pack.packId, pack.quantity + 1)} data-testid={`button-increase-pack-${pack.packId}`}><Plus className={`w-3 h-3 ${textMuted}`} /></button>
-                            </div>
+                            <button
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-200 text-amber-700 hover:bg-amber-50"}`}
+                              onClick={() => openPackForEdit(pack)}
+                              data-testid={`button-edit-pack-${pack.packId}`}
+                            >
+                              <Pencil className="w-3 h-3" /> Edit
+                            </button>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">

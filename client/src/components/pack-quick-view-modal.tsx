@@ -554,12 +554,20 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
 
 export function PackQuickViewModal() {
   const packId = usePackQuickView((s) => s.packId);
+  const editCartItem = usePackQuickView((s) => s.editCartItem);
+  const onSave = usePackQuickView((s) => s.onSave);
   const close  = usePackQuickView((s) => s.close);
+  const isEditing = editCartItem != null;
 
   const [qty, setQty]           = useState(1);
   const [activeTab, setActiveTab] = useState<"details" | "reviews">("details");
   const [reviewsTab, setReviewsTab] = useState<"pack" | "supplier">("pack");
   const [previewProductId, setPreviewProductId] = useState<number | null>(null);
+  // When editing an existing cart line, the pack-loaded effect below must seed
+  // flavorSelections from the cart's actual saved distribution once, instead
+  // of the auto-computed default — subsequent qty changes made by the user
+  // inside the modal still use the normal auto-distribute behavior.
+  const seedFromCartRef = useRef(false);
 
   // ── Global theme ──────────────────────────────────────────────────────────
   const { isDark, toggle } = useThemeStore();
@@ -572,6 +580,7 @@ export function PackQuickViewModal() {
 
   const { toast } = useToast();
   const addPackItem = useCart((s) => s.addPackItem);
+  const setPackItem = useCart((s) => s.setPackItem);
   const faved      = useFavorites((s) => (packId != null ? !!s.pack[packId] : false));
   const togglePack = useFavorites((s) => s.togglePack);
 
@@ -625,17 +634,61 @@ export function PackQuickViewModal() {
     return result;
   }
 
+  // Rebuilds the per-item flavor allocations from a saved cart distribution
+  // (used only the first time the modal loads in edit mode) instead of the
+  // auto-computed default. Matches cart rows to a pack item's in-stock
+  // variant options by (productId, flavorName, sizeName); if the same
+  // productId legitimately occupies more than one pack slot, each cart row
+  // is consumed at most once so quantities aren't double-counted.
+  function buildAllocationsFromCart(p: typeof pack, cartProducts: { productId: number; flavorName: string | null; sizeName: string | null; quantity: number }[]): Record<number, FlavorAllocation[]> {
+    if (!p) return {};
+    const remaining = cartProducts.map(c => ({ ...c }));
+    const result: Record<number, FlavorAllocation[]> = {};
+    for (const item of p.items) {
+      const inStockVariants = item.listingVariants.filter(v => v.availableQuantity > 0);
+      if (inStockVariants.length <= 1) continue;
+      const allocs: FlavorAllocation[] = inStockVariants.map(v => ({
+        variantId: v.variantId, flavorName: v.flavorName, sizeName: v.sizeName, quantity: 0, availableQty: v.availableQuantity,
+      }));
+      for (const alloc of allocs) {
+        const matchIndex = remaining.findIndex(c =>
+          c.productId === item.productId &&
+          (c.flavorName ?? null) === (alloc.flavorName ?? null) &&
+          (c.sizeName ?? null) === (alloc.sizeName ?? null)
+        );
+        if (matchIndex !== -1) {
+          alloc.quantity = remaining[matchIndex].quantity;
+          remaining.splice(matchIndex, 1);
+        }
+      }
+      result[item.id] = allocs;
+    }
+    return result;
+  }
+
   useEffect(() => {
     if (!pack) return;
+    if (seedFromCartRef.current && editCartItem) {
+      setFlavorSelections(buildAllocationsFromCart(pack, editCartItem.includedProducts));
+      seedFromCartRef.current = false;
+      return;
+    }
     setFlavorSelections(buildDefaultAllocations(pack, qty));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pack?.id, qty]);
 
   useEffect(() => {
-    setQty(1);
+    if (editCartItem) {
+      setQty(editCartItem.quantity);
+      seedFromCartRef.current = true;
+    } else {
+      setQty(1);
+      seedFromCartRef.current = false;
+    }
     setActiveTab("details");
     setReviewsTab("pack");
     setScrolled(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [packId]);
 
   const individualTotal = pack ? pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0) : 0;
@@ -687,7 +740,7 @@ export function PackQuickViewModal() {
         }));
     });
 
-    addPackItem({
+    const packCartData = {
       packId: pack.id,
       packName: pack.name,
       packImageUrl: pack.imageUrl ?? null,
@@ -695,8 +748,25 @@ export function PackQuickViewModal() {
       supplierName: pack.supplierName,
       unitPrice: pack.price,
       includedProducts,
-    }, qty);
-    toast({ title: "Ajouté au panier", description: `${pack.name} × ${qty}` });
+    };
+
+    if (isEditing) {
+      if (onSave) {
+        // Draft-only edit (e.g. opened from the Order Summary modal): the
+        // caller owns where this goes, so the real Cart is never touched.
+        onSave({ ...packCartData, quantity: qty });
+        toast({ title: "Commande mise à jour", description: `${pack.name} × ${qty}` });
+      } else {
+        // Edit flow from the Cart page: replace the existing cart line in
+        // place. Never adds a second pack, never merges onto the previous
+        // quantity/distribution.
+        setPackItem(packCartData, qty);
+        toast({ title: "Panier mis à jour", description: `${pack.name} × ${qty}` });
+      }
+    } else {
+      addPackItem(packCartData, qty);
+      toast({ title: "Ajouté au panier", description: `${pack.name} × ${qty}` });
+    }
     close();
   };
 
@@ -1036,7 +1106,9 @@ export function PackQuickViewModal() {
                   ? "Out of stock"
                   : !flavorSelectionsValid
                     ? "Complete flavor selection"
-                    : `Ajouter au panier · ${fmt(pack.price * qty)}`
+                    : isEditing
+                      ? `Mettre à jour · ${fmt(pack.price * qty)}`
+                      : `Ajouter au panier · ${fmt(pack.price * qty)}`
                 }
               </button>
             </div>

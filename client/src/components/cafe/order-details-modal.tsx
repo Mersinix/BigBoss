@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
-  Sun, Moon, X, ChevronRight, User,
+  Sun, Moon, X, User,
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { formatDate } from "@/lib/format";
@@ -13,9 +13,10 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { OrderWithDetails } from "@shared/schema";
-import { groupPackIncludedProducts } from "@/lib/pack-grouping";
+import { PackCompositionView } from "@/components/order/pack-composition-view";
+import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
 
@@ -92,110 +93,6 @@ function useTheme(isDark: boolean) {
       dk ? (map[status]?.badgeDk ?? "bg-gray-700 text-gray-300")
          : (map[status]?.badgeLt ?? "bg-gray-100 text-gray-700"),
   };
-}
-
-// ── Pack composition hook + view ──────────────────────────────────────────────
-
-type PackCompositionItem = {
-  listingId: number;
-  variantId: number | null;
-  productName: string;
-  flavorName: string | null;
-  sizeName: string | null;
-  quantity: number;
-};
-
-function usePackComposition(packId: number | null) {
-  return useQuery<PackCompositionItem[]>({
-    queryKey: ["/api/packs", packId, "composition"],
-    queryFn: async () => {
-      const res = await fetch(`/api/packs/${packId}/composition`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch pack composition");
-      return res.json();
-    },
-    enabled: packId != null,
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
-function PackCompositionView({
-  packId,
-  quantity,
-  snapshot,
-  t,
-}: {
-  packId: number;
-  quantity: number;
-  snapshot?: any;
-  t: ReturnType<typeof useTheme>;
-}) {
-  const { data: composition, isLoading } = usePackComposition(packId);
-  const historicalComposition = Array.isArray(snapshot?.includedProducts) ? snapshot.includedProducts : null;
-
-  if (!historicalComposition && isLoading) {
-    return (
-      <div className={`mt-2 rounded-xl p-3 space-y-1.5 ${t.innerCard} border`}>
-        {[1, 2].map(i => (
-          <div key={i} className={`h-4 rounded animate-pulse ${t.dk ? "bg-gray-700" : "bg-gray-200"}`} />
-        ))}
-      </div>
-    );
-  }
-
-  const rows = historicalComposition ?? composition ?? [];
-  if (!rows.length) return null;
-
-  // Stored order snapshots already contain the exact included quantity captured at
-  // checkout (already resolved to the total across every pack purchased — see
-  // PackCartItemProduct/cart-page.tsx). Legacy orders (created before that snapshot field
-  // existed) fall back to live composition rows, where quantity is per-one-pack and must
-  // still be multiplied by the ordered pack quantity.
-  const multiplier = historicalComposition ? 1 : quantity;
-  const groups = groupPackIncludedProducts(rows, multiplier);
-
-  return (
-    <div className={`mt-2 rounded-xl p-3 border ${t.innerCard}`}>
-      <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textSubtle}`}>
-        Composition du pack × {quantity}
-      </p>
-      <div className="space-y-2.5">
-        {groups.map((group) => (
-          <div key={group.productId} className={`flex items-start gap-2 text-xs ${t.textPrimary}`}>
-            <ChevronRight className={`w-3 h-3 mt-0.5 shrink-0 ${t.textSubtle}`} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start gap-2">
-                {group.productImageUrl && (
-                  <img
-                    src={group.productImageUrl}
-                    alt=""
-                    className="w-7 h-7 rounded-lg object-cover shrink-0"
-                  />
-                )}
-                <span className="font-medium">{group.productName}</span>
-              </div>
-              {(group.brandName || group.categoryName || group.subCategoryName) && (
-                <p className={`mt-1 text-[10px] ${t.textSubtle}`}>
-                  {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
-                </p>
-              )}
-              <div className="mt-1 space-y-0.5">
-                {group.distributions.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2">
-                    <span className={t.textMuted}>
-                      {d.flavorName && <span>Saveur: <b>{d.flavorName}</b></span>}
-                      {d.flavorName && d.sizeName && <span className="mx-1">·</span>}
-                      {d.sizeName && <span>Taille: <b>{d.sizeName}</b></span>}
-                    </span>
-                    <span className={`font-bold shrink-0 ${t.textMuted}`}>×{d.quantity}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -644,59 +541,68 @@ export default function OrderDetailsModal({
                         )}
                       </div>
 
-                      {/* Item rows */}
+                      {/* Item rows — regular products grouped by base product (one card,
+                          every purchased variant listed underneath), packs shown separately.
+                          Same grouping helper the Cart/Order Summary use, adapted for order
+                          items (see groupOrderItemsByProduct). */}
                       <div className={`divide-y ${t.rowDivide}`}>
-                        {(sub.items ?? []).map((item: any, idx: number) => {
+                        {groupOrderItemsByProduct(sub.items ?? []).map((group) => (
+                          <div key={`product-${group.productId}`} className="px-4 py-3">
+                            <div className="flex items-start gap-2.5">
+                              <div className={`w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 mt-0.5 ${t.dk ? "bg-gray-700" : "bg-gray-100"}`}>
+                                {group.productImageUrl
+                                  ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
+                                  : <Box className={`w-4 h-4 ${t.textMuted}`} />}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`font-medium text-sm ${t.textPrimary}`}>{group.productName}</p>
+                                {(group.brandName || group.categoryName || group.subCategoryName) && (
+                                  <p className={`text-[10px] mt-0.5 ${t.textMuted}`}>
+                                    {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
+                                  </p>
+                                )}
+                                <div className="mt-1.5 space-y-1.5">
+                                  {group.variants.map((variant) => (
+                                    <div key={variant.key} className="flex items-center justify-between gap-2">
+                                      <span className={`text-xs ${t.textMuted}`}>
+                                        {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                                      </span>
+                                      <span className={`text-xs font-semibold shrink-0 ${t.textPrimary}`}>
+                                        ×{variant.quantity} {fmt(variant.totalPrice)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <span className={`font-semibold text-sm ${t.textPrimary}`}>
+                                  {fmt(group.subtotal)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {(sub.items ?? []).filter((item: any) => !!item.packId).map((item: any, idx: number) => {
                           const snapshot = item.snapshot as any;
-                          const isPackItem = !!item.packId;
-                          const productSnapshot = snapshot?.kind === "PRODUCT" ? snapshot : null;
                           const packSnapshot = snapshot?.kind === "PACK" ? snapshot : null;
-                          const variant = [
-                            productSnapshot?.flavorName ?? item.flavorName,
-                            productSnapshot?.sizeName ?? item.sizeName,
-                          ].filter(Boolean).join(" · ");
-                          const itemName = isPackItem
-                            ? (packSnapshot?.packName ?? item.packName ?? "Pack")
-                            : (productSnapshot?.productName ?? item.product?.name ?? "Product");
-                          const itemImage = isPackItem
-                            ? packSnapshot?.packImageUrl
-                            : (productSnapshot?.productImageUrl ?? item.product?.imageUrl);
+                          const itemName = packSnapshot?.packName ?? item.packName ?? "Pack";
+                          const itemImage = packSnapshot?.packImageUrl;
                           return (
-                            <div key={idx} className="px-4 py-3">
+                            <div key={`pack-${item.id ?? idx}`} className="px-4 py-3">
                               <div className="flex items-start gap-2.5">
-                                <div className={`w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 mt-0.5 ${
-                                  isPackItem ? "bg-amber-500/15" : (t.dk ? "bg-gray-700" : "bg-gray-100")
-                                }`}>
+                                <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 mt-0.5 bg-amber-500/15">
                                   {itemImage
                                     ? <img src={itemImage} alt="" className="w-full h-full object-cover" />
-                                    : isPackItem
-                                      ? <Layers className="w-4 h-4 text-amber-500" />
-                                      : <Box className={`w-4 h-4 ${t.textMuted}`} />}
+                                    : <Layers className="w-4 h-4 text-amber-500" />}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className={`font-medium text-sm ${t.textPrimary}`}>
-                                    {itemName}
-                                  </p>
-                                  {!isPackItem && (
-                                    <p className={`text-[10px] mt-0.5 ${t.textMuted}`}>
-                                      {[
-                                        productSnapshot?.brandName,
-                                        productSnapshot?.categoryName,
-                                        productSnapshot?.subCategoryName,
-                                      ].filter(Boolean).join(" · ")}
-                                    </p>
-                                  )}
-                                  {variant && !isPackItem && (
-                                    <p className={`text-xs mt-0.5 ${t.textMuted}`}>{variant}</p>
-                                  )}
-                                  {isPackItem && (
-                                    <PackCompositionView
-                                      packId={item.packId}
-                                      quantity={item.quantity}
-                                      snapshot={packSnapshot}
-                                      t={t}
-                                    />
-                                  )}
+                                  <p className={`font-medium text-sm ${t.textPrimary}`}>{itemName}</p>
+                                  <PackCompositionView
+                                    packId={item.packId}
+                                    quantity={item.quantity}
+                                    snapshot={packSnapshot}
+                                    t={t}
+                                  />
                                 </div>
                                 <div className="shrink-0 text-right">
                                   <span className={`text-xs font-semibold block ${t.textMuted}`}>
@@ -756,34 +662,54 @@ export default function OrderDetailsModal({
                 })}
               </div>
             ) : (
-              /* Fallback: flat items when no subOrders */
+              /* Fallback: flat items when no subOrders — same grouping as above */
               <div className={`border rounded-2xl overflow-hidden ${t.cardBg}`}>
                 <div className={`divide-y ${t.rowDivide}`}>
-                  {(order.items ?? []).map((item: any, idx: number) => {
+                  {groupOrderItemsByProduct(order.items ?? []).map((group) => (
+                    <div key={`product-${group.productId}`} className="px-4 py-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shrink-0 ${t.dk ? "bg-gray-700" : "bg-gray-100"}`}>
+                          {group.productImageUrl
+                            ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
+                            : <Box className={`w-4 h-4 ${t.textMuted}`} />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className={`font-medium text-sm ${t.textPrimary}`}>{group.productName}</span>
+                          {(group.brandName || group.categoryName || group.subCategoryName) && (
+                            <p className={`text-[10px] truncate ${t.textMuted}`}>
+                              {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
+                        </div>
+                        <span className={`text-sm shrink-0 ${t.textMuted}`}>{fmt(group.subtotal)}</span>
+                      </div>
+                      <div className="mt-1 ml-11 space-y-0.5">
+                        {group.variants.map((variant) => (
+                          <div key={variant.key} className="flex items-center justify-between gap-2">
+                            <span className={`text-xs ${t.textMuted}`}>
+                              {variant.quantity}× {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                            </span>
+                            <span className={`text-xs shrink-0 ${t.textMuted}`}>{fmt(variant.totalPrice)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {(order.items ?? []).filter((item: any) => !!item.packId).map((item: any, idx: number) => {
                     const snapshot = item.snapshot as any;
-                    const isPackItem = !!item.packId;
-                    const itemName = isPackItem
-                      ? (snapshot?.packName ?? item.packName ?? "Pack")
-                      : (snapshot?.productName ?? item.product?.name ?? "Product");
-                    const image = isPackItem
-                      ? snapshot?.packImageUrl
-                      : (snapshot?.productImageUrl ?? item.product?.imageUrl);
+                    const itemName = snapshot?.packName ?? item.packName ?? "Pack";
+                    const image = snapshot?.packImageUrl;
                     return (
-                      <div key={idx} className="flex items-center justify-between px-4 py-3 gap-3">
+                      <div key={`pack-${item.id ?? idx}`} className="flex items-center justify-between px-4 py-3 gap-3">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className={`w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shrink-0 ${t.dk ? "bg-gray-700" : "bg-gray-100"}`}>
+                          <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shrink-0 bg-amber-500/15">
                             {image
                               ? <img src={image} alt="" className="w-full h-full object-cover" />
-                              : isPackItem ? <Layers className="w-4 h-4 text-amber-500" /> : <Box className={`w-4 h-4 ${t.textMuted}`} />}
+                              : <Layers className="w-4 h-4 text-amber-500" />}
                           </div>
                           <div className="min-w-0">
                             <span className={`text-xs font-bold ${t.textMuted}`}>{item.quantity}× </span>
                             <span className={`font-medium text-sm ${t.textPrimary}`}>{itemName}</span>
-                            {!isPackItem && (
-                              <p className={`text-[10px] truncate ${t.textMuted}`}>
-                                {[snapshot?.brandName, snapshot?.categoryName, snapshot?.subCategoryName, snapshot?.flavorName, snapshot?.sizeName].filter(Boolean).join(" · ")}
-                              </p>
-                            )}
                           </div>
                         </div>
                         <span className={`text-sm shrink-0 ${t.textMuted}`}>

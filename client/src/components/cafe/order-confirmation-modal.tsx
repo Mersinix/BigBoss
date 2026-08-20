@@ -4,13 +4,15 @@ import { Button } from "@/components/ui/button";
 import {
   Store, Layers, MapPin, Clock, AlertTriangle,
   Minus, Plus, Trash2, Zap, ArrowRight, Calendar, CheckCircle,
-  Sun, Moon, X, Truck, Banknote, CreditCard, Smartphone, Landmark, Package,
+  Sun, Moon, X, Truck, Banknote, CreditCard, Smartphone, Landmark, Package, Pencil,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useThemeStore } from "@/store/theme-store";
+import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import type { CartItem, PackCartItem } from "@/hooks/use-cart";
 import type { CartPromotionEvaluation, GeoLocation, OrderPriority } from "@shared/schema";
 import { groupPackIncludedProducts } from "@/lib/pack-grouping";
+import { groupCartProducts } from "@/lib/cart-grouping";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -95,6 +97,7 @@ export default function OrderConfirmationModal({
   const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
   const fmt = useFormatCurrency();
+  const openPackForEdit = usePackQuickView((s) => s.openForEdit);
 
   // Local editable copies of cart items
   const [localItems, setLocalItems] = useState<CartItem[]>([]);
@@ -106,11 +109,17 @@ export default function OrderConfirmationModal({
   const [deliveryMethod, setDeliveryMethod] = useState<"SELF_PICKUP" | "DELIVERY_SERVICE">("DELIVERY_SERVICE");
   const [paymentMethod, setPaymentMethod] = useState<"CASH_ON_DELIVERY" | "CREDIT_CARD" | "MOBILE_PAYMENT" | "BANK_TRANSFER">("CASH_ON_DELIVERY");
 
-  // Sync local state from props when modal opens
+  // Seed an independent order draft from the Cart when this modal opens.
+  // This must be a true deep clone, not a shallow spread: PackCartItem has a
+  // nested includedProducts array, and a shallow `{...p}` would leave the
+  // draft's array pointing at the exact same array instance as the live
+  // Cart's — any later draft-only edit could then corrupt the real Cart. The
+  // draft is fully independent from this point on: editing/removing items or
+  // packs here (see below) only ever touches local state, never useCart().
   useEffect(() => {
     if (open) {
-      setLocalItems(items.map(i => ({ ...i })));
-      setLocalPackItems(packItems.map(p => ({ ...p })));
+      setLocalItems(structuredClone(items));
+      setLocalPackItems(structuredClone(packItems));
       setPriority("NORMAL");
       setIsScheduled(false);
       setScheduledDate("");
@@ -134,11 +143,6 @@ export default function OrderConfirmationModal({
     setLocalItems(prev => prev.filter(i =>
       !(i.listingId === listingId && (i.flavorId ?? null) === (flavorId ?? null) && (i.sizeId ?? null) === (sizeId ?? null))
     ));
-  };
-
-  const updatePackQty = (packId: number, qty: number) => {
-    if (qty <= 0) { setLocalPackItems(prev => prev.filter(p => p.packId !== packId)); return; }
-    setLocalPackItems(prev => prev.map(p => p.packId === packId ? { ...p, quantity: qty } : p));
   };
 
   // ── Totals ───────────────────────────────────────────────────────────────────
@@ -240,62 +244,70 @@ export default function OrderConfirmationModal({
                   <span className={`font-semibold text-sm ${t.textPrimary}`}>{group.supplierName}</span>
                 </div>
 
-                {/* Item rows */}
+                {/* Product rows — grouped by base product, one card per product with
+                    every selected variant listed underneath (same grouping the Cart
+                    page uses, via the shared groupCartProducts helper). */}
                 <div className={`divide-y ${t.rowDivide}`}>
-                  {group.items.map(item => {
-                    const variant = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
-                    return (
-                      <div
-                        key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`}
-                        className="flex items-center gap-3 px-4 py-3"
-                      >
-                        <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 bg-gray-700/60">
-                          {item.productImageUrl
-                            ? <img src={item.productImageUrl} alt="" className="w-full h-full object-cover" />
-                            : <Package className="w-4 h-4 m-3 text-gray-500" />}
+                  {groupCartProducts(group.items).map(({ product, variants }) => (
+                    <div key={`product-${product.productId}`} className="flex gap-3 px-4 py-3">
+                      <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 bg-gray-700/60">
+                        {product.productImageUrl
+                          ? <img src={product.productImageUrl} alt="" className="w-full h-full object-cover" />
+                          : <Package className="w-4 h-4 m-3 text-gray-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{product.productName}</p>
+                        <div className={`flex flex-wrap gap-x-2 text-[10px] mt-0.5 ${t.textMuted}`}>
+                          {product.brandName && <span>Brand: {product.brandName}</span>}
+                          {product.categoryName && <span>Category: {product.categoryName}</span>}
+                          {product.subCategoryName && <span>SubCategory: {product.subCategoryName}</span>}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{item.productName}</p>
-                          <div className={`flex flex-wrap gap-x-2 text-[10px] mt-0.5 ${t.textMuted}`}>
-                            {item.brandName && <span>Brand: {item.brandName}</span>}
-                            {item.categoryName && <span>Category: {item.categoryName}</span>}
-                            {item.subCategoryName && <span>SubCategory: {item.subCategoryName}</span>}
-                            {variant && <span>Variant: {variant}</span>}
-                          </div>
-                          <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{fmt(item.unitPrice)} / unité</p>
-                        </div>
-                        <div className="flex items-center gap-2.5 shrink-0">
-                          {/* Stepper */}
-                          <div className={`flex items-center border rounded-xl overflow-hidden ${t.stepperBorder}`}>
-                            <button
-                              className={`px-2.5 py-1.5 transition-colors ${t.stepperBtn}`}
-                              onClick={() => updateItemQty(item.listingId, item.flavorId, item.sizeId, item.quantity - 1)}
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                            <span className={`px-3 text-sm font-bold w-8 text-center ${t.textPrimary}`}>
-                              {item.quantity}
-                            </span>
-                            <button
-                              className={`px-2.5 py-1.5 transition-colors ${t.stepperBtn}`}
-                              onClick={() => updateItemQty(item.listingId, item.flavorId, item.sizeId, item.quantity + 1)}
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                          </div>
-                          <span className={`text-sm font-bold min-w-[64px] text-right ${t.textPrimary}`}>
-                            {fmt(item.unitPrice * item.quantity)}
-                          </span>
-                          <button
-                            className={`transition-colors ${t.textMuted} hover:text-red-400`}
-                            onClick={() => removeItem(item.listingId, item.flavorId, item.sizeId)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                        <div className="mt-2 space-y-2">
+                          {variants.map(item => {
+                            const variant = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
+                            return (
+                              <div
+                                key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`}
+                                className="flex items-center gap-2.5"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  {variant && <p className={`text-xs truncate ${t.textMuted}`}>Variant: {variant}</p>}
+                                  <p className={`text-xs ${t.textSubtle}`}>{fmt(item.unitPrice)} chacun</p>
+                                </div>
+                                {/* Stepper */}
+                                <div className={`flex items-center border rounded-xl overflow-hidden shrink-0 ${t.stepperBorder}`}>
+                                  <button
+                                    className={`px-2.5 py-1.5 transition-colors ${t.stepperBtn}`}
+                                    onClick={() => updateItemQty(item.listingId, item.flavorId, item.sizeId, item.quantity - 1)}
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </button>
+                                  <span className={`px-3 text-sm font-bold w-8 text-center ${t.textPrimary}`}>
+                                    {item.quantity}
+                                  </span>
+                                  <button
+                                    className={`px-2.5 py-1.5 transition-colors ${t.stepperBtn}`}
+                                    onClick={() => updateItemQty(item.listingId, item.flavorId, item.sizeId, item.quantity + 1)}
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <span className={`text-sm font-bold min-w-[64px] text-right shrink-0 ${t.textPrimary}`}>
+                                  {fmt(item.unitPrice * item.quantity)}
+                                </span>
+                                <button
+                                  className={`transition-colors shrink-0 ${t.textMuted} hover:text-red-400`}
+                                  onClick={() => removeItem(item.listingId, item.flavorId, item.sizeId)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -349,25 +361,19 @@ export default function OrderConfirmationModal({
                         </div>
                     )}
                     <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{fmt(pack.unitPrice)} / pack</p>
+                    <button
+                      className={`flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${t.dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-300 text-amber-700 hover:bg-amber-100/60"}`}
+                      onClick={() => openPackForEdit(pack, (updated) => {
+                        // Draft-only: writes back into this modal's local
+                        // order draft, never into the real Cart.
+                        setLocalPackItems(prev => prev.map(p => p.packId === updated.packId ? updated : p));
+                      })}
+                      data-testid={`button-edit-pack-summary-${pack.packId}`}
+                    >
+                      <Pencil className="w-3 h-3" /> Edit
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <div className={`flex items-center border rounded-xl overflow-hidden ${t.stepperBorder}`}>
-                      <button
-                        className={`px-2.5 py-1.5 transition-colors ${t.stepperBtn}`}
-                        onClick={() => updatePackQty(pack.packId, pack.quantity - 1)}
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className={`px-3 text-sm font-bold w-8 text-center ${t.textPrimary}`}>
-                        {pack.quantity}
-                      </span>
-                      <button
-                        className={`px-2.5 py-1.5 transition-colors ${t.stepperBtn}`}
-                        onClick={() => updatePackQty(pack.packId, pack.quantity + 1)}
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
                     <span className={`text-sm font-bold min-w-[64px] text-right ${t.textPrimary}`}>
                       {fmt(pack.unitPrice * pack.quantity)}
                     </span>

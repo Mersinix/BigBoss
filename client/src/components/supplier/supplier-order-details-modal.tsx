@@ -6,14 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, Calendar, Zap, Package, X,
-  Sun, Moon, ChevronRight, User,
+  Sun, Moon, User,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateSubOrderStatus } from "@/hooks/use-orders";
-import { useQuery } from "@tanstack/react-query";
 import type { OrderWithDetails } from "@shared/schema";
+import { PackCompositionView } from "@/components/order/pack-composition-view";
+import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 
 // ── Status meta ───────────────────────────────────────────────────────────────
 
@@ -84,78 +85,6 @@ function useTheme(isDark: boolean) {
       isDark ? (map[status]?.badgeDk ?? "bg-gray-700 text-gray-300")
              : (map[status]?.badgeLt ?? "bg-gray-100 text-gray-700"),
   };
-}
-
-// ── Pack composition hook ─────────────────────────────────────────────────────
-
-type PackCompositionItem = {
-  listingId: number;
-  variantId: number | null;
-  productName: string;
-  flavorName: string | null;
-  sizeName: string | null;
-  quantity: number;
-};
-
-function usePackComposition(packId: number | null) {
-  return useQuery<PackCompositionItem[]>({
-    queryKey: ["/api/packs", packId, "composition"],
-    queryFn: async () => {
-      const res = await fetch(`/api/packs/${packId}/composition`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch pack composition");
-      return res.json();
-    },
-    enabled: packId != null,
-    staleTime: 5 * 60 * 1000, // Pack composition doesn't change often
-  });
-}
-
-// ── PackCompositionView component ────────────────────────────────────────────
-
-function PackCompositionView({ packId, quantity, t }: { packId: number; quantity: number; t: ReturnType<typeof useTheme> }) {
-  const { data: composition, isLoading } = usePackComposition(packId);
-
-  if (isLoading) {
-    return (
-      <div className={`mt-2 rounded-xl p-3 space-y-1.5 ${t.innerCard} border`}>
-        {[1, 2].map(i => (
-          <div key={i} className={`h-4 rounded animate-pulse ${t.dk ? "bg-gray-700" : "bg-gray-200"}`} />
-        ))}
-      </div>
-    );
-  }
-
-  if (!composition?.length) return null;
-
-  return (
-    <div className={`mt-2 rounded-xl p-3 border ${t.innerCard}`}>
-      <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textSubtle}`}>
-        Composition du pack × {quantity}
-      </p>
-      <div className="space-y-2">
-        {composition.map((comp, i) => {
-          const variant = [comp.flavorName, comp.sizeName].filter(Boolean).join(" · ");
-          const totalQty = comp.quantity * quantity;
-          return (
-            <div key={i} className={`flex items-start gap-2 text-xs ${t.textPrimary}`}>
-              <ChevronRight className={`w-3 h-3 mt-0.5 shrink-0 ${t.textSubtle}`} />
-              <div className="flex-1 min-w-0">
-                <span className="font-medium">{comp.productName}</span>
-                {variant && (
-                  <span className={`ml-1.5 ${t.textMuted}`}>
-                    {comp.flavorName && <span>Saveur: <b>{comp.flavorName}</b></span>}
-                    {comp.flavorName && comp.sizeName && <span className="mx-1">·</span>}
-                    {comp.sizeName && <span>Taille: <b>{comp.sizeName}</b></span>}
-                  </span>
-                )}
-              </div>
-              <span className={`font-bold shrink-0 ${t.textMuted}`}>×{totalQty}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -310,37 +239,60 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                   <span className={`font-semibold text-sm ${t.textPrimary}`}>Articles commandés</span>
                 </div>
 
-                {/* Item list */}
+                {/* Item list — same grouping helper and pack composition renderer as the
+                    Coffee Owner's Order Details modal, so both surfaces show identical data
+                    for the same order (see groupOrderItemsByProduct + PackCompositionView). */}
                 <div className={`divide-y ${t.rowDivide}`}>
-                  {items.map((item: any, idx: number) => {
-                    const isPackItem = !!item.packId;
-                    const variant = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
+                  {groupOrderItemsByProduct(items).map((group) => (
+                    <div key={`product-${group.productId}`} className="px-4 py-3">
+                      <div className="flex items-start gap-2.5">
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isDark ? "bg-gray-700" : "bg-gray-100"}`}>
+                          <Box className={`w-3 h-3 ${t.textMuted}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-medium text-sm ${t.textPrimary}`}>{group.productName}</p>
+                          {(group.brandName || group.categoryName || group.subCategoryName) && (
+                            <p className={`text-[10px] mt-0.5 ${t.textMuted}`}>
+                              {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
+                          <div className="mt-1.5 space-y-1.5">
+                            {group.variants.map((variant) => (
+                              <div key={variant.key} className="flex items-center justify-between gap-2">
+                                <span className={`text-xs ${t.textMuted}`}>
+                                  {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                                </span>
+                                <span className={`text-xs font-semibold shrink-0 ${t.textPrimary}`}>
+                                  ×{variant.quantity} {fmt(variant.totalPrice)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className={`font-semibold text-sm ${t.textPrimary}`}>{fmt(group.subtotal)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {items.filter((item: any) => !!item.packId).map((item: any, idx: number) => {
+                    const snapshot = item.snapshot as any;
+                    const packSnapshot = snapshot?.kind === "PACK" ? snapshot : null;
+                    const itemName = packSnapshot?.packName ?? item.packName;
                     return (
-                      <div key={idx} className="px-4 py-3">
+                      <div key={`pack-${item.id ?? idx}`} className="px-4 py-3">
                         <div className="flex items-start gap-2.5">
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                            isPackItem ? "bg-amber-500/15" : (isDark ? "bg-gray-700" : "bg-gray-100")
-                          }`}>
-                            {isPackItem
-                              ? <Layers className="w-3 h-3 text-amber-500" />
-                              : <Box className={`w-3 h-3 ${t.textMuted}`} />
-                            }
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-amber-500/15">
+                            <Layers className="w-3 h-3 text-amber-500" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`font-medium text-sm ${t.textPrimary}`}>
-                              {isPackItem ? item.packName : item.product?.name}
-                            </p>
-                            {variant && !isPackItem && (
-                              <p className={`text-xs mt-0.5 ${t.textMuted}`}>{variant}</p>
-                            )}
-                            {/* Pack composition detail */}
-                            {isPackItem && (
-                              <PackCompositionView
-                                packId={item.packId}
-                                quantity={item.quantity}
-                                t={t}
-                              />
-                            )}
+                            <p className={`font-medium text-sm ${t.textPrimary}`}>{itemName}</p>
+                            <PackCompositionView
+                              packId={item.packId}
+                              quantity={item.quantity}
+                              snapshot={packSnapshot}
+                              t={t}
+                            />
                           </div>
                           <div className="shrink-0 text-right">
                             <span className={`text-xs font-semibold block ${t.textMuted}`}>×{item.quantity}</span>

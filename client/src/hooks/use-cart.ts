@@ -136,6 +136,7 @@ interface CartState {
 
   // PACK actions
   addPackItem: (item: Omit<PackCartItem, 'quantity'>, quantity: number) => void;
+  setPackItem: (item: Omit<PackCartItem, 'quantity'>, quantity: number) => void;
   removePackItem: (packId: number) => void;
   updatePackQuantity: (packId: number, quantity: number) => void;
   clearPackItems: () => void;
@@ -249,6 +250,19 @@ export const useCart = create<CartState>()(
           }
           return { packItems: [...state.packItems, { ...itemData, quantity }] };
         });
+      },
+
+      // Replaces an existing pack cart line in place with a fully new
+      // configuration (quantity + distribution) — used by the Cart's Edit
+      // flow. Unlike addPackItem, this never merges/adds onto the existing
+      // quantity or distribution; it is a straight replace of that one line,
+      // keyed by packId (the cart's existing unique key for pack lines).
+      setPackItem: (itemData, quantity) => {
+        set((state) => ({
+          packItems: state.packItems.map(i => i.packId === itemData.packId
+            ? { ...itemData, quantity }
+            : i),
+        }));
       },
 
       removePackItem: (packId) => {

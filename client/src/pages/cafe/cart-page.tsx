@@ -336,7 +336,7 @@ export default function CartPage() {
             {hasShop && (
               <div className="space-y-4">
                 {hasShop && hasPrint && (
-                  <div className={`flex items-center gap-2 text-sm font-semibold uppercase tracking-wide ${textMuted}`}>
+                  <div className={`flex items-center gap-2 text-sm font-semibold uppercase tracking-wide ${dk ? "text-amber-500" : "text-amber-500"}`}>
                     <ShoppingBag className="w-4 h-4" /> Commandes SHOP
                   </div>
                 )}

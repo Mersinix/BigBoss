@@ -110,7 +110,7 @@ export function AppSidebar() {
           ],
         },
         {
-          label: "MANAGEMENT",
+          label: "MARKETING",
           items: [
            
             { title: "Notifications", url: "/admin/notifications", icon: Bell },
@@ -131,7 +131,6 @@ export function AppSidebar() {
             { title: "Users", url: "/admin/users", icon: Users },
             { title: "Roles & Permissions", url: "/admin/roles", icon: ShieldCheck },
             { title: "Suppliers", url: "/admin/suppliers", icon: Store },
-            { title: "Delivery", url: "/admin/delivery", icon: Truck },
           ],
         },
         {
@@ -141,6 +140,7 @@ export function AppSidebar() {
             { title: "Products", url: "/admin/products", icon: Package },
             { title: "Stores", url: "/admin/stores", icon: Store },
             { title: "Orders", url: "/orders", icon: ClipboardList },
+            { title: "Delivery", url: "/admin/delivery", icon: Truck },
             { title: "Invoices", url: "/admin/invoices", icon: FileText },
             { title: "Payments", url: "/admin/payments", icon: DollarSign },
             

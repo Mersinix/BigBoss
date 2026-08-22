@@ -1542,6 +1542,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Per-supplier-order item cancellation (Coffee Owner) ─────────────────────
+  // Distinct from PATCH /api/orders/:id/status (whole-order cancel) and
+  // PATCH /api/suborders/:id/status (Supplier/Admin lifecycle) — this lets a Coffee
+  // Owner cancel specific products/variants/packs within one still-PENDING supplier
+  // order without touching the rest of the order. See storage.cancelSubOrderItems for
+  // ownership/eligibility validation and totals recomputation (never trusts the client).
+  app.patch('/api/suborders/:id/cancel-items', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      if (user.role !== 'CAFE_OWNER') return res.status(403).json({ message: 'Forbidden' });
+      const subOrderId = parseInt(req.params.id);
+      const { orderItemIds } = z.object({
+        orderItemIds: z.array(z.number().int().positive()).min(1),
+      }).parse(req.body);
+
+      const result = await storage.cancelSubOrderItems(subOrderId, user.id, orderItemIds);
+
+      broadcastToUsers([result.order.cafeId, result.subOrder.supplierId], 'suborder_items_cancelled', {
+        orderId: result.order.id, subOrderId, orderItemIds, subOrderStatus: result.subOrder.status,
+      });
+      broadcast('suborder_items_cancelled', { orderId: result.order.id, subOrderId });
+      if (result.subOrder.status === 'CANCELLED') {
+        broadcast('inventory_updated', { subOrderId, orderId: result.order.id });
+      }
+
+      res.json(result);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      const message = err?.message ?? 'Unable to cancel items';
+      const status = message === 'Forbidden' ? 403 : message.includes('not found') ? 404
+        : message.includes('no longer be cancelled') || message.includes('already cancelled') ? 409
+        : 400;
+      res.status(status).json({ message });
+    }
+  });
+
+  // ── Order favorite ("Daily") — Coffee Owner only, own orders ─────────────────
+  app.patch('/api/orders/:id/favorite', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const orderId = parseInt(req.params.id);
+      const { isFavorite } = z.object({ isFavorite: z.boolean() }).parse(req.body);
+      const updated = await storage.setOrderFavorite(orderId, user.id, isFavorite);
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      const message = err?.message ?? 'Unable to update favorite';
+      res.status(message === 'Forbidden' ? 403 : message.includes('not found') ? 404 : 400).json({ message });
+    }
+  });
+
   // ── Deliveries ─────────────────────────────────────────────────────────────
   // Delivery-stage status changes (accept/assign/pickup/in-transit/delivered/cancel) go
   // through this namespace, not PATCH /api/orders/:id/status. See canUpdateOrderStatus above.

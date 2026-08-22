@@ -12,8 +12,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Clock, Calendar, Archive, Search, X, Box, Zap, Store, MapPin, Trash2, Loader2 } from "lucide-react";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
+import CafeOrdersPage from "@/pages/cafe/orders-page";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderWithDetails } from "@shared/schema";
+import { deriveOrderStatus } from "@/lib/order-status";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,31 +56,6 @@ function isFuture(order: OrderWithDetails) {
   const scheduled = new Date(scheduledAt);
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(0,0,0,0);
   return scheduled >= tomorrow;
-}
-
-// Derive the most meaningful order status from its sub-orders.
-// The DB `order.status` column only advances when ALL sub-orders complete, so it
-// can lag behind the individual supplier statuses that are already visible inside
-// the Order Details modal body.  Using this helper keeps every card badge in sync
-// with what the modal shows — there is no separate local state to maintain.
-//
-// Rule: minimum (least-advanced) non-cancelled sub-order status, which represents
-// the current bottleneck. Falls back to order.status when there are no sub-orders.
-const _STATUS_RANK: Record<string, number> = {
-  PENDING: 0, CONFIRMED: 1, PREPARING: 2,
-  READY: 3, IN_DELIVERY: 4, DELIVERED: 5,
-};
-
-function deriveOrderStatus(order: OrderWithDetails): string {
-  const subs = (order.subOrders ?? []) as any[];
-  if (!subs.length) return order.status;
-  const active = subs.filter((s: any) => s.status !== "CANCELLED");
-  if (active.length === 0) return "CANCELLED";
-  const minRank = active.reduce((min: number, s: any) => {
-    const rank = _STATUS_RANK[s.status ?? "PENDING"] ?? 0;
-    return rank < min ? rank : min;
-  }, Infinity);
-  return Object.keys(_STATUS_RANK).find((k) => _STATUS_RANK[k] === minRank) ?? order.status;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -145,6 +122,12 @@ export default function OrdersPage() {
     { id: "future", label: "Futures",      icon: Calendar, count: orders.filter(o => isFuture(o) && !["DELIVERED","CANCELLED"].includes(o.status)).length },
     { id: "old",    label: "Historique",   icon: Archive,  count: orders.filter(o => ["DELIVERED","CANCELLED"].includes(o.status) || (!isToday(o.createdAt) && !isFuture(o))).length },
   ];
+
+  // Coffee Owner gets a dedicated Today/Planifiées/Daily/Anciennes view (see
+  // cafe/orders-page.tsx) instead of the Admin/Supplier management list below —
+  // this is the one place /orders branches per role, so Admin's and Supplier's
+  // existing experience here is completely untouched.
+  if (user?.role === "CAFE_OWNER") return <CafeOrdersPage />;
 
   if (isLoading) return (
     <div className="flex flex-col gap-4 p-6">{[1,2,3].map(i => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}</div>

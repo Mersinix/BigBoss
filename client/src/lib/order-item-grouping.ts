@@ -18,11 +18,18 @@
 
 export type NormalizedOrderVariant = {
   key: string;
+  /** The underlying order_items.id — needed by anything that acts on a specific line
+   * (e.g. per-item cancellation), as opposed to `key`, which is only a stable React key. */
+  orderItemId: number | null;
   flavorName: string | null;
   sizeName: string | null;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  /** 'ACTIVE' | 'CANCELLED' — see orderItems.status. Cancelled variants are still returned
+   * (never filtered out) so every Order Details surface can show what was cancelled; only
+   * ACTIVE variants contribute to the group's `subtotal`. */
+  status: string;
 };
 
 export type NormalizedOrderProductGroup = {
@@ -67,11 +74,13 @@ export function groupOrderItemsByProduct(items: any[]): NormalizedOrderProductGr
         variants: [], subtotal: 0,
       });
     }
+    const status = item.status ?? "ACTIVE";
     groups[index].variants.push({
       key: `${item.id ?? item.listingId ?? productId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`,
-      flavorName, sizeName, quantity, unitPrice, totalPrice,
+      orderItemId: item.id ?? null,
+      flavorName, sizeName, quantity, unitPrice, totalPrice, status,
     });
-    groups[index].subtotal += totalPrice;
+    if (status !== "CANCELLED") groups[index].subtotal += totalPrice;
   }
 
   return groups;

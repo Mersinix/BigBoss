@@ -3,7 +3,10 @@ import { useThemeStore } from "@/store/theme-store";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
-import { useOrders } from "@/hooks/use-orders";
+import { useCafeOrders, CAFE_ORDER_STATUS_META, CAFE_ORDER_STATUS_FILTER_OPTS, type CafeOrderTabId } from "@/hooks/use-cafe-orders";
+import { deriveOrderStatus } from "@/lib/order-status";
+import { getEffectiveDate } from "@/lib/order-date";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -27,6 +30,7 @@ import {
   Star, Package, Trash2, CheckCircle, Clock, Calendar, Box, Truck,
   AlertCircle, DollarSign, ClipboardList, Phone, Globe, MapPinIcon, AlertTriangle,
   Printer, Megaphone, Wrench, User, GraduationCap, Sun, Moon, X, Plus, Loader2,
+  Archive, RotateCcw,
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount, type MaintenanceFavItem } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
@@ -82,18 +86,6 @@ function computeAccess(user: any) {
   return { isVisitor: false, isPending: pending, isApproved: approved, hasCommercial: approved };
 }
 
-// ── Status meta ───────────────────────────────────────────────────────────────
-
-const statusMeta: Record<string, { label: string; color: string; icon: any }> = {
-  PENDING: { label: "Pending", color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Clock },
-  CONFIRMED: { label: "Confirmed", color: "bg-blue-100 text-blue-800 border-blue-200", icon: CheckCircle },
-  PREPARING: { label: "Preparing", color: "bg-orange-100 text-orange-800 border-orange-200", icon: Box },
-  READY: { label: "Ready", color: "bg-teal-100 text-teal-800 border-teal-200", icon: Box },
-  IN_DELIVERY: { label: "In Delivery", color: "bg-purple-100 text-purple-800 border-purple-200", icon: Truck },
-  DELIVERED: { label: "Delivered", color: "bg-green-100 text-green-800 border-green-200", icon: CheckCircle },
-  CANCELLED: { label: "Cancelled", color: "bg-red-100 text-red-800 border-red-200", icon: AlertCircle },
-};
-
 // ── Fake data ─────────────────────────────────────────────────────────────────
 
 type ServiceId = "SHOP" | "PRINT" | "BARISTA" | "MARKETING" | "MAINTENANCE";
@@ -141,7 +133,9 @@ function AccountPanel({
   const toggle = useThemeStore((s) => s.toggle);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"orders" | "reservations" | "dashboard" | "settings">(initialTab ?? "orders");
-  const { data: orders = [], isLoading: ordersLoading } = useOrders();
+  const { isLoading: ordersLoading, sorted, byCategory, daily, listForTab, toggleFavorite, reorder, isReordering } = useCafeOrders();
+  const [ordersSubTab, setOrdersSubTab] = useState<CafeOrderTabId>("today");
+  const [ordersStatusFilter, setOrdersStatusFilter] = useState("ALL");
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const { data: maintenanceReservations = [], isLoading: reservationsLoading } = useQuery<any[]>({
     queryKey: ["/api/maintenance/reservations"],
@@ -168,14 +162,14 @@ function AccountPanel({
 
   // Auto-open a specific order when directed from the checkout flow
   useEffect(() => {
-    if (initialOrderId && orders.length > 0) {
-      const target = (orders as any[]).find((o) => o.id === initialOrderId);
+    if (initialOrderId && sorted.length > 0) {
+      const target = sorted.find((o) => o.id === initialOrderId);
       if (target) {
         setActiveTab("orders");
         setDetailOrder(target as OrderWithDetails);
       }
     }
-  }, [initialOrderId, orders]);
+  }, [initialOrderId, sorted]);
 
   const dk = isDark;
   const bg = dk ? "bg-gray-900" : "bg-white";
@@ -188,9 +182,6 @@ function AccountPanel({
   const dividerColor = dk ? "bg-gray-800" : "bg-gray-100";
   const inputCls = dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 rounded-xl" : "border-gray-200 rounded-xl";
   const borderClr = dk ? "border-gray-700/60" : "border-gray-100";
-
-  // Orders
-  const sorted = [...(orders as any[])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   // Dashboard
   const total = allOrders.length;
@@ -278,40 +269,118 @@ function AccountPanel({
       {/* ── Scrollable content ── */}
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full">
 
-        {/* ORDERS */}
-        {activeTab === "orders" && (
-          ordersLoading
-            ? <div className="space-y-3 pt-2">{[...Array(3)].map((_, i) => <div key={i} className={`h-20 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}</div>
-            : !sorted.length
-              ? <div className={`text-center py-16 ${textMuted}`}><ShoppingBag className="w-10 h-10 mx-auto mb-3 opacity-20" /><p className={`font-medium text-sm ${textPrimary}`}>No orders yet</p></div>
-              : <div className="space-y-3 pt-2">
-                  {sorted.map((order: any) => {
-                    const meta = statusMeta[order.status] ?? statusMeta.PENDING;
+        {/* ORDERS — same Today/Planifiées/Daily/Anciennes organization as the
+            standalone Orders page (cafe/orders-page.tsx), both driven by the
+            shared useCafeOrders() hook so there is a single source of truth
+            for categorization, favorites, and reorder. */}
+        {activeTab === "orders" && (() => {
+          const ordersTabs: { id: CafeOrderTabId; label: string; icon: any; count: number }[] = [
+            { id: "today", label: "Today", icon: Sun, count: byCategory.TODAY.length },
+            { id: "planned", label: "Planifiées", icon: Calendar, count: byCategory.PLANIFIEE.length },
+            { id: "daily", label: "Daily", icon: Star, count: daily.length },
+            { id: "old", label: "Anciennes", icon: Archive, count: byCategory.ANCIENNE.length },
+          ];
+          const baseList = listForTab(ordersSubTab);
+          const filtered = ordersStatusFilter === "ALL" ? baseList : baseList.filter((o) => deriveOrderStatus(o) === ordersStatusFilter);
+          return (
+            <div className="space-y-3 pt-2">
+              <div className={`flex gap-1 rounded-2xl p-1 overflow-x-auto ${switcherBg}`} style={{ scrollbarWidth: "none" }}>
+                {ordersTabs.map(({ id, label, icon: Icon, count }) => (
+                  <button
+                    key={id}
+                    onClick={() => setOrdersSubTab(id)}
+                    className={`flex-1 min-w-max flex items-center justify-center gap-1 py-2 px-2 text-[11px] font-semibold rounded-xl transition-all ${ordersSubTab === id ? switcherActive : switcherInactive}`}
+                    data-testid={`account-tab-orders-${id}`}
+                  >
+                    <Icon className="w-3 h-3" />{label}
+                    {count > 0 && (
+                      <span className={`text-[10px] font-bold px-1.5 rounded-full ${ordersSubTab === id ? "bg-amber-500 text-white" : dk ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"}`}>{count}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <Select value={ordersStatusFilter} onValueChange={setOrdersStatusFilter}>
+                <SelectTrigger className={`h-8 text-xs ${dk ? "border-gray-700 bg-gray-800 text-gray-200" : "border-gray-200 bg-gray-50"}`} data-testid="account-select-status-filter">
+                  <SelectValue placeholder="Statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CAFE_ORDER_STATUS_FILTER_OPTS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+
+              {ordersSubTab === "daily" && (
+                <p className={`text-[11px] -mt-1 ${textMuted}`}>Commandes marquées ⭐ — réutilisez-les comme modèles pour recommander rapidement.</p>
+              )}
+
+              {ordersLoading ? (
+                <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className={`h-20 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}</div>
+              ) : !filtered.length ? (
+                <div className={`text-center py-16 ${textMuted}`}>
+                  <ShoppingBag className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className={`font-medium text-sm ${textPrimary}`}>
+                    {ordersSubTab === "today" ? "Aucune commande aujourd'hui" : ordersSubTab === "planned" ? "Aucune commande planifiée" : ordersSubTab === "daily" ? "Aucune commande favorite" : "Aucune commande"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filtered.map((order: any) => {
+                    const displayStatus = deriveOrderStatus(order);
+                    const meta = CAFE_ORDER_STATUS_META[displayStatus] ?? CAFE_ORDER_STATUS_META.PENDING;
                     const Icon = meta.icon;
                     const supplierNames = (order.subOrders ?? []).map((s: any) => s.supplierName).filter(Boolean);
+                    const isFavorite = !!order.isFavorite;
                     return (
                       <button
                         key={order.id}
                         type="button"
                         onClick={() => setDetailOrder(order as OrderWithDetails)}
                         className={`w-full text-left border rounded-2xl p-4 space-y-2 transition-all hover:shadow-md active:scale-[0.99] ${cardBg} ${dk ? "hover:border-gray-600" : "hover:border-gray-200"}`}
+                        data-testid={`account-order-card-${order.id}`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className={`font-mono text-sm font-bold ${textPrimary}`}>#{String(order.id).padStart(6, "0")}</span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => { e.stopPropagation(); toggleFavorite(order); }}
+                              aria-label={isFavorite ? "Retirer de Daily" : "Ajouter à Daily"}
+                              className="p-1 -m-1"
+                              data-testid={`account-button-favorite-order-${order.id}`}
+                            >
+                              <Star className={`w-3.5 h-3.5 transition-colors ${isFavorite ? "fill-amber-400 text-amber-400" : "text-gray-400 hover:text-amber-400"}`} />
+                            </span>
+                            <span className={`font-mono text-sm font-bold ${textPrimary}`}>#{String(order.id).padStart(6, "0")}</span>
+                          </div>
                           <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}><Icon className="w-3 h-3" />{meta.label}</span>
                         </div>
                         {supplierNames.length > 0 && (
                           <p className={`text-xs truncate ${textMuted}`}>{supplierNames.join(" · ")}</p>
                         )}
                         <div className="flex items-center justify-between">
-                          <span className={`text-xs ${textMuted}`}>{order.createdAt ? formatDate(order.createdAt) : "—"}</span>
+                          <span className={`text-xs ${textMuted}`}>{formatDate(getEffectiveDate(order))}</span>
                           <span className={`text-sm font-bold ${dk ? "text-amber-400" : "text-amber-600"}`}>{fmt(order.totalAmount)}</span>
                         </div>
+                        {ordersSubTab === "daily" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1.5 w-full mt-1"
+                            disabled={isReordering}
+                            onClick={(e) => { e.stopPropagation(); reorder(order.id); }}
+                            data-testid={`account-button-reorder-daily-${order.id}`}
+                          >
+                            <RotateCcw className="w-3 h-3" /> Recommander
+                          </Button>
+                        )}
                       </button>
                     );
                   })}
                 </div>
-        )}
+              )}
+            </div>
+          );
+        })()}
        
         {/* MAINTENANCE RESERVATIONS */}
         {activeTab === "reservations" && (
@@ -470,11 +539,13 @@ function AccountPanel({
           )
         )}
         
-        {/* Order Details Modal — rendered inside AccountPanel so it sits above the panel dialog */}
+        {/* Order Details Modal — rendered inside AccountPanel so it sits above the panel dialog.
+            Resolved from the live orders query (not the raw clicked reference) so a per-supplier
+            cancellation made inside stays visible immediately without closing and reopening. */}
         <OrderDetailsModal
           open={!!detailOrder}
           onClose={() => setDetailOrder(null)}
-          order={detailOrder}
+          order={detailOrder ? (sorted.find((o) => o.id === detailOrder.id) ?? detailOrder) : null}
           showReorder={true}
           showCancel={true}
         />

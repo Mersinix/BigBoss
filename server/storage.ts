@@ -94,6 +94,8 @@ export interface IStorage {
   }): Promise<Order>;
   canUserAccessOrder(userId: number, userRole: string, orderId: number): Promise<boolean>;
   updateOrderStatus(id: number, status: typeof orders.$inferSelect.status, deliveryId?: number): Promise<Order>;
+  cancelSubOrderItems(subOrderId: number, cafeOwnerId: number, orderItemIds: number[]): Promise<{ subOrder: SubOrder; order: Order }>;
+  setOrderFavorite(orderId: number, cafeOwnerId: number, isFavorite: boolean): Promise<Order>;
   getReturns(filters?: { cafeId?: number; supplierId?: number }): Promise<OrderReturn[]>;
   createReturn(data: InsertOrderReturn): Promise<OrderReturn>;
   updateReturnStatus(id: number, status: string, supplierNotes?: string): Promise<OrderReturn>;
@@ -1706,6 +1708,94 @@ export class DatabaseStorage implements IStorage {
       }
       await this.restockFromOrderCancellation(listingId, item.quantity, `Order #${orderId} cancelled`);
     }
+  }
+
+  /**
+   * Coffee-Owner-initiated, per-item cancellation within a single still-PENDING sub-order.
+   * Mirrors the whole-order cancel path (updateOrderStatus -> restockOrderInventory) for
+   * stock restoration, but scoped to only the selected items, and recomputes the sub-order's
+   * subtotal and the parent order's total from the persisted order_items — never trusts a
+   * client-supplied total. Reuses recomputeOrderAggregateStatus (the single writer of
+   * orders.status) so a sub-order that becomes fully cancelled here stays consistent with
+   * every other status-changing path.
+   */
+  async cancelSubOrderItems(subOrderId: number, cafeOwnerId: number, orderItemIds: number[]): Promise<{ subOrder: SubOrder; order: Order }> {
+    const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, subOrderId));
+    if (!subOrder) throw new Error("Sub-order not found");
+    const [order] = await db.select().from(orders).where(eq(orders.id, subOrder.orderId));
+    if (!order) throw new Error("Order not found");
+    if (order.cafeId !== cafeOwnerId) throw new Error("Forbidden");
+    if (subOrder.status !== "PENDING") throw new Error("This supplier order can no longer be cancelled");
+
+    const items = await db.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+    const requestedIds = new Set(orderItemIds);
+    const targets = items.filter((item) => requestedIds.has(item.id));
+    if (targets.length !== orderItemIds.length) throw new Error("One or more items do not belong to this supplier order");
+    if (targets.some((item) => item.status === "CANCELLED")) throw new Error("One or more items are already cancelled");
+
+    // Restock exactly the items being cancelled — same restoration primitives the whole-order
+    // cancel path already uses (restockVariantFromOrderCancellation / restockFromOrderCancellation),
+    // so a Coffee Owner cancelling one variant here behaves identically to cancelling the whole
+    // pending order, just scoped down. Pack items only restore pack-level availability, matching
+    // restockOrderInventory's PENDING-sub-order branch (component stock is deducted only on
+    // confirmation, so there is nothing to restore for it here).
+    for (const item of targets) {
+      if (item.packId) {
+        await db.update(packs).set({ quantityAvailable: sql`${packs.quantityAvailable} + ${item.quantity}` }).where(eq(packs.id, item.packId));
+        continue;
+      }
+      if (!item.productId || !item.listingId) continue;
+      if (item.flavorId != null || item.sizeId != null) {
+        const variants = await this.getVariantsByListingId(item.listingId);
+        const variant = variants.find((v) => (v.flavorId ?? null) === (item.flavorId ?? null) && (v.sizeId ?? null) === (item.sizeId ?? null));
+        if (variant) {
+          await this.restockVariantFromOrderCancellation(variant.id, item.quantity, `Order #${order.id} item cancelled`);
+          continue;
+        }
+      }
+      await this.restockFromOrderCancellation(item.listingId, item.quantity, `Order #${order.id} item cancelled`);
+    }
+
+    const result = await db.transaction(async (tx) => {
+      await tx.update(orderItems).set({ status: "CANCELLED" }).where(inArray(orderItems.id, orderItemIds));
+
+      const refreshedItems = await tx.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+      const activeItems = refreshedItems.filter((item) => item.status !== "CANCELLED");
+      const activeRawSum = activeItems.reduce((sum, item) => sum + (item.totalPrice ?? item.unitPrice * item.quantity), 0);
+      const newSubtotal = Math.max(0, activeRawSum - (subOrder.discountAmount ?? 0));
+      const allCancelled = activeItems.length === 0;
+
+      const [updatedSubOrder] = await tx.update(subOrders)
+        .set({ subtotal: newSubtotal, status: allCancelled ? "CANCELLED" : subOrder.status })
+        .where(eq(subOrders.id, subOrderId))
+        .returning();
+
+      // Recompute the parent order's total from every sub-order (not just this one) — the
+      // source of truth for orders.totalAmount is always the persisted sub-order subtotals.
+      const siblingSubOrders = await tx.select().from(subOrders).where(eq(subOrders.orderId, subOrder.orderId));
+      const newOrderTotal = siblingSubOrders.reduce(
+        (sum, so) => sum + (so.id === subOrderId ? newSubtotal : so.subtotal),
+        0,
+      );
+      await tx.update(orders).set({ totalAmount: newOrderTotal }).where(eq(orders.id, subOrder.orderId));
+
+      if (allCancelled) {
+        await this.recomputeOrderAggregateStatus(subOrder.orderId, tx);
+      }
+      const [updatedOrder] = await tx.select().from(orders).where(eq(orders.id, subOrder.orderId));
+      return { subOrder: updatedSubOrder, order: updatedOrder };
+    });
+
+    return result;
+  }
+
+  /** Coffee Owner's "Daily" star — a persisted favorite flag on the order, scoped to its owner. */
+  async setOrderFavorite(orderId: number, cafeOwnerId: number, isFavorite: boolean): Promise<Order> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+    if (!order) throw new Error("Order not found");
+    if (order.cafeId !== cafeOwnerId) throw new Error("Forbidden");
+    const [updated] = await db.update(orders).set({ isFavorite }).where(eq(orders.id, orderId)).returning();
+    return updated;
   }
 
   /**

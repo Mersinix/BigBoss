@@ -175,6 +175,7 @@ export const orders = pgTable("orders", {
   paymentStatus: text("payment_status").notNull().default('PENDING'),
   priority: text("priority").notNull().default('NORMAL'), // 'NORMAL' | 'HIGH' | 'URGENT'
   scheduledAt: timestamp("scheduled_at"),                 // null = immediate
+  isFavorite: boolean("is_favorite").notNull().default(false), // Coffee Owner's "Daily" star
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -211,6 +212,10 @@ export const orderItems = pgTable("order_items", {
   flavorId: integer("flavor_id"),
   sizeId: integer("size_id"),
   snapshot: jsonb("snapshot"),
+  // 'ACTIVE' | 'CANCELLED' — per-item Coffee Owner cancellation (Part 1 of the
+  // per-supplier cancellation flow). Only settable while the parent sub-order
+  // is still PENDING; see storage.cancelSubOrderItems.
+  status: text("status").notNull().default('ACTIVE'),
 });
 
 // ── Returns ───────────────────────────────────────────────────────────────────

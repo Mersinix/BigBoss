@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
@@ -10,10 +11,8 @@ import {
 import { useThemeStore } from "@/store/theme-store";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useReorderToCart, useCancelSubOrderItems } from "@/hooks/use-orders";
 import type { OrderWithDetails } from "@shared/schema";
 import { PackCompositionView } from "@/components/order/pack-composition-view";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
@@ -45,9 +44,6 @@ const SUBORDER_STATUS: Record<string, { label: string; badgeDk: string; badgeLt:
   DELIVERED:   { label: "Livrée",         badgeDk: "bg-green-500/20 text-green-300",   badgeLt: "bg-green-100 text-green-800" },
   CANCELLED:   { label: "Annulée",         badgeDk: "bg-red-500/20 text-red-300",       badgeLt: "bg-red-100 text-red-800" },
 };
-
-// Statuses where the cafe owner can still cancel
-const CANCELLABLE_STATUSES = new Set(["PENDING"]);
 
 // Delivery lifecycle labels (deliveryStatusEnum) — distinct from the Shop order status
 // above. A sub-order only has a `delivery` once its own status reaches READY.
@@ -97,13 +93,142 @@ function useTheme(isDark: boolean) {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
+// ── Per-supplier-order cancellation modal ─────────────────────────────────────
+// Lets the Coffee Owner select which specific product variants / packs to cancel
+// within ONE still-PENDING supplier order. Only active (non-cancelled) items are
+// offered — already-cancelled ones don't need to be selectable again. Reuses the
+// exact same grouping helper the read-only item list above uses, so what's shown
+// here is always the same data, never a second representation.
+function CancelSubOrderModal({
+  subOrder,
+  onClose,
+  t,
+}: {
+  subOrder: any | null;
+  onClose: () => void;
+  t: ReturnType<typeof useTheme>;
+}) {
+  const { toast } = useToast();
+  const fmt = useFormatCurrency();
+  const cancelItems = useCancelSubOrderItems();
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const items: any[] = subOrder?.items ?? [];
+  const activeItems = items.filter((item) => item.status !== "CANCELLED");
+  const productGroups = groupOrderItemsByProduct(activeItems);
+  const activePackItems = activeItems.filter((item) => !!item.packId);
+
+  const toggle = (orderItemId: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderItemId)) next.delete(orderItemId);
+      else next.add(orderItemId);
+      return next;
+    });
+  };
+
+  const handleConfirm = () => {
+    if (!subOrder || selected.size === 0) return;
+    cancelItems.mutate(
+      { subOrderId: subOrder.id, orderItemIds: Array.from(selected) },
+      {
+        onSuccess: () => {
+          toast({ title: "Articles annulés", description: `${selected.size} article(s) annulé(s).` });
+          setSelected(new Set());
+          onClose();
+        },
+        onError: (err: Error) => toast({ title: "Annulation impossible", description: err.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  return (
+    <Dialog open={!!subOrder} onOpenChange={(v) => { if (!v) { setSelected(new Set()); onClose(); } }}>
+      <DialogContent className={`max-w-lg w-[calc(100%-2rem)] rounded-3xl border-0 shadow-2xl ${t.modalBg}`}>
+        <DialogTitle className={t.textPrimary}>
+          Annuler des articles {subOrder ? `— ${subOrder.supplierName}` : ""}
+        </DialogTitle>
+        {subOrder && (
+          <>
+            <p className={`text-xs ${t.textMuted}`}>
+              Sélectionnez les produits, variantes ou packs à annuler pour ce fournisseur.
+            </p>
+            <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
+              {productGroups.length === 0 && activePackItems.length === 0 && (
+                <p className={`text-sm text-center py-6 ${t.textMuted}`}>Aucun article annulable.</p>
+              )}
+              {productGroups.map((group) => (
+                <div key={group.productId} className={`border rounded-2xl p-3 ${t.innerCard}`}>
+                  <p className={`font-semibold text-sm ${t.textPrimary}`}>{group.productName}</p>
+                  <div className="mt-2 space-y-1.5">
+                    {group.variants.map((variant) => (
+                      <label
+                        key={variant.key}
+                        className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors ${t.dk ? "hover:bg-gray-700/50" : "hover:bg-gray-100"}`}
+                      >
+                        <Checkbox
+                          checked={variant.orderItemId != null && selected.has(variant.orderItemId)}
+                          onCheckedChange={() => variant.orderItemId != null && toggle(variant.orderItemId)}
+                          data-testid={`checkbox-cancel-item-${variant.orderItemId}`}
+                        />
+                        <span className={`flex-1 text-xs ${t.textMuted}`}>
+                          {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                        </span>
+                        <span className={`text-xs font-semibold ${t.textPrimary}`}>
+                          ×{variant.quantity} {fmt(variant.totalPrice)}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {activePackItems.map((item) => {
+                const snapshot = item.snapshot as any;
+                const packSnapshot = snapshot?.kind === "PACK" ? snapshot : null;
+                const itemName = packSnapshot?.packName ?? item.packName ?? "Pack";
+                return (
+                  <div key={`pack-${item.id}`} className={`border rounded-2xl p-3 ${t.innerCard}`}>
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <Checkbox
+                        checked={selected.has(item.id)}
+                        onCheckedChange={() => toggle(item.id)}
+                        data-testid={`checkbox-cancel-item-${item.id}`}
+                      />
+                      <span className={`flex-1 text-sm font-semibold ${t.textPrimary}`}>{itemName} ×{item.quantity}</span>
+                      <span className={`text-xs font-semibold ${t.textPrimary}`}>{fmt((item.unitPrice ?? 0) * item.quantity)}</span>
+                    </label>
+                    <div className="mt-1 ml-7">
+                      <PackCompositionView packId={item.packId} quantity={item.quantity} snapshot={packSnapshot} t={t} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={selected.size === 0 || cancelItems.isPending}
+            className="bg-red-600 hover:bg-red-700 text-white"
+            data-testid="button-confirm-cancel-items"
+          >
+            {cancelItems.isPending ? "Annulation…" : `Confirmer l'annulation (${selected.size})`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 type Props = {
   open: boolean;
   onClose: () => void;
   order: OrderWithDetails | null;
   /** Show the Reorder button. Default: true. Pass false for Admin/Supplier views. */
   showReorder?: boolean;
-  /** Show the Cancel button (for Cafe Owner). Default: false. */
+  /** Show per-supplier-order cancellation (for Cafe Owner). Default: false. */
   showCancel?: boolean;
 };
 
@@ -115,13 +240,11 @@ export default function OrderDetailsModal({
   const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
 
-  const { addItem, addPackItem } = useCart();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
-  const [reordering, setReordering] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const { reorder, isReordering } = useReorderToCart();
   const fmt = useFormatCurrency();
+  // Which sub-order's item-selection cancellation dialog is open, if any.
+  const [cancelTarget, setCancelTarget] = useState<any | null>(null);
 
   if (!order) return null;
 
@@ -132,113 +255,7 @@ export default function OrderDetailsModal({
   const deliveryAddress   = (order as any).deliveryAddress as { address: string } | null;
   const courierInstructions = (order as any).courierInstructions as string | null;
 
-  const canCancel = showCancel && CANCELLABLE_STATUSES.has(order.status);
-
-  // ── Reorder ────────────────────────────────────────────────────────────────
-
-  const handleReorder = async () => {
-    setReordering(true);
-    try {
-      const res = await fetch(`/api/orders/${order.id}/reorder`, { credentials: "include" });
-      if (!res.ok) throw new Error("Impossible de préparer la re-commande");
-      const data = await res.json() as {
-        items: any[];
-        packItems: any[];
-        unavailable: { name: string; reason: string }[];
-      };
-
-      // Append to existing cart (do NOT clear — preserve what's already there)
-      for (const item of data.items) {
-        addItem({
-          listingId: item.listingId,
-          productId: item.productId,
-          supplierId: item.supplierId,
-          supplierName: item.supplierName ?? "",
-          flavorId: item.flavorId ?? null,
-          sizeId: item.sizeId ?? null,
-          flavorName: item.flavorName ?? null,
-          sizeName: item.sizeName ?? null,
-          brandName: item.brandName ?? null,
-          categoryName: item.categoryName ?? item.productCategory ?? null,
-          subCategoryName: item.subCategoryName ?? null,
-          unitPrice: item.unitPrice,
-          productName: item.productName ?? "",
-          productImageUrl: item.productImageUrl ?? null,
-          productCategory: item.productCategory ?? "",
-        }, item.quantity);
-      }
-
-      for (const pack of data.packItems) {
-        addPackItem({
-          packId: pack.packId,
-          packName: pack.packName ?? "",
-          packImageUrl: pack.packImageUrl ?? null,
-          supplierId: pack.supplierId,
-          supplierName: pack.supplierName ?? "",
-          unitPrice: pack.unitPrice ?? 0,
-          includedProducts: (pack.includedProducts ?? []).map((item: any) => ({
-            productId: item.productId ?? 0,
-            productName: item.productName ?? "",
-            productImageUrl: item.productImageUrl ?? null,
-            brandName: item.brandName ?? null,
-            categoryName: item.categoryName ?? null,
-            subCategoryName: item.subCategoryName ?? null,
-            flavorName: item.flavorName ?? null,
-            sizeName: item.sizeName ?? null,
-            quantity: item.quantity ?? 0,
-          })),
-        }, pack.quantity);
-      }
-
-      const addedCount = data.items.length + data.packItems.length;
-      const unavailableCount = data.unavailable.length;
-
-      if (addedCount === 0 && unavailableCount > 0) {
-        toast({
-          title: "Aucun article disponible",
-          description: `${unavailableCount} article(s) ne sont plus disponibles.`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      let desc = `${addedCount} article(s) ajouté(s) au panier.`;
-      if (unavailableCount > 0) desc += ` ${unavailableCount} article(s) non disponible(s).`;
-
-      toast({ title: "Articles ajoutés au panier", description: desc });
-      onClose();
-      setLocation("/cart");
-    } catch (err: any) {
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    } finally {
-      setReordering(false);
-    }
-  };
-
-  // ── Cancel order ────────────────────────────────────────────────────────────
-
-  const handleCancel = async () => {
-    setCancelling(true);
-    try {
-      const res = await fetch(`/api/orders/${order.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "CANCELLED" }),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: "Impossible d'annuler la commande" }));
-        throw new Error(err.message ?? "Impossible d'annuler la commande");
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-      toast({ title: "Commande annulée", description: "La commande a été annulée avec succès." });
-      onClose();
-    } catch (err: any) {
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    } finally {
-      setCancelling(false);
-    }
-  };
+  const handleReorder = () => reorder(order.id);
 
   const subOrders  = order.subOrders ?? [];
   const hasSubOrders = subOrders.length > 0;
@@ -259,6 +276,7 @@ export default function OrderDetailsModal({
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent
         className="max-w-2xl w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
@@ -490,9 +508,27 @@ export default function OrderDetailsModal({
                           </div>
                           <span className={`font-semibold text-sm ${t.textPrimary}`}>{sub.supplierName}</span>
                         </div>
-                        <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${subStatusBadge}`}>
-                          {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${subStatusBadge}`}>
+                            {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
+                          </span>
+                          {/* Per-supplier-order cancellation — only while this specific
+                              supplier order is still PENDING, never based on the parent
+                              order's aggregate status. See Part 1 of the cancellation flow. */}
+                          {showCancel && sub.status === "PENDING" && (
+                            <button
+                              onClick={() => setCancelTarget(sub)}
+                              className={`flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
+                                t.dk
+                                  ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
+                                  : "border-red-300 text-red-600 hover:bg-red-50"
+                              }`}
+                              data-testid={`button-cancel-suborder-${sub.id}`}
+                            >
+                              <XCircle className="w-3 h-3" /> Annuler
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Each supplier/sub-order progresses independently. */}
@@ -562,16 +598,24 @@ export default function OrderDetailsModal({
                                   </p>
                                 )}
                                 <div className="mt-1.5 space-y-1.5">
-                                  {group.variants.map((variant) => (
-                                    <div key={variant.key} className="flex items-center justify-between gap-2">
-                                      <span className={`text-xs ${t.textMuted}`}>
-                                        {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
-                                      </span>
-                                      <span className={`text-xs font-semibold shrink-0 ${t.textPrimary}`}>
-                                        ×{variant.quantity} {fmt(variant.totalPrice)}
-                                      </span>
-                                    </div>
-                                  ))}
+                                  {group.variants.map((variant) => {
+                                    const cancelled = variant.status === "CANCELLED";
+                                    return (
+                                      <div key={variant.key} className="flex items-center justify-between gap-2">
+                                        <span className={`text-xs ${cancelled ? `line-through ${t.textSubtle}` : t.textMuted}`}>
+                                          {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                                        </span>
+                                        <span className="flex items-center gap-1.5 shrink-0">
+                                          {cancelled && (
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé</Badge>
+                                          )}
+                                          <span className={`text-xs font-semibold ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>
+                                            ×{variant.quantity} {fmt(variant.totalPrice)}
+                                          </span>
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                               <div className="shrink-0 text-right">
@@ -587,28 +631,34 @@ export default function OrderDetailsModal({
                           const packSnapshot = snapshot?.kind === "PACK" ? snapshot : null;
                           const itemName = packSnapshot?.packName ?? item.packName ?? "Pack";
                           const itemImage = packSnapshot?.packImageUrl;
+                          const cancelled = item.status === "CANCELLED";
                           return (
                             <div key={`pack-${item.id ?? idx}`} className="px-4 py-3">
                               <div className="flex items-start gap-2.5">
-                                <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 mt-0.5 bg-amber-500/15">
+                                <div className={`w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 mt-0.5 ${cancelled ? (t.dk ? "bg-gray-700" : "bg-gray-100") : "bg-amber-500/15"}`}>
                                   {itemImage
-                                    ? <img src={itemImage} alt="" className="w-full h-full object-cover" />
-                                    : <Layers className="w-4 h-4 text-amber-500" />}
+                                    ? <img src={itemImage} alt="" className={`w-full h-full object-cover ${cancelled ? "opacity-40 grayscale" : ""}`} />
+                                    : <Layers className={`w-4 h-4 ${cancelled ? t.textSubtle : "text-amber-500"}`} />}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className={`font-medium text-sm ${t.textPrimary}`}>{itemName}</p>
-                                  <PackCompositionView
-                                    packId={item.packId}
-                                    quantity={item.quantity}
-                                    snapshot={packSnapshot}
-                                    t={t}
-                                  />
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <p className={`font-medium text-sm ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>{itemName}</p>
+                                    {cancelled && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé</Badge>}
+                                  </div>
+                                  {!cancelled && (
+                                    <PackCompositionView
+                                      packId={item.packId}
+                                      quantity={item.quantity}
+                                      snapshot={packSnapshot}
+                                      t={t}
+                                    />
+                                  )}
                                 </div>
                                 <div className="shrink-0 text-right">
                                   <span className={`text-xs font-semibold block ${t.textMuted}`}>
                                     ×{item.quantity}
                                   </span>
-                                  <span className={`font-semibold text-sm ${t.textPrimary}`}>
+                                  <span className={`font-semibold text-sm ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>
                                     {fmt((item.unitPrice ?? 0) * item.quantity)}
                                   </span>
                                 </div>
@@ -750,24 +800,6 @@ export default function OrderDetailsModal({
                 Fermer
               </Button>
 
-              {/* Cancel */}
-              {canCancel && (
-                <Button
-                  variant="outline"
-                  className={`flex-1 min-w-[140px] rounded-xl h-11 font-semibold gap-2 transition-colors
-                    ${t.dk
-                      ? "border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 bg-transparent"
-                      : "border-red-300 text-red-600 hover:bg-red-50 bg-white"
-                    }`}
-                  onClick={handleCancel}
-                  disabled={cancelling}
-                  data-testid="button-cancel-order"
-                >
-                  <XCircle className="w-4 h-4" />
-                  {cancelling ? "Annulation…" : "Annuler"}
-                </Button>
-              )}
-
               {/* Reorder */}
               {showReorder && (
                 <Button
@@ -778,11 +810,11 @@ export default function OrderDetailsModal({
                       : "border-gray-200 text-gray-700 hover:bg-gray-50 bg-white"
                     }`}
                   onClick={handleReorder}
-                  disabled={reordering}
+                  disabled={isReordering}
                   data-testid="button-reorder"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  {reordering ? "Chargement…" : "Recommander"}
+                  {isReordering ? "Chargement…" : "Recommander"}
                 </Button>
               )}
             </div>
@@ -791,5 +823,8 @@ export default function OrderDetailsModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <CancelSubOrderModal subOrder={cancelTarget} onClose={() => setCancelTarget(null)} t={t} />
+    </>
   );
 }

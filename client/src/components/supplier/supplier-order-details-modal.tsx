@@ -257,16 +257,24 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                             </p>
                           )}
                           <div className="mt-1.5 space-y-1.5">
-                            {group.variants.map((variant) => (
-                              <div key={variant.key} className="flex items-center justify-between gap-2">
-                                <span className={`text-xs ${t.textMuted}`}>
-                                  {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
-                                </span>
-                                <span className={`text-xs font-semibold shrink-0 ${t.textPrimary}`}>
-                                  ×{variant.quantity} {fmt(variant.totalPrice)}
-                                </span>
-                              </div>
-                            ))}
+                            {group.variants.map((variant) => {
+                              const cancelled = variant.status === "CANCELLED";
+                              return (
+                                <div key={variant.key} className="flex items-center justify-between gap-2">
+                                  <span className={`text-xs ${cancelled ? `line-through ${t.textSubtle}` : t.textMuted}`}>
+                                    {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                                  </span>
+                                  <span className="flex items-center gap-1.5 shrink-0">
+                                    {cancelled && (
+                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé par le café</Badge>
+                                    )}
+                                    <span className={`text-xs font-semibold ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>
+                                      ×{variant.quantity} {fmt(variant.totalPrice)}
+                                    </span>
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
@@ -279,24 +287,30 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                     const snapshot = item.snapshot as any;
                     const packSnapshot = snapshot?.kind === "PACK" ? snapshot : null;
                     const itemName = packSnapshot?.packName ?? item.packName;
+                    const cancelled = item.status === "CANCELLED";
                     return (
                       <div key={`pack-${item.id ?? idx}`} className="px-4 py-3">
                         <div className="flex items-start gap-2.5">
-                          <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-amber-500/15">
-                            <Layers className="w-3 h-3 text-amber-500" />
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${cancelled ? (isDark ? "bg-gray-700" : "bg-gray-100") : "bg-amber-500/15"}`}>
+                            <Layers className={`w-3 h-3 ${cancelled ? t.textSubtle : "text-amber-500"}`} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`font-medium text-sm ${t.textPrimary}`}>{itemName}</p>
-                            <PackCompositionView
-                              packId={item.packId}
-                              quantity={item.quantity}
-                              snapshot={packSnapshot}
-                              t={t}
-                            />
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className={`font-medium text-sm ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>{itemName}</p>
+                              {cancelled && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé par le café</Badge>}
+                            </div>
+                            {!cancelled && (
+                              <PackCompositionView
+                                packId={item.packId}
+                                quantity={item.quantity}
+                                snapshot={packSnapshot}
+                                t={t}
+                              />
+                            )}
                           </div>
                           <div className="shrink-0 text-right">
                             <span className={`text-xs font-semibold block ${t.textMuted}`}>×{item.quantity}</span>
-                            <span className={`font-semibold text-sm ${t.textPrimary}`}>
+                            <span className={`font-semibold text-sm ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>
                               {fmt((item.unitPrice ?? 0) * item.quantity)}
                             </span>
                           </div>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useThemeStore } from "@/store/theme-store";
 import { useCart } from "@/hooks/use-cart";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { usePromotionEvaluation } from "@/hooks/use-promotion-evaluation";
+import { usePackAvailability, isPackFrozen, PACK_AVAILABILITY_KEY } from "@/hooks/use-pack-availability";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
   Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck, Sun, Moon,
-  CreditCard, Banknote, Smartphone, Landmark, Pencil
+  CreditCard, Banknote, Smartphone, Landmark, Pencil, AlertTriangle
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
@@ -31,7 +33,7 @@ export default function CartPage() {
   const {
     items, updateQuantity, removeItem, clearCart, getTotal, getItemsBySupplier,
     printItems, removePrintItem, clearPrintItems, getPrintTotal,
-    packItems, removePackItem, getPackTotal,
+    packItems, removePackItem,
   } = useCart();
   const { user } = useAuth();
   const openPackForEdit = usePackQuickView((s) => s.openForEdit);
@@ -39,6 +41,13 @@ export default function CartPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const openAccountWithOrder = useAccountOpenStore((s) => s.openWithOrder);
+  const queryClient = useQueryClient();
+
+  // Revalidates every Pack currently in the cart against its live backend state.
+  // A Pack the supplier has made unavailable stays visible (frozen) but must never
+  // be orderable/counted — see freezing logic below and orderablePackItems.
+  const { data: packAvailability = {} } = usePackAvailability(packItems.map((p) => p.packId));
+  const orderablePackItems = packItems.filter((p) => !isPackFrozen(packAvailability[p.packId]));
 
   const savedAccountAddress = userToAccountAddress(user as any);
 
@@ -92,8 +101,14 @@ export default function CartPage() {
 
   const totalShop = getTotal();
   const totalPrint = getPrintTotal();
-  const totalPack = getPackTotal();
+  // Frozen (currently unavailable) Packs are visible in the cart but must never
+  // contribute to a total the Coffee Owner could act on — sum only the orderable
+  // ones, at their current live price when known (see Scenario E: price refresh).
+  const totalPack = orderablePackItems.reduce((s, p) => s + (packAvailability[p.packId]?.price ?? p.unitPrice) * p.quantity, 0);
   const hasShop = items.length > 0 || packItems.length > 0;
+  // Distinct from hasShop: a cart holding only a frozen Pack still "has SHOP content"
+  // (must stay visible), but there is nothing left to actually order.
+  const hasOrderableShop = items.length > 0 || orderablePackItems.length > 0;
   const hasPrint = printItems.length > 0;
   const grandTotal = totalShop + totalPack + totalPrint - promoEval.totalDiscount;
 
@@ -106,6 +121,14 @@ export default function CartPage() {
   // Open the confirmation modal (with address validation)
   const handleOpenConfirm = () => {
     if (!hasShop) return;
+    if (!hasOrderableShop) {
+      toast({
+        title: "Aucun article disponible",
+        description: "Votre panier ne contient aucun article disponible à commander pour le moment.",
+        variant: "destructive",
+      });
+      return;
+    }
     setConfirmOpen(true);
   };
 
@@ -284,6 +307,11 @@ export default function CartPage() {
       },
       onError: (error) => {
         toast({ title: "Erreur", description: error.message, variant: "destructive" });
+        // The backend re-validates every Pack's availability at order creation (see
+        // resolvePackOrderItems) — if this failed because a Pack raced into
+        // unavailability between cart load and confirmation, refetch so the cart
+        // immediately shows it frozen instead of leaving stale "available" data on screen.
+        queryClient.invalidateQueries({ queryKey: [PACK_AVAILABILITY_KEY] });
       },
     });
   };
@@ -410,27 +438,59 @@ export default function CartPage() {
                   );
                 })}
 
-                {packItems.map((pack) => (
-                  <div key={`pack-${pack.packId}`} className={`border rounded-2xl overflow-hidden shadow-sm ${dk ? "bg-gray-800 border-amber-500/25" : "bg-white border-amber-100"}`} data-testid={`cart-pack-${pack.packId}`}>
-                    <div className={`px-3 sm:px-4 py-3 border-b flex items-center justify-between gap-2 ${dk ? "bg-amber-500/10 border-amber-500/25" : "bg-amber-50 border-amber-100"}`}>
+                {packItems.map((pack) => {
+                  const detail = packAvailability[pack.packId];
+                  const frozen = isPackFrozen(detail);
+                  // Only ever refresh display fields from the live Pack while it's actually
+                  // available — a frozen Pack keeps showing its last-known info, since the
+                  // live fetch either failed or explicitly says it's not orderable right now.
+                  const displayName = !frozen && detail ? detail.name : pack.packName;
+                  const displayImage = !frozen && detail ? detail.imageUrl : pack.packImageUrl;
+                  const displayUnitPrice = !frozen && detail ? detail.price : pack.unitPrice;
+                  return (
+                  <div
+                    key={`pack-${pack.packId}`}
+                    className={`border rounded-2xl overflow-hidden shadow-sm transition-opacity ${
+                      frozen
+                        ? `opacity-60 ${dk ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`
+                        : (dk ? "bg-gray-800 border-amber-500/25" : "bg-white border-amber-100")
+                    }`}
+                    data-testid={`cart-pack-${pack.packId}`}
+                  >
+                    <div className={`px-3 sm:px-4 py-3 border-b flex items-center justify-between gap-2 ${
+                      frozen
+                        ? (dk ? "bg-gray-700/40 border-gray-700" : "bg-gray-100 border-gray-200")
+                        : (dk ? "bg-amber-500/10 border-amber-500/25" : "bg-amber-50 border-amber-100")
+                    }`}>
                       <div className="flex items-center gap-2 min-w-0">
-                        <Layers className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span className={`font-semibold text-sm truncate ${dk ? "text-amber-400" : "text-amber-700"}`}>{pack.supplierName} · Pack</span>
+                        <Layers className={`w-4 h-4 shrink-0 ${frozen ? textMuted : "text-amber-500"}`} />
+                        <span className={`font-semibold text-sm truncate ${frozen ? textMuted : (dk ? "text-amber-400" : "text-amber-700")}`}>{pack.supplierName} · Pack</span>
                       </div>
-                      <span className={`text-sm font-medium shrink-0 ${dk ? "text-amber-400" : "text-amber-700"}`}>{fmt(pack.unitPrice * pack.quantity)}</span>
+                      {frozen ? (
+                        <Badge variant="outline" className={`shrink-0 gap-1 text-xs ${dk ? "border-gray-600 text-gray-300 bg-gray-800" : "border-gray-300 text-gray-600 bg-gray-50"}`} data-testid={`badge-pack-unavailable-${pack.packId}`}>
+                          <AlertTriangle className="w-3 h-3" /> Pack indisponible
+                        </Badge>
+                      ) : (
+                        <span className={`text-sm font-medium shrink-0 ${dk ? "text-amber-400" : "text-amber-700"}`}>{fmt(displayUnitPrice * pack.quantity)}</span>
+                      )}
                     </div>
                     <div className="p-3 sm:p-4">
                       <div className="flex gap-3">
-                        <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
-                          {pack.packImageUrl ? (
-                            <img src={pack.packImageUrl} className="w-full h-full object-cover" alt="" />
+                        <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg} ${frozen ? "grayscale" : ""}`}>
+                          {displayImage ? (
+                            <img src={displayImage} className="w-full h-full object-cover" alt="" />
                           ) : (
                             <div className={`w-full h-full flex items-center justify-center text-xs ${textMuted}`}>—</div>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`font-medium text-sm truncate ${textPrimary}`}>{pack.packName}</p>
-                           <p className={`text-xs ${textMuted}`}>{pack.supplierName} · {fmt(pack.unitPrice)} le pack</p>
+                          <p className={`font-medium text-sm truncate ${textPrimary}`}>{displayName}</p>
+                           <p className={`text-xs ${textMuted}`}>{pack.supplierName} · {fmt(displayUnitPrice)} le pack</p>
+                          {frozen && (
+                            <p className={`text-xs mt-1 ${dk ? "text-gray-400" : "text-gray-500"}`}>
+                              Ce Pack n'est plus disponible chez le fournisseur et ne sera pas inclus dans la commande.
+                            </p>
+                          )}
                           {pack.includedProducts.length > 0 && (
                              <div className={`mt-3 space-y-2.5 border-t pt-2 ${dk ? "border-amber-500/20" : "border-amber-100"}`}>
                                 {groupPackIncludedProducts(pack.includedProducts).map((group) => (
@@ -459,24 +519,27 @@ export default function CartPage() {
                                ))}
                              </div>
                           )}
-                          <div className="flex items-center gap-2 mt-2">
-                            <button
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-200 text-amber-700 hover:bg-amber-50"}`}
-                              onClick={() => openPackForEdit(pack)}
-                              data-testid={`button-edit-pack-${pack.packId}`}
-                            >
-                              <Pencil className="w-3 h-3" /> Edit
-                            </button>
-                          </div>
+                          {!frozen && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <button
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-200 text-amber-700 hover:bg-amber-50"}`}
+                                onClick={() => openPackForEdit(pack)}
+                                data-testid={`button-edit-pack-${pack.packId}`}
+                              >
+                                <Pencil className="w-3 h-3" /> Edit
+                              </button>
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
-                          <p className={`font-bold text-sm ${textPrimary}`}>{fmt(pack.unitPrice * pack.quantity)}</p>
+                          <p className={`font-bold text-sm ${frozen ? textMuted : textPrimary}`}>{fmt(displayUnitPrice * pack.quantity)}</p>
                           <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePackItem(pack.packId)} data-testid={`button-remove-pack-${pack.packId}`}><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -667,7 +730,7 @@ export default function CartPage() {
                         </div>
                       );
                     })}
-                    {packItems.length > 0 && (
+                    {orderablePackItems.length > 0 && (
                       <div className={`flex justify-between ${textMuted}`}>
                         <span>Packs</span>
                         <span>{fmt(totalPack)}</span>
@@ -688,7 +751,7 @@ export default function CartPage() {
                   <button
                     type="button"
                     onClick={handleOpenConfirm}
-                    disabled={createOrder.isPending}
+                    disabled={createOrder.isPending || !hasOrderableShop}
                     className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white py-3.5 font-semibold text-sm transition-all shadow-lg shadow-amber-500/20"
                     data-testid="button-place-order"
                   >
@@ -772,7 +835,7 @@ export default function CartPage() {
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         items={items}
-        packItems={packItems}
+        packItems={orderablePackItems}
         deliveryAddress={activeDeliveryAddress}
         courierInstructions={courierInstructions}
         promoEval={promoEval}

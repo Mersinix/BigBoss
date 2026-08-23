@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { useCart } from "@/hooks/use-cart";
+import { PACK_AVAILABILITY_KEY } from "@/hooks/use-pack-availability";
 
 const CATALOG_EVENTS = [
   "catalog_suggestion_created",
@@ -70,6 +71,14 @@ function invalidatePackQueries(qc: QueryClient) {
     const key = q.queryKey as string[];
     return Array.isArray(key) && key[0] === "/api/stores" && key[2] === "packs";
   }});
+  // Re-check every Pack currently sitting in the SHOP cart against its live backend
+  // state (see hooks/use-pack-availability.ts) — this is what lets a Coffee Owner
+  // already on /cart see a Pack freeze/unfreeze in real time, with no page refresh,
+  // whenever a Supplier creates/updates/deletes a Pack (pack_updated) or its stock
+  // changes (inventory_updated). The query itself only ever fetches whatever pack ids
+  // are currently in that browser tab's cart, so this is a no-op for any tab whose
+  // cart doesn't contain the affected Pack — never a broad app-wide refetch.
+  qc.invalidateQueries({ queryKey: [PACK_AVAILABILITY_KEY] });
 }
 
 function invalidateSupplierMappingQueries(qc: QueryClient) {
@@ -103,6 +112,11 @@ export function useRealtime(userId?: number) {
       ws.onopen = () => {
         // Register this connection with the server so we receive targeted messages
         if (userId) ws.send(JSON.stringify({ event: "user_register", userId }));
+        // A pack_updated/inventory_updated event fired while this tab was disconnected
+        // (initial load, dropped connection, reconnect) would otherwise never be seen —
+        // revalidate the cart's Pack availability on every (re)connect so it can never
+        // stay stale indefinitely; a no-op if the cart has no Packs.
+        qc.invalidateQueries({ queryKey: [PACK_AVAILABILITY_KEY] });
       };
 
       ws.onmessage = (e) => {

@@ -1818,6 +1818,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Single Pack lookup by id, regardless of current visibility/archived/expired/stock
+  // state — used by the SHOP cart to revalidate a Pack it already has in a cart line.
+  // Unlike GET /api/marketplace/packs/:id (which 404s on an unavailable Pack, since that
+  // route is for marketplace browsing), this always returns the Pack when it still exists
+  // so the cart can tell "temporarily unavailable" (isAvailable: false) apart from "no
+  // longer exists at all" (404) and, once available again, refresh to its latest data.
+  // Reuses storage.getPackDetail() — the exact same isAvailable computation already
+  // enforced by resolvePackOrderItems() at order-creation time — so there is one
+  // authoritative Pack availability source, not a second one.
+  app.get('/api/packs/:id', requireAuth, async (req, res) => {
+    try {
+      const packId = parseInt(req.params.id);
+      const pack = await storage.getPackDetail(packId);
+      if (!pack) return res.status(404).json({ message: 'Pack not found' });
+      res.json(pack);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching pack' });
+    }
+  });
+
   // ── Pack composition (for Supplier order details modal) ────────────────────
 
   app.get('/api/packs/:id/composition', requireAuth, async (req: any, res) => {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { deriveOrderStatus } from "@/lib/order-status";
+import { deriveOrderStatus, getSupplierStatusEntries, orderMatchesStatus } from "@/lib/order-status";
 import { getEffectiveDate } from "@/lib/order-date";
 import { useCafeOrders, CAFE_ORDER_STATUS_META as statusMeta, CAFE_ORDER_STATUS_FILTER_OPTS as STATUS_FILTER_OPTS, type CafeOrderTabId as TabId } from "@/hooks/use-cafe-orders";
 import { Badge } from "@/components/ui/badge";
@@ -28,9 +28,10 @@ export default function CafeOrdersPage() {
 
   const baseList = listForTab(tab);
 
-  const filtered = statusFilter === "ALL"
-    ? baseList
-    : baseList.filter((o) => deriveOrderStatus(o) === statusFilter);
+  // An order matches a status filter if AT LEAST ONE of its sub-orders currently has that
+  // status — not just the aggregate/least-advanced one — so a multi-supplier order shows up
+  // under every status any of its suppliers are actually in.
+  const filtered = baseList.filter((o) => orderMatchesStatus(o, statusFilter));
 
   // Always resolve the modal's order from the live query data, so cancellations/
   // favorites made while it's open are reflected immediately without a manual
@@ -102,6 +103,9 @@ export default function CafeOrdersPage() {
             const displayStatus = deriveOrderStatus(order);
             const meta = statusMeta[displayStatus] || { label: displayStatus, color: "bg-gray-100 text-gray-800", icon: Box };
             const Icon = meta.icon;
+            // A single collapsed badge hides other suppliers' state on a multi-supplier
+            // order — null (one supplier, or none) keeps today's single badge.
+            const supplierStatuses = getSupplierStatusEntries(order);
             const supplierNames = (order.subOrders ?? []).map((s: any) => s.supplierName).filter(Boolean);
             const itemCount = (order.subOrders ?? []).reduce((n: number, s: any) => n + (s.items?.length ?? 0), 0) || (order.items?.length ?? 0);
             const effectiveDate = getEffectiveDate(order);
@@ -151,10 +155,30 @@ export default function CafeOrdersPage() {
                       <p className="text-sm mt-0.5 font-bold">{fmt(order.totalAmount)}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={`${meta.color} border px-3 py-1 text-xs font-bold rounded-lg flex items-center gap-1.5`}>
-                      <Icon className="w-3.5 h-3.5" /> {meta.label}
-                    </Badge>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {supplierStatuses ? (
+                      // One row per supplier — name beside its own status badge — instead
+                      // of concatenating "Name — Status" into a single line of text, so
+                      // each supplier's state reads as a clearly separate item.
+                      <div className="flex flex-col items-end gap-1.5">
+                        {supplierStatuses.map((s) => {
+                          const sMeta = statusMeta[s.status] || { label: s.status, color: "bg-gray-100 text-gray-800", icon: Box };
+                          const SIcon = sMeta.icon;
+                          return (
+                            <div key={s.supplierId} className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-muted-foreground">{s.supplierName}</span>
+                              <Badge variant="outline" className={`${sMeta.color} border px-3 py-1 text-xs font-bold rounded-lg flex items-center gap-1.5`}>
+                                <SIcon className="w-3.5 h-3.5" /> {sMeta.label}
+                              </Badge>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className={`${meta.color} border px-3 py-1 text-xs font-bold rounded-lg flex items-center gap-1.5`}>
+                        <Icon className="w-3.5 h-3.5" /> {meta.label}
+                      </Badge>
+                    )}
                     {tab === "daily" && (
                       <Button
                         size="sm"

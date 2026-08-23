@@ -17,6 +17,7 @@ import type { OrderWithDetails } from "@shared/schema";
 import { PackCompositionView } from "@/components/order/pack-composition-view";
 import { DeliveryProgress } from "@/components/order/delivery-progress";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
+import { getSupplierStatusEntries } from "@/lib/order-status";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
 
@@ -251,6 +252,12 @@ export default function OrderDetailsModal({
 
   const statusMeta    = STATUS_META[order.status] ?? { label: order.status, badgeDk: "bg-gray-700 text-gray-300", badgeLt: "bg-gray-100 text-gray-700", icon: Box };
   const StatusIcon    = statusMeta.icon;
+  // order.status is a single column that only advances once EVERY sub-order completes —
+  // showing it as "the" order status at the top is misleading once there's more than one
+  // supplier, since the per-supplier sections below (never touched here) are the real
+  // source of truth. Null (one supplier, or none) keeps the existing single badge exactly
+  // as before.
+  const supplierStatuses = getSupplierStatusEntries(order);
   const priorityMeta  = PRIORITY_META[(order as any).priority ?? "NORMAL"] ?? PRIORITY_META.NORMAL;
   const scheduledAt   = (order as any).scheduledAt;
   const deliveryAddress   = (order as any).deliveryAddress as { address: string } | null;
@@ -318,14 +325,27 @@ export default function OrderDetailsModal({
 
             {/* Status + meta row */}
             <div className="flex flex-wrap items-center justify-center gap-2">
-              {/* Status badge */}
-              <Badge
-                variant="outline"
-                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${t.badge(order.status, STATUS_META)}`}
-              >
-                <StatusIcon className="w-3 h-3" />
-                {statusMeta.label}
-              </Badge>
+              {/* Status badge — a single order-level status is only accurate for one
+                  supplier; for a multi-supplier order it's replaced with a neutral count,
+                  since each supplier's real status is already shown in its own section
+                  below (never pretend one supplier's status stands for all of them). */}
+              {supplierStatuses ? (
+                <Badge
+                  variant="outline"
+                  className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-700 border-gray-200"}`}
+                >
+                  <Store className="w-3 h-3" />
+                  {supplierStatuses.length} fournisseurs
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${t.badge(order.status, STATUS_META)}`}
+                >
+                  <StatusIcon className="w-3 h-3" />
+                  {statusMeta.label}
+                </Badge>
+              )}
 
               {/* Date */}
               <span className={`flex items-center gap-1 text-xs ${t.textMuted}`}>
@@ -471,7 +491,9 @@ export default function OrderDetailsModal({
                   ) : (
                     <>
                       {deliveryAddress && <p className={`text-xs mt-1 ${t.textMuted}`}>{deliveryAddress.address}</p>}
-                      <p className={`text-xs mt-1 ${t.textMuted}`}>Status: {statusMeta.label}</p>
+                      {!supplierStatuses && (
+                        <p className={`text-xs mt-1 ${t.textMuted}`}>Status: {statusMeta.label}</p>
+                      )}
                     </>
                   )}
                   <p className={`text-xs mt-1 ${t.textMuted}`}>Delivery fee: {fmt(deliveryFee)}</p>

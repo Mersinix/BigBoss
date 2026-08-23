@@ -4,7 +4,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { useCafeOrders, CAFE_ORDER_STATUS_META, CAFE_ORDER_STATUS_FILTER_OPTS, type CafeOrderTabId } from "@/hooks/use-cafe-orders";
-import { deriveOrderStatus } from "@/lib/order-status";
+import { deriveOrderStatus, getSupplierStatusEntries, orderMatchesStatus } from "@/lib/order-status";
 import { getEffectiveDate } from "@/lib/order-date";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -281,7 +281,9 @@ function AccountPanel({
             { id: "old", label: "Anciennes", icon: Archive, count: byCategory.ANCIENNE.length },
           ];
           const baseList = listForTab(ordersSubTab);
-          const filtered = ordersStatusFilter === "ALL" ? baseList : baseList.filter((o) => deriveOrderStatus(o) === ordersStatusFilter);
+          // At least one sub-order matching the selected status is enough — see
+          // lib/order-status.ts orderMatchesStatus.
+          const filtered = baseList.filter((o) => orderMatchesStatus(o, ordersStatusFilter));
           return (
             <div className="space-y-3 pt-2">
               <div className={`flex gap-1 rounded-2xl p-1 overflow-x-auto ${switcherBg}`} style={{ scrollbarWidth: "none" }}>
@@ -304,8 +306,16 @@ function AccountPanel({
                 <SelectTrigger className={`h-8 text-xs ${dk ? "border-gray-700 bg-gray-800 text-gray-200" : "border-gray-200 bg-gray-50"}`} data-testid="account-select-status-filter">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
-                <SelectContent>
-                  {CAFE_ORDER_STATUS_FILTER_OPTS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                <SelectContent className={dk ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-200 text-gray-900"}>
+                  {CAFE_ORDER_STATUS_FILTER_OPTS.map((o) => (
+                    <SelectItem
+                      key={o.value}
+                      value={o.value}
+                      className={dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : "text-gray-900 focus:bg-gray-100 focus:text-gray-900"}
+                    >
+                      {o.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 
@@ -328,6 +338,10 @@ function AccountPanel({
                     const displayStatus = deriveOrderStatus(order);
                     const meta = CAFE_ORDER_STATUS_META[displayStatus] ?? CAFE_ORDER_STATUS_META.PENDING;
                     const Icon = meta.icon;
+                    // A single collapsed badge hides other suppliers' state on a
+                    // multi-supplier order — null (one supplier, or none) keeps the
+                    // existing single-badge display.
+                    const supplierStatuses = getSupplierStatusEntries(order);
                     const supplierNames = (order.subOrders ?? []).map((s: any) => s.supplierName).filter(Boolean);
                     const isFavorite = !!order.isFavorite;
                     return (
@@ -352,10 +366,32 @@ function AccountPanel({
                             </span>
                             <span className={`font-mono text-sm font-bold ${textPrimary}`}>#{String(order.id).padStart(6, "0")}</span>
                           </div>
-                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}><Icon className="w-3 h-3" />{meta.label}</span>
+                          {!supplierStatuses && (
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}><Icon className="w-3 h-3" />{meta.label}</span>
+                          )}
                         </div>
-                        {supplierNames.length > 0 && (
-                          <p className={`text-xs truncate ${textMuted}`}>{supplierNames.join(" · ")}</p>
+                        {supplierStatuses ? (
+                          // One row per supplier — name left, its own status badge right —
+                          // instead of a single collapsed badge or one line of concatenated
+                          // "Name — Status" text, so each supplier's state reads on its own.
+                          <div className="space-y-1">
+                            {supplierStatuses.map((s) => {
+                              const sMeta = CAFE_ORDER_STATUS_META[s.status] ?? CAFE_ORDER_STATUS_META.PENDING;
+                              const SIcon = sMeta.icon;
+                              return (
+                                <div key={s.supplierId} className="flex items-center justify-between gap-2">
+                                  <span className={`text-xs truncate ${textMuted}`}>{s.supplierName}</span>
+                                  <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-xl border shrink-0 ${sMeta.color}`}>
+                                    <SIcon className="w-3 h-3" />{sMeta.label}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          supplierNames.length > 0 && (
+                            <p className={`text-xs truncate ${textMuted}`}>{supplierNames.join(" · ")}</p>
+                          )
                         )}
                         <div className="flex items-center justify-between">
                           <span className={`text-xs ${textMuted}`}>{formatDate(getEffectiveDate(order))}</span>
@@ -365,7 +401,7 @@ function AccountPanel({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 text-xs gap-1.5 w-full mt-1"
+                            className={`h-7 text-xs gap-1.5 w-full mt-1 ${dk ? "border-white text-white hover:bg-gray-700 hover:text-white hover:border-white" : ""}`}
                             disabled={isReordering}
                             onClick={(e) => { e.stopPropagation(); reorder(order.id); }}
                             data-testid={`account-button-reorder-daily-${order.id}`}

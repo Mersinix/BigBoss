@@ -15,7 +15,7 @@ import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-deta
 import CafeOrdersPage from "@/pages/cafe/orders-page";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderWithDetails } from "@shared/schema";
-import { deriveOrderStatus } from "@/lib/order-status";
+import { deriveOrderStatus, getSupplierStatusEntries, orderMatchesStatus } from "@/lib/order-status";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -91,7 +91,10 @@ export default function OrdersPage() {
   // Apply filters
   const filtered = useMemo(() => {
     return filteredByView.filter(o => {
-      if (statusFilter !== "ALL" && o.status !== statusFilter) return false;
+      // At least one sub-order matching the selected status is enough — the raw order.status
+      // column only advances once every sub-order completes, so comparing against it directly
+      // hid a multi-supplier order under any status besides its slowest supplier's.
+      if (!orderMatchesStatus(o, statusFilter)) return false;
       if (cafeSearch && !o.cafe?.name.toLowerCase().includes(cafeSearch.toLowerCase())) return false;
       if (supplierSearch) {
         const match = (o.subOrders ?? []).some((so: any) => so.supplierName?.toLowerCase().includes(supplierSearch.toLowerCase()));
@@ -232,6 +235,12 @@ export default function OrdersPage() {
               : deriveOrderStatus(order);
             const badgeColor = STATUS_BADGE[displayStatus] ?? "bg-gray-100 text-gray-800";
             const label = STATUS_LABELS[displayStatus] ?? displayStatus;
+            // A supplier only ever sees their own single sub-order here, so the collapsed
+            // badge above is already accurate for them. Every other role sees the full,
+            // possibly multi-supplier order — for those, a single aggregate badge can hide
+            // suppliers that are behind. Null (one supplier, or none) keeps today's single
+            // badge; otherwise render one badge per supplier instead.
+            const supplierStatuses = isSupplier ? null : getSupplierStatusEntries(order);
             const priority = (order as any).priority;
             const scheduledAt = (order as any).scheduledAt;
             const deliveryAddress = (order as any).deliveryAddress as { address: string } | null;
@@ -245,7 +254,15 @@ export default function OrdersPage() {
                     <div className="flex-1 min-w-0 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-xs text-muted-foreground">#{String(order.id).padStart(6,"0")}</span>
-                        <Badge variant="secondary" className={`${badgeColor} text-xs`}>{label}</Badge>
+                        {supplierStatuses ? (
+                          supplierStatuses.map((s) => (
+                            <Badge key={s.supplierId} variant="secondary" className={`${STATUS_BADGE[s.status] ?? "bg-gray-100 text-gray-800"} text-xs`}>
+                              {s.supplierName} — {STATUS_LABELS[s.status] ?? s.status}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="secondary" className={`${badgeColor} text-xs`}>{label}</Badge>
+                        )}
                         {priority && priority !== "NORMAL" && (
                           <Badge variant="secondary" className={`text-xs ${priority === "URGENT" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
                             <Zap className="w-3 h-3 mr-0.5" />{priority === "URGENT" ? "Urgent" : "Haute prio."}

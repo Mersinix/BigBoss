@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpdateSubOrderStatus } from "@/hooks/use-orders";
 import type { OrderWithDetails } from "@shared/schema";
 import { PackCompositionView } from "@/components/order/pack-composition-view";
+import { DeliveryProgress } from "@/components/order/delivery-progress";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 
 // ── Status meta ───────────────────────────────────────────────────────────────
@@ -350,6 +351,11 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                       {(subOrder as any).delivery.driver && (
                         <p className={`text-xs ${t.textPrimary}`}>Chauffeur: {(subOrder as any).delivery.driver.name}</p>
                       )}
+                      <DeliveryProgress
+                        status={(subOrder as any).delivery.status}
+                        pickupCode={(subOrder as any).delivery.status === "ASSIGNED" ? (subOrder as any).delivery.pickupCode : null}
+                        t={t}
+                      />
                     </div>
                   </div>
                 )}

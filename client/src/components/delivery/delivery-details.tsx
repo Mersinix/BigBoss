@@ -165,6 +165,14 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
             {d.deliveryFee > 0 && <div><span className="text-muted-foreground">Frais :</span> {fmt(d.deliveryFee)}</div>}
             <div><span className="text-muted-foreground">Créée :</span> {formatDate(d.createdAt as any)}</div>
           </div>
+          {/* Backend redacts pickupCode to every role except SUPPLIER/ADMIN — this only ever
+              renders for the operating supplier, who reads it aloud to the driver at pickup. */}
+          {viewerRole === "SUPPLIER" && (d as any).pickupCode && d.status === "ASSIGNED" && (
+            <p className="text-xs pt-1">
+              <span className="text-muted-foreground">Code de collecte pour le chauffeur : </span>
+              <span className="font-mono font-bold tracking-widest">{(d as any).pickupCode}</span>
+            </p>
+          )}
         </CardContent>
       </Card>
 

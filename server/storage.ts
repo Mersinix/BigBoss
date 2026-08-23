@@ -77,7 +77,7 @@ export interface IStorage {
   getProducts(filters?: { category?: string; supplierId?: number; search?: string }): Promise<ProductWithSupplier[]>;
 
   // Orders
-  getOrders(filters?: { cafeId?: number; supplierId?: number; deliveryId?: number }): Promise<OrderWithDetails[]>;
+  getOrders(filters?: { cafeId?: number; supplierId?: number; driverId?: number; deliveryCompanyId?: number; viewerRole?: string }): Promise<OrderWithDetails[]>;
   getOrder(id: number): Promise<OrderWithDetails | undefined>;
   resolveOrderItems(items: CreateOrderItemInput[]): Promise<CreateOrderItem[]>;
   resolvePackOrderItems(items: CreatePackOrderItem[]): Promise<ResolvedPackOrderItem[]>;
@@ -105,11 +105,13 @@ export interface IStorage {
   dispatchDelivery(deliveryId: number, supplierId: number, mode: DeliveryMode): Promise<Delivery>;
   cancelActiveDeliveryForSubOrder(subOrderId: number): Promise<Delivery | null>;
   getDeliveries(userId: number, role: string): Promise<DeliveryWithDetails[]>;
-  getDelivery(id: number): Promise<DeliveryWithDetails | undefined>;
+  getDelivery(id: number, viewerRole?: string): Promise<DeliveryWithDetails | undefined>;
   canUserAccessDelivery(userId: number, role: string, deliveryId: number): Promise<boolean>;
   acceptDelivery(deliveryId: number, deliveryCompanyId: number): Promise<Delivery>;
   assignDriver(deliveryId: number, actingUser: { id: number; role: string }, driverId: number): Promise<Delivery>;
-  updateDeliveryStatus(deliveryId: number, actingUser: { id: number; role: string }, newStatus: DeliveryStatus): Promise<Delivery>;
+  updateDeliveryStatus(deliveryId: number, actingUser: { id: number; role: string }, newStatus: DeliveryStatus, code?: string): Promise<Delivery>;
+  /** Strips confirmation codes the given viewer role has no business seeing — see storage.ts comment. */
+  redactDeliveryCodes(delivery: Delivery, viewerRole?: string): Delivery;
   getDriversForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number): Promise<User[]>;
   createDriverForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number, data: { name: string; email: string; password: string; phone?: string | null }): Promise<User>;
   getApprovedDeliveryCompanyIds(): Promise<number[]>;
@@ -520,7 +522,7 @@ export class DatabaseStorage implements IStorage {
 
   // ── Orders ──────────────────────────────────────────────────────────────────
 
-  async getOrders(filters?: { cafeId?: number; supplierId?: number; driverId?: number; deliveryCompanyId?: number }): Promise<OrderWithDetails[]> {
+  async getOrders(filters?: { cafeId?: number; supplierId?: number; driverId?: number; deliveryCompanyId?: number; viewerRole?: string }): Promise<OrderWithDetails[]> {
     const allOrders = await db.select().from(orders);
     const allItems = await db.select().from(orderItems);
     const allProducts = await db.select().from(products);
@@ -580,6 +582,9 @@ export class DatabaseStorage implements IStorage {
             pickedUpAt: delivery.pickedUpAt,
             inTransitAt: delivery.inTransitAt,
             deliveredAt: delivery.deliveredAt,
+            // Redacted to the one role that should read each — see storage.redactDeliveryCodes.
+            pickupCode: filters?.viewerRole === 'SUPPLIER' || filters?.viewerRole === 'ADMIN' || filters?.viewerRole === 'SUPER_ADMIN' ? delivery.pickupCode : null,
+            dropoffCode: filters?.viewerRole === 'CAFE_OWNER' || filters?.viewerRole === 'ADMIN' || filters?.viewerRole === 'SUPER_ADMIN' ? delivery.dropoffCode : null,
           } : null,
         };
       });
@@ -868,9 +873,18 @@ export class DatabaseStorage implements IStorage {
       // see SHOP_DELIVERY_SYNCHRONIZATION_ANALYSIS.md §6/§9). Preserves whatever value the
       // order already carries rather than inventing pricing.
       deliveryFee: order.deliveryFee ?? 0,
+      // Two-way confirmation codes — generated once, never regenerated. See shared/schema.ts
+      // deliveries.pickupCode/dropoffCode comment.
+      pickupCode: this.generateDeliveryConfirmationCode(),
+      dropoffCode: this.generateDeliveryConfirmationCode(),
     }).onConflictDoNothing().returning();
 
     return created ?? null;
+  }
+
+  /** 6-digit numeric confirmation code — short enough to read aloud/type on a phone. */
+  private generateDeliveryConfirmationCode(): string {
+    return String(Math.floor(100000 + Math.random() * 900000));
   }
 
   /**
@@ -1102,6 +1116,22 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  /**
+   * Strips confirmation codes the given viewer has no business seeing. The supplier reads
+   * pickupCode (to hand to the driver at collection); the cafe owner reads dropoffCode (to
+   * hand to the driver at drop-off). The driver never sees either value — only submits an
+   * attempt via updateDeliveryStatus. Admin/super-admin keep both for support/dispute
+   * resolution; every other role (delivery company) sees neither.
+   */
+  redactDeliveryCodes(delivery: Delivery, viewerRole?: string): Delivery {
+    if (viewerRole === 'ADMIN' || viewerRole === 'SUPER_ADMIN') return delivery;
+    return {
+      ...delivery,
+      pickupCode: viewerRole === 'SUPPLIER' ? delivery.pickupCode : null,
+      dropoffCode: viewerRole === 'CAFE_OWNER' ? delivery.dropoffCode : null,
+    };
+  }
+
   private toDeliveryWithDetails(row: Delivery, users_: User[], orders_: Order[], subOrders_: SubOrder[], orderItems_: OrderItem[]): DeliveryWithDetails {
     const userMap = new Map(users_.map((u) => [u.id, u]));
     const order = orders_.find((o) => o.id === row.orderId);
@@ -1168,11 +1198,11 @@ export class DatabaseStorage implements IStorage {
       orderIds.length ? db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds)) : Promise.resolve([]),
     ]);
     return rows
-      .map((r) => this.toDeliveryWithDetails(r, usersRows, ordersRows, subOrdersRows, orderItemsRows))
+      .map((r) => this.toDeliveryWithDetails(this.redactDeliveryCodes(r, role), usersRows, ordersRows, subOrdersRows, orderItemsRows))
       .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
   }
 
-  async getDelivery(id: number): Promise<DeliveryWithDetails | undefined> {
+  async getDelivery(id: number, viewerRole?: string): Promise<DeliveryWithDetails | undefined> {
     const [row] = await db.select().from(deliveries).where(eq(deliveries.id, id));
     if (!row) return undefined;
     const [[order], [subOrder], usersRows, orderItemsRows] = await Promise.all([
@@ -1181,7 +1211,7 @@ export class DatabaseStorage implements IStorage {
       db.select().from(users).where(inArray(users.id, [row.cafeId, row.supplierId, row.deliveryCompanyId, row.driverId].filter((x): x is number => x != null))),
       db.select().from(orderItems).where(eq(orderItems.orderId, row.orderId)),
     ]);
-    return this.toDeliveryWithDetails(row, usersRows, order ? [order] : [], subOrder ? [subOrder] : [], orderItemsRows);
+    return this.toDeliveryWithDetails(this.redactDeliveryCodes(row, viewerRole), usersRows, order ? [order] : [], subOrder ? [subOrder] : [], orderItemsRows);
   }
 
   /**
@@ -1260,7 +1290,7 @@ export class DatabaseStorage implements IStorage {
    * sub-order→order desync (never the reverse) identified in the pre-implementation
    * analysis. On PICKED_UP/IN_TRANSIT, propagates the sub-order to IN_DELIVERY.
    */
-  async updateDeliveryStatus(deliveryId: number, actingUser: { id: number; role: string }, newStatus: DeliveryStatus): Promise<Delivery> {
+  async updateDeliveryStatus(deliveryId: number, actingUser: { id: number; role: string }, newStatus: DeliveryStatus, code?: string): Promise<Delivery> {
     const [current] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
     if (!current) throw new Error('Delivery not found');
 
@@ -1280,6 +1310,21 @@ export class DatabaseStorage implements IStorage {
       const isAdmin = actingUser.role === 'ADMIN' || actingUser.role === 'SUPER_ADMIN';
       if (!isOwningCompany && !isOwningSupplier && !isAdmin) {
         throw new Error('Only the operating supplier/delivery company or an admin can cancel this delivery');
+      }
+    }
+
+    // Two-way confirmation codes gate the two "physical handoff" transitions. Only enforced
+    // when the delivery actually has a code — deliveries created before this feature have
+    // pickupCode/dropoffCode = null and remain code-exempt (see shared/schema.ts comment),
+    // so an in-flight legacy delivery is never blocked by a code it was never given.
+    if (newStatus === 'PICKED_UP' && current.pickupCode) {
+      if (!code || code.trim() !== current.pickupCode) {
+        throw new Error('Invalid confirmation code');
+      }
+    }
+    if (newStatus === 'DELIVERED' && current.dropoffCode) {
+      if (!code || code.trim() !== current.dropoffCode) {
+        throw new Error('Invalid confirmation code');
       }
     }
 

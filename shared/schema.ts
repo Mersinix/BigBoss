@@ -266,6 +266,15 @@ export const deliveries = pgTable("deliveries", {
   // to either DELIVERY_COMPANY (→ AVAILABLE, enters the existing accept/assign queue) or
   // SUPPLIER (→ ACCEPTED directly — the supplier is its own operator, no acceptance needed).
   status: deliveryStatusEnum("status").notNull().default('PENDING'),
+  // Two-way confirmation codes, generated once at creation (see createDeliveryForSubOrder) and
+  // never regenerated. pickupCode is read by the supplier and given verbally/in-person to the
+  // driver to confirm collection (ASSIGNED -> PICKED_UP); dropoffCode is read by the cafe owner
+  // and given to the driver to confirm receipt (IN_TRANSIT -> DELIVERED). Each is redacted by
+  // storage.ts/routes.ts to only the one role that should ever see it — the driver never reads
+  // either value, only submits an attempt. Null on deliveries created before this feature
+  // (updateDeliveryStatus skips the check when null — see storage.ts).
+  pickupCode: text("pickup_code"),
+  dropoffCode: text("dropoff_code"),
   // Snapshots taken at creation time — deliberately NOT foreign keys to live location data.
   // A supplier changing their profile address, or a cafe's account location changing, must
   // never rewrite the pickup/destination of a delivery that is already in progress or history.
@@ -1597,6 +1606,10 @@ export type SubOrderDeliverySummary = {
   pickedUpAt: Date | null;
   inTransitAt: Date | null;
   deliveredAt: Date | null;
+  // Redacted server-side to the one role that should see each (see storage.getOrders) —
+  // always null for every other viewer, including the driver.
+  pickupCode: string | null;
+  dropoffCode: string | null;
 };
 
 export type SubOrderWithItems = SubOrder & {

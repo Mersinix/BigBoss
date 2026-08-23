@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReorderToCart, useCancelSubOrderItems } from "@/hooks/use-orders";
 import type { OrderWithDetails } from "@shared/schema";
 import { PackCompositionView } from "@/components/order/pack-composition-view";
+import { DeliveryProgress } from "@/components/order/delivery-progress";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
@@ -704,6 +705,11 @@ export default function OrderDetailsModal({
                             {sub.delivery.driver && (
                               <p className={`text-xs mt-1 ${t.textPrimary}`}>Chauffeur: {sub.delivery.driver.name}</p>
                             )}
+                            <DeliveryProgress
+                              status={sub.delivery.status}
+                              dropoffCode={["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(sub.delivery.status) ? sub.delivery.dropoffCode : null}
+                              t={t}
+                            />
                           </div>
                         </div>
                       )}

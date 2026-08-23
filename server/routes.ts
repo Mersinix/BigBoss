@@ -1292,6 +1292,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // never written.
       if (user?.role === 'DRIVER') filters.driverId = user.id;
       if (user?.role === 'DELIVERY_COMPANY') filters.deliveryCompanyId = user.id;
+      filters.viewerRole = user?.role;
       res.json(await storage.getOrders(filters));
     } catch (e) {
       res.status(500).json({ message: "Error fetching orders" });
@@ -1616,7 +1617,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const deliveryId = parseInt(req.params.id);
       const canAccess = await storage.canUserAccessDelivery(user.id, user.role, deliveryId);
       if (!canAccess) return res.status(403).json({ message: 'Forbidden' });
-      const delivery = await storage.getDelivery(deliveryId);
+      const delivery = await storage.getDelivery(deliveryId, user.role);
       if (!delivery) return res.status(404).json({ message: 'Not found' });
       res.json(delivery);
     } catch (err: any) {
@@ -1666,7 +1667,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
       }
       broadcast('delivery_status_changed', { deliveryId, status: updated.status });
-      res.json(updated);
+      res.json(storage.redactDeliveryCodes(updated, 'SUPPLIER'));
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(409).json({ message: err.message ?? 'Unable to dispatch delivery' });
@@ -1688,7 +1689,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           deliveryId, status: updated.status, orderId: delivery.orderId, subOrderId: delivery.subOrderId,
         });
       }
-      res.json(updated);
+      res.json(storage.redactDeliveryCodes(updated, 'DELIVERY_COMPANY'));
     } catch (err: any) {
       res.status(409).json({ message: err.message ?? 'Unable to accept delivery' });
     }
@@ -1717,7 +1718,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           deliveryId, status: updated.status, orderId: delivery.orderId, subOrderId: delivery.subOrderId,
         });
       }
-      res.json(updated);
+      res.json(storage.redactDeliveryCodes(updated, user.role));
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(409).json({ message: err.message ?? 'Unable to assign driver' });
@@ -1729,10 +1730,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = await storage.getUser(req.session.userId!);
       if (!user) return res.status(401).json({ message: 'Unauthorized' });
       const deliveryId = parseInt(req.params.id);
-      const { status } = z.object({
+      const { status, code } = z.object({
         status: z.enum(['PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED']),
+        code: z.string().trim().max(32).optional(),
       }).parse(req.body);
-      const updated = await storage.updateDeliveryStatus(deliveryId, { id: user.id, role: user.role }, status);
+      const updated = await storage.updateDeliveryStatus(deliveryId, { id: user.id, role: user.role }, status, code);
       const delivery = await storage.getDelivery(deliveryId);
       if (delivery) {
         await storage.refreshOrderMessagingState(delivery.orderId);
@@ -1754,10 +1756,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           }
         }
       }
-      res.json(updated);
+      res.json(storage.redactDeliveryCodes(updated, user.role));
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
-      res.status(409).json({ message: err.message ?? 'Unable to update delivery status' });
+      const message = err?.message ?? 'Unable to update delivery status';
+      res.status(message === 'Invalid confirmation code' ? 400 : 409).json({ message });
     }
   });
 

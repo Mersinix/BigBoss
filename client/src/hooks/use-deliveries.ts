@@ -89,11 +89,11 @@ export function useAssignDriver() {
 export function useUpdateDeliveryStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ deliveryId, status }: { deliveryId: number; status: DeliveryStatus }) => {
+    mutationFn: async ({ deliveryId, status, code }: { deliveryId: number; status: DeliveryStatus; code?: string }) => {
       const res = await fetch(buildUrl(api.deliveries.updateStatus.path, { id: deliveryId }), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(code ? { status, code } : { status }),
         credentials: "include",
       });
       if (!res.ok) {

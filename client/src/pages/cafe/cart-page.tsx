@@ -48,6 +48,13 @@ export default function CartPage() {
   // be orderable/counted — see freezing logic below and orderablePackItems.
   const { data: packAvailability = {} } = usePackAvailability(packItems.map((p) => p.packId));
   const orderablePackItems = packItems.filter((p) => !isPackFrozen(packAvailability[p.packId]));
+  // The confirmed live Pack detail — null while the check is still loading, still
+  // "unknown" (a failed/errored check, which must never be treated as stale data
+  // to display), or genuinely confirmed unavailable with no detail returned.
+  const liveDetailOf = (packId: number) => {
+    const result = packAvailability[packId];
+    return result && result.status !== "unknown" ? result.detail : null;
+  };
 
   const savedAccountAddress = userToAccountAddress(user as any);
 
@@ -104,7 +111,7 @@ export default function CartPage() {
   // Frozen (currently unavailable) Packs are visible in the cart but must never
   // contribute to a total the Coffee Owner could act on — sum only the orderable
   // ones, at their current live price when known (see Scenario E: price refresh).
-  const totalPack = orderablePackItems.reduce((s, p) => s + (packAvailability[p.packId]?.price ?? p.unitPrice) * p.quantity, 0);
+  const totalPack = orderablePackItems.reduce((s, p) => s + (liveDetailOf(p.packId)?.price ?? p.unitPrice) * p.quantity, 0);
   const hasShop = items.length > 0 || packItems.length > 0;
   // Distinct from hasShop: a cart holding only a frozen Pack still "has SHOP content"
   // (must stay visible), but there is nothing left to actually order.
@@ -439,14 +446,14 @@ export default function CartPage() {
                 })}
 
                 {packItems.map((pack) => {
-                  const detail = packAvailability[pack.packId];
-                  const frozen = isPackFrozen(detail);
-                  // Only ever refresh display fields from the live Pack while it's actually
-                  // available — a frozen Pack keeps showing its last-known info, since the
-                  // live fetch either failed or explicitly says it's not orderable right now.
-                  const displayName = !frozen && detail ? detail.name : pack.packName;
-                  const displayImage = !frozen && detail ? detail.imageUrl : pack.packImageUrl;
-                  const displayUnitPrice = !frozen && detail ? detail.price : pack.unitPrice;
+                  const frozen = isPackFrozen(packAvailability[pack.packId]);
+                  const liveDetail = liveDetailOf(pack.packId);
+                  // Only ever refresh display fields from a CONFIRMED live Pack — a frozen
+                  // Pack keeps showing its last-known info, and so does one whose check
+                  // simply failed/errored (liveDetail is null there too; see isPackFrozen).
+                  const displayName = !frozen && liveDetail ? liveDetail.name : pack.packName;
+                  const displayImage = !frozen && liveDetail ? liveDetail.imageUrl : pack.packImageUrl;
+                  const displayUnitPrice = !frozen && liveDetail ? liveDetail.price : pack.unitPrice;
                   return (
                   <div
                     key={`pack-${pack.packId}`}

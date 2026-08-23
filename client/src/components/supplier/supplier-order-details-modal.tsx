@@ -264,13 +264,14 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                                 <div key={variant.key} className="flex items-center justify-between gap-2">
                                   <span className={`text-xs ${cancelled ? `line-through ${t.textSubtle}` : t.textMuted}`}>
                                     {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                                    <span className="ml-1.5">×{variant.quantity}</span>
                                   </span>
                                   <span className="flex items-center gap-1.5 shrink-0">
                                     {cancelled && (
                                       <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé par le café</Badge>
                                     )}
                                     <span className={`text-xs font-semibold ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>
-                                      ×{variant.quantity} {fmt(variant.totalPrice)}
+                                      {fmt(variant.totalPrice)}
                                     </span>
                                   </span>
                                 </div>

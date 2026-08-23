@@ -16,7 +16,7 @@ import {
   orderReturns,
   deliveries,
   type OrderReturn, type InsertOrderReturn,
-  type Delivery, type DeliveryStatus, type DeliveryMode, type DeliveryWithDetails, type DeliveryOrderItemDetail, type GeoLocation,
+  type Delivery, type DeliveryStatus, type DeliveryMode, type DeliveryWithDetails, type GeoLocation,
   type LandingConfig, type Prospect, type InsertProspect, type ProspectStats,
   type ConversationSummary, type ConversationDetail, type ConversationMessageRow, type EligibleContact,
   type InsertUser, type User,
@@ -1099,23 +1099,6 @@ export class DatabaseStorage implements IStorage {
     CANCELLED: [],
   };
 
-  private buildDeliveryItemDetails(items: OrderItem[]): DeliveryOrderItemDetail[] {
-    return items.map((item) => {
-      const snap = (item.snapshot ?? {}) as any;
-      const isPack = item.packId != null;
-      return {
-        id: item.id,
-        productName: isPack ? (item.packName ?? snap.packName ?? 'Pack') : (snap.productName ?? 'Product'),
-        flavorName: snap.flavorName ?? null,
-        sizeName: snap.sizeName ?? null,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice: item.totalPrice ?? item.unitPrice * item.quantity,
-        packName: isPack ? (item.packName ?? snap.packName ?? null) : null,
-      };
-    });
-  }
-
   /**
    * Strips confirmation codes the given viewer has no business seeing. The supplier reads
    * pickupCode (to hand to the driver at collection); the cafe owner reads dropoffCode (to
@@ -1132,15 +1115,23 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  private toDeliveryWithDetails(row: Delivery, users_: User[], orders_: Order[], subOrders_: SubOrder[], orderItems_: OrderItem[]): DeliveryWithDetails {
+  private toDeliveryWithDetails(row: Delivery, users_: User[], orders_: Order[], subOrders_: SubOrder[], orderItems_: OrderItem[], products_: Product[]): DeliveryWithDetails {
     const userMap = new Map(users_.map((u) => [u.id, u]));
+    const productMap = new Map(products_.map((p) => [p.id, p]));
     const order = orders_.find((o) => o.id === row.orderId);
     const subOrder = subOrders_.find((s) => s.id === row.subOrderId);
     const cafe = userMap.get(row.cafeId);
     const supplier = userMap.get(row.supplierId);
     const company = row.deliveryCompanyId ? userMap.get(row.deliveryCompanyId) : undefined;
     const driver = row.driverId ? userMap.get(row.driverId) : undefined;
-    const itemsForThisSubOrder = orderItems_.filter((i) => i.subOrderId === row.subOrderId);
+    // Same shape as OrderWithDetails.subOrders[].items (see getOrders) — the exact raw,
+    // joined order items, including snapshot/packId/productId — so every delivery-detail
+    // surface can reuse the exact same groupOrderItemsByProduct/PackCompositionView
+    // rendering the Coffee Owner order-details modal already uses, instead of a second,
+    // lossy flattened representation.
+    const itemsForThisSubOrder = orderItems_
+      .filter((i) => i.subOrderId === row.subOrderId)
+      .map((i) => ({ ...i, product: (i.productId != null ? productMap.get(i.productId) : undefined) ?? {} as Product }));
     const allItemsForOrder = orderItems_.filter((i) => i.orderId === row.orderId);
     return {
       ...row,
@@ -1156,7 +1147,7 @@ export class DatabaseStorage implements IStorage {
       supplier: { id: row.supplierId, name: supplier?.name ?? 'Unknown', phone: supplier?.phone ?? null, locationAddress: supplier?.locationAddress ?? null, locationLat: supplier?.locationLat ?? null, locationLng: supplier?.locationLng ?? null },
       deliveryCompany: company ? { id: company.id, name: company.name } : null,
       driver: driver ? { id: driver.id, name: driver.name, phone: driver.phone, locationLat: driver.locationLat ?? null, locationLng: driver.locationLng ?? null } : null,
-      items: this.buildDeliveryItemDetails(itemsForThisSubOrder),
+      items: itemsForThisSubOrder,
     };
   }
 
@@ -1197,8 +1188,10 @@ export class DatabaseStorage implements IStorage {
       userIds.length ? db.select().from(users).where(inArray(users.id, userIds)) : Promise.resolve([]),
       orderIds.length ? db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds)) : Promise.resolve([]),
     ]);
+    const productIds = Array.from(new Set(orderItemsRows.map((i) => i.productId).filter((x): x is number => x != null)));
+    const productsRows = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
     return rows
-      .map((r) => this.toDeliveryWithDetails(this.redactDeliveryCodes(r, role), usersRows, ordersRows, subOrdersRows, orderItemsRows))
+      .map((r) => this.toDeliveryWithDetails(this.redactDeliveryCodes(r, role), usersRows, ordersRows, subOrdersRows, orderItemsRows, productsRows))
       .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
   }
 
@@ -1211,7 +1204,9 @@ export class DatabaseStorage implements IStorage {
       db.select().from(users).where(inArray(users.id, [row.cafeId, row.supplierId, row.deliveryCompanyId, row.driverId].filter((x): x is number => x != null))),
       db.select().from(orderItems).where(eq(orderItems.orderId, row.orderId)),
     ]);
-    return this.toDeliveryWithDetails(this.redactDeliveryCodes(row, viewerRole), usersRows, order ? [order] : [], subOrder ? [subOrder] : [], orderItemsRows);
+    const productIds = Array.from(new Set(orderItemsRows.map((i) => i.productId).filter((x): x is number => x != null)));
+    const productsRows = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
+    return this.toDeliveryWithDetails(this.redactDeliveryCodes(row, viewerRole), usersRows, order ? [order] : [], subOrder ? [subOrder] : [], orderItemsRows, productsRows);
   }
 
   /**

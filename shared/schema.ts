@@ -317,17 +317,6 @@ export type Delivery = typeof deliveries.$inferSelect;
 export type DeliveryStatus = 'PENDING' | 'AVAILABLE' | 'ACCEPTED' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type DeliveryMode = 'DELIVERY_COMPANY' | 'SUPPLIER';
 
-export type DeliveryOrderItemDetail = {
-  id: number;
-  productName: string;
-  flavorName: string | null;
-  sizeName: string | null;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  packName?: string | null;
-};
-
 // Full detail payload — deliberately includes everything a Supplier / Delivery Company /
 // Driver / Admin needs to decide on or perform a delivery without a second fetch (order
 // items, cafe + supplier contact info, live driver/supplier coordinates for the navigation
@@ -341,7 +330,11 @@ export type DeliveryWithDetails = Delivery & {
   supplier: { id: number; name: string; phone: string | null; locationAddress: string | null; locationLat: string | null; locationLng: string | null };
   deliveryCompany: { id: number; name: string } | null;
   driver: { id: number; name: string; phone: string | null; locationLat: string | null; locationLng: string | null } | null;
-  items: DeliveryOrderItemDetail[];
+  // Same shape as SubOrderWithItems.items — the raw, joined order items (snapshot, packId,
+  // productId included) — so every delivery-detail surface can reuse the exact same
+  // groupOrderItemsByProduct/PackCompositionView rendering the Coffee Owner order-details
+  // modal uses, rather than a second, lossy flattened product representation.
+  items: (OrderItem & { product: Product; flavorName?: string | null; sizeName?: string | null })[];
 };
 
 // ── Category System ──────────────────────────────────────────────────────────

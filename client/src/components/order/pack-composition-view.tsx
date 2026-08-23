@@ -60,7 +60,7 @@ export function PackCompositionView({
 
   if (!historicalComposition && isLoading) {
     return (
-      <div className={`mt-2 rounded-xl p-3 space-y-1.5 ${t.innerCard} border`}>
+      <div className="mt-2 space-y-1.5">
         {[1, 2].map(i => (
           <div key={i} className={`h-4 rounded animate-pulse ${t.dk ? "bg-gray-700" : "bg-gray-200"}`} />
         ))}
@@ -79,9 +79,11 @@ export function PackCompositionView({
   const multiplier = historicalComposition ? 1 : quantity;
   const groups = groupPackIncludedProducts(rows, multiplier);
 
+  // Rendered directly on the parent card's own background — no inner container/border/bg,
+  // so this reads as a section of the Produits card, not a card nested inside a card.
   return (
-    <div className={`mt-2 rounded-xl p-3 border ${t.innerCard}`}>
-      <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textSubtle}`}>
+    <div className="mt-2">
+      <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${t.textPrimary}`}>
         Composition du pack × {quantity}
       </p>
       <div className="space-y-2.5">
@@ -97,22 +99,22 @@ export function PackCompositionView({
                     className="w-7 h-7 rounded-lg object-cover shrink-0"
                   />
                 )}
-                <span className="font-medium">{group.productName}</span>
+                <span className={`font-medium ${t.textPrimary}`}>{group.productName}</span>
               </div>
               {(group.brandName || group.categoryName || group.subCategoryName) && (
-                <p className={`mt-1 text-[10px] ${t.textSubtle}`}>
+                <p className={`mt-1 text-[10px] ${t.textPrimary}`}>
                   {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
                 </p>
               )}
               <div className="mt-1 space-y-0.5">
                 {group.distributions.map((d, i) => (
                   <div key={i} className="flex items-center justify-between gap-2">
-                    <span className={t.textMuted}>
+                    <span className={t.textPrimary}>
                       {d.flavorName && <span>Saveur: <b>{d.flavorName}</b></span>}
                       {d.flavorName && d.sizeName && <span className="mx-1">·</span>}
                       {d.sizeName && <span>Taille: <b>{d.sizeName}</b></span>}
                     </span>
-                    <span className={`font-bold shrink-0 ${t.textMuted}`}>×{d.quantity}</span>
+                    <span className={`font-bold shrink-0 ${t.textPrimary}`}>×{d.quantity}</span>
                   </div>
                 ))}
               </div>

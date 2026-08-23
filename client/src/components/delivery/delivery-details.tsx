@@ -1,9 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Store, User, MapPin, ArrowRight, Package, Truck, Building2, Phone } from "lucide-react";
+import { Store, User, MapPin, ArrowRight, Package, Truck, Building2, Phone, Layers } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { formatDate } from "@/lib/format";
+import { useThemeStore } from "@/store/theme-store";
 import DeliveryRouteMap from "@/components/delivery/delivery-route-map";
+import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
+import { PackCompositionView, type PackCompositionTheme } from "@/components/order/pack-composition-view";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 export const DELIVERY_STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -43,8 +46,19 @@ type Props = {
  */
 export default function DeliveryDetails({ delivery: d, viewerRole, showNavigation, driverLocation, actions }: Props) {
   const fmt = useFormatCurrency();
+  const isDark = useThemeStore((s) => s.isDark);
   const statusMeta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700" };
   const stage = d.status === "PICKED_UP" || d.status === "IN_TRANSIT" || d.status === "DELIVERED" ? "TO_DESTINATION" : "TO_PICKUP";
+  // PackCompositionView is shared with the Coffee Owner/Supplier order-details modals —
+  // this page has no manual light/dark toggle of its own, so bridge the current theme store
+  // into the same minimal structural theme those modals pass it.
+  const packTheme: PackCompositionTheme = {
+    dk: isDark,
+    innerCard: isDark ? "bg-gray-800/60 border-gray-700/40" : "bg-muted/50 border-border",
+    textSubtle: "text-muted-foreground",
+    textPrimary: "text-foreground",
+    textMuted: "text-muted-foreground",
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -120,21 +134,72 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
             <Package className="w-3.5 h-3.5" /> Produits
           </p>
           <div className="divide-y divide-border/50">
-            {d.items.map((item) => (
-              <div key={item.id} className="py-2 flex items-center justify-between gap-2 text-sm">
-                <div className="min-w-0">
-                  <p className="font-medium truncate">{item.productName}</p>
-                  {(item.flavorName || item.sizeName) && (
-                    <p className="text-xs text-muted-foreground">{[item.flavorName, item.sizeName].filter(Boolean).join(" · ")}</p>
-                  )}
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xs text-muted-foreground block">×{item.quantity}</span>
-                  <span className="font-semibold text-xs">{fmt(item.totalPrice)}</span>
+            {groupOrderItemsByProduct(d.items ?? []).map((group) => (
+              <div key={`product-${group.productId}`} className="py-2">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shrink-0 bg-muted">
+                    {group.productImageUrl
+                      ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
+                      : <Package className="w-4 h-4 text-muted-foreground" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate">{group.productName}</p>
+                    {(group.brandName || group.categoryName || group.subCategoryName) && (
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+                    <div className="mt-1 space-y-0.5">
+                      {group.variants.map((variant) => {
+                        const cancelled = variant.status === "CANCELLED";
+                        return (
+                          <div key={variant.key} className="flex items-center justify-between gap-2 text-xs">
+                            <span className={cancelled ? "line-through text-muted-foreground/60" : "text-muted-foreground"}>
+                              {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                              <span className="ml-1.5">×{variant.quantity}</span>
+                            </span>
+                            <span className={`font-semibold shrink-0 ${cancelled ? "line-through text-muted-foreground/60" : ""}`}>
+                              {fmt(variant.totalPrice)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
-            {d.items.length === 0 && <p className="text-xs text-muted-foreground py-2">Aucun article</p>}
+            {(d.items ?? []).filter((item: any) => !!item.packId).map((item: any, idx: number) => {
+              const snapshot = item.snapshot as any;
+              const packSnapshot = snapshot?.kind === "PACK" ? snapshot : null;
+              const itemName = packSnapshot?.packName ?? item.packName ?? "Pack";
+              const itemImage = packSnapshot?.packImageUrl;
+              const cancelled = item.status === "CANCELLED";
+              return (
+                <div key={`pack-${item.id ?? idx}`} className="py-2">
+                  <div className="flex items-start gap-2.5">
+                    <div className={`w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center shrink-0 ${cancelled ? "bg-muted" : "bg-amber-500/15"}`}>
+                      {itemImage
+                        ? <img src={itemImage} alt="" className={`w-full h-full object-cover ${cancelled ? "opacity-40 grayscale" : ""}`} />
+                        : <Layers className={`w-4 h-4 ${cancelled ? "text-muted-foreground" : "text-amber-500"}`} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`font-medium text-sm truncate ${cancelled ? "line-through text-muted-foreground/60" : ""}`}>{itemName}</p>
+                      {!cancelled && (
+                        <PackCompositionView packId={item.packId} quantity={item.quantity} snapshot={packSnapshot} t={packTheme} />
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="text-xs text-muted-foreground block">×{item.quantity}</span>
+                      <span className={`font-semibold text-sm ${cancelled ? "line-through text-muted-foreground/60" : ""}`}>
+                        {fmt((item.unitPrice ?? 0) * item.quantity)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {(!d.items || d.items.length === 0) && <p className="text-xs text-muted-foreground py-2">Aucun article</p>}
           </div>
           <div className="flex justify-between items-center pt-2 mt-1 border-t border-border/50">
             <span className="text-xs font-medium text-muted-foreground">Sous-total</span>

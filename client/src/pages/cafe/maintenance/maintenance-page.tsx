@@ -420,8 +420,8 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
           </button>
         </div>
         <div className="relative max-w-3xl mx-auto text-center">
-          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}><Wrench className={`w-8 h-8 ${t.dk ? "text-orange-400" : "text-white"}`} /></div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">BigBoss <span className={t.dk ? "text-orange-400" : "text-orange-200"}>MAINTENANCE</span></h1>
+          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}><Wrench className={`w-8 h-8 ${t.dk ? "text-amber-400" : "text-white"}`} /></div>
+          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">BigBoss <span className={t.dk ? "text-amber-400" : "text-amber-200"}>MAINTENANCE</span></h1>
           <p className={`text-base mb-4 max-w-xl mx-auto ${t.dk ? "text-gray-400" : "text-orange-100"}`}>Trouvez des techniciens certifiés pour la maintenance et réparation de vos équipements de café</p>
           <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${t.dk ? "text-gray-400" : "text-orange-100"}`}><span className="flex items-center gap-1.5"><Users className="w-4 h-4" />{profiles.filter((item) => item.available).length} techniciens disponibles</span><span className="flex items-center gap-1.5"><Shield className="w-4 h-4" />{profiles.filter((item) => item.certifications.length > 0).length} certifiés</span><span className="flex items-center gap-1.5"><Zap className="w-4 h-4" />Intervention rapide</span></div>
         </div>

@@ -326,10 +326,10 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           </div>
           <div className="max-w-3xl mx-auto text-center">
           <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
-            <Printer className={`w-8 h-8 ${isDark ? "text-blue-400" : "text-white"}`} />
+            <Printer className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
           </div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-            BigBoss <span className={isDark ? "text-blue-400" : "text-blue-200"}>PRINT</span>
+            BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>PRINT</span>
           </h1>
           <p className={`text-base mb-4 max-w-xl mx-auto ${isDark ? "text-gray-400" : "text-blue-100"}`}>
             Commandez vos supports imprimés professionnels directement depuis la plateforme.

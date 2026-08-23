@@ -704,10 +704,10 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
           </div>
           <div className="max-w-3xl mx-auto text-center">
           <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
-            <Megaphone className={`w-8 h-8 ${isDark ? "text-purple-400" : "text-white"}`} />
+            <Megaphone className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
           </div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-            BigBoss <span className={isDark ? "text-purple-400" : "text-purple-200"}>MARKETING</span>
+            BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>MARKETING</span>
           </h1>
           <p className={`text-base mb-4 max-w-xl mx-auto ${isDark ? "text-gray-400" : "text-purple-100"}`}>
             Boostez la visibilité de votre café avec des experts marketing dédiés à la restauration

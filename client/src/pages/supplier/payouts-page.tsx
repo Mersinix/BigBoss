@@ -1,25 +1,45 @@
-import { useCurrency } from "@/hooks/use-currency";
+import { useMemo, useState } from "react";
+import { useOrders } from "@/hooks/use-orders";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DollarSign, CreditCard, Clock } from "lucide-react";
+import { DollarSign, CreditCard, Percent } from "lucide-react";
+import { formatDate } from "@/lib/format";
+import {
+  buildFinancialRows, PAYOUT_STATUS_META, PAYMENT_COLLECTION_META, payoutReference,
+} from "@/lib/financial-rows";
+import {
+  FinancialFilterBar, applyFinancialFilters, DEFAULT_FINANCIAL_FILTERS,
+} from "@/components/financial/financial-filter-bar";
 
-const fakePayouts = [
-  { id: "PAY-001", period: "Mar 2026", amount: 2680, fee: 134, net: 2546, status: "Paid", date: "Apr 5, 2026", method: "Bank Transfer" },
-  { id: "PAY-002", period: "Feb 2026", amount: 1960, fee: 98, net: 1862, status: "Paid", date: "Mar 5, 2026", method: "Bank Transfer" },
-  { id: "PAY-003", period: "Jan 2026", amount: 2340, fee: 117, net: 2223, status: "Paid", date: "Feb 5, 2026", method: "Bank Transfer" },
-  { id: "PAY-004", period: "Apr 2026", amount: 3100, fee: 155, net: 2945, status: "Pending", date: "May 5, 2026", method: "Bank Transfer" },
+const STATUS_OPTIONS = [
+  { value: "ALL", label: "Tous les statuts" },
+  { value: "DUE", label: "À verser" },
+  { value: "UPCOMING", label: "À venir" },
+  { value: "CANCELLED", label: "Annulé" },
 ];
 
-const statusStyle: Record<string, string> = {
-  Paid: "bg-green-100 text-green-700",
-  Pending: "bg-amber-400 text-amber-700",
-};
-
+// Payout data is derived live from the same orders/sub-orders the rest of the app uses —
+// no separate payouts table exists (see lib/financial-rows.ts). Real-time updates come for
+// free: use-realtime.ts already invalidates ["/api/orders"] on every order/sub-order/
+// delivery status change, and useOrders() reads that same query.
 export default function PayoutsPage() {
-  const currency = useCurrency();
-  const totalPaid = fakePayouts.filter((p) => p.status === "Paid").reduce((s, p) => s + p.net, 0);
+  const fmt = useFormatCurrency();
+  const { data: orders = [], isLoading } = useOrders();
+  const [filters, setFilters] = useState(DEFAULT_FINANCIAL_FILTERS);
+
+  const allRows = useMemo(() => buildFinancialRows(orders), [orders]);
+  const rows = useMemo(
+    () => applyFinancialFilters(allRows, filters, { statusField: "payoutStatus", amountField: "netAmount" })
+      .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime()),
+    [allRows, filters],
+  );
+
+  const totalDue = allRows.filter((r) => r.payoutStatus === "DUE").reduce((s, r) => s + r.netAmount, 0);
+  const totalUpcoming = allRows.filter((r) => r.payoutStatus === "UPCOMING").reduce((s, r) => s + r.netAmount, 0);
+  const totalCommission = allRows.filter((r) => r.payoutStatus !== "CANCELLED").reduce((s, r) => s + r.commission, 0);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -32,54 +52,80 @@ export default function PayoutsPage() {
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-green-500/10 rounded-xl p-3"><DollarSign className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Total Paid Out</p><p className="text-2xl font-bold text-green-600">{currency} {totalPaid.toLocaleString()}</p></div>
+            <div><p className="text-xs text-muted-foreground">À verser (livrées)</p><p className="text-2xl font-bold text-green-600">{fmt(totalDue)}</p></div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Pending Payout</p><p className="text-2xl font-bold text-amber-600">{currency} 2,945</p></div>
+            <div className="bg-amber-500/10 rounded-xl p-3"><CreditCard className="w-5 h-5 text-amber-600" /></div>
+            <div><p className="text-xs text-muted-foreground">À venir (en cours)</p><p className="text-2xl font-bold text-amber-600">{fmt(totalUpcoming)}</p></div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-primary/10 rounded-xl p-3"><CreditCard className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-xs text-muted-foreground">Next Payout Date</p><p className="text-xl font-bold">May 5, 2026</p></div>
+            <div className="bg-primary/10 rounded-xl p-3"><Percent className="w-5 h-5 text-primary" /></div>
+            <div><p className="text-xs text-muted-foreground">Commission plateforme (5%)</p><p className="text-2xl font-bold">{fmt(totalCommission)}</p></div>
           </CardContent>
         </Card>
       </div>
 
+      <FinancialFilterBar
+        filters={filters}
+        onChange={setFilters}
+        statusOptions={STATUS_OPTIONS}
+        searchPlaceholder="Café..."
+      />
+
       <Card>
         <CardHeader><CardTitle className="text-base font-semibold">Payout History</CardTitle></CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Gross</TableHead>
-                <TableHead>Platform Fee (5%)</TableHead>
-                <TableHead>Net</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fakePayouts.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{p.id}</TableCell>
-                  <TableCell className="font-medium">{p.period}</TableCell>
-                  <TableCell>{currency} {p.amount.toLocaleString()}</TableCell>
-                  <TableCell className="text-muted-foreground">{currency} {p.fee}</TableCell>
-                  <TableCell className="font-semibold text-green-600">{currency} {p.net.toLocaleString()}</TableCell>
-                  <TableCell className="text-muted-foreground">{p.method}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{p.date}</TableCell>
-                  <TableCell><Badge variant="secondary" className={statusStyle[p.status]}>{p.status}</Badge></TableCell>
+          {isLoading ? (
+            <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Commande</TableHead>
+                  <TableHead>Café</TableHead>
+                  <TableHead>Brut</TableHead>
+                  <TableHead>Commission (5%)</TableHead>
+                  <TableHead>Net</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Paiement</TableHead>
+                  <TableHead>Statut</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.subOrderId} data-testid={`row-payout-${r.subOrderId}`}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{payoutReference(r.subOrderId)}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">#{String(r.orderId).padStart(6, "0")}</TableCell>
+                    <TableCell className="font-medium">{r.cafeName}</TableCell>
+                    <TableCell>{fmt(r.subtotal)}</TableCell>
+                    <TableCell className="text-muted-foreground">{fmt(r.commission)}</TableCell>
+                    <TableCell className="font-semibold text-green-600">{fmt(r.netAmount)}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{r.createdAt ? formatDate(r.createdAt as any) : "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={PAYMENT_COLLECTION_META[r.paymentCollectionStatus].className}>
+                        {PAYMENT_COLLECTION_META[r.paymentCollectionStatus].label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={PAYOUT_STATUS_META[r.payoutStatus].className}>
+                        {PAYOUT_STATUS_META[r.payoutStatus].label}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-10">Aucun payout</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,21 +6,47 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DollarSign, CreditCard, TrendingUp } from "lucide-react";
+import { formatDate } from "@/lib/format";
+import type { OrderWithDetails } from "@shared/schema";
+import {
+  buildFinancialRows, PAYOUT_STATUS_META, PAYMENT_COLLECTION_META, payoutReference,
+} from "@/lib/financial-rows";
+import {
+  FinancialFilterBar, applyFinancialFilters, DEFAULT_FINANCIAL_FILTERS,
+} from "@/components/financial/financial-filter-bar";
 
+const STATUS_OPTIONS = [
+  { value: "ALL", label: "Tous les statuts" },
+  { value: "DUE", label: "À verser" },
+  { value: "UPCOMING", label: "À venir" },
+  { value: "CANCELLED", label: "Annulé" },
+];
+
+// Admin's payout/settlement view across every supplier — built from the same real
+// orders/sub-orders as the Supplier Payouts page (see lib/financial-rows.ts), never a
+// separate mock/demo dataset. One row per supplier sub-order so a multi-supplier order's
+// financials are never collapsed into a single (wrong) supplier/amount — the previous
+// version used order.totalAmount / order.supplier, which is null for multi-supplier orders.
 export default function PaymentsPage() {
   const fmt = useFormatCurrency();
-  const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
-  // NOTE: 'currency' was renamed to 'fmt' — all {currency}... expressions below use fmt(...)
+  const { data: orders = [], isLoading } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
+  const [filters, setFilters] = useState(DEFAULT_FINANCIAL_FILTERS);
 
-  const totalRevenue = orders
-    .filter((o) => o.status === "DELIVERED")
-    .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  const allRows = useMemo(() => buildFinancialRows(orders), [orders]);
+  const supplierOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const r of allRows) map.set(r.supplierId, r.supplierName);
+    return Array.from(map.entries()).map(([value, label]) => ({ value: String(value), label }));
+  }, [allRows]);
+  const rows = useMemo(
+    () => applyFinancialFilters(allRows, filters, { statusField: "payoutStatus", amountField: "netAmount" })
+      .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime()),
+    [allRows, filters],
+  );
 
-  const pendingAmount = orders
-    .filter((o) => !["DELIVERED", "CANCELLED"].includes(o.status))
-    .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-
-  const commission = Math.round(totalRevenue * 0.05);
+  const totalRevenue = allRows.filter((r) => r.payoutStatus === "DUE").reduce((s, r) => s + r.subtotal, 0);
+  const pendingAmount = allRows.filter((r) => r.payoutStatus === "UPCOMING").reduce((s, r) => s + r.subtotal, 0);
+  const commission = allRows.filter((r) => r.payoutStatus !== "CANCELLED").reduce((s, r) => s + r.commission, 0);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -35,7 +62,7 @@ export default function PaymentsPage() {
               <DollarSign className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground font-medium">Total Revenue</p>
+              <p className="text-xs text-muted-foreground font-medium">Revenue (livrées)</p>
               <p className="text-2xl font-bold text-green-600">{fmt(totalRevenue)}</p>
             </div>
           </CardContent>
@@ -64,6 +91,14 @@ export default function PaymentsPage() {
         </Card>
       </div>
 
+      <FinancialFilterBar
+        filters={filters}
+        onChange={setFilters}
+        statusOptions={STATUS_OPTIONS}
+        searchPlaceholder="Café ou fournisseur..."
+        supplierOptions={supplierOptions}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Payment Transactions</CardTitle>
@@ -77,33 +112,44 @@ export default function PaymentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>ID</TableHead>
                   <TableHead>Order #</TableHead>
                   <TableHead>Cafe</TableHead>
+                  <TableHead>Supplier</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Commission (5%)</TableHead>
+                  <TableHead>Net</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Paiement</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orders.map((o) => (
-                  <TableRow key={o.id}>
-                    <TableCell className="font-medium">#{o.id}</TableCell>
-                    <TableCell>{o.cafe?.name}</TableCell>
-                    <TableCell>{fmt(o.totalAmount || 0)}</TableCell>
-                    <TableCell className="text-muted-foreground">{fmt(Math.round((o.totalAmount || 0) * 0.05))}</TableCell>
+                {rows.map((r) => (
+                  <TableRow key={r.subOrderId} data-testid={`row-payment-${r.subOrderId}`}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{payoutReference(r.subOrderId)}</TableCell>
+                    <TableCell className="font-medium">#{String(r.orderId).padStart(6, "0")}</TableCell>
+                    <TableCell>{r.cafeName}</TableCell>
+                    <TableCell>{r.supplierName}</TableCell>
+                    <TableCell>{fmt(r.subtotal)}</TableCell>
+                    <TableCell className="text-muted-foreground">{fmt(r.commission)}</TableCell>
+                    <TableCell className="font-semibold">{fmt(r.netAmount)}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{r.createdAt ? formatDate(r.createdAt as any) : "—"}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={o.status === "DELIVERED" ? "bg-green-100 text-green-700" : "bg-amber-400 text-amber-700"}
-                      >
-                        {o.status === "DELIVERED" ? "Paid" : "Pending"}
+                      <Badge variant="secondary" className={PAYMENT_COLLECTION_META[r.paymentCollectionStatus].className}>
+                        {PAYMENT_COLLECTION_META[r.paymentCollectionStatus].label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={PAYOUT_STATUS_META[r.payoutStatus].className}>
+                        {PAYOUT_STATUS_META[r.payoutStatus].label}
                       </Badge>
                     </TableCell>
                   </TableRow>
                 ))}
-                {orders.length === 0 && (
+                {rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">No payment records</TableCell>
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-10">No payment records</TableCell>
                   </TableRow>
                 )}
               </TableBody>

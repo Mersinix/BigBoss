@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
-  Sun, Moon, X, User,
+  Sun, Moon, X, User, FileText, Wallet,
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { formatDate } from "@/lib/format";
@@ -18,6 +18,8 @@ import { PackCompositionView } from "@/components/order/pack-composition-view";
 import { DeliveryProgress } from "@/components/order/delivery-progress";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 import { getSupplierStatusEntries } from "@/lib/order-status";
+import OrderInvoiceModal from "@/components/financial/order-invoice-modal";
+import PayoutInfoModal from "@/components/financial/payout-info-modal";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
 
@@ -232,12 +234,18 @@ type Props = {
   showReorder?: boolean;
   /** Show per-supplier-order cancellation (for Cafe Owner). Default: false. */
   showCancel?: boolean;
+  /** Show the "View Invoice" action. Default: true. */
+  showInvoice?: boolean;
+  /** Show the "Payout Info" action. Default: true. */
+  showPayoutInfo?: boolean;
 };
 
 export default function OrderDetailsModal({
   open, onClose, order,
   showReorder = true,
   showCancel = false,
+  showInvoice = true,
+  showPayoutInfo = true,
 }: Props) {
   const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
@@ -247,6 +255,8 @@ export default function OrderDetailsModal({
   const fmt = useFormatCurrency();
   // Which sub-order's item-selection cancellation dialog is open, if any.
   const [cancelTarget, setCancelTarget] = useState<any | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [payoutInfoOpen, setPayoutInfoOpen] = useState(false);
 
   if (!order) return null;
 
@@ -846,6 +856,41 @@ export default function OrderDetailsModal({
                   {isReordering ? "Chargement…" : "Recommander"}
                 </Button>
               )}
+
+              {/* Digital invoice — built live from this same order's data, see
+                  components/financial/order-invoice-modal.tsx */}
+              {showInvoice && (
+                <Button
+                  variant="outline"
+                  className={`flex-1 min-w-[120px] rounded-xl h-11 font-semibold gap-2 transition-colors
+                    ${t.dk
+                      ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white bg-transparent"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50 bg-white"
+                    }`}
+                  onClick={() => setInvoiceOpen(true)}
+                  data-testid="button-view-invoice"
+                >
+                  <FileText className="w-4 h-4" />
+                  Facture
+                </Button>
+              )}
+
+              {/* Payout info — visible once at least one supplier sub-order exists */}
+              {showPayoutInfo && hasSubOrders && (
+                <Button
+                  variant="outline"
+                  className={`flex-1 min-w-[120px] rounded-xl h-11 font-semibold gap-2 transition-colors
+                    ${t.dk
+                      ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white bg-transparent"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50 bg-white"
+                    }`}
+                  onClick={() => setPayoutInfoOpen(true)}
+                  data-testid="button-payout-info"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Paiement
+                </Button>
+              )}
             </div>
           </div>
 
@@ -854,6 +899,8 @@ export default function OrderDetailsModal({
     </Dialog>
 
     <CancelSubOrderModal subOrder={cancelTarget} onClose={() => setCancelTarget(null)} t={t} />
+    <OrderInvoiceModal open={invoiceOpen} onClose={() => setInvoiceOpen(false)} order={order} />
+    <PayoutInfoModal open={payoutInfoOpen} onClose={() => setPayoutInfoOpen(false)} order={order} />
     </>
   );
 }

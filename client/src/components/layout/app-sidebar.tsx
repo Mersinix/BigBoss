@@ -158,6 +158,8 @@ export function AppSidebar() {
           label: "MAIN",
           items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
+            { title: "Analytics", url: "/supplier/analytics", icon: BarChart2 },
+            { title: "Cafes", url: "/supplier/cafes", icon: Coffee },
             { title: "Store", url: "/supplier/store", icon: Store },
             { title: "Categories", url: "/supplier/categories", icon: Folder },
             { title: "Products", url: "/supplier/products", icon: Package },
@@ -171,6 +173,8 @@ export function AppSidebar() {
             { title: "Orders", url: "/orders", icon: ClipboardList },
             { title: "Order Delivery", url: "/supplier/delivery-status", icon: MapPin },
             { title: "Returns", url: "/supplier/returns", icon: RotateCcw },
+            { title: "Payouts", url: "/supplier/payouts", icon: Wallet },
+            { title: "Invoices", url: "/supplier/invoices", icon: FileText },
           ],
         },
          {
@@ -182,23 +186,7 @@ export function AppSidebar() {
             { title: "Promotions", url: "/supplier/promotions", icon: Tag },
             { title: "Discount Codes", url: "/supplier/discount-codes", icon: Ticket },
           ],
-        },
-        {
-          label: "FINANCE",
-          items: [
-            { title: "Analytics", url: "/supplier/analytics", icon: BarChart2 },
-            { title: "Payouts", url: "/supplier/payouts", icon: Wallet },
-            { title: "Invoices", url: "/supplier/invoices", icon: FileText },
-          ],
-        },
-        {
-          label: "CUSTOMERS",
-          items: [
-            { title: "Cafes", url: "/supplier/cafes", icon: Coffee },
-            
-          ],
-        },
-        
+        },        
         {
           label: "ACCOUNT",
           items: [

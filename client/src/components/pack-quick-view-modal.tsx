@@ -556,6 +556,8 @@ export function PackQuickViewModal() {
   const packId = usePackQuickView((s) => s.packId);
   const editCartItem = usePackQuickView((s) => s.editCartItem);
   const onSave = usePackQuickView((s) => s.onSave);
+  const replaceTargetPackId = usePackQuickView((s) => s.replaceTargetPackId);
+  const clearReplaceTarget = usePackQuickView((s) => s.clearReplaceTarget);
   const close  = usePackQuickView((s) => s.close);
   const isEditing = editCartItem != null;
 
@@ -581,6 +583,7 @@ export function PackQuickViewModal() {
   const { toast } = useToast();
   const addPackItem = useCart((s) => s.addPackItem);
   const setPackItem = useCart((s) => s.setPackItem);
+  const replacePackItem = useCart((s) => s.replacePackItem);
   const faved      = useFavorites((s) => (packId != null ? !!s.pack[packId] : false));
   const togglePack = useFavorites((s) => s.togglePack);
 
@@ -763,6 +766,13 @@ export function PackQuickViewModal() {
         setPackItem(packCartData, qty);
         toast({ title: "Panier mis à jour", description: `${pack.name} × ${qty}` });
       }
+    } else if (replaceTargetPackId != null) {
+      // Arrived here via the Cart's "Choisir un autre fournisseur" action on a Pack
+      // line the supplier cancelled — this Pack replaces that line instead of adding
+      // a new one (see hooks/use-pack-quick-view.ts armReplace).
+      replacePackItem(replaceTargetPackId, packCartData, qty);
+      toast({ title: "Pack remplacé", description: `${pack.name} × ${qty} — ${pack.supplierName}` });
+      clearReplaceTarget();
     } else {
       addPackItem(packCartData, qty);
       toast({ title: "Ajouté au panier", description: `${pack.name} × ${qty}` });

@@ -4,7 +4,7 @@
  * what will be applied at checkout.
  */
 import { useQuery } from "@tanstack/react-query";
-import { useCart } from "./use-cart";
+import { useCart, type CartItem } from "./use-cart";
 import type { CartPromotionEvaluation } from "@shared/schema";
 
 async function evaluatePromotions(
@@ -23,8 +23,14 @@ async function evaluatePromotions(
   return res.json();
 }
 
-export function usePromotionEvaluation() {
-  const { items } = useCart();
+// itemsOverride lets a caller evaluate promotions against only its orderable items —
+// e.g. the Cart page excludes lines a supplier cancelled (cancelledBySupplier) from this
+// evaluation, the same way they're excluded from checkout/totals, so a promotion like
+// "free shipping over X" is never triggered/withheld based on a line that can't actually
+// be ordered. Defaults to the full live cart when omitted (previous behavior).
+export function usePromotionEvaluation(itemsOverride?: CartItem[]) {
+  const { items: cartStoreItems } = useCart();
+  const items = itemsOverride ?? cartStoreItems;
 
   const cartItems = items.map(i => ({
     listingId: i.listingId,

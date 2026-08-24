@@ -129,6 +129,28 @@ export default function OrderConfirmationModal({
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The parent (cart-page.tsx) already excludes frozen/cancelled lines from the items
+  // and packItems props it passes in (see orderableItems/orderablePackItems there). If a
+  // line still present in this draft has since disappeared from that eligible set — e.g.
+  // a realtime supplier-cancellation event arrived while this modal was already open —
+  // drop it from the draft too, so an already-open checkout can never go on to submit an
+  // item that just became ineligible. This only ever REMOVES a line the live cart no
+  // longer considers eligible; it never adds one, so the Coffee Owner's own in-progress
+  // edits within this draft (items/packs they already removed or adjusted here) are
+  // never overwritten by unrelated cart activity.
+  useEffect(() => {
+    if (!open) return;
+    setLocalItems((prev) => prev.filter((li) =>
+      items.some((it) =>
+        it.listingId === li.listingId &&
+        (it.flavorId ?? null) === (li.flavorId ?? null) &&
+        (it.sizeId ?? null) === (li.sizeId ?? null)
+      )
+    ));
+    setLocalPackItems((prev) => prev.filter((lp) => packItems.some((p) => p.packId === lp.packId)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, packItems]);
+
   // ── Item editing ─────────────────────────────────────────────────────────────
 
   const updateItemQty = (listingId: number, flavorId: number | null, sizeId: number | null, qty: number) => {

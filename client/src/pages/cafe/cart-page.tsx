@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useThemeStore } from "@/store/theme-store";
-import { useCart } from "@/hooks/use-cart";
+import { useCart, type CartItem } from "@/hooks/use-cart";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
+import { useQuickView } from "@/hooks/use-quick-view";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { usePromotionEvaluation } from "@/hooks/use-promotion-evaluation";
@@ -31,23 +32,57 @@ import { groupCartProducts } from "@/lib/cart-grouping";
 
 export default function CartPage() {
   const {
-    items, updateQuantity, removeItem, clearCart, getTotal, getItemsBySupplier,
+    items, updateQuantity, removeItem, clearCart, getItemsBySupplier,
     printItems, removePrintItem, clearPrintItems, getPrintTotal,
     packItems, removePackItem,
   } = useCart();
   const { user } = useAuth();
   const openPackForEdit = usePackQuickView((s) => s.openForEdit);
+  const armPackReplace = usePackQuickView((s) => s.armReplace);
+  const openProductForReplace = useQuickView((s) => s.openForReplace);
   const createOrder = useCreateOrder();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const openAccountWithOrder = useAccountOpenStore((s) => s.openWithOrder);
   const queryClient = useQueryClient();
 
+  // "Choisir un autre fournisseur" — a product line the supplier cancelled reopens the
+  // existing product modal (every supplier's listing for the same product, since that's
+  // exactly what the modal already shows without a fixed supplierId), pre-armed to
+  // replace this exact line instead of adding a new one. No navigation needed: the
+  // modal is already mounted globally by MarketplaceLayout, which wraps this page.
+  const handleReplaceItem = (item: CartItem) => {
+    openProductForReplace(item.productId, {
+      listingId: item.listingId,
+      flavorId: item.flavorId,
+      sizeId: item.sizeId,
+      flavorName: item.flavorName,
+      sizeName: item.sizeName,
+      quantity: item.quantity,
+    });
+  };
+
+  // Packs are supplier-exclusive — there is no "same Pack, another supplier" the way
+  // there is for a product's multiple listings, so a replacement is necessarily a
+  // different Pack found by browsing. Arms the replacement, then sends the Coffee Owner
+  // to the marketplace to pick one; the next Pack they add there replaces this line.
+  const handleReplacePack = (packId: number, packName: string) => {
+    armPackReplace(packId);
+    toast({ title: "Choisissez un Pack de remplacement", description: `Le prochain Pack ajouté remplacera « ${packName} ».` });
+    setLocation("/products");
+  };
+
   // Revalidates every Pack currently in the cart against its live backend state.
   // A Pack the supplier has made unavailable stays visible (frozen) but must never
   // be orderable/counted — see freezing logic below and orderablePackItems.
   const { data: packAvailability = {} } = usePackAvailability(packItems.map((p) => p.packId));
-  const orderablePackItems = packItems.filter((p) => !isPackFrozen(packAvailability[p.packId]));
+  // Two independent reasons a Pack line can be excluded from checkout: the Pack itself
+  // became unavailable (existing availability-freeze feature), or its supplier cancelled
+  // the order it was part of (cancelledBySupplier — this task). Either one keeps it out.
+  const orderablePackItems = packItems.filter((p) => !isPackFrozen(packAvailability[p.packId]) && !p.cancelledBySupplier);
+  // Same rule for regular items — a cancelled line stays visible in the cart but must
+  // never reach checkout/totals/the order payload until the Coffee Owner replaces it.
+  const orderableItems = items.filter((i) => !i.cancelledBySupplier);
   // The confirmed live Pack detail — null while the check is still loading, still
   // "unknown" (a failed/errored check, which must never be treated as stale data
   // to display), or genuinely confirmed unavailable with no detail returned.
@@ -104,18 +139,20 @@ export default function CartPage() {
     ? savedAccountAddress
     : customDeliveryAddress;
 
-  const { evaluation: promoEval } = usePromotionEvaluation();
+  const { evaluation: promoEval } = usePromotionEvaluation(orderableItems);
 
-  const totalShop = getTotal();
+  // Frozen/cancelled lines are visible in the cart but must never contribute to a total
+  // the Coffee Owner could act on — sum only the orderable ones (see orderableItems).
+  const totalShop = orderableItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
   const totalPrint = getPrintTotal();
   // Frozen (currently unavailable) Packs are visible in the cart but must never
   // contribute to a total the Coffee Owner could act on — sum only the orderable
   // ones, at their current live price when known (see Scenario E: price refresh).
   const totalPack = orderablePackItems.reduce((s, p) => s + (liveDetailOf(p.packId)?.price ?? p.unitPrice) * p.quantity, 0);
   const hasShop = items.length > 0 || packItems.length > 0;
-  // Distinct from hasShop: a cart holding only a frozen Pack still "has SHOP content"
-  // (must stay visible), but there is nothing left to actually order.
-  const hasOrderableShop = items.length > 0 || orderablePackItems.length > 0;
+  // Distinct from hasShop: a cart holding only a frozen/cancelled line still "has SHOP
+  // content" (must stay visible), but there is nothing left to actually order.
+  const hasOrderableShop = orderableItems.length > 0 || orderablePackItems.length > 0;
   const hasPrint = printItems.length > 0;
   const grandTotal = totalShop + totalPack + totalPrint - promoEval.totalDiscount;
 
@@ -330,6 +367,18 @@ export default function CartPage() {
 
   const bySupplier = getItemsBySupplier();
   const supplierEntries = Array.from(bySupplier.entries());
+  // Separate, orderable-only grouping for the checkout preview panel below (which must
+  // match what "Passer commande" will actually submit) — the main cart display above
+  // keeps using the unfiltered supplierEntries, since cancelled items must stay visible
+  // there exactly as they are today.
+  const orderableBySupplier = new Map<number, { supplierName: string; items: CartItem[] }>();
+  for (const item of orderableItems) {
+    if (!orderableBySupplier.has(item.supplierId)) {
+      orderableBySupplier.set(item.supplierId, { supplierName: item.supplierName, items: [] });
+    }
+    orderableBySupplier.get(item.supplierId)!.items.push(item);
+  }
+  const orderableSupplierEntries = Array.from(orderableBySupplier.entries());
 
   if (!hasShop && !hasPrint) {
     return (
@@ -420,19 +469,37 @@ export default function CartPage() {
                                <div className="mt-2 space-y-2">
                                  {variants.map((item) => {
                                    const variantLabel = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
+                                   const cancelled = !!item.cancelledBySupplier;
                                    return (
-                                     <div key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`} className="flex items-center gap-2 min-w-0">
-                                       <div className="flex-1 min-w-0">
-                                         {variantLabel && <p className={`text-xs truncate ${textMuted}`}>Variant: {variantLabel}</p>}
-                                         <p className={`text-xs ${textMuted}`}>{fmt(item.unitPrice)} chacun</p>
+                                     <div key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`} className={cancelled ? "opacity-60" : ""}>
+                                       <div className="flex items-center gap-2 min-w-0">
+                                         <div className="flex-1 min-w-0">
+                                           {variantLabel && <p className={`text-xs truncate ${textMuted}`}>Variant: {variantLabel}</p>}
+                                           <p className={`text-xs ${textMuted}`}>{fmt(item.unitPrice)} chacun</p>
+                                         </div>
+                                         <div className={`flex items-center border rounded-xl overflow-hidden shrink-0 ${borderClr}`}>
+                                           <button disabled={cancelled} className={`px-2 py-1 transition-colors disabled:cursor-not-allowed ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, Math.max(1, item.quantity - 1))} data-testid={`button-decrease-${item.listingId}`}><Minus className={`w-3 h-3 ${textMuted}`} /></button>
+                                           <span className={`px-2 sm:px-3 text-sm font-medium w-7 sm:w-8 text-center ${textPrimary}`}>{item.quantity}</span>
+                                           <button disabled={cancelled} className={`px-2 py-1 transition-colors disabled:cursor-not-allowed ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, item.quantity + 1)} data-testid={`button-increase-${item.listingId}`}><Plus className={`w-3 h-3 ${textMuted}`} /></button>
+                                         </div>
+                                         <span className={`font-bold text-xs min-w-[52px] text-right ${textPrimary}`}>{fmt(item.unitPrice * item.quantity)}</span>
+                                         <button className={`transition-colors ${textMuted} hover:text-red-500 shrink-0`} onClick={() => removeItem(item.listingId, item.flavorId, item.sizeId)} data-testid={`button-remove-${item.listingId}`}><Trash2 className="w-4 h-4" /></button>
                                        </div>
-                                       <div className={`flex items-center border rounded-xl overflow-hidden shrink-0 ${borderClr}`}>
-                                         <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, Math.max(1, item.quantity - 1))} data-testid={`button-decrease-${item.listingId}`}><Minus className={`w-3 h-3 ${textMuted}`} /></button>
-                                         <span className={`px-2 sm:px-3 text-sm font-medium w-7 sm:w-8 text-center ${textPrimary}`}>{item.quantity}</span>
-                                         <button className={`px-2 py-1 transition-colors ${dk ? "hover:bg-gray-700" : "hover:bg-gray-100"}`} onClick={() => updateQuantity(item.listingId, item.flavorId, item.sizeId, item.quantity + 1)} data-testid={`button-increase-${item.listingId}`}><Plus className={`w-3 h-3 ${textMuted}`} /></button>
-                                       </div>
-                                       <span className={`font-bold text-xs min-w-[52px] text-right ${textPrimary}`}>{fmt(item.unitPrice * item.quantity)}</span>
-                                       <button className={`transition-colors ${textMuted} hover:text-red-500 shrink-0`} onClick={() => removeItem(item.listingId, item.flavorId, item.sizeId)} data-testid={`button-remove-${item.listingId}`}><Trash2 className="w-4 h-4" /></button>
+                                       {item.cancelledBySupplier && (
+                                         <div className={`mt-1.5 flex flex-wrap items-center gap-2 rounded-xl border px-2.5 py-2 ${dk ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200"}`}>
+                                           <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${dk ? "text-red-400" : "text-red-600"}`} />
+                                           <span className={`text-xs flex-1 min-w-0 ${dk ? "text-red-300" : "text-red-700"}`}>
+                                             Commande annulée par le fournisseur{item.cancelledBySupplier.supplierName ? ` (${item.cancelledBySupplier.supplierName})` : ""}
+                                           </span>
+                                           <button
+                                             className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors shrink-0 ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-300 text-amber-700 hover:bg-amber-50"}`}
+                                             onClick={() => handleReplaceItem(item)}
+                                             data-testid={`button-replace-item-${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`}
+                                           >
+                                             Choisir un autre fournisseur
+                                           </button>
+                                         </div>
+                                       )}
                                      </div>
                                    );
                                  })}
@@ -447,6 +514,12 @@ export default function CartPage() {
 
                 {packItems.map((pack) => {
                   const frozen = isPackFrozen(packAvailability[pack.packId]);
+                  const cancelled = !!pack.cancelledBySupplier;
+                  // Either reason keeps the Pack out of checkout and its controls disabled —
+                  // "Pack indisponible" (frozen) and "Commande annulée" (cancelled) are still
+                  // shown as two distinct messages (see the badge/banner below), but both
+                  // dim the card and hide Edit the same way.
+                  const notEditable = frozen || cancelled;
                   const liveDetail = liveDetailOf(pack.packId);
                   // Only ever refresh display fields from a CONFIRMED live Pack — a frozen
                   // Pack keeps showing its last-known info, and so does one whose check
@@ -458,20 +531,20 @@ export default function CartPage() {
                   <div
                     key={`pack-${pack.packId}`}
                     className={`border rounded-2xl overflow-hidden shadow-sm transition-opacity ${
-                      frozen
+                      notEditable
                         ? `opacity-60 ${dk ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`
                         : (dk ? "bg-gray-800 border-amber-500/25" : "bg-white border-amber-100")
                     }`}
                     data-testid={`cart-pack-${pack.packId}`}
                   >
                     <div className={`px-3 sm:px-4 py-3 border-b flex items-center justify-between gap-2 ${
-                      frozen
+                      notEditable
                         ? (dk ? "bg-gray-700/40 border-gray-700" : "bg-gray-100 border-gray-200")
                         : (dk ? "bg-amber-500/10 border-amber-500/25" : "bg-amber-50 border-amber-100")
                     }`}>
                       <div className="flex items-center gap-2 min-w-0">
-                        <Layers className={`w-4 h-4 shrink-0 ${frozen ? textMuted : "text-amber-500"}`} />
-                        <span className={`font-semibold text-sm truncate ${frozen ? textMuted : (dk ? "text-amber-400" : "text-amber-700")}`}>{pack.supplierName} · Pack</span>
+                        <Layers className={`w-4 h-4 shrink-0 ${notEditable ? textMuted : "text-amber-500"}`} />
+                        <span className={`font-semibold text-sm truncate ${notEditable ? textMuted : (dk ? "text-amber-400" : "text-amber-700")}`}>{pack.supplierName} · Pack</span>
                       </div>
                       {frozen ? (
                         <Badge variant="outline" className={`shrink-0 gap-1 text-xs ${dk ? "border-gray-600 text-gray-300 bg-gray-800" : "border-gray-300 text-gray-600 bg-gray-50"}`} data-testid={`badge-pack-unavailable-${pack.packId}`}>
@@ -483,7 +556,7 @@ export default function CartPage() {
                     </div>
                     <div className="p-3 sm:p-4">
                       <div className="flex gap-3">
-                        <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg} ${frozen ? "grayscale" : ""}`}>
+                        <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg} ${notEditable ? "grayscale" : ""}`}>
                           {displayImage ? (
                             <img src={displayImage} className="w-full h-full object-cover" alt="" />
                           ) : (
@@ -526,7 +599,7 @@ export default function CartPage() {
                                ))}
                              </div>
                           )}
-                          {!frozen && (
+                          {!notEditable && (
                             <div className="flex items-center gap-2 mt-2">
                               <button
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-200 text-amber-700 hover:bg-amber-50"}`}
@@ -537,9 +610,24 @@ export default function CartPage() {
                               </button>
                             </div>
                           )}
+                          {pack.cancelledBySupplier && (
+                            <div className={`mt-2 flex flex-wrap items-center gap-2 rounded-xl border px-2.5 py-2 ${dk ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200"}`}>
+                              <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${dk ? "text-red-400" : "text-red-600"}`} />
+                              <span className={`text-xs flex-1 min-w-0 ${dk ? "text-red-300" : "text-red-700"}`}>
+                                Commande annulée par le fournisseur{pack.cancelledBySupplier.supplierName ? ` (${pack.cancelledBySupplier.supplierName})` : ""}
+                              </span>
+                              <button
+                                className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors shrink-0 ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-300 text-amber-700 hover:bg-amber-50"}`}
+                                onClick={() => handleReplacePack(pack.packId, pack.packName)}
+                                data-testid={`button-replace-pack-${pack.packId}`}
+                              >
+                                Choisir un autre fournisseur
+                              </button>
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
-                          <p className={`font-bold text-sm ${frozen ? textMuted : textPrimary}`}>{fmt(displayUnitPrice * pack.quantity)}</p>
+                          <p className={`font-bold text-sm ${notEditable ? textMuted : textPrimary}`}>{fmt(displayUnitPrice * pack.quantity)}</p>
                           <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePackItem(pack.packId)} data-testid={`button-remove-pack-${pack.packId}`}><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
@@ -709,7 +797,7 @@ export default function CartPage() {
                   </div>
 
                   <div className={`space-y-2 text-sm border-t pt-4 ${borderClr}`}>
-                    {supplierEntries.map(([sid, group]) => {
+                    {orderableSupplierEntries.map(([sid, group]) => {
                       const supTotal = group.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
                       const promoResult = promoEval.bySupplier.find(r => r.supplierId === Number(sid));
                       return (
@@ -841,7 +929,7 @@ export default function CartPage() {
       <OrderConfirmationModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        items={items}
+        items={orderableItems}
         packItems={orderablePackItems}
         deliveryAddress={activeDeliveryAddress}
         courierInstructions={courierInstructions}

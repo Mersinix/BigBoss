@@ -708,6 +708,92 @@ export class DatabaseStorage implements IStorage {
     return resolved;
   }
 
+  /**
+   * Maps the Coffee Owner's actual per-order Pack selection (captured as
+   * includedProducts — the same data orderItems.snapshot already stores and the order's
+   * product display already reads) to the real supplierProductVariants/listing rows it
+   * consumes, with the exact quantity against each. This is the single place that decides
+   * "which inventory row does this selection refer to" — reused by the order-creation-time
+   * stock check (resolvePackOrderItems), the confirmation-time deduction
+   * (deductPackComponentStock), and the cancellation-time restoration
+   * (restorePackComponentStock), so none of the three can ever disagree about which
+   * variant a selection means.
+   *
+   * A Pack can include the same base product more than once across different size groups
+   * (e.g. one component slot sized "Stika", a separate slot sized "1L") — size is what
+   * disambiguates which slot a selected flavor belongs to. Falls back to the Pack's own
+   * default/representative variant (the pre-existing behavior) whenever a selection can't
+   * be matched — e.g. a legacy order placed before this fix, whose stored selection lacks
+   * enough detail to match precisely.
+   */
+  private async resolvePackComponentDeductions(
+    packId: number,
+    orderQty: number,
+    includedProducts: Array<{ productId?: number; flavorName?: string | null; sizeName?: string | null; quantity: number }>,
+  ): Promise<{ variants: Map<number, number>; listings: Map<number, number>; affectedListingIds: Set<number> }> {
+    const variants = new Map<number, number>();
+    const listings = new Map<number, number>();
+    const affectedListingIds = new Set<number>();
+
+    const components = await db.select().from(packItems).where(eq(packItems.packId, packId));
+    if (!components.length) return { variants, listings, affectedListingIds };
+
+    const listingIds = Array.from(new Set(components.map((c) => c.listingId)));
+    const listingRows = listingIds.length
+      ? await db.select().from(supplierProductListings).where(inArray(supplierProductListings.id, listingIds))
+      : [];
+    const listingProductId = new Map(listingRows.map((l) => [l.id, l.productId]));
+
+    const { flvMap, szMap } = await buildTaxonomyCache();
+    const flavorIdByName = new Map<string, number>();
+    for (const f of Array.from(flvMap.values())) flavorIdByName.set(f.name, f.id);
+
+    for (const comp of components) {
+      affectedListingIds.add(comp.listingId);
+      const defaultQty = comp.quantity * orderQty;
+
+      if (comp.variantId == null) {
+        // No flavor/size distribution exists for this component — quantity is scoped to
+        // the listing itself, so the Pack's own defined per-pack quantity is authoritative.
+        listings.set(comp.listingId, (listings.get(comp.listingId) ?? 0) + defaultQty);
+        continue;
+      }
+
+      const [representative] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, comp.variantId));
+      if (!representative) continue;
+      const repSizeId = representative.sizeId ?? null;
+      const repSizeName = repSizeId != null ? (szMap.get(repSizeId)?.name ?? null) : null;
+      const compProductId = listingProductId.get(comp.listingId);
+
+      const matching = includedProducts.filter((s) =>
+        (compProductId == null || s.productId == null || s.productId === compProductId) &&
+        (s.sizeName ?? null) === repSizeName,
+      );
+
+      if (!matching.length) {
+        variants.set(representative.id, (variants.get(representative.id) ?? 0) + defaultQty);
+        continue;
+      }
+
+      const groupVariants = await db.select().from(supplierProductVariants).where(and(
+        eq(supplierProductVariants.listingId, comp.listingId),
+        repSizeId == null ? isNull(supplierProductVariants.sizeId) : eq(supplierProductVariants.sizeId, repSizeId),
+      ));
+
+      for (const sel of matching) {
+        let target = representative;
+        if (sel.flavorName) {
+          const flavorId = flavorIdByName.get(sel.flavorName);
+          const variantForFlavor = flavorId != null ? groupVariants.find((v) => v.flavorId === flavorId) : undefined;
+          if (variantForFlavor) target = variantForFlavor;
+        }
+        variants.set(target.id, (variants.get(target.id) ?? 0) + sel.quantity);
+      }
+    }
+
+    return { variants, listings, affectedListingIds };
+  }
+
   async resolvePackOrderItems(items: CreatePackOrderItem[]): Promise<ResolvedPackOrderItem[]> {
     const resolved: ResolvedPackOrderItem[] = [];
     for (const item of items) {
@@ -718,6 +804,35 @@ export class DatabaseStorage implements IStorage {
       if (!detail || !detail.isAvailable) throw new Error(`Pack ${pack.name} is not available`);
       if (item.quantity > Math.min(pack.quantityAvailable, detail.maxBuildable)) {
         throw new Error(`Insufficient stock for pack ${pack.name}`);
+      }
+      // The check above only verifies stock at the flavor-GROUP level (e.g. "enough
+      // combined stock across every flavor of this size"). It can pass while the ONE
+      // exact flavor/size the Coffee Owner actually selected is low or fully out — verify
+      // that specifically before accepting the order.
+      if (item.includedProducts?.length) {
+        const { variants, listings } = await this.resolvePackComponentDeductions(item.packId, item.quantity, item.includedProducts);
+        if (variants.size) {
+          const variantIds = Array.from(variants.keys());
+          const variantRows = await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.id, variantIds));
+          const variantById = new Map(variantRows.map((v) => [v.id, v]));
+          for (const [variantId, needed] of Array.from(variants)) {
+            const row = variantById.get(variantId);
+            if (!row || row.quantity < needed) {
+              throw new Error(`Insufficient stock for pack ${pack.name}`);
+            }
+          }
+        }
+        if (listings.size) {
+          const listingIds = Array.from(listings.keys());
+          const listingRows = await db.select().from(supplierProductListings).where(inArray(supplierProductListings.id, listingIds));
+          const listingById = new Map(listingRows.map((l) => [l.id, l]));
+          for (const [listingId, needed] of Array.from(listings)) {
+            const row = listingById.get(listingId);
+            if (!row || row.stock < needed) {
+              throw new Error(`Insufficient stock for pack ${pack.name}`);
+            }
+          }
+        }
       }
       const [supplier] = await db.select().from(users).where(eq(users.id, pack.supplierId));
       const includedProducts = item.includedProducts?.length
@@ -796,6 +911,15 @@ export class DatabaseStorage implements IStorage {
     // sub-order is cancelled (e.g. supplier rejects after accepting).
     if (wasAlreadyConfirmed && status === 'CANCELLED') {
       await this.restoreSubOrderPackStock(subOrderId);
+    }
+    // Restore REGULAR item stock whenever this sub-order transitions to CANCELLED for the
+    // first time — regardless of whether it had reached CONFIRMED, since regular items are
+    // deducted at order creation, not at confirmation (see restockSubOrderRegularItems).
+    // This is the Supplier "Demandes de commandes" reject path — the common case is
+    // rejecting a still-PENDING request, which the wasAlreadyConfirmed-gated Pack
+    // restoration above intentionally does not cover.
+    if (existing.status !== 'CANCELLED' && status === 'CANCELLED') {
+      await this.restockSubOrderRegularItems(subOrderId, existing.orderId);
     }
 
     return updated;
@@ -930,51 +1054,44 @@ export class DatabaseStorage implements IStorage {
     const packOrderItems = items.filter((i) => i.packId != null);
     if (!packOrderItems.length) return;
 
+    // Accumulate across every Pack line in this sub-order before writing — if the SAME
+    // variant is consumed by more than one Pack purchased in the same order (e.g. Pack A
+    // and Pack B both include Boga/Citron/Stika), the quantities are summed into one final
+    // decrement per variant, never applied as separate partial writes.
+    const variantTotals = new Map<number, number>();
+    const listingTotals = new Map<number, number>();
+    const affectedListingIds = new Set<number>();
+
     for (const orderItem of packOrderItems) {
-      const packId = orderItem.packId!;
-      const orderQty = orderItem.quantity;
-      const components = await db.select().from(packItems).where(eq(packItems.packId, packId));
+      const snapshot = (orderItem.snapshot ?? {}) as any;
+      const includedProducts = Array.isArray(snapshot.includedProducts) ? snapshot.includedProducts : [];
+      const { variants, listings, affectedListingIds: compListings } =
+        await this.resolvePackComponentDeductions(orderItem.packId!, orderItem.quantity, includedProducts);
+      for (const [variantId, qty] of Array.from(variants)) variantTotals.set(variantId, (variantTotals.get(variantId) ?? 0) + qty);
+      for (const [listingId, qty] of Array.from(listings)) listingTotals.set(listingId, (listingTotals.get(listingId) ?? 0) + qty);
+      for (const id of Array.from(compListings)) affectedListingIds.add(id);
+    }
 
-      const affectedListingIds = new Set<number>();
-      for (const comp of components) {
-        const deductQty = comp.quantity * orderQty;
-        if (comp.variantId != null) {
-          const representative = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, comp.variantId));
-          const selectedVariants = comp.flavorIds == null
-            ? representative
-            : await db.select().from(supplierProductVariants).where(and(
-                eq(supplierProductVariants.listingId, comp.listingId),
-                representative[0]?.sizeId == null ? isNull(supplierProductVariants.sizeId) : eq(supplierProductVariants.sizeId, representative[0].sizeId),
-              ));
-          const usableVariants = comp.flavorIds == null
-            ? selectedVariants
-            : selectedVariants.filter(v => v.flavorId != null && comp.flavorIds!.includes(v.flavorId));
-          let remaining = deductQty;
-          for (const variant of usableVariants) {
-            if (remaining <= 0) break;
-            const amount = Math.min(remaining, variant.quantity);
-            if (amount <= 0) continue;
-            await db.update(supplierProductVariants)
-              .set({ quantity: sql`GREATEST(${supplierProductVariants.quantity} - ${amount}, 0)` })
-              .where(eq(supplierProductVariants.id, variant.id));
-            remaining -= amount;
-          }
-          affectedListingIds.add(comp.listingId);
-        } else {
-          await db.update(supplierProductListings)
-            .set({ stock: sql`GREATEST(${supplierProductListings.stock} - ${deductQty}, 0)` })
-            .where(eq(supplierProductListings.id, comp.listingId));
-        }
-      }
+    for (const [variantId, qty] of Array.from(variantTotals)) {
+      if (qty <= 0) continue;
+      await db.update(supplierProductVariants)
+        .set({ quantity: sql`GREATEST(${supplierProductVariants.quantity} - ${qty}, 0)` })
+        .where(eq(supplierProductVariants.id, variantId));
+    }
+    for (const [listingId, qty] of Array.from(listingTotals)) {
+      if (qty <= 0) continue;
+      await db.update(supplierProductListings)
+        .set({ stock: sql`GREATEST(${supplierProductListings.stock} - ${qty}, 0)` })
+        .where(eq(supplierProductListings.id, listingId));
+    }
 
-      // Refresh aggregate listing stock for every affected listing
-      for (const listingId of Array.from(affectedListingIds)) {
-        const listingVariants = await this.getVariantsByListingId(listingId);
-        const aggStock = listingVariants.reduce((s, v) => s + v.quantity, 0);
-        await db.update(supplierProductListings)
-          .set({ stock: aggStock })
-          .where(eq(supplierProductListings.id, listingId));
-      }
+    // Refresh aggregate listing stock for every affected listing
+    for (const listingId of Array.from(affectedListingIds)) {
+      const listingVariants = await this.getVariantsByListingId(listingId);
+      const aggStock = listingVariants.reduce((s, v) => s + v.quantity, 0);
+      await db.update(supplierProductListings)
+        .set({ stock: aggStock })
+        .where(eq(supplierProductListings.id, listingId));
     }
   }
 
@@ -997,40 +1114,39 @@ export class DatabaseStorage implements IStorage {
         .set({ quantityAvailable: sql`${packs.quantityAvailable} + ${orderQty}` })
         .where(eq(packs.id, packId));
 
-      // Restore component variant/listing stock
-      await this.restorePackComponentStock(packId, orderQty);
+      // Restore component variant/listing stock — using this exact order item's own
+      // selected distribution, the same one that was actually deducted at confirmation.
+      const snapshot = (orderItem.snapshot ?? {}) as any;
+      const includedProducts = Array.isArray(snapshot.includedProducts) ? snapshot.includedProducts : [];
+      await this.restorePackComponentStock(packId, orderQty, includedProducts);
     }
   }
 
-  /** Restores variant/flavor stock for every pack item — used on order cancellation. */
-  private async restorePackComponentStock(packId: number, orderQty: number): Promise<void> {
-    const components = await db.select().from(packItems).where(eq(packItems.packId, packId));
+  /**
+   * Restores variant/flavor stock for every pack item — used on order cancellation.
+   * Restores to the SAME exact variant(s) resolvePackComponentDeductions would deduct
+   * for this selection, so cancelling never gives stock back to the wrong flavor/size
+   * (which would otherwise permanently drift the representative variant's stock up while
+   * leaving the actually-sold flavor's stock never replenished).
+   */
+  private async restorePackComponentStock(
+    packId: number,
+    orderQty: number,
+    includedProducts: Array<{ productId?: number; flavorName?: string | null; sizeName?: string | null; quantity: number }> = [],
+  ): Promise<void> {
+    const { variants, listings, affectedListingIds } = await this.resolvePackComponentDeductions(packId, orderQty, includedProducts);
 
-    const affectedListingIds = new Set<number>();
-    for (const comp of components) {
-      const restoreQty = comp.quantity * orderQty;
-      if (comp.variantId != null) {
-        const [representative] = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.id, comp.variantId));
-        const selectedVariants = comp.flavorIds == null
-          ? (representative ? [representative] : [])
-          : await db.select().from(supplierProductVariants).where(and(
-              eq(supplierProductVariants.listingId, comp.listingId),
-              representative?.sizeId == null ? isNull(supplierProductVariants.sizeId) : eq(supplierProductVariants.sizeId, representative.sizeId),
-            ));
-        const usableVariants = comp.flavorIds == null
-          ? selectedVariants
-          : selectedVariants.filter(v => v.flavorId != null && comp.flavorIds!.includes(v.flavorId));
-        const restoreTarget = usableVariants[0];
-        if (!restoreTarget) continue;
-        await db.update(supplierProductVariants)
-          .set({ quantity: sql`${supplierProductVariants.quantity} + ${restoreQty}` })
-          .where(eq(supplierProductVariants.id, restoreTarget.id));
-        affectedListingIds.add(comp.listingId);
-      } else {
-        await db.update(supplierProductListings)
-          .set({ stock: sql`${supplierProductListings.stock} + ${restoreQty}` })
-          .where(eq(supplierProductListings.id, comp.listingId));
-      }
+    for (const [variantId, qty] of Array.from(variants)) {
+      if (qty <= 0) continue;
+      await db.update(supplierProductVariants)
+        .set({ quantity: sql`${supplierProductVariants.quantity} + ${qty}` })
+        .where(eq(supplierProductVariants.id, variantId));
+    }
+    for (const [listingId, qty] of Array.from(listings)) {
+      if (qty <= 0) continue;
+      await db.update(supplierProductListings)
+        .set({ stock: sql`${supplierProductListings.stock} + ${qty}` })
+        .where(eq(supplierProductListings.id, listingId));
     }
 
     for (const listingId of Array.from(affectedListingIds)) {
@@ -1705,7 +1821,9 @@ export class DatabaseStorage implements IStorage {
           // Restore component stock only if this sub-order was confirmed
           // (component stock is only deducted at confirmation, not at order creation)
           if (so && CONFIRMED_STATUSES.has(so.status ?? '')) {
-            await this.restorePackComponentStock(item.packId, item.quantity);
+            const snapshot = (item.snapshot ?? {}) as any;
+            const includedProducts = Array.isArray(snapshot.includedProducts) ? snapshot.includedProducts : [];
+            await this.restorePackComponentStock(item.packId, item.quantity, includedProducts);
           }
         } else {
           // No sub-order record: restore pack availability unconditionally
@@ -1747,6 +1865,37 @@ export class DatabaseStorage implements IStorage {
         }
       }
       await this.restockFromOrderCancellation(listingId, item.quantity, `Order #${orderId} cancelled`);
+    }
+  }
+
+  /**
+   * Restores stock for every still-ACTIVE regular (non-Pack) item in ONE sub-order — used
+   * when a Supplier rejects/cancels that specific sub-order (see updateSubOrderStatus).
+   * Regular item stock is deducted at order CREATION time (unlike Pack components, which
+   * deduct only at confirmation — see deductPackComponentStock), so it must be restored
+   * here regardless of whether this sub-order had ever reached CONFIRMED. Skips items
+   * already marked CANCELLED (e.g. individually cancelled earlier via
+   * cancelSubOrderItems, which already restocked them) so nothing is ever restocked twice.
+   * Reuses the exact same restockVariantFromOrderCancellation/restockFromOrderCancellation
+   * primitives restockOrderInventory and cancelSubOrderItems already use — one inventory
+   * restoration mechanism, not a parallel one.
+   */
+  private async restockSubOrderRegularItems(subOrderId: number, orderId: number): Promise<void> {
+    const items = await db.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+    for (const item of items) {
+      if (item.packId) continue; // Pack components are handled separately (see restoreSubOrderPackStock).
+      if (item.status === 'CANCELLED') continue;
+      if (!item.productId || !item.listingId) continue;
+
+      if (item.flavorId != null || item.sizeId != null) {
+        const variants = await this.getVariantsByListingId(item.listingId);
+        const variant = variants.find((v) => (v.flavorId ?? null) === (item.flavorId ?? null) && (v.sizeId ?? null) === (item.sizeId ?? null));
+        if (variant) {
+          await this.restockVariantFromOrderCancellation(variant.id, item.quantity, `Order #${orderId} sub-order rejected`);
+          continue;
+        }
+      }
+      await this.restockFromOrderCancellation(item.listingId, item.quantity, `Order #${orderId} sub-order rejected`);
     }
   }
 
@@ -1866,7 +2015,17 @@ export class DatabaseStorage implements IStorage {
       supplierName: string;
       unitPrice: number;
       quantity: number;
-      includedProducts: Array<{ productName: string; flavorName: string | null; sizeName: string | null; quantity: number }>;
+      includedProducts: Array<{
+        productId: number;
+        productName: string;
+        productImageUrl: string | null;
+        brandName: string | null;
+        categoryName: string | null;
+        subCategoryName: string | null;
+        flavorName: string | null;
+        sizeName: string | null;
+        quantity: number;
+      }>;
     }>;
   }> {
     const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, subOrderId));
@@ -1885,7 +2044,44 @@ export class DatabaseStorage implements IStorage {
       if (item.packId) {
         const [pack] = await db.select().from(packs).where(eq(packs.id, item.packId));
         if (!pack) continue;
-        const [packDetail] = await this.buildPackDetails([pack]);
+        // Prefer the Coffee Owner's actual captured selection (orderItems.snapshot,
+        // written at checkout — see resolvePackOrderItems) over the Pack's current
+        // generic default composition. Restoring from the default would silently
+        // discard exactly which flavor/size the Coffee Owner had chosen (e.g. Ananas
+        // instead of the pack's representative Citron) — the cart must show back what
+        // they actually selected, not a re-derived guess. Only a legacy order placed
+        // before this snapshot field existed falls back to the live default.
+        const snapshot = (item.snapshot ?? {}) as any;
+        const snapshotIncluded = snapshot.kind === "PACK" && Array.isArray(snapshot.includedProducts)
+          ? snapshot.includedProducts
+          : null;
+        let includedProducts: Array<{ productId: number; productName: string; productImageUrl: string | null; brandName: string | null; categoryName: string | null; subCategoryName: string | null; flavorName: string | null; sizeName: string | null; quantity: number }>;
+        if (snapshotIncluded) {
+          includedProducts = snapshotIncluded.map((pi: any) => ({
+            productId: pi.productId ?? 0,
+            productName: pi.productName ?? "Produit",
+            productImageUrl: pi.productImageUrl ?? null,
+            brandName: pi.brandName ?? null,
+            categoryName: pi.categoryName ?? null,
+            subCategoryName: pi.subCategoryName ?? null,
+            flavorName: pi.flavorName ?? null,
+            sizeName: pi.sizeName ?? null,
+            quantity: pi.quantity,
+          }));
+        } else {
+          const [packDetail] = await this.buildPackDetails([pack]);
+          includedProducts = (packDetail?.items ?? []).map((pi) => ({
+            productId: pi.productId,
+            productName: pi.productName,
+            productImageUrl: pi.productImageUrl ?? null,
+            brandName: pi.brandName ?? null,
+            categoryName: pi.categoryName ?? null,
+            subCategoryName: pi.subCategoryName ?? null,
+            flavorName: pi.flavorName ?? null,
+            sizeName: pi.sizeName ?? null,
+            quantity: pi.quantity,
+          }));
+        }
         packItemsResult.push({
           packId: item.packId,
           packName: item.packName ?? pack.name,
@@ -1894,12 +2090,7 @@ export class DatabaseStorage implements IStorage {
           supplierName,
           unitPrice: item.unitPrice,
           quantity: item.quantity,
-          includedProducts: (packDetail?.items ?? []).map((pi) => ({
-            productName: pi.productName,
-            flavorName: pi.flavorName ?? null,
-            sizeName: pi.sizeName ?? null,
-            quantity: pi.quantity,
-          })),
+          includedProducts,
         });
       } else if (item.productId && item.listingId) {
         const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, item.listingId));

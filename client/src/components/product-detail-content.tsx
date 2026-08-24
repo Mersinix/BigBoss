@@ -13,6 +13,7 @@ import { useThemeStore } from "@/store/theme-store";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
+import { useQuickView } from "@/hooks/use-quick-view";
 import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant, ListingPromotion } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { ReviewModal } from "@/components/review-modal";
@@ -85,11 +86,22 @@ function VariantRow({
   isDark?: boolean;
 }) {
   const fmt = useFormatCurrency();
-  const { addItem, getItemQuantity } = useCart();
+  const { addItem, replaceItem, getItemQuantity } = useCart();
   const { toast } = useToast();
-  const [qty, setQty] = useState(1);
+  // Set only when this modal was opened from the Cart's "Choisir un autre fournisseur"
+  // action on a line the supplier cancelled — see hooks/use-quick-view.ts. Every variant
+  // row across every supplier reads the same target, so the quantity always defaults to
+  // what was originally requested and the row matching the original flavor/size is
+  // highlighted, no matter which supplier the Coffee Owner ends up picking.
+  const replaceTarget = useQuickView((s) => s.replaceTarget);
+  const clearReplaceTarget = useQuickView((s) => s.clearReplaceTarget);
+  const closeQuickView = useQuickView((s) => s.close);
+  const [qty, setQty] = useState(replaceTarget?.quantity ?? 1);
   const inCart = getItemQuantity(listing.id, variant.flavorId, variant.sizeId);
   const outOfStock = variant.quantity <= 0;
+  const isReplacementMatch = !!replaceTarget
+    && (replaceTarget.flavorName ?? null) === (variant.flavorName ?? null)
+    && (replaceTarget.sizeName ?? null) === (variant.sizeName ?? null);
 
   // Best price-affecting promotion for this listing
   const bestPricePromo = useMemo(() => {
@@ -104,7 +116,7 @@ function VariantRow({
 
   const handleAdd = () => {
     if (outOfStock) return;
-    addItem({
+    const newItem = {
       listingId: listing.id, flavorId: variant.flavorId, sizeId: variant.sizeId,
       productId: product.id, productName: product.name, productImageUrl: product.imageUrl ?? null,
       productCategory: product.category ?? "", brandName: product.brandLabel?.name ?? null,
@@ -113,7 +125,19 @@ function VariantRow({
       supplierId: listing.supplierId,
       supplierName: listing.supplierName, flavorName: variant.flavorName ?? null,
       sizeName: variant.sizeName ?? null, unitPrice: promoPrice ?? variant.price,
-    }, qty);
+    };
+    if (replaceTarget) {
+      replaceItem(
+        { listingId: replaceTarget.listingId, flavorId: replaceTarget.flavorId, sizeId: replaceTarget.sizeId },
+        newItem,
+        qty,
+      );
+      toast({ title: "Fournisseur remplacé", description: `${product.name}${variant.flavorName ? ` – ${variant.flavorName}` : ""}${variant.sizeName ? ` (${variant.sizeName})` : ""} × ${qty} — ${listing.supplierName}` });
+      clearReplaceTarget();
+      closeQuickView();
+      return;
+    }
+    addItem(newItem, qty);
     toast({ title: "Added to cart", description: `${product.name}${variant.flavorName ? ` – ${variant.flavorName}` : ""}${variant.sizeName ? ` (${variant.sizeName})` : ""} × ${qty}` });
   };
 
@@ -135,6 +159,15 @@ function VariantRow({
     </span>
   );
 
+  // Shown only in replacement mode, on the row matching the originally cancelled
+  // flavor/size — helps the Coffee Owner pick the equivalent variant from the new
+  // supplier without having to remember the exact configuration themselves.
+  const replacementBadge = isReplacementMatch && (
+    <span className="inline-flex items-center gap-1 bg-emerald-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5">
+      <CheckCircle2 className="w-2.5 h-2.5" />Correspond à votre sélection
+    </span>
+  );
+
   // Price display: promotional (large) + original (strikethrough) when promo active
   const priceDisplay = (shrink = true) => (
     <div className={`text-right ${shrink ? "shrink-0" : ""}`}>
@@ -150,13 +183,14 @@ function VariantRow({
   );
 
   return (
-    <div className={`py-3 border-b ${borderCls} last:border-0`}>
+    <div className={`py-3 border-b ${borderCls} last:border-0 ${isReplacementMatch ? "-mx-2 px-2 rounded-xl ring-1 ring-emerald-500/40 bg-emerald-500/5" : ""}`}>
       {/* Desktop / tablet: single-row layout (sm and up) */}
       <div className="hidden sm:flex items-center justify-between gap-4">
         <div className="flex-1 min-w-0">
           <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
           {outOfStock && <span className="ml-2 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md">Out of stock</span>}
           {promoBadge && <div>{promoBadge}</div>}
+          {replacementBadge && <div>{replacementBadge}</div>}
         </div>
         {priceDisplay()}
         {!outOfStock && (
@@ -187,6 +221,7 @@ function VariantRow({
             {outOfStock && <span className="text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md shrink-0">Out of stock</span>}
           </div>
           {promoBadge}
+          {replacementBadge}
         </div>
         {/* Line 2: price + qty + add */}
         {!outOfStock && (

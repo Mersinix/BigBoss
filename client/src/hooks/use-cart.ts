@@ -1,6 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+// Set on a cart line that was put back into the cart because its supplier
+// cancelled/refused the sub-order it was part of (see hooks/use-realtime.ts's
+// suborder_rejected handler). Cleared the moment the Coffee Owner replaces the
+// line with another supplier's offering (replaceItem/replacePackItem) or removes
+// it outright — never a permanent flag, just a marker for the cart UI to explain
+// why the line reappeared and to offer the "choose another supplier" action.
+export interface SupplierCancellationInfo {
+  orderId: number;
+  subOrderId: number;
+  supplierName: string;
+}
+
 // ── SHOP cart item ────────────────────────────────────────────────────────────
 
 export interface CartItem {
@@ -20,6 +32,7 @@ export interface CartItem {
   sizeName: string | null;
   unitPrice: number;
   quantity: number;
+  cancelledBySupplier?: SupplierCancellationInfo | null;
 }
 
 function cartKey(item: Pick<CartItem, 'listingId' | 'flavorId' | 'sizeId'>): string {
@@ -79,6 +92,7 @@ export interface PackCartItem {
   unitPrice: number;
   quantity: number;
   includedProducts: PackCartItemProduct[];
+  cancelledBySupplier?: SupplierCancellationInfo | null;
 }
 
 function distributionKey(item: Pick<PackCartItemProduct, 'productId' | 'flavorName' | 'sizeName'>): string {
@@ -125,6 +139,18 @@ interface CartState {
   getTotal: () => number;
   getItemQuantity: (listingId: number, flavorId: number | null, sizeId: number | null) => number;
   getItemsBySupplier: () => Map<number, { supplierName: string; items: CartItem[] }>;
+  // Puts a line back into the cart because its supplier cancelled the order it was
+  // part of, tagging it with cancelledBySupplier so the cart can explain why it
+  // reappeared and offer a replacement action. Merges into an existing identical
+  // line (same product/variant) if one already exists, same as addItem.
+  restoreItem: (item: Omit<CartItem, 'quantity' | 'cancelledBySupplier'>, quantity: number, cancelledBySupplier: SupplierCancellationInfo) => void;
+  // Atomically removes the cancelled line (identified by its old identity) and adds
+  // the newly chosen supplier's line in its place — never leaves both lines present.
+  replaceItem: (
+    oldKey: { listingId: number; flavorId: number | null; sizeId: number | null },
+    item: Omit<CartItem, 'quantity' | 'cancelledBySupplier'>,
+    quantity: number,
+  ) => void;
 
   // PRINT actions
   addPrintItem: (item: Omit<PrintCartItem, 'id'>) => void;
@@ -142,6 +168,9 @@ interface CartState {
   clearPackItems: () => void;
   getPackTotal: () => number;
   getPackQuantity: (packId: number) => number;
+  // Same restore/replace pair as the SHOP actions above, but for Pack lines.
+  restorePackItem: (item: Omit<PackCartItem, 'quantity' | 'cancelledBySupplier'>, quantity: number, cancelledBySupplier: SupplierCancellationInfo) => void;
+  replacePackItem: (oldPackId: number, item: Omit<PackCartItem, 'quantity' | 'cancelledBySupplier'>, quantity: number) => void;
 }
 
 export const useCart = create<CartState>()(
@@ -195,6 +224,30 @@ export const useCart = create<CartState>()(
           map.get(item.supplierId)!.items.push(item);
         }
         return map;
+      },
+
+      restoreItem: (itemData, quantity, cancelledBySupplier) => {
+        set((state) => {
+          const key = cartKey(itemData);
+          const existing = state.items.find(i => cartKey(i) === key);
+          if (existing) {
+            return { items: state.items.map(i => cartKey(i) === key ? { ...i, quantity: i.quantity + quantity, cancelledBySupplier } : i) };
+          }
+          return { items: [...state.items, { ...itemData, quantity, cancelledBySupplier }] };
+        });
+      },
+
+      replaceItem: (oldKey, itemData, quantity) => {
+        set((state) => {
+          const oldCartKey = cartKey(oldKey);
+          const withoutOld = state.items.filter(i => cartKey(i) !== oldCartKey);
+          const newCartKey = cartKey(itemData);
+          const existingNew = withoutOld.find(i => cartKey(i) === newCartKey);
+          if (existingNew) {
+            return { items: withoutOld.map(i => cartKey(i) === newCartKey ? { ...i, quantity: i.quantity + quantity, cancelledBySupplier: null } : i) };
+          }
+          return { items: [...withoutOld, { ...itemData, quantity, cancelledBySupplier: null }] };
+        });
       },
 
       // ── PRINT ──
@@ -288,6 +341,39 @@ export const useCart = create<CartState>()(
       getPackTotal: () => get().packItems.reduce((t, i) => t + i.unitPrice * i.quantity, 0),
 
       getPackQuantity: (packId) => get().packItems.find(i => i.packId === packId)?.quantity ?? 0,
+
+      restorePackItem: (itemData, quantity, cancelledBySupplier) => {
+        set((state) => {
+          const existing = state.packItems.find(i => i.packId === itemData.packId);
+          if (existing) {
+            return {
+              packItems: state.packItems.map(i => i.packId === itemData.packId
+                ? { ...i, quantity: i.quantity + quantity, cancelledBySupplier }
+                : i),
+            };
+          }
+          return { packItems: [...state.packItems, { ...itemData, quantity, cancelledBySupplier }] };
+        });
+      },
+
+      // A replacement Pack is necessarily a different Pack entity (different packId —
+      // Packs belong to exactly one supplier, so "another supplier" means a different
+      // Pack, not a different listing of the same one). Removes the cancelled line by
+      // its old packId and adds the newly chosen Pack in its place, atomically.
+      replacePackItem: (oldPackId, itemData, quantity) => {
+        set((state) => {
+          const withoutOld = state.packItems.filter(i => i.packId !== oldPackId);
+          const existingNew = withoutOld.find(i => i.packId === itemData.packId);
+          if (existingNew) {
+            return {
+              packItems: withoutOld.map(i => i.packId === itemData.packId
+                ? { ...i, quantity: i.quantity + quantity, cancelledBySupplier: null }
+                : i),
+            };
+          }
+          return { packItems: [...withoutOld, { ...itemData, quantity, cancelledBySupplier: null }] };
+        });
+      },
     }),
     { name: 'b2b-cart-v3' }
   )

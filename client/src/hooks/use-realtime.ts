@@ -168,10 +168,18 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/stores"] });
           }
           if (event === 'suborder_rejected') {
-            // Restore rejected items directly into the cafe owner's cart
+            // Restore rejected items directly into the cafe owner's cart, tagged with
+            // cancelledBySupplier so the Cart page can explain why each line reappeared
+            // and offer the "choose another supplier" replacement action (see
+            // pages/cafe/cart-page.tsx) — never a silent, unexplained re-add.
             const cart = useCart.getState();
+            const cancelledBySupplier = {
+              orderId: data?.orderId,
+              subOrderId: data?.subOrderId,
+              supplierName: data?.supplierName ?? '',
+            };
             for (const item of (data?.regularItems ?? [])) {
-              cart.addItem({
+              cart.restoreItem({
                 listingId: item.listingId,
                 productId: item.productId,
                 supplierId: item.supplierId,
@@ -187,10 +195,10 @@ export function useRealtime(userId?: number) {
                 brandName: item.brandName ?? null,
                 categoryName: item.categoryName ?? item.productCategory ?? null,
                 subCategoryName: item.subCategoryName ?? null,
-              }, item.quantity);
+              }, item.quantity, cancelledBySupplier);
             }
             for (const pack of (data?.packItems ?? [])) {
-              cart.addPackItem({
+              cart.restorePackItem({
                 packId: pack.packId,
                 packName: pack.packName ?? '',
                 packImageUrl: pack.packImageUrl ?? null,
@@ -198,7 +206,7 @@ export function useRealtime(userId?: number) {
                 supplierName: pack.supplierName ?? '',
                 unitPrice: pack.unitPrice ?? 0,
                 includedProducts: pack.includedProducts ?? [],
-              }, pack.quantity);
+              }, pack.quantity, cancelledBySupplier);
             }
             // Invalidate orders so the UI reflects the rejection
             qc.invalidateQueries({ queryKey: ['/api/orders'] });

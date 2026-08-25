@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, Calendar, Zap, Package, X,
-  Sun, Moon, User,
+  Sun, Moon, User, ListX,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -16,6 +16,7 @@ import type { OrderWithDetails } from "@shared/schema";
 import { PackCompositionView } from "@/components/order/pack-composition-view";
 import { DeliveryProgress } from "@/components/order/delivery-progress";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
+import SupplierCancelItemsModal from "@/components/supplier/supplier-cancel-items-modal";
 
 // ── Status meta ───────────────────────────────────────────────────────────────
 
@@ -101,12 +102,19 @@ type Props = {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// Sub-order statuses at which the Supplier can still cancel part of their own order —
+// identical to the boundary the status picklist below already enforces for the whole-order
+// "Annuler"/"Refuser" action (SUPPLIER_NEXT_STATUSES never offers CANCELLED past PREPARING),
+// and mirrors storage.cancelSupplierSubOrderItems's own server-side check.
+const GRANULAR_CANCEL_STATUSES = new Set(["PENDING", "CONFIRMED", "PREPARING"]);
+
 export default function SupplierOrderDetailsModal({ open, onClose, order, supplierId, readOnly = false }: Props) {
   const [isDark, setIsDark] = useState(true);
   const t = useTheme(isDark);
   const { toast } = useToast();
   const fmt = useFormatCurrency();
   const updateSubOrderStatus = useUpdateSubOrderStatus();
+  const [cancelItemsTarget, setCancelItemsTarget] = useState<any | null>(null);
 
   if (!order) return null;
 
@@ -136,6 +144,7 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
   const items = subOrder?.items ?? [];
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
         <DialogTitle className="sr-only">Commande #{String(order.id).padStart(6, "0")}</DialogTitle>
@@ -401,6 +410,24 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
               </div>
             )}
 
+            {/* Cancel specific items — a Pack, a product, a variant, or part of a line's
+                quantity — instead of only being able to refuse the whole order above. */}
+            {!readOnly && subOrder && items.length > 0 && GRANULAR_CANCEL_STATUSES.has(subStatus) && (
+              <Button
+                variant="outline"
+                className={`w-full rounded-xl h-10 font-semibold gap-2 border transition-colors ${
+                  isDark
+                    ? "border-red-500/40 text-red-400 hover:bg-red-500/10 bg-transparent"
+                    : "border-red-300 text-red-600 hover:bg-red-50 bg-white"
+                }`}
+                onClick={() => setCancelItemsTarget(subOrder)}
+                data-testid="button-open-supplier-cancel-items"
+              >
+                <ListX className="w-4 h-4" />
+                Annuler des articles
+              </Button>
+            )}
+
             {/* Close button */}
             <Button
               variant="outline"
@@ -417,5 +444,8 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
         </div>
       </DialogContent>
     </Dialog>
+
+    <SupplierCancelItemsModal subOrder={cancelItemsTarget} onClose={() => setCancelItemsTarget(null)} t={t} />
+    </>
   );
 }

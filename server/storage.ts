@@ -2010,6 +2010,189 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  /**
+   * Cancels part or all of one order item's quantity. When cancelQty covers the item's
+   * entire remaining quantity, the row is simply marked CANCELLED in place (identical to the
+   * existing cancelSubOrderItems behavior). When cancelQty is less than the item's quantity,
+   * the row is split: the original row keeps the remaining ACTIVE quantity, and a new sibling
+   * row (same order/sub-order/product/listing/flavor/size/pack, cloned snapshot) is inserted
+   * with exactly the cancelled quantity and status CANCELLED. Every existing consumer that
+   * renders order items (groupOrderItemsByProduct, the pack-item maps in the Coffee
+   * Owner/Supplier/Admin order modals) already iterates every row in a sub-order and renders
+   * cancelled ones with strikethrough — so a split pair renders correctly with zero display
+   * changes, exactly like two naturally distinct line items.
+   *
+   * For a Pack row, the snapshot's includedProducts quantities (the Coffee Owner's actual
+   * selected flavor/size distribution — see resolvePackComponentDeductions) are scaled down
+   * proportionally between the two halves, so neither the remaining nor the cancelled slice
+   * ever loses or duplicates the original exact selection.
+   */
+  private async splitAndCancelOrderItem(
+    tx: any,
+    item: typeof orderItems.$inferSelect,
+    cancelQty: number,
+  ): Promise<{ cancelledItemId: number; cancelledQty: number }> {
+    if (cancelQty >= item.quantity) {
+      await tx.update(orderItems).set({ status: 'CANCELLED' }).where(eq(orderItems.id, item.id));
+      return { cancelledItemId: item.id, cancelledQty: item.quantity };
+    }
+
+    const remainingQty = item.quantity - cancelQty;
+    const originalSnapshot = (item.snapshot ?? {}) as any;
+    const scaleSnapshot = (qty: number) => {
+      if (!originalSnapshot || typeof originalSnapshot !== 'object') return originalSnapshot;
+      const scaled: any = { ...originalSnapshot, quantity: qty, totalPrice: item.unitPrice * qty };
+      if (originalSnapshot.kind === 'PACK' && Array.isArray(originalSnapshot.includedProducts)) {
+        scaled.includedProducts = originalSnapshot.includedProducts.map((p: any) => ({
+          ...p,
+          quantity: Math.round((p.quantity * qty) / item.quantity),
+        }));
+      }
+      return scaled;
+    };
+
+    await tx.update(orderItems).set({
+      quantity: remainingQty,
+      totalPrice: item.unitPrice * remainingQty,
+      snapshot: scaleSnapshot(remainingQty),
+    }).where(eq(orderItems.id, item.id));
+
+    const [inserted] = await tx.insert(orderItems).values({
+      orderId: item.orderId,
+      subOrderId: item.subOrderId,
+      productId: item.productId,
+      listingId: item.listingId,
+      packId: item.packId,
+      packName: item.packName,
+      quantity: cancelQty,
+      unitPrice: item.unitPrice,
+      totalPrice: item.unitPrice * cancelQty,
+      flavorId: item.flavorId,
+      sizeId: item.sizeId,
+      snapshot: scaleSnapshot(cancelQty),
+      status: 'CANCELLED',
+    }).returning();
+
+    return { cancelledItemId: inserted.id, cancelledQty: cancelQty };
+  }
+
+  /**
+   * Supplier-initiated granular cancellation: lets a Supplier cancel exactly the
+   * products/variants/Packs/quantities they cannot fulfill from their OWN sub-order, instead
+   * of only being able to reject the whole sub-order (see updateSubOrderStatus's CANCELLED
+   * transition, which remains unchanged and still available as the "cancel entire order"
+   * fast path). Authorized to the sub-order's own supplier only — never another supplier's
+   * sub-order within the same multi-supplier order. Allowed while the sub-order is still
+   * PENDING, CONFIRMED, or PREPARING — the same boundary the existing status picklist already
+   * enforces (SUPPLIER_NEXT_STATUSES never offers CANCELLED past PREPARING, since READY hands
+   * the sub-order off to the Delivery lifecycle).
+   *
+   * Stock is restored for exactly the cancelled quantity via the same restock primitives
+   * (restockVariantFromOrderCancellation / restockFromOrderCancellation /
+   * restorePackComponentStock) every other cancellation path already uses — never a second
+   * inventory mechanism. If every item ends up cancelled, the sub-order itself becomes
+   * CANCELLED (mirroring cancelSubOrderItems), otherwise its existing status is preserved.
+   */
+  async cancelSupplierSubOrderItems(
+    subOrderId: number,
+    supplierId: number,
+    targets: Array<{ orderItemId: number; quantity: number }>,
+  ): Promise<{ subOrder: SubOrder; order: Order; cancelledItemIds: number[] }> {
+    const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, subOrderId));
+    if (!subOrder) throw new Error('Sub-order not found');
+    if (subOrder.supplierId !== supplierId) throw new Error('Forbidden');
+    const CANCELLABLE_STATUSES = new Set(['PENDING', 'CONFIRMED', 'PREPARING']);
+    if (!CANCELLABLE_STATUSES.has(subOrder.status ?? '')) {
+      throw new Error('This supplier order can no longer be modified');
+    }
+    const [order] = await db.select().from(orders).where(eq(orders.id, subOrder.orderId));
+    if (!order) throw new Error('Order not found');
+    if (!targets.length) throw new Error('No items specified');
+
+    const items = await db.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+    const itemMap = new Map(items.map((i) => [i.id, i]));
+
+    // Merge duplicate targets for the same order item (defensive — the client should never
+    // send the same id twice, but never silently double-cancel if it does).
+    const mergedTargets = new Map<number, number>();
+    for (const t of targets) {
+      if (!Number.isInteger(t.quantity) || t.quantity <= 0) throw new Error('Invalid cancellation quantity');
+      mergedTargets.set(t.orderItemId, (mergedTargets.get(t.orderItemId) ?? 0) + t.quantity);
+    }
+    for (const [orderItemId, qty] of Array.from(mergedTargets)) {
+      const item = itemMap.get(orderItemId);
+      if (!item) throw new Error('One or more items do not belong to this supplier order');
+      if (item.status === 'CANCELLED') throw new Error('One or more items are already cancelled');
+      if (qty > item.quantity) throw new Error('Cannot cancel more than the ordered quantity');
+    }
+
+    // Restock exactly the cancelled quantity per item — same primitives every other
+    // cancellation path already uses (see cancelSubOrderItems / restockOrderInventory).
+    for (const [orderItemId, qty] of Array.from(mergedTargets)) {
+      const item = itemMap.get(orderItemId)!;
+      if (item.packId) {
+        await db.update(packs).set({ quantityAvailable: sql`${packs.quantityAvailable} + ${qty}` }).where(eq(packs.id, item.packId));
+        const snapshot = (item.snapshot ?? {}) as any;
+        const includedProducts = Array.isArray(snapshot.includedProducts) ? snapshot.includedProducts : [];
+        // Scale the actual purchased selection down to exactly the cancelled portion of this
+        // line — never restore the full line's components when only part of its quantity was
+        // cancelled (see splitAndCancelOrderItem's identical scaling for the stored snapshot).
+        const scaledIncluded = includedProducts.map((p: any) => ({
+          ...p,
+          quantity: Math.round((p.quantity * qty) / item.quantity),
+        }));
+        await this.restorePackComponentStock(item.packId, qty, scaledIncluded);
+        continue;
+      }
+      if (!item.productId || !item.listingId) continue;
+      if (item.flavorId != null || item.sizeId != null) {
+        const variants = await this.getVariantsByListingId(item.listingId);
+        const variant = variants.find((v) => (v.flavorId ?? null) === (item.flavorId ?? null) && (v.sizeId ?? null) === (item.sizeId ?? null));
+        if (variant) {
+          await this.restockVariantFromOrderCancellation(variant.id, qty, `Order #${order.id} item cancelled by supplier`);
+          continue;
+        }
+      }
+      await this.restockFromOrderCancellation(item.listingId, qty, `Order #${order.id} item cancelled by supplier`);
+    }
+
+    const cancelledItemIds: number[] = [];
+    const result = await db.transaction(async (tx) => {
+      for (const [orderItemId, qty] of Array.from(mergedTargets)) {
+        const item = itemMap.get(orderItemId)!;
+        const { cancelledItemId } = await this.splitAndCancelOrderItem(tx, item, qty);
+        cancelledItemIds.push(cancelledItemId);
+      }
+
+      const refreshedItems = await tx.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+      const activeItems = refreshedItems.filter((i: any) => i.status !== 'CANCELLED');
+      const activeRawSum = activeItems.reduce((sum: number, i: any) => sum + (i.totalPrice ?? i.unitPrice * i.quantity), 0);
+      const newSubtotal = Math.max(0, activeRawSum - (subOrder.discountAmount ?? 0));
+      const allCancelled = activeItems.length === 0;
+
+      const [updatedSubOrder] = await tx.update(subOrders)
+        .set({ subtotal: newSubtotal, status: allCancelled ? 'CANCELLED' : subOrder.status })
+        .where(eq(subOrders.id, subOrderId))
+        .returning();
+
+      const siblingSubOrders = await tx.select().from(subOrders).where(eq(subOrders.orderId, subOrder.orderId));
+      const newOrderTotal = siblingSubOrders.reduce(
+        (sum, so) => sum + (so.id === subOrderId ? newSubtotal : so.subtotal),
+        0,
+      );
+      await tx.update(orders).set({ totalAmount: newOrderTotal }).where(eq(orders.id, subOrder.orderId));
+
+      if (allCancelled) {
+        await this.cancelActiveDeliveryForSubOrder(subOrderId, tx);
+        await this.recomputeOrderAggregateStatus(subOrder.orderId, tx);
+      }
+      const [updatedOrder] = await tx.select().from(orders).where(eq(orders.id, subOrder.orderId));
+      return { subOrder: updatedSubOrder, order: updatedOrder };
+    });
+
+    return { ...result, cancelledItemIds };
+  }
+
   /** Coffee Owner's "Daily" star — a persisted favorite flag on the order, scoped to its owner. */
   async setOrderFavorite(orderId: number, cafeOwnerId: number, isFavorite: boolean): Promise<Order> {
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
@@ -2021,9 +2204,12 @@ export class DatabaseStorage implements IStorage {
 
   /**
    * Collects items from a sub-order with all the data needed to restore them to the cafe
-   * owner's cart (used when a supplier rejects/cancels their sub-order).
+   * owner's cart (used when a supplier rejects/cancels their sub-order, in full or in part).
+   * Pass itemIds to scope this to only the specific order_items rows that were just
+   * cancelled (partial cancellation — see cancelSupplierSubOrderItems); omit it for the
+   * existing whole-sub-order-rejected path, which restores every item in the sub-order.
    */
-  async getSubOrderItemsForCartRestore(subOrderId: number): Promise<{
+  async getSubOrderItemsForCartRestore(subOrderId: number, itemIds?: number[]): Promise<{
     regularItems: Array<{
       listingId: number;
       productId: number;
@@ -2066,7 +2252,8 @@ export class DatabaseStorage implements IStorage {
     const [supplier] = await db.select().from(users).where(eq(users.id, subOrder.supplierId));
     const supplierName = supplier?.name ?? subOrder.supplierName;
 
-    const items = await db.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+    const allItems = await db.select().from(orderItems).where(eq(orderItems.subOrderId, subOrderId));
+    const items = itemIds ? allItems.filter((i) => itemIds.includes(i.id)) : allItems;
     const tx = await buildTaxonomyCache();
 
     const regularItems: any[] = [];

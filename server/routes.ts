@@ -1580,6 +1580,63 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Granular per-item/variant/quantity/Pack cancellation (Supplier) ─────────
+  // Lets a Supplier cancel exactly what they cannot fulfill from their OWN sub-order —
+  // a whole Pack, a single product, one variant, or part of a line's quantity — instead of
+  // only being able to reject the entire sub-order (PATCH /api/suborders/:id/status still
+  // does that, unchanged). See storage.cancelSupplierSubOrderItems for ownership/eligibility
+  // validation, quantity-level row splitting, and stock restoration.
+  app.patch('/api/suborders/:id/supplier-cancel-items', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      if (user.role !== 'SUPPLIER') return res.status(403).json({ message: 'Forbidden' });
+      const subOrderId = parseInt(req.params.id);
+      const { items } = z.object({
+        items: z.array(z.object({
+          orderItemId: z.number().int().positive(),
+          quantity: z.number().int().positive(),
+        })).min(1),
+      }).parse(req.body);
+
+      const result = await storage.cancelSupplierSubOrderItems(subOrderId, user.id, items);
+
+      // Reuses the exact same event the whole-sub-order reject path already emits, carrying
+      // only the just-cancelled rows (see getSubOrderItemsForCartRestore's itemIds filter) —
+      // the existing use-realtime.ts 'suborder_rejected' handler already restores these into
+      // the Coffee Owner's cart with the cancelledBySupplier marker, unchanged, whether the
+      // rest of the sub-order is still active or not.
+      const cartItems = await storage.getSubOrderItemsForCartRestore(subOrderId, result.cancelledItemIds);
+      broadcastToUsers([result.order.cafeId], 'suborder_rejected', {
+        orderId: result.order.id,
+        subOrderId,
+        supplierName: result.subOrder.supplierName,
+        regularItems: cartItems.regularItems,
+        packItems: cartItems.packItems,
+      });
+      // Order-list/details refresh for the Coffee Owner, this Supplier, and every other
+      // connected client (Admin, other tabs) — same event ORDER_EVENTS already invalidates
+      // ["/api/orders"] on.
+      broadcastToUsers([result.order.cafeId, result.subOrder.supplierId], 'suborder_items_cancelled', {
+        orderId: result.order.id, subOrderId, subOrderStatus: result.subOrder.status,
+      });
+      broadcast('suborder_items_cancelled', { orderId: result.order.id, subOrderId });
+      // Stock was restored regardless of whether the whole sub-order ended up cancelled —
+      // unlike the Coffee-Owner-initiated cancel-items route above, always notify so any other
+      // Coffee Owner viewing this product/Pack sees the restored quantity without refreshing.
+      broadcast('inventory_updated', { subOrderId, orderId: result.order.id });
+
+      res.json(result);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      const message = err?.message ?? 'Unable to cancel items';
+      const status = message === 'Forbidden' ? 403 : message.includes('not found') ? 404
+        : message.includes('no longer be modified') || message.includes('already cancelled') ? 409
+        : 400;
+      res.status(status).json({ message });
+    }
+  });
+
   // ── Order favorite ("Daily") — Coffee Owner only, own orders ─────────────────
   app.patch('/api/orders/:id/favorite', requireAuth, async (req, res) => {
     try {

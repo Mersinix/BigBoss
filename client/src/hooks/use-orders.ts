@@ -240,6 +240,30 @@ export function useCancelSubOrderItems() {
   });
 }
 
+/** Supplier-initiated granular cancellation — a whole Pack, a product, a variant, or part of
+ * a line's quantity — from their own sub-order. See PATCH /api/suborders/:id/supplier-cancel-items. */
+export function useSupplierCancelItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ subOrderId, items }: { subOrderId: number; items: { orderItemId: number; quantity: number }[] }) => {
+      const res = await fetch(`/api/suborders/${subOrderId}/supplier-cancel-items`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Failed to cancel items" }));
+        throw new Error(err.message ?? "Failed to cancel items");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
+    },
+  });
+}
+
 export function useSetOrderFavorite() {
   const queryClient = useQueryClient();
   return useMutation({

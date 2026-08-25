@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { DollarSign, TrendingUp, TrendingDown, Percent, Wallet } from "lucide-react";
+import { DollarSign, TrendingUp, Percent, Wallet } from "lucide-react";
 import type { OrderWithDetails } from "@shared/schema";
 import { formatDate } from "@/lib/format";
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
@@ -13,15 +12,17 @@ import { flattenOrders, resolveDateRange, monthlySeries, type DateRangePreset } 
 import {
   buildFinancialRows, PLATFORM_COMMISSION_RATE, PAYOUT_STATUS_META, payoutReference,
 } from "@/lib/financial-rows";
+import { DashboardHero, StatCard, SectionCard, EmptyState } from "@/components/dashboard/dashboard-kit";
 
-// New Supplier "Revenus" tab — no separate payout/invoice system exists (see the previous
-// Payouts/Invoices synchronization work in lib/financial-rows.ts); this reuses that exact
-// same derivation so numbers here always agree with Supplier Payouts/Invoices and Admin
-// Payments/Earnings for the same orders. GET /api/orders already returns only this
-// supplier's own sub-orders (see storage.getOrders), so every row below is already scoped.
+// Supplier "Revenus" tab — no separate payout/invoice system exists (see lib/financial-rows.ts);
+// this reuses that exact same derivation so numbers here always agree with Supplier Payouts/
+// Invoices and Admin Payments/Earnings for the same orders. GET /api/orders already returns
+// only this supplier's own sub-orders (see storage.getOrders), so every row below is already
+// scoped. Built on the same shared dashboard kit as Admin Earnings (components/dashboard/
+// dashboard-kit.tsx) so the two "Earnings" tabs read as one financial product.
 export default function SupplierEarningsPage() {
   const fmt = useFormatCurrency();
-  const { data: orders = [], isLoading } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
+  const { data: orders = [] } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
   const [preset, setPreset] = useState<DateRangePreset>("30d");
   const [custom, setCustom] = useState({ from: "", to: "" });
 
@@ -58,99 +59,47 @@ export default function SupplierEarningsPage() {
   }, [series]);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Revenus</h1>
+          <h1 className="text-2xl font-display font-bold text-foreground">Revenus</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Aperçu financier de votre activité.</p>
         </div>
         <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-muted-foreground font-medium">Chiffre d'affaires livré</p>
-              <div className="bg-amber-500/10 p-1.5 rounded-lg"><DollarSign className="w-4 h-4 text-amber-500" /></div>
-            </div>
-            <p className="text-2xl font-bold text-amber-500">{fmt(grossDelivered)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-muted-foreground font-medium">Gains nets (après commission)</p>
-              <div className="bg-green-500/10 p-1.5 rounded-lg"><Wallet className="w-4 h-4 text-green-500" /></div>
-            </div>
-            <p className="text-2xl font-bold text-green-500">{fmt(netEarnings)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-muted-foreground font-medium">Croissance mensuelle</p>
-              <div className={`p-1.5 rounded-lg ${monthGrowth >= 0 ? "bg-green-500/10" : "bg-red-500/10"}`}>
-                {monthGrowth >= 0 ? <TrendingUp className="w-4 h-4 text-green-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
-              </div>
-            </div>
-            <p className={`text-2xl font-bold ${monthGrowth >= 0 ? "text-green-500" : "text-red-500"}`}>{monthGrowth >= 0 ? "+" : ""}{monthGrowth.toFixed(1)}%</p>
-            <p className="text-xs text-muted-foreground mt-1">vs mois précédent</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-muted-foreground font-medium">Commission plateforme</p>
-              <div className="bg-blue-500/10 p-1.5 rounded-lg"><Percent className="w-4 h-4 text-blue-500" /></div>
-            </div>
-            <p className="text-2xl font-bold text-blue-500">{fmt(commission)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% du livré</p>
-          </CardContent>
-        </Card>
+      <DashboardHero
+        title="Gains nets"
+        subtitle="Après déduction de la commission plateforme, sur les commandes livrées."
+        stat={fmt(netEarnings)}
+        statLabel="Sur la période sélectionnée"
+        icon={Wallet}
+      />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Chiffre d'affaires livré" value={fmt(grossDelivered)} icon={DollarSign} tone="amber" />
+        <StatCard label="Croissance mensuelle" value={`${monthGrowth >= 0 ? "+" : ""}${monthGrowth.toFixed(1)}%`} icon={TrendingUp} tone={monthGrowth >= 0 ? "green" : "red"} subtext="vs mois précédent" />
+        <StatCard label="Commission plateforme" value={fmt(commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% du livré`} />
+        <StatCard label="Versements à venir" value={fmt(pendingNet)} icon={Wallet} tone="amber" subtext="Commandes en cours" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3"><Wallet className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Versements dus (livrées)</p><p className="text-xl font-bold text-green-600">{fmt(netEarnings)}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3"><Wallet className="w-5 h-5 text-amber-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Versements à venir</p><p className="text-xl font-bold text-amber-600">{fmt(pendingNet)}</p></div>
-          </CardContent>
-        </Card>
-      </div>
+      <SectionCard title="Revenu mensuel" icon={TrendingUp} right={<span className="text-xs text-muted-foreground">12 derniers mois</span>}>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+            <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+            <Tooltip
+              contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
+              formatter={(v: any) => [fmt(v as number), "Revenu"]}
+            />
+            <Bar dataKey="revenue" fill="#d97706" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold">Revenu mensuel</CardTitle>
-            <span className="text-xs text-muted-foreground">12 derniers mois</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-              <Tooltip
-                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                formatter={(v: any) => [fmt(v as number), "Revenu"]}
-              />
-              <Bar dataKey="revenue" fill="#d97706" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base font-semibold">Versements récents</CardTitle></CardHeader>
-        <CardContent>
+      <SectionCard title="Versements récents" icon={Wallet} contentClassName="overflow-x-auto">
+        {rows.length === 0 ? <EmptyState message="Aucun versement pour cette période." /> : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -175,13 +124,10 @@ export default function SupplierEarningsPage() {
                   <TableCell><Badge variant="secondary" className={PAYOUT_STATUS_META[r.payoutStatus].className}>{PAYOUT_STATUS_META[r.payoutStatus].label}</Badge></TableCell>
                 </TableRow>
               ))}
-              {rows.length === 0 && !isLoading && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-10">Aucun versement pour cette période</TableCell></TableRow>
-              )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        )}
+      </SectionCard>
 
       <p className="text-xs text-muted-foreground">{nonCancelled.length} sous-commande(s) facturable(s) sur la période.</p>
     </div>

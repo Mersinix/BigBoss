@@ -159,6 +159,7 @@ export function AppSidebar() {
           items: [
             { title: "Dashboard", url: "/", icon: LayoutDashboard },
             { title: "Analytics", url: "/supplier/analytics", icon: BarChart2 },
+            { title: "Earnings", url: "/supplier/earnings", icon: TrendingUp },
             { title: "Cafes", url: "/supplier/cafes", icon: Coffee },
             { title: "Store", url: "/supplier/store", icon: Store },
             { title: "Categories", url: "/supplier/categories", icon: Folder },
@@ -175,7 +176,6 @@ export function AppSidebar() {
             { title: "Returns", url: "/supplier/returns", icon: RotateCcw },
             { title: "Payouts", url: "/supplier/payouts", icon: Wallet },
             { title: "Invoices", url: "/supplier/invoices", icon: FileText },
-            { title: "Earnings", url: "/supplier/earnings", icon: TrendingUp },
           ],
         },
          {

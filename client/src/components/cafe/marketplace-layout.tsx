@@ -47,6 +47,7 @@ import OrderDetailsModal from "@/components/cafe/order-details-modal";
 import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/maintenance/maintenance-page";
 import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard } from "@shared/schema";
 import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
+import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
@@ -188,15 +189,25 @@ function AccountPanel({
   const delivered = allOrders.filter((o) => o.status === "DELIVERED").length;
   const inProgress = allOrders.filter((o) => ["PENDING", "CONFIRMED", "PREPARING"].includes(o.status)).length;
   const spent = allOrders.filter((o) => o.status !== "CANCELLED").reduce((s, o) => s + (o.totalAmount || 0), 0);
+  const now = new Date();
+  const spentThisMonth = allOrders
+    .filter((o) => o.status !== "CANCELLED" && o.createdAt && new Date(o.createdAt).getMonth() === now.getMonth() && new Date(o.createdAt).getFullYear() === now.getFullYear())
+    .reduce((s, o) => s + (o.totalAmount || 0), 0);
   const kpis = [
-    { label: "Total Orders", value: total, icon: ShoppingBag, color: dk ? "text-white" : "text-gray-900" },
-    { label: "In Progress", value: inProgress, icon: Clock, color: "text-amber-400" },
-    { label: "Delivered", value: delivered, icon: CheckCircle, color: "text-green-400" },
-    { label: "Spent", value: fmt(spent), icon: DollarSign, color: "text-blue-400" },
+    { label: "Total commandes", value: total, icon: ShoppingBag, color: dk ? "text-white" : "text-gray-900" },
+    { label: "En cours", value: inProgress, icon: Clock, color: "text-amber-400" },
+    { label: "Livrées", value: delivered, icon: CheckCircle, color: "text-green-400" },
+    { label: "Total dépensé", value: fmt(spent), icon: DollarSign, color: "text-blue-400" },
   ];
   const statusCounts: Record<string, number> = {};
   allOrders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1; });
   const maxCount = Math.max(...Object.values(statusCounts), 1);
+  // Real-data insights derived the same way as the Admin/Supplier dashboards (see
+  // lib/marketplace-analytics.ts) — scoped to this Coffee Owner automatically, since
+  // GET /api/orders already returns only their own orders for a CAFE_OWNER viewer.
+  const dashLines = flattenOrders(allOrders as OrderWithDetails[]);
+  const favoriteSuppliers = topSuppliers(dashLines, 3);
+  const mostBoughtProducts = topProducts(dashLines, 3);
 
   const tabs = [
     { key: "orders" as const, label: "Orders", icon: ClipboardList },
@@ -584,6 +595,7 @@ function AccountPanel({
           order={detailOrder ? (sorted.find((o) => o.id === detailOrder.id) ?? detailOrder) : null}
           showReorder={true}
           showCancel={true}
+          showPayoutInfo={false}
         />
 
         {/* DASHBOARD */}
@@ -602,17 +614,47 @@ function AccountPanel({
                     </div>
                   ))}
                 </div>
+                <div className={`border rounded-2xl p-4 flex items-center justify-between ${cardBg}`}>
+                  <p className={`text-xs ${textMuted}`}>Dépensé ce mois-ci</p>
+                  <p className={`text-lg font-bold ${dk ? "text-white" : "text-gray-900"}`}>{fmt(spentThisMonth)}</p>
+                </div>
                 {Object.keys(statusCounts).length > 0 && (
                   <div className={`border rounded-2xl p-4 ${cardBg}`}>
-                    <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>Order Status Breakdown</p>
+                    <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>Répartition des commandes</p>
                     <div className="space-y-2.5">
                       {Object.entries(statusCounts).map(([status, count]) => (
                         <div key={status} className="space-y-1">
                           <div className="flex justify-between text-xs">
-                            <span className={textMuted}>{status.replace("_", " ")}</span>
+                            <span className={textMuted}>{FR_STATUS_LABEL[status] ?? status}</span>
                             <span className={textPrimary}>{count}</span>
                           </div>
                           <Progress value={(count / maxCount) * 100} className="h-1.5" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {favoriteSuppliers.length > 0 && (
+                  <div className={`border rounded-2xl p-4 ${cardBg}`}>
+                    <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>Fournisseurs favoris</p>
+                    <div className="space-y-2">
+                      {favoriteSuppliers.map((s, i) => (
+                        <div key={s.id} className="flex items-center justify-between text-xs">
+                          <span className={`truncate ${textMuted}`}><span className="mr-1.5">#{i + 1}</span>{s.name}</span>
+                          <span className={`font-semibold shrink-0 ${textPrimary}`}>{fmt(s.revenue)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {mostBoughtProducts.length > 0 && (
+                  <div className={`border rounded-2xl p-4 ${cardBg}`}>
+                    <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>Produits les plus achetés</p>
+                    <div className="space-y-2">
+                      {mostBoughtProducts.map((p, i) => (
+                        <div key={p.id} className="flex items-center justify-between text-xs">
+                          <span className={`truncate ${textMuted}`}><span className="mr-1.5">#{i + 1}</span>{p.name}</span>
+                          <span className={`font-semibold shrink-0 ${textPrimary}`}>×{p.quantity}</span>
                         </div>
                       ))}
                     </div>

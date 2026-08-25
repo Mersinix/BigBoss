@@ -208,6 +208,7 @@ export default function CafeOrdersPage() {
         order={selectedOrder}
         showReorder={true}
         showCancel={true}
+        showPayoutInfo={false}
       />
     </div>
   );

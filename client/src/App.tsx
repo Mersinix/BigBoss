@@ -21,6 +21,7 @@ import SupplierOrdersPage from "@/pages/supplier/orders-page";
 import ReturnsPage from "@/pages/supplier/returns-page";
 import DeliveryStatusPage from "@/pages/supplier/delivery-status-page";
 import FinanceAnalyticsPage from "@/pages/supplier/finance-analytics-page";
+import SupplierEarningsPage from "@/pages/supplier/earnings-page";
 import PayoutsPage from "@/pages/supplier/payouts-page";
 import SupplierInvoicesPage from "@/pages/supplier/invoices-page";
 import CafesPage from "@/pages/supplier/cafes-page";
@@ -286,6 +287,9 @@ function Router() {
       </Route>
       <Route path="/supplier/analytics">
         {() => (<DashboardLayout><ProtectedRoute component={FinanceAnalyticsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/supplier/earnings">
+        {() => (<DashboardLayout><ProtectedRoute component={SupplierEarningsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/payouts">
         {() => (<DashboardLayout><ProtectedRoute component={PayoutsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}

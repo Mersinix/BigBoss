@@ -175,6 +175,7 @@ export function AppSidebar() {
             { title: "Returns", url: "/supplier/returns", icon: RotateCcw },
             { title: "Payouts", url: "/supplier/payouts", icon: Wallet },
             { title: "Invoices", url: "/supplier/invoices", icon: FileText },
+            { title: "Earnings", url: "/supplier/earnings", icon: TrendingUp },
           ],
         },
          {

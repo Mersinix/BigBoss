@@ -46,6 +46,16 @@ import DeliveryCompanyDriversPage from "@/pages/delivery/drivers-page";
 import DriverDeliveriesPage from "@/pages/delivery/driver-deliveries-page";
 import SupplierMyDeliveriesPage from "@/pages/supplier/my-deliveries-page";
 import SupplierDeliveryDriversPage from "@/pages/supplier/delivery-drivers-page";
+import { DriverAccountShell } from "@/components/layout/driver-account-shell";
+import DriverAccountPage from "@/pages/driver/account";
+import DriverPlanningPage from "@/pages/driver/planning";
+import DriverWalletPage from "@/pages/driver/wallet";
+import DriverPaymentsPage from "@/pages/driver/payments";
+import DriverOpportunitiesPage from "@/pages/driver/opportunities";
+import DriverActivityPage from "@/pages/driver/activity";
+import DriverRewardsPage from "@/pages/driver/rewards";
+import DriverReviewsPage from "@/pages/driver/reviews";
+import DriverSettingsPage from "@/pages/driver/settings";
 
 // New role dashboards
 import PrinterDashboard from "@/pages/printer/dashboard";
@@ -217,6 +227,9 @@ function HomeRoute() {
   if (user.role === "CAFE_OWNER") return <Redirect to="/products" />;
   if (user.role === "MAINTENANCE") return <MaintenanceDashboard />;
   if (user.role === "BARISTA_MARKETPLACE") return <Redirect to="/barista-marketplace" />;
+  // Driver account switcher (like Barista Marketplace) replaces the generic sidebar for
+  // Drivers — see components/layout/driver-account-shell.tsx.
+  if (user.role === "DRIVER") return <Redirect to="/driver" />;
   return (
     <DashboardLayout>
       <SmartDashboard />
@@ -508,6 +521,46 @@ function Router() {
       {/* ── Shared Delivery Company / Driver routes ── */}
       <Route path="/delivery/messages">
         {() => (<DashboardLayout><ProtectedRoute component={DeliveryMessagesPage} allowedRoles={["DELIVERY_COMPANY", "DRIVER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+
+      {/* ── Driver account — top switcher shell instead of the sidebar, mirrors the Barista
+          Marketplace account structure (see driver-account-shell.tsx). The old
+          /delivery/deliveries and /delivery/messages routes above are left registered
+          unchanged for backward compatibility (and because /delivery/messages is still used
+          by DELIVERY_COMPANY as-is) — Driver navigation now happens exclusively through
+          these /driver/... routes instead. ── */}
+      <Route path="/driver">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverAccountPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/planning">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverPlanningPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/deliveries">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverDeliveriesPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/wallet">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverWalletPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/payments">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverPaymentsPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/opportunities">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverOpportunitiesPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/activity">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverActivityPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/rewards">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverRewardsPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/messages">
+        {() => (<DriverAccountShell><ProtectedRoute component={DeliveryMessagesPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/reviews">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverReviewsPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/settings">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverSettingsPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
 
       <Route component={NotFound} />

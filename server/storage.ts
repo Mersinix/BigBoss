@@ -1262,6 +1262,8 @@ export class DatabaseStorage implements IStorage {
         totalAmount: order?.totalAmount ?? 0,
         createdAt: order?.createdAt ?? null,
         itemCount: allItemsForOrder.length,
+        priority: (order?.priority ?? 'NORMAL') as string,
+        scheduledAt: order?.scheduledAt ?? null,
       },
       subOrder: { id: subOrder?.id ?? row.subOrderId, status: subOrder?.status ?? '', supplierName: subOrder?.supplierName ?? supplier?.name ?? 'Unknown', subtotal: subOrder?.subtotal ?? 0 },
       cafe: { id: row.cafeId, name: cafe?.name ?? 'Unknown', phone: cafe?.phone ?? null, locationAddress: cafe?.locationAddress ?? null },

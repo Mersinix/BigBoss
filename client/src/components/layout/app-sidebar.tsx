@@ -214,18 +214,10 @@ export function AppSidebar() {
       ];
     }
 
-    if (user.role === "DRIVER") {
-      return [
-        {
-          label: "MAIN",
-          items: [
-            { title: "Dashboard", url: "/", icon: LayoutDashboard },
-            { title: "My Deliveries", url: "/delivery/deliveries", icon: Truck },
-            { title: "Messages", url: "/delivery/messages", icon: MessageCircle },
-          ],
-        },
-      ];
-    }
+    // DRIVER no longer uses this sidebar — the Driver account now uses its own top switcher
+    // shell (see components/layout/driver-account-shell.tsx and App.tsx's /driver/... routes),
+    // mirroring the Barista Marketplace account structure. HomeRoute redirects DRIVER to
+    // /driver before DashboardLayout (which renders this sidebar) is ever reached.
 
     if (user.role === "PRINTER") {
       return [

@@ -324,7 +324,7 @@ export type DeliveryMode = 'DELIVERY_COMPANY' | 'SUPPLIER';
 // nothing here is duplicated/stored on the deliveries row itself beyond the pickup/
 // destination snapshots that already existed.
 export type DeliveryWithDetails = Delivery & {
-  order: { id: number; status: string; totalAmount: number; createdAt: Date | null; itemCount: number };
+  order: { id: number; status: string; totalAmount: number; createdAt: Date | null; itemCount: number; priority: string; scheduledAt: Date | null };
   subOrder: { id: number; status: string; supplierName: string; subtotal: number };
   cafe: { id: number; name: string; phone: string | null; locationAddress: string | null };
   supplier: { id: number; name: string; phone: string | null; locationAddress: string | null; locationLat: string | null; locationLng: string | null };

@@ -3,15 +3,16 @@ import { useAuth } from "@/hooks/use-auth";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mail, Phone, MapPin, Truck, CheckCircle2, Clock, Star, Building2 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { StatCard } from "@/components/dashboard/dashboard-kit";
+import { getAvatarUrl } from "@/lib/avatar";
 
 // "Mon Compte" — the Driver account's landing page. Profile fields come straight from
-// useAuth() (the users row — see shared/schema.ts, a DRIVER account has no dedicated
-// avatar/vehicle columns today, so those are simply not shown rather than fabricated).
+// useAuth() (the users row — see shared/schema.ts; a DRIVER account has no dedicated
+// vehicle columns today, so those are simply not shown rather than fabricated).
 // Activity counts and the operator name (delivery company or supplier) are derived from
 // GET /api/deliveries, already scoped server-side to this driver's own rows (see
 // storage.getDeliveries) and kept realtime by DriverAccountShell's useRealtime() call.
@@ -47,6 +48,7 @@ export default function DriverAccountPage() {
       <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20">
         <CardContent className="p-6 flex flex-wrap items-center gap-5">
           <Avatar className="w-16 h-16 shrink-0">
+            <AvatarImage src={getAvatarUrl(user)} alt={user?.name ?? "Driver"} />
             <AvatarFallback className="bg-blue-600 text-white font-bold text-xl">
               {user?.name?.charAt(0)?.toUpperCase() ?? "D"}
             </AvatarFallback>

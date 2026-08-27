@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { db } from "./db";
 import { isNull, isNotNull, or, like, gte, lte } from "drizzle-orm";
 import { evaluateCartPromotions as engineEvaluate } from "./promotions-engine";
@@ -15,6 +16,7 @@ import {
   conversations, conversationParticipants, messages,
   orderReturns,
   deliveries,
+  passwordResetCodes,
   type OrderReturn, type InsertOrderReturn,
   type Delivery, type DeliveryStatus, type DeliveryMode, type DeliveryWithDetails, type GeoLocation,
   type LandingConfig, type Prospect, type InsertProspect, type ProspectStats,
@@ -443,9 +445,135 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async updateUserProfile(id: number, updates: { name?: string; phone?: string; email?: string; password?: string }) {
+  async updateUserProfile(id: number, updates: { name?: string; phone?: string; email?: string; password?: string; isWhatsapp?: boolean; profileImageUrl?: string | null }) {
     const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
     return updated;
+  }
+
+  // ── Password reset ────────────────────────────────────────────────────────────
+  // Two-phase: a 6-digit code is emailed and verified first, then a short-lived opaque
+  // token authorizes the actual password change in a separate request (see
+  // shared/schema.ts passwordResetCodes for the full rationale). Only hashes are ever
+  // persisted; raw values exist only transiently in memory / in the outgoing email.
+
+  private hashResetValue(value: string): string {
+    return crypto.createHash("sha256").update(value).digest("hex");
+  }
+
+  /**
+   * Creates a new reset code for this user, invalidating any still-usable prior codes first
+   * (so requesting a new code always makes older ones dead, never leaving two valid codes at
+   * once). Returns the RAW 6-digit code — the only caller allowed to see it is the route
+   * handler, which passes it straight to sendPasswordResetEmail and never returns it in the
+   * HTTP response.
+   *
+   * All expiry/cooldown timestamps here are computed and later compared using Postgres's own
+   * now() (via sql`now() + interval ...`), never app-side `new Date()` arithmetic. These
+   * columns are `timestamp without time zone`, and this database's session timezone is not
+   * UTC — writing an app-computed Date through the driver and later comparing it against a
+   * DB-computed defaultNow() value on the same column type produced a real, verified bug
+   * (codeExpiresAt appearing to be over an hour before its own createdAt), which made the
+   * resend cooldown permanently block every request. Keeping every write AND every comparison
+   * on the database's clock avoids that entire class of mismatch.
+   */
+  async createPasswordResetCode(userId: number): Promise<string> {
+    await db.update(passwordResetCodes)
+      .set({ usedAt: sql`now()` })
+      .where(and(eq(passwordResetCodes.userId, userId), isNull(passwordResetCodes.usedAt)));
+
+    const code = String(crypto.randomInt(100000, 1000000));
+    await db.insert(passwordResetCodes).values({
+      userId,
+      codeHash: this.hashResetValue(code),
+      codeExpiresAt: sql`now() + interval '10 minutes'` as unknown as Date,
+    });
+    return code;
+  }
+
+  /** Most recent still-usable (not consumed) reset-code row for a user, if any — used both
+   * to verify a code and to apply a short per-email cooldown on new requests. */
+  private async getActivePasswordResetRow(userId: number) {
+    const rows = await db.select().from(passwordResetCodes)
+      .where(and(eq(passwordResetCodes.userId, userId), isNull(passwordResetCodes.usedAt)))
+      .orderBy(desc(passwordResetCodes.createdAt))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  /** Cooldown check before issuing a new code, so "resend" can't be used to spam a user's
+   * inbox or brute-force-probe email addresses at high volume. Computed entirely in SQL
+   * (created_at vs now() - interval), never against an app-side Date — see
+   * createPasswordResetCode's comment for why. */
+  async canRequestNewPasswordResetCode(userId: number): Promise<boolean> {
+    const [row] = await db.select({ tooSoon: sql<boolean>`${passwordResetCodes.createdAt} > now() - interval '60 seconds'` })
+      .from(passwordResetCodes)
+      .where(and(eq(passwordResetCodes.userId, userId), isNull(passwordResetCodes.usedAt)))
+      .orderBy(desc(passwordResetCodes.createdAt))
+      .limit(1);
+    if (!row) return true;
+    return !row.tooSoon;
+  }
+
+  private static readonly MAX_RESET_CODE_ATTEMPTS = 5;
+
+  /**
+   * Verifies a submitted code against this user's latest active reset request. On success,
+   * consumes the code (so it can never be verified a second time) and issues a short-lived
+   * opaque token (returned raw, stored only as a hash) that the final reset-password step
+   * must present — the numeric code itself is never accepted again after this point.
+   */
+  async verifyPasswordResetCode(userId: number, code: string): Promise<
+    { ok: true; resetToken: string } | { ok: false; reason: "invalid" | "expired" | "too_many_attempts" }
+  > {
+    const row = await this.getActivePasswordResetRow(userId);
+    if (!row) return { ok: false, reason: "invalid" };
+    const [{ expired }] = await db.select({ expired: sql<boolean>`${passwordResetCodes.codeExpiresAt} < now()` })
+      .from(passwordResetCodes).where(eq(passwordResetCodes.id, row.id));
+    if (expired) return { ok: false, reason: "expired" };
+    if (row.codeAttempts >= DatabaseStorage.MAX_RESET_CODE_ATTEMPTS) {
+      // Burn the row so a fresh "forgot password" request is required — caps total guesses
+      // per emailed code at MAX_RESET_CODE_ATTEMPTS regardless of how this state was reached.
+      await db.update(passwordResetCodes).set({ usedAt: sql`now()` }).where(eq(passwordResetCodes.id, row.id));
+      return { ok: false, reason: "too_many_attempts" };
+    }
+    if (this.hashResetValue(code) !== row.codeHash) {
+      await db.update(passwordResetCodes)
+        .set({ codeAttempts: sql`${passwordResetCodes.codeAttempts} + 1` })
+        .where(eq(passwordResetCodes.id, row.id));
+      return { ok: false, reason: "invalid" };
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    await db.update(passwordResetCodes)
+      .set({
+        verifiedTokenHash: this.hashResetValue(resetToken),
+        verifiedTokenExpiresAt: sql`now() + interval '10 minutes'` as unknown as Date,
+      })
+      .where(eq(passwordResetCodes.id, row.id));
+    return { ok: true, resetToken };
+  }
+
+  /**
+   * Applies the actual password change. Looks the row up strictly by the token's hash (never
+   * trusts a client-supplied userId/email for this step) and requires usedAt still null and
+   * the token not expired — so a token can authorize exactly one password change, for exactly
+   * the account whose code was verified, and never after 10 minutes.
+   */
+  async resetPasswordWithToken(resetToken: string, newPassword: string): Promise<boolean> {
+    const tokenHash = this.hashResetValue(resetToken);
+    const [row] = await db.select().from(passwordResetCodes)
+      .where(and(
+        eq(passwordResetCodes.verifiedTokenHash, tokenHash),
+        isNull(passwordResetCodes.usedAt),
+        sql`${passwordResetCodes.verifiedTokenExpiresAt} > now()`,
+      ));
+    if (!row) return false;
+
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({ password: newPassword }).where(eq(users.id, row.userId));
+      await tx.update(passwordResetCodes).set({ usedAt: sql`now()` }).where(eq(passwordResetCodes.id, row.id));
+    });
+    return true;
   }
 
   async updateUserBilling(id: number, billing: BillingInfo) {
@@ -2542,6 +2670,7 @@ export class DatabaseStorage implements IStorage {
         reviewCount: stats?.total ?? 0,
         name: user.name,
         phone: user.phone ?? null,
+        profileImageUrl: user.profileImageUrl ?? null,
         location,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
         available,
@@ -2861,6 +2990,7 @@ export class DatabaseStorage implements IStorage {
         name: user.name,
         email: user.email,
         phone: user.phone,
+        profileImageUrl: user.profileImageUrl,
         status: user.status,
         location: user.locationAddress ?? profile.coverageArea,
         available: profile.isAvailable && !profile.isOnVacation,
@@ -3020,6 +3150,7 @@ export class DatabaseStorage implements IStorage {
         userId: user.id,
         name: user.name,
         phone: user.phone ?? null,
+        profileImageUrl: user.profileImageUrl ?? null,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
         location: user.locationAddress ?? profile.city ?? "",
         available,
@@ -3054,6 +3185,7 @@ export class DatabaseStorage implements IStorage {
       userId: row.user.id,
       name: row.user.name,
       phone: row.user.phone ?? null,
+      profileImageUrl: row.user.profileImageUrl ?? null,
       initials: row.user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
       location: row.user.locationAddress ?? row.profile.city ?? "",
       available: row.profile.isAvailable && !row.profile.isOnVacation,
@@ -5978,7 +6110,7 @@ export class DatabaseStorage implements IStorage {
       const myParticipant = myParticipantMap.get(conv.id)!;
       const others = allParticipants
         .filter(r => r.cp.conversationId === conv.id && r.cp.userId !== userId)
-        .map(r => ({ id: r.u.id, name: r.u.name, role: r.u.role }));
+        .map(r => ({ id: r.u.id, name: r.u.name, role: r.u.role, profileImageUrl: r.u.profileImageUrl }));
 
       // Unread: messages after lastReadAt (or all if never read)
       const myLastRead = myParticipant.lastReadAt;
@@ -6283,7 +6415,7 @@ export class DatabaseStorage implements IStorage {
       inArray(users.id, Array.from(eligibleIds)),
       ...(roleCondition ? [roleCondition] : []),
     ));
-    return contacts.map(u => ({ id: u.id, name: u.name, role: u.role }));
+    return contacts.map(u => ({ id: u.id, name: u.name, role: u.role, profileImageUrl: u.profileImageUrl }));
   }
 
   /** Admin: hide or show a conversation for a specific user (or for all current participants if targetUserId is null). */
@@ -6322,6 +6454,7 @@ export class DatabaseStorage implements IStorage {
           id: r.u.id,
           name: r.u.name,
           role: r.u.role,
+          profileImageUrl: r.u.profileImageUrl,
           hiddenAt: r.cp.hiddenAt ? r.cp.hiddenAt.toISOString() : null,
         }));
       const lastMsg = lastMsgs.find(m => m.conversationId === conv.id);

@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAvatarUrl } from "@/lib/avatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
@@ -114,6 +115,7 @@ function AgentCard({
       <div className="p-3 flex flex-col gap-2">
         <div className="flex items-start gap-3">
           <Avatar className="w-10 h-10 shrink-0">
+            <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} />
             <AvatarFallback className="bg-orange-100 text-orange-700 font-bold text-sm">{agent.initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0 pr-6">
@@ -243,7 +245,7 @@ export function AgentDetailModal({
           <div className="p-5">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start gap-3">
-                <Avatar className="w-14 h-14"><AvatarFallback className="bg-orange-100 text-orange-700 font-bold text-lg">{agent.initials}</AvatarFallback></Avatar>
+                <Avatar className="w-14 h-14"><AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} /><AvatarFallback className="bg-orange-100 text-orange-700 font-bold text-lg">{agent.initials}</AvatarFallback></Avatar>
                 <div>
                   <h2 className="font-bold text-lg leading-tight">{agent.name}</h2>
                 <p className={`text-sm ${t.textMuted}`}>{agent.jobTitle}</p>

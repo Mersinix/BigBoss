@@ -109,6 +109,27 @@
     font-family: var(--font-display);
     @apply tracking-tight font-bold text-foreground;
   }
+
+  /* Chrome/Edge/Safari force a white (or yellow) background + black text on
+     autofilled inputs, ignoring our own input styling. The inset box-shadow
+     trick repaints that background using our own theme color before the
+     browser gets to paint it, and the long transition delay stops the
+     yellow "flash" some browsers show for a split second on autofill. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    -webkit-box-shadow: 0 0 0px 1000px hsl(var(--background)) inset;
+    box-shadow: 0 0 0px 1000px hsl(var(--background)) inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover,
+  .dark input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #fff;
+    -webkit-box-shadow: 0 0 0px 1000px #1f2937 inset;
+    box-shadow: 0 0 0px 1000px #1f2937 inset;
+  }
 }
 
 @layer utilities {

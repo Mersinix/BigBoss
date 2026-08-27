@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { broadcast, broadcastToUsers } from "./ws";
 import { storage } from "./storage";
+import { sendPasswordResetEmail } from "./email";
 import {
   geocodeAddress,
   generateGrid,
@@ -127,6 +128,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     password: z.string().min(6, "Password must be at least 6 characters"),
     role: z.enum(['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE']).optional(),
     phone: z.string().optional().nullable(),
+    isWhatsapp: z.boolean().optional(),
+    profileImageUrl: z.string().optional().nullable(),
     governorates: z.array(z.string()).optional().nullable(),
     printCategories: z.array(z.string()).optional().nullable(),
     marketingCategories: z.array(z.string()).optional().nullable(),
@@ -159,8 +162,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const PENDING_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
       const LOCATION_REQUIRED_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
       const role = body.role ?? 'CAFE_OWNER';
-      if (LOCATION_REQUIRED_ROLES.includes(role) && (!body.locationAddress || !body.locationLat || !body.locationLng)) {
-        return res.status(400).json({ message: "Location is required for this role. Please pick your address on the map." });
+      // Registration now only collects the address-details step (no map pin), so
+      // lat/lng are no longer required here — Admin sets/refines the precise
+      // geolocation later via the full 3-step location picker (see /api/admin/users/:id/location).
+      if (LOCATION_REQUIRED_ROLES.includes(role) && !body.locationAddress) {
+        return res.status(400).json({ message: "L'adresse est requise pour ce type de compte." });
       }
       const status = PENDING_ROLES.includes(role) ? 'pending' : 'approved';
       const existing = await storage.getUserByEmail(body.email);
@@ -178,6 +184,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         role,
         status,
         phone: body.phone ?? null,
+        isWhatsapp: body.isWhatsapp ?? false,
+        profileImageUrl: body.profileImageUrl?.trim() || null,
         categories: body.categories ?? null,
         governorates: body.governorates ?? null,
         printCategories: body.printCategories ?? null,
@@ -192,6 +200,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const user = await storage.createUser(userData);
       req.session.userId = user.id;
+      broadcast("admin_user_directory_changed");
       res.status(201).json(user);
     } catch (err) {
       if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
@@ -223,6 +232,75 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post(api.auth.logout.path, (req, res) => {
     req.session.destroy(() => res.json({ message: "Logged out" }));
+  });
+
+  // ── Password reset ────────────────────────────────────────────────────────────
+  // Reuses the existing users table / getUserByEmail / updateUserProfile — no parallel
+  // account system. See shared/schema.ts passwordResetCodes and storage.ts's
+  // createPasswordResetCode/verifyPasswordResetCode/resetPasswordWithToken for the security
+  // model (hashed codes, expiry, single-use, attempt limits, opaque second-phase token).
+  const GENERIC_FORGOT_MESSAGE = "Si un compte existe avec cet email, un code de vérification a été envoyé.";
+
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = z.object({ email: z.string().email() }).parse(req.body);
+      const user = await storage.getUserByEmail(email);
+      // Always the same response whether or not the account exists — never lets a caller
+      // distinguish a real account from an unknown email (account-enumeration protection).
+      if (user) {
+        const canSend = await storage.canRequestNewPasswordResetCode(user.id);
+        if (canSend) {
+          const code = await storage.createPasswordResetCode(user.id);
+          await sendPasswordResetEmail(user.email, code);
+        }
+      }
+      res.json({ message: GENERIC_FORGOT_MESSAGE });
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: "Email invalide." });
+      res.status(200).json({ message: GENERIC_FORGOT_MESSAGE });
+    }
+  });
+
+  app.post("/api/auth/verify-reset-code", async (req, res) => {
+    try {
+      const { email, code } = z.object({ email: z.string().email(), code: z.string().min(1) }).parse(req.body);
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(400).json({ message: "Code invalide.", reason: "invalid" });
+      const result = await storage.verifyPasswordResetCode(user.id, code);
+      if (!result.ok) {
+        const messages: Record<string, string> = {
+          invalid: "Code invalide.",
+          expired: "Ce code a expiré. Veuillez en demander un nouveau.",
+          too_many_attempts: "Trop de tentatives. Veuillez demander un nouveau code.",
+        };
+        return res.status(400).json({ message: messages[result.reason], reason: result.reason });
+      }
+      res.json({ resetToken: result.resetToken });
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: "Requête invalide." });
+      res.status(500).json({ message: "Erreur serveur." });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { resetToken, newPassword, confirmPassword } = z.object({
+        resetToken: z.string().min(1),
+        newPassword: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+        confirmPassword: z.string().min(1),
+      }).parse(req.body);
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
+      }
+      const success = await storage.resetPasswordWithToken(resetToken, newPassword);
+      if (!success) {
+        return res.status(400).json({ message: "Ce lien de réinitialisation a expiré ou a déjà été utilisé. Veuillez recommencer." });
+      }
+      res.json({ message: "Mot de passe réinitialisé avec succès." });
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Erreur serveur." });
+    }
   });
 
   // ── System Management (platform service visibility) ────────────────────────
@@ -360,10 +438,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch('/api/auth/me/profile', requireAuth, async (req, res) => {
     try {
-      const { name, phone, password, currentPassword } = req.body;
-      const updates: { name?: string; phone?: string; password?: string } = {};
+      const { name, phone, isWhatsapp, profileImageUrl, password, currentPassword } = req.body;
+      const updates: { name?: string; phone?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; password?: string } = {};
       if (name !== undefined) updates.name = name;
       if (phone !== undefined) updates.phone = phone;
+      if (isWhatsapp !== undefined) updates.isWhatsapp = !!isWhatsapp;
+      if (profileImageUrl !== undefined) updates.profileImageUrl = profileImageUrl?.trim() || null;
       if (password) {
         if (!currentPassword) return res.status(400).json({ message: "Current password required" });
         const existing = await storage.getUser(req.session.userId!);
@@ -374,6 +454,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         updates.password = password;
       }
       const user = await storage.updateUserProfile(req.session.userId!, updates);
+      broadcastToUsers([req.session.userId!], "user_profile_updated");
+      broadcast("admin_user_directory_changed");
       res.json(user);
     } catch (err) {
       res.status(500).json({ message: "Failed to update profile" });
@@ -391,6 +473,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         placeId: String(placeId ?? ""),
         details: details ?? undefined,
       });
+      broadcastToUsers([req.session.userId!], "user_profile_updated");
+      broadcast("admin_user_directory_changed");
       res.json(user);
     } catch (err) {
       res.status(500).json({ message: "Failed to update location" });
@@ -2036,7 +2120,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/users", requireAdmin, async (req, res) => {
     try {
-      const { name, email, password, role, phone, governorates, printCategories, marketingCategories, maintenanceCategories, categories } = req.body;
+      const { name, email, password, role, phone, isWhatsapp, profileImageUrl, governorates, printCategories, marketingCategories, maintenanceCategories, categories } = req.body;
       if (!name || !email || !password || !role) return res.status(400).json({ message: "name, email, password and role are required" });
       const existing = await storage.getUserByEmail(email);
       if (existing) return res.status(400).json({ message: "Email already exists" });
@@ -2047,12 +2131,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = await storage.createUser({
         name, email, password, role, status: 'approved',
         phone: phone ?? null,
+        isWhatsapp: !!isWhatsapp,
+        profileImageUrl: profileImageUrl?.trim() || null,
         governorates: governorates ?? null,
         printCategories: printCategories ?? null,
         marketingCategories: marketingCategories ?? null,
         maintenanceCategories: maintenanceCategories ?? null,
         categories: categories ?? null,
       } as any);
+      broadcast("admin_user_directory_changed");
       res.status(201).json(user);
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -2060,18 +2147,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { name, email, phone, governorates, printCategories, marketingCategories, maintenanceCategories, categories, locationAddress } = req.body;
+      const {
+        name, email, phone, isWhatsapp, profileImageUrl,
+        governorates, printCategories, marketingCategories, maintenanceCategories, categories,
+        locationAddress, locationLat, locationLng, locationPlaceId, locationDetails,
+      } = req.body;
       const updates: any = {};
       if (name !== undefined) updates.name = name;
       if (email !== undefined) updates.email = email;
       if (phone !== undefined) updates.phone = phone;
+      if (isWhatsapp !== undefined) updates.isWhatsapp = !!isWhatsapp;
+      if (profileImageUrl !== undefined) updates.profileImageUrl = profileImageUrl?.trim() || null;
       if (governorates !== undefined) updates.governorates = governorates;
       if (printCategories !== undefined) updates.printCategories = printCategories;
       if (marketingCategories !== undefined) updates.marketingCategories = marketingCategories;
       if (maintenanceCategories !== undefined) updates.maintenanceCategories = maintenanceCategories;
       if (categories !== undefined) updates.categories = categories;
       if (locationAddress !== undefined) updates.locationAddress = locationAddress;
+      if (locationLat !== undefined) updates.locationLat = locationLat !== null ? String(locationLat) : null;
+      if (locationLng !== undefined) updates.locationLng = locationLng !== null ? String(locationLng) : null;
+      if (locationPlaceId !== undefined) updates.locationPlaceId = locationPlaceId;
+      if (locationDetails !== undefined) updates.locationDetails = locationDetails;
       const updated = await storage.updateUser(id, updates);
+      broadcastToUsers([id], "user_profile_updated");
+      broadcast("admin_user_directory_changed");
       res.json(updated);
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -2079,6 +2178,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteUser(parseInt(req.params.id));
+      broadcast("admin_user_directory_changed");
       res.json({ message: "Deleted" });
     } catch { res.status(500).json({ message: "Error" }); }
   });

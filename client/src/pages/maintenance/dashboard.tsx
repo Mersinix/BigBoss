@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getAvatarUrl } from "@/lib/avatar";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -218,6 +219,7 @@ function MaintenanceMessages() {
                     className="w-full flex items-center gap-3 px-5 py-3 text-left border-b border-gray-100 last:border-0 hover:bg-orange-50/50 transition-colors"
                   >
                     <Avatar className="w-9 h-9 shrink-0">
+                      <AvatarImage src={getAvatarUrl(conversation.otherParticipants[0] as any)} alt={name} />
                       <AvatarFallback className="bg-orange-100 text-orange-700 font-bold text-xs">{name.charAt(0).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
@@ -629,6 +631,7 @@ export default function MaintenanceDashboard() {
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-4">
                   <Avatar className="w-16 h-16">
+                    <AvatarImage src={getAvatarUrl(user)} alt={profileName || "Maintenance"} />
                     <AvatarFallback className="bg-orange-100 text-orange-700 font-bold text-xl">
                       {profileName.charAt(0)?.toUpperCase() ?? "M"}
                     </AvatarFallback>

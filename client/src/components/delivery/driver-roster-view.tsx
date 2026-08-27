@@ -3,11 +3,12 @@ import { useDeliveries } from "@/hooks/use-deliveries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Truck, Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getAvatarUrl } from "@/lib/avatar";
 import type { User } from "@shared/schema";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 
@@ -110,6 +111,7 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
                     <TableCell>
                       <div className="flex items-center gap-2.5">
                         <Avatar className="w-8 h-8">
+                          <AvatarImage src={getAvatarUrl(d)} alt={d.name} />
                           <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">{d.name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <p className="font-medium text-sm">{d.name}</p>

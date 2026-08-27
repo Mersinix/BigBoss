@@ -18,7 +18,7 @@ import {
   ShoppingBag, Printer, Coffee, Megaphone, Wrench, MapPin,
   ChevronDown, Instagram, Facebook, Mail,
   Phone, ArrowRight, CheckCircle, Building2, Truck, GraduationCap, Users, ChevronRight,
-  ChevronLeft, Clock, Globe, Moon, Sun, X
+  ChevronLeft, Clock, Globe, Moon, Sun, X, Eye, EyeOff, KeyRound, Loader2, MailCheck
 } from "lucide-react";
 import { Link, Redirect } from "wouter";
 import type { CategoryWithCount, LandingConfig, HeroSlide } from "@shared/schema";
@@ -255,27 +255,18 @@ const ROLES = [
   { id: "MAINTENANCE",         label: "Maintenance",        icon: Wrench,        color: "text-orange-600",  bg: "bg-orange-50",  border: "border-orange-200",  iconBg: "bg-orange-500",  hover: "hover:border-orange-400",  desc: "Proposez vos services de maintenance aux cafés." },
 ];
 
-// ── Registration constants ────────────────────────────────────────────────────
-
-const TUNISIAN_GOVERNORATES = [
-  "Ariana","Béja","Ben Arous","Bizerte","Gabès","Gafsa","Jendouba","Kairouan",
-  "Kasserine","Kébili","Le Kef","Mahdia","La Manouba","Médenine","Monastir",
-  "Nabeul","Sfax","Sidi Bouzid","Siliana","Sousse","Tataouine","Tozeur","Tunis","Zaghouan"
-];
-const PRINT_CATS = ["Flyers","Menus","Cartes de visite","Affiches","Enseignes","Packaging","Étiquettes","Banderoles","Gobelets","Kakémonos"];
-const MARKETING_CATS = ["Réseaux sociaux","Vidéo","Photographie","SEO","Publicité","Branding","Site web","Influence","Email marketing","Événementiel"];
-const BARISTA_SPECIALTIES = ["Espresso","Latte Art","Cold Brew","Brewing Methods","Formation barista","Sensory Training","Coffee Roasting","Machine Maintenance"];
-const MAINTENANCE_CATS = ["Machines à café","Machines espresso","Moulins à café","Machines à glace","Réfrigérateurs","Lave-vaisselle","Fours","Mixeurs","Électricité","Plomberie","Climatisation","Ventilation","Systèmes POS","Réseaux WiFi","Caméras sécurité","Mobilier","Éclairage","Menuiserie","Peinture","Signalétique"];
-
 // ── Validation schemas ────────────────────────────────────────────────────────
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email ou téléphone requis"),
   password: z.string().min(6, "Mot de passe requis (min. 6 caractères)"),
 });
+type AuthTab = "login" | "register" | "forgot-email" | "forgot-code" | "forgot-password" | "forgot-success";
 const baseFields = {
   email: z.string().email("Email invalide"),
   phone: z.string().min(8, "Numéro invalide"),
+  isWhatsapp: z.boolean().optional(),
+  profileImageUrl: z.string().url("URL invalide").optional().or(z.literal("")),
   password: z.string().min(6, "Min. 6 caractères"),
   confirmPassword: z.string().min(6, "Min. 6 caractères"),
 };
@@ -283,7 +274,7 @@ const pw = (d: any) => d.password === d.confirmPassword;
 const pwErrMsg = { message: "Les mots de passe ne correspondent pas", path: ["confirmPassword"] };
 const cafeSchema = z.object({ ...baseFields, cafeName: z.string().min(2), firstName: z.string().min(2) }).refine(pw, pwErrMsg);
 const supplierSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
-const deliverySchema = z.object({ ...baseFields, firstName: z.string().min(2), lastName: z.string().min(2), governorates: z.array(z.string()).min(1) }).refine(pw, pwErrMsg);
+const deliverySchema = z.object({ ...baseFields, firstName: z.string().min(2), lastName: z.string().min(2), governorates: z.array(z.string()).optional() }).refine(pw, pwErrMsg);
 const printerSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 const marketingSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 const baristaSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
@@ -301,22 +292,18 @@ function FormField({ id, label, type = "text", placeholder, register, error }: {
   );
 }
 
-function MultiSelect({ label, options, selected, onChange }: { label: string; options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
-  const toggle = (opt: string) => {
-    if (selected.includes(opt)) onChange(selected.filter((s) => s !== opt));
-    else onChange([...selected, opt]);
-  };
+function PhoneWhatsappField({ register, whatsappRegister, error }: { register: any; whatsappRegister: any; error?: string }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <div className="flex flex-wrap gap-1.5 p-3 rounded-xl border border-border/50 bg-secondary/20 max-h-32 overflow-y-auto">
-        {options.map((opt) => (
-          <button key={opt} type="button" onClick={() => toggle(opt)} data-testid={`chip-${opt.replace(/\s/g, "-")}`}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${selected.includes(opt) ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/50 hover:border-primary/50"}`}>
-            {opt}
-          </button>
-        ))}
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor="reg-phone">Téléphone</Label>
+        <label htmlFor="reg-is-whatsapp" className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+          <input id="reg-is-whatsapp" type="checkbox" data-testid="checkbox-whatsapp" className="w-3.5 h-3.5 rounded border-border/50 accent-primary" {...whatsappRegister} />
+          Numéro WhatsApp
+        </label>
       </div>
+      <Input id="reg-phone" placeholder="+216 XX XXX XXX" data-testid="input-reg-phone" className="rounded-xl px-4 py-5 bg-secondary/30 border-border/50" {...register} />
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
@@ -363,18 +350,19 @@ function FeatureChip({ icon, label, sublabel, dk }: { icon: ReactNode; label: st
 // ── Role-specific forms ───────────────────────────────────────────────────────
 
 function CafeForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(cafeSchema), defaultValues: { cafeName: "", firstName: "", email: "", phone: "", password: "", confirmPassword: "" } });
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(cafeSchema), defaultValues: { cafeName: "", firstName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="cafeName" label="Nom du café" placeholder="Ex: Café des Arts" register={register("cafeName")} error={errors.cafeName?.message} />
         <FormField id="firstName" label="Prénom" placeholder="Votre prénom" register={register("firstName")} error={errors.firstName?.message} />
       </div>
+      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="cafe@example.com" register={register("email")} error={errors.email?.message} />
-      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
-        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera demandée à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
@@ -383,18 +371,19 @@ function CafeForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLo
 }
 
 function SupplierForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(supplierSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(supplierSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="companyName" label="Nom de l'entreprise" placeholder="Ex: TunRoast SARL" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Nom du contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
+      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@company.com" register={register("email")} error={errors.email?.message} />
-      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
-        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation GPS sera requise à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
@@ -403,46 +392,40 @@ function SupplierForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; 
 }
 
 function DeliveryForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm({ resolver: zodResolver(deliverySchema), defaultValues: { firstName: "", lastName: "", email: "", phone: "", password: "", confirmPassword: "", governorates: [] as string[] } });
-  const [govs, setGovs] = useState<string[]>([]);
-  const updateGovs = (v: string[]) => { setGovs(v); setValue("governorates", v); };
-  const doSubmit = (d: any) => onSubmit({ ...d, governorates: govs });
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(deliverySchema), defaultValues: { firstName: "", lastName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
   return (
-    <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="firstName" label="Prénom" placeholder="Votre prénom" register={register("firstName")} error={errors.firstName?.message} />
         <FormField id="lastName" label="Nom" placeholder="Votre nom" register={register("lastName")} error={errors.lastName?.message} />
       </div>
+      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="delivery@example.com" register={register("email")} error={errors.email?.message} />
-      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
-        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <MultiSelect label="Gouvernorats couverts" options={TUNISIAN_GOVERNORATES} selected={govs} onChange={updateGovs} />
-      {errors.governorates && <p className="text-xs text-destructive">{errors.governorates.message as string}</p>}
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
 function PrinterForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(printerSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
-  const [cats, setCats] = useState<string[]>([]);
-  const doSubmit = (d: any) => onSubmit({ ...d, printCategories: cats });
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(printerSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
   return (
-    <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="companyName" label="Nom de l'imprimerie" placeholder="Ex: ImprimTunis" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
+      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@imprimerie.com" register={register("email")} error={errors.email?.message} />
-      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
-        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <MultiSelect label="Catégories d'impression" options={PRINT_CATS} selected={cats} onChange={setCats} />
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
@@ -450,54 +433,41 @@ function PrinterForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; i
 }
 
 function MarketingForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(marketingSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
-  const [cats, setCats] = useState<string[]>([]);
-  const doSubmit = (d: any) => onSubmit({ ...d, marketingCategories: cats });
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(marketingSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
   return (
-    <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="companyName" label="Nom de l'agence" placeholder="Ex: TunMedia" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
+      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@agence.com" register={register("email")} error={errors.email?.message} />
-      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
-        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <MultiSelect label="Services proposés" options={MARKETING_CATS} selected={cats} onChange={setCats} />
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
-// Single source of truth for Barista skill names — fetched from the Barista
-// Marketplace taxonomy table (server/storage.ts getBaristaSkills). BARISTA_SPECIALTIES
-// remains as a fallback so registration keeps working if the fetch hasn't resolved yet.
-function useBaristaSkillOptions(): string[] {
-  const { data } = useQuery<{ name: string }[]>({ queryKey: ["/api/barista/skills"] });
-  return data && data.length > 0 ? data.map((s) => s.name) : BARISTA_SPECIALTIES;
-}
-
 function BaristaAcademyForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
-  const [specialties, setSpecialties] = useState<string[]>([]);
-  const specialtyOptions = useBaristaSkillOptions();
-  const doSubmit = (d: any) => onSubmit({ ...d, categories: specialties });
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
   return (
-    <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="companyName" label="Nom de l'académie" placeholder="Ex: Tunis Barista Academy" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
+      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@academy.com" register={register("email")} error={errors.email?.message} />
-      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
-        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <MultiSelect label="Spécialités enseignées" options={specialtyOptions} selected={specialties} onChange={setSpecialties} />
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
@@ -505,23 +475,20 @@ function BaristaAcademyForm({ onSubmit, isLoading }: { onSubmit: (data: any) => 
 }
 
 function BaristaMarketplaceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
-  const [specialties, setSpecialties] = useState<string[]>([]);
-  const specialtyOptions = useBaristaSkillOptions();
-  const doSubmit = (d: any) => onSubmit({ ...d, categories: specialties });
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
   return (
-    <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="companyName" label="Nom / Structure" placeholder="Ex: Barista Pro TN" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Nom du barista" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
+      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="barista@example.com" register={register("email")} error={errors.email?.message} />
-      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
-        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <MultiSelect label="Compétences / spécialités" options={specialtyOptions} selected={specialties} onChange={setSpecialties} />
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
@@ -529,22 +496,20 @@ function BaristaMarketplaceForm({ onSubmit, isLoading }: { onSubmit: (data: any)
 }
 
 function MaintenanceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(maintenanceSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", password: "", confirmPassword: "" } });
-  const [cats, setCats] = useState<string[]>([]);
-  const doSubmit = (d: any) => onSubmit({ ...d, maintenanceCategories: cats });
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(maintenanceSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
   return (
-    <form onSubmit={handleSubmit(doSubmit)} className="space-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="companyName" label="Nom / Structure" placeholder="Ex: TechPro Maintenance" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
+      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@maintenance.com" register={register("email")} error={errors.email?.message} />
-      <FormField id="reg-phone" label="Téléphone" placeholder="+216 XX XXX XXX" register={register("phone")} error={errors.phone?.message} />
+      <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="••••••••" register={register("password")} error={errors.password?.message} />
-        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="••••••••" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <MultiSelect label="Catégories de maintenance" options={MAINTENANCE_CATS} selected={cats} onChange={setCats} />
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
       <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
@@ -574,9 +539,10 @@ export default function LandingPage() {
 
   // Auth modal state
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authTab, setAuthTab] = useState<"login" | "register">("login");
+  const [authTab, setAuthTab] = useState<AuthTab>("login");
   const [selectedRole, setSelectedRole] = useState("CAFE_OWNER");
   const [roleSubModalOpen, setRoleSubModalOpen] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Registration state
   const [isRegistering, setIsRegistering] = useState(false);
@@ -584,6 +550,131 @@ export default function LandingPage() {
   const [authLocationModalOpen, setAuthLocationModalOpen] = useState(false);
   const [isDoingLogin, setIsDoingLogin] = useState(false);
   const [authModalPreLocationClose, setAuthModalPreLocationClose] = useState(false);
+
+  // Forgot-password flow state
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [resetCodeError, setResetCodeError] = useState<string | null>(null);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [isResettingPw, setIsResettingPw] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+  const [newPasswordError, setNewPasswordError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  const resetForgotFlowState = () => {
+    setResetEmail(""); setResetCode(""); setResetToken(null); setResetCodeError(null);
+    setNewPassword(""); setConfirmNewPassword(""); setNewPasswordError(null);
+    setShowNewPassword(false); setShowConfirmNewPassword(false); setResendCooldown(0);
+  };
+
+  const requestResetCode = async (email: string) => {
+    const res = await fetch("/api/auth/forgot-password", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }), credentials: "include",
+    });
+    return res.ok;
+  };
+
+  const handleForgotEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) return;
+    setIsSendingCode(true);
+    try {
+      await requestResetCode(resetEmail.trim());
+      setResetCodeError(null);
+      setResetCode("");
+      setResendCooldown(60);
+      setAuthTab("forgot-code");
+    } catch {
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible d'envoyer le code pour le moment." });
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || isSendingCode) return;
+    setIsSendingCode(true);
+    try {
+      await requestResetCode(resetEmail.trim());
+      setResendCooldown(60);
+      setResetCodeError(null);
+      toast({ title: "Nouveau code envoyé" });
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetCode.trim()) return;
+    setIsVerifyingCode(true);
+    setResetCodeError(null);
+    try {
+      const res = await fetch("/api/auth/verify-reset-code", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail.trim(), code: resetCode.trim() }),
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setResetCodeError(data.message ?? "Code invalide.");
+        return;
+      }
+      setResetToken(data.resetToken);
+      setAuthTab("forgot-password");
+    } catch {
+      setResetCodeError("Erreur serveur. Veuillez réessayer.");
+    } finally {
+      setIsVerifyingCode(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setNewPasswordError(null);
+    if (newPassword.length < 6) {
+      setNewPasswordError("Le mot de passe doit contenir au moins 6 caractères.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setNewPasswordError("Les mots de passe ne correspondent pas.");
+      return;
+    }
+    if (!resetToken) {
+      setNewPasswordError("Session expirée. Veuillez recommencer.");
+      return;
+    }
+    setIsResettingPw(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resetToken, newPassword, confirmPassword: confirmNewPassword }),
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNewPasswordError(data.message ?? "Impossible de réinitialiser le mot de passe.");
+        return;
+      }
+      setAuthTab("forgot-success");
+    } catch {
+      setNewPasswordError("Erreur serveur. Veuillez réessayer.");
+    } finally {
+      setIsResettingPw(false);
+    }
+  };
 
   // Standalone pending approval modal (shown after registration or login for pending accounts)
   const [pendingApprovalModalOpen, setPendingApprovalModalOpen] = useState(false);
@@ -681,12 +772,15 @@ export default function LandingPage() {
   }
 
   const buildPayload = (role: string, data: any) => {
-    const base: any = { role, email: data.email, phone: data.phone, password: data.password };
+    const base: any = {
+      role, email: data.email, phone: data.phone, password: data.password,
+      isWhatsapp: !!data.isWhatsapp, profileImageUrl: data.profileImageUrl || null,
+    };
     switch (role) {
       case "CAFE_OWNER": base.name = `${data.firstName} — ${data.cafeName}`; break;
       case "SUPPLIER": case "PRINTER": case "MARKETING": case "BARISTA_ACADEMY": case "BARISTA_MARKETPLACE": case "MAINTENANCE":
-        base.name = data.companyName; base.categories = data.categories; base.printCategories = data.printCategories; base.marketingCategories = data.marketingCategories; base.maintenanceCategories = data.maintenanceCategories ?? null; break;
-      case "DELIVERY_COMPANY": base.name = `${data.firstName} ${data.lastName}`; base.governorates = data.governorates; break;
+        base.name = data.companyName; break;
+      case "DELIVERY_COMPANY": base.name = `${data.firstName} ${data.lastName}`; break;
     }
     return base;
   };
@@ -724,7 +818,14 @@ export default function LandingPage() {
     setAuthLocationModalOpen(false);
     setAuthModalPreLocationClose(false);
     if (pendingFormData) {
-      const payload = { ...pendingFormData, locationAddress: loc.address, locationLat: parseFloat(loc.lat), locationLng: parseFloat(loc.lng), locationPlaceId: loc.placeId, locationDetails: loc.details ?? null };
+      const payload = {
+        ...pendingFormData,
+        locationAddress: loc.address,
+        locationLat: loc.lat ? parseFloat(loc.lat) : null,
+        locationLng: loc.lng ? parseFloat(loc.lng) : null,
+        locationPlaceId: loc.placeId || null,
+        locationDetails: loc.details ?? null,
+      };
       setPendingFormData(null);
       await submitRegistration(payload);
       setAuthModalOpen(true);
@@ -1303,8 +1404,12 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* ── Registration location picker ── */}
+      {/* ── Registration location picker ──
+          Registration only collects the address-details step (no map pin) — Admin
+          later sets/refines the precise geolocation via the full 3-step flow in
+          Admin → Users → User detail. */}
       <LocationPickerModal open={authLocationModalOpen} mode="account" title="Choisissez votre adresse" required={true}
+        startStep={3} lockStep
         onClose={handleAuthLocationClose} onConfirm={handleAuthLocationConfirm} />
 
       {/* ── Auth modal ── */}
@@ -1370,21 +1475,24 @@ export default function LandingPage() {
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
                   <div className="pt-2">
-                      {/* Tab switcher — pill style */}
-                      <div className={`flex gap-1 rounded-2xl p-1 mb-5 ${swBg}`}>
-                        <button
-                          type="button"
-                          data-testid="tab-login"
-                          onClick={() => setAuthTab("login")}
-                          className={`flex-1 py-2 text-[12px] font-semibold rounded-xl transition-all ${authTab === "login" ? swActive : swInact}`}
-                        >Connexion</button>
-                        <button
-                          type="button"
-                          data-testid="tab-register"
-                          onClick={() => setAuthTab("register")}
-                          className={`flex-1 py-2 text-[12px] font-semibold rounded-xl transition-all ${authTab === "register" ? swActive : swInact}`}
-                        >Inscription</button>
-                      </div>
+                      {/* Tab switcher — pill style. Hidden during the forgot-password sub-flow,
+                          which takes over the modal like the register screen already does. */}
+                      {(authTab === "login" || authTab === "register") && (
+                        <div className={`flex gap-1 rounded-2xl p-1 mb-5 ${swBg}`}>
+                          <button
+                            type="button"
+                            data-testid="tab-login"
+                            onClick={() => setAuthTab("login")}
+                            className={`flex-1 py-2 text-[12px] font-semibold rounded-xl transition-all ${authTab === "login" ? swActive : swInact}`}
+                          >Connexion</button>
+                          <button
+                            type="button"
+                            data-testid="tab-register"
+                            onClick={() => setAuthTab("register")}
+                            className={`flex-1 py-2 text-[12px] font-semibold rounded-xl transition-all ${authTab === "register" ? swActive : swInact}`}
+                          >Inscription</button>
+                        </div>
+                      )}
 
                       {/* LOGIN */}
                       {authTab === "login" && (
@@ -1396,8 +1504,36 @@ export default function LandingPage() {
                               {loginForm.formState.errors.email && <p className="text-xs text-red-500">{loginForm.formState.errors.email.message}</p>}
                             </div>
                             <div className="space-y-1.5">
-                              <label htmlFor="login-password" className={`text-xs font-semibold ${labelCls || "text-gray-700"}`}>Mot de passe</label>
-                              <Input id="login-password" type="password" placeholder="••••••••" data-testid="input-login-password" className={inputCls} {...loginForm.register("password")} />
+                              <div className="flex items-center justify-between">
+                                <label htmlFor="login-password" className={`text-xs font-semibold ${labelCls || "text-gray-700"}`}>Mot de passe</label>
+                                <button
+                                  type="button"
+                                  data-testid="button-forgot-password"
+                                  onClick={() => { resetForgotFlowState(); setAuthTab("forgot-email"); }}
+                                  className="text-xs font-medium text-amber-500 hover:underline"
+                                >
+                                  Mot de passe oublié ?
+                                </button>
+                              </div>
+                              <div className="relative">
+                                <Input
+                                  id="login-password"
+                                  type={showLoginPassword ? "text" : "password"}
+                                  placeholder="••••••••"
+                                  data-testid="input-login-password"
+                                  className={`${inputCls} pr-11`}
+                                  {...loginForm.register("password")}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowLoginPassword((v) => !v)}
+                                  aria-label={showLoginPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                                  data-testid="button-toggle-login-password"
+                                  className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors ${dk ? "text-gray-400 hover:text-gray-200" : "text-gray-400 hover:text-gray-600"}`}
+                                >
+                                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
                               {loginForm.formState.errors.password && <p className="text-xs text-red-500">{loginForm.formState.errors.password.message}</p>}
                             </div>
                             <button
@@ -1418,6 +1554,193 @@ export default function LandingPage() {
                               <ChevronLeft className="w-4 h-4" /> Retour
                             </button>
                           </div>
+                        </div>
+                      )}
+
+                      {/* FORGOT PASSWORD — step 1: identify the account by email. Reuses the
+                          existing users table via GET-by-email server-side; no parallel
+                          account system. */}
+                      {authTab === "forgot-email" && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                          <button type="button" data-testid="button-back-from-forgot-email" onClick={() => { resetForgotFlowState(); setAuthTab("login"); }}
+                            className={`flex items-center gap-1 text-sm transition-colors ${textMut}`}>
+                            <ChevronLeft className="w-4 h-4" /> Retour à la connexion
+                          </button>
+                          <div className="flex flex-col items-center text-center gap-2 pt-1 pb-1">
+                            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                              <KeyRound className="w-5 h-5 text-amber-500" />
+                            </div>
+                            <h3 className={`font-semibold text-sm ${textPri}`}>Mot de passe oublié ?</h3>
+                            <p className={`text-xs ${textMut}`}>Entrez l'email associé à votre compte, nous vous enverrons un code de vérification.</p>
+                          </div>
+                          <form onSubmit={handleForgotEmailSubmit} className="space-y-4">
+                            <div className="space-y-1.5">
+                              <label htmlFor="forgot-email" className={`text-xs font-semibold ${labelCls || "text-gray-700"}`}>Email</label>
+                              <Input
+                                id="forgot-email"
+                                type="email"
+                                placeholder="email@exemple.com"
+                                data-testid="input-forgot-email"
+                                className={inputCls}
+                                value={resetEmail}
+                                onChange={(e) => setResetEmail(e.target.value)}
+                                required
+                              />
+                            </div>
+                            <button
+                              type="submit"
+                              data-testid="button-send-reset-code"
+                              disabled={isSendingCode || !resetEmail.trim()}
+                              className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white transition-all shadow-lg shadow-amber-500/20"
+                            >
+                              {isSendingCode ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Envoi...</span> : "Envoyer le code"}
+                            </button>
+                          </form>
+                        </div>
+                      )}
+
+                      {/* FORGOT PASSWORD — step 2: enter the 6-digit code emailed by the server
+                          (POST /api/auth/forgot-password). Verified server-side against a
+                          hashed, expiring, single-use, attempt-limited code — see
+                          storage.verifyPasswordResetCode. The raw code itself never reaches
+                          this page except via the user's own inbox. */}
+                      {authTab === "forgot-code" && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                          <button type="button" data-testid="button-back-from-forgot-code" onClick={() => setAuthTab("forgot-email")}
+                            className={`flex items-center gap-1 text-sm transition-colors ${textMut}`}>
+                            <ChevronLeft className="w-4 h-4" /> Retour
+                          </button>
+                          <div className="flex flex-col items-center text-center gap-2 pt-1 pb-1">
+                            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                              <MailCheck className="w-5 h-5 text-amber-500" />
+                            </div>
+                            <h3 className={`font-semibold text-sm ${textPri}`}>Vérifiez votre email</h3>
+                            <p className={`text-xs ${textMut}`}>Un code de vérification a été envoyé à <span className={`font-medium ${textPri}`}>{resetEmail}</span> s'il correspond à un compte existant.</p>
+                          </div>
+                          <form onSubmit={handleVerifyCode} className="space-y-4">
+                            <div className="space-y-1.5">
+                              <label htmlFor="forgot-code" className={`text-xs font-semibold ${labelCls || "text-gray-700"}`}>Code de vérification</label>
+                              <Input
+                                id="forgot-code"
+                                inputMode="numeric"
+                                autoFocus
+                                placeholder="123456"
+                                data-testid="input-reset-code"
+                                className={`${inputCls} text-center tracking-[0.3em] font-semibold`}
+                                maxLength={6}
+                                value={resetCode}
+                                onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ""))}
+                                required
+                              />
+                              {resetCodeError && <p className="text-xs text-red-500">{resetCodeError}</p>}
+                            </div>
+                            <button
+                              type="submit"
+                              data-testid="button-confirm-reset-code"
+                              disabled={isVerifyingCode || resetCode.trim().length !== 6}
+                              className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white transition-all shadow-lg shadow-amber-500/20"
+                            >
+                              {isVerifyingCode ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Vérification...</span> : "Confirmer"}
+                            </button>
+                          </form>
+                          <p className={`text-center text-sm pt-1 ${textMut}`}>
+                            {resendCooldown > 0 ? (
+                              <span>Renvoyer le code dans {resendCooldown}s</span>
+                            ) : (
+                              <>Vous n'avez rien reçu ?{" "}
+                                <button type="button" data-testid="button-resend-reset-code" disabled={isSendingCode} onClick={handleResendCode} className="text-amber-500 font-medium hover:underline disabled:opacity-50">
+                                  Renvoyer le code
+                                </button>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* FORGOT PASSWORD — step 3: set a new password, authorized by the
+                          short-lived opaque resetToken issued after step 2 (never the numeric
+                          code itself again) — see storage.resetPasswordWithToken. */}
+                      {authTab === "forgot-password" && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                          <div className="flex flex-col items-center text-center gap-2 pt-1 pb-1">
+                            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                              <KeyRound className="w-5 h-5 text-amber-500" />
+                            </div>
+                            <h3 className={`font-semibold text-sm ${textPri}`}>Nouveau mot de passe</h3>
+                            <p className={`text-xs ${textMut}`}>Choisissez un nouveau mot de passe pour votre compte.</p>
+                          </div>
+                          <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                            <div className="space-y-1.5">
+                              <label htmlFor="new-password" className={`text-xs font-semibold ${labelCls || "text-gray-700"}`}>Nouveau mot de passe</label>
+                              <div className="relative">
+                                <Input
+                                  id="new-password"
+                                  type={showNewPassword ? "text" : "password"}
+                                  placeholder="••••••••"
+                                  data-testid="input-new-password"
+                                  className={`${inputCls} pr-11`}
+                                  value={newPassword}
+                                  onChange={(e) => setNewPassword(e.target.value)}
+                                  required
+                                />
+                                <button type="button" onClick={() => setShowNewPassword((v) => !v)} aria-label={showNewPassword ? "Masquer" : "Afficher"}
+                                  data-testid="button-toggle-new-password"
+                                  className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors ${dk ? "text-gray-400 hover:text-gray-200" : "text-gray-400 hover:text-gray-600"}`}>
+                                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label htmlFor="confirm-new-password" className={`text-xs font-semibold ${labelCls || "text-gray-700"}`}>Confirmer le mot de passe</label>
+                              <div className="relative">
+                                <Input
+                                  id="confirm-new-password"
+                                  type={showConfirmNewPassword ? "text" : "password"}
+                                  placeholder="••••••••"
+                                  data-testid="input-confirm-new-password"
+                                  className={`${inputCls} pr-11`}
+                                  value={confirmNewPassword}
+                                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                  required
+                                />
+                                <button type="button" onClick={() => setShowConfirmNewPassword((v) => !v)} aria-label={showConfirmNewPassword ? "Masquer" : "Afficher"}
+                                  data-testid="button-toggle-confirm-new-password"
+                                  className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors ${dk ? "text-gray-400 hover:text-gray-200" : "text-gray-400 hover:text-gray-600"}`}>
+                                  {showConfirmNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
+                              {newPasswordError && <p className="text-xs text-red-500">{newPasswordError}</p>}
+                            </div>
+                            <button
+                              type="submit"
+                              data-testid="button-submit-new-password"
+                              disabled={isResettingPw || !newPassword || !confirmNewPassword}
+                              className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white transition-all shadow-lg shadow-amber-500/20"
+                            >
+                              {isResettingPw ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Réinitialisation...</span> : "Réinitialiser le mot de passe"}
+                            </button>
+                          </form>
+                        </div>
+                      )}
+
+                      {/* FORGOT PASSWORD — success */}
+                      {authTab === "forgot-success" && (
+                        <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 text-center py-2">
+                          <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto">
+                            <CheckCircle className="w-7 h-7 text-green-500" />
+                          </div>
+                          <div>
+                            <h3 className={`font-semibold text-base ${textPri}`}>Mot de passe modifié</h3>
+                            <p className={`text-xs mt-1 ${textMut}`}>Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.</p>
+                          </div>
+                          <button
+                            type="button"
+                            data-testid="button-forgot-success-login"
+                            onClick={() => { resetForgotFlowState(); setAuthTab("login"); }}
+                            className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-lg shadow-amber-500/20"
+                          >
+                            Retour à la connexion
+                          </button>
                         </div>
                       )}
 

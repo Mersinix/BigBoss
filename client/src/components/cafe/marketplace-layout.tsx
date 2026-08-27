@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAvatarUrl } from "@/lib/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
@@ -242,6 +243,7 @@ function AccountPanel({
         {/* User identity strip */}
         <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border mb-4 ${cardBg}`}>
           <Avatar className="w-10 h-10 shrink-0">
+            <AvatarImage src={getAvatarUrl(user)} alt={user?.name ?? "User"} />
             <AvatarFallback className={`font-bold text-sm ${dk ? "bg-gray-700 text-amber-400" : "bg-blue-100 text-blue-700"}`}>
               {user?.name?.charAt(0)?.toUpperCase() ?? "U"}
             </AvatarFallback>
@@ -1180,6 +1182,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
               {baristaItems.map((item) => (
                 <div key={item.id} className={`group flex items-center gap-3 border rounded-2xl p-3 ${cardBg}`}>
                   <Avatar className="w-9 h-9 shrink-0">
+                    <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} />
                     <AvatarFallback className={`${dk ? "bg-green-900 text-green-300" : "bg-green-100 text-green-700"} font-bold text-xs`}>{item.initials}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
@@ -1265,6 +1268,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   data-testid={`card-fav-maintenance-${item.id}`}
                 >
                   <Avatar className="w-11 h-11 shrink-0">
+                    <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} />
                     <AvatarFallback className={`${dk ? "bg-orange-900 text-orange-300" : "bg-orange-100 text-orange-700"} font-bold text-xs`}>{item.initials}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
@@ -2164,6 +2168,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
                 data-testid="button-profile"
               >
                 <Avatar className="w-6 h-6">
+                  <AvatarImage src={getAvatarUrl(user)} alt={user.name ?? "User"} />
                   <AvatarFallback className={`text-xs font-bold ${isDark ? "bg-gray-700 text-amber-400" : "bg-blue-100 text-blue-700"}`}>
                     {user.name?.charAt(0)?.toUpperCase() ?? "U"}
                   </AvatarFallback>

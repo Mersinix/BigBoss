@@ -59,6 +59,8 @@ interface Props {
   initialAddress?: string;
   initialDetails?: AddressDetails;
   showRadius?: boolean; // adds radius slider in step 2
+  startStep?: 1 | 2 | 3; // open directly on a later step (e.g. registration skips the map picker)
+  lockStep?: boolean; // hide back-navigation into earlier steps (used with startStep to keep them unreachable)
 }
 
 interface Suggestion {
@@ -102,11 +104,13 @@ export default function LocationPickerModal({
   initialAddress,
   initialDetails,
   showRadius = false,
+  startStep = 1,
+  lockStep = false,
 }: Props) {
   const hasDetailsStep = mode !== "search";
   const totalSteps = hasDetailsStep ? 3 : 2;
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(startStep);
   const [mapsReady, setMapsReady] = useState(false);
   const [search, setSearch] = useState(initialAddress ?? "");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -114,6 +118,10 @@ export default function LocationPickerModal({
   const [selectedAddress, setSelectedAddress] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number }>(DEFAULT_CENTER);
   const [placeId, setPlaceId] = useState("");
+  // Only true once the user has actually picked a point (search result, geolocation,
+  // or map drag) — lets a skip-to-step-3 flow (no map step visited) submit without a
+  // fabricated lat/lng instead of silently sending the Tunis map default as if it were real.
+  const [positionPicked, setPositionPicked] = useState(false);
   const [details, setDetails] = useState<AddressDetails>({ ...EMPTY_DETAILS, ...initialDetails });
   const [saving, setSaving] = useState(false);
   const [radiusKm, setRadiusKm] = useState<number | null>(null);
@@ -127,7 +135,7 @@ export default function LocationPickerModal({
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    if (open) {
+    if (open && !(lockStep && startStep === 3)) {
       loadGoogleMapsScript().then(() => {
         setMapsReady(true);
         autocompleteRef.current = new window.google.maps.places.AutocompleteService();
@@ -166,6 +174,7 @@ export default function LocationPickerModal({
             setSelectedAddress(results[0].formatted_address);
             setCoords({ lat: pos.lat(), lng: pos.lng() });
             setPlaceId(results[0].place_id ?? "");
+            setPositionPicked(true);
           }
         });
       });
@@ -217,6 +226,7 @@ export default function LocationPickerModal({
         setCoords({ lat: loc.lat(), lng: loc.lng() });
         setSelectedAddress(results[0].formatted_address);
         setPlaceId(sug.placeId);
+        setPositionPicked(true);
         if (!details.street) setDetails((d) => ({ ...d, street: results[0].formatted_address }));
         setStep(2);
       }
@@ -236,6 +246,7 @@ export default function LocationPickerModal({
             setSelectedAddress(results[0].formatted_address);
             setSearch(results[0].formatted_address);
             setPlaceId(results[0].place_id ?? "");
+            setPositionPicked(true);
             if (!details.street) setDetails((d) => ({ ...d, street: results[0].formatted_address }));
             setStep(2);
           }
@@ -254,22 +265,23 @@ export default function LocationPickerModal({
       if (v) cleaned[k] = v;
     });
     onConfirm({
-      address: selectedAddress,
-      lat: String(coords.lat),
-      lng: String(coords.lng),
-      placeId,
+      address: selectedAddress || details.street || "",
+      lat: positionPicked ? String(coords.lat) : "",
+      lng: positionPicked ? String(coords.lng) : "",
+      placeId: positionPicked ? placeId : "",
       details: Object.keys(cleaned).length ? cleaned : undefined,
       ...(showRadius ? { radius: radiusKm } : {}),
     });
-  }, [selectedAddress, coords, placeId, details, onConfirm, showRadius, radiusKm]);
+  }, [selectedAddress, coords, placeId, details, onConfirm, showRadius, radiusKm, positionPicked]);
 
   const reset = () => {
-    setStep(1);
+    setStep(startStep);
     setSearch(initialAddress ?? "");
     setSuggestions([]);
     setSelectedAddress("");
     setCoords(DEFAULT_CENTER);
     setPlaceId("");
+    setPositionPicked(false);
     setDetails({ ...EMPTY_DETAILS, ...initialDetails });
     setSaving(false);
     setRadiusKm(null);
@@ -326,7 +338,7 @@ export default function LocationPickerModal({
           <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
             <div className="flex items-center justify-between mb-4">
               {/* Back or dummy spacer */}
-              {step > 1 ? (
+              {step > 1 && !lockStep ? (
                 <button
                   type="button"
                   onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}
@@ -534,10 +546,12 @@ export default function LocationPickerModal({
             {/* ── Step 3: Address details ── */}
             {step === 3 && hasDetailsStep && (
               <div className="px-5 py-4 flex flex-col gap-4 pb-6">
-                <div className={`flex items-start gap-3 p-3 border rounded-2xl ${dk ? "bg-amber-500/10 border-amber-500/25" : "bg-amber-50 border-amber-100"}`}>
-                  <CheckCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                  <p className={`text-sm font-medium leading-snug ${dk ? "text-amber-300" : "text-amber-800"}`}>{selectedAddress}</p>
-                </div>
+                {selectedAddress && (
+                  <div className={`flex items-start gap-3 p-3 border rounded-2xl ${dk ? "bg-amber-500/10 border-amber-500/25" : "bg-amber-50 border-amber-100"}`}>
+                    <CheckCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className={`text-sm font-medium leading-snug ${dk ? "text-amber-300" : "text-amber-800"}`}>{selectedAddress}</p>
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <Label className={labelCls}>Adresse (optionnel)</Label>

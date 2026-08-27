@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAvatarUrl } from "@/lib/avatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
@@ -348,6 +349,7 @@ function RecruitDialog({
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <Avatar className="w-10 h-10">
+              <AvatarImage src={getAvatarUrl(barista as any)} alt={barista.name} />
               <AvatarFallback className="bg-green-100 text-green-700 font-bold text-sm">{barista.initials}</AvatarFallback>
             </Avatar>
             <div>
@@ -447,6 +449,7 @@ function BaristaCard({
       <div className="p-3 flex flex-col gap-2">
         <div className="flex items-start gap-3">
           <Avatar className="w-10 h-10 shrink-0">
+            <AvatarImage src={getAvatarUrl(barista as any)} alt={barista.name} />
             <AvatarFallback className="bg-green-100 text-green-700 font-bold text-sm">
               {barista.initials}
             </AvatarFallback>

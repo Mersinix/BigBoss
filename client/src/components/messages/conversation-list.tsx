@@ -1,9 +1,10 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MessageCircle, Plus, Search } from "lucide-react";
 import type { ConversationSummary, EligibleContact } from "@shared/schema";
+import { getAvatarUrl } from "@/lib/avatar";
 import { useState } from "react";
 import {
   Dialog,
@@ -117,6 +118,7 @@ export function ConversationList({
                 } ${isActive ? "bg-primary/5" : "hover:bg-secondary/60"}`}
               >
                 <Avatar className="w-9 h-9 shrink-0">
+                  <AvatarImage src={getAvatarUrl(conv.otherParticipants[0] as any)} alt={displayName} />
                   <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">
                     {displayName.charAt(0).toUpperCase()}
                   </AvatarFallback>
@@ -176,6 +178,7 @@ export function ConversationList({
                         data-testid={`button-contact-${c.id}`}
                       >
                         <Avatar className="w-8 h-8">
+                          <AvatarImage src={getAvatarUrl(c as any)} alt={c.name} />
                           <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">{c.name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">

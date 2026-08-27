@@ -1,9 +1,10 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, Send, Loader2 } from "lucide-react";
 import type { ConversationSummary, ConversationMessageRow } from "@shared/schema";
+import { getAvatarUrl } from "@/lib/avatar";
 import { useEffect, useRef } from "react";
 
 const ROLE_BADGE: Record<string, string> = {
@@ -68,6 +69,7 @@ export function ChatView({
           </button>
         )}
         <Avatar className="w-8 h-8">
+          <AvatarImage src={getAvatarUrl(conversation.otherParticipants[0] as any)} alt={displayName} />
           <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">
             {displayName.charAt(0).toUpperCase()}
           </AvatarFallback>

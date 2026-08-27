@@ -11,11 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserCheck, ShieldCheck, Plus, CheckCircle, XCircle, Clock,
-  Filter, Trash2, Save
+  Filter, Trash2, Save, MapPin
 } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { User } from "@shared/schema";
+import { getAvatarUrl } from "@/lib/avatar";
+import type { User, AddressDetails } from "@shared/schema";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -111,8 +114,9 @@ function UserDetailDialog({
   const qc = useQueryClient();
   const baristaSkillOptions = useBaristaSkillOptions();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [form, setForm] = useState({
-    name: "", email: "", phone: "", locationAddress: "",
+    name: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", locationAddress: "",
     governorates: [] as string[],
     printCategories: [] as string[],
     marketingCategories: [] as string[],
@@ -127,6 +131,8 @@ function UserDetailDialog({
         name: user.name ?? "",
         email: user.email ?? "",
         phone: u.phone ?? "",
+        isWhatsapp: !!u.isWhatsapp,
+        profileImageUrl: u.profileImageUrl ?? "",
         locationAddress: u.locationAddress ?? "",
         governorates: u.governorates ?? [],
         printCategories: u.printCategories ?? [],
@@ -162,6 +168,18 @@ function UserDetailDialog({
     onError: () => toast({ title: "Erreur lors de la suppression", variant: "destructive" }),
   });
 
+  const locationMutation = useMutation({
+    mutationFn: (loc: PickedLocation) => apiRequest("PATCH", `/api/admin/users/${user!.id}`, {
+      locationAddress: loc.address || null,
+      locationLat: loc.lat ? parseFloat(loc.lat) : null,
+      locationLng: loc.lng ? parseFloat(loc.lng) : null,
+      locationPlaceId: loc.placeId || null,
+      locationDetails: loc.details ?? null,
+    }),
+    onSuccess: () => { invalidate(); toast({ title: "Localisation mise à jour" }); setLocationModalOpen(false); },
+    onError: () => toast({ title: "Erreur lors de la mise à jour de la localisation", variant: "destructive" }),
+  });
+
   const handleSave = () => {
     if (!form.name.trim() || !form.email.trim()) {
       toast({ title: "Nom et email requis", variant: "destructive" });
@@ -171,6 +189,8 @@ function UserDetailDialog({
       name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim() || null,
+      isWhatsapp: form.isWhatsapp,
+      profileImageUrl: form.profileImageUrl.trim() || null,
       locationAddress: form.locationAddress.trim() || null,
       governorates: form.governorates.length > 0 ? form.governorates : null,
       printCategories: form.printCategories.length > 0 ? form.printCategories : null,
@@ -192,7 +212,11 @@ function UserDetailDialog({
     <Dialog open={open} onOpenChange={v => { if (!v) { setConfirmDelete(false); onClose(); } }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 flex-wrap">
+          <DialogTitle className="flex items-center gap-3 flex-wrap">
+            <Avatar className="w-9 h-9">
+              <AvatarImage src={getAvatarUrl({ profileImageUrl: form.profileImageUrl || (user as any).profileImageUrl })} alt={user.name} />
+              <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+            </Avatar>
             <span>{user.name}</span>
             <Badge variant="secondary" className={`${roleColors[user.role] || ""} text-xs`}>
               {user.role.replace(/_/g, " ")}
@@ -225,12 +249,30 @@ function UserDetailDialog({
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@exemple.com" />
             </div>
             <div className="space-y-1.5">
-              <Label>Téléphone</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Téléphone</Label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                  <input type="checkbox" data-testid="checkbox-detail-whatsapp" className="w-3.5 h-3.5 rounded border-border/50 accent-primary"
+                    checked={form.isWhatsapp} onChange={e => setForm(f => ({ ...f, isWhatsapp: e.target.checked }))} />
+                  WhatsApp
+                </label>
+              </div>
               <Input data-testid="input-detail-phone" value={form.phone}
                 onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+216 xx xxx xxx" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Adresse</Label>
+            <div className="space-y-1.5 col-span-2">
+              <Label>Photo de profil (URL)</Label>
+              <Input data-testid="input-detail-picture" type="url" value={form.profileImageUrl}
+                onChange={e => setForm(f => ({ ...f, profileImageUrl: e.target.value }))} placeholder="https://…" />
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Adresse</Label>
+                <Button type="button" size="sm" variant="outline" className="h-6 text-xs gap-1"
+                  onClick={() => setLocationModalOpen(true)} data-testid="button-edit-location">
+                  <MapPin className="w-3 h-3" /> Modifier la localisation
+                </Button>
+              </div>
               <Input data-testid="input-detail-location" value={form.locationAddress}
                 onChange={e => setForm(f => ({ ...f, locationAddress: e.target.value }))} placeholder="Adresse complète" />
             </div>
@@ -324,6 +366,18 @@ function UserDetailDialog({
           </div>
         </div>
       </DialogContent>
+
+      {/* Full 3-step location flow — Admin retains map search + pin adjustment +
+          address details, unlike the simplified (details-only) registration flow. */}
+      <LocationPickerModal
+        open={locationModalOpen}
+        mode="account"
+        title="Choisissez l'adresse de l'utilisateur"
+        initialAddress={form.locationAddress}
+        initialDetails={(user as any).locationDetails as AddressDetails | undefined}
+        onClose={() => setLocationModalOpen(false)}
+        onConfirm={(loc) => locationMutation.mutate(loc)}
+      />
     </Dialog>
   );
 }
@@ -336,7 +390,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState("CAFE_OWNER");
   const [form, setForm] = useState({
-    email: "", phone: "", password: "",
+    email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "",
     firstName: "", lastName: "",
     cafeName: "", companyName: "", contactName: "",
     governorates: [] as string[],
@@ -349,7 +403,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
 
   const reset = () => {
     setRole("CAFE_OWNER");
-    setForm({ email: "", phone: "", password: "", firstName: "", lastName: "", cafeName: "", companyName: "", contactName: "", governorates: [], printCategories: [], marketingCategories: [], maintenanceCategories: [], categories: [] });
+    setForm({ email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", firstName: "", lastName: "", cafeName: "", companyName: "", contactName: "", governorates: [], printCategories: [], marketingCategories: [], maintenanceCategories: [], categories: [] });
     setErrors({});
   };
 
@@ -391,7 +445,8 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
     if (!validate()) return;
     const payload: any = {
       role, name: buildName(),
-      email: form.email, phone: form.phone, password: form.password,
+      email: form.email, phone: form.phone, isWhatsapp: form.isWhatsapp,
+      profileImageUrl: form.profileImageUrl.trim() || null, password: form.password,
     };
     if (role === "DELIVERY_COMPANY") payload.governorates = form.governorates;
     if (role === "PRINTER") payload.printCategories = form.printCategories;
@@ -491,9 +546,20 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
             {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>Téléphone *</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Téléphone *</Label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                <input type="checkbox" data-testid="checkbox-user-whatsapp" className="w-3.5 h-3.5 rounded border-border/50 accent-primary"
+                  checked={form.isWhatsapp} onChange={e => setForm(f => ({ ...f, isWhatsapp: e.target.checked }))} />
+                WhatsApp
+              </label>
+            </div>
             <Input data-testid="input-user-phone" value={form.phone} onChange={sf("phone")} placeholder="+216 xx xxx xxx" />
             {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label>Photo de profil (URL)</Label>
+            <Input data-testid="input-user-picture" type="url" value={form.profileImageUrl} onChange={sf("profileImageUrl")} placeholder="https://…" />
           </div>
           <div className="space-y-1.5">
             <Label>Mot de passe *</Label>
@@ -689,10 +755,14 @@ export default function UsersPage() {
                     <TableRow key={u.id} data-testid={`row-user-${u.id}`}>
                       <TableCell>
                         <button
-                          className="font-medium hover:text-primary transition-colors text-left"
+                          className="font-medium hover:text-primary transition-colors text-left flex items-center gap-2"
                           onClick={() => setSelectedUserId(u.id)}
                           data-testid={`button-user-detail-${u.id}`}
                         >
+                          <Avatar className="w-6 h-6">
+                            <AvatarImage src={getAvatarUrl(u as any)} alt={u.name} />
+                            <AvatarFallback className="text-[10px]">{u.name?.charAt(0)}</AvatarFallback>
+                          </Avatar>
                           {u.name}
                         </button>
                       </TableCell>

@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getAvatarUrl } from "@/lib/avatar";
 import { User, Bell, CreditCard, MapPin, Building2, FileText, Landmark } from "lucide-react";
 
 // ── Company Details Modal ─────────────────────────────────────────────────────
@@ -139,6 +140,8 @@ export default function SupplierSettingsPage() {
     name: user?.name || "Premium Beans Co",
     email: user?.email || "",
     phone: (user as any)?.phone || "+216 71 234 567",
+    isWhatsapp: (user as any)?.isWhatsapp ?? false,
+    profileImageUrl: (user as any)?.profileImageUrl ?? "",
   });
   const [notifs, setNotifs] = useState({ newOrders: true, payouts: true, reviews: false, lowStock: true });
   const [companyOpen, setCompanyOpen] = useState(false);
@@ -147,7 +150,10 @@ export default function SupplierSettingsPage() {
 
   const save = async () => {
     try {
-      await apiRequest("PATCH", "/api/auth/me/profile", { name: profile.name, phone: profile.phone });
+      await apiRequest("PATCH", "/api/auth/me/profile", {
+        name: profile.name, phone: profile.phone,
+        isWhatsapp: profile.isWhatsapp, profileImageUrl: profile.profileImageUrl.trim() || null,
+      });
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast({ title: "Sauvegardé", description: "Profil mis à jour." });
     } catch {
@@ -176,6 +182,7 @@ export default function SupplierSettingsPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4 mb-2">
             <Avatar className="w-14 h-14 border-2 border-primary/20">
+              <AvatarImage src={getAvatarUrl(profile)} alt={profile.name} />
               <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{profile.name.charAt(0)}</AvatarFallback>
             </Avatar>
             <div>
@@ -194,8 +201,19 @@ export default function SupplierSettingsPage() {
               <Input id="semail" data-testid="input-semail" value={profile.email} disabled className="opacity-60" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="sphone">Téléphone</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="sphone">Téléphone</Label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                  <input type="checkbox" data-testid="checkbox-supplier-whatsapp" className="w-3.5 h-3.5 rounded border-border/50 accent-primary"
+                    checked={profile.isWhatsapp} onChange={(e) => setProfile({ ...profile, isWhatsapp: e.target.checked })} />
+                  WhatsApp
+                </label>
+              </div>
               <Input id="sphone" data-testid="input-sphone" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="spicture">Photo de profil (URL)</Label>
+              <Input id="spicture" data-testid="input-spicture" type="url" value={profile.profileImageUrl} onChange={(e) => setProfile({ ...profile, profileImageUrl: e.target.value })} placeholder="https://…" />
             </div>
           </div>
         </CardContent>

@@ -25,7 +25,8 @@ import {
   SidebarMenuItem,
   SidebarHeader
 } from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAvatarUrl } from "@/lib/avatar";
 
 type NavItem = { title: string; url: string; icon: ComponentType<{ className?: string }> };
 type NavGroup = {
@@ -360,6 +361,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-3 mb-3 px-1">
           <Avatar className="w-8 h-8 border border-sidebar-border">
+            <AvatarImage src={getAvatarUrl(user)} alt={user.name} />
             <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
               {user.name.charAt(0).toUpperCase()}
             </AvatarFallback>

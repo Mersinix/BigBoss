@@ -23,6 +23,8 @@ export default function DriverSettingsPage() {
   const { toast } = useToast();
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [isWhatsapp, setIsWhatsapp] = useState((user as any)?.isWhatsapp ?? false);
+  const [profileImageUrl, setProfileImageUrl] = useState((user as any)?.profileImageUrl ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -31,7 +33,7 @@ export default function DriverSettingsPage() {
   const saveProfile = async () => {
     setSaving(true);
     try {
-      await apiRequest("PATCH", "/api/auth/me/profile", { name, phone });
+      await apiRequest("PATCH", "/api/auth/me/profile", { name, phone, isWhatsapp, profileImageUrl: profileImageUrl.trim() || null });
       await queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
       toast({ title: "Sauvegardé", description: "Profil mis à jour." });
     } catch {
@@ -70,12 +72,23 @@ export default function DriverSettingsPage() {
             <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-driver-name" />
           </div>
           <div className="space-y-1.5">
-            <Label>Téléphone</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Téléphone</Label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                <input type="checkbox" data-testid="checkbox-driver-whatsapp" className="w-3.5 h-3.5 rounded border-border/50 accent-primary"
+                  checked={isWhatsapp} onChange={(e) => setIsWhatsapp(e.target.checked)} />
+                WhatsApp
+              </label>
+            </div>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} data-testid="input-driver-phone" />
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Email</Label>
             <Input value={user?.email ?? ""} disabled />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Photo de profil (URL)</Label>
+            <Input type="url" value={profileImageUrl} onChange={(e) => setProfileImageUrl(e.target.value)} placeholder="https://…" data-testid="input-driver-picture" />
           </div>
         </div>
         <Button className="mt-4" onClick={saveProfile} disabled={saving} data-testid="button-save-driver-profile">

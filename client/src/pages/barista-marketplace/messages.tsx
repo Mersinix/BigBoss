@@ -6,9 +6,10 @@ import { useToast } from "@/hooks/use-toast";
 import type { ConversationSummary, ConversationMessageRow } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageCircle, Send, ChevronLeft } from "lucide-react";
+import { getAvatarUrl } from "@/lib/avatar";
 
 // Reuses the exact same conversations/messages API as every other service
 // (Shop, Maintenance) — same tables, same endpoints, filtered to service
@@ -94,6 +95,7 @@ export default function BaristaMarketplaceMessagesPage() {
                       data-testid={`row-conversation-${conversation.id}`}
                     >
                       <Avatar className="w-9 h-9 shrink-0">
+                        <AvatarImage src={getAvatarUrl(conversation.otherParticipants[0] as any)} alt={name} />
                         <AvatarFallback className="bg-green-100 text-green-700 font-bold text-xs">{name.charAt(0).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">

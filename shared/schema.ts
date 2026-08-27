@@ -36,6 +36,8 @@ export const users = pgTable("users", {
   role: userRoleEnum("role").notNull().default('CAFE_OWNER'),
   status: userAccountStatusEnum('status').default('approved').notNull(),
   phone: text("phone"),
+  isWhatsapp: boolean("is_whatsapp").default(false),
+  profileImageUrl: text("profile_image_url"),
   billingInfo: jsonb("billing_info"),
   governorates: text("governorates").array(),
   categories: text("categories").array(),
@@ -60,6 +62,29 @@ export const users = pgTable("users", {
     "users_driver_single_owner_check",
     sql`NOT (${table.deliveryCompanyId} IS NOT NULL AND ${table.supplierId} IS NOT NULL)`,
   ),
+}));
+
+// Password reset — one row per "forgot password" request. Only ever stores HASHES, never
+// the raw 6-digit code or the raw reset token — see server/storage.ts
+// createPasswordResetCode/verifyPasswordResetCode/resetPasswordWithToken, the only code
+// paths allowed to touch this table. Two-phase: a short-lived numeric code is emailed and
+// verified first (codeHash/codeExpiresAt/codeAttempts), then a short-lived opaque token
+// (verifiedTokenHash/verifiedTokenExpiresAt) is issued to authorize the actual password
+// change in a separate request, so the numeric code itself is never resubmitted alongside
+// the new password. usedAt is set once the password has actually been changed via this row,
+// making the whole row permanently dead (single-use).
+export const passwordResetCodes = pgTable("password_reset_codes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  codeHash: text("code_hash").notNull(),
+  codeExpiresAt: timestamp("code_expires_at").notNull(),
+  codeAttempts: integer("code_attempts").notNull().default(0),
+  verifiedTokenHash: text("verified_token_hash"),
+  verifiedTokenExpiresAt: timestamp("verified_token_expires_at"),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdx: index("password_reset_codes_user_idx").on(table.userId),
 }));
 
 // Products — admin-created catalog items (isAdminProduct=true) or legacy supplier products
@@ -678,6 +703,7 @@ export type BaristaMarketplaceCard = BaristaMarketplaceProfile & {
   userId: number;
   name: string;
   phone: string | null;
+  profileImageUrl: string | null;
   initials: string;
   location: string;
   available: boolean;
@@ -1195,6 +1221,7 @@ export type MaintenanceMarketplaceCard = MaintenanceProfile & {
   userId: number;
   name: string;
   phone: string | null;
+  profileImageUrl: string | null;
   location: string;
   initials: string;
   available: boolean;
@@ -1863,11 +1890,11 @@ export type ConversationSummary = {
   lastMessage: { content: string; senderId: number; senderName: string; createdAt: string } | null;
   unreadCount: number;
   /** Everyone in the conversation except the requesting user */
-  otherParticipants: { id: number; name: string; role: string; hiddenAt?: string | null }[];
+  otherParticipants: { id: number; name: string; role: string; profileImageUrl?: string | null; hiddenAt?: string | null }[];
 };
 
 export type ConversationDetail = ConversationSummary & {
-  allParticipants: { id: number; name: string; role: string }[];
+  allParticipants: { id: number; name: string; role: string; profileImageUrl?: string | null }[];
 };
 
 export type ConversationMessageRow = {
@@ -1880,7 +1907,7 @@ export type ConversationMessageRow = {
   createdAt: string;
 };
 
-export type EligibleContact = { id: number; name: string; role: string };
+export type EligibleContact = { id: number; name: string; role: string; profileImageUrl?: string | null };
 
 // ── Returns types ─────────────────────────────────────────────────────────────
 export const insertOrderReturnSchema = createInsertSchema(orderReturns);

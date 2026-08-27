@@ -25,6 +25,8 @@ const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
+const USER_PROFILE_EVENTS = ["user_profile_updated"];
+const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
 const BARISTA_EVENTS = [
   "barista_profile_updated",
   "barista_request_created",
@@ -210,6 +212,15 @@ export function useRealtime(userId?: number) {
             }
             // Invalidate orders so the UI reflects the rejection
             qc.invalidateQueries({ queryKey: ['/api/orders'] });
+          }
+          if (USER_PROFILE_EVENTS.includes(event)) {
+            // Targeted at this session's own user (see broadcastToUsers in server/routes.ts)
+            // so the profile picture/phone/WhatsApp/location edited in one tab (or by an
+            // Admin) shows up immediately in every other open tab for that same user.
+            qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+          }
+          if (ADMIN_USER_DIRECTORY_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
           }
           if (TAXONOMY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/categories"] });

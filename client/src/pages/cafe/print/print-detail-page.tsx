@@ -1,23 +1,22 @@
 import { useState, useRef, useCallback } from "react";
 import { useParams, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Upload, X, Star, Clock, MapPin, FileImage,
-  ShoppingCart, Check, Package, Palette, Scissors, Ruler
+  ShoppingCart, Check, Package, Scissors
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
 import { useToast } from "@/hooks/use-toast";
 import { useThemeStore } from "@/store/theme-store";
-import {
-  getPrintProduct, getPrintBrand, getPrintCategory, getPrintSubCategory,
-  COLOR_SWATCHES, SIZE_OPTIONS,
-} from "@/data/print-data";
+import type { PrintCatalogCard } from "@shared/schema";
 
 function useTheme(isDark: boolean) {
   return {
@@ -34,6 +33,9 @@ function useTheme(isDark: boolean) {
 // ── Star Rating ───────────────────────────────────────────────────────────────
 
 function StarRating({ rating, count, isDark }: { rating: number; count: number; isDark: boolean }) {
+  if (count === 0) {
+    return <span className={`text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>Aucun avis</span>;
+  }
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-0.5">
@@ -45,100 +47,6 @@ function StarRating({ rating, count, isDark }: { rating: number; count: number; 
         ))}
       </div>
       <span className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>{rating.toFixed(1)} ({count} avis)</span>
-    </div>
-  );
-}
-
-// ── Color Swatch Selector ─────────────────────────────────────────────────────
-
-function ColorSelector({ label, value, onChange, isDark }: { label: string; value: string; onChange: (v: string) => void; isDark: boolean }) {
-  return (
-    <div className="space-y-2">
-      <Label className="text-sm font-semibold flex items-center gap-1.5">
-        <Palette className="w-3.5 h-3.5 text-blue-600" /> {label}
-      </Label>
-      <div className="flex flex-wrap gap-2">
-        {COLOR_SWATCHES.map((c) => (
-          <button
-            key={c.value}
-            title={c.name}
-            onClick={() => onChange(c.value)}
-            className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${
-              value === c.value ? "border-blue-600 scale-110 shadow-md" : isDark ? "border-gray-600" : "border-gray-200"
-            }`}
-            style={{ backgroundColor: c.value }}
-            data-testid={`color-${c.name.toLowerCase()}`}
-          />
-        ))}
-        <div className="flex items-center gap-1.5">
-          <input
-            type="color"
-            value={value || "#1A1A1A"}
-            onChange={(e) => onChange(e.target.value)}
-            className={`w-7 h-7 rounded-full border-2 cursor-pointer overflow-hidden p-0 ${isDark ? "border-gray-600" : "border-gray-200"}`}
-            title="Couleur personnalisée"
-          />
-          <span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>Personnalisé</span>
-        </div>
-      </div>
-      {value && (
-        <div className={`flex items-center gap-2 text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-          <div className={`w-4 h-4 rounded-full border ${isDark ? "border-gray-600" : "border-gray-200"}`} style={{ backgroundColor: value }} />
-          {COLOR_SWATCHES.find((c) => c.value === value)?.name ?? value}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Size Matrix ───────────────────────────────────────────────────────────────
-
-function SizeMatrix({ sizeMatrix, onChange, isDark }: {
-  sizeMatrix: Record<string, number>;
-  onChange: (matrix: Record<string, number>) => void;
-  isDark: boolean;
-}) {
-  const total = Object.values(sizeMatrix).reduce((s, v) => s + v, 0);
-  return (
-    <div className="space-y-3">
-      <Label className="text-sm font-semibold flex items-center gap-1.5">
-        <Ruler className="w-3.5 h-3.5 text-blue-600" /> Quantité par taille
-      </Label>
-      <div className={`overflow-hidden rounded-xl border ${isDark ? "border-gray-700" : "border-gray-200"}`}>
-        <table className="w-full text-sm">
-          <thead className={isDark ? "bg-gray-700/60" : "bg-gray-50"}>
-            <tr>
-              <th className={`text-left px-4 py-2.5 font-semibold ${isDark ? "text-gray-300" : "text-gray-600"}`}>Taille</th>
-              <th className={`text-left px-4 py-2.5 font-semibold ${isDark ? "text-gray-300" : "text-gray-600"}`}>Quantité</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {SIZE_OPTIONS.map((size) => (
-              <tr key={size} className={`transition-colors ${isDark ? "hover:bg-gray-700/40" : "hover:bg-gray-50/50"}`}>
-                <td className="px-4 py-2.5">
-                  <Badge variant="outline" className="font-bold text-xs">{size}</Badge>
-                </td>
-                <td className="px-4 py-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    value={sizeMatrix[size] ?? 0}
-                    onChange={(e) => onChange({ ...sizeMatrix, [size]: Math.max(0, parseInt(e.target.value) || 0) })}
-                    className="h-8 w-24 text-sm"
-                    data-testid={`input-size-${size.toLowerCase()}`}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot className={isDark ? "bg-blue-950/40 border-t border-blue-900/60" : "bg-blue-50 border-t border-blue-100"}>
-            <tr>
-              <td className="px-4 py-2.5 font-bold text-blue-400">Total</td>
-              <td className="px-4 py-2.5 font-bold text-blue-400" data-testid="text-total-qty">{total} pièce{total !== 1 ? "s" : ""}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
     </div>
   );
 }
@@ -214,27 +122,51 @@ export default function PrintDetailPage() {
   const { toast } = useToast();
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
-
-  const product = getPrintProduct(params.productId ?? "");
-  const brand = product ? getPrintBrand(product.brandId) : null;
-  const category = product ? getPrintCategory(product.categoryId) : null;
-  const subCategory = product ? getPrintSubCategory(product.subCategoryId) : null;
-
-  // Customization state
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
-  const [uploadedDataUrl, setUploadedDataUrl] = useState<string | null>(null);
-  const [primaryColor, setPrimaryColor] = useState("#1A1A1A");
-  const [secondaryColor, setSecondaryColor] = useState("#FFFFFF");
-  const [material, setMaterial] = useState(product?.materials?.[0] ?? "");
-  const [sizeMatrix, setSizeMatrix] = useState<Record<string, number>>(
-    Object.fromEntries(SIZE_OPTIONS.map((s) => [s, 0]))
-  );
-  const [generalQuantity, setGeneralQuantity] = useState(product?.minQuantity ?? 1);
-  const [notes, setNotes] = useState("");
-  const [added, setAdded] = useState(false);
   const fmt = useFormatCurrency();
 
-  if (!product) {
+  const { data: card, isLoading, isError } = useQuery<PrintCatalogCard>({
+    queryKey: ["/api/print/marketplace", params.productId],
+    enabled: !!params.productId,
+  });
+
+  // Customization state — the real PrintCatalogItem schema has no per-item
+  // color/size variants (only a flat materials[] and a single unit/price), so
+  // customization here is limited to what the catalog item actually supports:
+  // an optional material choice, a plain quantity, an uploaded design file and
+  // free-text notes.
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [uploadedDataUrl, setUploadedDataUrl] = useState<string | null>(null);
+  const [material, setMaterial] = useState<string>("");
+  const [quantity, setQuantity] = useState<number>(1);
+  const [notes, setNotes] = useState("");
+  const [added, setAdded] = useState(false);
+  const [initializedFor, setInitializedFor] = useState<number | null>(null);
+
+  // Seed material/quantity defaults once the card has loaded.
+  if (card && initializedFor !== card.id) {
+    setInitializedFor(card.id);
+    setMaterial(card.materials[0] ?? "");
+    setQuantity(card.minQuantity || 1);
+  }
+
+  if (isLoading) {
+    return (
+      <div className={`min-h-screen ${t.pageBg}`}>
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <Skeleton className="h-5 w-40 mb-6" />
+          <div className="grid lg:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <Skeleton className="aspect-[4/3] w-full rounded-2xl" />
+              <Skeleton className="h-64 w-full rounded-2xl" />
+            </div>
+            <Skeleton className="h-96 w-full rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !card) {
     return (
       <div className={`min-h-screen ${t.pageBg} flex flex-col items-center justify-center gap-4 px-4`}>
         <Package className={`w-16 h-16 ${t.textSubtle}`} />
@@ -246,47 +178,40 @@ export default function PrintDetailPage() {
     );
   }
 
-  const totalQuantity = product.hasSizes
-    ? Object.values(sizeMatrix).reduce((s, v) => s + v, 0)
-    : generalQuantity;
-
-  const subtotal = product.basePrice * totalQuantity;
+  const starRating = card.rating / 10;
+  const subtotal = card.priceInCents * quantity;
 
   const handleAddToCart = () => {
-    if (totalQuantity < product.minQuantity) {
+    if (quantity < card.minQuantity) {
       toast({
         title: "Quantité insuffisante",
-        description: `Quantité minimum : ${product.minQuantity} ${product.priceUnit}(s)`,
+        description: `Quantité minimum : ${card.minQuantity} ${card.unit}(s)`,
         variant: "destructive",
       });
       return;
     }
 
     addPrintItem({
-      printProductId: product.id,
-      printProductName: product.name,
-      printProductImage: product.imageUrl,
-      brandId: product.brandId,
-      brandName: brand?.name ?? "",
-      deliveryTime: product.deliveryTime,
+      catalogItemId: card.id,
+      name: card.name,
+      imageUrl: card.imageUrl,
+      printerId: card.printerId,
+      printerName: card.printerName,
+      productionTimeDays: card.productionTimeDays,
+      unitPriceInCents: card.priceInCents,
+      unit: card.unit,
+      minQuantity: card.minQuantity,
+      quantity,
+      material,
       uploadedFileDataUrl: uploadedDataUrl,
       uploadedFileName,
-      primaryColor,
-      secondaryColor,
-      material,
-      sizeMatrix,
-      hasSizes: product.hasSizes,
-      generalQuantity,
       notes,
-      unitPrice: product.basePrice,
-      totalQuantity,
-      priceUnit: product.priceUnit,
     });
 
     setAdded(true);
     toast({
       title: "Ajouté au panier !",
-      description: `${product.name} × ${totalQuantity} ${product.priceUnit}(s)`,
+      description: `${card.name} × ${quantity} ${card.unit}(s)`,
     });
     setTimeout(() => setAdded(false), 2500);
   };
@@ -305,38 +230,42 @@ export default function PrintDetailPage() {
           <div className="space-y-6">
             {/* Image */}
             <div className={`rounded-2xl overflow-hidden aspect-[4/3] border shadow-sm ${t.cardBg}`}>
-              <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+              {card.imageUrl ? (
+                <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center"><Package className={`w-14 h-14 ${t.textSubtle}`} /></div>
+              )}
             </div>
 
             {/* Info card */}
             <div className={`${t.cardBg} rounded-2xl border shadow-sm p-6 space-y-4`}>
               <div>
                 <div className="flex flex-wrap gap-2 mb-3">
-                  {category && (
+                  {card.category && (
                     <Badge className="bg-blue-100 text-blue-700 border-0">
-                      {category.icon} {category.name}
+                      {card.category}
                     </Badge>
                   )}
-                  {subCategory && (
-                    <Badge variant="outline" className={t.textMuted}>{subCategory.name}</Badge>
+                  {card.subCategory && (
+                    <Badge variant="outline" className={t.textMuted}>{card.subCategory}</Badge>
                   )}
                 </div>
-                <h1 className={`text-2xl font-bold ${t.textPrimary}`}>{product.name}</h1>
-                <p className={`${t.textMuted} text-sm mt-2 leading-relaxed`}>{product.description}</p>
+                <h1 className={`text-2xl font-bold ${t.textPrimary}`}>{card.name}</h1>
+                <p className={`${t.textMuted} text-sm mt-2 leading-relaxed`}>{card.description}</p>
               </div>
 
-              <StarRating rating={product.rating} count={product.reviewCount} isDark={isDark} />
+              <StarRating rating={starRating} count={card.reviewCount} isDark={isDark} />
 
-              {brand && (
+              {card.printerName && (
                 <div className={`flex items-start gap-3 p-3 rounded-xl ${t.mutedBg}`}>
                   <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-                    <span className="text-white font-bold text-sm">{brand.name.charAt(0)}</span>
+                    <span className="text-white font-bold text-sm">{card.printerName.charAt(0)}</span>
                   </div>
                   <div>
-                    <p className="font-semibold text-sm">{brand.name}</p>
+                    <p className="font-semibold text-sm">{card.printerName}</p>
                     <div className={`flex items-center gap-3 text-xs ${t.textMuted} mt-0.5`}>
-                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{brand.location}</span>
-                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Livraison {brand.deliveryTime}</span>
+                      {card.printerLocation && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{card.printerLocation}</span>}
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Livraison {card.productionTimeDays}j</span>
                     </div>
                   </div>
                 </div>
@@ -344,7 +273,7 @@ export default function PrintDetailPage() {
 
               <div className={`flex items-center justify-between text-sm ${t.textMuted} pt-1`}>
                 <span>Min. commande :</span>
-                <span className={`font-semibold ${t.textPrimary}`}>{product.minQuantity} {product.priceUnit}(s)</span>
+                <span className={`font-semibold ${t.textPrimary}`}>{card.minQuantity} {card.unit}(s)</span>
               </div>
             </div>
           </div>
@@ -374,20 +303,14 @@ export default function PrintDetailPage() {
                 />
               </div>
 
-              <Separator />
-
-              {/* Colors */}
-              <ColorSelector label="Couleur principale" value={primaryColor} onChange={setPrimaryColor} isDark={isDark} />
-              <ColorSelector label="Couleur secondaire" value={secondaryColor} onChange={setSecondaryColor} isDark={isDark} />
-
               {/* Material */}
-              {product.materials.length > 0 && (
+              {card.materials.length > 0 && (
                 <>
                   <Separator />
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold">Matière</Label>
                     <div className="flex flex-wrap gap-2">
-                      {product.materials.map((m) => (
+                      {card.materials.map((m) => (
                         <button
                           key={m}
                           onClick={() => setMaterial(m)}
@@ -408,40 +331,36 @@ export default function PrintDetailPage() {
 
               <Separator />
 
-              {/* Sizes or General Quantity */}
-              {product.hasSizes ? (
-                <SizeMatrix sizeMatrix={sizeMatrix} onChange={setSizeMatrix} isDark={isDark} />
-              ) : (
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold flex items-center gap-1.5">
-                    <Package className="w-3.5 h-3.5 text-blue-600" /> Quantité totale
-                  </Label>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setGeneralQuantity((q) => Math.max(product.minQuantity, q - (product.minQuantity > 10 ? 10 : 1)))}
-                      className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
-                      data-testid="button-qty-decrease"
-                    >−</button>
-                    <Input
-                      type="number"
-                      value={generalQuantity}
-                      min={product.minQuantity}
-                      onChange={(e) => setGeneralQuantity(Math.max(product.minQuantity, parseInt(e.target.value) || product.minQuantity))}
-                      className="h-9 w-24 text-center font-semibold"
-                      data-testid="input-quantity"
-                    />
-                    <button
-                      onClick={() => setGeneralQuantity((q) => q + (product.minQuantity > 10 ? 10 : 1))}
-                      className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
-                      data-testid="button-qty-increase"
-                    >+</button>
-                    <span className={`text-sm ${t.textSubtle}`}>{product.priceUnit}(s)</span>
-                  </div>
-                  {product.minQuantity > 1 && (
-                    <p className={`text-xs ${t.textSubtle}`}>Min. {product.minQuantity} {product.priceUnit}(s)</p>
-                  )}
+              {/* Quantity */}
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5 text-blue-600" /> Quantité totale
+                </Label>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setQuantity((q) => Math.max(card.minQuantity, q - (card.minQuantity > 10 ? 10 : 1)))}
+                    className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
+                    data-testid="button-qty-decrease"
+                  >−</button>
+                  <Input
+                    type="number"
+                    value={quantity}
+                    min={card.minQuantity}
+                    onChange={(e) => setQuantity(Math.max(card.minQuantity, parseInt(e.target.value) || card.minQuantity))}
+                    className="h-9 w-24 text-center font-semibold"
+                    data-testid="input-quantity"
+                  />
+                  <button
+                    onClick={() => setQuantity((q) => q + (card.minQuantity > 10 ? 10 : 1))}
+                    className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
+                    data-testid="button-qty-increase"
+                  >+</button>
+                  <span className={`text-sm ${t.textSubtle}`}>{card.unit}(s)</span>
                 </div>
-              )}
+                {card.minQuantity > 1 && (
+                  <p className={`text-xs ${t.textSubtle}`}>Min. {card.minQuantity} {card.unit}(s)</p>
+                )}
+              </div>
 
               <Separator />
 
@@ -464,11 +383,11 @@ export default function PrintDetailPage() {
               <div className="space-y-2 text-sm">
                 <div className={`flex justify-between ${t.textMuted}`}>
                   <span>Prix unitaire</span>
-                  <span className="font-medium">{fmt(product.basePrice)} / {product.priceUnit}</span>
+                  <span className="font-medium">{fmt(card.priceInCents)} / {card.unit}</span>
                 </div>
                 <div className={`flex justify-between ${t.textMuted}`}>
                   <span>Quantité</span>
-                  <span className="font-medium">{totalQuantity} {product.priceUnit}(s)</span>
+                  <span className="font-medium">{quantity} {card.unit}(s)</span>
                 </div>
                 {material && (
                   <div className={`flex justify-between ${t.textMuted}`}>
@@ -479,7 +398,7 @@ export default function PrintDetailPage() {
                 <div className={`flex justify-between ${t.textMuted}`}>
                   <span>Livraison estimée</span>
                   <span className="font-medium flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" /> {product.deliveryTime}
+                    <Clock className="w-3.5 h-3.5" /> {card.productionTimeDays}j
                   </span>
                 </div>
                 <div className={`border-t pt-3 flex justify-between items-center ${t.border}`}>

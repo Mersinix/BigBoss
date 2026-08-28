@@ -25,6 +25,7 @@ const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
+const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated"];
 const USER_PROFILE_EVENTS = ["user_profile_updated"];
 const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
 const BARISTA_EVENTS = [
@@ -251,6 +252,14 @@ export function useRealtime(userId?: number) {
             if (data?.conversationId) {
               qc.invalidateQueries({ queryKey: ["/api/messages/conversations", data.conversationId, "messages"] });
             }
+          }
+          if (PRINT_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/print/catalog"] });
+            qc.invalidateQueries({ queryKey: ["/api/print/marketplace"] });
+            qc.invalidateQueries({ queryKey: ["/api/print/categories"] });
+            qc.invalidateQueries({ queryKey: ["/api/print/orders"] });
+            qc.invalidateQueries({ queryKey: ["/api/print/revenue"] });
+            invalidateMessagingQueries(qc);
           }
           if (MAINTENANCE_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/maintenance-favorites"] });

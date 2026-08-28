@@ -1,102 +1,146 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { useCurrency } from "@/hooks/use-currency";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Printer, Package, ShoppingBag, Star, TrendingUp, Clock } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { Printer, Package, ShoppingBag, TrendingUp, Clock, Factory, ClipboardList } from "lucide-react";
+import type { PrintCatalogItem, PrintOrderWithParties } from "@shared/schema";
+import { DashboardHero, StatCard, SectionCard, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { PRINT_ORDER_STATUS_META, formatMonthKey } from "@/lib/print-order-status";
 
-const salesData = [
-  { month: "Jan", revenue: 320 }, { month: "Fév", revenue: 580 }, { month: "Mar", revenue: 760 },
-  { month: "Avr", revenue: 940 }, { month: "Mai", revenue: 1120 }, { month: "Jun", revenue: 1380 },
-];
+type PrintRevenueSummary = {
+  totalEarnedCents: number;
+  completedOrders: number;
+  currentMonthCents: number;
+  currentMonthOrders: number;
+  history: { month: string; totalCents: number; orders: number }[];
+};
 
-const recentOrders = [
-  { id: "PRT-01", client: "Café des Nattes", type: "Flyers A5", qty: 500, amount: 85, status: "En cours" },
-  { id: "PRT-02", client: "Ariana Lounge", type: "Menus plastifiés", qty: 50, amount: 220, status: "Livré" },
-  { id: "PRT-03", client: "Cafétéria Ennasr", type: "Kakémonos", qty: 2, amount: 180, status: "En attente" },
-];
-
+// Real Printer dashboard — every number here is computed client-side from the live
+// /api/print/orders, /api/print/catalog and /api/print/revenue endpoints (no mock data).
+// "Note moyenne" is deliberately omitted: there is no printer-level aggregate rating
+// endpoint exposed to the Printer's own dashboard, so it cannot be honestly computed
+// (same convention as pages/maintenance/dashboard.tsx omitting KPIs it can't back with
+// real data).
 export default function PrinterDashboard() {
   const { user } = useAuth();
-  const currency = useCurrency();
+  const fmt = useFormatCurrency();
+
+  const { data: orders = [], isLoading: ordersLoading } = useQuery<PrintOrderWithParties[]>({
+    queryKey: ["/api/print/orders"],
+  });
+  const { data: catalog = [], isLoading: catalogLoading } = useQuery<PrintCatalogItem[]>({
+    queryKey: ["/api/print/catalog"],
+  });
+  const { data: revenue, isLoading: revenueLoading } = useQuery<PrintRevenueSummary>({
+    queryKey: ["/api/print/revenue"],
+  });
+
+  const isLoading = ordersLoading || catalogLoading || revenueLoading;
+
+  const now = new Date();
+  const ordersThisMonth = useMemo(
+    () => orders.filter((o) => {
+      const d = new Date(o.createdAt as any);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }),
+    [orders],
+  );
+  const pendingCount = useMemo(() => orders.filter((o) => o.status === "PENDING").length, [orders]);
+  const preparingCount = useMemo(() => orders.filter((o) => o.status === "PREPARING").length, [orders]);
+  const activeCatalogCount = useMemo(() => catalog.filter((c) => c.isActive).length, [catalog]);
+  const recentOrders = useMemo(
+    () => [...orders]
+      .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime())
+      .slice(0, 6),
+    [orders],
+  );
+
+  const chartData = useMemo(
+    () => (revenue?.history ?? []).map((h) => ({ month: formatMonthKey(h.month), revenue: h.totalCents / 100 })),
+    [revenue],
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-5 p-6">
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Skeleton className="h-64 w-full rounded-2xl" />
+          <Skeleton className="h-64 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard Imprimerie</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Bienvenue, {user?.name}. Voici un aperçu de votre activité.</p>
-      </div>
+      <DashboardHero
+        title="Dashboard Imprimerie"
+        subtitle={`Bienvenue, ${user?.name}. Voici un aperçu de votre activité.`}
+        stat={fmt(revenue?.currentMonthCents ?? 0)}
+        statLabel="CA ce mois-ci"
+        icon={Printer}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Commandes ce mois", value: "14", icon: ShoppingBag, color: "text-primary" },
-          { label: "En cours", value: "3", icon: Clock, color: "text-amber-500" },
-          { label: "Produits actifs", value: "28", icon: Package, color: "text-green-500" },
-          { label: "Note moyenne", value: "4.8", icon: Star, color: "text-yellow-500" },
-        ].map((kpi) => (
-          <Card key={kpi.label}>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
-              </div>
-              <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <StatCard label="Commandes ce mois" value={ordersThisMonth.length} icon={ShoppingBag} tone="primary" />
+        <StatCard label="En attente" value={pendingCount} icon={Clock} tone="amber" />
+        <StatCard label="En production" value={preparingCount} icon={Factory} tone="blue" />
+        <StatCard label="Produits actifs" value={activeCatalogCount} icon={Package} tone="green" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-primary" /> Chiffre d'affaires (6 mois)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={salesData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+        <SectionCard title="Chiffre d'affaires (6 mois)" icon={TrendingUp}>
+          {chartData.every((d) => d.revenue === 0) && chartData.length === 0 ? (
+            <EmptyState message="Pas encore de revenus." />
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="printerGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`${currency} ${v}`, "Revenu"]} />
-                <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={2} fill="url(#printerGrad)" dot={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [fmt(Math.round(v * 100)), "Revenu"]} />
+                <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#printerGrad)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
+          )}
+        </SectionCard>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Commandes récentes</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <SectionCard title="Commandes récentes" icon={ClipboardList}>
+          {recentOrders.length === 0 ? (
+            <EmptyState message="Aucune commande pour le moment." icon={ClipboardList} />
+          ) : (
             <div className="space-y-3">
-              {recentOrders.map((o) => (
-                <div key={o.id} className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-secondary/20">
-                  <div>
-                    <p className="font-medium text-sm">{o.client}</p>
-                    <p className="text-xs text-muted-foreground">{o.type} · {o.qty} unités</p>
+              {recentOrders.map((o) => {
+                const meta = PRINT_ORDER_STATUS_META[o.status as keyof typeof PRINT_ORDER_STATUS_META] ?? PRINT_ORDER_STATUS_META.PENDING;
+                return (
+                  <div key={o.id} className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-secondary/20">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{o.cafeOwnerName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{o.itemName} · {o.quantity} unités</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-semibold text-sm">{fmt(o.totalInCents)}</span>
+                      <Badge variant="outline" className={meta.className}>{meta.label}</Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">{currency} {o.amount}</span>
-                    <Badge variant="secondary" className={
-                      o.status === "Livré" ? "bg-green-100 text-green-700" :
-                      o.status === "En cours" ? "bg-blue-100 text-blue-700" :
-                      "bg-amber-400 text-amber-700"
-                    }>{o.status}</Badge>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </SectionCard>
       </div>
     </div>
   );

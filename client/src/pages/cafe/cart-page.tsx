@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useThemeStore } from "@/store/theme-store";
-import { useCart, type CartItem } from "@/hooks/use-cart";
+import { useCart, type CartItem, type PrintCartItem } from "@/hooks/use-cart";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { useCreateOrder } from "@/hooks/use-orders";
@@ -30,6 +31,24 @@ import { useAccountOpenStore } from "@/store/account-open-store";
 import { groupPackIncludedProducts } from "@/lib/pack-grouping";
 import { groupCartProducts } from "@/lib/cart-grouping";
 
+// apiRequest throws `Error("<status>: <raw response text>")` (see throwIfResNotOk
+// in @/lib/queryClient) rather than parsing the JSON body — this recovers the
+// server's actual { message } (e.g. "Minimum quantity for this service is X.")
+// so it can be shown verbatim instead of the raw "400: {...}" string.
+function extractApiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    const raw = error.message.replace(/^\d+:\s*/, "");
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.message === "string") return parsed.message;
+    } catch {
+      // not JSON — fall through to the raw text
+    }
+    return raw || fallback;
+  }
+  return fallback;
+}
+
 export default function CartPage() {
   const {
     items, updateQuantity, removeItem, clearCart, getItemsBySupplier,
@@ -41,6 +60,24 @@ export default function CartPage() {
   const armPackReplace = usePackQuickView((s) => s.armReplace);
   const openProductForReplace = useQuickView((s) => s.openForReplace);
   const createOrder = useCreateOrder();
+  const createPrintOrders = useMutation({
+    // One PRINT cart line = one real order (the backend has no "multi-item"
+    // print order concept — see POST /api/print/orders). Fires one POST per
+    // line and waits for all of them; Promise.all's all-or-nothing semantics
+    // mean a single failing line (e.g. below minimum quantity, or the service
+    // was deactivated meanwhile) fails the whole batch, so nothing is cleared
+    // from the cart and the Coffee Owner keeps every line to retry.
+    mutationFn: async (items: PrintCartItem[]) => {
+      return Promise.all(items.map(async (item) => {
+        const res = await apiRequest("POST", "/api/print/orders", {
+          catalogItemId: item.catalogItemId,
+          quantity: item.quantity,
+          notes: item.notes || undefined,
+        });
+        return res.json();
+      }));
+    },
+  });
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const openAccountWithOrder = useAccountOpenStore((s) => s.openWithOrder);
@@ -361,8 +398,21 @@ export default function CartPage() {
   };
 
   const handlePrintCheckout = () => {
-    toast({ title: "Commande PRINT envoyée !", description: "Vos demandes d'impression ont été transmises." });
-    clearPrintItems();
+    if (createPrintOrders.isPending || printItems.length === 0) return;
+    createPrintOrders.mutate(printItems, {
+      onSuccess: () => {
+        toast({ title: "Commande PRINT envoyée !", description: "Vos demandes d'impression ont été transmises." });
+        clearPrintItems();
+        queryClient.invalidateQueries({ queryKey: ["/api/print/orders"] });
+      },
+      onError: (error) => {
+        toast({
+          title: "Erreur",
+          description: extractApiErrorMessage(error, "Impossible d'envoyer une ou plusieurs demandes d'impression."),
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   const bySupplier = getItemsBySupplier();
@@ -648,23 +698,22 @@ export default function CartPage() {
                 )}
                 {printItems.map((item) => {
                   const isPdf = item.uploadedFileName?.toLowerCase().endsWith(".pdf");
-                  const sizeEntries = Object.entries(item.sizeMatrix).filter(([, qty]) => qty > 0);
                   return (
                     <div key={item.id} className={`border rounded-2xl overflow-hidden shadow-sm ${dk ? "bg-gray-800 border-blue-500/25" : "bg-white border-blue-100"}`} data-testid={`cart-print-item-${item.id}`}>
                       <div className={`px-3 sm:px-4 py-3 border-b flex items-center justify-between gap-2 ${dk ? "bg-blue-500/10 border-blue-500/25" : "bg-blue-50 border-blue-100"}`}>
                         <div className="flex items-center gap-2 min-w-0">
                           <Printer className={`w-4 h-4 shrink-0 ${dk ? "text-blue-400" : "text-blue-600"}`} />
-                          <span className={`font-semibold text-sm truncate ${dk ? "text-blue-400" : "text-blue-700"}`}>{item.brandName}</span>
+                          <span className={`font-semibold text-sm truncate ${dk ? "text-blue-400" : "text-blue-700"}`}>{item.printerName}</span>
                         </div>
-                        <span className={`text-sm font-medium shrink-0 ${dk ? "text-blue-400" : "text-blue-700"}`}>{fmt(item.unitPrice * item.totalQuantity)}</span>
+                        <span className={`text-sm font-medium shrink-0 ${dk ? "text-blue-400" : "text-blue-700"}`}>{fmt(item.unitPriceInCents * item.quantity)}</span>
                       </div>
                       <div className="p-3 sm:p-4">
                         <div className="flex gap-3">
                           <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 border ${dk ? "bg-gray-700 border-gray-700" : "bg-white border-gray-100"}`}>
                             {item.uploadedFileDataUrl && !isPdf ? (
                               <img src={item.uploadedFileDataUrl} className="w-full h-full object-cover" alt="Design" />
-                            ) : item.printProductImage ? (
-                              <img src={item.printProductImage} className="w-full h-full object-cover" alt="" />
+                            ) : item.imageUrl ? (
+                              <img src={item.imageUrl} className="w-full h-full object-cover" alt="" />
                             ) : (
                               <div className={`w-full h-full flex items-center justify-center ${dk ? "bg-gray-700" : "bg-blue-50"}`}>
                                 <Package className={`w-6 h-6 ${dk ? "text-blue-400/40" : "text-blue-300"}`} />
@@ -672,45 +721,24 @@ export default function CartPage() {
                             )}
                           </div>
                           <div className="flex-1 min-w-0 space-y-1">
-                            <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.printProductName}</p>
+                            <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
                             {item.uploadedFileName && (
                               <p className={`text-xs truncate ${dk ? "text-blue-400" : "text-blue-600"}`}>📎 {item.uploadedFileName}</p>
                             )}
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              {item.primaryColor && (
-                                <div className={`flex items-center gap-1 text-xs ${textMuted}`}>
-                                  <div className="w-3 h-3 rounded-full border border-gray-400/30 shrink-0" style={{ backgroundColor: item.primaryColor }} />
-                                  <span>C1</span>
-                                </div>
-                              )}
-                              {item.secondaryColor && (
-                                <div className={`flex items-center gap-1 text-xs ${textMuted}`}>
-                                  <div className="w-3 h-3 rounded-full border border-gray-400/30 shrink-0" style={{ backgroundColor: item.secondaryColor }} />
-                                  <span>C2</span>
-                                </div>
-                              )}
-                              {item.material && (
+                            {item.material && (
+                              <div className="flex flex-wrap gap-1.5 mt-1">
                                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-xl border ${dk ? "bg-gray-700 border-gray-600 text-gray-300" : "bg-gray-100 border-gray-200 text-gray-600"}`}>
                                   {item.material}
                                 </span>
-                              )}
-                            </div>
-                            {item.hasSizes && sizeEntries.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {sizeEntries.map(([size, qty]) => (
-                                  <span key={size} className={`text-[10px] font-semibold px-2 py-0.5 rounded-xl border ${dk ? "border-gray-600 text-gray-300" : "border-gray-200 text-gray-600"}`}>
-                                    {size}: {qty}
-                                  </span>
-                                ))}
                               </div>
                             )}
                             <div className={`flex items-center gap-2 flex-wrap text-xs mt-1 ${textMuted}`}>
-                              <span>{item.totalQuantity} {item.priceUnit}(s)</span>
-                              <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{item.deliveryTime}</span>
+                              <span>{item.quantity} {item.unit}(s)</span>
+                              <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{item.productionTimeDays}j</span>
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
-                            <p className={`font-bold text-sm ${textPrimary}`}>{fmt(item.unitPrice * item.totalQuantity)}</p>
+                            <p className={`font-bold text-sm ${textPrimary}`}>{fmt(item.unitPriceInCents * item.quantity)}</p>
                             <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePrintItem(item.id)} data-testid={`button-remove-print-${item.id}`}>
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -868,8 +896,8 @@ export default function CartPage() {
                   <div className="space-y-2 text-sm">
                     {printItems.map((item) => (
                       <div key={item.id} className={`flex justify-between ${textMuted}`}>
-                        <span className="truncate mr-2">{item.printProductName}</span>
-                        <span>{fmt(item.unitPrice * item.totalQuantity)}</span>
+                        <span className="truncate mr-2">{item.name}</span>
+                        <span>{fmt(item.unitPriceInCents * item.quantity)}</span>
                       </div>
                     ))}
                     <div className={`border-t pt-3 flex justify-between items-center font-bold ${dk ? "border-blue-500/20" : "border-blue-100"}`}>
@@ -880,10 +908,11 @@ export default function CartPage() {
                   <button
                     type="button"
                     onClick={handlePrintCheckout}
-                    className={`w-full rounded-2xl py-3.5 font-semibold text-sm transition-all shadow-lg text-white ${dk ? "bg-blue-600 hover:bg-blue-500 shadow-blue-500/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"}`}
+                    disabled={createPrintOrders.isPending || printItems.length === 0}
+                    className={`w-full rounded-2xl py-3.5 font-semibold text-sm transition-all shadow-lg text-white disabled:opacity-50 ${dk ? "bg-blue-600 hover:bg-blue-500 shadow-blue-500/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"}`}
                     data-testid="button-place-print-order"
                   >
-                    <span className="flex items-center justify-center gap-2">Confirmer PRINT <ArrowRight className="w-4 h-4" /></span>
+                    {createPrintOrders.isPending ? "Traitement…" : <span className="flex items-center justify-center gap-2">Confirmer PRINT <ArrowRight className="w-4 h-4" /></span>}
                   </button>
                   <button className={`w-full text-xs text-center transition-colors ${textMuted} hover:text-red-500`} onClick={clearPrintItems}>
                     Vider PRINT

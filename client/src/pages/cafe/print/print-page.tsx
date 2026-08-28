@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import printBannerImg from "@assets/1000_F_446608261_m4mqK7D6A8O68SkqWo4ea4VQgrGVbRHY_(1)_1780853922496.jpg";
 import { useLocation, useSearch } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useThemeStore } from "@/store/theme-store";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,13 +14,23 @@ import {
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
-import {
-  PRINT_CATEGORIES, PRINT_SUBCATEGORIES, PRINT_BRANDS, PRINT_PRODUCTS,
-  getPrintBrand, getPrintCategory, getPrintSubCategory,
-  type PrintProduct,
-} from "@/data/print-data";
+import type { PrintCatalogCard } from "@shared/schema";
 
-// ── Category Strip ────────────────────────────────────────────────────────────
+// ── Production time buckets ─────────────────────────────────────────────────
+// The real schema only has a numeric productionTimeDays (no free-text delivery
+// string like the old mock data), so the "delivery time" filter buckets by it.
+
+const PRODUCTION_TIME_BUCKETS = [
+  { label: "≤ 3 jours", test: (d: number) => d <= 3 },
+  { label: "4-7 jours", test: (d: number) => d >= 4 && d <= 7 },
+  { label: "8+ jours", test: (d: number) => d >= 8 },
+];
+
+function bucketLabelFor(days: number): string {
+  return PRODUCTION_TIME_BUCKETS.find((b) => b.test(days))?.label ?? "";
+}
+
+// ── Theme helper ─────────────────────────────────────────────────────────────
 
 function useTheme(isDark: boolean) {
   return {
@@ -38,7 +49,15 @@ function useTheme(isDark: boolean) {
   };
 }
 
-function PrintCategoryStrip({ selected, onSelect, isDark }: { selected: string; onSelect: (id: string) => void; isDark: boolean }) {
+// ── Category Strip ────────────────────────────────────────────────────────────
+
+function PrintCategoryStrip({ categories, loading, selected, onSelect, isDark }: {
+  categories: string[];
+  loading: boolean;
+  selected: string;
+  onSelect: (id: string) => void;
+  isDark: boolean;
+}) {
   const t = useTheme(isDark);
   return (
     <div className={`${t.cardBg} border-b`}>
@@ -52,17 +71,23 @@ function PrintCategoryStrip({ selected, onSelect, isDark }: { selected: string; 
             <span className="text-lg"><Printer className="w-5 h-5" /></span>
             <span className="text-[11px] font-semibold leading-tight">Tout</span>
           </button>
-          {PRINT_CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => onSelect(selected === cat.id ? "" : cat.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === cat.id ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
-              data-testid={`button-print-cat-${cat.id}`}
-            >
-              <span className="text-lg">{cat.icon}</span>
-              <span className="text-[11px] font-semibold leading-tight line-clamp-2 max-w-[64px]">{cat.name}</span>
-            </button>
-          ))}
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-[54px] w-[64px] rounded-xl shrink-0" />
+            ))
+          ) : (
+            categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => onSelect(selected === cat ? "" : cat)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === cat ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
+                data-testid={`button-print-cat-${cat}`}
+              >
+                <span className="text-lg">🖨️</span>
+                <span className="text-[11px] font-semibold leading-tight line-clamp-2 max-w-[64px]">{cat}</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -83,30 +108,29 @@ function StarRating({ rating }: { rating: number }) {
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 
-function PrintProductCard({ product, onClick, isDark }: { product: PrintProduct; onClick: () => void; isDark: boolean }) {
-  const brand = getPrintBrand(product.brandId);
-  const category = getPrintCategory(product.categoryId);
-  const faved = useFavorites((s) => !!s.print[product.id]);
+function PrintProductCard({ card, onClick, isDark }: { card: PrintCatalogCard; onClick: () => void; isDark: boolean }) {
+  const faved = useFavorites((s) => !!s.print[String(card.id)]);
   const togglePrint = useFavorites((s) => s.togglePrint);
   const fmt = useFormatCurrency();
   const t = useTheme(isDark);
+  const starRating = card.rating / 10;
 
   return (
     <div
-      data-testid={`card-print-${product.id}`}
+      data-testid={`card-print-${card.id}`}
       className={`group cursor-pointer rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
       onClick={onClick}
     >
       <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        {card.imageUrl ? (
+          <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full flex items-center justify-center"><Package className={`w-10 h-10 ${t.textSubtle}`} /></div>
         )}
-        {category && (
+        {card.category && (
           <div className="absolute top-2 left-2">
             <Badge className={`${isDark ? "bg-gray-800/90 text-gray-200" : "bg-white/90 text-gray-700"} backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2`}>
-              {category.icon} {category.name}
+              {card.category}
             </Badge>
           </div>
         )}
@@ -115,40 +139,65 @@ function PrintProductCard({ product, onClick, isDark }: { product: PrintProduct;
           onClick={(e) => {
             e.stopPropagation();
             togglePrint({
-              id: product.id,
-              name: product.name,
-              brand: brand?.name ?? "",
-              price: product.basePrice,
-              priceUnit: product.priceUnit,
-              image: product.imageUrl ?? "",
+              id: String(card.id),
+              name: card.name,
+              brand: card.printerName,
+              price: card.priceInCents,
+              priceUnit: card.unit,
+              image: card.imageUrl ?? "",
             });
           }}
-          data-testid={`button-fav-print-${product.id}`}
+          data-testid={`button-fav-print-${card.id}`}
         >
           <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
         </button>
       </div>
       <div className="p-3 flex-1 flex flex-col gap-2">
-        <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors ${t.textPrimary}`}>{product.name}</h3>
-        {brand && <p className={`text-xs font-medium ${t.textMuted}`}>{brand.name}</p>}
+        <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors ${t.textPrimary}`}>{card.name}</h3>
+        {card.printerName && <p className={`text-xs font-medium ${t.textMuted}`}>{card.printerName}</p>}
         <div className="flex items-center gap-1.5">
-          <StarRating rating={product.rating} />
-          <span className={`text-[11px] ${t.textSubtle}`}>({product.reviewCount})</span>
+          {card.reviewCount > 0 ? (
+            <>
+              <StarRating rating={starRating} />
+              <span className={`text-[11px] ${t.textSubtle}`}>({card.reviewCount})</span>
+            </>
+          ) : (
+            <span className={`text-[11px] ${t.textSubtle}`}>Aucun avis</span>
+          )}
         </div>
         <div className={`mt-auto pt-2 border-t ${t.border}`}>
           <div className="flex items-center justify-between">
             <div>
               <p className={`text-[10px] ${t.textSubtle}`}>À partir de</p>
-              <p className="font-bold text-sm text-blue-600">{fmt(product.basePrice)}<span className={`text-[10px] font-normal ${t.textSubtle}`}>/{product.priceUnit}</span></p>
+              <p className="font-bold text-sm text-blue-600">{fmt(card.priceInCents)}<span className={`text-[10px] font-normal ${t.textSubtle}`}>/{card.unit}</span></p>
             </div>
               <div className={`flex items-center gap-1 text-[11px] ${t.textSubtle}`}>
               <Clock className="w-3 h-3" />
-              <span>{product.deliveryTime}</span>
+              <span>{card.productionTimeDays}j</span>
             </div>
           </div>
-          {product.minQuantity > 1 && (
-            <p className={`text-[10px] mt-1 ${t.textSubtle}`}>Min. {product.minQuantity} {product.priceUnit}s</p>
+          {card.minQuantity > 1 && (
+            <p className={`text-[10px] mt-1 ${t.textSubtle}`}>Min. {card.minQuantity} {card.unit}s</p>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Skeleton Card ─────────────────────────────────────────────────────────────
+
+function PrintProductCardSkeleton({ isDark }: { isDark: boolean }) {
+  const t = useTheme(isDark);
+  return (
+    <div className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${t.cardBg}`}>
+      <Skeleton className="aspect-[4/3] w-full rounded-none" />
+      <div className="p-3 flex-1 flex flex-col gap-2">
+        <Skeleton className="h-4 w-4/5" />
+        <Skeleton className="h-3 w-2/5" />
+        <Skeleton className="h-3 w-1/3" />
+        <div className={`mt-auto pt-2 border-t ${t.border}`}>
+          <Skeleton className="h-4 w-2/3" />
         </div>
       </div>
     </div>
@@ -164,10 +213,8 @@ interface PrintFilters {
   deliveryTime: string;
 }
 
-const DELIVERY_OPTIONS = ["24h", "48h", "3-5 jours", "1 semaine"];
-
-function PrintFilterBar({ products, filters, onChange, onReset, categoryId, isDark }: {
-  products: PrintProduct[];
+function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark }: {
+  cards: PrintCatalogCard[];
   filters: PrintFilters;
   onChange: (key: keyof PrintFilters, val: string) => void;
   onReset: () => void;
@@ -178,30 +225,31 @@ function PrintFilterBar({ products, filters, onChange, onReset, categoryId, isDa
   const hasActive = Object.values(filters).some(Boolean);
 
   const subCategories = useMemo(() => {
-    const catId = categoryId || null;
-    return PRINT_SUBCATEGORIES.filter((sc) =>
-      (!catId || sc.categoryId === catId) &&
-      products.some((p) => p.subCategoryId === sc.id)
-    );
-  }, [products, categoryId]);
+    const set = new Set<string>();
+    cards.forEach((c) => {
+      if (c.subCategory && (!categoryId || c.category === categoryId)) set.add(c.subCategory);
+    });
+    return Array.from(set);
+  }, [cards, categoryId]);
 
-  const brands = useMemo(() => {
-    const ids = new Set(products.map((p) => p.brandId));
-    return PRINT_BRANDS.filter((b) => ids.has(b.id));
-  }, [products]);
+  const printers = useMemo(() => {
+    const map = new Map<string, string>();
+    cards.forEach((c) => map.set(String(c.printerId), c.printerName));
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [cards]);
 
   const materials = useMemo(() => {
     const set = new Set<string>();
-    products.forEach((p) => p.materials.forEach((m) => set.add(m)));
+    cards.forEach((c) => c.materials.forEach((m) => set.add(m)));
     return Array.from(set);
-  }, [products]);
+  }, [cards]);
 
-  const deliveryTimes = useMemo(() => {
-    const set = new Set(products.map((p) => p.deliveryTime));
-    return DELIVERY_OPTIONS.filter((d) => set.has(d));
-  }, [products]);
+  const deliveryBuckets = useMemo(() => {
+    const set = new Set(cards.map((c) => bucketLabelFor(c.productionTimeDays)));
+    return PRODUCTION_TIME_BUCKETS.map((b) => b.label).filter((l) => set.has(l));
+  }, [cards]);
 
-  if (!subCategories.length && !brands.length && !materials.length) return null;
+  if (!subCategories.length && !printers.length && !materials.length) return null;
 
   return (
     <div className={`${t.cardBg} border-b py-2 px-4`}>
@@ -212,16 +260,16 @@ function PrintFilterBar({ products, filters, onChange, onReset, categoryId, isDa
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sous-catégories</SelectItem>
-              {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>)}
+              {subCategories.map((sc) => <SelectItem key={sc} value={sc}>{sc}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
-        {brands.length > 0 && (
+        {printers.length > 0 && (
           <Select value={filters.brandId || "__all__"} onValueChange={(v) => onChange("brandId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`}><SelectValue placeholder="Société d'impression" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sociétés</SelectItem>
-              {brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+              {printers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
@@ -234,12 +282,12 @@ function PrintFilterBar({ products, filters, onChange, onReset, categoryId, isDa
             </SelectContent>
           </Select>
         )}
-        {deliveryTimes.length > 0 && (
+        {deliveryBuckets.length > 0 && (
           <Select value={filters.deliveryTime || "__all__"} onValueChange={(v) => onChange("deliveryTime", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`}><SelectValue placeholder="Livraison" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes livraisons</SelectItem>
-              {deliveryTimes.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              {deliveryBuckets.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
@@ -262,6 +310,15 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   const toggleTheme = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
+  const { data: cards = [], isLoading: cardsLoading } = useQuery<PrintCatalogCard[]>({
+    queryKey: ["/api/print/marketplace"],
+    enabled: !comingSoon,
+  });
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery<string[]>({
+    queryKey: ["/api/print/categories"],
+    enabled: !comingSoon,
+  });
+
   const urlParams = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
   const initialSearch = urlParams.get("q") ?? "";
   const initialCategory = urlParams.get("categoryId") ?? "";
@@ -276,35 +333,31 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   const searchQuery = initialSearch.toLowerCase();
 
   const filtered = useMemo(() => {
-    let list = PRINT_PRODUCTS;
+    let list = cards;
 
     if (searchQuery) {
-      list = list.filter((p) => {
-        const brand = getPrintBrand(p.brandId);
-        const cat = getPrintCategory(p.categoryId);
-        const subcat = getPrintSubCategory(p.subCategoryId);
-        return (
-          p.name.toLowerCase().includes(searchQuery) ||
-          p.description.toLowerCase().includes(searchQuery) ||
-          cat?.name.toLowerCase().includes(searchQuery) ||
-          subcat?.name.toLowerCase().includes(searchQuery) ||
-          brand?.name.toLowerCase().includes(searchQuery)
-        );
-      });
+      list = list.filter((c) =>
+        c.name.toLowerCase().includes(searchQuery) ||
+        c.description.toLowerCase().includes(searchQuery) ||
+        c.category.toLowerCase().includes(searchQuery) ||
+        c.subCategory.toLowerCase().includes(searchQuery) ||
+        c.printerName.toLowerCase().includes(searchQuery)
+      );
     }
-    if (categoryId) list = list.filter((p) => p.categoryId === categoryId);
-    if (filters.subCategoryId) list = list.filter((p) => p.subCategoryId === filters.subCategoryId);
-    if (filters.brandId) list = list.filter((p) => p.brandId === filters.brandId);
-    if (filters.material) list = list.filter((p) => p.materials.includes(filters.material));
-    if (filters.deliveryTime) list = list.filter((p) => p.deliveryTime === filters.deliveryTime);
+    if (categoryId) list = list.filter((c) => c.category === categoryId);
+    if (filters.subCategoryId) list = list.filter((c) => c.subCategory === filters.subCategoryId);
+    if (filters.brandId) list = list.filter((c) => String(c.printerId) === filters.brandId);
+    if (filters.material) list = list.filter((c) => c.materials.includes(filters.material));
+    if (filters.deliveryTime) list = list.filter((c) => bucketLabelFor(c.productionTimeDays) === filters.deliveryTime);
 
     return list;
-  }, [searchQuery, categoryId, filters]);
+  }, [cards, searchQuery, categoryId, filters]);
 
   const updateFilter = (key: keyof PrintFilters, val: string) => setFilters((p) => ({ ...p, [key]: val }));
   const resetFilters = () => setFilters({ subCategoryId: "", brandId: "", material: "", deliveryTime: "" });
 
-  const selectedCategory = PRINT_CATEGORIES.find((c) => c.id === categoryId);
+  const isLoading = cardsLoading || categoriesLoading;
+  const distinctPrinterCount = useMemo(() => new Set(cards.map((c) => c.printerId)).size, [cards]);
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
@@ -337,15 +390,15 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${isDark ? "text-gray-400" : "text-blue-100"}`}>
             <span className="flex items-center gap-1.5">
               <Package className="w-4 h-4" />
-              {PRINT_PRODUCTS.length} produits disponibles
+              {isLoading ? "…" : cards.length} produits disponibles
             </span>
             <span className="flex items-center gap-1.5">
               <Users className="w-4 h-4" />
-              {PRINT_BRANDS.length} sociétés d'impression
+              {isLoading ? "…" : distinctPrinterCount} sociétés d'impression
             </span>
             <span className="flex items-center gap-1.5">
               <Star className="w-4 h-4 fill-blue-200" />
-              {PRINT_CATEGORIES.length} catégories
+              {isLoading ? "…" : categories.length} catégories
             </span>
           </div>
           </div>
@@ -368,6 +421,8 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
       <>
       <div className="sticky top-14 z-30">
         <PrintCategoryStrip
+          categories={categories}
+          loading={categoriesLoading}
           selected={categoryId}
           isDark={isDark}
           onSelect={(id) => {
@@ -381,7 +436,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         />
 
         <PrintFilterBar
-          products={PRINT_PRODUCTS}
+          cards={cards}
           filters={filters}
           onChange={updateFilter}
           onReset={resetFilters}
@@ -393,12 +448,18 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
        <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-4">
            <h1 className={`font-bold text-lg ${t.textPrimary}`}>
-            {selectedCategory ? `${selectedCategory.icon} ${selectedCategory.name}` : "Services d'impression"}
+            {categoryId || "Services d'impression"}
           </h1>
-           <p className={`text-sm mt-0.5 ${t.textSubtle}`}>{filtered.length} service{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}</p>
+           <p className={`text-sm mt-0.5 ${t.textSubtle}`}>{isLoading ? "…" : `${filtered.length} service${filtered.length !== 1 ? "s" : ""} disponible${filtered.length !== 1 ? "s" : ""}`}</p>
         </div>
 
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <PrintProductCardSkeleton key={i} isDark={isDark} />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
              <Printer className={`w-14 h-14 ${t.textSubtle}`} />
             <div>
@@ -411,11 +472,11 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {filtered.map((product) => (
+            {filtered.map((card) => (
               <PrintProductCard
-                key={product.id}
-                product={product}
-                 onClick={() => navigate(`/print/${product.id}`)}
+                key={card.id}
+                card={card}
+                 onClick={() => navigate(`/print/${card.id}`)}
                  isDark={isDark}
               />
             ))}

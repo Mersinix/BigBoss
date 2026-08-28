@@ -142,6 +142,40 @@ export async function seedDatabase(): Promise<void> {
       phone: "+216 71 234 001",
       maintenanceCategories: ["Machines à café", "Machines espresso", "Électricité", "Plomberie"],
     } as any);
+    const printer = await storage.createUser({
+      email: "printer@printstudio.com",
+      password: "password",
+      name: "Coffee Print Studio",
+      role: "PRINTER",
+      status: "approved",
+      phone: "+216 71 234 002",
+      printCategories: ["Uniformes & Accessoires", "Packaging", "Signalétique"],
+      locationAddress: "Tunis Centre, Tunisie",
+    } as any);
+    await storage.createPrintCatalogItem(printer.id, {
+      name: "Tablier barista brodé",
+      description: "Tablier en toile épaisse avec broderie du logo du café",
+      category: "Uniformes & Accessoires",
+      subCategory: "Tabliers",
+      priceInCents: 4500,
+      unit: "pièce",
+      minQuantity: 5,
+      productionTimeDays: 4,
+      materials: ["Coton", "Toile"],
+      isActive: true,
+    });
+    await storage.createPrintCatalogItem(printer.id, {
+      name: "Gobelets carton personnalisés 8oz",
+      description: "Gobelets à café biodégradables imprimés à votre marque",
+      category: "Packaging",
+      subCategory: "Gobelets",
+      priceInCents: 120,
+      unit: "pièce",
+      minQuantity: 500,
+      productionTimeDays: 7,
+      materials: ["Carton"],
+      isActive: true,
+    });
 
     // Legacy supplier-owned products for cafe browsing
     await storage.createProduct({

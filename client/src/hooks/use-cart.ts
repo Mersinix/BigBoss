@@ -40,27 +40,28 @@ function cartKey(item: Pick<CartItem, 'listingId' | 'flavorId' | 'sizeId'>): str
 }
 
 // ── PRINT cart item ───────────────────────────────────────────────────────────
+// Backed by the real PrintCatalogItem schema (server/shared/schema.ts), which
+// only models a flat materials[] list, a single unit/priceInCents, and no
+// per-item color/size variants — unlike the old mock data, so this line item
+// carries a plain quantity + an optional material choice from the catalog
+// item's own materials[] rather than an invented size matrix.
 
 export interface PrintCartItem {
   id: string;
-  printProductId: string;
-  printProductName: string;
-  printProductImage: string | null;
-  brandId: string;
-  brandName: string;
-  deliveryTime: string;
+  catalogItemId: number;
+  name: string;
+  imageUrl: string | null;
+  printerId: number;
+  printerName: string;
+  productionTimeDays: number;
+  unitPriceInCents: number;
+  unit: string;
+  minQuantity: number;
+  quantity: number;
+  material: string;
   uploadedFileDataUrl: string | null;
   uploadedFileName: string | null;
-  primaryColor: string;
-  secondaryColor: string;
-  material: string;
-  sizeMatrix: Record<string, number>;
-  hasSizes: boolean;
-  generalQuantity: number;
   notes: string;
-  unitPrice: number;
-  totalQuantity: number;
-  priceUnit: string;
 }
 
 // ── PACK cart item ────────────────────────────────────────────────────────────
@@ -155,7 +156,7 @@ interface CartState {
   // PRINT actions
   addPrintItem: (item: Omit<PrintCartItem, 'id'>) => void;
   removePrintItem: (id: string) => void;
-  updatePrintQuantity: (id: string, sizeMatrix: Record<string, number>, generalQuantity: number) => void;
+  updatePrintQuantity: (id: string, quantity: number) => void;
   clearPrintItems: () => void;
   getPrintTotal: () => number;
   getTotalItemCount: () => number;
@@ -260,23 +261,22 @@ export const useCart = create<CartState>()(
         set((state) => ({ printItems: state.printItems.filter(i => i.id !== id) }));
       },
 
-      updatePrintQuantity: (id, sizeMatrix, generalQuantity) => {
-        const totalQuantity = Object.values(sizeMatrix).reduce((s, v) => s + v, 0) || generalQuantity;
+      updatePrintQuantity: (id, quantity) => {
         set((state) => ({
-          printItems: state.printItems.map(i =>
-            i.id === id ? { ...i, sizeMatrix, generalQuantity, totalQuantity } : i
-          ),
+          printItems: quantity <= 0
+            ? state.printItems.filter(i => i.id !== id)
+            : state.printItems.map(i => i.id === id ? { ...i, quantity } : i),
         }));
       },
 
       clearPrintItems: () => set({ printItems: [] }),
 
       getPrintTotal: () =>
-        get().printItems.reduce((t, i) => t + i.unitPrice * i.totalQuantity, 0),
+        get().printItems.reduce((t, i) => t + i.unitPriceInCents * i.quantity, 0),
 
       getTotalItemCount: () => {
         const shop = get().items.reduce((s, i) => s + i.quantity, 0);
-        const print = get().printItems.reduce((s, i) => s + i.totalQuantity, 0);
+        const print = get().printItems.reduce((s, i) => s + i.quantity, 0);
         const pack = get().packItems.reduce((s, i) => s + i.quantity, 0);
         return shop + print + pack;
       },

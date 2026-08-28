@@ -549,7 +549,7 @@ export const supplierStores = pgTable("supplier_stores", {
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id"), // nullable for product-level reviews
-  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE'
+  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT'
   cafeId: integer("cafe_id").notNull(),
   productId: integer("product_id"),
   listingId: integer("listing_id"),
@@ -558,6 +558,8 @@ export const supplierProductReviews = pgTable("supplier_product_reviews", {
   reservationId: integer("reservation_id"), // optional completed intervention link
   baristaMarketplaceUserId: integer("barista_marketplace_user_id"), // for BARISTA_MARKETPLACE reviews
   baristaMissionId: integer("barista_mission_id"), // completed mission this review is for
+  printerId: integer("printer_id"), // for PRINT reviews
+  printOrderId: integer("print_order_id"), // completed print order this review is for
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   cafeName: text("cafe_name").notNull().default(''),
@@ -844,6 +846,63 @@ export const maintenanceZones = pgTable("maintenance_zones", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ── PRINT ────────────────────────────────────────────────────────────────────
+// Unlike Maintenance/Barista (one profile per provider, a flat day-rate), a
+// Printer's real offering is a priced catalog of many distinct items — closer
+// in shape to a Supplier's product listings. printCatalogItems is that catalog,
+// scoped to the owning Printer (users.id, role='PRINTER') via printerId.
+// printOrders mirrors maintenanceReservations for the request/fulfillment
+// lifecycle, but — learning from Maintenance's gap (no price field at all,
+// see server/storage.ts getMaintenanceAdminOverview comments) — snapshots the
+// item name + unit price onto the order at creation time (the same pattern
+// Barista uses for baristaMarketplaceMissions.rateInCents), so a later catalog
+// price edit never rewrites the price of an already-placed order, and the
+// catalog item can be safely deleted later without corrupting order history.
+// status reuses orderStatusEnum's values (as plain text, matching subOrders'
+// convention of validating a shared status vocabulary via zod rather than a
+// hard DB enum) instead of inventing a parallel status system: PENDING →
+// CONFIRMED → PREPARING (production) → READY → IN_DELIVERY → DELIVERED, or
+// CANCELLED at any point before DELIVERED.
+export const printCatalogItems = pgTable("print_catalog_items", {
+  id: serial("id").primaryKey(),
+  printerId: integer("printer_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  imageUrl: text("image_url"),
+  category: text("category").notNull().default(""),
+  subCategory: text("sub_category").notNull().default(""),
+  priceInCents: integer("price_in_cents").notNull().default(0),
+  unit: text("unit").notNull().default("unité"),
+  minQuantity: integer("min_quantity").notNull().default(1),
+  productionTimeDays: integer("production_time_days").notNull().default(3),
+  materials: text("materials").array().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  printerIdx: index("print_catalog_items_printer_idx").on(table.printerId),
+}));
+
+export const printOrders = pgTable("print_orders", {
+  id: serial("id").primaryKey(),
+  printerId: integer("printer_id").notNull(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  catalogItemId: integer("catalog_item_id"), // nullable — survives catalog item deletion
+  itemName: text("item_name").notNull(),            // snapshot at order time
+  unitPriceInCents: integer("unit_price_in_cents").notNull(), // snapshot at order time
+  quantity: integer("quantity").notNull().default(1),
+  totalInCents: integer("total_in_cents").notNull(),
+  status: text("status").notNull().default("PENDING"),
+  notes: text("notes").notNull().default(""),
+  deliveryAddress: text("delivery_address"),
+  contactPhone: text("contact_phone").notNull().default(""),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  printerIdx: index("print_orders_printer_idx").on(table.printerId),
+  ownerIdx: index("print_orders_owner_idx").on(table.cafeOwnerId),
+}));
+
 // ── Promotions ───────────────────────────────────────────────────────────────
 
 export const promotionTypeEnum = pgEnum('promotion_type', [
@@ -1129,6 +1188,8 @@ export const insertMaintenanceFavoriteSchema = createInsertSchema(maintenanceFav
 export const insertMaintenanceReservationSchema = createInsertSchema(maintenanceReservations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMaintenanceCompetencySchema = createInsertSchema(maintenanceCompetencies).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMaintenanceZoneSchema = createInsertSchema(maintenanceZones).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPrintCatalogItemSchema = createInsertSchema(printCatalogItems).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPrintOrderSchema = createInsertSchema(printOrders).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertBaristaSkillSchema = createInsertSchema(baristaSkills).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertBaristaMarketplaceProfileSchema = createInsertSchema(baristaMarketplaceProfiles).omit({ id: true, updatedAt: true });
@@ -1231,6 +1292,26 @@ export type MaintenanceMarketplaceCard = MaintenanceProfile & {
 };
 export type InsertMaintenanceReservation = z.infer<typeof insertMaintenanceReservationSchema>;
 export type InsertPackFavorite = z.infer<typeof insertPackFavoriteSchema>;
+
+export type PrintCatalogItem = typeof printCatalogItems.$inferSelect;
+export type InsertPrintCatalogItem = z.infer<typeof insertPrintCatalogItemSchema>;
+export type PrintOrder = typeof printOrders.$inferSelect;
+export type InsertPrintOrder = z.infer<typeof insertPrintOrderSchema>;
+export type PrintOrderStatus = 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'IN_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+/** A catalog item joined with its printer's identity/location — the card shown on /print. */
+export type PrintCatalogCard = PrintCatalogItem & {
+  printerName: string;
+  printerPhone: string | null;
+  printerImageUrl: string | null;
+  printerLocation: string;
+  rating: number; // 0-50 (x10), mirrors maintenanceProfiles/baristaMarketplaceProfiles convention
+  reviewCount: number;
+};
+/** A print order joined with the other party's identity, for both Printer and Coffee Owner views. */
+export type PrintOrderWithParties = PrintOrder & {
+  printerName: string;
+  cafeOwnerName: string;
+};
 
 export type Promotion = typeof promotions.$inferSelect;
 export type InsertPromotion = z.infer<typeof insertPromotionSchema>;

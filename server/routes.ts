@@ -725,6 +725,164 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── PRINT catalog/marketplace/orders ──────────────────────────────────────
+  // Mirrors the Maintenance marketplace routes above structurally (public
+  // browsing endpoint, role-gated provider-management endpoints, a single
+  // role-branched /orders endpoint, ownership enforced inside storage.ts's
+  // WHERE clauses) — see shared/schema.ts printCatalogItems/printOrders and
+  // server/storage.ts's PRINT section for the full rationale.
+  const PRINT_ORDER_STATUSES = ["PENDING", "CONFIRMED", "PREPARING", "READY", "IN_DELIVERY", "DELIVERED", "CANCELLED"] as const;
+
+  app.get("/api/print/catalog", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+    res.json(await storage.getPrintCatalogForPrinter(user.id));
+  });
+
+  app.post("/api/print/catalog", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+      const body = z.object({
+        name: z.string().min(1),
+        description: z.string().default(""),
+        imageUrl: z.string().optional().nullable(),
+        category: z.string().default(""),
+        subCategory: z.string().default(""),
+        priceInCents: z.number().int().min(0),
+        unit: z.string().default("unité"),
+        minQuantity: z.number().int().min(1).default(1),
+        productionTimeDays: z.number().int().min(0).default(3),
+        materials: z.array(z.string()).default([]),
+        isActive: z.boolean().default(true),
+      }).parse(req.body);
+      const item = await storage.createPrintCatalogItem(user.id, body);
+      broadcast("print_catalog_updated", { printerId: user.id });
+      res.status(201).json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to create catalog item" });
+    }
+  });
+
+  app.patch("/api/print/catalog/:id", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+      const body = z.object({
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        imageUrl: z.string().optional().nullable(),
+        category: z.string().optional(),
+        subCategory: z.string().optional(),
+        priceInCents: z.number().int().min(0).optional(),
+        unit: z.string().optional(),
+        minQuantity: z.number().int().min(1).optional(),
+        productionTimeDays: z.number().int().min(0).optional(),
+        materials: z.array(z.string()).optional(),
+        isActive: z.boolean().optional(),
+      }).parse(req.body);
+      const updated = await storage.updatePrintCatalogItem(parseInt(req.params.id), user.id, body);
+      if (!updated) return res.status(404).json({ message: "Catalog item not found" });
+      broadcast("print_catalog_updated", { printerId: user.id });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update catalog item" });
+    }
+  });
+
+  app.delete("/api/print/catalog/:id", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+    const deleted = await storage.deletePrintCatalogItem(parseInt(req.params.id), user.id);
+    if (!deleted) return res.status(404).json({ message: "Catalog item not found" });
+    broadcast("print_catalog_updated", { printerId: user.id });
+    res.json({ message: "Deleted" });
+  });
+
+  app.get("/api/print/marketplace", async (req: any, res) => {
+    try {
+      res.json(await storage.getPrintMarketplaceCards({
+        search: typeof req.query.search === "string" ? req.query.search : undefined,
+        category: typeof req.query.category === "string" ? req.query.category : undefined,
+        printerId: req.query.printerId ? Number(req.query.printerId) : undefined,
+      }));
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load PRINT marketplace" });
+    }
+  });
+
+  app.get("/api/print/marketplace/:id", async (req, res) => {
+    try {
+      const card = await storage.getPrintMarketplaceCard(parseInt(req.params.id));
+      if (!card) return res.status(404).json({ message: "Print service not found" });
+      res.json(card);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load PRINT item" });
+    }
+  });
+
+  app.get("/api/print/categories", async (_req, res) => {
+    try { res.json(await storage.getPrintCategories()); }
+    catch { res.status(500).json({ message: "Failed to load PRINT categories" }); }
+  });
+
+  app.get("/api/print/orders", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    if (user.role === "PRINTER") return res.json(await storage.getPrintOrdersForPrinter(user.id));
+    if (user.role === "CAFE_OWNER") return res.json(await storage.getPrintOrdersForOwner(user.id));
+    return res.status(403).json({ message: "Forbidden" });
+  });
+
+  app.post("/api/print/orders", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+      const body = z.object({
+        catalogItemId: z.number().int().positive(),
+        quantity: z.number().int().min(1),
+        notes: z.string().optional(),
+        deliveryAddress: z.string().optional(),
+        contactPhone: z.string().optional(),
+      }).parse(req.body);
+      const order = await storage.createPrintOrder(user.id, {
+        ...body,
+        contactPhone: body.contactPhone || user.phone || "",
+      });
+      broadcast("print_order_updated", { orderId: order.id });
+      broadcastToUsers([user.id, order.printerId], "print_order_updated", { orderId: order.id });
+      broadcastToUsers([user.id, order.printerId], "conversation_updated", { service: "PRINT", orderId: order.id });
+      res.status(201).json(order);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err?.message ?? "Failed to create order" });
+    }
+  });
+
+  app.patch("/api/print/orders/:id/status", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+      const { status } = z.object({ status: z.enum(PRINT_ORDER_STATUSES) }).parse(req.body);
+      const updated = await storage.updatePrintOrderStatus(parseInt(req.params.id), user.id, status);
+      if (!updated) return res.status(404).json({ message: "Order not found" });
+      broadcast("print_order_updated", { orderId: updated.id });
+      broadcastToUsers([user.id, updated.cafeOwnerId], "print_order_updated", { orderId: updated.id });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update order status" });
+    }
+  });
+
+  app.get("/api/print/revenue", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+    res.json(await storage.getPrintRevenueSummary(user.id));
+  });
+
   app.get("/api/admin/maintenance", requireAdmin, async (_req, res) => {
     try { res.json(await storage.getMaintenanceAdminOverview()); }
     catch { res.status(500).json({ message: "Failed to load Maintenance overview" }); }

@@ -59,6 +59,12 @@ import DriverSettingsPage from "@/pages/driver/settings";
 
 // New role dashboards
 import PrinterDashboard from "@/pages/printer/dashboard";
+import PrinterServices from "@/pages/printer/services";
+import PrinterOrders from "@/pages/printer/orders";
+import PrinterCatalog from "@/pages/printer/catalog";
+import PrinterInvoices from "@/pages/printer/invoices";
+import PrinterAnalytics from "@/pages/printer/analytics";
+import PrinterSettings from "@/pages/printer/settings";
 import MarketingDashboard from "@/pages/marketing/dashboard";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
 import BaristaMarketplaceDashboard from "@/pages/barista-marketplace/dashboard";
@@ -336,7 +342,25 @@ function Router() {
       </Route>
 
       {/* ── Printer routes ── */}
-      <Route path="/printer/:rest*">
+      <Route path="/printer/services">
+        {() => (<DashboardLayout><ProtectedRoute component={PrinterServices} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/printer/orders">
+        {() => (<DashboardLayout><ProtectedRoute component={PrinterOrders} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/printer/catalog">
+        {() => (<DashboardLayout><ProtectedRoute component={PrinterCatalog} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/printer/invoices">
+        {() => (<DashboardLayout><ProtectedRoute component={PrinterInvoices} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/printer/analytics">
+        {() => (<DashboardLayout><ProtectedRoute component={PrinterAnalytics} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/printer/settings">
+        {() => (<DashboardLayout><ProtectedRoute component={PrinterSettings} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/printer">
         {() => (<DashboardLayout><ProtectedRoute component={PrinterDashboard} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
       </Route>
 

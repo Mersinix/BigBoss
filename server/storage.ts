@@ -11,6 +11,7 @@ import {
   landingConfig, messagingSettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones,
+  printCatalogItems, printOrders,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
@@ -49,6 +50,8 @@ import {
   type MaintenanceProfile, type InsertMaintenanceProfile, type MaintenanceMarketplaceCard,
   type MaintenanceReservation, type InsertMaintenanceReservation,
   type MaintenanceCompetency, type MaintenanceZone,
+  type PrintCatalogItem, type InsertPrintCatalogItem, type PrintCatalogCard,
+  type PrintOrder, type InsertPrintOrder, type PrintOrderWithParties,
   type BaristaSkill, type BaristaMarketplaceProfile, type InsertBaristaMarketplaceProfile,
   type BaristaMarketplaceRequest, type BaristaMarketplaceMission,
   type BaristaMarketplaceCard, type BaristaRequestWithParties, type BaristaMissionWithParties,
@@ -281,6 +284,20 @@ export interface IStorage {
   getMaintenanceFavoritesByUser(userId: number): Promise<number[]>;
   addMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
   removeMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
+
+  // PRINT
+  getPrintCatalogForPrinter(printerId: number): Promise<PrintCatalogItem[]>;
+  createPrintCatalogItem(printerId: number, data: Partial<InsertPrintCatalogItem>): Promise<PrintCatalogItem>;
+  updatePrintCatalogItem(id: number, printerId: number, updates: Partial<InsertPrintCatalogItem>): Promise<PrintCatalogItem | undefined>;
+  deletePrintCatalogItem(id: number, printerId: number): Promise<boolean>;
+  getPrintMarketplaceCards(filters?: { search?: string; category?: string; printerId?: number }): Promise<PrintCatalogCard[]>;
+  getPrintMarketplaceCard(id: number): Promise<PrintCatalogCard | undefined>;
+  getPrintCategories(): Promise<string[]>;
+  getPrintOrdersForPrinter(printerId: number): Promise<PrintOrderWithParties[]>;
+  getPrintOrdersForOwner(ownerId: number): Promise<PrintOrderWithParties[]>;
+  createPrintOrder(cafeOwnerId: number, data: { catalogItemId: number; quantity: number; notes?: string; deliveryAddress?: string; contactPhone?: string }): Promise<PrintOrder>;
+  updatePrintOrderStatus(id: number, printerId: number, status: string): Promise<PrintOrder | undefined>;
+  getPrintRevenueSummary(printerId: number): Promise<{ totalEarnedCents: number; completedOrders: number; currentMonthCents: number; currentMonthOrders: number; history: { month: string; totalCents: number; orders: number }[] }>;
 
   // Barista Marketplace
   getBaristaSkills(activeOnly?: boolean): Promise<BaristaSkill[]>;
@@ -3032,6 +3049,229 @@ export class DatabaseStorage implements IStorage {
       eq(maintenanceFavorites.userId, userId),
       eq(maintenanceFavorites.maintenanceUserId, maintenanceUserId),
     ));
+  }
+
+  // ── PRINT ────────────────────────────────────────────────────────────────────
+  // See shared/schema.ts printCatalogItems/printOrders for the architecture note.
+  // Every catalog-item and order mutation is scoped in the WHERE clause itself
+  // (ownership-in-WHERE pattern, mirroring Maintenance) rather than a separate
+  // pre-check, so a Printer can never affect another Printer's rows even if a
+  // route bug ever skipped the role/ownership check upstream.
+
+  private async computePrintReviewStats(printerIds: number[]): Promise<Map<number, { rating: number; reviewCount: number }>> {
+    const stats = new Map<number, { rating: number; reviewCount: number }>();
+    if (printerIds.length === 0) return stats;
+    const rows = await db.select({ printerId: supplierProductReviews.printerId, rating: supplierProductReviews.rating })
+      .from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.reviewType, "PRINT"), inArray(supplierProductReviews.printerId as any, printerIds)));
+    const agg = new Map<number, { sum: number; count: number }>();
+    for (const row of rows) {
+      if (!row.printerId) continue;
+      const cur = agg.get(row.printerId) ?? { sum: 0, count: 0 };
+      cur.sum += row.rating; cur.count += 1;
+      agg.set(row.printerId, cur);
+    }
+    for (const [printerId, { sum, count }] of Array.from(agg)) {
+      stats.set(printerId, { rating: Math.round((sum / count) * 10), reviewCount: count });
+    }
+    return stats;
+  }
+
+  async getPrintCatalogForPrinter(printerId: number): Promise<PrintCatalogItem[]> {
+    return db.select().from(printCatalogItems)
+      .where(eq(printCatalogItems.printerId, printerId))
+      .orderBy(desc(printCatalogItems.createdAt));
+  }
+
+  async createPrintCatalogItem(printerId: number, data: Partial<InsertPrintCatalogItem>): Promise<PrintCatalogItem> {
+    const [created] = await db.insert(printCatalogItems).values({ ...data, printerId } as any).returning();
+    return created;
+  }
+
+  async updatePrintCatalogItem(id: number, printerId: number, updates: Partial<InsertPrintCatalogItem>): Promise<PrintCatalogItem | undefined> {
+    const safeUpdates = { ...updates };
+    delete (safeUpdates as any).printerId; // ownership is fixed at creation, never client-reassignable
+    const [updated] = await db.update(printCatalogItems)
+      .set({ ...safeUpdates, updatedAt: new Date() } as any)
+      .where(and(eq(printCatalogItems.id, id), eq(printCatalogItems.printerId, printerId)))
+      .returning();
+    return updated;
+  }
+
+  async deletePrintCatalogItem(id: number, printerId: number): Promise<boolean> {
+    const deleted = await db.delete(printCatalogItems)
+      .where(and(eq(printCatalogItems.id, id), eq(printCatalogItems.printerId, printerId)))
+      .returning();
+    return deleted.length > 0;
+  }
+
+  async getPrintMarketplaceCards(filters?: { search?: string; category?: string; printerId?: number }): Promise<PrintCatalogCard[]> {
+    const rows = await db.select({ item: printCatalogItems, printer: users })
+      .from(printCatalogItems)
+      .innerJoin(users, eq(printCatalogItems.printerId, users.id))
+      .where(and(
+        eq(printCatalogItems.isActive, true),
+        eq(users.role, "PRINTER" as any),
+        eq(users.status, "approved"),
+        ...(filters?.printerId ? [eq(printCatalogItems.printerId, filters.printerId)] : []),
+      ));
+
+    const printerIds = Array.from(new Set(rows.map((r) => r.printer.id)));
+    const statsMap = await this.computePrintReviewStats(printerIds);
+
+    const cards = rows.map(({ item, printer }) => {
+      const stats = statsMap.get(printer.id);
+      return {
+        ...item,
+        printerName: printer.name,
+        printerPhone: printer.phone ?? null,
+        printerImageUrl: printer.profileImageUrl ?? null,
+        printerLocation: printer.locationAddress ?? "",
+        rating: stats?.rating ?? 0,
+        reviewCount: stats?.reviewCount ?? 0,
+      } as PrintCatalogCard;
+    });
+
+    const query = filters?.search?.trim().toLowerCase();
+    return cards.filter((card) => {
+      if (query) {
+        const haystack = [card.name, card.description, card.category, card.subCategory, card.printerName].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (filters?.category && card.category.toLowerCase() !== filters.category.toLowerCase()) return false;
+      return true;
+    });
+  }
+
+  /** Single-item detail for the Coffee Owner's PRINT product-detail page. Only
+   *  active items from approved printers are visible here — same visibility
+   *  rule as getPrintMarketplaceCards, just narrowed to one id. */
+  async getPrintMarketplaceCard(id: number): Promise<PrintCatalogCard | undefined> {
+    const [row] = await db.select({ item: printCatalogItems, printer: users })
+      .from(printCatalogItems)
+      .innerJoin(users, eq(printCatalogItems.printerId, users.id))
+      .where(and(
+        eq(printCatalogItems.id, id),
+        eq(printCatalogItems.isActive, true),
+        eq(users.role, "PRINTER" as any),
+        eq(users.status, "approved"),
+      ));
+    if (!row) return undefined;
+    const stats = (await this.computePrintReviewStats([row.printer.id])).get(row.printer.id);
+    return {
+      ...row.item,
+      printerName: row.printer.name,
+      printerPhone: row.printer.phone ?? null,
+      printerImageUrl: row.printer.profileImageUrl ?? null,
+      printerLocation: row.printer.locationAddress ?? "",
+      rating: stats?.rating ?? 0,
+      reviewCount: stats?.reviewCount ?? 0,
+    };
+  }
+
+  async getPrintCategories(): Promise<string[]> {
+    const rows = await db.select({ category: printCatalogItems.category })
+      .from(printCatalogItems)
+      .innerJoin(users, eq(printCatalogItems.printerId, users.id))
+      .where(and(
+        eq(printCatalogItems.isActive, true),
+        eq(users.role, "PRINTER" as any),
+        eq(users.status, "approved"),
+      ));
+    return Array.from(new Set(rows.map((r) => r.category).filter((c) => c.trim().length > 0))).sort((a, b) => a.localeCompare(b));
+  }
+
+  async getPrintOrdersForPrinter(printerId: number): Promise<PrintOrderWithParties[]> {
+    const rows = await db.select({ order: printOrders, owner: users })
+      .from(printOrders)
+      .innerJoin(users, eq(printOrders.cafeOwnerId, users.id))
+      .where(eq(printOrders.printerId, printerId))
+      .orderBy(desc(printOrders.createdAt));
+    return rows.map(({ order, owner }) => ({ ...order, printerName: "", cafeOwnerName: owner.name }));
+  }
+
+  async getPrintOrdersForOwner(ownerId: number): Promise<PrintOrderWithParties[]> {
+    const rows = await db.select({ order: printOrders, printer: users })
+      .from(printOrders)
+      .innerJoin(users, eq(printOrders.printerId, users.id))
+      .where(eq(printOrders.cafeOwnerId, ownerId))
+      .orderBy(desc(printOrders.createdAt));
+    return rows.map(({ order, printer }) => ({ ...order, printerName: printer.name, cafeOwnerName: "" }));
+  }
+
+  /** Snapshots the catalog item's current name/price onto the order so a later
+   *  catalog edit (or deletion) never rewrites an already-placed order's price —
+   *  see the architecture note on printOrders in shared/schema.ts. */
+  async createPrintOrder(cafeOwnerId: number, data: { catalogItemId: number; quantity: number; notes?: string; deliveryAddress?: string; contactPhone?: string }): Promise<PrintOrder> {
+    const [item] = await db.select().from(printCatalogItems).where(eq(printCatalogItems.id, data.catalogItemId));
+    if (!item || !item.isActive) throw new Error("This print service is no longer available.");
+    const quantity = Math.max(1, Math.floor(data.quantity));
+    if (quantity < item.minQuantity) throw new Error(`Minimum quantity for this service is ${item.minQuantity}.`);
+    const [created] = await db.insert(printOrders).values({
+      printerId: item.printerId,
+      cafeOwnerId,
+      catalogItemId: item.id,
+      itemName: item.name,
+      unitPriceInCents: item.priceInCents,
+      quantity,
+      totalInCents: item.priceInCents * quantity,
+      status: "PENDING",
+      notes: data.notes ?? "",
+      deliveryAddress: data.deliveryAddress ?? null,
+      contactPhone: data.contactPhone ?? "",
+    } as any).returning();
+    return created;
+  }
+
+  async updatePrintOrderStatus(id: number, printerId: number, status: string): Promise<PrintOrder | undefined> {
+    const [updated] = await db.update(printOrders)
+      .set({ status, updatedAt: new Date() })
+      .where(and(eq(printOrders.id, id), eq(printOrders.printerId, printerId)))
+      .returning();
+    return updated;
+  }
+
+  async getPrintRevenueSummary(printerId: number): Promise<{
+    totalEarnedCents: number; completedOrders: number;
+    currentMonthCents: number; currentMonthOrders: number;
+    history: { month: string; totalCents: number; orders: number }[];
+  }> {
+    const completed = await db.select().from(printOrders).where(and(
+      eq(printOrders.printerId, printerId),
+      eq(printOrders.status, "DELIVERED"),
+    ));
+    const now = new Date();
+    const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonthKey = monthKey(now);
+
+    const byMonth = new Map<string, { totalCents: number; orders: number }>();
+    let currentMonthCents = 0;
+    let currentMonthOrders = 0;
+    for (const o of completed) {
+      const completedAt = o.updatedAt ?? o.createdAt ?? now;
+      const key = monthKey(new Date(completedAt));
+      const bucket = byMonth.get(key) ?? { totalCents: 0, orders: 0 };
+      bucket.totalCents += o.totalInCents;
+      bucket.orders += 1;
+      byMonth.set(key, bucket);
+      if (key === currentMonthKey) { currentMonthCents += o.totalInCents; currentMonthOrders += 1; }
+    }
+
+    const history: { month: string; totalCents: number; orders: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = monthKey(d);
+      const bucket = byMonth.get(key);
+      history.push({ month: key, totalCents: bucket?.totalCents ?? 0, orders: bucket?.orders ?? 0 });
+    }
+
+    return {
+      totalEarnedCents: completed.reduce((s, o) => s + o.totalInCents, 0),
+      completedOrders: completed.length,
+      currentMonthCents,
+      currentMonthOrders,
+      history,
+    };
   }
 
   // ── Barista Marketplace ──────────────────────────────────────────────────────

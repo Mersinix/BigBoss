@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import printBannerImg from "@assets/1000_F_446608261_m4mqK7D6A8O68SkqWo4ea4VQgrGVbRHY_(1)_1780853922496.jpg";
-import { useLocation, useSearch } from "wouter";
+import { useLocation, useSearch, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useThemeStore } from "@/store/theme-store";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart, Sun, Moon
+  Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart, Sun, Moon, ClipboardList
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -373,6 +373,17 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         {/* Content */}
         <div className="relative">
           <div className="flex justify-end items-center gap-2 mb-9">
+            {!comingSoon && (
+              <Link href="/print/orders">
+                <button
+                  aria-label="Mes commandes PRINT"
+                  className={`h-8 px-3 rounded-full flex items-center gap-1.5 text-xs font-semibold transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200" : "bg-white/20 hover:bg-white/30 text-white"}`}
+                  data-testid="link-print-my-orders"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" /> Mes commandes
+                </button>
+              </Link>
+            )}
             <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>

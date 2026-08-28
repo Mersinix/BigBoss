@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
-export type ServiceKey = "PRINTING" | "MARKETING" | "BARISTA" | "MAINTENANCE";
+// BARISTA_ACADEMY/BARISTA_MARKETPLACE are additive alongside the pre-existing
+// combined "BARISTA" key — see the note on serviceKeyEnum in shared/schema.ts.
+export type ServiceKey = "PRINTING" | "MARKETING" | "BARISTA" | "BARISTA_ACADEMY" | "BARISTA_MARKETPLACE" | "MAINTENANCE";
 export type ServiceState = "VISIBLE" | "HIDDEN" | "COMING_SOON";
 export type ServiceStatesMap = Record<ServiceKey, ServiceState>;
 
@@ -8,6 +10,8 @@ const DEFAULT_STATES: ServiceStatesMap = {
   PRINTING: "VISIBLE",
   MARKETING: "VISIBLE",
   BARISTA: "VISIBLE",
+  BARISTA_ACADEMY: "VISIBLE",
+  BARISTA_MARKETPLACE: "VISIBLE",
   MAINTENANCE: "VISIBLE",
 };
 

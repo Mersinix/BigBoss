@@ -813,7 +813,19 @@ function CategoryEditModalInline({ user, open, onClose, supplierCatIds }: { user
     enabled: user.role === 'SUPPLIER',
   });
 
-  const presets = PRESET_CATS_BY_ROLE[user.role] ?? [];
+  // PRINTER presets come from the real print category taxonomy (managed on
+  // admin/print-page.tsx's "Catégories" tab) instead of the static
+  // PRESET_CATS_BY_ROLE.PRINTER list, which would otherwise silently drift out
+  // of sync with it — same fetch-with-fallback pattern as admin/users-page.tsx's
+  // usePrintCategoryOptions().
+  const { data: printTaxonomy } = useQuery<{ name: string; isActive: boolean }[]>({
+    queryKey: ["/api/admin/print"], select: (d: any) => d.taxonomy, enabled: user.role === 'PRINTER',
+  });
+  const printActivePresets = printTaxonomy?.filter((c) => c.isActive).map((c) => c.name);
+
+  const presets = user.role === 'PRINTER'
+    ? (printActivePresets && printActivePresets.length > 0 ? printActivePresets : PRESET_CATS_BY_ROLE.PRINTER)
+    : (PRESET_CATS_BY_ROLE[user.role] ?? []);
   const current = getUserCategories(user);
   const [selected, setSelected] = useState<string[]>(current);
   const [selectedCatIds, setSelectedCatIds] = useState<number[]>(supplierCatIds ?? []);

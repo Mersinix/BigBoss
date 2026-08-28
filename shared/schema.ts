@@ -21,10 +21,18 @@ export const deliveryStatusEnum = pgEnum('delivery_status', [
 export const deliveryModeEnum = pgEnum('delivery_mode', ['DELIVERY_COMPANY', 'SUPPLIER']);
 export const listingVisibilityEnum = pgEnum('listing_visibility', ['VISIBLE', 'HIDDEN']);
 export const userAccountStatusEnum = pgEnum('user_account_status', ['pending', 'approved', 'rejected']);
-export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA', 'MAINTENANCE']);
+// BARISTA_ACADEMY/BARISTA_MARKETPLACE are additive, alongside the pre-existing
+// combined 'BARISTA' value — 'BARISTA' still gates the existing Coffee-Owner
+// browsing route (client/src/pages/cafe/barista/barista-page.tsx) untouched;
+// the two new keys exist specifically so Admin System Management can control
+// visibility/order for the two Barista sub-services independently wherever a
+// feature (like the Coffee Owner "My Account → Reservations" switcher) needs
+// that finer granularity. Never remove 'BARISTA' — that would break the
+// existing route's gate.
+export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE']);
 export const serviceStateEnum = pgEnum('service_state', ['VISIBLE', 'HIDDEN', 'COMING_SOON']);
 
-export const MARKETPLACE_SERVICE_IDS = ['SHOP', 'PRINT', 'BARISTA', 'MARKETING', 'MAINTENANCE'] as const;
+export const MARKETPLACE_SERVICE_IDS = ['SHOP', 'PRINT', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MARKETING', 'MAINTENANCE'] as const;
 export type MarketplaceServiceId = typeof MARKETPLACE_SERVICE_IDS[number];
 export const DEFAULT_SERVICE_ORDER: MarketplaceServiceId[] = [...MARKETPLACE_SERVICE_IDS];
 
@@ -42,6 +50,7 @@ export const users = pgTable("users", {
   governorates: text("governorates").array(),
   categories: text("categories").array(),
   printCategories: text("print_categories").array(),
+  printSubCategories: text("print_sub_categories").array(),
   marketingCategories: text("marketing_categories").array(),
   maintenanceCategories: text("maintenance_categories").array(),
   locationAddress: text("location_address"),
@@ -883,6 +892,40 @@ export const printCatalogItems = pgTable("print_catalog_items", {
   printerIdx: index("print_catalog_items_printer_idx").on(table.printerId),
 }));
 
+// Admin-managed PRINT category taxonomy — mirrors maintenanceCompetencies
+// exactly (id/name/isActive/isFrozen, hard-delete, no referential guard:
+// printCatalogItems.category stays plain text so a deleted/renamed taxonomy
+// entry never corrupts historical catalog/order data). Named distinctly from
+// users.printCategories (an unrelated per-account admin-approval-scope array)
+// to avoid confusion between the two concepts.
+export const printCategoryTaxonomy = pgTable("print_category_taxonomy", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Admin-managed PRINT subcategory taxonomy — one level below printCategoryTaxonomy
+// (e.g. category "Flyers" → subcategories "A5"/"A4"/"A3"). categoryId is a soft
+// reference (no hard FK), matching this codebase's established convention for
+// taxonomy tables (see maintenanceCompetencies/maintenanceZones) — printCatalogItems
+// keeps plain-text category/subCategory values, so a taxonomy edit/delete never
+// corrupts historical catalog/order data.
+export const printSubCategoryTaxonomy = pgTable("print_subcategory_taxonomy", {
+  id: serial("id").primaryKey(),
+  categoryId: integer("category_id").notNull(),
+  name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  categoryIdx: index("print_subcategory_taxonomy_category_idx").on(table.categoryId),
+  uniqueNamePerCategory: uniqueIndex("print_subcategory_taxonomy_unique").on(table.categoryId, table.name),
+}));
+
 export const printOrders = pgTable("print_orders", {
   id: serial("id").primaryKey(),
   printerId: integer("printer_id").notNull(),
@@ -1190,6 +1233,8 @@ export const insertMaintenanceCompetencySchema = createInsertSchema(maintenanceC
 export const insertMaintenanceZoneSchema = createInsertSchema(maintenanceZones).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPrintCatalogItemSchema = createInsertSchema(printCatalogItems).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPrintOrderSchema = createInsertSchema(printOrders).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPrintCategoryTaxonomySchema = createInsertSchema(printCategoryTaxonomy).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPrintSubCategoryTaxonomySchema = createInsertSchema(printSubCategoryTaxonomy).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertBaristaSkillSchema = createInsertSchema(baristaSkills).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertBaristaMarketplaceProfileSchema = createInsertSchema(baristaMarketplaceProfiles).omit({ id: true, updatedAt: true });
@@ -1252,7 +1297,7 @@ export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
 
 export type PlatformService = typeof platformServices.$inferSelect;
 export type InsertPlatformService = z.infer<typeof insertPlatformServiceSchema>;
-export type ServiceKey = 'PRINTING' | 'MARKETING' | 'BARISTA' | 'MAINTENANCE';
+export type ServiceKey = 'PRINTING' | 'MARKETING' | 'BARISTA' | 'BARISTA_ACADEMY' | 'BARISTA_MARKETPLACE' | 'MAINTENANCE';
 export type ServiceState = 'VISIBLE' | 'HIDDEN' | 'COMING_SOON';
 export type ServiceStatesMap = Record<ServiceKey, ServiceState>;
 
@@ -1312,6 +1357,10 @@ export type PrintOrderWithParties = PrintOrder & {
   printerName: string;
   cafeOwnerName: string;
 };
+export type PrintCategoryTaxonomy = typeof printCategoryTaxonomy.$inferSelect;
+export type InsertPrintCategoryTaxonomy = z.infer<typeof insertPrintCategoryTaxonomySchema>;
+export type PrintSubCategoryTaxonomy = typeof printSubCategoryTaxonomy.$inferSelect;
+export type InsertPrintSubCategoryTaxonomy = z.infer<typeof insertPrintSubCategoryTaxonomySchema>;
 
 export type Promotion = typeof promotions.$inferSelect;
 export type InsertPromotion = z.infer<typeof insertPromotionSchema>;

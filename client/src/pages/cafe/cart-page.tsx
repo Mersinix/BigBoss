@@ -917,6 +917,11 @@ export default function CartPage() {
                   <button className={`w-full text-xs text-center transition-colors ${textMuted} hover:text-red-500`} onClick={clearPrintItems}>
                     Vider PRINT
                   </button>
+                  <Link href="/print/orders">
+                    <button className={`w-full text-xs text-center transition-colors ${dk ? "text-blue-400 hover:text-blue-300" : "text-blue-600 hover:text-blue-700"}`} data-testid="link-print-orders">
+                      Voir mes commandes PRINT
+                    </button>
+                  </Link>
                 </div>
               </div>
             )}

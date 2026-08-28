@@ -91,7 +91,7 @@ export default function PrinterInvoices() {
   const totalPending = pending.reduce((s, r) => s + r.amount, 0);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Facturation</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Vos factures générées à partir des commandes.</p>

@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import type { PrintCatalogItem } from "@shared/schema";
+import type { PrintCatalogItem, PrintCategoryTaxonomy, PrintSubCategoryTaxonomy } from "@shared/schema";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
-import { Plus, Pencil, Trash2, Printer, X } from "lucide-react";
-
+import { Plus, Pencil, Trash2, Printer, X, Layers } from "lucide-react";
+import { Link } from "wouter";
 type FormState = {
   name: string;
   description: string;
@@ -55,18 +57,34 @@ function toFormState(item: PrintCatalogItem): FormState {
 // ── Create/Edit form dialog ───────────────────────────────────────────────────
 
 function ServiceFormDialog({
-  open, onOpenChange, editing, categorySuggestions,
+  open, onOpenChange, editing,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: PrintCatalogItem | null;
-  categorySuggestions: string[];
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [materialDraft, setMaterialDraft] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Category/subcategory are constrained to what this Printer has selected in
+  // the Catégories tab (itself constrained to the Admin's active taxonomy) —
+  // never free text, so a service can never reference a category the server
+  // would reject anyway (see the validatePrintTaxonomySelection check on
+  // POST/PATCH /api/print/catalog).
+  const { data: mapping } = useQuery<{ categories: string[]; subCategories: string[] }>({
+    queryKey: ["/api/print/me/categories"], enabled: open,
+  });
+  const { data: taxonomy } = useQuery<{ categories: PrintCategoryTaxonomy[]; subcategories: PrintSubCategoryTaxonomy[] }>({
+    queryKey: ["/api/print/taxonomy"], enabled: open,
+  });
+  const mappedCategories = mapping?.categories ?? [];
+  const selectedCategoryTaxonomy = taxonomy?.categories.find((c) => c.name === form.category);
+  const subCategoryOptions = (taxonomy?.subcategories ?? [])
+    .filter((s) => s.categoryId === selectedCategoryTaxonomy?.id && (mapping?.subCategories ?? []).includes(s.name))
+    .map((s) => s.name);
 
   useEffect(() => {
     setForm(editing ? toFormState(editing) : EMPTY_FORM);
@@ -159,27 +177,36 @@ function ServiceFormDialog({
             <Label>Image (URL)</Label>
             <Input type="url" value={form.imageUrl} onChange={set("imageUrl")} placeholder="https://…" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Catégorie *</Label>
-              <Input data-testid="input-service-category" value={form.category} onChange={set("category")} placeholder="ex: Flyers" />
-              {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
-              {categorySuggestions.length > 0 && (
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {categorySuggestions.slice(0, 6).map((c) => (
-                    <button type="button" key={c} onClick={() => setForm((f) => ({ ...f, category: c }))}
-                      className="px-2 py-0.5 rounded-full text-[11px] border border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary">
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              )}
+          {mappedCategories.length === 0 ? (
+            <div className="rounded-xl border border-amber-300/50 bg-amber-500/5 p-3 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Sélectionnez d'abord au moins une catégorie dans l'onglet Catégories pour pouvoir créer un service.
+              </p>
+              <Link href="/printer/categories">
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0">
+                  <Layers className="w-3.5 h-3.5" /> Catégories
+                </Button>
+              </Link>
             </div>
-            <div className="space-y-1.5">
-              <Label>Sous-catégorie</Label>
-              <Input value={form.subCategory} onChange={set("subCategory")} placeholder="ex: A5" />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Catégorie *</Label>
+                <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v, subCategory: "" }))}>
+                  <SelectTrigger data-testid="input-service-category"><SelectValue placeholder="Choisir…" /></SelectTrigger>
+                  <SelectContent>{mappedCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+                {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sous-catégorie</Label>
+                <Select value={form.subCategory || undefined} onValueChange={(v) => setForm((f) => ({ ...f, subCategory: v }))} disabled={!form.category || subCategoryOptions.length === 0}>
+                  <SelectTrigger><SelectValue placeholder={subCategoryOptions.length === 0 ? "Aucune" : "Choisir…"} /></SelectTrigger>
+                  <SelectContent>{subCategoryOptions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label>Prix *</Label>
@@ -233,7 +260,7 @@ function ServiceFormDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
-          <Button data-testid="button-save-service" onClick={submit} disabled={saving}>
+          <Button data-testid="button-save-service" onClick={submit} disabled={saving || mappedCategories.length === 0}>
             {saving ? "Enregistrement…" : editing ? "Enregistrer" : "Créer"}
           </Button>
         </DialogFooter>
@@ -250,7 +277,6 @@ export default function PrinterServices() {
   const fmt = useFormatCurrency();
 
   const { data: catalog = [], isLoading } = useQuery<PrintCatalogItem[]>({ queryKey: ["/api/print/catalog"] });
-  const { data: categories = [] } = useQuery<string[]>({ queryKey: ["/api/print/categories"] });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PrintCatalogItem | null>(null);
@@ -277,7 +303,7 @@ export default function PrinterServices() {
   const openEdit = (item: PrintCatalogItem) => { setEditing(item); setFormOpen(true); };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Services</h1>
@@ -359,7 +385,7 @@ export default function PrinterServices() {
         </div>
       )}
 
-      <ServiceFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} categorySuggestions={categories} />
+      <ServiceFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} />
 
       <Dialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
         <DialogContent className="sm:max-w-sm">

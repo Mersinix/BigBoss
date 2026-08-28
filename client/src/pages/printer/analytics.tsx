@@ -73,7 +73,7 @@ export default function PrinterAnalytics() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-6 p-6">
+      <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}
@@ -84,7 +84,7 @@ export default function PrinterAnalytics() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Performance de votre activité d'impression.</p>

@@ -25,7 +25,7 @@ const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
-const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated"];
+const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated"];
 const USER_PROFILE_EVENTS = ["user_profile_updated"];
 const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
 const BARISTA_EVENTS = [
@@ -222,6 +222,7 @@ export function useRealtime(userId?: number) {
           }
           if (ADMIN_USER_DIRECTORY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/print"] });
           }
           if (TAXONOMY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/categories"] });
@@ -257,8 +258,12 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/print/catalog"] });
             qc.invalidateQueries({ queryKey: ["/api/print/marketplace"] });
             qc.invalidateQueries({ queryKey: ["/api/print/categories"] });
+            qc.invalidateQueries({ queryKey: ["/api/print/taxonomy"] });
+            qc.invalidateQueries({ queryKey: ["/api/print/me/categories"] });
             qc.invalidateQueries({ queryKey: ["/api/print/orders"] });
             qc.invalidateQueries({ queryKey: ["/api/print/revenue"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/print/reviews") });
+            qc.invalidateQueries({ queryKey: ["/api/admin/print"] });
             invalidateMessagingQueries(qc);
           }
           if (MAINTENANCE_EVENTS.includes(event)) {

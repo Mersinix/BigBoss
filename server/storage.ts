@@ -11,7 +11,7 @@ import {
   landingConfig, messagingSettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones,
-  printCatalogItems, printOrders,
+  printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
@@ -52,6 +52,7 @@ import {
   type MaintenanceCompetency, type MaintenanceZone,
   type PrintCatalogItem, type InsertPrintCatalogItem, type PrintCatalogCard,
   type PrintOrder, type InsertPrintOrder, type PrintOrderWithParties,
+  type PrintCategoryTaxonomy, type PrintSubCategoryTaxonomy,
   type BaristaSkill, type BaristaMarketplaceProfile, type InsertBaristaMarketplaceProfile,
   type BaristaMarketplaceRequest, type BaristaMarketplaceMission,
   type BaristaMarketplaceCard, type BaristaRequestWithParties, type BaristaMissionWithParties,
@@ -298,6 +299,22 @@ export interface IStorage {
   createPrintOrder(cafeOwnerId: number, data: { catalogItemId: number; quantity: number; notes?: string; deliveryAddress?: string; contactPhone?: string }): Promise<PrintOrder>;
   updatePrintOrderStatus(id: number, printerId: number, status: string): Promise<PrintOrder | undefined>;
   getPrintRevenueSummary(printerId: number): Promise<{ totalEarnedCents: number; completedOrders: number; currentMonthCents: number; currentMonthOrders: number; history: { month: string; totalCents: number; orders: number }[] }>;
+  getPrintCategoryTaxonomy(): Promise<PrintCategoryTaxonomy[]>;
+  createPrintCategory(name: string): Promise<PrintCategoryTaxonomy>;
+  updatePrintCategory(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<PrintCategoryTaxonomy | undefined>;
+  deletePrintCategory(id: number): Promise<void>;
+  adminSetPrintCatalogItemActive(id: number, isActive: boolean): Promise<PrintCatalogItem | undefined>;
+  getPrintAdminOverview(): Promise<any>;
+  getPrintSubCategoryTaxonomy(categoryId?: number): Promise<PrintSubCategoryTaxonomy[]>;
+  createPrintSubCategory(categoryId: number, name: string): Promise<PrintSubCategoryTaxonomy>;
+  updatePrintSubCategory(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<PrintSubCategoryTaxonomy | undefined>;
+  deletePrintSubCategory(id: number): Promise<void>;
+  getPrintSubCategories(): Promise<string[]>;
+  getPrinterCategoryMapping(printerId: number): Promise<{ categories: string[]; subCategories: string[] }>;
+  setPrinterCategoryMapping(printerId: number, mapping: { categories: string[]; subCategories: string[] }): Promise<{ categories: string[]; subCategories: string[]; rejected: { categories: string[]; subCategories: string[] } }>;
+  getPrintReviews(printerId: number): Promise<SupplierProductReview[]>;
+  getPrintReviewForOrder(orderId: number, cafeId: number): Promise<SupplierProductReview | undefined>;
+  upsertPrintReview(data: { printerId: number; printOrderId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }>;
 
   // Barista Marketplace
   getBaristaSkills(activeOnly?: boolean): Promise<BaristaSkill[]>;
@@ -3169,6 +3186,15 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  /** IMPORTANT DISTINCTION (do not "fix" this back to taxonomy-first — that was
+   *  tried and deliberately reverted): Admin taxonomy *availability* is a
+   *  different concept from marketplace *visibility*. A category can be active
+   *  in printCategoryTaxonomy (so Printers can map/use it) without ever
+   *  appearing on /print, if no approved Printer currently has an active
+   *  catalog item using it. This must stay a pure derivation from real active
+   *  marketplace data — never taxonomy-first — so /print never shows an empty
+   *  category. The taxonomy itself is exposed separately via getPrintTaxonomy()
+   *  for Admin's and the Printer's own category-mapping UIs. */
   async getPrintCategories(): Promise<string[]> {
     const rows = await db.select({ category: printCatalogItems.category })
       .from(printCatalogItems)
@@ -3179,6 +3205,20 @@ export class DatabaseStorage implements IStorage {
         eq(users.status, "approved"),
       ));
     return Array.from(new Set(rows.map((r) => r.category).filter((c) => c.trim().length > 0))).sort((a, b) => a.localeCompare(b));
+  }
+
+  /** Same "derived from actually-used active marketplace data" rule as
+   *  getPrintCategories() — see the note above. */
+  async getPrintSubCategories(): Promise<string[]> {
+    const rows = await db.select({ subCategory: printCatalogItems.subCategory })
+      .from(printCatalogItems)
+      .innerJoin(users, eq(printCatalogItems.printerId, users.id))
+      .where(and(
+        eq(printCatalogItems.isActive, true),
+        eq(users.role, "PRINTER" as any),
+        eq(users.status, "approved"),
+      ));
+    return Array.from(new Set(rows.map((r) => r.subCategory).filter((c) => c.trim().length > 0))).sort((a, b) => a.localeCompare(b));
   }
 
   async getPrintOrdersForPrinter(printerId: number): Promise<PrintOrderWithParties[]> {
@@ -3271,6 +3311,263 @@ export class DatabaseStorage implements IStorage {
       currentMonthCents,
       currentMonthOrders,
       history,
+    };
+  }
+
+  // ── PRINT admin ──────────────────────────────────────────────────────────────
+  // Mirrors maintenanceCompetencies' taxonomy-management pattern (see above):
+  // auto-seeded once from whatever category text already exists on catalog
+  // items, then admin-managed independently; hard delete, no referential guard
+  // (printCatalogItems.category stays plain text, matching maintenanceProfiles'
+  // convention, so a renamed/deleted taxonomy entry never corrupts history).
+
+  private async seedPrintCategoryTaxonomyIfEmpty(): Promise<void> {
+    const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(printCategoryTaxonomy);
+    if (count && count.count > 0) return;
+    const rows = await db.select({ category: printCatalogItems.category }).from(printCatalogItems);
+    const names = Array.from(new Set(rows.map((r) => r.category.trim()).filter(Boolean)));
+    if (names.length) await db.insert(printCategoryTaxonomy).values(names.map((name) => ({ name }))).onConflictDoNothing();
+  }
+
+  async getPrintCategoryTaxonomy(): Promise<PrintCategoryTaxonomy[]> {
+    await this.seedPrintCategoryTaxonomyIfEmpty();
+    return db.select().from(printCategoryTaxonomy).orderBy(asc(printCategoryTaxonomy.name));
+  }
+
+  async createPrintCategory(name: string): Promise<PrintCategoryTaxonomy> {
+    const [created] = await db.insert(printCategoryTaxonomy).values({ name: name.trim() }).returning();
+    return created;
+  }
+
+  async updatePrintCategory(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<PrintCategoryTaxonomy | undefined> {
+    const [updated] = await db.update(printCategoryTaxonomy)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .where(eq(printCategoryTaxonomy.id, id)).returning();
+    return updated;
+  }
+
+  async deletePrintCategory(id: number): Promise<void> {
+    await db.delete(printCategoryTaxonomy).where(eq(printCategoryTaxonomy.id, id));
+  }
+
+  async getPrintSubCategoryTaxonomy(categoryId?: number): Promise<PrintSubCategoryTaxonomy[]> {
+    const rows = await db.select().from(printSubCategoryTaxonomy)
+      .where(categoryId !== undefined ? eq(printSubCategoryTaxonomy.categoryId, categoryId) : undefined)
+      .orderBy(asc(printSubCategoryTaxonomy.name));
+    return rows;
+  }
+
+  async createPrintSubCategory(categoryId: number, name: string): Promise<PrintSubCategoryTaxonomy> {
+    const [created] = await db.insert(printSubCategoryTaxonomy).values({ categoryId, name: name.trim() }).returning();
+    return created;
+  }
+
+  async updatePrintSubCategory(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<PrintSubCategoryTaxonomy | undefined> {
+    const [updated] = await db.update(printSubCategoryTaxonomy)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .where(eq(printSubCategoryTaxonomy.id, id)).returning();
+    return updated;
+  }
+
+  async deletePrintSubCategory(id: number): Promise<void> {
+    await db.delete(printSubCategoryTaxonomy).where(eq(printSubCategoryTaxonomy.id, id));
+  }
+
+  /** The Printer's own account (users.printCategories/printSubCategories) is
+   *  reused as the mapping store — it already existed for an admin-set-approval
+   *  purpose (see admin/users-page.tsx), which this doesn't remove; a Printer
+   *  self-selecting from the same taxonomy via this method just becomes the
+   *  additional, primary way that array gets populated going forward. */
+  async getPrinterCategoryMapping(printerId: number): Promise<{ categories: string[]; subCategories: string[] }> {
+    const [row] = await db.select({ categories: users.printCategories, subCategories: users.printSubCategories })
+      .from(users).where(eq(users.id, printerId));
+    return { categories: row?.categories ?? [], subCategories: row?.subCategories ?? [] };
+  }
+
+  /** Validates every submitted name against the ACTIVE admin taxonomy (a
+   *  Printer can never map an inactive/frozen or nonexistent category), and
+   *  every subcategory against both the active taxonomy AND its declared
+   *  parent category being one of the categories being mapped in the same
+   *  call — silently drops anything invalid rather than erroring, and reports
+   *  what was dropped so the route layer can surface it. */
+  async setPrinterCategoryMapping(printerId: number, mapping: { categories: string[]; subCategories: string[] }): Promise<{ categories: string[]; subCategories: string[]; rejected: { categories: string[]; subCategories: string[] } }> {
+    const [categoryTaxonomy, subCategoryTaxonomy] = await Promise.all([
+      this.getPrintCategoryTaxonomy(),
+      this.getPrintSubCategoryTaxonomy(),
+    ]);
+    const activeCategoryNames = new Set(categoryTaxonomy.filter((c) => c.isActive && !c.isFrozen).map((c) => c.name));
+    const categoryByName = new Map(categoryTaxonomy.map((c) => [c.name, c] as const));
+
+    const acceptedCategories = mapping.categories.filter((name) => activeCategoryNames.has(name));
+    const rejectedCategories = mapping.categories.filter((name) => !activeCategoryNames.has(name));
+    const acceptedCategorySet = new Set(acceptedCategories);
+
+    const acceptedSubCategories = mapping.subCategories.filter((name) => {
+      const sub = subCategoryTaxonomy.find((s) => s.name === name && s.isActive && !s.isFrozen);
+      if (!sub) return false;
+      const parent = Array.from(categoryByName.values()).find((c) => c.id === sub.categoryId);
+      return !!parent && acceptedCategorySet.has(parent.name);
+    });
+    const rejectedSubCategories = mapping.subCategories.filter((name) => !acceptedSubCategories.includes(name));
+
+    await db.update(users)
+      .set({ printCategories: acceptedCategories, printSubCategories: acceptedSubCategories })
+      .where(eq(users.id, printerId));
+
+    return {
+      categories: acceptedCategories,
+      subCategories: acceptedSubCategories,
+      rejected: { categories: rejectedCategories, subCategories: rejectedSubCategories },
+    };
+  }
+
+  async getPrintReviews(printerId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.reviewType, "PRINT"), eq(supplierProductReviews.printerId as any, printerId)))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getPrintReviewForOrder(orderId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
+    const [row] = await db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.reviewType, "PRINT"),
+        eq(supplierProductReviews.printOrderId as any, orderId),
+        eq(supplierProductReviews.cafeId, cafeId),
+      ));
+    return row;
+  }
+
+  /** Upsert keyed on (printOrderId, cafeId) — mirrors upsertMaintenanceReview
+   *  exactly (re-submitting for the same order updates rather than
+   *  duplicates). No denormalized rating column to refresh here: PRINT has no
+   *  per-printer profile row (unlike maintenanceProfiles) — getPrintMarketplaceCards/
+   *  getPrintAdminOverview already compute rating/reviewCount live from this
+   *  same table on every read via computePrintReviewStats, so there is nothing
+   *  to keep in sync — the live computation IS the source of truth. */
+  async upsertPrintReview(data: { printerId: number; printOrderId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }> {
+    const existing = await this.getPrintReviewForOrder(data.printOrderId, data.cafeId);
+    if (existing) {
+      const [updated] = await db.update(supplierProductReviews)
+        .set({ rating: data.rating, comment: data.comment ?? null, updatedAt: new Date() })
+        .where(eq(supplierProductReviews.id, existing.id)).returning();
+      return { review: updated, isUpdate: true };
+    }
+    const [created] = await db.insert(supplierProductReviews).values({
+      reviewType: "PRINT",
+      cafeId: data.cafeId,
+      printerId: data.printerId,
+      printOrderId: data.printOrderId,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.cafeName,
+    } as any).returning();
+    return { review: created, isUpdate: false };
+  }
+
+  /** Admin moderation — toggle any printer's catalog item, no ownership check.
+   *  Deliberately narrower than the printer's own updatePrintCatalogItem: Admin
+   *  moderates visibility, it doesn't edit another business's catalog content. */
+  async adminSetPrintCatalogItemActive(id: number, isActive: boolean): Promise<PrintCatalogItem | undefined> {
+    const [updated] = await db.update(printCatalogItems)
+      .set({ isActive, updatedAt: new Date() })
+      .where(eq(printCatalogItems.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getPrintAdminOverview(): Promise<any> {
+    const taxonomy = await this.getPrintCategoryTaxonomy();
+    const subcategoryTaxonomy = await this.getPrintSubCategoryTaxonomy();
+    const printerRows = await db.select().from(users).where(eq(users.role, "PRINTER" as any));
+    const catalogRows = await db.select().from(printCatalogItems);
+    const orderRows = await db.select().from(printOrders);
+    const reviewRows = await db.select().from(supplierProductReviews).where(eq(supplierProductReviews.reviewType, "PRINT"));
+    const allUsers = await db.select().from(users);
+    const userMap = new Map(allUsers.map((u) => [u.id, u]));
+
+    const categoryCounts = new Map<string, number>();
+    for (const item of catalogRows) if (item.category.trim()) {
+      categoryCounts.set(item.category, (categoryCounts.get(item.category) ?? 0) + 1);
+    }
+
+    const reviewStats = new Map<number, { sum: number; count: number }>();
+    for (const r of reviewRows) {
+      if (!r.printerId) continue;
+      const cur = reviewStats.get(r.printerId) ?? { sum: 0, count: 0 };
+      cur.sum += r.rating; cur.count += 1;
+      reviewStats.set(r.printerId, cur);
+    }
+
+    const printers = printerRows.map((printer) => {
+      const items = catalogRows.filter((i) => i.printerId === printer.id);
+      const orders = orderRows.filter((o) => o.printerId === printer.id);
+      const revenueCents = orders.filter((o) => o.status === "DELIVERED").reduce((s, o) => s + o.totalInCents, 0);
+      const stats = reviewStats.get(printer.id);
+      return {
+        userId: printer.id,
+        name: printer.name,
+        email: printer.email,
+        phone: printer.phone,
+        profileImageUrl: printer.profileImageUrl,
+        status: printer.status,
+        location: printer.locationAddress ?? "",
+        createdAt: printer.createdAt,
+        activeServiceCount: items.filter((i) => i.isActive).length,
+        totalServiceCount: items.length,
+        totalOrders: orders.length,
+        revenueCents,
+        rating: stats ? Math.round((stats.sum / stats.count) * 10) : 0,
+        reviewCount: stats?.count ?? 0,
+        initials: printer.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+      };
+    });
+
+    const orders = orderRows
+      .slice()
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+      .map((o) => ({
+        ...o,
+        printerName: userMap.get(o.printerId)?.name ?? "—",
+        cafeOwnerName: userMap.get(o.cafeOwnerId)?.name ?? "—",
+      }));
+
+    const reviews = reviewRows.map((r) => ({
+      ...r,
+      printerName: r.printerId ? (userMap.get(r.printerId)?.name ?? "—") : "—",
+    }));
+
+    const catalogItems = catalogRows
+      .slice()
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+      .map((item) => ({ ...item, printerName: userMap.get(item.printerId)?.name ?? "—" }));
+
+    const deliveredOrders = orderRows.filter((o) => o.status === "DELIVERED");
+    const totalRevenueCents = deliveredOrders.reduce((s, o) => s + o.totalInCents, 0);
+    const totalReviewRating = reviewRows.reduce((s, r) => s + r.rating, 0);
+
+    return {
+      stats: {
+        totalPrinters: printerRows.length,
+        activePrinters: printerRows.filter((p) => p.status === "approved").length,
+        availablePrinters: printers.filter((p) => p.activeServiceCount > 0).length,
+        totalServices: catalogRows.length,
+        activeServices: catalogRows.filter((i) => i.isActive).length,
+        totalOrders: orderRows.length,
+        pendingOrders: orderRows.filter((o) => o.status === "PENDING").length,
+        inProductionOrders: orderRows.filter((o) => o.status === "PREPARING").length,
+        completedOrders: deliveredOrders.length,
+        cancelledOrders: orderRows.filter((o) => o.status === "CANCELLED").length,
+        totalRevenueCents,
+        reviewCount: reviewRows.length,
+        averageRating: reviewRows.length ? Math.round((totalReviewRating / reviewRows.length) * 10) / 10 : 0,
+      },
+      categories: Array.from(categoryCounts, ([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
+      taxonomy,
+      subcategoryTaxonomy,
+      printers,
+      catalogItems,
+      orders,
+      reviews,
     };
   }
 
@@ -5147,9 +5444,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServiceStates(): Promise<ServiceStatesMap> {
-    const ALL_SERVICES: ServiceKey[] = ['PRINTING', 'MARKETING', 'BARISTA', 'MAINTENANCE'];
+    const ALL_SERVICES: ServiceKey[] = ['PRINTING', 'MARKETING', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
     const rows = await db.select().from(platformServices);
-    const map: ServiceStatesMap = { PRINTING: 'VISIBLE', MARKETING: 'VISIBLE', BARISTA: 'VISIBLE', MAINTENANCE: 'VISIBLE' };
+    const map: ServiceStatesMap = { PRINTING: 'VISIBLE', MARKETING: 'VISIBLE', BARISTA: 'VISIBLE', BARISTA_ACADEMY: 'VISIBLE', BARISTA_MARKETPLACE: 'VISIBLE', MAINTENANCE: 'VISIBLE' };
     for (const row of rows) {
       map[row.service as ServiceKey] = row.state as ServiceState;
     }

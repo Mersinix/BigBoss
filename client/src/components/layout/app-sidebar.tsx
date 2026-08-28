@@ -123,7 +123,7 @@ export function AppSidebar() {
           label: "SERVICES",
           items: [
             { title: "Maintenance", url: "/admin/maintenance", icon: Wrench },
-            
+            { title: "Print", url: "/admin/print", icon: Printer },
           ],
         },
         {
@@ -219,38 +219,10 @@ export function AppSidebar() {
     // shell (see components/layout/driver-account-shell.tsx and App.tsx's /driver/... routes),
     // mirroring the Barista Marketplace account structure. HomeRoute redirects DRIVER to
     // /driver before DashboardLayout (which renders this sidebar) is ever reached.
-
-    if (user.role === "PRINTER") {
-      return [
-        {
-          label: "MAIN",
-          items: [
-            { title: "Dashboard", url: "/", icon: LayoutDashboard },
-          ],
-        },
-        {
-          label: "BUSINESS",
-          items: [
-            { title: "Services", url: "/printer/services", icon: Printer },
-            { title: "Commandes", url: "/printer/orders", icon: ClipboardList },
-            { title: "Catalogue", url: "/printer/catalog", icon: Package },
-          ],
-        },
-        {
-          label: "FINANCE",
-          items: [
-            { title: "Facturation", url: "/printer/invoices", icon: FileText },
-            { title: "Analytics", url: "/printer/analytics", icon: BarChart2 },
-          ],
-        },
-        {
-          label: "ACCOUNT",
-          items: [
-            { title: "Settings", url: "/printer/settings", icon: Settings },
-          ],
-        },
-      ];
-    }
+    //
+    // PRINTER no longer uses this sidebar either — same treatment, same reasoning — see
+    // components/layout/printer-account-shell.tsx and App.tsx's /printer/... routes.
+    // HomeRoute redirects PRINTER to /printer before this sidebar is ever reached.
 
     if (user.role === "MARKETING") {
       return [

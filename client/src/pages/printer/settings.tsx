@@ -61,7 +61,7 @@ export default function PrinterSettings() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-2xl">
+    <div className="flex flex-col gap-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Settings</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Gérez votre compte et vos préférences.</p>

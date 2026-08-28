@@ -317,7 +317,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/system-services/:service", requireAdmin, async (req, res) => {
     try {
       const service = req.params.service as string;
-      const VALID_SERVICES = ['PRINTING', 'MARKETING', 'BARISTA', 'MAINTENANCE'];
+      const VALID_SERVICES = ['PRINTING', 'MARKETING', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
       const VALID_STATES = ['VISIBLE', 'HIDDEN', 'COMING_SOON'];
       if (!VALID_SERVICES.includes(service)) return res.status(400).json({ message: "Invalid service" });
       const { state } = req.body;
@@ -340,7 +340,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/system-service-order", requireAdmin, async (req, res) => {
     try {
-      const order = z.array(z.enum(['SHOP', 'PRINT', 'BARISTA', 'MARKETING', 'MAINTENANCE'])).parse(req.body?.order);
+      const order = z.array(z.enum(['SHOP', 'PRINT', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MARKETING', 'MAINTENANCE'])).parse(req.body?.order);
       const saved = await storage.setServiceOrder(order as any);
       broadcast("system_services_updated", { serviceOrder: saved });
       res.json(saved);
@@ -739,6 +739,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(await storage.getPrintCatalogForPrinter(user.id));
   });
 
+  // A Printer's category/subCategory choice on a service must be both (a)
+  // currently active in the Admin taxonomy and (b) already mapped/selected by
+  // that Printer via PATCH /api/print/me/categories — never an arbitrary
+  // string, and never a category the Printer hasn't opted into. Only validates
+  // fields that are actually present in this call (partial-update-friendly).
+  async function validatePrintTaxonomySelection(printerId: number, category?: string, subCategory?: string): Promise<string | null> {
+    if (!category) return null;
+    const [categoryTaxonomy, mapping] = await Promise.all([
+      storage.getPrintCategoryTaxonomy(),
+      storage.getPrinterCategoryMapping(printerId),
+    ]);
+    const categoryRow = categoryTaxonomy.find((c) => c.name === category);
+    if (!categoryRow || !categoryRow.isActive || categoryRow.isFrozen) {
+      return "Cette catégorie n'est plus disponible.";
+    }
+    if (!mapping.categories.includes(category)) {
+      return "Sélectionnez d'abord cette catégorie dans l'onglet Catégories.";
+    }
+    if (subCategory) {
+      const subCategoryTaxonomy = await storage.getPrintSubCategoryTaxonomy(categoryRow.id);
+      const subRow = subCategoryTaxonomy.find((s) => s.name === subCategory);
+      if (!subRow || !subRow.isActive || subRow.isFrozen) {
+        return "Cette sous-catégorie n'est plus disponible.";
+      }
+      if (!mapping.subCategories.includes(subCategory)) {
+        return "Sélectionnez d'abord cette sous-catégorie dans l'onglet Catégories.";
+      }
+    }
+    return null;
+  }
+
   app.post("/api/print/catalog", requireAuth, async (req: any, res) => {
     try {
       const user = await storage.getUser(req.session.userId);
@@ -756,6 +787,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         materials: z.array(z.string()).default([]),
         isActive: z.boolean().default(true),
       }).parse(req.body);
+      const taxonomyError = await validatePrintTaxonomySelection(user.id, body.category, body.subCategory);
+      if (taxonomyError) return res.status(400).json({ message: taxonomyError });
       const item = await storage.createPrintCatalogItem(user.id, body);
       broadcast("print_catalog_updated", { printerId: user.id });
       res.status(201).json(item);
@@ -782,6 +815,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         materials: z.array(z.string()).optional(),
         isActive: z.boolean().optional(),
       }).parse(req.body);
+      const taxonomyError = await validatePrintTaxonomySelection(user.id, body.category, body.subCategory);
+      if (taxonomyError) return res.status(400).json({ message: taxonomyError });
       const updated = await storage.updatePrintCatalogItem(parseInt(req.params.id), user.id, body);
       if (!updated) return res.status(404).json({ message: "Catalog item not found" });
       broadcast("print_catalog_updated", { printerId: user.id });
@@ -826,6 +861,88 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/print/categories", async (_req, res) => {
     try { res.json(await storage.getPrintCategories()); }
     catch { res.status(500).json({ message: "Failed to load PRINT categories" }); }
+  });
+
+  // Active Admin taxonomy (categories + subcategories) — what a Printer is allowed
+  // to map/select from. Distinct from GET /api/print/categories above, which is
+  // the marketplace-visibility list (derived from actually-used active services,
+  // not the raw taxonomy) — see the note on storage.getPrintCategories().
+  app.get("/api/print/taxonomy", async (_req, res) => {
+    try {
+      const [categories, subcategories] = await Promise.all([
+        storage.getPrintCategoryTaxonomy(),
+        storage.getPrintSubCategoryTaxonomy(),
+      ]);
+      res.json({
+        categories: categories.filter((c) => c.isActive && !c.isFrozen),
+        subcategories: subcategories.filter((s) => s.isActive && !s.isFrozen),
+      });
+    } catch { res.status(500).json({ message: "Failed to load PRINT taxonomy" }); }
+  });
+
+  app.get("/api/print/me/categories", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+    res.json(await storage.getPrinterCategoryMapping(user.id));
+  });
+
+  app.patch("/api/print/me/categories", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+      const body = z.object({
+        categories: z.array(z.string()).default([]),
+        subCategories: z.array(z.string()).default([]),
+      }).parse(req.body);
+      const result = await storage.setPrinterCategoryMapping(user.id, body);
+      broadcast("print_categories_updated", { printerId: user.id, kind: "mapping" });
+      res.json(result);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update category mapping" });
+    }
+  });
+
+  app.get("/api/print/reviews/order/:orderId", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const review = await storage.getPrintReviewForOrder(parseInt(req.params.orderId), user.id);
+    res.json(review ?? null);
+  });
+
+  app.get("/api/print/reviews/:printerId", async (req, res) => {
+    try { res.json(await storage.getPrintReviews(parseInt(req.params.printerId))); }
+    catch { res.status(500).json({ message: "Failed to load PRINT reviews" }); }
+  });
+
+  app.post("/api/print/reviews", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "CAFE_OWNER" || user.status !== "approved") {
+        return res.status(403).json({ message: "Only approved Coffee Owners can submit reviews" });
+      }
+      const body = z.object({
+        printerId: z.number().int().positive(),
+        printOrderId: z.number().int().positive(),
+        rating: z.number().int().min(1).max(5),
+        comment: z.string().max(2000).optional(),
+      }).parse(req.body);
+      // Ownership + eligibility enforced the same way as Maintenance reviews:
+      // the order is looked up only within this Coffee Owner's own orders, so a
+      // review can never be attached to someone else's order, and only a
+      // DELIVERED order (this module's terminal/completed state) is reviewable.
+      const ownOrders = await storage.getPrintOrdersForOwner(user.id);
+      const order = ownOrders.find((o) => o.id === body.printOrderId);
+      if (!order || order.printerId !== body.printerId || order.status !== "DELIVERED") {
+        return res.status(400).json({ message: "Les avis sont disponibles après une commande livrée." });
+      }
+      const result = await storage.upsertPrintReview({ ...body, cafeId: user.id, cafeName: user.name });
+      broadcast("print_review_updated", { printerId: body.printerId, printOrderId: body.printOrderId });
+      res.status(result.isUpdate ? 200 : 201).json(result.review);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to submit review" });
+    }
   });
 
   app.get("/api/print/orders", requireAuth, async (req: any, res) => {
@@ -881,6 +998,102 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
     res.json(await storage.getPrintRevenueSummary(user.id));
+  });
+
+  // ── Admin PRINT — same philosophy as Admin Maintenance above: one aggregate
+  // overview endpoint the client filters/tabs over client-side, plus dedicated
+  // mutation endpoints for taxonomy CRUD and catalog moderation. ──────────────
+
+  app.get("/api/admin/print", requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getPrintAdminOverview()); }
+    catch (err) { console.error(err); res.status(500).json({ message: "Failed to load PRINT overview" }); }
+  });
+
+  app.post("/api/admin/print/categories", requireAdmin, async (req, res) => {
+    try {
+      const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
+      const created = await storage.createPrintCategory(name);
+      broadcast("print_categories_updated", { kind: "taxonomy" });
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to create category" });
+    }
+  });
+
+  app.patch("/api/admin/print/categories/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const updated = await storage.updatePrintCategory(parseInt(req.params.id), body);
+      if (!updated) return res.status(404).json({ message: "Category not found" });
+      broadcast("print_categories_updated", { kind: "taxonomy" });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update category" });
+    }
+  });
+
+  app.delete("/api/admin/print/categories/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deletePrintCategory(parseInt(req.params.id));
+      broadcast("print_categories_updated", { kind: "taxonomy" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete category" }); }
+  });
+
+  app.post("/api/admin/print/subcategories", requireAdmin, async (req, res) => {
+    try {
+      const { categoryId, name } = z.object({ categoryId: z.number().int().positive(), name: z.string().trim().min(1).max(120) }).parse(req.body);
+      const created = await storage.createPrintSubCategory(categoryId, name);
+      broadcast("print_categories_updated", { kind: "taxonomy" });
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to create subcategory" });
+    }
+  });
+
+  app.patch("/api/admin/print/subcategories/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const updated = await storage.updatePrintSubCategory(parseInt(req.params.id), body);
+      if (!updated) return res.status(404).json({ message: "Subcategory not found" });
+      broadcast("print_categories_updated", { kind: "taxonomy" });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update subcategory" });
+    }
+  });
+
+  app.delete("/api/admin/print/subcategories/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deletePrintSubCategory(parseInt(req.params.id));
+      broadcast("print_categories_updated", { kind: "taxonomy" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete subcategory" }); }
+  });
+
+  app.patch("/api/admin/print/catalog/:id", requireAdmin, async (req, res) => {
+    try {
+      const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
+      const updated = await storage.adminSetPrintCatalogItemActive(parseInt(req.params.id), isActive);
+      if (!updated) return res.status(404).json({ message: "Catalog item not found" });
+      broadcast("print_catalog_updated", { printerId: updated.printerId, kind: "admin_moderation" });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update catalog item" });
+    }
   });
 
   app.get("/api/admin/maintenance", requireAdmin, async (_req, res) => {

@@ -34,6 +34,7 @@ import HelpCenterPage from "@/pages/supplier/help-center-page";
 import OrdersPage from "@/pages/shared/orders-page";
 import PrintPage from "@/pages/cafe/print/print-page";
 import PrintDetailPage from "@/pages/cafe/print/print-detail-page";
+import PrintOrdersPage from "@/pages/cafe/print/print-orders-page";
 import BaristaPage from "@/pages/cafe/barista/barista-page";
 import MarketingPage from "@/pages/cafe/marketing/marketing-page";
 import SupplierMessagesPage from "@/pages/supplier/messages-page";
@@ -47,6 +48,7 @@ import DriverDeliveriesPage from "@/pages/delivery/driver-deliveries-page";
 import SupplierMyDeliveriesPage from "@/pages/supplier/my-deliveries-page";
 import SupplierDeliveryDriversPage from "@/pages/supplier/delivery-drivers-page";
 import { DriverAccountShell } from "@/components/layout/driver-account-shell";
+import { PrinterAccountShell } from "@/components/layout/printer-account-shell";
 import DriverAccountPage from "@/pages/driver/account";
 import DriverPlanningPage from "@/pages/driver/planning";
 import DriverWalletPage from "@/pages/driver/wallet";
@@ -64,6 +66,9 @@ import PrinterOrders from "@/pages/printer/orders";
 import PrinterCatalog from "@/pages/printer/catalog";
 import PrinterInvoices from "@/pages/printer/invoices";
 import PrinterAnalytics from "@/pages/printer/analytics";
+import PrinterMessages from "@/pages/printer/messages";
+import PrinterReviews from "@/pages/printer/reviews";
+import PrinterCategories from "@/pages/printer/categories";
 import PrinterSettings from "@/pages/printer/settings";
 import MarketingDashboard from "@/pages/marketing/dashboard";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
@@ -97,6 +102,7 @@ import SystemManagementPage from "@/pages/admin/system-management-page";
 import ProspectingPage from "@/pages/admin/prospecting-page";
 import AdminReviewsPage from "@/pages/admin/reviews-page";
 import AdminMaintenancePage from "@/pages/admin/maintenance-page";
+import AdminPrintPage from "@/pages/admin/print-page";
 import ComingSoonPage from "@/pages/coming-soon-page";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -236,6 +242,9 @@ function HomeRoute() {
   // Driver account switcher (like Barista Marketplace) replaces the generic sidebar for
   // Drivers — see components/layout/driver-account-shell.tsx.
   if (user.role === "DRIVER") return <Redirect to="/driver" />;
+  // Printer account switcher (same pattern) replaces the generic sidebar for Printers —
+  // see components/layout/printer-account-shell.tsx.
+  if (user.role === "PRINTER") return <Redirect to="/printer" />;
   return (
     <DashboardLayout>
       <SmartDashboard />
@@ -341,27 +350,37 @@ function Router() {
         {() => (<DashboardLayout><ProtectedRoute component={SupplierMessagesPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
 
-      {/* ── Printer routes ── */}
+      {/* ── Printer routes — account switcher replaces the generic sidebar for Printer
+          (like Driver/Barista Marketplace) — see components/layout/printer-account-shell.tsx. ── */}
       <Route path="/printer/services">
-        {() => (<DashboardLayout><ProtectedRoute component={PrinterServices} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterServices} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
       <Route path="/printer/orders">
-        {() => (<DashboardLayout><ProtectedRoute component={PrinterOrders} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterOrders} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
       <Route path="/printer/catalog">
-        {() => (<DashboardLayout><ProtectedRoute component={PrinterCatalog} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterCatalog} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
       <Route path="/printer/invoices">
-        {() => (<DashboardLayout><ProtectedRoute component={PrinterInvoices} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterInvoices} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
       <Route path="/printer/analytics">
-        {() => (<DashboardLayout><ProtectedRoute component={PrinterAnalytics} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterAnalytics} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
+      </Route>
+      <Route path="/printer/messages">
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterMessages} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
+      </Route>
+      <Route path="/printer/reviews">
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterReviews} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
+      </Route>
+      <Route path="/printer/categories">
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterCategories} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
       <Route path="/printer/settings">
-        {() => (<DashboardLayout><ProtectedRoute component={PrinterSettings} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterSettings} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
       <Route path="/printer">
-        {() => (<DashboardLayout><ProtectedRoute component={PrinterDashboard} allowedRoles={["PRINTER"]} requireApproved /></DashboardLayout>)}
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterDashboard} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
 
       {/* ── Marketing Panel routes ── */}
@@ -410,6 +429,16 @@ function Router() {
         {() => (
           <MarketplaceLayout>
             <ComingSoonPage />
+          </MarketplaceLayout>
+        )}
+      </Route>
+      {/* Registered before /print/:productId — wouter matches routes in declaration
+          order, and the param route would otherwise greedily swallow "orders" as if
+          it were a productId. */}
+      <Route path="/print/orders">
+        {() => (
+          <MarketplaceLayout>
+            <GatedServiceRoute service="PRINTING" component={PrintOrdersPage} />
           </MarketplaceLayout>
         )}
       </Route>
@@ -521,6 +550,9 @@ function Router() {
       </Route>
       <Route path="/admin/maintenance">
         {() => (<DashboardLayout><ProtectedRoute component={AdminMaintenancePage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      <Route path="/admin/print">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminPrintPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
       <Route path="/admin/messages">
         {() => (<DashboardLayout><ProtectedRoute component={AdminMessagesPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}

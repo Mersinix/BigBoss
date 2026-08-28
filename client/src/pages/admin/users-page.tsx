@@ -41,6 +41,16 @@ function useBaristaSkillOptions(): string[] {
   return active && active.length > 0 ? active : BARISTA_SPECIALTIES;
 }
 
+// Same pattern as useBaristaSkillOptions above — fetches the real PRINT category
+// taxonomy (client/src/pages/admin/print-page.tsx's "Catégories" tab manages the
+// same table) instead of the stale local PRINT_CATS list this screen previously
+// used unconditionally.
+function usePrintCategoryOptions(): string[] {
+  const { data } = useQuery<{ name: string; isActive: boolean }[]>({ queryKey: ["/api/admin/print"], select: (d: any) => d.taxonomy });
+  const active = data?.filter((c) => c.isActive).map((c) => c.name);
+  return active && active.length > 0 ? active : PRINT_CATS;
+}
+
 // ── Styling helpers ────────────────────────────────────────────────────────────
 
 const roleColors: Record<string, string> = {
@@ -113,6 +123,7 @@ function UserDetailDialog({
   const { toast } = useToast();
   const qc = useQueryClient();
   const baristaSkillOptions = useBaristaSkillOptions();
+  const printCategoryOptions = usePrintCategoryOptions();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [form, setForm] = useState({
@@ -284,7 +295,7 @@ function UserDetailDialog({
               selected={form.governorates} onChange={v => setForm(f => ({ ...f, governorates: v }))} />
           )}
           {user.role === "PRINTER" && (
-            <MultiChip label="Catégories impression" options={PRINT_CATS}
+            <MultiChip label="Catégories impression" options={printCategoryOptions}
               selected={form.printCategories} onChange={v => setForm(f => ({ ...f, printCategories: v }))} />
           )}
           {user.role === "MARKETING" && (
@@ -387,6 +398,7 @@ function UserDetailDialog({
 function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
   const { toast } = useToast();
   const baristaSkillOptions = useBaristaSkillOptions();
+  const printCategoryOptions = usePrintCategoryOptions();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState("CAFE_OWNER");
   const [form, setForm] = useState({
@@ -576,7 +588,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
             </div>
           )}
           {role === "PRINTER" && (
-            <MultiChip label="Catégories impression" options={PRINT_CATS}
+            <MultiChip label="Catégories impression" options={printCategoryOptions}
               selected={form.printCategories} onChange={v => setForm(f => ({ ...f, printCategories: v }))} />
           )}
           {role === "MARKETING" && (

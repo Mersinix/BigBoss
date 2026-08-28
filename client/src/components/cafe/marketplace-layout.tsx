@@ -30,13 +30,13 @@ import {
   Search, LogOut, Settings, LayoutDashboard, Store, Send,
   Star, Package, Trash2, CheckCircle, Clock, Calendar, Box, Truck,
   AlertCircle, DollarSign, ClipboardList, Phone, Globe, MapPinIcon, AlertTriangle,
-  Printer, Megaphone, Wrench, User, GraduationCap, Sun, Moon, X, Plus, Loader2,
+  Printer, Megaphone, Wrench, User, Users, GraduationCap, Sun, Moon, X, Plus, Loader2,
   Archive, RotateCcw,
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount, type MaintenanceFavItem } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
-import { useServiceStates } from "@/hooks/use-service-states";
-import { sortServiceIds, useServiceOrder } from "@/hooks/use-service-order";
+import { useServiceStates, type ServiceKey } from "@/hooks/use-service-states";
+import { sortServiceIds, useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
 import { useMessagingSettings } from "@/hooks/use-messaging-settings";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useQuickView } from "@/hooks/use-quick-view";
@@ -46,8 +46,10 @@ import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
 import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/maintenance/maintenance-page";
-import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard } from "@shared/schema";
-import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
+import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties } from "@shared/schema";
+import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/hooks/use-barista-marketplace";
+import { useBaristaRequests, useBaristaMissions } from "@/hooks/use-barista-marketplace";
+import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
 import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
@@ -143,6 +145,76 @@ function AccountPanel({
     queryKey: ["/api/maintenance/reservations"],
     enabled: !!user,
   });
+
+  // ── Reservations sub-switcher — Admin System Management is the single source
+  // of truth for which of these appear and in what order (task requirement).
+  // Maintenance's query/rendering above is untouched; PRINT and Marketplace
+  // Baristas reuse their own existing, already-owner-scoped endpoints; Marketing
+  // and Barista Academy are intentionally empty until those modules exist. ──
+  const { states: serviceStates } = useServiceStates();
+  const { order: serviceOrder } = useServiceOrder();
+  const { data: printOrders = [], isLoading: printOrdersLoading } = useQuery<PrintOrderWithParties[]>({
+    queryKey: ["/api/print/orders"],
+    enabled: !!user,
+  });
+  const { data: baristaRequests = [], isLoading: baristaRequestsLoading } = useBaristaRequests();
+  const { data: baristaMissions = [], isLoading: baristaMissionsLoading } = useBaristaMissions();
+  const [detailPrintOrder, setDetailPrintOrder] = useState<PrintOrderWithParties | null>(null);
+  const [detailBaristaMission, setDetailBaristaMission] = useState<BaristaMission | null>(null);
+  const [detailBaristaRequest, setDetailBaristaRequest] = useState<BaristaRequest | null>(null);
+
+  const RESERVATION_SERVICE_TABS: { key: string; orderId: MarketplaceServiceId; stateKey: ServiceKey; label: string; icon: any }[] = [
+    { key: "maintenance", orderId: "MAINTENANCE", stateKey: "MAINTENANCE", label: "Maintenance", icon: Wrench },
+    { key: "print", orderId: "PRINT", stateKey: "PRINTING", label: "PRINT", icon: Printer },
+    { key: "marketing", orderId: "MARKETING", stateKey: "MARKETING", label: "Marketing", icon: Megaphone },
+    { key: "barista_academy", orderId: "BARISTA_ACADEMY", stateKey: "BARISTA_ACADEMY", label: "Barista Academy", icon: GraduationCap },
+    { key: "barista_marketplace", orderId: "BARISTA_MARKETPLACE", stateKey: "BARISTA_MARKETPLACE", label: "Marketplace Baristas", icon: Users },
+  ];
+  const visibleReservationTabs = serviceOrder
+    .map((id) => RESERVATION_SERVICE_TABS.find((t) => t.orderId === id))
+    .filter((t): t is typeof RESERVATION_SERVICE_TABS[number] => !!t && serviceStates[t.stateKey] !== "HIDDEN");
+  const [reservationsService, setReservationsService] = useState<string | null>(null);
+
+  // Default to the first visible service, and if Admin hides the one currently
+  // selected, hop to the next visible one — never leave the Coffee Owner on a
+  // disabled tab.
+  useEffect(() => {
+    if (visibleReservationTabs.length === 0) { if (reservationsService !== null) setReservationsService(null); return; }
+    if (!reservationsService || !visibleReservationTabs.some((t) => t.key === reservationsService)) {
+      setReservationsService(visibleReservationTabs[0].key);
+    }
+  }, [visibleReservationTabs.map((t) => t.key).join("|")]);
+
+  // If Admin hides every service represented here while the Coffee Owner is on
+  // the Reservations tab, fall back to Orders rather than showing an empty tab.
+  useEffect(() => {
+    if (activeTab === "reservations" && visibleReservationTabs.length === 0) setActiveTab("orders");
+  }, [activeTab, visibleReservationTabs.length]);
+
+  const baristaRequestStatusMeta: Record<string, { label: string; color: string }> = {
+    PENDING: { label: "En attente", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+    DISCUSSION: { label: "En discussion", color: "bg-blue-100 text-blue-800 border-blue-200" },
+    ACCEPTED: { label: "Acceptée", color: "bg-green-100 text-green-800 border-green-200" },
+    REJECTED: { label: "Refusée", color: "bg-red-100 text-red-800 border-red-200" },
+    CANCELLED: { label: "Annulée", color: "bg-gray-100 text-gray-700 border-gray-200" },
+    COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
+  };
+  const baristaMissionStatusMeta: Record<string, { label: string; color: string }> = {
+    UPCOMING: { label: "À venir", color: "bg-blue-100 text-blue-800 border-blue-200" },
+    ACTIVE: { label: "En cours", color: "bg-purple-100 text-purple-800 border-purple-200" },
+    COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
+    CANCELLED: { label: "Annulée", color: "bg-gray-100 text-gray-700 border-gray-200" },
+  };
+  // A request that has been ACCEPTED has a corresponding mission — show the
+  // mission (which carries the real, immutable rate/schedule) instead of the
+  // now-superseded request, mirroring how Maintenance inlines its own
+  // RESCHEDULE_PENDING sub-state into the same card rather than a second list.
+  const acceptedRequestIds = new Set(baristaMissions.map((m) => m.requestId));
+  const baristaTimelineItems: ({ kind: "mission"; data: BaristaMission } | { kind: "request"; data: BaristaRequest })[] = [
+    ...baristaMissions.map((data) => ({ kind: "mission" as const, data })),
+    ...baristaRequests.filter((r) => !acceptedRequestIds.has(r.id)).map((data) => ({ kind: "request" as const, data })),
+  ].sort((a, b) => new Date(b.data.createdAt).getTime() - new Date(a.data.createdAt).getTime());
+
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
   const [notifs, setNotifs] = useState({ orderUpdates: true, promotions: false, newSuppliers: true });
   const fmt = useFormatCurrency();
@@ -212,7 +284,9 @@ function AccountPanel({
 
   const tabs = [
     { key: "orders" as const, label: "Orders", icon: ClipboardList },
-    { key: "reservations" as const, label: "Reservations", icon: Calendar },
+    // Hidden entirely when every service represented in Reservations is
+    // Admin-hidden (task requirement — never show an empty Reservations tab).
+    ...(visibleReservationTabs.length > 0 ? [{ key: "reservations" as const, label: "Reservations", icon: Calendar }] : []),
     { key: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
     { key: "settings" as const, label: "Settings", icon: Settings },
   ];
@@ -432,162 +506,286 @@ function AccountPanel({
         })()}
        
         {/* MAINTENANCE RESERVATIONS */}
-        {activeTab === "reservations" && (
-          reservationsLoading ? (
-            <div className="space-y-3 pt-2">
-              {[...Array(2)].map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-32 rounded-2xl animate-pulse ${
-                    dk ? "bg-gray-800" : "bg-gray-100"
-                  }`}
-                />
-              ))}
-            </div>
-          ) : maintenanceReservations.length === 0 ? (
-            <div className={`text-center py-16 ${textMuted}`}>
-              <Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" />
-              <p className={`font-medium text-sm ${textPrimary}`}>
-                No maintenance reservations yet
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3 pt-2">
-              {[...maintenanceReservations]
-                .sort((a: any, b: any) => {
-                  const dateA = new Date(
-                    `${a.date}T${a.time || "00:00"}`
-                  ).getTime();
+        {activeTab === "reservations" && visibleReservationTabs.length > 0 && (
+          <div className="space-y-3 pt-2">
+            {/* ── Service sub-switcher — visibility + order from Admin System Management ── */}
+            {visibleReservationTabs.length > 1 && (
+              <div className={`flex gap-1 rounded-2xl p-1 overflow-x-auto ${switcherBg}`} style={{ scrollbarWidth: "none" }}>
+                {visibleReservationTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setReservationsService(tab.key)}
+                    className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap ${reservationsService === tab.key ? switcherActive : switcherInactive}`}
+                    data-testid={`tab-reservations-${tab.key}`}
+                  >
+                    <tab.icon className="w-3.5 h-3.5" />{tab.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
-                  const dateB = new Date(
-                    `${b.date}T${b.time || "00:00"}`
-                  ).getTime();
-
-                  return dateB - dateA; // Newest → Oldest
-                })
-                .map((reservation: any) => {
-                  const meta =
-                    reservationStatus[reservation.status] ??
-                    reservationStatus.PENDING;
-
-                  return (
+            {/* ── Maintenance — UNCHANGED from the existing implementation ── */}
+            {reservationsService === "maintenance" && (
+              reservationsLoading ? (
+                <div className="space-y-3 pt-2">
+                  {[...Array(2)].map((_, i) => (
                     <div
-                      key={reservation.id}
-                      className={`border rounded-2xl p-4 space-y-3 ${cardBg}`}
-                    >
-                      {/* Header */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p
-                            className={`font-semibold text-sm truncate ${textPrimary}`}
-                          >
-                            {reservation.maintenanceName ||
-                              "Maintenance professional"}
-                          </p>
+                      key={i}
+                      className={`h-32 rounded-2xl animate-pulse ${
+                        dk ? "bg-gray-800" : "bg-gray-100"
+                      }`}
+                    />
+                  ))}
+                </div>
+              ) : maintenanceReservations.length === 0 ? (
+                <div className={`text-center py-16 ${textMuted}`}>
+                  <Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className={`font-medium text-sm ${textPrimary}`}>
+                    No maintenance reservations yet
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 pt-2">
+                  {[...maintenanceReservations]
+                    .sort((a: any, b: any) => {
+                      const dateA = new Date(
+                        `${a.date}T${a.time || "00:00"}`
+                      ).getTime();
 
-                          <p className={`text-xs mt-0.5 ${textMuted}`}>
-                            {reservation.service} · {reservation.category || "—"}
-                          </p>
-                        </div>
+                      const dateB = new Date(
+                        `${b.date}T${b.time || "00:00"}`
+                      ).getTime();
 
-                        <span
-                          className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}
+                      return dateB - dateA; // Newest → Oldest
+                    })
+                    .map((reservation: any) => {
+                      const meta =
+                        reservationStatus[reservation.status] ??
+                        reservationStatus.PENDING;
+
+                      return (
+                        <div
+                          key={reservation.id}
+                          className={`border rounded-2xl p-4 space-y-3 ${cardBg}`}
                         >
-                          {meta.label}
-                        </span>
-                      </div>
-
-                      {/* Date / Time / Location */}
-                      <div
-                        className={`grid grid-cols-2 gap-2 text-xs ${textMuted}`}
-                      >
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-amber-500" />
-                          {reservation.date}
-                        </span>
-
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-amber-500" />
-                          {reservation.time || "—"}
-                        </span>
-
-                        <span className="flex items-center gap-1 col-span-2">
-                          <MapPin className="w-3 h-3 text-amber-500" />
-                          {reservation.location || "—"}
-                        </span>
-                      </div>
-
-                      {/* Urgency / Description */}
-                      <div
-                        className={`flex flex-wrap gap-2 text-[11px] ${textMuted}`}
-                      >
-                        <span>
-                          Urgence : {reservation.urgency || "NORMAL"}
-                        </span>
-
-                        {reservation.description && (
-                          <span className="truncate">
-                            · {reservation.description}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Reschedule Request */}
-                      {reservation.status === "RESCHEDULE_PENDING" &&
-                        reservation.proposedDate && (
-                          <div
-                            className={`rounded-xl border px-3 py-2 text-xs ${
-                              dk
-                                ? "bg-purple-900/20 border-purple-800 text-purple-300"
-                                : "bg-purple-50 border-purple-100 text-purple-700"
-                            }`}
-                          >
-                            Le technicien propose le{" "}
-                            <strong>{reservation.proposedDate}</strong>
-                            {reservation.proposedTime
-                              ? ` à ${reservation.proposedTime}`
-                              : ""}
-                            .
-
-                            <div className="flex gap-2 mt-2">
-                              <Button
-                                size="sm"
-                                className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white"
-                                disabled={respondToReschedule.isPending}
-                                onClick={() =>
-                                  respondToReschedule.mutate({
-                                    id: reservation.id,
-                                    accepted: true,
-                                  })
-                                }
+                          {/* Header */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p
+                                className={`font-semibold text-sm truncate ${textPrimary}`}
                               >
-                                Confirmer modification
-                              </Button>
+                                {reservation.maintenanceName ||
+                                  "Maintenance professional"}
+                              </p>
 
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 rounded-xl border-red-200 text-red-600"
-                                disabled={respondToReschedule.isPending}
-                                onClick={() =>
-                                  respondToReschedule.mutate({
-                                    id: reservation.id,
-                                    accepted: false,
-                                  })
-                                }
-                              >
-                                Rejeter modification
-                              </Button>
+                              <p className={`text-xs mt-0.5 ${textMuted}`}>
+                                {reservation.service} · {reservation.category || "—"}
+                              </p>
                             </div>
+
+                            <span
+                              className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}
+                            >
+                              {meta.label}
+                            </span>
                           </div>
-                        )}
-                    </div>
-                  );
-                })}
-            </div>
-          )
+
+                          {/* Date / Time / Location */}
+                          <div
+                            className={`grid grid-cols-2 gap-2 text-xs ${textMuted}`}
+                          >
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-amber-500" />
+                              {reservation.date}
+                            </span>
+
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-500" />
+                              {reservation.time || "—"}
+                            </span>
+
+                            <span className="flex items-center gap-1 col-span-2">
+                              <MapPin className="w-3 h-3 text-amber-500" />
+                              {reservation.location || "—"}
+                            </span>
+                          </div>
+
+                          {/* Urgency / Description */}
+                          <div
+                            className={`flex flex-wrap gap-2 text-[11px] ${textMuted}`}
+                          >
+                            <span>
+                              Urgence : {reservation.urgency || "NORMAL"}
+                            </span>
+
+                            {reservation.description && (
+                              <span className="truncate">
+                                · {reservation.description}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Reschedule Request */}
+                          {reservation.status === "RESCHEDULE_PENDING" &&
+                            reservation.proposedDate && (
+                              <div
+                                className={`rounded-xl border px-3 py-2 text-xs ${
+                                  dk
+                                    ? "bg-purple-900/20 border-purple-800 text-purple-300"
+                                    : "bg-purple-50 border-purple-100 text-purple-700"
+                                }`}
+                              >
+                                Le technicien propose le{" "}
+                                <strong>{reservation.proposedDate}</strong>
+                                {reservation.proposedTime
+                                  ? ` à ${reservation.proposedTime}`
+                                  : ""}
+                                .
+
+                                <div className="flex gap-2 mt-2">
+                                  <Button
+                                    size="sm"
+                                    className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white"
+                                    disabled={respondToReschedule.isPending}
+                                    onClick={() =>
+                                      respondToReschedule.mutate({
+                                        id: reservation.id,
+                                        accepted: true,
+                                      })
+                                    }
+                                  >
+                                    Confirmer modification
+                                  </Button>
+
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 rounded-xl border-red-200 text-red-600"
+                                    disabled={respondToReschedule.isPending}
+                                    onClick={() =>
+                                      respondToReschedule.mutate({
+                                        id: reservation.id,
+                                        accepted: false,
+                                      })
+                                    }
+                                  >
+                                    Rejeter modification
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )
+            )}
+
+            {/* ── PRINT — real orders from the same /api/print/orders endpoint the
+                dedicated "Mes commandes PRINT" page uses; no duplicate data source. ── */}
+            {reservationsService === "print" && (
+              printOrdersLoading ? (
+                <div className="space-y-3">
+                  {[...Array(2)].map((_, i) => <div key={i} className={`h-28 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}
+                </div>
+              ) : printOrders.length === 0 ? (
+                <div className={`text-center py-16 ${textMuted}`}>
+                  <Printer className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune commande PRINT pour le moment</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {[...printOrders]
+                    .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime())
+                    .map((order) => {
+                      const meta = PRINT_ORDER_STATUS_META[order.status as keyof typeof PRINT_ORDER_STATUS_META] ?? PRINT_ORDER_STATUS_META.PENDING;
+                      return (
+                        <button
+                          key={order.id}
+                          onClick={() => setDetailPrintOrder(order)}
+                          className={`w-full text-left border rounded-2xl p-4 space-y-3 ${cardBg}`}
+                          data-testid={`card-reservation-print-${order.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className={`font-semibold text-sm truncate ${textPrimary}`}>{order.printerName}</p>
+                              <p className={`text-xs mt-0.5 ${textMuted}`}>{order.itemName} · {order.quantity} unité(s)</p>
+                            </div>
+                            <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.className}`}>{meta.label}</span>
+                          </div>
+                          <div className={`flex items-center justify-between text-xs ${textMuted}`}>
+                            <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-amber-500" />{order.createdAt ? formatDate(order.createdAt as any) : "—"}</span>
+                            <span className={`font-semibold ${textPrimary}`}>{fmt(order.totalInCents)}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              )
+            )}
+
+            {/* ── Marketplace Baristas — merges requests (not yet accepted) with
+                missions (accepted), reusing the existing role-scoped endpoints
+                a Barista Marketplace professional already sees on their own
+                side; nothing new server-side. ── */}
+            {reservationsService === "barista_marketplace" && (
+              (baristaRequestsLoading || baristaMissionsLoading) ? (
+                <div className="space-y-3">
+                  {[...Array(2)].map((_, i) => <div key={i} className={`h-28 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}
+                </div>
+              ) : baristaTimelineItems.length === 0 ? (
+                <div className={`text-center py-16 ${textMuted}`}>
+                  <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune réservation Marketplace Baristas pour le moment</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {baristaTimelineItems.map((item) => {
+                    const meta = item.kind === "mission"
+                      ? (baristaMissionStatusMeta[item.data.status] ?? baristaMissionStatusMeta.UPCOMING)
+                      : (baristaRequestStatusMeta[item.data.status] ?? baristaRequestStatusMeta.PENDING);
+                    return (
+                      <button
+                        key={`${item.kind}-${item.data.id}`}
+                        onClick={() => item.kind === "mission" ? setDetailBaristaMission(item.data) : setDetailBaristaRequest(item.data)}
+                        className={`w-full text-left border rounded-2xl p-4 space-y-3 ${cardBg}`}
+                        data-testid={`card-reservation-barista-${item.kind}-${item.data.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.data.baristaName}</p>
+                            <p className={`text-xs mt-0.5 ${textMuted}`}>{item.data.missionType}</p>
+                          </div>
+                          <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+                        </div>
+                        <div className={`flex items-center gap-1 text-xs ${textMuted}`}>
+                          <Calendar className="w-3 h-3 text-amber-500" />
+                          {item.data.startDate}{item.data.endDate ? ` → ${item.data.endDate}` : ""}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {/* ── Marketing / Barista Academy — intentionally empty until those
+                modules exist; real empty state, no fake data. ── */}
+            {reservationsService === "marketing" && (
+              <div className={`text-center py-16 ${textMuted}`}>
+                <Megaphone className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className={`font-medium text-sm ${textPrimary}`}>Aucune activité Marketing pour le moment</p>
+              </div>
+            )}
+            {reservationsService === "barista_academy" && (
+              <div className={`text-center py-16 ${textMuted}`}>
+                <GraduationCap className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className={`font-medium text-sm ${textPrimary}`}>Aucune activité Barista Academy pour le moment</p>
+              </div>
+            )}
+          </div>
         )}
-        
+
         {/* Order Details Modal — rendered inside AccountPanel so it sits above the panel dialog.
             Resolved from the live orders query (not the raw clicked reference) so a per-supplier
             cancellation made inside stays visible immediately without closing and reopening. */}
@@ -599,6 +797,84 @@ function AccountPanel({
           showCancel={true}
           showPayoutInfo={false}
         />
+
+        {/* PRINT order details — resolved live from the same printOrders query so a
+            realtime status update shows immediately if this dialog is left open. */}
+        <Dialog open={!!detailPrintOrder} onOpenChange={(o) => !o && setDetailPrintOrder(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogTitle>Commande PRINT {detailPrintOrder ? `#${detailPrintOrder.id}` : ""}</DialogTitle>
+            <DialogDescription className="sr-only">Détails de la commande PRINT</DialogDescription>
+            {(() => {
+              const order = detailPrintOrder ? (printOrders.find((o) => o.id === detailPrintOrder.id) ?? detailPrintOrder) : null;
+              if (!order) return null;
+              const meta = PRINT_ORDER_STATUS_META[order.status as keyof typeof PRINT_ORDER_STATUS_META] ?? PRINT_ORDER_STATUS_META.PENDING;
+              return (
+                <div className="space-y-3 text-sm">
+                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.className}`}>{meta.label}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><p className={`text-xs ${textMuted}`}>Imprimeur</p><p className="font-medium">{order.printerName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Service</p><p className="font-medium">{order.itemName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Quantité</p><p>{order.quantity}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Prix unitaire</p><p>{fmt(order.unitPriceInCents)}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Total</p><p className="font-semibold">{fmt(order.totalInCents)}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Créée le</p><p>{order.createdAt ? formatDate(order.createdAt as any) : "—"}</p></div>
+                  </div>
+                  {order.deliveryAddress && <div><p className={`text-xs ${textMuted}`}>Livraison</p><p>{order.deliveryAddress}</p></div>}
+                  {order.notes && <div><p className={`text-xs ${textMuted}`}>Notes</p><p>{order.notes}</p></div>}
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Barista Marketplace mission details */}
+        <Dialog open={!!detailBaristaMission} onOpenChange={(o) => !o && setDetailBaristaMission(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogTitle>Mission {detailBaristaMission ? `#${detailBaristaMission.id}` : ""}</DialogTitle>
+            <DialogDescription className="sr-only">Détails de la mission Marketplace Baristas</DialogDescription>
+            {(() => {
+              const mission = detailBaristaMission ? (baristaMissions.find((m) => m.id === detailBaristaMission.id) ?? detailBaristaMission) : null;
+              if (!mission) return null;
+              const meta = baristaMissionStatusMeta[mission.status] ?? baristaMissionStatusMeta.UPCOMING;
+              return (
+                <div className="space-y-3 text-sm">
+                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><p className={`text-xs ${textMuted}`}>Barista</p><p className="font-medium">{mission.baristaName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Mission</p><p className="font-medium">{mission.missionType}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Tarif</p><p>{fmt(mission.rateInCents)}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Dates</p><p>{mission.startDate}{mission.endDate ? ` → ${mission.endDate}` : ""}</p></div>
+                  </div>
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Barista Marketplace request details (not yet accepted into a mission) */}
+        <Dialog open={!!detailBaristaRequest} onOpenChange={(o) => !o && setDetailBaristaRequest(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogTitle>Demande {detailBaristaRequest ? `#${detailBaristaRequest.id}` : ""}</DialogTitle>
+            <DialogDescription className="sr-only">Détails de la demande Marketplace Baristas</DialogDescription>
+            {(() => {
+              const request = detailBaristaRequest ? (baristaRequests.find((r) => r.id === detailBaristaRequest.id) ?? detailBaristaRequest) : null;
+              if (!request) return null;
+              const meta = baristaRequestStatusMeta[request.status] ?? baristaRequestStatusMeta.PENDING;
+              return (
+                <div className="space-y-3 text-sm">
+                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><p className={`text-xs ${textMuted}`}>Barista</p><p className="font-medium">{request.baristaName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Mission</p><p className="font-medium">{request.missionType}</p></div>
+                    {request.proposedRateInCents != null && <div><p className={`text-xs ${textMuted}`}>Tarif proposé</p><p>{fmt(request.proposedRateInCents)}</p></div>}
+                    <div><p className={`text-xs ${textMuted}`}>Dates</p><p>{request.startDate}{request.endDate ? ` → ${request.endDate}` : ""}</p></div>
+                  </div>
+                  {request.message && <div><p className={`text-xs ${textMuted}`}>Message</p><p>{request.message}</p></div>}
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
 
         {/* DASHBOARD */}
         {activeTab === "dashboard" && (

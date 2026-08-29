@@ -5444,9 +5444,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServiceStates(): Promise<ServiceStatesMap> {
-    const ALL_SERVICES: ServiceKey[] = ['PRINTING', 'MARKETING', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
+    const ALL_SERVICES: ServiceKey[] = ['PRINTING', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
     const rows = await db.select().from(platformServices);
-    const map: ServiceStatesMap = { PRINTING: 'VISIBLE', MARKETING: 'VISIBLE', BARISTA: 'VISIBLE', BARISTA_ACADEMY: 'VISIBLE', BARISTA_MARKETPLACE: 'VISIBLE', MAINTENANCE: 'VISIBLE' };
+    const map: ServiceStatesMap = { PRINTING: 'VISIBLE', MARKETING: 'VISIBLE', BARISTA_ACADEMY: 'VISIBLE', BARISTA_MARKETPLACE: 'VISIBLE', MAINTENANCE: 'VISIBLE' };
     for (const row of rows) {
       map[row.service as ServiceKey] = row.state as ServiceState;
     }
@@ -6830,7 +6830,12 @@ export class DatabaseStorage implements IStorage {
       MAINTENANCE: ['CAFE_OWNER', 'MAINTENANCE'],
       PRINT: ['CAFE_OWNER', 'PRINTER'],
       MARKETING: ['CAFE_OWNER', 'MARKETING'],
-      BARISTA: ['CAFE_OWNER', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE'],
+      // Marketplace-only: there is no real Coffee-Owner-facing contact/hire flow
+      // for BARISTA_ACADEMY providers (the Academy page is static content, see
+      // client/src/pages/cafe/barista/barista-academy-page.tsx) — including that
+      // role here would make Academy accounts messageable with no real
+      // relationship behind it.
+      BARISTA: ['CAFE_OWNER', 'BARISTA_MARKETPLACE'],
     };
     const allowedServiceRoles = service ? serviceRoles[service] : undefined;
 

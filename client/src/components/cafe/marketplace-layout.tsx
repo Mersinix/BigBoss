@@ -984,18 +984,25 @@ function AccountPanel({
 
 // ── Favorites Panel ───────────────────────────────────────────────────────────
 
-type FavService = "SHOP" | "MAINTENANCE" | "PRINT" | "BARISTA" | "MARKETING" ;
-type BaristaSubTab = "academy" | "marketplace";
+// BARISTA is split into two independent top-level tabs (Marketplace Baristas
+// and Barista Academy — matching the /barista vs /academy page split), so the
+// former inner BARISTA sub-switcher is gone; each is just its own tab now,
+// same as SHOP/MAINTENANCE/PRINT/MARKETING.
+type FavService = "SHOP" | "MAINTENANCE" | "PRINT" | "BARISTA_MARKETPLACE" | "BARISTA_ACADEMY" | "MARKETING";
 type ShopSubTab = "products" | "packs" | "stores";
 
-const FAV_SERVICES: FavService[] = ["SHOP", "MAINTENANCE" , "PRINT", "BARISTA", "MARKETING"];
-const FAV_SERVICE_TO_KEY: Record<FavService,  "MAINTENANCE" | "PRINTING" | "BARISTA" | "MARKETING"  | null> = {
+const FAV_SERVICES: FavService[] = ["SHOP", "MAINTENANCE", "PRINT", "BARISTA_MARKETPLACE", "BARISTA_ACADEMY", "MARKETING"];
+const FAV_SERVICE_TO_KEY: Record<FavService, "MAINTENANCE" | "PRINTING" | "BARISTA_MARKETPLACE" | "BARISTA_ACADEMY" | "MARKETING" | null> = {
   SHOP: null,
-   MAINTENANCE: "MAINTENANCE",
+  MAINTENANCE: "MAINTENANCE",
   PRINT: "PRINTING",
-  BARISTA: "BARISTA",
+  BARISTA_MARKETPLACE: "BARISTA_MARKETPLACE",
+  BARISTA_ACADEMY: "BARISTA_ACADEMY",
   MARKETING: "MARKETING",
- 
+};
+const FAV_SERVICE_LABEL: Record<FavService, string> = {
+  SHOP: "SHOP", MAINTENANCE: "MAINTENANCE", PRINT: "PRINT",
+  BARISTA_MARKETPLACE: "BARISTA", BARISTA_ACADEMY: "ACADEMY", MARKETING: "MARKETING",
 };
 
 function FavoritesPanel({ onClose }: { onClose: () => void }) {
@@ -1006,7 +1013,6 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const toggle = useThemeStore((s) => s.toggle);
   const [activeService, setActiveService] = useState<FavService>("SHOP");
   const [shopTab, setShopTab] = useState<ShopSubTab>("products");
-  const [baristaTab, setBaristaTab] = useState<BaristaSubTab>("academy");
   const [selectedMaintenanceAgent, setSelectedMaintenanceAgent] = useState<MaintenanceMarketplaceCard | null>(null);
   const [maintenanceDetailOpen, setMaintenanceDetailOpen] = useState(false);
 
@@ -1185,7 +1191,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
               onClick={() => setActiveService(s)}
               className={`shrink-0 min-w-[110px] h-7 px-4 flex items-center justify-center text-[11px] font-semibold rounded-xl transition-all whitespace-nowrap scrollbar-hide ${activeService === s ? switcherActive : switcherInactive}`}
             >
-              {s}
+              {FAV_SERVICE_LABEL[s]}
             </button>
           ))}
         </div>
@@ -1206,26 +1212,6 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                 }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* BARISTA sub-switcher */}
-        {activeService === "BARISTA" && (
-          <div className={`flex gap-1 rounded-2xl p-1 mt-2.5 border ${subSwitcherBg}`}>
-            {(["academy", "marketplace"] as BaristaSubTab[]).map((sub) => (
-              <button
-                key={sub}
-                data-testid={`tab-fav-barista-${sub}`}
-                onClick={() => setBaristaTab(sub)}
-                className={`flex-1 py-1.5 text-[11px] font-semibold rounded-xl transition-all ${
-                  baristaTab === sub
-                    ? dk ? "bg-gray-700 text-green-400 shadow-sm" : "bg-white text-green-600 shadow-sm"
-                    : switcherInactive
-                }`}
-              >
-                {sub === "academy" ? "Barista Academy" : "Marketplace Baristas"}
               </button>
             ))}
           </div>
@@ -1421,7 +1407,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         )}
 
         {/* BARISTA — Academy */}
-        {activeService === "BARISTA" && baristaTab === "academy" && (
+        {activeService === "BARISTA_ACADEMY" && (
           academyItems.length === 0 ? renderEmpty() : (
             <div className="grid grid-cols-2 gap-3">
               {academyItems.map((item) => (
@@ -1452,7 +1438,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         )}
 
         {/* BARISTA — Marketplace */}
-        {activeService === "BARISTA" && baristaTab === "marketplace" && (
+        {activeService === "BARISTA_MARKETPLACE" && (
           baristaItems.length === 0 ? renderEmpty() : (
             <div className="space-y-2">
               {baristaItems.map((item) => (
@@ -1593,14 +1579,24 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
 
 // ── Chat Panel ────────────────────────────────────────────────────────────────
 
+// ServiceId here still matches the DB's messaging-conversation `service` column
+// value ("BARISTA" — a separate, generic string enum from the ServiceKey
+// visibility gate below), which stays a single value: there's no real
+// Coffee-Owner-facing messaging flow for Barista Academy providers (see the
+// serviceRoles.BARISTA note in server/storage.ts's getEligibleContacts), so
+// this tab is — and always was — Marketplace-only in practice. Its label
+// reflects that; its VISIBILITY gate now points at the real BARISTA_MARKETPLACE
+// key instead of the retired combined "BARISTA" ServiceKey.
 const SERVICES_LIST: ServiceId[] = ["SHOP", "MAINTENANCE", "PRINT", "BARISTA", "MARKETING"];
-const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "MAINTENANCE" | "BARISTA" | "MARKETING"  | null> = {
+const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "MAINTENANCE" | "BARISTA_MARKETPLACE" | "MARKETING" | null> = {
   SHOP: null,
   MAINTENANCE: "MAINTENANCE",
   PRINT: "PRINTING",
-  BARISTA: "BARISTA",
+  BARISTA: "BARISTA_MARKETPLACE",
   MARKETING: "MARKETING",
-  
+};
+const SERVICE_ID_LABEL: Record<ServiceId, string> = {
+  SHOP: "SHOP", MAINTENANCE: "MAINTENANCE", PRINT: "PRINT", BARISTA: "Marketplace Baristas", MARKETING: "MARKETING",
 };
 
 // ── Messages Panel (premium dark/light — mirrors FavoritesPanel design) ───────
@@ -1824,7 +1820,7 @@ function MessagesPanel({
               onClick={() => switchService(s)}
               className={`shrink-0 min-w-[110px] h-7 px-4 flex items-center justify-center text-[11px] font-semibold rounded-xl transition-all whitespace-nowrap scrollbar-hide ${service === s ? switcherActive : switcherInactive}`}
             >
-              {s}
+              {SERVICE_ID_LABEL[s]}
             </button>
           ))}
         </div>
@@ -2472,12 +2468,15 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
             style={{ scrollbarWidth: "none" }}
           >
             {[
-              { id: "shop", label: "SHOP", icon: ShoppingBag, href: "/products", service: null },
-              { id: "print", label: "PRINT", icon: Printer, href: "/print", service: "PRINTING" as const },
-              { id: "barista", label: "BARISTA", icon: Coffee, href: "/barista", service: "BARISTA" as const },
-              { id: "marketing", label: "MARKETING", icon: Megaphone, href: "/marketing", service: "MARKETING" as const },
-              { id: "maintenance", label: "MAINTENANCE", icon: Wrench, href: "/maintenance", service: "MAINTENANCE" as const },
-            ].sort((a, b) => sortServiceIds([a.id, b.id], headerServiceOrder)[0] === a.id ? -1 : 1)
+              { id: "shop", orderId: "SHOP" as const, label: "SHOP", icon: ShoppingBag, href: "/products", service: null },
+              { id: "maintenance", orderId: "MAINTENANCE" as const, label: "MAINTENANCE", icon: Wrench, href: "/maintenance", service: "MAINTENANCE" as const },
+              { id: "print", orderId: "PRINT" as const, label: "PRINT", icon: Printer, href: "/print", service: "PRINTING" as const },
+              // BARISTA now means Marketplace Baristas only; Barista Academy is its
+              // own independent service/page — see the split at /barista vs /academy.
+              { id: "barista", orderId: "BARISTA_MARKETPLACE" as const, label: "BARISTA", icon: Coffee, href: "/barista", service: "BARISTA_MARKETPLACE" as const },
+              { id: "academy", orderId: "BARISTA_ACADEMY" as const, label: "ACADEMY", icon: GraduationCap, href: "/academy", service: "BARISTA_ACADEMY" as const },
+              { id: "marketing", orderId: "MARKETING" as const, label: "MARKETING", icon: Megaphone, href: "/marketing", service: "MARKETING" as const },
+            ].sort((a, b) => sortServiceIds([a.orderId, b.orderId], headerServiceOrder)[0] === a.orderId ? -1 : 1)
               .filter((svc) => !svc.service || headerServiceStates[svc.service] !== "HIDDEN").map((svc) => {
               const isActive = location.startsWith("/" + svc.id) || (svc.href === "/products" && (location === "/products" || location.startsWith("/products")));
               return (

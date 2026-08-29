@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Printer, Megaphone, Coffee, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
@@ -18,16 +18,17 @@ import type { LandingConfig, HeroSlide } from "@shared/schema";
 
 // ── Service visibility ────────────────────────────────────────────────────────
 
+// The old combined "Barista" service/card is retired — Barista Marketplace and
+// Barista Academy are now two fully independent services, each with its own
+// discovery page (/barista, /academy) AND its own tab in the Coffee Owner's
+// "My Account → Reservations" switcher, both controlled by the single card
+// below (one source of truth for both surfaces — no "(réservations)"-only card).
 const SERVICES: { key: ServiceKey; label: string; description: string; icon: any }[] = [
-  { key: "PRINTING",    label: "Printing",     description: "Marketplace PRINT — services d'impression pour les cafés.", icon: Printer },
-  { key: "MARKETING",   label: "Marketing",    description: "Services MARKETING — agences et prestataires marketing.",   icon: Megaphone },
-  { key: "BARISTA",     label: "Barista",      description: "Barista Academy & Marketplace Baristas — page de découverte du café.", icon: Coffee },
-  // Additive, independent of the combined "Barista" card above (which still gates the
-  // discovery page): these two control visibility/order specifically for the Coffee
-  // Owner's "My Account → Reservations" switcher tabs of the same name.
-  { key: "BARISTA_ACADEMY",     label: "Barista Academy (réservations)",      description: "Onglet Barista Academy dans Mon Compte → Réservations.", icon: GraduationCap },
-  { key: "BARISTA_MARKETPLACE", label: "Marketplace Baristas (réservations)", description: "Onglet Marketplace Baristas dans Mon Compte → Réservations.", icon: Users },
-  { key: "MAINTENANCE", label: "Maintenance",  description: "Services MAINTENANCE — techniciens pour équipements café.", icon: Wrench },
+  { key: "PRINTING",            label: "Printing",             description: "Marketplace PRINT — services d'impression pour les cafés.", icon: Printer },
+  { key: "BARISTA_MARKETPLACE", label: "Marketplace Baristas", description: "Page /barista — recrutement de baristas indépendants.", icon: Users },
+  { key: "BARISTA_ACADEMY",     label: "Barista Academy",      description: "Page /academy — formations et cours barista.", icon: GraduationCap },
+  { key: "MARKETING",           label: "Marketing",            description: "Services MARKETING — agences et prestataires marketing.",   icon: Megaphone },
+  { key: "MAINTENANCE",         label: "Maintenance",          description: "Services MAINTENANCE — techniciens pour équipements café.", icon: Wrench },
 ];
 
 const SERVICE_ORDER_CARDS: { id: MarketplaceServiceId; key?: ServiceKey; label: string; description: string; icon: any }[] = [

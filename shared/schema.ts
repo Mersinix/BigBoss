@@ -21,18 +21,21 @@ export const deliveryStatusEnum = pgEnum('delivery_status', [
 export const deliveryModeEnum = pgEnum('delivery_mode', ['DELIVERY_COMPANY', 'SUPPLIER']);
 export const listingVisibilityEnum = pgEnum('listing_visibility', ['VISIBLE', 'HIDDEN']);
 export const userAccountStatusEnum = pgEnum('user_account_status', ['pending', 'approved', 'rejected']);
-// BARISTA_ACADEMY/BARISTA_MARKETPLACE are additive, alongside the pre-existing
-// combined 'BARISTA' value — 'BARISTA' still gates the existing Coffee-Owner
-// browsing route (client/src/pages/cafe/barista/barista-page.tsx) untouched;
-// the two new keys exist specifically so Admin System Management can control
-// visibility/order for the two Barista sub-services independently wherever a
-// feature (like the Coffee Owner "My Account → Reservations" switcher) needs
-// that finer granularity. Never remove 'BARISTA' — that would break the
-// existing route's gate.
+// The combined 'BARISTA' value is retired at the application level (the
+// customer-facing discovery page it used to gate as one combined page has
+// been split into two independent pages, /barista and /academy, each gated
+// by its own key below) but the literal enum value is kept in the Postgres
+// type — Postgres enum values can't be safely dropped, and any already-stored
+// platformServices row with service='BARISTA' is simply orphaned/inert, not
+// referenced by any app code anymore. Never re-add 'BARISTA' to ServiceKey
+// (shared/schema.ts) or any of the switcher arrays that consume it.
 export const serviceKeyEnum = pgEnum('service_key', ['PRINTING', 'MARKETING', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE']);
 export const serviceStateEnum = pgEnum('service_state', ['VISIBLE', 'HIDDEN', 'COMING_SOON']);
 
-export const MARKETPLACE_SERVICE_IDS = ['SHOP', 'PRINT', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MARKETING', 'MAINTENANCE'] as const;
+// Order matches the app-wide canonical service order (main switcher, Admin
+// System Management): SHOP, MAINTENANCE, PRINT, BARISTA_MARKETPLACE ("BARISTA"),
+// BARISTA_ACADEMY ("ACADEMY"), MARKETING.
+export const MARKETPLACE_SERVICE_IDS = ['SHOP', 'MAINTENANCE', 'PRINT', 'BARISTA_MARKETPLACE', 'BARISTA_ACADEMY', 'MARKETING'] as const;
 export type MarketplaceServiceId = typeof MARKETPLACE_SERVICE_IDS[number];
 export const DEFAULT_SERVICE_ORDER: MarketplaceServiceId[] = [...MARKETPLACE_SERVICE_IDS];
 
@@ -1297,7 +1300,7 @@ export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
 
 export type PlatformService = typeof platformServices.$inferSelect;
 export type InsertPlatformService = z.infer<typeof insertPlatformServiceSchema>;
-export type ServiceKey = 'PRINTING' | 'MARKETING' | 'BARISTA' | 'BARISTA_ACADEMY' | 'BARISTA_MARKETPLACE' | 'MAINTENANCE';
+export type ServiceKey = 'PRINTING' | 'MARKETING' | 'BARISTA_ACADEMY' | 'BARISTA_MARKETPLACE' | 'MAINTENANCE';
 export type ServiceState = 'VISIBLE' | 'HIDDEN' | 'COMING_SOON';
 export type ServiceStatesMap = Record<ServiceKey, ServiceState>;
 

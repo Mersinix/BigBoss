@@ -225,12 +225,15 @@ const DEFAULT_MAINTENANCE_IMG = "https://images.unsplash.com/photo-1621905251189
 
 // ── Services ──────────────────────────────────────────────────────────────────
 
+// BARISTA now means Marketplace Baristas only; Barista Academy is its own
+// independent service/page (/academy) — see the split at App.tsx's routes.
 const SERVICES = [
-  { id: "shop",        label: "SHOP",        icon: ShoppingBag, href: "/products" },
-  { id: "print",       label: "PRINT",       icon: Printer,     href: "/print",       service: "PRINTING"    as ServiceKey },
-  { id: "barista",     label: "BARISTA",     icon: Coffee,      href: "/barista",     service: "BARISTA"     as ServiceKey },
-  { id: "marketing",   label: "MARKETING",   icon: Megaphone,   href: "/marketing",   service: "MARKETING"   as ServiceKey },
-  { id: "maintenance", label: "MAINTENANCE", icon: Wrench,      href: "/maintenance", service: "MAINTENANCE" as ServiceKey },
+  { id: "shop",                label: "SHOP",        icon: ShoppingBag, href: "/products" },
+  { id: "maintenance",         label: "MAINTENANCE", icon: Wrench,      href: "/maintenance", service: "MAINTENANCE"         as ServiceKey },
+  { id: "print",                label: "PRINT",       icon: Printer,     href: "/print",       service: "PRINTING"            as ServiceKey },
+  { id: "barista_marketplace", label: "BARISTA",     icon: Coffee,      href: "/barista",     service: "BARISTA_MARKETPLACE" as ServiceKey },
+  { id: "barista_academy",     label: "ACADEMY",     icon: GraduationCap, href: "/academy",   service: "BARISTA_ACADEMY"     as ServiceKey },
+  { id: "marketing",           label: "MARKETING",   icon: Megaphone,   href: "/marketing",   service: "MARKETING"           as ServiceKey },
 ];
 
 const MARKETING_SERVICES = [
@@ -849,12 +852,19 @@ export default function LandingPage() {
   const visibleServices = sortServiceIds(SERVICES, serviceOrder).filter((svc) => !svc.service || serviceStates[svc.service] !== "HIDDEN");
   const isPrintVisible = serviceStates.PRINTING !== "HIDDEN";
   const isMarketingVisible = serviceStates.MARKETING !== "HIDDEN";
-  const isBaristaVisible = serviceStates.BARISTA !== "HIDDEN";
   const isMaintenanceVisible = serviceStates.MAINTENANCE !== "HIDDEN";
   const isMaintenanceComingSoon = serviceStates.MAINTENANCE === "COMING_SOON";
   const isPrintComingSoon = serviceStates.PRINTING === "COMING_SOON";
   const isMarketingComingSoon = serviceStates.MARKETING === "COMING_SOON";
-  const isBaristaComingSoon = serviceStates.BARISTA === "COMING_SOON";
+  // Barista Academy and Marketplace Baristas are independently admin-controlled
+  // (no more combined "BARISTA" key) — the shared registration section below
+  // renders if either is visible, but each of its two cards independently
+  // respects its own key/comingSoon state.
+  const isBaristaAcademyVisible = serviceStates.BARISTA_ACADEMY !== "HIDDEN";
+  const isBaristaMarketplaceVisible = serviceStates.BARISTA_MARKETPLACE !== "HIDDEN";
+  const isBaristaVisible = isBaristaAcademyVisible || isBaristaMarketplaceVisible;
+  const isBaristaAcademyComingSoon = serviceStates.BARISTA_ACADEMY === "COMING_SOON";
+  const isBaristaMarketplaceComingSoon = serviceStates.BARISTA_MARKETPLACE === "COMING_SOON";
 
   // Clicking a service icon: open auth modal if not logged in
   const handleServiceClick = (href: string) => {
@@ -1164,7 +1174,7 @@ export default function LandingPage() {
       {isBaristaVisible && (
         <section
           className={`py-16 md:py-20 px-4 ${dk("bg-white", "bg-gray-950")}`}
-          style={{ order: serviceOrder.indexOf("BARISTA") }}
+          style={{ order: serviceOrder.indexOf("BARISTA_MARKETPLACE") }}
         >
           <div className="max-w-7xl mx-auto">
             <SectionHeading
@@ -1172,48 +1182,57 @@ export default function LandingPage() {
               iconWrap={dk("bg-green-500/10", "bg-green-500/15")}
               iconColor="text-green-600"
               title={t.baristaTitle}
-              badge={isBaristaComingSoon && <Badge variant="outline" className="border-green-200 text-green-600 bg-green-50 text-xs">Bientôt</Badge>}
               dk={dk}
             />
 
             <div className="grid md:grid-cols-2 gap-6 mt-8">
-              {/* Barista Academy card */}
-              <div className={`group flex flex-col sm:flex-row gap-4 p-6 rounded-3xl border shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${dk("bg-gradient-to-br from-green-50 to-emerald-50 border-green-100", "bg-green-950/30 border-green-900")}`}>
-                <div className="flex-1">
-                  <div className="w-12 h-12 bg-green-500/15 rounded-2xl flex items-center justify-center mb-3">
-                    <Coffee className="w-6 h-6 text-green-600" />
+              {/* Barista Academy card — independently admin-controlled */}
+              {isBaristaAcademyVisible && (
+                <div className={`group flex flex-col sm:flex-row gap-4 p-6 rounded-3xl border shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${dk("bg-gradient-to-br from-green-50 to-emerald-50 border-green-100", "bg-green-950/30 border-green-900")}`}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-12 h-12 bg-green-500/15 rounded-2xl flex items-center justify-center">
+                        <Coffee className="w-6 h-6 text-green-600" />
+                      </div>
+                      {isBaristaAcademyComingSoon && <Badge variant="outline" className="border-green-200 text-green-600 bg-green-50 text-xs">Bientôt</Badge>}
+                    </div>
+                    <h3 className={`text-lg font-bold mb-2 ${dk("text-gray-900", "text-white")}`}>{t.academyName}</h3>
+                    <p className={`text-sm leading-relaxed mb-4 ${dk("text-gray-500", "text-gray-400")}`}>{t.academyDesc}</p>
+                    <Button onClick={() => openAuth("register", "BARISTA_ACADEMY")}
+                      variant="outline" className="border-green-300 text-green-700 hover:bg-green-50 rounded-xl w-full font-semibold group/btn" data-testid="button-barista-academy-cta">
+                      {t.academyCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
+                    </Button>
                   </div>
-                  <h3 className={`text-lg font-bold mb-2 ${dk("text-gray-900", "text-white")}`}>{t.academyName}</h3>
-                  <p className={`text-sm leading-relaxed mb-4 ${dk("text-gray-500", "text-gray-400")}`}>{t.academyDesc}</p>
-                  <Button onClick={() => openAuth("register", "BARISTA_ACADEMY")}
-                    variant="outline" className="border-green-300 text-green-700 hover:bg-green-50 rounded-xl w-full font-semibold group/btn" data-testid="button-barista-academy-cta">
-                    {t.academyCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
-                  </Button>
+                  {/* Contextual image — right on desktop, below on mobile */}
+                  <div className="sm:w-36 sm:shrink-0 rounded-2xl overflow-hidden shadow-md">
+                    <img src={academyImg} alt="Barista Academy" className="w-full h-32 sm:h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                  </div>
                 </div>
-                {/* Contextual image — right on desktop, below on mobile */}
-                <div className="sm:w-36 sm:shrink-0 rounded-2xl overflow-hidden shadow-md">
-                  <img src={academyImg} alt="Barista Academy" className="w-full h-32 sm:h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
-                </div>
-              </div>
+              )}
 
-              {/* Marketplace Baristas card */}
-              <div className={`group flex flex-col sm:flex-row gap-4 p-6 rounded-3xl border shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${dk("bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100", "bg-blue-950/30 border-blue-900")}`}>
-                <div className="flex-1">
-                  <div className="w-12 h-12 bg-blue-500/15 rounded-2xl flex items-center justify-center mb-3">
-                    <Users className="w-6 h-6 text-blue-600" />
+              {/* Marketplace Baristas card — independently admin-controlled */}
+              {isBaristaMarketplaceVisible && (
+                <div className={`group flex flex-col sm:flex-row gap-4 p-6 rounded-3xl border shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${dk("bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100", "bg-blue-950/30 border-blue-900")}`}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-12 h-12 bg-blue-500/15 rounded-2xl flex items-center justify-center">
+                        <Users className="w-6 h-6 text-blue-600" />
+                      </div>
+                      {isBaristaMarketplaceComingSoon && <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50 text-xs">Bientôt</Badge>}
+                    </div>
+                    <h3 className={`text-lg font-bold mb-2 ${dk("text-gray-900", "text-white")}`}>{t.marketplaceName}</h3>
+                    <p className={`text-sm leading-relaxed mb-4 ${dk("text-gray-500", "text-gray-400")}`}>{t.marketplaceDesc}</p>
+                    <Button onClick={() => openAuth("register", "BARISTA_MARKETPLACE")}
+                      variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl w-full font-semibold group/btn" data-testid="button-barista-marketplace-cta">
+                      {t.marketplaceCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
+                    </Button>
                   </div>
-                  <h3 className={`text-lg font-bold mb-2 ${dk("text-gray-900", "text-white")}`}>{t.marketplaceName}</h3>
-                  <p className={`text-sm leading-relaxed mb-4 ${dk("text-gray-500", "text-gray-400")}`}>{t.marketplaceDesc}</p>
-                  <Button onClick={() => openAuth("register", "BARISTA_MARKETPLACE")}
-                    variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl w-full font-semibold group/btn" data-testid="button-barista-marketplace-cta">
-                    {t.marketplaceCta} <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
-                  </Button>
+                  {/* Contextual image */}
+                  <div className="sm:w-36 sm:shrink-0 rounded-2xl overflow-hidden shadow-md">
+                    <img src={marketplaceImg} alt="Barista Marketplace" className="w-full h-32 sm:h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                  </div>
                 </div>
-                {/* Contextual image */}
-                <div className="sm:w-36 sm:shrink-0 rounded-2xl overflow-hidden shadow-md">
-                  <img src={marketplaceImg} alt="Barista Marketplace" className="w-full h-32 sm:h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </section>

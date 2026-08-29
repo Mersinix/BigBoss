@@ -36,6 +36,7 @@ import PrintPage from "@/pages/cafe/print/print-page";
 import PrintDetailPage from "@/pages/cafe/print/print-detail-page";
 import PrintOrdersPage from "@/pages/cafe/print/print-orders-page";
 import BaristaPage from "@/pages/cafe/barista/barista-page";
+import BaristaAcademyPage from "@/pages/cafe/barista/barista-academy-page";
 import MarketingPage from "@/pages/cafe/marketing/marketing-page";
 import SupplierMessagesPage from "@/pages/supplier/messages-page";
 import AdminMessagesPage from "@/pages/admin/messages-page";
@@ -456,10 +457,20 @@ function Router() {
           </MarketplaceLayout>
         )}
       </Route>
+      {/* /barista = Marketplace Baristas only; Barista Academy is now its own
+          independent page/service at /academy — see the split rationale on
+          shared/schema.ts's serviceKeyEnum. */}
       <Route path="/barista">
         {() => (
           <MarketplaceLayout>
-            <GatedServiceRoute service="BARISTA" component={BaristaPage} />
+            <GatedServiceRoute service="BARISTA_MARKETPLACE" component={BaristaPage} />
+          </MarketplaceLayout>
+        )}
+      </Route>
+      <Route path="/academy">
+        {() => (
+          <MarketplaceLayout>
+            <GatedServiceRoute service="BARISTA_ACADEMY" component={BaristaAcademyPage} />
           </MarketplaceLayout>
         )}
       </Route>

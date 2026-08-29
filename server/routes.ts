@@ -317,7 +317,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/system-services/:service", requireAdmin, async (req, res) => {
     try {
       const service = req.params.service as string;
-      const VALID_SERVICES = ['PRINTING', 'MARKETING', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
+      const VALID_SERVICES = ['PRINTING', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
       const VALID_STATES = ['VISIBLE', 'HIDDEN', 'COMING_SOON'];
       if (!VALID_SERVICES.includes(service)) return res.status(400).json({ message: "Invalid service" });
       const { state } = req.body;
@@ -340,7 +340,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/system-service-order", requireAdmin, async (req, res) => {
     try {
-      const order = z.array(z.enum(['SHOP', 'PRINT', 'BARISTA', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MARKETING', 'MAINTENANCE'])).parse(req.body?.order);
+      const order = z.array(z.enum(['SHOP', 'MAINTENANCE', 'PRINT', 'BARISTA_MARKETPLACE', 'BARISTA_ACADEMY', 'MARKETING'])).parse(req.body?.order);
       const saved = await storage.setServiceOrder(order as any);
       broadcast("system_services_updated", { serviceOrder: saved });
       res.json(saved);

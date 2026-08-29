@@ -1431,6 +1431,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     catch { res.status(500).json({ message: "Failed to load revenue" }); }
   });
 
+  // ── Admin BARISTA — same philosophy as Admin PRINT above: one aggregate
+  // overview endpoint the client tabs/filters over, built entirely from the
+  // real Barista Marketplace tables (no duplicate data, no mock KPIs). ──────
+
+  app.get("/api/admin/barista", requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getBaristaAdminOverview()); }
+    catch (err) { console.error(err); res.status(500).json({ message: "Failed to load Barista overview" }); }
+  });
+
   // ── Barista Marketplace: admin skills taxonomy (mirrors admin/maintenance/competencies) ──
 
   app.get("/api/admin/barista/skills", requireAdmin, async (_req, res) => {

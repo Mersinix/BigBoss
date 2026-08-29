@@ -342,6 +342,7 @@ export interface IStorage {
   getBaristaFavoritesByUser(userId: number): Promise<number[]>;
   addBaristaFavorite(userId: number, baristaUserId: number): Promise<void>;
   removeBaristaFavorite(userId: number, baristaUserId: number): Promise<void>;
+  getBaristaAdminOverview(): Promise<any>;
 
   // Inventory
   getSupplierInventory(supplierId: number, filters?: InventoryFilters, sort?: InventorySort, page?: number, pageSize?: number): Promise<InventoryListResult>;
@@ -4087,6 +4088,105 @@ export class DatabaseStorage implements IStorage {
       eq(baristaMarketplaceFavorites.userId, userId),
       eq(baristaMarketplaceFavorites.baristaUserId, baristaUserId),
     ));
+  }
+
+  // ── Admin aggregate overview — same philosophy as getPrintAdminOverview:
+  // one endpoint the client tabs/filters over, built entirely from the real
+  // Barista Marketplace tables above (no duplicate/derived storage, no mock
+  // data). Rating/reviewCount reuse computeBaristaReviewStats — the same live
+  // computation the public marketplace and single-card reads already use, so
+  // Admin, Coffee Owner and the Barista's own account always agree. ──────────
+  async getBaristaAdminOverview(): Promise<any> {
+    const skills = await this.getBaristaSkills(false);
+    const baristaUsers = await db.select().from(users).where(eq(users.role, "BARISTA_MARKETPLACE" as any));
+    const profileRows = await db.select().from(baristaMarketplaceProfiles);
+    const profileByUserId = new Map(profileRows.map((p) => [p.userId, p]));
+    const requestRows = await db.select().from(baristaMarketplaceRequests).orderBy(desc(baristaMarketplaceRequests.createdAt));
+    const missionRows = await db.select().from(baristaMarketplaceMissions).orderBy(desc(baristaMarketplaceMissions.createdAt));
+    const reviewRows = await db.select().from(supplierProductReviews).where(eq(supplierProductReviews.reviewType, "BARISTA_MARKETPLACE"));
+    const allUsers = await db.select().from(users);
+    const userMap = new Map(allUsers.map((u) => [u.id, u]));
+
+    const baristaUserIds = baristaUsers.map((u) => u.id);
+    const statsMap = await this.computeBaristaReviewStats(baristaUserIds);
+
+    const baristas = baristaUsers.map((u) => {
+      const profile = profileByUserId.get(u.id);
+      const stats = statsMap.get(u.id);
+      const ownMissions = missionRows.filter((m) => m.baristaUserId === u.id);
+      const completedOwnMissions = ownMissions.filter((m) => m.status === "COMPLETED");
+      const available = !!profile && profile.isAvailable && !profile.isOnVacation && profile.marketplaceVisible;
+      return {
+        userId: u.id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone ?? null,
+        profileImageUrl: u.profileImageUrl ?? null,
+        status: u.status,
+        level: profile?.level ?? "BEGINNER",
+        city: profile?.city || u.locationAddress || "",
+        location: u.locationAddress ?? profile?.city ?? "",
+        bio: profile?.bio ?? "",
+        skills: profile?.skills ?? [],
+        availableDays: profile?.availableDays ?? [],
+        isAvailable: profile?.isAvailable ?? false,
+        isOnVacation: profile?.isOnVacation ?? false,
+        marketplaceVisible: profile?.marketplaceVisible ?? false,
+        available,
+        dailyRateInCents: profile?.dailyRateInCents ?? 0,
+        rating: stats?.rating ?? 0,
+        reviewCount: stats?.reviewCount ?? 0,
+        requestCount: requestRows.filter((r) => r.baristaUserId === u.id).length,
+        missionCount: ownMissions.length,
+        completedMissionCount: completedOwnMissions.length,
+        revenueCents: completedOwnMissions.reduce((s, m) => s + m.rateInCents, 0),
+        createdAt: u.createdAt,
+        initials: u.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+      };
+    });
+
+    const requests = requestRows.map((r) => ({
+      ...r,
+      cafeOwnerName: userMap.get(r.cafeOwnerId)?.name ?? "—",
+      baristaName: userMap.get(r.baristaUserId)?.name ?? "—",
+    }));
+
+    const missions = missionRows.map((m) => ({
+      ...m,
+      cafeOwnerName: userMap.get(m.cafeOwnerId)?.name ?? "—",
+      baristaName: userMap.get(m.baristaUserId)?.name ?? "—",
+    }));
+
+    const reviews = reviewRows.map((r) => ({
+      ...r,
+      baristaName: r.baristaMarketplaceUserId ? (userMap.get(r.baristaMarketplaceUserId)?.name ?? "—") : "—",
+    }));
+
+    const completedMissions = missionRows.filter((m) => m.status === "COMPLETED");
+    const pendingMissions = missionRows.filter((m) => m.status === "UPCOMING" || m.status === "ACTIVE");
+    const totalReviewRating = reviewRows.reduce((s, r) => s + r.rating, 0);
+
+    return {
+      stats: {
+        totalBaristas: baristaUsers.length,
+        activeBaristas: baristaUsers.filter((u) => u.status === "approved").length,
+        availableBaristas: baristas.filter((b) => b.available).length,
+        totalRequests: requestRows.length,
+        pendingRequests: requestRows.filter((r) => r.status === "PENDING" || r.status === "DISCUSSION").length,
+        totalMissions: missionRows.length,
+        completedMissions: completedMissions.length,
+        cancelledMissions: missionRows.filter((m) => m.status === "CANCELLED").length,
+        completedMissionValueCents: completedMissions.reduce((s, m) => s + m.rateInCents, 0),
+        pendingMissionValueCents: pendingMissions.reduce((s, m) => s + m.rateInCents, 0),
+        reviewCount: reviewRows.length,
+        averageRating: reviewRows.length ? Math.round((totalReviewRating / reviewRows.length) * 10) / 10 : 0,
+      },
+      skills,
+      baristas,
+      requests,
+      missions,
+      reviews,
+    };
   }
 
   // ── Supplier variants ───────────────────────────────────────────────────────

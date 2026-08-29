@@ -288,6 +288,7 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/barista/reviews"] });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/barista/profile") });
             qc.invalidateQueries({ queryKey: ["/api/admin/barista/skills"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/barista"] });
             qc.invalidateQueries({ queryKey: ["/api/barista-favorites"] });
             if (event === "barista_request_created" || event === "barista_request_status_changed") {
               invalidateMessagingQueries(qc);

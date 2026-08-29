@@ -104,6 +104,7 @@ import ProspectingPage from "@/pages/admin/prospecting-page";
 import AdminReviewsPage from "@/pages/admin/reviews-page";
 import AdminMaintenancePage from "@/pages/admin/maintenance-page";
 import AdminPrintPage from "@/pages/admin/print-page";
+import AdminBaristaPage from "@/pages/admin/barista-page";
 import ComingSoonPage from "@/pages/coming-soon-page";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -564,6 +565,11 @@ function Router() {
       </Route>
       <Route path="/admin/print">
         {() => (<DashboardLayout><ProtectedRoute component={AdminPrintPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      {/* Admin Barista management — mirrors Admin PRINT's own route/layout pattern.
+          Marketplace Baristas only; Barista Academy (/academy) is not represented here. */}
+      <Route path="/admin/barista">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminBaristaPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
       <Route path="/admin/messages">
         {() => (<DashboardLayout><ProtectedRoute component={AdminMessagesPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}

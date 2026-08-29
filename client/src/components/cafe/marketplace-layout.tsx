@@ -49,6 +49,7 @@ import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/
 import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties } from "@shared/schema";
 import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/hooks/use-barista-marketplace";
 import { useBaristaRequests, useBaristaMissions } from "@/hooks/use-barista-marketplace";
+import { useAcademyRegistrations } from "@/hooks/use-barista-academy";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
 import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
 
@@ -92,7 +93,7 @@ function computeAccess(user: any) {
 
 // ── Fake data ─────────────────────────────────────────────────────────────────
 
-type ServiceId = "SHOP" | "PRINT" | "BARISTA" | "MARKETING" | "MAINTENANCE";
+type ServiceId = "SHOP" | "PRINT" | "BARISTA" | "ACADEMY" | "MARKETING" | "MAINTENANCE";
 type ThreadMessage = { from: "me" | "them"; text: string; time: string };
 type Thread = { id: number; name: string; service: ServiceId; lastMessage: string; time: string; unread: number; messages: ThreadMessage[] };
 
@@ -100,6 +101,7 @@ const SERVICE_BADGE: Record<ServiceId, string> = {
   SHOP:        "bg-blue-100 text-blue-700",
   PRINT:       "bg-orange-100 text-orange-700",
   BARISTA:     "bg-green-100 text-green-700",
+  ACADEMY:     "bg-indigo-100 text-indigo-700",
   MARKETING:   "bg-purple-100 text-purple-700",
   MAINTENANCE: "bg-amber-100 text-amber-700",
 };
@@ -148,9 +150,10 @@ function AccountPanel({
 
   // ── Reservations sub-switcher — Admin System Management is the single source
   // of truth for which of these appear and in what order (task requirement).
-  // Maintenance's query/rendering above is untouched; PRINT and Marketplace
-  // Baristas reuse their own existing, already-owner-scoped endpoints; Marketing
-  // and Barista Academy are intentionally empty until those modules exist. ──
+  // Maintenance's query/rendering above is untouched; PRINT, Marketplace
+  // Baristas and Barista Academy all reuse their own existing, already
+  // owner-scoped endpoints; Marketing is intentionally empty until that
+  // module exists. ──
   const { states: serviceStates } = useServiceStates();
   const { order: serviceOrder } = useServiceOrder();
   const { data: printOrders = [], isLoading: printOrdersLoading } = useQuery<PrintOrderWithParties[]>({
@@ -159,6 +162,11 @@ function AccountPanel({
   });
   const { data: baristaRequests = [], isLoading: baristaRequestsLoading } = useBaristaRequests();
   const { data: baristaMissions = [], isLoading: baristaMissionsLoading } = useBaristaMissions();
+  // Barista Academy — same real, owner-scoped endpoint the Academy account's own
+  // Inscriptions tab and Admin Academy read from (GET /api/academy/registrations
+  // already scopes by session role, returning only this Coffee Owner's own
+  // registrations). No duplicate data source.
+  const { data: academyRegistrations = [], isLoading: academyRegistrationsLoading } = useAcademyRegistrations();
   const [detailPrintOrder, setDetailPrintOrder] = useState<PrintOrderWithParties | null>(null);
   const [detailBaristaMission, setDetailBaristaMission] = useState<BaristaMission | null>(null);
   const [detailBaristaRequest, setDetailBaristaRequest] = useState<BaristaRequest | null>(null);
@@ -202,6 +210,12 @@ function AccountPanel({
   const baristaMissionStatusMeta: Record<string, { label: string; color: string }> = {
     UPCOMING: { label: "À venir", color: "bg-blue-100 text-blue-800 border-blue-200" },
     ACTIVE: { label: "En cours", color: "bg-purple-100 text-purple-800 border-purple-200" },
+    COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
+    CANCELLED: { label: "Annulée", color: "bg-gray-100 text-gray-700 border-gray-200" },
+  };
+  const academyRegistrationStatusMeta: Record<string, { label: string; color: string }> = {
+    PENDING: { label: "En attente", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+    CONFIRMED: { label: "Confirmée", color: "bg-indigo-100 text-indigo-800 border-indigo-200" },
     COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
     CANCELLED: { label: "Annulée", color: "bg-gray-100 text-gray-700 border-gray-200" },
   };
@@ -769,19 +783,59 @@ function AccountPanel({
               )
             )}
 
-            {/* ── Marketing / Barista Academy — intentionally empty until those
-                modules exist; real empty state, no fake data. ── */}
+            {/* ── Marketing — intentionally empty until that module exists;
+                real empty state, no fake data. ── */}
             {reservationsService === "marketing" && (
               <div className={`text-center py-16 ${textMuted}`}>
                 <Megaphone className="w-10 h-10 mx-auto mb-3 opacity-20" />
                 <p className={`font-medium text-sm ${textPrimary}`}>Aucune activité Marketing pour le moment</p>
               </div>
             )}
+
+            {/* ── Barista Academy — real registrations from the same
+                /api/academy/registrations endpoint the Academy account's own
+                Inscriptions tab and Admin Academy read from. ── */}
             {reservationsService === "barista_academy" && (
-              <div className={`text-center py-16 ${textMuted}`}>
-                <GraduationCap className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                <p className={`font-medium text-sm ${textPrimary}`}>Aucune activité Barista Academy pour le moment</p>
-              </div>
+              academyRegistrationsLoading ? (
+                <div className="space-y-3">
+                  {[...Array(2)].map((_, i) => <div key={i} className={`h-28 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}
+                </div>
+              ) : academyRegistrations.length === 0 ? (
+                <div className={`text-center py-16 ${textMuted}`}>
+                  <GraduationCap className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune inscription Barista Academy pour le moment</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {[...academyRegistrations]
+                    .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime())
+                    .map((registration) => {
+                      const meta = academyRegistrationStatusMeta[registration.status] ?? academyRegistrationStatusMeta.PENDING;
+                      return (
+                        <div
+                          key={registration.id}
+                          className={`w-full text-left border rounded-2xl p-4 space-y-3 ${cardBg}`}
+                          data-testid={`card-reservation-academy-${registration.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className={`font-semibold text-sm truncate ${textPrimary}`}>{registration.academyName}</p>
+                              <p className={`text-xs mt-0.5 ${textMuted}`}>{registration.courseTitle} · {registration.participantCount} participant{registration.participantCount > 1 ? "s" : ""}</p>
+                            </div>
+                            <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+                          </div>
+                          <div className={`flex items-center justify-between text-xs ${textMuted}`}>
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-amber-500" />
+                              {registration.sessionStartDate ?? (registration.createdAt ? formatDate(registration.createdAt as any) : "—")}
+                            </span>
+                            <span className={`font-semibold ${textPrimary}`}>{fmt(registration.priceInCents)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )
             )}
           </div>
         )}
@@ -1581,22 +1635,23 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
 
 // ServiceId here still matches the DB's messaging-conversation `service` column
 // value ("BARISTA" — a separate, generic string enum from the ServiceKey
-// visibility gate below), which stays a single value: there's no real
-// Coffee-Owner-facing messaging flow for Barista Academy providers (see the
-// serviceRoles.BARISTA note in server/storage.ts's getEligibleContacts), so
-// this tab is — and always was — Marketplace-only in practice. Its label
-// reflects that; its VISIBILITY gate now points at the real BARISTA_MARKETPLACE
-// key instead of the retired combined "BARISTA" ServiceKey.
-const SERVICES_LIST: ServiceId[] = ["SHOP", "MAINTENANCE", "PRINT", "BARISTA", "MARKETING"];
-const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "MAINTENANCE" | "BARISTA_MARKETPLACE" | "MARKETING" | null> = {
+// visibility gate below), which stays a single value for Marketplace: there's
+// no real Coffee-Owner-facing messaging flow for Barista Academy under that
+// tag (see the serviceRoles.BARISTA note in server/storage.ts's
+// getEligibleContacts) — Academy instead gets its own "ACADEMY" tag, since it
+// now has a real registration-backed relationship of its own (see
+// serviceRoles.ACADEMY). Its VISIBILITY gate points at BARISTA_ACADEMY.
+const SERVICES_LIST: ServiceId[] = ["SHOP", "MAINTENANCE", "PRINT", "BARISTA", "ACADEMY", "MARKETING"];
+const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "MAINTENANCE" | "BARISTA_MARKETPLACE" | "BARISTA_ACADEMY" | "MARKETING" | null> = {
   SHOP: null,
   MAINTENANCE: "MAINTENANCE",
   PRINT: "PRINTING",
   BARISTA: "BARISTA_MARKETPLACE",
+  ACADEMY: "BARISTA_ACADEMY",
   MARKETING: "MARKETING",
 };
 const SERVICE_ID_LABEL: Record<ServiceId, string> = {
-  SHOP: "SHOP", MAINTENANCE: "MAINTENANCE", PRINT: "PRINT", BARISTA: "Marketplace Baristas", MARKETING: "MARKETING",
+  SHOP: "SHOP", MAINTENANCE: "MAINTENANCE", PRINT: "PRINT", BARISTA: "Marketplace Baristas", ACADEMY: "Barista Academy", MARKETING: "MARKETING",
 };
 
 // ── Messages Panel (premium dark/light — mirrors FavoritesPanel design) ───────

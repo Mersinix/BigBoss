@@ -125,6 +125,7 @@ export function AppSidebar() {
             { title: "Maintenance", url: "/admin/maintenance", icon: Wrench },
             { title: "Print", url: "/admin/print", icon: Printer },
             { title: "Barista", url: "/admin/barista", icon: Coffee },
+            { title: "Academy", url: "/admin/academy", icon: GraduationCap },
           ],
         },
         {

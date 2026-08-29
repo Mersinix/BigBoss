@@ -38,6 +38,14 @@ const BARISTA_EVENTS = [
   "barista_taxonomy_updated",
   "barista_favorite_updated",
 ];
+const ACADEMY_EVENTS = [
+  "academy_profile_updated",
+  "academy_course_updated",
+  "academy_session_updated",
+  "academy_registration_created",
+  "academy_registration_status_changed",
+  "academy_review_created",
+];
 
 function invalidateInventoryQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
@@ -291,6 +299,19 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/barista"] });
             qc.invalidateQueries({ queryKey: ["/api/barista-favorites"] });
             if (event === "barista_request_created" || event === "barista_request_status_changed") {
+              invalidateMessagingQueries(qc);
+            }
+          }
+          if (ACADEMY_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/academy/courses"] });
+            qc.invalidateQueries({ queryKey: ["/api/academy/my/courses"] });
+            qc.invalidateQueries({ queryKey: ["/api/academy/sessions"] });
+            qc.invalidateQueries({ queryKey: ["/api/academy/registrations"] });
+            qc.invalidateQueries({ queryKey: ["/api/academy/revenue"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/academy/reviews") });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/academy/profile") });
+            qc.invalidateQueries({ queryKey: ["/api/admin/academy"] });
+            if (event === "academy_registration_created" || event === "academy_registration_status_changed") {
               invalidateMessagingQueries(qc);
             }
           }

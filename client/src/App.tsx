@@ -73,6 +73,16 @@ import PrinterCategories from "@/pages/printer/categories";
 import PrinterSettings from "@/pages/printer/settings";
 import MarketingDashboard from "@/pages/marketing/dashboard";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
+import BaristaAcademyCoursesPage from "@/pages/barista-academy/courses";
+import BaristaAcademyRegistrationsPage from "@/pages/barista-academy/registrations";
+import BaristaAcademyStudentsPage from "@/pages/barista-academy/students";
+import BaristaAcademyCalendarPage from "@/pages/barista-academy/calendar";
+import BaristaAcademyRevenuePage from "@/pages/barista-academy/revenue";
+import BaristaAcademyMessagesPage from "@/pages/barista-academy/messages";
+import BaristaAcademyReviewsPage from "@/pages/barista-academy/reviews";
+import BaristaAcademyAnalyticsPage from "@/pages/barista-academy/analytics";
+import BaristaAcademySettingsPage from "@/pages/barista-academy/settings";
+import { AcademyAccountShell } from "@/components/layout/academy-account-shell";
 import BaristaMarketplaceDashboard from "@/pages/barista-marketplace/dashboard";
 import BaristaMarketplaceProfilePage from "@/pages/barista-marketplace/profile";
 import BaristaMarketplaceRequestsPage from "@/pages/barista-marketplace/requests";
@@ -81,6 +91,7 @@ import BaristaMarketplaceRevenuePage from "@/pages/barista-marketplace/revenue";
 import BaristaMarketplaceSettingsPage from "@/pages/barista-marketplace/settings";
 import BaristaMarketplaceMessagesPage from "@/pages/barista-marketplace/messages";
 import BaristaMarketplaceReviewsPage from "@/pages/barista-marketplace/reviews";
+import BaristaMarketplaceAcademyPage from "@/pages/barista-marketplace/academy";
 import { BaristaAccountShell } from "@/components/layout/barista-account-shell";
 import MaintenanceDashboard from "@/pages/maintenance/dashboard";
 import MaintenancePage from "@/pages/cafe/maintenance/maintenance-page";
@@ -105,6 +116,7 @@ import AdminReviewsPage from "@/pages/admin/reviews-page";
 import AdminMaintenancePage from "@/pages/admin/maintenance-page";
 import AdminPrintPage from "@/pages/admin/print-page";
 import AdminBaristaPage from "@/pages/admin/barista-page";
+import AdminAcademyPage from "@/pages/admin/academy-page";
 import ComingSoonPage from "@/pages/coming-soon-page";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -241,6 +253,9 @@ function HomeRoute() {
   if (user.role === "CAFE_OWNER") return <Redirect to="/products" />;
   if (user.role === "MAINTENANCE") return <MaintenanceDashboard />;
   if (user.role === "BARISTA_MARKETPLACE") return <Redirect to="/barista-marketplace" />;
+  // Academy account switcher (same pattern as Barista Marketplace) replaces the
+  // generic sidebar for Barista Academy — see components/layout/academy-account-shell.tsx.
+  if (user.role === "BARISTA_ACADEMY") return <Redirect to="/barista-academy" />;
   // Driver account switcher (like Barista Marketplace) replaces the generic sidebar for
   // Drivers — see components/layout/driver-account-shell.tsx.
   if (user.role === "DRIVER") return <Redirect to="/driver" />;
@@ -390,9 +405,37 @@ function Router() {
         {() => (<DashboardLayout><ProtectedRoute component={MarketingDashboard} allowedRoles={["MARKETING"]} requireApproved /></DashboardLayout>)}
       </Route>
 
-      {/* ── Barista Academy routes ── */}
-      <Route path="/barista-academy/:rest*">
-        {() => (<DashboardLayout><ProtectedRoute component={BaristaAcademyDashboard} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></DashboardLayout>)}
+      {/* ── Barista Academy routes — top switcher shell instead of the sidebar, same
+          organizational pattern as Barista Marketplace, see academy-account-shell.tsx ── */}
+      <Route path="/barista-academy">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyDashboard} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/courses">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyCoursesPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/registrations">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyRegistrationsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/students">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyStudentsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/calendar">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyCalendarPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/revenue">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyRevenuePage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/messages">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyMessagesPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/reviews">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyReviewsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/analytics">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyAnalyticsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/settings">
+        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademySettingsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
       </Route>
 
       {/* ── Barista Marketplace routes — top switcher shell instead of the sidebar, see barista-account-shell.tsx ── */}
@@ -416,6 +459,9 @@ function Router() {
       </Route>
       <Route path="/barista-marketplace/reviews">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceReviewsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
+      </Route>
+      <Route path="/barista-marketplace/academy">
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceAcademyPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/settings">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceSettingsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
@@ -567,9 +613,14 @@ function Router() {
         {() => (<DashboardLayout><ProtectedRoute component={AdminPrintPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
       {/* Admin Barista management — mirrors Admin PRINT's own route/layout pattern.
-          Marketplace Baristas only; Barista Academy (/academy) is not represented here. */}
+          Marketplace Baristas only — Barista Academy is its own separate Admin
+          service below (/admin/academy), matching the /barista vs /academy split. */}
       <Route path="/admin/barista">
         {() => (<DashboardLayout><ProtectedRoute component={AdminBaristaPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      {/* Admin Academy management — same architecture as Admin Barista/PRINT above. */}
+      <Route path="/admin/academy">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminAcademyPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
       <Route path="/admin/messages">
         {() => (<DashboardLayout><ProtectedRoute component={AdminMessagesPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}

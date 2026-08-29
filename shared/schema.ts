@@ -494,6 +494,7 @@ export const messagingSettings = pgTable("messaging_settings", {
   supplierMessagingEnabled: boolean("supplier_messaging_enabled").notNull().default(true),
   maintenanceMessagingEnabled: boolean("maintenance_messaging_enabled").notNull().default(true),
   baristaMessagingEnabled: boolean("barista_messaging_enabled").notNull().default(true),
+  academyMessagingEnabled: boolean("academy_messaging_enabled").notNull().default(true),
   broadcastsEnabled: boolean("broadcasts_enabled").notNull().default(true),
   gracePeriodMinutes: integer("grace_period_minutes").notNull().default(30),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -561,7 +562,7 @@ export const supplierStores = pgTable("supplier_stores", {
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id"), // nullable for product-level reviews
-  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT'
+  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT' | 'ACADEMY'
   cafeId: integer("cafe_id").notNull(),
   productId: integer("product_id"),
   listingId: integer("listing_id"),
@@ -572,6 +573,8 @@ export const supplierProductReviews = pgTable("supplier_product_reviews", {
   baristaMissionId: integer("barista_mission_id"), // completed mission this review is for
   printerId: integer("printer_id"), // for PRINT reviews
   printOrderId: integer("print_order_id"), // completed print order this review is for
+  academyUserId: integer("academy_user_id"), // for ACADEMY reviews
+  academyRegistrationId: integer("academy_registration_id"), // completed registration this review is for
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   cafeName: text("cafe_name").notNull().default(''),
@@ -735,6 +738,153 @@ export type BaristaRequestWithParties = BaristaMarketplaceRequest & {
 export type BaristaMissionWithParties = BaristaMarketplaceMission & {
   cafeOwnerName: string;
   baristaName: string;
+};
+
+// ── Barista Academy ──────────────────────────────────────────────────────────
+// Mirrors the Barista Marketplace pattern above field-for-field, adapted to
+// Academy semantics: a public academy profile, a course ("formation") catalog
+// each academy manages itself, sessions (dates) per course for the calendar,
+// and a registration ("inscription") lifecycle instead of a request/mission
+// pair — an Academy course can run multiple times, so "book a spot" maps
+// naturally to one registration record rather than Barista's request→mission
+// two-step. Reviews reuse supplierProductReviews (reviewType='ACADEMY') exactly
+// like BARISTA_MARKETPLACE and PRINT did — see the new academyUserId/
+// academyRegistrationId columns added to that table below.
+
+export const academyCourseLevelEnum = pgEnum('academy_course_level', ['BEGINNER', 'ADVANCED', 'EXPERT']);
+export const academyRegistrationStatusEnum = pgEnum('academy_registration_status', ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED']);
+export const academySessionStatusEnum = pgEnum('academy_session_status', ['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED']);
+
+// Public academy profile — one per BARISTA_ACADEMY user. users.name/phone/
+// profileImageUrl/locationAddress remain canonical for identity/contact/
+// location (mirrors baristaMarketplaceProfiles' own note); this table only
+// stores fields the generic users table has no place for.
+export const academyProfiles = pgTable("academy_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  description: text("description").notNull().default(""),
+  marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// A "formation" — one course an academy offers. Publication (isPublished) is
+// the academy's own publish/unpublish control; the public /academy marketplace
+// only ever lists published courses from approved academies (mirrors
+// baristaMarketplaceProfiles.marketplaceVisible + users.status='approved').
+export const academyCourses = pgTable("academy_courses", {
+  id: serial("id").primaryKey(),
+  academyUserId: integer("academy_user_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  level: academyCourseLevelEnum("level").notNull().default('BEGINNER'),
+  priceInCents: integer("price_in_cents").notNull().default(0),
+  duration: text("duration").notNull().default(""), // free text, e.g. "3 jours" — matches baristaMarketplaceRequests.missionType's free-text convention
+  hasCertification: boolean("has_certification").notNull().default(false),
+  category: text("category").notNull().default(""), // free text course type, e.g. "Espresso", "Management"
+  location: text("location").notNull().default(""),
+  trainingMode: text("training_mode").notNull().default("Présentiel"), // free text: Présentiel / En ligne / Hybride
+  capacity: integer("capacity"), // nullable = unlimited
+  imageUrl: text("image_url"),
+  isPublished: boolean("is_published").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  academyUserIdx: index("academy_courses_academy_user_idx").on(table.academyUserId),
+}));
+
+// A scheduled date/run of a course — what the Calendrier tab and registration
+// session picker are built on. capacity is nullable and falls back to the
+// parent course's capacity when unset.
+export const academyCourseSessions = pgTable("academy_course_sessions", {
+  id: serial("id").primaryKey(),
+  courseId: integer("course_id").notNull(),
+  academyUserId: integer("academy_user_id").notNull(), // denormalized for admin/query convenience, mirrors baristaMarketplaceMissions' own denorm of cafeOwnerId/baristaUserId
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date"),
+  capacity: integer("capacity"),
+  status: academySessionStatusEnum("status").notNull().default('UPCOMING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  courseIdx: index("academy_sessions_course_idx").on(table.courseId),
+  academyUserIdx: index("academy_sessions_academy_user_idx").on(table.academyUserId),
+}));
+
+// A Coffee Owner's registration ("inscription") for a course, optionally tied
+// to a specific session. One row is the single synchronized source of truth
+// read by the Academy account, the Coffee Owner and Admin alike — no separate
+// copies (mirrors baristaMarketplaceRequests' own "one row, three readers" note).
+// participantType distinguishes who registered — a Coffee Owner (registering
+// their business, possibly for multiple employees) or a Barista Marketplace
+// professional (registering themselves, for their own professional
+// development via Espace Barista Marketplace → Academy). cafeOwnerId is kept
+// as the literal column name for backward compatibility with every existing
+// query/route/UI built against it, but semantically now holds "the
+// registrant's user id" regardless of participantType — never rename it
+// without updating every reference across storage.ts/routes.ts and both
+// account UIs. This is the SAME registration model both participant types
+// share (one row, one source of truth for Academy/Admin/the registrant) —
+// deliberately not a second table, per the "reuse the existing model" rule.
+export const academyRegistrationParticipantTypeEnum = pgEnum('academy_registration_participant_type', ['CAFE_OWNER', 'BARISTA_MARKETPLACE']);
+
+export const academyRegistrations = pgTable("academy_registrations", {
+  id: serial("id").primaryKey(),
+  courseId: integer("course_id").notNull(),
+  sessionId: integer("session_id"), // nullable — a course may not require picking a specific session
+  academyUserId: integer("academy_user_id").notNull(), // denormalized, mirrors academyCourseSessions.academyUserId
+  cafeOwnerId: integer("cafe_owner_id").notNull(), // the registrant's user id — see participantType note above
+  participantType: academyRegistrationParticipantTypeEnum("participant_type").notNull().default('CAFE_OWNER'),
+  participantCount: integer("participant_count").notNull().default(1),
+  participants: text("participants").array().notNull().default([]), // optional participant names, entered by the registrant
+  priceInCents: integer("price_in_cents").notNull().default(0), // snapshot: course.priceInCents × participantCount at registration time
+  status: academyRegistrationStatusEnum("status").notNull().default('PENDING'),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at").defaultNow(),
+  confirmedAt: timestamp("confirmed_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  completedAt: timestamp("completed_at"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  courseIdx: index("academy_registrations_course_idx").on(table.courseId),
+  academyUserIdx: index("academy_registrations_academy_user_idx").on(table.academyUserId),
+  cafeOwnerIdx: index("academy_registrations_cafe_owner_idx").on(table.cafeOwnerId),
+  statusIdx: index("academy_registrations_status_idx").on(table.status),
+}));
+
+export type AcademyCourseLevel = 'BEGINNER' | 'ADVANCED' | 'EXPERT';
+export type AcademyRegistrationStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+export type AcademySessionStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+
+export type AcademyProfile = typeof academyProfiles.$inferSelect;
+export type InsertAcademyProfile = typeof academyProfiles.$inferInsert;
+export type AcademyCourse = typeof academyCourses.$inferSelect;
+export type InsertAcademyCourse = typeof academyCourses.$inferInsert;
+export type AcademyCourseSession = typeof academyCourseSessions.$inferSelect;
+export type InsertAcademyCourseSession = typeof academyCourseSessions.$inferInsert;
+export type AcademyRegistration = typeof academyRegistrations.$inferSelect;
+export type InsertAcademyRegistration = typeof academyRegistrations.$inferInsert;
+
+// Public marketplace card — what /academy actually renders. Rating/reviewCount
+// are always computed live from supplierProductReviews (mirrors
+// BaristaMarketplaceCard's own approach) rather than stored.
+export type AcademyCourseCard = AcademyCourse & {
+  academyName: string;
+  academyLocation: string;
+  rating: number; // 0-50, i.e. x10
+  reviewCount: number;
+};
+
+export type AcademyRegistrationWithParties = AcademyRegistration & {
+  cafeOwnerName: string;
+  academyName: string;
+  courseTitle: string;
+  sessionStartDate: string | null;
+  sessionEndDate: string | null;
+};
+
+export type AcademyCourseSessionWithCourse = AcademyCourseSession & {
+  courseTitle: string;
+  registeredCount: number;
 };
 
 // ── Packs ────────────────────────────────────────────────────────────────────
@@ -1243,6 +1393,11 @@ export const insertBaristaSkillSchema = createInsertSchema(baristaSkills).omit({
 export const insertBaristaMarketplaceProfileSchema = createInsertSchema(baristaMarketplaceProfiles).omit({ id: true, updatedAt: true });
 export const insertBaristaMarketplaceRequestSchema = createInsertSchema(baristaMarketplaceRequests).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertBaristaMarketplaceFavoriteSchema = createInsertSchema(baristaMarketplaceFavorites).omit({ id: true, createdAt: true });
+
+export const insertAcademyProfileSchema = createInsertSchema(academyProfiles).omit({ id: true, updatedAt: true });
+export const insertAcademyCourseSchema = createInsertSchema(academyCourses).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAcademyCourseSessionSchema = createInsertSchema(academyCourseSessions).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAcademyRegistrationSchema = createInsertSchema(academyRegistrations).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });

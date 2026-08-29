@@ -15,7 +15,7 @@ import { Download, Eye, EyeOff, Megaphone, MessageSquare, Trash2, Users } from "
 import { MessagesPanel } from "@/components/messages/messages-panel";
 import type { ConversationSummary, EligibleContact } from "@shared/schema";
 
-const MESSAGE_SERVICES = ["SHOP", "MAINTENANCE", "BARISTA", "PRINT", "MARKETING"] as const;
+const MESSAGE_SERVICES = ["SHOP", "MAINTENANCE", "BARISTA", "ACADEMY", "PRINT", "MARKETING"] as const;
 
 const ROLE_COLOR: Record<string, string> = {
   ADMIN:            "bg-red-100 text-red-700",

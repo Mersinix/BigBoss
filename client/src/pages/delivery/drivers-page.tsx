@@ -9,6 +9,7 @@ export default function DeliveryCompanyDriversPage() {
         subtitle="Gérez les chauffeurs de votre entreprise."
         useDrivers={useDeliveryCompanyDrivers}
         useCreateDriver={useCreateDriver}
+        ownerType="DELIVERY_COMPANY"
       />
     </div>
   );

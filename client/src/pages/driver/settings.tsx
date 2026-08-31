@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { User, Bell, Lock, LogOut } from "lucide-react";
+import { User, Bell, Lock, LogOut, Truck } from "lucide-react";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMyVehicle, useCreateMyVehicle, useUpdateMyVehicle, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 
 // "Paramètres" — reuses the app's existing generic profile-update endpoint (PATCH
 // /api/auth/me/profile, already used by Supplier/Maintenance settings pages) rather than
@@ -29,6 +31,37 @@ export default function DriverSettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [notifs, setNotifs] = useState({ deliveries: true, messages: true, assignments: true, payments: true });
+
+  // Vehicle — synchronized with the same vehicles row a Delivery Company/Supplier manages
+  // (see use-delivery-ecosystem.ts). If the operator hasn't assigned one yet, the Driver can
+  // self-register their own under their own operator (no vehicle if they have neither).
+  const { data: vehicle, isLoading: vehicleLoading } = useMyVehicle();
+  const createVehicle = useCreateMyVehicle();
+  const updateVehicle = useUpdateMyVehicle();
+  const [vType, setVType] = useState<DeliveryVehicleType>("MOTO");
+  const [vBrand, setVBrand] = useState("");
+  const [vModel, setVModel] = useState("");
+  const [vPlate, setVPlate] = useState("");
+  const [vAc, setVAc] = useState(false);
+
+  useEffect(() => {
+    if (!vehicle) return;
+    setVType(vehicle.type);
+    setVBrand(vehicle.brand);
+    setVModel(vehicle.model);
+    setVPlate(vehicle.plateNumber);
+    setVAc(vehicle.hasAirConditioning);
+  }, [vehicle?.updatedAt]);
+
+  const canHaveVehicle = !!(user as any)?.deliveryCompanyId || !!(user as any)?.supplierId;
+  const saveVehicle = () => {
+    const data = { type: vType, brand: vBrand, model: vModel, plateNumber: vPlate, hasAirConditioning: vAc };
+    const mutation = vehicle ? updateVehicle : createVehicle;
+    mutation.mutate(data, {
+      onSuccess: () => toast({ title: "Véhicule enregistré" }),
+      onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+    });
+  };
 
   const saveProfile = async () => {
     setSaving(true);
@@ -94,6 +127,51 @@ export default function DriverSettingsPage() {
         <Button className="mt-4" onClick={saveProfile} disabled={saving} data-testid="button-save-driver-profile">
           {saving ? "Enregistrement…" : "Enregistrer"}
         </Button>
+      </SectionCard>
+
+      <SectionCard title="Véhicule" icon={Truck}>
+        {!canHaveVehicle ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">Votre compte n'est rattaché à aucune entreprise de livraison ni fournisseur — impossible d'enregistrer un véhicule.</p>
+        ) : vehicleLoading ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">Chargement…</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Type de véhicule</Label>
+                <Select value={vType} onValueChange={(v) => setVType(v as DeliveryVehicleType)}>
+                  <SelectTrigger data-testid="select-driver-vehicle-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(VEHICLE_TYPE_LABELS) as DeliveryVehicleType[]).map((t) => (
+                      <SelectItem key={t} value={t}>{VEHICLE_TYPE_LABELS[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Marque</Label>
+                <Input value={vBrand} onChange={(e) => setVBrand(e.target.value)} placeholder="Honda, Peugeot…" data-testid="input-driver-vehicle-brand" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Modèle</Label>
+                <Input value={vModel} onChange={(e) => setVModel(e.target.value)} data-testid="input-driver-vehicle-model" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Matricule</Label>
+                <Input value={vPlate} onChange={(e) => setVPlate(e.target.value)} placeholder="123 TUN 4567" data-testid="input-driver-vehicle-plate" />
+              </div>
+              {(vType === "CAR" || vType === "VAN" || vType === "TRUCK") && (
+                <div className="flex items-center justify-between sm:col-span-2 py-1">
+                  <span className="text-sm text-foreground">Avec climatiseur</span>
+                  <Switch checked={vAc} onCheckedChange={setVAc} data-testid="switch-driver-vehicle-ac" />
+                </div>
+              )}
+            </div>
+            <Button className="mt-4" onClick={saveVehicle} disabled={createVehicle.isPending || updateVehicle.isPending} data-testid="button-save-driver-vehicle">
+              {createVehicle.isPending || updateVehicle.isPending ? "Enregistrement…" : vehicle ? "Mettre à jour le véhicule" : "Enregistrer le véhicule"}
+            </Button>
+          </>
+        )}
       </SectionCard>
 
       <SectionCard title="Notifications" icon={Bell}>

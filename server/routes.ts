@@ -2547,6 +2547,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Change the assigned driver before pickup (Part 32/33) — reuses the delivery status
+  // machine as-is; storage.reassignDriver refuses once PICKED_UP or later.
+  app.patch('/api/deliveries/:id/reassign', requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      if (!['DELIVERY_COMPANY', 'SUPPLIER'].includes(user.role)) return res.status(403).json({ message: 'Forbidden' });
+      const deliveryId = parseInt(req.params.id);
+      const { driverId } = z.object({ driverId: z.number() }).parse(req.body);
+      const previous = await storage.getDelivery(deliveryId);
+      const updated = await storage.reassignDriver(deliveryId, { id: user.id, role: user.role }, driverId);
+      const recipients = [driverId, user.id, ...(previous?.driver ? [previous.driver.id] : [])];
+      broadcastToUsers(recipients, 'delivery_assigned', { deliveryId, status: updated.status, driverId });
+      broadcast('delivery_status_changed', { deliveryId, status: updated.status });
+      if (previous) {
+        broadcastToUsers([previous.cafeId, previous.supplierId], 'delivery_status_changed', {
+          deliveryId, status: updated.status, orderId: previous.orderId, subOrderId: previous.subOrderId,
+        });
+      }
+      res.json(storage.redactDeliveryCodes(updated, user.role));
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(409).json({ message: err.message ?? 'Unable to reassign driver' });
+    }
+  });
+
   app.patch('/api/deliveries/:id/status', requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
@@ -2600,6 +2626,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     email: z.string().email(),
     password: z.string().min(6),
     phone: z.string().optional().nullable(),
+    isWhatsapp: z.boolean().optional(),
+    profileImageUrl: z.string().optional().nullable(),
   });
 
   app.get('/api/delivery-company/drivers', requireApprovedDeliveryCompany, async (req: any, res) => {
@@ -2637,6 +2665,250 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: err.message ?? 'Error creating driver' });
+    }
+  });
+
+  // ── Vehicles — Delivery Company / Supplier fleet, and Driver self-service. One model,
+  // reused by every owner kind (see shared/schema.ts vehicles). ──────────────────────────
+
+  const vehicleInputSchema = z.object({
+    type: z.enum(['BICYCLE', 'MOTO', 'CAR', 'VAN', 'TRUCK', 'OTHER']).optional(),
+    brand: z.string().max(80).optional(),
+    model: z.string().max(80).optional(),
+    plateNumber: z.string().max(40).optional(),
+    hasAirConditioning: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+  });
+
+  function vehicleOwnerRoutes(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', requireOwner: any) {
+    app.get(`/api/${ownerType === 'DELIVERY_COMPANY' ? 'delivery-company' : 'supplier'}/vehicles`, requireOwner, async (req: any, res) => {
+      try {
+        const ownerId = ownerType === 'DELIVERY_COMPANY' ? req.deliveryCompany.id : req.session.userId;
+        res.json(await storage.getVehiclesForOwner(ownerType, ownerId));
+      } catch (err: any) { res.status(500).json({ message: err.message ?? 'Error fetching vehicles' }); }
+    });
+
+    app.post(`/api/${ownerType === 'DELIVERY_COMPANY' ? 'delivery-company' : 'supplier'}/vehicles`, requireOwner, async (req: any, res) => {
+      try {
+        const ownerId = ownerType === 'DELIVERY_COMPANY' ? req.deliveryCompany.id : req.session.userId;
+        const data = vehicleInputSchema.parse(req.body);
+        const vehicle = await storage.createVehicle(ownerType, ownerId, data as any);
+        broadcast('vehicle_updated', { ownerType, ownerId, vehicleId: vehicle.id, kind: 'created' });
+        res.status(201).json(vehicle);
+      } catch (err: any) {
+        if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+        res.status(400).json({ message: err.message ?? 'Error creating vehicle' });
+      }
+    });
+
+    app.patch(`/api/${ownerType === 'DELIVERY_COMPANY' ? 'delivery-company' : 'supplier'}/vehicles/:id`, requireOwner, async (req: any, res) => {
+      try {
+        const ownerId = ownerType === 'DELIVERY_COMPANY' ? req.deliveryCompany.id : req.session.userId;
+        const data = vehicleInputSchema.parse(req.body);
+        const vehicle = await storage.updateVehicle(Number(req.params.id), ownerType, ownerId, data as any);
+        if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
+        broadcast('vehicle_updated', { ownerType, ownerId, vehicleId: vehicle.id, kind: 'updated' });
+        res.json(vehicle);
+      } catch (err: any) {
+        if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+        res.status(400).json({ message: err.message ?? 'Error updating vehicle' });
+      }
+    });
+
+    app.delete(`/api/${ownerType === 'DELIVERY_COMPANY' ? 'delivery-company' : 'supplier'}/vehicles/:id`, requireOwner, async (req: any, res) => {
+      try {
+        const ownerId = ownerType === 'DELIVERY_COMPANY' ? req.deliveryCompany.id : req.session.userId;
+        await storage.deleteVehicle(Number(req.params.id), ownerType, ownerId);
+        broadcast('vehicle_updated', { ownerType, ownerId, vehicleId: Number(req.params.id), kind: 'deleted' });
+        res.json({ ok: true });
+      } catch (err: any) { res.status(500).json({ message: err.message ?? 'Error deleting vehicle' }); }
+    });
+
+    app.patch(`/api/${ownerType === 'DELIVERY_COMPANY' ? 'delivery-company' : 'supplier'}/vehicles/:id/assign`, requireOwner, async (req: any, res) => {
+      try {
+        const ownerId = ownerType === 'DELIVERY_COMPANY' ? req.deliveryCompany.id : req.session.userId;
+        const { driverId } = z.object({ driverId: z.number().int().positive().nullable() }).parse(req.body);
+        const vehicle = await storage.assignVehicleToDriver(Number(req.params.id), ownerType, ownerId, driverId);
+        broadcastToUsers(driverId ? [driverId] : [], 'vehicle_updated', { ownerType, ownerId, vehicleId: vehicle.id, kind: 'assigned' });
+        broadcast('vehicle_updated', { ownerType, ownerId, vehicleId: vehicle.id, kind: 'assigned' });
+        res.json(vehicle);
+      } catch (err: any) {
+        res.status(400).json({ message: err.message ?? 'Error assigning vehicle' });
+      }
+    });
+  }
+  vehicleOwnerRoutes('DELIVERY_COMPANY', requireApprovedDeliveryCompany);
+  vehicleOwnerRoutes('SUPPLIER', requireApprovedSupplier);
+
+  // Driver self-service: read their own assigned vehicle, or self-register one under their
+  // own operator if none is assigned yet (Espace Chauffeur → Paramètres — see task Part 11).
+  app.get('/api/driver/vehicle', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DRIVER') return res.status(403).json({ message: 'Driver access required' });
+    try { res.json((await storage.getVehicleForDriver(user.id)) ?? null); }
+    catch { res.status(500).json({ message: 'Failed to load vehicle' }); }
+  });
+
+  app.post('/api/driver/vehicle', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DRIVER') return res.status(403).json({ message: 'Driver access required' });
+    if (!user.deliveryCompanyId && !user.supplierId) return res.status(400).json({ message: 'Driver has no operator account to register a vehicle under' });
+    try {
+      const existing = await storage.getVehicleForDriver(user.id);
+      if (existing) return res.status(400).json({ message: 'You already have a vehicle — edit it instead of creating a new one' });
+      const data = vehicleInputSchema.parse(req.body);
+      const ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER' = user.deliveryCompanyId ? 'DELIVERY_COMPANY' : 'SUPPLIER';
+      const ownerId = user.deliveryCompanyId ?? user.supplierId!;
+      const vehicle = await storage.createVehicle(ownerType, ownerId, data as any);
+      const assigned = await storage.assignVehicleToDriver(vehicle.id, ownerType, ownerId, user.id);
+      broadcast('vehicle_updated', { ownerType, ownerId, vehicleId: vehicle.id, kind: 'created' });
+      res.status(201).json(assigned);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error registering vehicle' });
+    }
+  });
+
+  app.patch('/api/driver/vehicle', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DRIVER') return res.status(403).json({ message: 'Driver access required' });
+    try {
+      const existing = await storage.getVehicleForDriver(user.id);
+      if (!existing) return res.status(404).json({ message: 'No vehicle to update' });
+      const data = vehicleInputSchema.parse(req.body);
+      const vehicle = await storage.updateVehicle(existing.id, existing.ownerType, existing.ownerId, data as any);
+      broadcast('vehicle_updated', { ownerType: existing.ownerType, ownerId: existing.ownerId, vehicleId: existing.id, kind: 'updated' });
+      res.json(vehicle);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error updating vehicle' });
+    }
+  });
+
+  // ── Admin — Delivery Pricing configuration (System Management) ──────────────────────
+
+  app.get('/api/admin/delivery-pricing', requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getDeliveryPricingSettings()); }
+    catch { res.status(500).json({ message: 'Failed to load delivery pricing settings' }); }
+  });
+
+  app.patch('/api/admin/delivery-pricing', requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        vehiclePricing: z.record(z.string(), z.object({ pricePerKmCents: z.number().int().min(0), minFeeCents: z.number().int().min(0) })).optional(),
+        defaultVehicleType: z.enum(['BICYCLE', 'MOTO', 'CAR', 'VAN', 'TRUCK', 'OTHER']).optional(),
+        surgeMultiplierPermille: z.number().int().min(0).max(10000).optional(),
+        surgeLabel: z.string().max(200).optional(),
+        cafeOwnerSharePercent: z.number().int().min(0).max(100).optional(),
+      }).parse(req.body);
+      const settings = await storage.updateDeliveryPricingSettings(body as any);
+      broadcast('delivery_pricing_updated', {});
+      res.json(settings);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: 'Failed to update delivery pricing settings' });
+    }
+  });
+
+  // ── Driver reviews (reuses supplierProductReviews, reviewType='DRIVER') ─────────────
+
+  app.get('/api/driver/reviews/:driverId', async (req, res) => {
+    try { res.json(await storage.getDriverReviews(Number(req.params.driverId))); }
+    catch { res.status(500).json({ message: 'Failed to load driver reviews' }); }
+  });
+
+  app.get('/api/driver/reviews/delivery/:deliveryId', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+    const delivery = await storage.getDelivery(Number(req.params.deliveryId), user.role);
+    if (!delivery) return res.status(404).json({ message: 'Delivery not found' });
+    if (user.role !== 'CAFE_OWNER' || delivery.cafeId !== user.id) return res.status(403).json({ message: 'Forbidden' });
+    res.json((await storage.getDriverReviewForDelivery(delivery.id, user.id)) ?? null);
+  });
+
+  app.post('/api/driver/reviews', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'CAFE_OWNER' || user.status !== 'approved') {
+      return res.status(403).json({ message: 'Only approved Coffee Owners can submit reviews' });
+    }
+    try {
+      const body = z.object({
+        driverId: z.number().int().positive(),
+        deliveryId: z.number().int().positive(),
+        rating: z.number().int().min(1).max(5),
+        comment: z.string().max(2000).optional(),
+      }).parse(req.body);
+      const delivery = await storage.getDelivery(body.deliveryId, 'ADMIN');
+      if (!delivery || delivery.cafeId !== user.id || delivery.driverId !== body.driverId || delivery.status !== 'DELIVERED') {
+        return res.status(400).json({ message: 'Reviews are only available after a completed delivery' });
+      }
+      const result = await storage.upsertDriverReview({ ...body, cafeId: user.id, cafeName: user.name, cafeOwnerName: user.name });
+      broadcast('driver_review_created', { driverId: body.driverId, deliveryId: body.deliveryId });
+      res.status(result.isUpdate ? 200 : 201).json(result.review);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Unable to submit review' });
+    }
+  });
+
+  // ── Delivery Opportunities — Delivery Company publishes, eligible Drivers apply ────────
+
+  app.get('/api/delivery-company/opportunities', requireApprovedDeliveryCompany, async (req: any, res) => {
+    try { res.json(await storage.getOpportunitiesForCompany(req.deliveryCompany.id)); }
+    catch { res.status(500).json({ message: 'Failed to load opportunities' }); }
+  });
+
+  app.post('/api/delivery-company/opportunities', requireApprovedDeliveryCompany, async (req: any, res) => {
+    try {
+      const body = z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().max(2000).optional(),
+        area: z.string().max(200).optional(),
+        vehicleTypeRequired: z.enum(['BICYCLE', 'MOTO', 'CAR', 'VAN', 'TRUCK', 'OTHER']).optional().nullable(),
+        startAt: z.string().optional().nullable(),
+        durationHours: z.number().int().min(1).max(999).optional().nullable(),
+        compensationCents: z.number().int().min(0).optional().nullable(),
+      }).parse(req.body);
+      const opportunity = await storage.createOpportunity(req.deliveryCompany.id, {
+        ...body,
+        startAt: body.startAt ? new Date(body.startAt) : null,
+      } as any);
+      broadcast('delivery_opportunity_updated', { deliveryCompanyId: req.deliveryCompany.id, kind: 'created' });
+      res.status(201).json(opportunity);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error creating opportunity' });
+    }
+  });
+
+  app.patch('/api/delivery-company/opportunities/:id/close', requireApprovedDeliveryCompany, async (req: any, res) => {
+    try {
+      const { status } = z.object({ status: z.enum(['CLOSED', 'CANCELLED']) }).parse(req.body);
+      const opportunity = await storage.closeOpportunity(Number(req.params.id), req.deliveryCompany.id, status);
+      broadcast('delivery_opportunity_updated', { deliveryCompanyId: req.deliveryCompany.id, kind: 'closed' });
+      res.json(opportunity);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error closing opportunity' });
+    }
+  });
+
+  app.get('/api/driver/opportunities', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DRIVER') return res.status(403).json({ message: 'Driver access required' });
+    try { res.json(await storage.getOpportunitiesForDriver(user.id)); }
+    catch { res.status(500).json({ message: 'Failed to load opportunities' }); }
+  });
+
+  app.patch('/api/driver/opportunities/:id/accept', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DRIVER') return res.status(403).json({ message: 'Driver access required' });
+    try {
+      const opportunity = await storage.acceptOpportunity(Number(req.params.id), user.id);
+      broadcast('delivery_opportunity_updated', { deliveryCompanyId: opportunity.deliveryCompanyId, kind: 'filled' });
+      res.json(opportunity);
+    } catch (err: any) {
+      res.status(409).json({ message: err.message ?? 'Unable to accept opportunity' });
     }
   });
 

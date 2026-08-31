@@ -45,6 +45,7 @@ import DeliveryDashboard from "@/pages/delivery/dashboard";
 import AvailableDeliveriesPage from "@/pages/delivery/available-deliveries-page";
 import MyDeliveriesPage from "@/pages/delivery/my-deliveries-page";
 import DeliveryCompanyDriversPage from "@/pages/delivery/drivers-page";
+import DeliveryVehiclesPage from "@/pages/delivery/vehicles-page";
 import DriverDeliveriesPage from "@/pages/delivery/driver-deliveries-page";
 import SupplierMyDeliveriesPage from "@/pages/supplier/my-deliveries-page";
 import SupplierDeliveryDriversPage from "@/pages/supplier/delivery-drivers-page";
@@ -635,6 +636,9 @@ function Router() {
       </Route>
       <Route path="/delivery/drivers">
         {() => (<DashboardLayout><ProtectedRoute component={DriversRoute} allowedRoles={["DELIVERY_COMPANY", "SUPPLIER"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/delivery/vehicles">
+        {() => (<DashboardLayout><ProtectedRoute component={DeliveryVehiclesPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       {/* ── Driver routes ── */}

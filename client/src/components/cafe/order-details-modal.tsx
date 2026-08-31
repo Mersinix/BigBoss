@@ -6,8 +6,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
-  Sun, Moon, X, User, FileText, Wallet,
+  Sun, Moon, X, User, FileText, Wallet, Star,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { useDriverReviewForDelivery, useCreateDriverReview } from "@/hooks/use-delivery-ecosystem";
 import { useThemeStore } from "@/store/theme-store";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -69,6 +71,66 @@ const ORDER_PROGRESS_STAGES = [
   { status: "IN_DELIVERY", label: "Out for Delivery", icon: Truck },
   { status: "DELIVERED", label: "Delivered", icon: CheckCircle2 },
 ] as const;
+
+// ── Driver review (task Part 31) — one review per completed delivery, reusing the
+// existing supplierProductReviews table (reviewType='DRIVER') exactly like every other
+// review surface in this app (Academy/Barista/Print/Maintenance). Synchronizes with
+// Driver → Avis, Driver rating, Delivery Company Driver detail, and Admin automatically —
+// same live-computed rating pattern, nothing stored twice. ──────────────────────────────
+
+function DriverReviewButton({ driverId, deliveryId, isDark }: { driverId: number; deliveryId: number; isDark: boolean }) {
+  const { toast } = useToast();
+  const { data: existing, isLoading } = useDriverReviewForDelivery(deliveryId);
+  const createReview = useCreateDriverReview();
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+
+  if (isLoading) return null;
+
+  if (existing) {
+    return (
+      <div className="flex items-center gap-1 text-xs mt-1.5 text-amber-500">
+        {"★".repeat(existing.rating)}{"☆".repeat(5 - existing.rating)}
+        <span className={isDark ? "text-gray-400" : "text-gray-500"}>Avis envoyé</span>
+      </div>
+    );
+  }
+
+  const submit = () => {
+    createReview.mutate({ driverId, deliveryId, rating, comment: comment.trim() || undefined }, {
+      onSuccess: () => { toast({ title: "Avis envoyé" }); setOpen(false); },
+      onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+    });
+  };
+
+  return (
+    <>
+      <Button size="sm" variant="outline" className="h-7 text-xs mt-1.5 gap-1" onClick={() => setOpen(true)} data-testid={`button-review-driver-${deliveryId}`}>
+        <Star className="w-3 h-3" /> Donner un avis
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>Évaluer le chauffeur</DialogTitle>
+          <div className="flex items-center gap-1 py-2">
+            {[1, 2, 3, 4, 5].map((v) => (
+              <button key={v} type="button" onClick={() => setRating(v)} data-testid={`star-driver-${v}`}>
+                <Star className={`w-6 h-6 ${v <= rating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+              </button>
+            ))}
+          </div>
+          <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Votre avis (optionnel)" data-testid="input-driver-review-comment" />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
+            <Button onClick={submit} disabled={createReview.isPending} data-testid="button-submit-driver-review">
+              {createReview.isPending ? "Envoi…" : "Envoyer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 // ── Design system (mirrors pack-quick-view-modal) ─────────────────────────────
 
@@ -281,7 +343,12 @@ export default function OrderDetailsModal({
   const deliveryMethod = (order as any).deliveryMethod ?? "DELIVERY_SERVICE";
   const paymentMethod = (order as any).paymentMethod ?? "CASH_ON_DELIVERY";
   const paymentStatus = (order as any).paymentStatus ?? "PENDING";
-  const deliveryFee = Number((order as any).deliveryFee ?? 0);
+  // Real computed fee (see storage.computeDeliveryFee) — sums this Coffee Owner's own share
+  // across every sub-order delivery on this order (a Shop order can span multiple suppliers,
+  // each with its own delivery). orders.deliveryFee itself stays 0/legacy (see
+  // shared/schema.ts deliveries.deliveryFee comment) — the real value lives per-delivery.
+  const deliveryFee = subOrders.reduce((sum, sub) => sum + (sub.delivery?.cafeOwnerFeeShareCents ?? 0), 0);
+  const anyFreeDelivery = subOrders.some((sub) => sub.delivery?.freeDeliveryApplied);
   const deliveryLabel = deliveryMethod === "SELF_PICKUP" ? "Self Pickup" : "Delivery Service";
   const paymentLabel = paymentMethod === "CASH_ON_DELIVERY"
     ? "Cash on Delivery"
@@ -506,7 +573,7 @@ export default function OrderDetailsModal({
                       )}
                     </>
                   )}
-                  <p className={`text-xs mt-1 ${t.textMuted}`}>Delivery fee: {fmt(deliveryFee)}</p>
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>Delivery fee: {anyFreeDelivery && deliveryFee === 0 ? <span className="text-green-500 font-medium">Free</span> : fmt(deliveryFee)}</p>
                   {order.delivery?.name && <p className={`text-xs mt-1 ${t.textMuted}`}>Driver: {order.delivery.name}</p>}
                 </div>
                 <div className={`rounded-xl border p-3 ${t.cardBg}`}>
@@ -743,6 +810,9 @@ export default function OrderDetailsModal({
                               dropoffCode={["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(sub.delivery.status) ? sub.delivery.dropoffCode : null}
                               t={t}
                             />
+                            {sub.delivery.status === "DELIVERED" && sub.delivery.driver && (
+                              <DriverReviewButton driverId={sub.delivery.driver.id} deliveryId={sub.delivery.id} isDark={t.dk} />
+                            )}
                           </div>
                         </div>
                       )}

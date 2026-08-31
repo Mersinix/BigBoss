@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useDeliveries, useDispatchDelivery } from "@/hooks/use-deliveries";
+import { useDeliveries, useDispatchDelivery, useSupplierDrivers } from "@/hooks/use-deliveries";
+import { useReassignDriver } from "@/hooks/use-delivery-ecosystem";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,41 @@ function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDetails; 
   );
 }
 
+// Change the assigned driver before pickup (task Part 32) — only meaningful once a driver
+// is already assigned (deliveryMode SUPPLIER, status ASSIGNED); refuses once PICKED_UP or
+// later (storage.reassignDriver enforces this server-side too).
+function ReassignDialog({ delivery, onClose }: { delivery: DeliveryWithDetails; onClose: () => void }) {
+  const { data: drivers = [] } = useSupplierDrivers();
+  const reassignDriver = useReassignDriver();
+  const { toast } = useToast();
+  const [selected, setSelected] = useState("");
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Changer le chauffeur assigné</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">Commande #{delivery.orderId} · actuellement {delivery.driver?.name ?? "—"}</p>
+        <Select value={selected} onValueChange={setSelected}>
+          <SelectTrigger data-testid="select-reassign-driver"><SelectValue placeholder="Choisir un nouveau chauffeur" /></SelectTrigger>
+          <SelectContent>
+            {drivers.filter((d) => d.id !== delivery.driverId).map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button
+          className="w-full" disabled={!selected || reassignDriver.isPending}
+          onClick={() => reassignDriver.mutate({ deliveryId: delivery.id, driverId: Number(selected) }, {
+            onSuccess: () => { toast({ title: "Chauffeur réassigné" }); onClose(); },
+            onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+          })}
+          data-testid="button-confirm-reassign"
+        >
+          Réassigner
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function SupplierDeliveryStatusPage() {
   const { data: deliveries = [], isLoading } = useDeliveries();
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -93,6 +129,7 @@ export default function SupplierDeliveryStatusPage() {
   const [search, setSearch] = useState("");
   const [dispatchTarget, setDispatchTarget] = useState<DeliveryWithDetails | null>(null);
   const [viewTarget, setViewTarget] = useState<DeliveryWithDetails | null>(null);
+  const [reassignTarget, setReassignTarget] = useState<DeliveryWithDetails | null>(null);
 
   const filtered = useMemo(() => {
     return deliveries.filter((d) => {
@@ -218,6 +255,9 @@ export default function SupplierDeliveryStatusPage() {
                         {d.status === "PENDING" && (
                           <Button size="sm" onClick={() => setDispatchTarget(d)}>Dispatcher</Button>
                         )}
+                        {d.status === "ASSIGNED" && d.deliveryMode === "SUPPLIER" && (
+                          <Button size="sm" variant="outline" onClick={() => setReassignTarget(d)} data-testid={`button-reassign-status-${d.id}`}>Changer de chauffeur</Button>
+                        )}
                         <Button size="sm" variant="ghost" onClick={() => setViewTarget(d)}>Détails</Button>
                       </div>
                     </div>
@@ -228,6 +268,8 @@ export default function SupplierDeliveryStatusPage() {
           })}
         </div>
       )}
+
+      {reassignTarget && <ReassignDialog delivery={reassignTarget} onClose={() => setReassignTarget(null)} />}
 
       {dispatchTarget && <DispatchDialog delivery={dispatchTarget} onClose={() => setDispatchTarget(null)} />}
 

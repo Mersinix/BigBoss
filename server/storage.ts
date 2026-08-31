@@ -17,10 +17,12 @@ import {
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
   orderReturns,
-  deliveries,
+  deliveries, vehicles, deliveryPricingSettings, deliveryOpportunities,
   passwordResetCodes,
   type OrderReturn, type InsertOrderReturn,
   type Delivery, type DeliveryStatus, type DeliveryMode, type DeliveryWithDetails, type GeoLocation,
+  type Vehicle, type InsertVehicle, type DeliveryVehicleType,
+  type DeliveryPricingSettings, type DeliveryOpportunity, type DeliveryOpportunityStatus,
   type LandingConfig, type Prospect, type InsertProspect, type ProspectStats,
   type ConversationSummary, type ConversationDetail, type ConversationMessageRow, type EligibleContact,
   type InsertUser, type User,
@@ -791,6 +793,9 @@ export class DatabaseStorage implements IStorage {
             // Redacted to the one role that should read each — see storage.redactDeliveryCodes.
             pickupCode: filters?.viewerRole === 'SUPPLIER' || filters?.viewerRole === 'ADMIN' || filters?.viewerRole === 'SUPER_ADMIN' ? delivery.pickupCode : null,
             dropoffCode: filters?.viewerRole === 'CAFE_OWNER' || filters?.viewerRole === 'ADMIN' || filters?.viewerRole === 'SUPER_ADMIN' ? delivery.dropoffCode : null,
+            deliveryFee: delivery.deliveryFee,
+            cafeOwnerFeeShareCents: delivery.cafeOwnerFeeShareCents,
+            freeDeliveryApplied: delivery.freeDeliveryApplied,
           } : null,
         };
       });
@@ -1177,6 +1182,17 @@ export class DatabaseStorage implements IStorage {
     };
     const destinationAddress = (order.deliveryAddress as GeoLocation | null) ?? undefined;
 
+    // Provisional fee estimate — no driver assigned yet, so only the supplier→cafe leg is
+    // known. Recomputed (and frozen) with the real driver→supplier leg + real vehicle type
+    // at assignDriver() — see the fee engine note there.
+    const estimate = await this.computeDeliveryFee({
+      supplierId: subOrder.supplierId,
+      cafeId: order.cafeId,
+      subtotalCents: subOrder.subtotal ?? 0,
+      supplierLocation: supplier ? { lat: supplier.locationLat, lng: supplier.locationLng } : null,
+      cafeLocation: destinationAddress ? { lat: destinationAddress.lat, lng: destinationAddress.lng } : null,
+    });
+
     const [created] = await client.insert(deliveries).values({
       subOrderId,
       orderId: order.id,
@@ -1187,10 +1203,16 @@ export class DatabaseStorage implements IStorage {
       status: 'PENDING',
       pickupAddress,
       destinationAddress,
-      // Snapshot orders.deliveryFee as-is (always 0 today — no fee algorithm exists yet;
-      // see SHOP_DELIVERY_SYNCHRONIZATION_ANALYSIS.md §6/§9). Preserves whatever value the
-      // order already carries rather than inventing pricing.
-      deliveryFee: order.deliveryFee ?? 0,
+      // Real, computed fee (see storage.computeDeliveryFee) — provisional until a driver is
+      // assigned. Replaces the old "always snapshot orders.deliveryFee, which is always 0"
+      // placeholder now that a real pricing engine exists.
+      deliveryFee: estimate.feeCents,
+      cafeOwnerFeeShareCents: estimate.cafeOwnerFeeShareCents,
+      supplierFeeShareCents: estimate.supplierFeeShareCents,
+      freeDeliveryApplied: estimate.freeDeliveryApplied,
+      vehicleType: estimate.vehicleType,
+      distanceKm: estimate.distanceKm.toFixed(2),
+      surgeMultiplierPermille: estimate.surgeMultiplierPermille,
       // Two-way confirmation codes — generated once, never regenerated. See shared/schema.ts
       // deliveries.pickupCode/dropoffCode comment.
       pickupCode: this.generateDeliveryConfirmationCode(),
@@ -1598,11 +1620,98 @@ export class DatabaseStorage implements IStorage {
       ownerCondition = eq(deliveries.deliveryCompanyId, actingUser.id);
     }
 
+    // Final fee — real driver→supplier leg now known, plus the driver's actually-assigned
+    // vehicle type (falls back to the pricing config's default if the driver has none yet,
+    // same as the creation-time estimate). Frozen here: updateDeliveryStatus never touches
+    // these fields again, so a later Admin pricing change never rewrites this delivery's
+    // already-locked financial value (see shared/schema.ts deliveries.feeFinalizedAt).
+    const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, delivery.subOrderId));
+    const assignedVehicle = await this.getVehicleForDriver(driverId);
+    const finalFee = await this.computeDeliveryFee({
+      supplierId: delivery.supplierId,
+      cafeId: delivery.cafeId,
+      subtotalCents: subOrder?.subtotal ?? 0,
+      supplierLocation: { lat: delivery.pickupAddress?.lat, lng: delivery.pickupAddress?.lng },
+      cafeLocation: { lat: delivery.destinationAddress?.lat, lng: delivery.destinationAddress?.lng },
+      driverLocation: { lat: driver.locationLat, lng: driver.locationLng },
+      vehicleType: assignedVehicle?.type ?? null,
+    });
+
     const [updated] = await db.update(deliveries)
-      .set({ status: 'ASSIGNED', driverId, assignedAt: new Date() })
+      .set({
+        status: 'ASSIGNED', driverId, assignedAt: new Date(),
+        deliveryFee: finalFee.feeCents,
+        cafeOwnerFeeShareCents: finalFee.cafeOwnerFeeShareCents,
+        supplierFeeShareCents: finalFee.supplierFeeShareCents,
+        freeDeliveryApplied: finalFee.freeDeliveryApplied,
+        vehicleId: assignedVehicle?.id ?? null,
+        vehicleType: finalFee.vehicleType,
+        distanceKm: finalFee.distanceKm.toFixed(2),
+        surgeMultiplierPermille: finalFee.surgeMultiplierPermille,
+        feeFinalizedAt: new Date(),
+      })
       .where(and(eq(deliveries.id, deliveryId), eq(deliveries.status, 'ACCEPTED'), ownerCondition))
       .returning();
     if (!updated) throw new Error('Delivery is not assignable (not accepted by you, or already assigned)');
+    return updated;
+  }
+
+  /**
+   * Change the assigned driver before the delivery has physically started — same ownership
+   * rules as assignDriver, but for a delivery already in ASSIGNED (has a driver, not yet
+   * picked up). Deliberately does NOT touch ASSIGNED deliveries any other way and refuses
+   * outright once PICKED_UP/IN_TRANSIT/DELIVERED — reassigning mid-handoff would corrupt the
+   * pickup-code flow (the code was already read aloud to the original driver) and the
+   * physical chain of custody. See task Part 32/33.
+   */
+  async reassignDriver(deliveryId: number, actingUser: { id: number; role: string }, newDriverId: number): Promise<Delivery> {
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
+    if (!delivery) throw new Error('Delivery not found');
+    if (delivery.status !== 'ASSIGNED') {
+      throw new Error(delivery.status === 'ACCEPTED' ? 'Use the initial driver assignment for this delivery' : 'This delivery can no longer be reassigned — it has already been collected');
+    }
+    const [driver] = await db.select().from(users).where(eq(users.id, newDriverId));
+    if (!driver || driver.role !== 'DRIVER') throw new Error('Invalid driver');
+
+    let ownerCondition;
+    if (delivery.deliveryMode === 'SUPPLIER') {
+      if (actingUser.role !== 'SUPPLIER' || delivery.supplierId !== actingUser.id) throw new Error('Only the operating supplier can reassign this delivery');
+      if (driver.supplierId !== actingUser.id) throw new Error('Driver does not belong to your supplier account');
+      ownerCondition = eq(deliveries.supplierId, actingUser.id);
+    } else {
+      if (actingUser.role !== 'DELIVERY_COMPANY' || delivery.deliveryCompanyId !== actingUser.id) throw new Error('Only the accepting delivery company can reassign this delivery');
+      if (driver.deliveryCompanyId !== actingUser.id) throw new Error('Driver does not belong to your company');
+      ownerCondition = eq(deliveries.deliveryCompanyId, actingUser.id);
+    }
+
+    const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, delivery.subOrderId));
+    const assignedVehicle = await this.getVehicleForDriver(newDriverId);
+    const finalFee = await this.computeDeliveryFee({
+      supplierId: delivery.supplierId,
+      cafeId: delivery.cafeId,
+      subtotalCents: subOrder?.subtotal ?? 0,
+      supplierLocation: { lat: delivery.pickupAddress?.lat, lng: delivery.pickupAddress?.lng },
+      cafeLocation: { lat: delivery.destinationAddress?.lat, lng: delivery.destinationAddress?.lng },
+      driverLocation: { lat: driver.locationLat, lng: driver.locationLng },
+      vehicleType: assignedVehicle?.type ?? null,
+    });
+
+    const [updated] = await db.update(deliveries)
+      .set({
+        driverId: newDriverId, assignedAt: new Date(),
+        deliveryFee: finalFee.feeCents,
+        cafeOwnerFeeShareCents: finalFee.cafeOwnerFeeShareCents,
+        supplierFeeShareCents: finalFee.supplierFeeShareCents,
+        freeDeliveryApplied: finalFee.freeDeliveryApplied,
+        vehicleId: assignedVehicle?.id ?? null,
+        vehicleType: finalFee.vehicleType,
+        distanceKm: finalFee.distanceKm.toFixed(2),
+        surgeMultiplierPermille: finalFee.surgeMultiplierPermille,
+        feeFinalizedAt: new Date(),
+      })
+      .where(and(eq(deliveries.id, deliveryId), eq(deliveries.status, 'ASSIGNED'), ownerCondition))
+      .returning();
+    if (!updated) throw new Error('Delivery could not be reassigned — it may have changed state concurrently');
     return updated;
   }
 
@@ -1697,7 +1806,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users).where(and(eq(users.role, 'DRIVER'), ownerCondition));
   }
 
-  async createDriverForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number, data: { name: string; email: string; password: string; phone?: string | null }): Promise<User> {
+  /** Same core Driver account information architecture regardless of who creates the
+   *  account — Admin's Add User (name/email/password/phone/isWhatsapp/profileImageUrl),
+   *  a Delivery Company's Add Driver, or a Supplier's Add Driver all produce the exact same
+   *  shape of DRIVER user row. Never a different/inconsistent Driver schema per creator. */
+  async createDriverForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number, data: { name: string; email: string; password: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null }): Promise<User> {
     const existing = await this.getUserByEmail(data.email);
     if (existing) throw new Error('Email already exists');
     return this.createUser({
@@ -1707,6 +1820,8 @@ export class DatabaseStorage implements IStorage {
       role: 'DRIVER',
       status: 'approved', // vetted by the owning operator, not the platform admin
       phone: data.phone ?? null,
+      isWhatsapp: !!data.isWhatsapp,
+      profileImageUrl: data.profileImageUrl?.trim() || null,
       deliveryCompanyId: ownerType === 'DELIVERY_COMPANY' ? ownerId : null,
       supplierId: ownerType === 'SUPPLIER' ? ownerId : null,
     } as any);
@@ -1722,6 +1837,285 @@ export class DatabaseStorage implements IStorage {
   async getApprovedDeliveryCompanyIds(): Promise<number[]> {
     const rows = await db.select({ id: users.id }).from(users).where(and(eq(users.role, 'DELIVERY_COMPANY'), eq(users.status, 'approved')));
     return rows.map((r) => r.id);
+  }
+
+  // ── Delivery Pricing Engine ─────────────────────────────────────────────────
+  // Centralized, Admin-configured — see shared/schema.ts deliveryPricingSettings.
+  // Same getOrCreate-singleton pattern as getMessagingSettings.
+
+  async getDeliveryPricingSettings(): Promise<DeliveryPricingSettings> {
+    const [row] = await db.select().from(deliveryPricingSettings).limit(1);
+    if (row) return row;
+    // Seeded from the exact example figures given when this pricing model was specified
+    // (Moto 0.5 DT/km, min 3 DT; Car 1 DT/km, min 5 DT) so the system is immediately
+    // functional instead of silently showing 0.00 again — Admin can change every value.
+    const seed = {
+      BICYCLE: { pricePerKmCents: 30, minFeeCents: 150 },
+      MOTO: { pricePerKmCents: 50, minFeeCents: 300 },
+      CAR: { pricePerKmCents: 100, minFeeCents: 500 },
+      VAN: { pricePerKmCents: 150, minFeeCents: 800 },
+      TRUCK: { pricePerKmCents: 250, minFeeCents: 1500 },
+      OTHER: { pricePerKmCents: 50, minFeeCents: 300 },
+    };
+    const [created] = await db.insert(deliveryPricingSettings).values({ vehiclePricing: seed as any }).onConflictDoNothing().returning();
+    if (created) return created;
+    const [existing] = await db.select().from(deliveryPricingSettings).limit(1);
+    return existing!;
+  }
+
+  async updateDeliveryPricingSettings(updates: Partial<{
+    vehiclePricing: Record<DeliveryVehicleType, { pricePerKmCents: number; minFeeCents: number }>;
+    defaultVehicleType: DeliveryVehicleType;
+    surgeMultiplierPermille: number;
+    surgeLabel: string;
+    cafeOwnerSharePercent: number;
+  }>): Promise<DeliveryPricingSettings> {
+    const current = await this.getDeliveryPricingSettings();
+    const next = {
+      ...updates,
+      cafeOwnerSharePercent: updates.cafeOwnerSharePercent !== undefined
+        ? Math.max(0, Math.min(100, Math.round(updates.cafeOwnerSharePercent)))
+        : undefined,
+      surgeMultiplierPermille: updates.surgeMultiplierPermille !== undefined
+        ? Math.max(0, Math.round(updates.surgeMultiplierPermille))
+        : undefined,
+    };
+    const [updated] = await db.update(deliveryPricingSettings)
+      .set({ ...next, updatedAt: new Date() } as any)
+      .where(eq(deliveryPricingSettings.id, current.id))
+      .returning();
+    return updated;
+  }
+
+  private haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+    const R = 6371;
+    const toRad = (v: number) => (v * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+  }
+
+  private parseLatLng(loc?: { lat?: string | null; lng?: string | null } | null): { lat: number; lng: number } | null {
+    if (!loc?.lat || !loc?.lng) return null;
+    const lat = Number(loc.lat);
+    const lng = Number(loc.lng);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return { lat, lng };
+  }
+
+  /** True if `supplierId` has an ACTIVE Free Shipping promotion that applies to this
+   *  sub-order right now (subtotal ≥ freeShippingMinAmount, cafe eligible, within date
+   *  range) — reuses the existing promotions table/targeting, no second promo engine. */
+  private async hasApplicableFreeDeliveryPromotion(supplierId: number, cafeId: number, subtotalCents: number): Promise<boolean> {
+    const now = new Date();
+    const rows = await db.select().from(promotions).where(and(
+      eq(promotions.supplierId, supplierId),
+      eq(promotions.type, 'FREE_SHIPPING' as any),
+      eq(promotions.status, 'ACTIVE' as any),
+    ));
+    return rows.some((p) => {
+      if (p.startDate && new Date(p.startDate) > now) return false;
+      if (p.endDate && new Date(p.endDate) < now) return false;
+      if (p.eligibleCafeIds && p.eligibleCafeIds.length > 0 && !p.eligibleCafeIds.includes(cafeId)) return false;
+      const minAmount = p.freeShippingMinAmount ?? 0;
+      return subtotalCents >= minAmount;
+    });
+  }
+
+  /**
+   * The delivery pricing engine. Distance = driver→supplier (only known once a driver is
+   * assigned — 0 before that) + supplier→cafe (known from creation). Missing coordinates
+   * safely fall back to 0 for that leg rather than fabricating a distance — the resulting
+   * fee is then whatever the minimum for the vehicle type covers, never negative, never
+   * blocked. Free-delivery: driver/company compensation (feeCents) is never reduced; only
+   * the responsibility split changes (cafeOwnerShareCents → 0, supplierShareCents → feeCents).
+   */
+  private async computeDeliveryFee(params: {
+    supplierId: number;
+    cafeId: number;
+    subtotalCents: number;
+    supplierLocation: { lat?: string | null; lng?: string | null } | null;
+    cafeLocation: { lat?: string | null; lng?: string | null } | null;
+    driverLocation?: { lat?: string | null; lng?: string | null } | null;
+    vehicleType?: DeliveryVehicleType | null;
+  }): Promise<{
+    feeCents: number; distanceKm: number; vehicleType: DeliveryVehicleType;
+    surgeMultiplierPermille: number; cafeOwnerFeeShareCents: number; supplierFeeShareCents: number; freeDeliveryApplied: boolean;
+  }> {
+    const settings = await this.getDeliveryPricingSettings();
+    const vehicleType = params.vehicleType ?? settings.defaultVehicleType;
+    const pricing = settings.vehiclePricing?.[vehicleType] ?? { pricePerKmCents: 0, minFeeCents: 0 };
+
+    const supplierPos = this.parseLatLng(params.supplierLocation);
+    const cafePos = this.parseLatLng(params.cafeLocation);
+    const driverPos = params.driverLocation ? this.parseLatLng(params.driverLocation) : null;
+
+    const supplierToCafeKm = supplierPos && cafePos ? this.haversineKm(supplierPos, cafePos) : 0;
+    const driverToSupplierKm = driverPos && supplierPos ? this.haversineKm(driverPos, supplierPos) : 0;
+    const distanceKm = driverToSupplierKm + supplierToCafeKm;
+
+    const rawFee = Math.round(distanceKm * pricing.pricePerKmCents * (settings.surgeMultiplierPermille / 1000));
+    const feeCents = Math.max(0, Math.max(rawFee, pricing.minFeeCents));
+
+    const freeDeliveryApplied = await this.hasApplicableFreeDeliveryPromotion(params.supplierId, params.cafeId, params.subtotalCents);
+    const cafeOwnerFeeShareCents = freeDeliveryApplied ? 0 : Math.round(feeCents * (settings.cafeOwnerSharePercent / 100));
+    const supplierFeeShareCents = feeCents - cafeOwnerFeeShareCents;
+
+    return {
+      feeCents, distanceKm, vehicleType,
+      surgeMultiplierPermille: settings.surgeMultiplierPermille,
+      cafeOwnerFeeShareCents, supplierFeeShareCents, freeDeliveryApplied,
+    };
+  }
+
+  // ── Vehicles ──────────────────────────────────────────────────────────────────
+  // One vehicle belongs to exactly one operator (Delivery Company or Supplier — same
+  // owner-kind concept as deliveries.deliveryMode) and may be assigned to at most one of
+  // that operator's own drivers at a time (DB partial-unique-index enforced).
+
+  async getVehiclesForOwner(ownerType: DeliveryMode, ownerId: number): Promise<Vehicle[]> {
+    return db.select().from(vehicles).where(and(eq(vehicles.ownerType, ownerType), eq(vehicles.ownerId, ownerId))).orderBy(desc(vehicles.createdAt));
+  }
+
+  async getVehicleForDriver(driverId: number): Promise<Vehicle | undefined> {
+    const [row] = await db.select().from(vehicles).where(eq(vehicles.assignedDriverId, driverId));
+    return row;
+  }
+
+  async createVehicle(ownerType: DeliveryMode, ownerId: number, data: Partial<InsertVehicle>): Promise<Vehicle> {
+    const { ownerType: _o, ownerId: _i, id: _id, assignedDriverId: _a, ...safe } = data as any;
+    const [created] = await db.insert(vehicles).values({ ...safe, ownerType, ownerId }).returning();
+    return created;
+  }
+
+  async updateVehicle(id: number, ownerType: DeliveryMode, ownerId: number, data: Partial<InsertVehicle>): Promise<Vehicle | undefined> {
+    const { ownerType: _o, ownerId: _i, id: _id, ...safe } = data as any;
+    const [updated] = await db.update(vehicles)
+      .set({ ...safe, updatedAt: new Date() })
+      .where(and(eq(vehicles.id, id), eq(vehicles.ownerType, ownerType), eq(vehicles.ownerId, ownerId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteVehicle(id: number, ownerType: DeliveryMode, ownerId: number): Promise<void> {
+    await db.delete(vehicles).where(and(eq(vehicles.id, id), eq(vehicles.ownerType, ownerType), eq(vehicles.ownerId, ownerId)));
+  }
+
+  /** Assigns a vehicle to one of the operator's own drivers — unassigns it from whoever had
+   *  it first (a vehicle can only be actively assigned to one driver; DB partial unique index
+   *  is the hard guarantee, this is the friendly path that avoids hitting it). */
+  async assignVehicleToDriver(vehicleId: number, ownerType: DeliveryMode, ownerId: number, driverId: number | null): Promise<Vehicle> {
+    const [vehicle] = await db.select().from(vehicles).where(and(eq(vehicles.id, vehicleId), eq(vehicles.ownerType, ownerType), eq(vehicles.ownerId, ownerId)));
+    if (!vehicle) throw new Error('Vehicle not found');
+    if (driverId != null) {
+      const [driver] = await db.select().from(users).where(eq(users.id, driverId));
+      const belongsToOwner = ownerType === 'SUPPLIER' ? driver?.supplierId === ownerId : driver?.deliveryCompanyId === ownerId;
+      if (!driver || driver.role !== 'DRIVER' || !belongsToOwner) throw new Error('Driver does not belong to this operator');
+      // Free the driver's previous vehicle, if any, before assigning the new one.
+      await db.update(vehicles).set({ assignedDriverId: null, updatedAt: new Date() }).where(eq(vehicles.assignedDriverId, driverId));
+    }
+    const [updated] = await db.update(vehicles).set({ assignedDriverId: driverId, updatedAt: new Date() }).where(eq(vehicles.id, vehicleId)).returning();
+    return updated;
+  }
+
+  // ── Driver Reviews (reuses supplierProductReviews, reviewType='DRIVER') ──────────
+
+  async getDriverReviews(driverId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.driverId as any, driverId), eq(supplierProductReviews.reviewType, 'DRIVER')))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getDriverReviewForDelivery(deliveryId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
+    const [review] = await db.select().from(supplierProductReviews).where(and(
+      eq(supplierProductReviews.deliveryId as any, deliveryId),
+      eq(supplierProductReviews.cafeId, cafeId),
+      eq(supplierProductReviews.reviewType, 'DRIVER'),
+    ));
+    return review;
+  }
+
+  private async computeDriverReviewStats(driverIds: number[]): Promise<Map<number, { rating: number; reviewCount: number }>> {
+    if (!driverIds.length) return new Map();
+    const rows = await db.select({ driverId: supplierProductReviews.driverId, rating: supplierProductReviews.rating })
+      .from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.reviewType, 'DRIVER'), inArray(supplierProductReviews.driverId as any, driverIds)));
+    const sums = new Map<number, { total: number; sum: number }>();
+    for (const row of rows) {
+      if (!row.driverId) continue;
+      const cur = sums.get(row.driverId) ?? { total: 0, sum: 0 };
+      cur.total += 1; cur.sum += row.rating;
+      sums.set(row.driverId, cur);
+    }
+    const result = new Map<number, { rating: number; reviewCount: number }>();
+    for (const [id, s] of Array.from(sums.entries())) result.set(id, { rating: Math.round((s.sum / s.total) * 10), reviewCount: s.total });
+    return result;
+  }
+
+  async upsertDriverReview(data: { driverId: number; deliveryId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string; cafeOwnerName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }> {
+    const existing = await this.getDriverReviewForDelivery(data.deliveryId, data.cafeId);
+    if (existing) {
+      const [review] = await db.update(supplierProductReviews)
+        .set({ rating: data.rating, comment: data.comment ?? null, updatedAt: new Date() } as any)
+        .where(eq(supplierProductReviews.id, existing.id))
+        .returning();
+      return { review, isUpdate: true };
+    }
+    const [review] = await db.insert(supplierProductReviews).values({
+      reviewType: 'DRIVER',
+      driverId: data.driverId,
+      deliveryId: data.deliveryId,
+      cafeId: data.cafeId,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.cafeName,
+      cafeOwnerName: data.cafeOwnerName,
+      supplierId: null, productId: null, listingId: null, packId: null, productName: null,
+    } as any).returning();
+    return { review, isUpdate: false };
+  }
+
+  // ── Delivery Opportunities (Delivery Company publishes, eligible Drivers apply) ──────
+
+  async getOpportunitiesForCompany(deliveryCompanyId: number): Promise<DeliveryOpportunity[]> {
+    return db.select().from(deliveryOpportunities).where(eq(deliveryOpportunities.deliveryCompanyId, deliveryCompanyId)).orderBy(desc(deliveryOpportunities.createdAt));
+  }
+
+  /** Eligible = OPEN opportunities from the driver's own delivery company (a driver working
+   *  under a Supplier has no delivery-company opportunities to see). */
+  async getOpportunitiesForDriver(driverId: number): Promise<DeliveryOpportunity[]> {
+    const [driver] = await db.select().from(users).where(eq(users.id, driverId));
+    if (!driver?.deliveryCompanyId) return [];
+    return db.select().from(deliveryOpportunities)
+      .where(and(eq(deliveryOpportunities.deliveryCompanyId, driver.deliveryCompanyId), eq(deliveryOpportunities.status, 'OPEN')))
+      .orderBy(desc(deliveryOpportunities.createdAt));
+  }
+
+  async createOpportunity(deliveryCompanyId: number, data: { title: string; description?: string; area?: string; vehicleTypeRequired?: DeliveryVehicleType | null; startAt?: Date | null; durationHours?: number | null; compensationCents?: number | null }): Promise<DeliveryOpportunity> {
+    const [created] = await db.insert(deliveryOpportunities).values({ ...data, deliveryCompanyId, status: 'OPEN' } as any).returning();
+    return created;
+  }
+
+  async closeOpportunity(id: number, deliveryCompanyId: number, status: 'CLOSED' | 'CANCELLED'): Promise<DeliveryOpportunity> {
+    const [updated] = await db.update(deliveryOpportunities)
+      .set({ status, updatedAt: new Date() })
+      .where(and(eq(deliveryOpportunities.id, id), eq(deliveryOpportunities.deliveryCompanyId, deliveryCompanyId), eq(deliveryOpportunities.status, 'OPEN')))
+      .returning();
+    if (!updated) throw new Error('Opportunity not found or already closed');
+    return updated;
+  }
+
+  /** Atomic — first eligible driver to accept fills it (compare-and-swap on status=OPEN). */
+  async acceptOpportunity(id: number, driverId: number): Promise<DeliveryOpportunity> {
+    const [driver] = await db.select().from(users).where(eq(users.id, driverId));
+    if (!driver?.deliveryCompanyId) throw new Error('Only drivers belonging to a delivery company can accept opportunities');
+    const [updated] = await db.update(deliveryOpportunities)
+      .set({ status: 'FILLED', filledByDriverId: driverId, filledAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(deliveryOpportunities.id, id), eq(deliveryOpportunities.deliveryCompanyId, driver.deliveryCompanyId), eq(deliveryOpportunities.status, 'OPEN')))
+      .returning();
+    if (!updated) throw new Error('This opportunity is no longer available');
+    return updated;
   }
 
   /**
@@ -7086,6 +7480,18 @@ export class DatabaseStorage implements IStorage {
 
   // ── Messaging ──────────────────────────────────────────────────────────────
 
+  /** True if `driverId` has an active (not DELIVERED/CANCELLED) delivery connecting them to
+   *  `otherId`, who must be the delivery's supplier or cafe owner (per `otherRole`). Backs
+   *  Driver ↔ Supplier / Driver ↔ Coffee Owner messaging eligibility. */
+  private async hasActiveDeliveryRelationship(driverId: number, otherId: number, otherRole: string): Promise<boolean> {
+    const rows = await db.select({ status: deliveries.status }).from(deliveries).where(and(
+      eq(deliveries.driverId, driverId),
+      otherRole === "SUPPLIER" ? eq(deliveries.supplierId, otherId) : eq(deliveries.cafeId, otherId),
+    ));
+    const activeStatuses = new Set(["ASSIGNED", "PICKED_UP", "IN_TRANSIT"]);
+    return rows.some((r) => activeStatuses.has(r.status));
+  }
+
   private async hasEligibleMessagingRelationship(userA: number, userB: number, service: string): Promise<boolean> {
     const people = await db.select({ id: users.id, role: users.role })
       .from(users)
@@ -7114,6 +7520,17 @@ export class DatabaseStorage implements IStorage {
         .where(and(eq(subOrders.supplierId, supplierId), eq(orders.cafeId, cafeId)));
       const activeStatuses = new Set(["PENDING", "CONFIRMED", "PREPARING", "READY", "IN_DELIVERY"]);
       return [...directOrders, ...supplierSubOrders].some(order => activeStatuses.has(order.status));
+    }
+
+    // Driver ↔ Supplier / Driver ↔ Coffee Owner — reuses the SHOP service tag (same
+    // conversation ecosystem as the Supplier↔Coffee Owner order chat above) scoped to an
+    // active (not yet DELIVERED/CANCELLED) delivery connecting them. Backs the Driver
+    // Livraisons map's Message button (task Part 4) — never an unrelated conversation.
+    if (service === "SHOP" && roleA === "DRIVER" && (roleB === "SUPPLIER" || roleB === "CAFE_OWNER")) {
+      return this.hasActiveDeliveryRelationship(userA, userB, roleB);
+    }
+    if (service === "SHOP" && roleB === "DRIVER" && (roleA === "SUPPLIER" || roleA === "CAFE_OWNER")) {
+      return this.hasActiveDeliveryRelationship(userB, userA, roleA);
     }
 
     if (service === "MAINTENANCE" && ((roleA === "MAINTENANCE" && roleB === "CAFE_OWNER") || (roleB === "MAINTENANCE" && roleA === "CAFE_OWNER"))) {
@@ -7580,6 +7997,15 @@ export class DatabaseStorage implements IStorage {
       const allCafes = await db.select().from(users)
         .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
       for (const c of allCafes) contactUserIds.add(c.id);
+      // A Driver additionally needs the Supplier of whichever delivery is actively assigned
+      // to them — the Livraisons map's Message button (task Part 4) targets exactly this
+      // pair, scoped by the real assignment rather than "every supplier on the platform".
+      if (me.role === 'DRIVER') {
+        const ownDeliveries = await db.select({ supplierId: deliveries.supplierId, cafeId: deliveries.cafeId })
+          .from(deliveries)
+          .where(and(eq(deliveries.driverId, userId), inArray(deliveries.status, ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'])));
+        for (const d of ownDeliveries) { contactUserIds.add(d.supplierId); contactUserIds.add(d.cafeId); }
+      }
     } else if (me.role === 'MAINTENANCE') {
       const allCafes = await db.select().from(users)
         .where(and(eq(users.role, 'CAFE_OWNER' as any), eq(users.status, 'approved')));
@@ -7621,7 +8047,11 @@ export class DatabaseStorage implements IStorage {
         (me.role === "SUPPLIER" && candidate.role === "CAFE_OWNER") ||
         (me.role === "CAFE_OWNER" && candidate.role === "SUPPLIER") ||
         (me.role === "MAINTENANCE" && candidate.role === "CAFE_OWNER") ||
-        (me.role === "CAFE_OWNER" && candidate.role === "MAINTENANCE");
+        (me.role === "CAFE_OWNER" && candidate.role === "MAINTENANCE") ||
+        // Driver ↔ Supplier / Driver ↔ Coffee Owner must be scoped to an actual active
+        // delivery (task Part 4/15/25 — "do not allow unrelated conversations"), unlike the
+        // always-eligible "all approved cafes" fallback the DRIVER branch above also adds.
+        (me.role === "DRIVER" && (candidate.role === "SUPPLIER" || candidate.role === "CAFE_OWNER"));
       if (!restrictedPair || await this.hasEligibleMessagingRelationship(userId, candidate.id, relationshipService)) {
         eligibleIds.add(candidate.id);
       }

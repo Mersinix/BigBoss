@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap } from "lucide-react";
+import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
@@ -457,6 +458,148 @@ function GlobalCurrencySection() {
   );
 }
 
+// ── Delivery Pricing configuration ───────────────────────────────────────────
+// One centralized section per task requirement ("Do not scatter configuration
+// across unrelated Admin pages") — everything the fee engine in
+// server/storage.ts computeDeliveryFee() reads lives here. Vehicle price/km +
+// minimum fee, the active surge multiplier, and the default Coffee Owner/
+// Supplier fee split. See shared/schema.ts deliveryPricingSettings.
+
+const VEHICLE_TYPES: DeliveryVehicleType[] = ["BICYCLE", "MOTO", "CAR", "VAN", "TRUCK", "OTHER"];
+
+function DeliveryPricingSection() {
+  const { toast } = useToast();
+  const { data: settings, isLoading } = useDeliveryPricingSettings();
+  const update = useUpdateDeliveryPricingSettings();
+  const [local, setLocal] = useState<typeof settings | null>(null);
+
+  useEffect(() => { if (settings) setLocal(settings); }, [settings]);
+
+  const value = local ?? settings;
+  if (isLoading || !value) {
+    return <Card><CardContent className="pt-6"><Skeleton className="h-40 w-full" /></CardContent></Card>;
+  }
+
+  const saveVehicle = (type: DeliveryVehicleType, field: "pricePerKmCents" | "minFeeCents", dt: string) => {
+    const cents = Math.max(0, Math.round(parseFloat(dt || "0") * 100));
+    const nextPricing = { ...value.vehiclePricing, [type]: { ...value.vehiclePricing[type], [field]: cents } };
+    setLocal({ ...value, vehiclePricing: nextPricing });
+    update.mutate({ vehiclePricing: nextPricing }, {
+      onSuccess: () => toast({ title: "Tarification mise à jour" }),
+      onError: (e: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: e?.message }),
+    });
+  };
+
+  const saveField = (field: "defaultVehicleType" | "surgeMultiplierPermille" | "surgeLabel" | "cafeOwnerSharePercent", val: any) => {
+    setLocal({ ...value, [field]: val });
+    update.mutate({ [field]: val } as any, {
+      onSuccess: () => toast({ title: "Configuration mise à jour" }),
+      onError: (e: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: e?.message }),
+    });
+  };
+
+  return (
+    <Card data-testid="card-delivery-pricing">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-indigo-500/10 rounded-lg p-2.5"><Truck className="w-5 h-5 text-indigo-600" /></div>
+          <div>
+            <CardTitle className="text-base">Tarification des livraisons</CardTitle>
+            <CardDescription className="pt-1 text-sm">
+              Prix/km et frais minimum par type de véhicule, multiplicateur actif, et répartition par défaut du frais de livraison.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-5">
+        <div>
+          <SectionLabel>Tarification par véhicule</SectionLabel>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm mt-2">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground text-xs">
+                  <th className="p-2">Véhicule</th>
+                  <th className="p-2">Prix / km</th>
+                  <th className="p-2">Frais minimum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {VEHICLE_TYPES.map((type) => (
+                  <tr key={type} className="border-b last:border-0" data-testid={`row-vehicle-pricing-${type}`}>
+                    <td className="p-2 font-medium">{VEHICLE_TYPE_LABELS[type]}</td>
+                    <td className="p-2">
+                      <Input
+                        type="number" min={0} step="0.1" className="w-28 h-8"
+                        defaultValue={(value.vehiclePricing[type]?.pricePerKmCents ?? 0) / 100}
+                        onBlur={(e) => saveVehicle(type, "pricePerKmCents", e.target.value)}
+                        data-testid={`input-price-per-km-${type}`}
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="number" min={0} step="0.1" className="w-28 h-8"
+                        defaultValue={(value.vehiclePricing[type]?.minFeeCents ?? 0) / 100}
+                        onBlur={(e) => saveVehicle(type, "minFeeCents", e.target.value)}
+                        data-testid={`input-min-fee-${type}`}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Montants en DT. Enregistrement automatique en quittant le champ.</p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-border/50">
+          <div>
+            <SectionLabel>Véhicule par défaut (avant assignation d'un chauffeur)</SectionLabel>
+            <Select value={value.defaultVehicleType} onValueChange={(v) => saveField("defaultVehicleType", v)}>
+              <SelectTrigger className="mt-1.5" data-testid="select-default-vehicle"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {VEHICLE_TYPES.map((t) => <SelectItem key={t} value={t}>{VEHICLE_TYPE_LABELS[t]}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <SectionLabel>Répartition Coffee Owner (%) — le reste est à la charge du fournisseur</SectionLabel>
+            <Input
+              type="number" min={0} max={100} className="mt-1.5"
+              defaultValue={value.cafeOwnerSharePercent}
+              onBlur={(e) => saveField("cafeOwnerSharePercent", Math.max(0, Math.min(100, Math.round(parseFloat(e.target.value || "0")))))}
+              data-testid="input-cafe-owner-share"
+            />
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-border/50">
+          <div>
+            <SectionLabel><span className="inline-flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" />Multiplicateur actif (×)</span></SectionLabel>
+            <Input
+              type="number" min={0} step="0.1" className="mt-1.5"
+              defaultValue={value.surgeMultiplierPermille / 1000}
+              onBlur={(e) => saveField("surgeMultiplierPermille", Math.max(0, Math.round(parseFloat(e.target.value || "1") * 1000)))}
+              data-testid="input-surge-multiplier"
+            />
+          </div>
+          <div>
+            <SectionLabel>Motif / étiquette (optionnel)</SectionLabel>
+            <Input
+              className="mt-1.5" placeholder="ex : Pluie forte, forte chaleur…"
+              defaultValue={value.surgeLabel}
+              onBlur={(e) => saveField("surgeLabel", e.target.value)}
+              data-testid="input-surge-label"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Formule appliquée à chaque livraison : distance (chauffeur→fournisseur + fournisseur→café) × prix/km du véhicule × multiplicateur, avec un plancher au frais minimum du véhicule. Les livraisons déjà terminées conservent leur montant historique — un changement ici n'affecte que les nouvelles livraisons et les assignations à venir.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SystemManagementPage() {
@@ -565,6 +708,9 @@ export default function SystemManagementPage() {
 
       {/* ── Messages System ── */}
       <MessagesSystemSection />
+
+      {/* ── Delivery Pricing ── */}
+      <DeliveryPricingSection />
 
       {/* ── Landing Page Config ── */}
       <LandingConfigSection />

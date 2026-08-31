@@ -23,6 +23,7 @@ const INVENTORY_EVENTS = ["inventory_updated"];
 const PROMOTION_EVENTS = ["promotion_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "suborder_items_cancelled", "order_deleted"];
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
+const DELIVERY_ECOSYSTEM_EVENTS = ["vehicle_updated", "delivery_pricing_updated", "driver_review_created", "delivery_opportunity_updated"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
 const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated"];
@@ -251,6 +252,15 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
             // Delivery status changes propagate into sub-order/order aggregates.
             qc.invalidateQueries({ queryKey: ["/api/orders"] });
+          }
+          if (DELIVERY_ECOSYSTEM_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/vehicles") });
+            qc.invalidateQueries({ queryKey: ["/api/driver/vehicle"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/delivery-pricing"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/driver/reviews") });
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/opportunities"] });
+            qc.invalidateQueries({ queryKey: ["/api/driver/opportunities"] });
           }
           if (MESSAGING_EVENTS.includes(event)) {
             invalidateMessagingQueries(qc);

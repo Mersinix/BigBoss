@@ -19,6 +19,10 @@ export const deliveryStatusEnum = pgEnum('delivery_status', [
 // Who operates the delivery. Null while PENDING (not yet dispatched by the supplier — see
 // deliveries.deliveryMode below); set once the supplier dispatches it.
 export const deliveryModeEnum = pgEnum('delivery_mode', ['DELIVERY_COMPANY', 'SUPPLIER']);
+// Declared here (ahead of the deliveries table below, which snapshots a vehicleType) rather
+// than alongside the rest of the delivery-pricing-engine block further down — see that block
+// for the vehicles/deliveryPricingSettings tables this enum is shared by.
+export const deliveryVehicleTypeEnum = pgEnum('delivery_vehicle_type', ['BICYCLE', 'MOTO', 'CAR', 'VAN', 'TRUCK', 'OTHER']);
 export const listingVisibilityEnum = pgEnum('listing_visibility', ['VISIBLE', 'HIDDEN']);
 export const userAccountStatusEnum = pgEnum('user_account_status', ['pending', 'approved', 'rejected']);
 // The combined 'BARISTA' value is retired at the application level (the
@@ -317,10 +321,30 @@ export const deliveries = pgTable("deliveries", {
   // never rewrite the pickup/destination of a delivery that is already in progress or history.
   pickupAddress: jsonb("pickup_address").$type<GeoLocation>().notNull(),
   destinationAddress: jsonb("destination_address").$type<GeoLocation>(),
-  // Snapshot of orders.deliveryFee at creation time. No fee-calculation algorithm exists yet
-  // (see orders.deliveryFee — always 0 today); this column exists so a real algorithm can be
-  // introduced later without another schema change.
+  // Real, computed compensation (see storage.computeDeliveryFee) — what the driver/operator
+  // actually earns for this delivery. NEVER reduced by a free-delivery promotion; only who
+  // PAYS for it (cafeOwnerFeeShareCents/supplierFeeShareCents below) changes in that case.
+  // Computed twice: a provisional estimate at creation (supplier→cafe distance only, no
+  // driver known yet) and a final figure at driver assignment (adds driver→supplier
+  // distance, locks the real vehicle type) — never recomputed again after that, so a
+  // completed delivery's financial value stays historically stable even if Admin later
+  // changes pricing config (see shared/schema.ts deliveryPricingSettings).
   deliveryFee: integer("delivery_fee").notNull().default(0),
+  // Fee responsibility split — defaults to deliveryPricingSettings.cafeOwnerSharePercent,
+  // collapsed to cafeOwnerFeeShareCents=0 / supplierFeeShareCents=deliveryFee when
+  // freeDeliveryApplied (an active Supplier FREE_SHIPPING promotion covers this delivery).
+  cafeOwnerFeeShareCents: integer("cafe_owner_fee_share_cents").notNull().default(0),
+  supplierFeeShareCents: integer("supplier_fee_share_cents").notNull().default(0),
+  freeDeliveryApplied: boolean("free_delivery_applied").notNull().default(false),
+  // Snapshots of what produced deliveryFee, for transparency/audit — never used to
+  // silently recompute a historical fee.
+  vehicleId: integer("vehicle_id"),
+  vehicleType: deliveryVehicleTypeEnum("vehicle_type"),
+  distanceKm: text("distance_km"), // decimal stored as text, matches this project's lat/lng text-column convention
+  surgeMultiplierPermille: integer("surge_multiplier_permille"),
+  // Set once the fee is computed from a real driver+vehicle (at assignment) rather than the
+  // creation-time estimate — the recompute-once-more guard.
+  feeFinalizedAt: timestamp("fee_finalized_at"),
   createdAt: timestamp("created_at").defaultNow(),
   acceptedAt: timestamp("accepted_at"),
   assignedAt: timestamp("assigned_at"),
@@ -353,6 +377,96 @@ export const deliveriesRelations = relations(deliveries, ({ one }) => ({
 export type Delivery = typeof deliveries.$inferSelect;
 export type DeliveryStatus = 'PENDING' | 'AVAILABLE' | 'ACCEPTED' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type DeliveryMode = 'DELIVERY_COMPANY' | 'SUPPLIER';
+
+// ── Delivery pricing engine ─────────────────────────────────────────────────
+// A real, centrally-configured fee replaces the "no algorithm exists yet"
+// placeholder (deliveries.deliveryFee always 0 before this). See
+// storage.computeDeliveryFee for the formula. Nothing here duplicates the
+// Delivery model above — every field lives on the SAME deliveries row.
+
+export type DeliveryVehicleType = 'BICYCLE' | 'MOTO' | 'CAR' | 'VAN' | 'TRUCK' | 'OTHER';
+
+// A vehicle belongs to exactly one operator (a Delivery Company or a Supplier
+// running its own drivers — same XOR-owner shape as users.deliveryCompanyId/
+// supplierId above) and may be assigned to at most one of that operator's
+// drivers at a time. A Driver with no operator-assigned vehicle can self-
+// register their own under their own operator (ownerType/ownerId mirrors
+// their own deliveryCompanyId/supplierId) — same table, no second system.
+export const vehicles = pgTable("vehicles", {
+  id: serial("id").primaryKey(),
+  ownerType: deliveryModeEnum("owner_type").notNull(), // reuses DELIVERY_COMPANY | SUPPLIER — same operator-kind concept as deliveries.deliveryMode
+  ownerId: integer("owner_id").notNull(),
+  type: deliveryVehicleTypeEnum("type").notNull().default('MOTO'),
+  brand: text("brand").notNull().default(""),
+  model: text("model").notNull().default(""),
+  plateNumber: text("plate_number").notNull().default(""),
+  hasAirConditioning: boolean("has_air_conditioning").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  assignedDriverId: integer("assigned_driver_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  ownerIdx: index("vehicles_owner_idx").on(table.ownerType, table.ownerId),
+  // A vehicle can only ever be actively assigned to one driver — enforced the same
+  // "partial unique index" way as deliveries' one-active-delivery-per-sub-order rule.
+  oneDriverPerVehicle: uniqueIndex("vehicles_assigned_driver_unique")
+    .on(table.assignedDriverId)
+    .where(sql`${table.assignedDriverId} IS NOT NULL`),
+}));
+
+export type Vehicle = typeof vehicles.$inferSelect;
+export type InsertVehicle = typeof vehicles.$inferInsert;
+
+// Admin-configured pricing — singleton row, same pattern as messagingSettings/
+// landingConfig (getOrCreate on first read, one UPDATE thereafter).
+export const deliveryPricingSettings = pgTable("delivery_pricing_settings", {
+  id: serial("id").primaryKey(),
+  // Per vehicle type: { pricePerKmCents, minFeeCents }. jsonb keyed by DeliveryVehicleType
+  // rather than one column per type per field, so adding a vehicle type later needs no migration.
+  vehiclePricing: jsonb("vehicle_pricing").$type<Record<DeliveryVehicleType, { pricePerKmCents: number; minFeeCents: number }>>().notNull().default(sql`'{}'::jsonb`),
+  // Used as the estimate vehicle type before a real driver/vehicle is assigned (see
+  // storage.computeDeliveryFee's two computation points).
+  defaultVehicleType: deliveryVehicleTypeEnum("default_vehicle_type").notNull().default('MOTO'),
+  // Stored ×1000 (e.g. 1400 = ×1.4) to avoid floating point in Postgres integer columns.
+  surgeMultiplierPermille: integer("surge_multiplier_permille").notNull().default(1000),
+  surgeLabel: text("surge_label").notNull().default(""),
+  // Default Coffee Owner share of the fee, 0-100; Supplier covers the rest (100 - this).
+  // Free-delivery promotions override this per-delivery (cafeOwner share becomes 0) — see
+  // storage.computeDeliveryFee.
+  cafeOwnerSharePercent: integer("cafe_owner_share_percent").notNull().default(50),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type DeliveryPricingSettings = typeof deliveryPricingSettings.$inferSelect;
+
+// Real-time Delivery-Company-published Driver opportunities (Part 17/18 — audited: nothing
+// like this existed before). A Driver applying/accepting fills it; no duplicate assignment
+// system — accepting an opportunity does not itself create a Delivery (deliveries are still
+// only created from real orders), it is a labor/staffing call, kept deliberately separate.
+export const deliveryOpportunityStatusEnum = pgEnum('delivery_opportunity_status', ['OPEN', 'FILLED', 'CLOSED', 'CANCELLED']);
+
+export const deliveryOpportunities = pgTable("delivery_opportunities", {
+  id: serial("id").primaryKey(),
+  deliveryCompanyId: integer("delivery_company_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  area: text("area").notNull().default(""),
+  vehicleTypeRequired: deliveryVehicleTypeEnum("vehicle_type_required"),
+  startAt: timestamp("start_at"),
+  durationHours: integer("duration_hours"),
+  compensationCents: integer("compensation_cents"), // nullable — only shown if the company actually specifies one
+  status: deliveryOpportunityStatusEnum("status").notNull().default('OPEN'),
+  filledByDriverId: integer("filled_by_driver_id"),
+  filledAt: timestamp("filled_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  companyIdx: index("delivery_opportunities_company_idx").on(table.deliveryCompanyId),
+  statusIdx: index("delivery_opportunities_status_idx").on(table.status),
+}));
+
+export type DeliveryOpportunity = typeof deliveryOpportunities.$inferSelect;
+export type DeliveryOpportunityStatus = 'OPEN' | 'FILLED' | 'CLOSED' | 'CANCELLED';
 
 // Full detail payload — deliberately includes everything a Supplier / Delivery Company /
 // Driver / Admin needs to decide on or perform a delivery without a second fetch (order
@@ -562,7 +676,7 @@ export const supplierStores = pgTable("supplier_stores", {
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id"), // nullable for product-level reviews
-  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT' | 'ACADEMY'
+  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT' | 'ACADEMY' | 'DRIVER'
   cafeId: integer("cafe_id").notNull(),
   productId: integer("product_id"),
   listingId: integer("listing_id"),
@@ -575,6 +689,8 @@ export const supplierProductReviews = pgTable("supplier_product_reviews", {
   printOrderId: integer("print_order_id"), // completed print order this review is for
   academyUserId: integer("academy_user_id"), // for ACADEMY reviews
   academyRegistrationId: integer("academy_registration_id"), // completed registration this review is for
+  driverId: integer("driver_id"), // for DRIVER reviews
+  deliveryId: integer("delivery_id"), // completed delivery this review is for
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   cafeName: text("cafe_name").notNull().default(''),
@@ -1399,6 +1515,9 @@ export const insertAcademyCourseSchema = createInsertSchema(academyCourses).omit
 export const insertAcademyCourseSessionSchema = createInsertSchema(academyCourseSessions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAcademyRegistrationSchema = createInsertSchema(academyRegistrations).omit({ id: true, createdAt: true, updatedAt: true });
 
+export const insertVehicleSchema = createInsertSchema(vehicles).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertDeliveryOpportunitySchema = createInsertSchema(deliveryOpportunities).omit({ id: true, createdAt: true, updatedAt: true });
+
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });
 
@@ -1918,6 +2037,12 @@ export type SubOrderDeliverySummary = {
   // always null for every other viewer, including the driver.
   pickupCode: string | null;
   dropoffCode: string | null;
+  // Real computed fee (see storage.computeDeliveryFee) — cafeOwnerFeeShareCents is what
+  // THIS Coffee Owner actually owes; deliveryFee is the full driver/operator compensation
+  // and is not shown here (internal payout breakdown, task Part 30).
+  deliveryFee: number;
+  cafeOwnerFeeShareCents: number;
+  freeDeliveryApplied: boolean;
 };
 
 export type SubOrderWithItems = SubOrder & {

@@ -211,6 +211,7 @@ export function AppSidebar() {
             { title: "Available Deliveries", url: "/delivery/available", icon: Package },
             { title: "My Deliveries", url: "/delivery/my-deliveries", icon: Truck },
             { title: "Drivers", url: "/delivery/drivers", icon: Users },
+            { title: "Vehicles", url: "/delivery/vehicles", icon: Truck },
             { title: "Messages", url: "/delivery/messages", icon: MessageCircle },
           ],
         },

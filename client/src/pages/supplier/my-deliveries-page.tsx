@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useDeliveries, useAssignDriver, useSupplierDrivers } from "@/hooks/use-deliveries";
+import { useReassignDriver } from "@/hooks/use-delivery-ecosystem";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { formatDate } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,6 +39,37 @@ function AssignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
         })}
       >
         Assigner
+      </Button>
+    </div>
+  );
+}
+
+// Change the assigned driver before pickup (task Part 32/33) — reuses assignDriver's
+// ownership rules via storage.reassignDriver; refuses once PICKED_UP or later.
+function ReassignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
+  const { data: drivers = [] } = useSupplierDrivers();
+  const reassignDriver = useReassignDriver();
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<string>("");
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={selected} onValueChange={setSelected}>
+        <SelectTrigger className="h-8 w-40 text-xs" data-testid={`select-reassign-${delivery.id}`}><SelectValue placeholder="Changer de chauffeur" /></SelectTrigger>
+        <SelectContent>
+          {drivers.filter((d) => d.id !== delivery.driverId).map((d) => <SelectItem key={d.id} value={String(d.id)} className="text-xs">{d.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Button
+        size="sm" variant="outline" className="h-8 text-xs"
+        disabled={!selected || reassignDriver.isPending}
+        onClick={() => reassignDriver.mutate({ deliveryId: delivery.id, driverId: Number(selected) }, {
+          onSuccess: () => { toast({ title: "Chauffeur réassigné" }); setSelected(""); },
+          onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+        })}
+        data-testid={`button-reassign-${delivery.id}`}
+      >
+        Réassigner
       </Button>
     </div>
   );
@@ -114,7 +146,15 @@ export default function SupplierMyDeliveriesPage() {
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="font-semibold text-sm">{fmt(d.deliveryFee ?? 0)}</span>
                     {d.status === "ACCEPTED" && <AssignDriverControl delivery={d} />}
-                    {["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(d.status) && (
+                    {d.status === "ASSIGNED" && (
+                      <div className="flex flex-col items-end gap-1.5">
+                        <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                          <Truck className="w-3 h-3" /> {d.driver?.name ?? "—"}
+                        </Badge>
+                        <ReassignDriverControl delivery={d} />
+                      </div>
+                    )}
+                    {["PICKED_UP", "IN_TRANSIT"].includes(d.status) && (
                       <Badge variant="outline" className="flex items-center gap-1 text-xs">
                         <Truck className="w-3 h-3" /> {d.driver?.name ?? "—"}
                       </Badge>

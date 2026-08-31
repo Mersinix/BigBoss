@@ -17,18 +17,21 @@ import {
   LogOut,
 } from "lucide-react";
 
+// Order: Dashboard, Messages, Profil public, Demandes, Missions, Academy, Revenus, Avis,
+// Settings — matches the requested switcher order exactly; no functionality changed, only
+// tab order (each is still its own real /barista-marketplace/... route).
 const TABS = [
   { path: "/barista-marketplace", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { path: "/barista-marketplace/messages", label: "Messages", icon: MessageCircle },
   { path: "/barista-marketplace/profile", label: "Profil public", icon: UserCheck },
   { path: "/barista-marketplace/requests", label: "Demandes", icon: Briefcase },
   { path: "/barista-marketplace/missions", label: "Missions", icon: ClipboardList },
-  { path: "/barista-marketplace/revenue", label: "Revenus", icon: DollarSign },
-  { path: "/barista-marketplace/messages", label: "Messages", icon: MessageCircle },
-  { path: "/barista-marketplace/reviews", label: "Avis", icon: Star },
   // Personal Academy workspace — connects to the same real Academy ecosystem
   // (courses/registrations) as Coffee Owner /academy, Academy Account and
   // Admin Academy. See client/src/pages/barista-marketplace/academy.tsx.
   { path: "/barista-marketplace/academy", label: "Academy", icon: GraduationCap },
+  { path: "/barista-marketplace/revenue", label: "Revenus", icon: DollarSign },
+  { path: "/barista-marketplace/reviews", label: "Avis", icon: Star },
   { path: "/barista-marketplace/settings", label: "Settings", icon: Settings },
 ];
 

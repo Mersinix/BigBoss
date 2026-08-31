@@ -48,6 +48,8 @@ import OrderDetailsModal from "@/components/cafe/order-details-modal";
 import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/maintenance/maintenance-page";
 import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties } from "@shared/schema";
 import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/hooks/use-barista-marketplace";
+import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
+import { RecruitDialog as BaristaRecruitDialog } from "@/pages/cafe/barista/barista-page";
 import { useBaristaRequests, useBaristaMissions } from "@/hooks/use-barista-marketplace";
 import { useAcademyRegistrations } from "@/hooks/use-barista-academy";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
@@ -1069,6 +1071,10 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const [shopTab, setShopTab] = useState<ShopSubTab>("products");
   const [selectedMaintenanceAgent, setSelectedMaintenanceAgent] = useState<MaintenanceMarketplaceCard | null>(null);
   const [maintenanceDetailOpen, setMaintenanceDetailOpen] = useState(false);
+  // Clicking a favorite Barista card opens the same comprehensive detail modal
+  // used on /barista (Part 22) — no separate favorites-only barista view.
+  const [detailBaristaId, setDetailBaristaId] = useState<number | null>(null);
+  const [recruitBarista, setRecruitBarista] = useState<BaristaMarketplaceCard | null>(null);
 
   const {
     shop, print, academy, baristaMarket, marketing, maintenance, pack,
@@ -1491,35 +1497,46 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           )
         )}
 
-        {/* BARISTA — Marketplace */}
+        {/* BARISTA — Marketplace. Left half = large photo, right half = info
+            (Parts 12-13), mirroring the /barista card's own wide layout —
+            same visual language, just applied to this list's row shape. */}
         {activeService === "BARISTA_MARKETPLACE" && (
           baristaItems.length === 0 ? renderEmpty() : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {baristaItems.map((item) => (
-                <div key={item.id} className={`group flex items-center gap-3 border rounded-2xl p-3 ${cardBg}`}>
-                  <Avatar className="w-9 h-9 shrink-0">
-                    <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} />
-                    <AvatarFallback className={`${dk ? "bg-green-900 text-green-300" : "bg-green-100 text-green-700"} font-bold text-xs`}>{item.initials}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailBaristaId(item.id)}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden cursor-pointer h-28 ${cardBg}`}
+                  data-testid={`row-fav-barista-${item.id}`}
+                >
+                  <div className="w-2/5 shrink-0 relative">
+                    <Avatar className="w-full h-full rounded-none">
+                      <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} className="object-cover" />
+                      <AvatarFallback className={`rounded-none font-bold text-xl ${dk ? "bg-green-900 text-green-300" : "bg-green-100 text-green-700"}`}>{item.initials}</AvatarFallback>
+                    </Avatar>
+                    <span
+                      className={`absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full border-2 border-white ${item.available ? "bg-green-500" : "bg-gray-300"}`}
+                      title={item.available ? "Disponible" : "Indisponible"}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1 justify-center">
                     <div className="flex items-center gap-1.5">
                       <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.available ? "bg-green-400" : "bg-gray-500"}`} />
                     </div>
-                    <p className={`text-xs flex items-center gap-1 mt-0.5 ${textMuted}`}>
-                      <MapPinIcon className="w-2.5 h-2.5" />{item.location}
+                    <p className={`text-xs flex items-center gap-1 ${textMuted}`}>
+                      <MapPinIcon className="w-2.5 h-2.5 shrink-0" />{item.location}
                     </p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {item.skills.slice(0, 2).map((sk) => (
-                        <span key={sk} className={`text-[10px] px-1.5 py-0.5 rounded-full ${dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{sk}</span>
-                      ))}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                  <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
-                      onClick={() => removeBaristaMarket(item.id)}
+                      onClick={(e) => { e.stopPropagation(); removeBaristaMarket(item.id); }}
                       data-testid={`button-fav-remove-barista-${item.id}`}
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
@@ -1625,6 +1642,19 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         }}
         onContact={contactMaintenance}
         onReserve={(agent, data) => reserveMaintenance.mutate({ agent, data })}
+        isDark={dk}
+      />
+
+      <BaristaDetailModal
+        baristaUserId={detailBaristaId}
+        open={detailBaristaId != null}
+        onClose={() => setDetailBaristaId(null)}
+        onRecruit={(b) => { setDetailBaristaId(null); setRecruitBarista(b); }}
+      />
+      <BaristaRecruitDialog
+        barista={recruitBarista}
+        open={!!recruitBarista}
+        onClose={() => setRecruitBarista(null)}
         isDark={dk}
       />
     </div>

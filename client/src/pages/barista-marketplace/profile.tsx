@@ -7,7 +7,11 @@ import {
   useUpdateBaristaProfile,
   useUpdateBaristaAvailability,
   useBaristaSkills,
+  useCreateBaristaWorkHistory,
+  useUpdateBaristaWorkHistory,
+  useDeleteBaristaWorkHistory,
   type BaristaLevel,
+  type BaristaWorkHistory,
 } from "@/hooks/use-barista-marketplace";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, UserCheck, Eye, EyeOff } from "lucide-react";
+import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Briefcase, Pencil, Trash2 } from "lucide-react";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const LEVEL_LABELS: Record<BaristaLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -40,6 +44,18 @@ export default function BaristaProfilePage() {
   const [availableDays, setAvailableDays] = useState<string[]>([]);
   const [onVacation, setOnVacation] = useState(false);
 
+  // Certifications & expérience (Part 18) — real, Barista-entered values only.
+  const [certifications, setCertifications] = useState<string[]>([]);
+  const [newCertification, setNewCertification] = useState("");
+  const [experienceYears, setExperienceYears] = useState("");
+  const [portfolioUrls, setPortfolioUrls] = useState<string[]>([]);
+  const [newPortfolioUrl, setNewPortfolioUrl] = useState("");
+
+  const createWorkHistory = useCreateBaristaWorkHistory();
+  const updateWorkHistory = useUpdateBaristaWorkHistory();
+  const deleteWorkHistory = useDeleteBaristaWorkHistory();
+  const [workHistoryForm, setWorkHistoryForm] = useState<Partial<BaristaWorkHistory> | null>(null);
+
   useEffect(() => {
     if (!data?.profile) return;
     setLevel(data.profile.level);
@@ -50,6 +66,9 @@ export default function BaristaProfilePage() {
     setVisible(data.profile.marketplaceVisible);
     setAvailableDays(data.profile.availableDays ?? []);
     setOnVacation(data.profile.isOnVacation);
+    setCertifications(data.profile.certifications ?? []);
+    setExperienceYears(data.profile.experienceYears != null ? String(data.profile.experienceYears) : "");
+    setPortfolioUrls(data.profile.portfolioUrls ?? []);
   }, [data?.profile?.updatedAt]);
 
   const toggleSkill = (name: string) => {
@@ -58,25 +77,55 @@ export default function BaristaProfilePage() {
   const toggleDay = (day: string) => {
     setAvailableDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
   };
+  const addCertification = () => {
+    const v = newCertification.trim();
+    if (!v || certifications.includes(v)) return;
+    setCertifications((prev) => [...prev, v]);
+    setNewCertification("");
+  };
+  const addPortfolioUrl = () => {
+    const v = newPortfolioUrl.trim();
+    if (!v || portfolioUrls.includes(v)) return;
+    setPortfolioUrls((prev) => [...prev, v]);
+    setNewPortfolioUrl("");
+  };
 
-  const saveProfile = () => {
+  // Single Save button covering both profile fields and availability (Part 17) —
+  // fires both existing mutations together instead of exposing two separate buttons;
+  // no business behavior changes, both endpoints are still called exactly as before.
+  const saving = updateProfile.isPending || updateAvailability.isPending;
+  const saveAll = () => {
     updateProfile.mutate(
-      { level, bio, skills, dailyRateInCents: Math.round(parseFloat(rate || "0") * 100), city, marketplaceVisible: visible },
       {
-        onSuccess: () => toast({ title: "Profil mis à jour" }),
+        level, bio, skills, dailyRateInCents: Math.round(parseFloat(rate || "0") * 100), city, marketplaceVisible: visible,
+        certifications, experienceYears: experienceYears.trim() === "" ? null : Number(experienceYears), portfolioUrls,
+      },
+      { onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }) }
+    );
+    updateAvailability.mutate(
+      { availableDays, isOnVacation: onVacation, isAvailable: !onVacation },
+      {
+        onSuccess: () => toast({ title: "Profil enregistré" }),
         onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
       }
     );
   };
 
-  const saveAvailability = () => {
-    updateAvailability.mutate(
-      { availableDays, isOnVacation: onVacation, isAvailable: !onVacation },
-      {
-        onSuccess: () => toast({ title: "Disponibilité mise à jour" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const saveWorkHistory = () => {
+    if (!workHistoryForm?.cafeName?.trim()) return;
+    const payload = {
+      cafeName: workHistoryForm.cafeName.trim(),
+      role: workHistoryForm.role ?? "",
+      startPeriod: workHistoryForm.startPeriod ?? "",
+      endPeriod: workHistoryForm.endPeriod || null,
+      description: workHistoryForm.description ?? "",
+    };
+    const onDone = {
+      onSuccess: () => { setWorkHistoryForm(null); toast({ title: "Café précédent enregistré" }); },
+      onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+    };
+    if (workHistoryForm.id) updateWorkHistory.mutate({ id: workHistoryForm.id, ...payload }, onDone);
+    else createWorkHistory.mutate(payload, onDone);
   };
 
   if (isLoading) {
@@ -120,7 +169,17 @@ export default function BaristaProfilePage() {
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Ville</label>
-              <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Tunis" data-testid="input-profile-city" />
+              {user?.locationAddress ? (
+                <>
+                  <Input value={user.locationAddress} disabled data-testid="input-profile-city" />
+                  <p className="text-[11px] text-muted-foreground mt-1">Dérivée de votre adresse (Settings → Localisation).</p>
+                </>
+              ) : (
+                <>
+                  <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Tunis" data-testid="input-profile-city" />
+                  <p className="text-[11px] text-muted-foreground mt-1">Ajoutez une adresse dans Settings pour une localisation précise.</p>
+                </>
+              )}
             </div>
           </div>
 
@@ -162,12 +221,112 @@ export default function BaristaProfilePage() {
             </div>
             <Switch checked={visible} onCheckedChange={setVisible} data-testid="switch-profile-visible" />
           </div>
+        </CardContent>
+      </Card>
 
-          <div className="flex justify-end">
-            <Button onClick={saveProfile} disabled={updateProfile.isPending} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-save-profile">
-              {updateProfile.isPending ? "Enregistrement…" : "Enregistrer le profil"}
-            </Button>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Award className="w-4 h-4 text-green-600" /> Certifications &amp; expérience
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Expérience (ans)</label>
+            <Input type="number" min={0} max={80} value={experienceYears} onChange={(e) => setExperienceYears(e.target.value)} placeholder="Ex: 5" className="max-w-[160px]" data-testid="input-profile-experience-years" />
           </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-2 block">Certifications</label>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {certifications.length === 0 && <p className="text-xs text-muted-foreground">Aucune certification ajoutée.</p>}
+              {certifications.map((cert) => (
+                <Badge key={cert} variant="outline" className="gap-1 pr-1">
+                  {cert}
+                  <button type="button" onClick={() => setCertifications((prev) => prev.filter((c) => c !== cert))} data-testid={`button-remove-certification-${cert}`}>
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input value={newCertification} onChange={(e) => setNewCertification(e.target.value)} placeholder="Ex: Certification SCA" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCertification())} data-testid="input-new-certification" />
+              <Button type="button" variant="outline" size="icon" onClick={addCertification} data-testid="button-add-certification"><Plus className="w-4 h-4" /></Button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1"><ImageIcon className="w-3.5 h-3.5" /> Portfolio (images)</label>
+            {portfolioUrls.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
+                {portfolioUrls.map((url) => (
+                  <div key={url} className="relative group aspect-square rounded-lg overflow-hidden border border-border/50 bg-muted">
+                    <img src={url} alt="Portfolio" className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />
+                    <button
+                      type="button"
+                      onClick={() => setPortfolioUrls((prev) => prev.filter((u) => u !== url))}
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      data-testid={`button-remove-portfolio-${url}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input value={newPortfolioUrl} onChange={(e) => setNewPortfolioUrl(e.target.value)} placeholder="https://…" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioUrl())} data-testid="input-new-portfolio-url" />
+              <Button type="button" variant="outline" size="icon" onClick={addPortfolioUrl} data-testid="button-add-portfolio-url"><Plus className="w-4 h-4" /></Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-green-600" /> Cafés précédents
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(data?.card?.workHistory ?? []).length === 0 && !workHistoryForm && (
+            <p className="text-xs text-muted-foreground">Aucune expérience précédente enregistrée.</p>
+          )}
+          {(data?.card?.workHistory ?? []).map((w: BaristaWorkHistory) => (
+            <div key={w.id} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border/50">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{w.cafeName}{w.role ? ` — ${w.role}` : ""}</p>
+                <p className="text-xs text-muted-foreground">{w.startPeriod || "?"} → {w.endPeriod || "Aujourd'hui"}</p>
+                {w.description && <p className="text-xs text-muted-foreground mt-1">{w.description}</p>}
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWorkHistoryForm(w)} data-testid={`button-edit-work-history-${w.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteWorkHistory.mutate(w.id)} data-testid={`button-delete-work-history-${w.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+              </div>
+            </div>
+          ))}
+
+          {workHistoryForm ? (
+            <div className="p-3 rounded-lg border border-border/50 space-y-2 bg-muted/30">
+              <Input placeholder="Nom du café / établissement" value={workHistoryForm.cafeName ?? ""} onChange={(e) => setWorkHistoryForm((p) => ({ ...p, cafeName: e.target.value }))} data-testid="input-work-history-cafe-name" />
+              <Input placeholder="Rôle (ex: Barista senior)" value={workHistoryForm.role ?? ""} onChange={(e) => setWorkHistoryForm((p) => ({ ...p, role: e.target.value }))} data-testid="input-work-history-role" />
+              <div className="grid grid-cols-2 gap-2">
+                <Input placeholder="Début (ex: 2022)" value={workHistoryForm.startPeriod ?? ""} onChange={(e) => setWorkHistoryForm((p) => ({ ...p, startPeriod: e.target.value }))} data-testid="input-work-history-start" />
+                <Input placeholder="Fin (vide = actuel)" value={workHistoryForm.endPeriod ?? ""} onChange={(e) => setWorkHistoryForm((p) => ({ ...p, endPeriod: e.target.value }))} data-testid="input-work-history-end" />
+              </div>
+              <Textarea placeholder="Description (facultatif)" rows={2} value={workHistoryForm.description ?? ""} onChange={(e) => setWorkHistoryForm((p) => ({ ...p, description: e.target.value }))} data-testid="input-work-history-description" />
+              <div className="flex gap-2 justify-end">
+                <Button type="button" variant="ghost" onClick={() => setWorkHistoryForm(null)}>Annuler</Button>
+                <Button type="button" onClick={saveWorkHistory} disabled={createWorkHistory.isPending || updateWorkHistory.isPending} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-save-work-history">
+                  Enregistrer
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button type="button" variant="outline" size="sm" onClick={() => setWorkHistoryForm({})} className="gap-1.5" data-testid="button-add-work-history">
+              <Plus className="w-3.5 h-3.5" /> Ajouter un café précédent
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -198,13 +357,17 @@ export default function BaristaProfilePage() {
             </div>
             <Switch checked={onVacation} onCheckedChange={setOnVacation} data-testid="switch-profile-vacation" />
           </div>
-          <div className="flex justify-end">
-            <Button onClick={saveAvailability} disabled={updateAvailability.isPending} variant="outline" data-testid="button-save-availability">
-              {updateAvailability.isPending ? "Enregistrement…" : "Enregistrer la disponibilité"}
-            </Button>
-          </div>
         </CardContent>
       </Card>
+
+      {/* One main Save button covering profile + availability (Part 17) — replaces
+          the two separate "Enregistrer le profil" / "Enregistrer la disponibilité"
+          buttons; both underlying mutations still fire, no behavior change. */}
+      <div className="flex justify-end sticky bottom-4">
+        <Button onClick={saveAll} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white shadow-lg" data-testid="button-save-profile-all">
+          {saving ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </div>
     </div>
   );
 }

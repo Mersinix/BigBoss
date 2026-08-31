@@ -13,6 +13,7 @@ import {
   maintenanceCompetencies, maintenanceZones,
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
+  baristaWorkHistory, baristaReports,
   academyProfiles, academyCourses, academyCourseSessions, academyRegistrations,
   promotions, promotionUsage,
   conversations, conversationParticipants, messages,
@@ -59,6 +60,8 @@ import {
   type BaristaSkill, type BaristaMarketplaceProfile, type InsertBaristaMarketplaceProfile,
   type BaristaMarketplaceRequest, type BaristaMarketplaceMission,
   type BaristaMarketplaceCard, type BaristaRequestWithParties, type BaristaMissionWithParties,
+  type BaristaWorkHistory, type InsertBaristaWorkHistory,
+  type BaristaReport, type InsertBaristaReport,
   type BaristaRequestStatus, type BaristaMissionStatus,
   type AcademyProfile, type InsertAcademyProfile, type AcademyCourse, type InsertAcademyCourse,
   type AcademyCourseSession, type AcademyRegistration,
@@ -4059,6 +4062,80 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // ── Work history ("Cafés précédents / Expérience") — own table, own CRUD, exactly like
+  // baristaSkills, so entries can be added/removed individually. ──────────────────────────
+
+  async getBaristaWorkHistory(baristaUserId: number): Promise<BaristaWorkHistory[]> {
+    const rows = await db.select().from(baristaWorkHistory).where(eq(baristaWorkHistory.baristaUserId, baristaUserId));
+    return rows.sort((a, b) => (b.startPeriod > a.startPeriod ? 1 : -1));
+  }
+
+  async createBaristaWorkHistory(baristaUserId: number, data: Partial<InsertBaristaWorkHistory>): Promise<BaristaWorkHistory> {
+    const { baristaUserId: _ignored, id: _id, ...safe } = data as any;
+    const [created] = await db.insert(baristaWorkHistory).values({ ...safe, baristaUserId }).returning();
+    return created;
+  }
+
+  async updateBaristaWorkHistory(id: number, baristaUserId: number, data: Partial<InsertBaristaWorkHistory>): Promise<BaristaWorkHistory | undefined> {
+    const { baristaUserId: _ignored, id: _id, ...safe } = data as any;
+    const [updated] = await db.update(baristaWorkHistory)
+      .set({ ...safe, updatedAt: new Date() })
+      .where(and(eq(baristaWorkHistory.id, id), eq(baristaWorkHistory.baristaUserId, baristaUserId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteBaristaWorkHistory(id: number, baristaUserId: number): Promise<void> {
+    await db.delete(baristaWorkHistory).where(and(eq(baristaWorkHistory.id, id), eq(baristaWorkHistory.baristaUserId, baristaUserId)));
+  }
+
+  // ── Entity-level Barista reports (Coffee Owner reporting a Barista account) —
+  // distinct from review-reporting; resolved centrally by Admin. ─────────────────
+
+  async createBaristaReport(cafeOwnerId: number, baristaUserId: number, reason: string): Promise<BaristaReport> {
+    const [created] = await db.insert(baristaReports).values({ cafeOwnerId, baristaUserId, reason }).returning();
+    return created;
+  }
+
+  async getBaristaReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(BaristaReport & { cafeOwnerName: string; baristaName: string })[]> {
+    const rows = await db.select().from(baristaReports)
+      .where(status ? eq(baristaReports.status, status) : undefined)
+      .orderBy(desc(baristaReports.createdAt));
+    if (rows.length === 0) return [];
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.baristaUserId])));
+    const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
+    return rows.map((r) => ({ ...r, cafeOwnerName: userMap.get(r.cafeOwnerId) ?? "—", baristaName: userMap.get(r.baristaUserId) ?? "—" }));
+  }
+
+  // Coffee Owner's own "Blacklist" view (Part 18-21) — a scoped read of the same
+  // baristaReports table above, filtered to reports THIS Coffee Owner submitted.
+  // Not a second persistence layer: same rows Admin moderates, just narrowed by
+  // cafeOwnerId server-side so one Coffee Owner never sees another's report text.
+  async getBaristaReportsByOwner(cafeOwnerId: number): Promise<(BaristaReport & {
+    baristaName: string; baristaProfileImageUrl: string | null; baristaLocation: string | null;
+  })[]> {
+    const rows = await db.select().from(baristaReports)
+      .where(eq(baristaReports.cafeOwnerId, cafeOwnerId))
+      .orderBy(desc(baristaReports.createdAt));
+    if (rows.length === 0) return [];
+    const baristaIds = Array.from(new Set(rows.map((r) => r.baristaUserId)));
+    const baristaRows = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl, locationAddress: users.locationAddress })
+      .from(users).where(inArray(users.id, baristaIds));
+    const baristaMap = new Map(baristaRows.map((u) => [u.id, u]));
+    return rows.map((r) => {
+      const barista = baristaMap.get(r.baristaUserId);
+      return { ...r, baristaName: barista?.name ?? "—", baristaProfileImageUrl: barista?.profileImageUrl ?? null, baristaLocation: barista?.locationAddress ?? null };
+    });
+  }
+
+  async resolveBaristaReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<BaristaReport | undefined> {
+    const [updated] = await db.update(baristaReports)
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .where(eq(baristaReports.id, id))
+      .returning();
+    return updated;
+  }
+
   /** Live rating/reviewCount for one Barista — shared by the list builder and single-card reads. */
   private async computeBaristaReviewStats(baristaUserIds: number[]): Promise<Map<number, { rating: number; reviewCount: number }>> {
     if (!baristaUserIds.length) return new Map();
@@ -4087,6 +4164,7 @@ export class DatabaseStorage implements IStorage {
   /** Public marketplace listing — mirrors getMaintenanceProfiles() exactly. */
   async getBaristaMarketplaceProfiles(filters?: {
     search?: string; level?: string; skill?: string; city?: string; available?: boolean;
+    viewerLocation?: { lat?: string | null; lng?: string | null } | null;
   }): Promise<BaristaMarketplaceCard[]> {
     const rows = await db.select({ profile: baristaMarketplaceProfiles, user: users })
       .from(baristaMarketplaceProfiles)
@@ -4117,9 +4195,23 @@ export class DatabaseStorage implements IStorage {
       activeMissions.filter((m) => m.startDate <= todayStr && (m.endDate ?? m.startDate) >= todayStr).map((m) => m.baristaUserId),
     );
 
+    const workHistoryRows = userIds.length
+      ? await db.select().from(baristaWorkHistory).where(inArray(baristaWorkHistory.baristaUserId, userIds))
+      : [];
+    const workHistoryByUser = new Map<number, BaristaWorkHistory[]>();
+    for (const w of workHistoryRows) {
+      const list = workHistoryByUser.get(w.baristaUserId) ?? [];
+      list.push(w);
+      workHistoryByUser.set(w.baristaUserId, list);
+    }
+
+    const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
+
     const cards = rows.map(({ profile, user }) => {
       const stats = statsMap.get(profile.userId);
       const available = profile.isAvailable && !profile.isOnVacation && !busyToday.has(profile.userId);
+      const baristaPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+      const distanceKm = viewerPos && baristaPos ? Math.round(this.haversineKm(viewerPos, baristaPos) * 10) / 10 : null;
       return {
         ...profile,
         userId: user.id,
@@ -4131,6 +4223,8 @@ export class DatabaseStorage implements IStorage {
         available,
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
+        workHistory: (workHistoryByUser.get(profile.userId) ?? []).sort((a, b) => (b.startPeriod > a.startPeriod ? 1 : -1)),
+        distanceKm,
       } as BaristaMarketplaceCard;
     });
 
@@ -4148,13 +4242,17 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getBaristaMarketplaceCard(userId: number): Promise<BaristaMarketplaceCard | undefined> {
+  async getBaristaMarketplaceCard(userId: number, viewerLocation?: { lat?: string | null; lng?: string | null } | null): Promise<BaristaMarketplaceCard | undefined> {
     const [row] = await db.select({ profile: baristaMarketplaceProfiles, user: users })
       .from(baristaMarketplaceProfiles)
       .innerJoin(users, eq(baristaMarketplaceProfiles.userId, users.id))
       .where(eq(baristaMarketplaceProfiles.userId, userId));
     if (!row) return undefined;
     const stats = (await this.computeBaristaReviewStats([userId])).get(userId);
+    const workHistory = await db.select().from(baristaWorkHistory).where(eq(baristaWorkHistory.baristaUserId, userId));
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const baristaPos = this.parseLatLng({ lat: row.user.locationLat, lng: row.user.locationLng });
+    const distanceKm = viewerPos && baristaPos ? Math.round(this.haversineKm(viewerPos, baristaPos) * 10) / 10 : null;
     return {
       ...row.profile,
       userId: row.user.id,
@@ -4164,6 +4262,8 @@ export class DatabaseStorage implements IStorage {
       initials: row.user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
       location: row.user.locationAddress ?? row.profile.city ?? "",
       available: row.profile.isAvailable && !row.profile.isOnVacation,
+      workHistory: workHistory.sort((a, b) => (b.startPeriod > a.startPeriod ? 1 : -1)),
+      distanceKm,
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
     };
@@ -6964,25 +7064,44 @@ export class DatabaseStorage implements IStorage {
       .where(conditions.length ? (conditions.length === 1 ? conditions[0] : and(...conditions)) : undefined)
       .orderBy(desc(supplierProductReviews.createdAt));
 
-    // Keep the Admin Maintenance Reviews view on the same user-backed source
-    // of truth as the Maintenance overview, without changing other review
-    // categories or their existing response shape.
-    const maintenanceIds = Array.from(new Set(rows
-      .filter((review) => review.reviewType === "MAINTENANCE")
-      .flatMap((review) => [review.maintenanceUserId, review.cafeId])
-      .filter((id): id is number => typeof id === "number")));
-    if (maintenanceIds.length === 0) return rows;
+    // Resolve the reviewed entity's real name for every review type that targets a user
+    // account (Maintenance/Barista/Academy/Print/Driver) — same user-backed source of
+    // truth each domain's own Admin overview already reads, attached generically here
+    // instead of one bespoke branch per type. Product/Pack/Supplier reviews already carry
+    // enough denormalized fields (productName, cafeName) and need no resolution.
+    const targetIds = Array.from(new Set(rows.flatMap((review) => [
+      review.reviewType === "MAINTENANCE" ? review.maintenanceUserId : null,
+      review.reviewType === "BARISTA_MARKETPLACE" ? review.baristaMarketplaceUserId : null,
+      review.reviewType === "ACADEMY" ? review.academyUserId : null,
+      review.reviewType === "PRINT" ? review.printerId : null,
+      review.reviewType === "DRIVER" ? review.driverId : null,
+      review.cafeId,
+    ]).filter((id): id is number => typeof id === "number")));
+    if (targetIds.length === 0) return rows;
     const relatedUsers = await db.select({ id: users.id, name: users.name })
       .from(users)
-      .where(inArray(users.id, maintenanceIds));
+      .where(inArray(users.id, targetIds));
     const names = new Map(relatedUsers.map((user) => [user.id, user.name]));
-    return rows.map((review) => review.reviewType === "MAINTENANCE"
-      ? ({
-          ...review,
-          maintenanceName: names.get(review.maintenanceUserId ?? 0) ?? review.cafeName,
-          reviewerName: names.get(review.cafeId) ?? review.cafeName,
-        } as any)
-      : review);
+    const targetIdFor = (review: SupplierProductReview): number | null => {
+      switch (review.reviewType) {
+        case "MAINTENANCE": return review.maintenanceUserId;
+        case "BARISTA_MARKETPLACE": return review.baristaMarketplaceUserId;
+        case "ACADEMY": return review.academyUserId;
+        case "PRINT": return review.printerId;
+        case "DRIVER": return review.driverId;
+        default: return null;
+      }
+    };
+    return rows.map((review) => {
+      const targetId = targetIdFor(review);
+      return {
+        ...review,
+        // maintenanceName kept for backward compatibility with the existing Maintenance tab.
+        maintenanceName: review.reviewType === "MAINTENANCE" ? (names.get(review.maintenanceUserId ?? 0) ?? review.cafeName) : undefined,
+        targetName: targetId != null ? (names.get(targetId) ?? review.cafeName) : undefined,
+        reviewerName: names.get(review.cafeId) ?? review.cafeName,
+      } as any;
+    });
   }
 
   async getExistingProductReview(productId: number, cafeId: number): Promise<SupplierProductReview | undefined> {

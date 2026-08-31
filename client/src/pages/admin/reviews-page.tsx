@@ -4,9 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Star, Loader2, Package, Store, Wrench, Flag, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Star, Loader2, Package, Store, Wrench, Flag, Trash2, CheckCircle2, AlertTriangle, Layers, Coffee, GraduationCap, Truck, Printer, Megaphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -26,28 +25,48 @@ function formatDate(d: Date | string | null | undefined) {
   return new Date(d as any).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-type ReviewTab = "products" | "supplier" | "maintenance";
+// Central review moderation switcher — every real review domain in the app maps here.
+// One domain (reviewType) ↔ one existing table row shape, all served by the same already
+// generic GET/DELETE/PATCH-resolve /api/admin/reviews* endpoints (storage.getAllReviews/
+// deleteReview/resolveReviewReport) — no per-domain moderation system. Barista/Academy/
+// Print/Delivery target names are resolved server-side onto `targetName` (see
+// storage.getAllReviews) so this page never needs a second per-domain lookup.
+const TABS = [
+  { key: "PRODUCT", label: "Product", icon: Package },
+  { key: "PACK", label: "Pack", icon: Layers },
+  { key: "SUPPLIER", label: "Supplier", icon: Store },
+  { key: "MAINTENANCE", label: "Maintenance", icon: Wrench },
+  { key: "BARISTA_MARKETPLACE", label: "Barista", icon: Coffee },
+  { key: "ACADEMY", label: "Academy", icon: GraduationCap },
+  { key: "DRIVER", label: "Delivery", icon: Truck },
+  { key: "PRINT", label: "Print", icon: Printer },
+  { key: "MARKETING", label: "Marketing", icon: Megaphone },
+] as const;
+type ReviewType = (typeof TABS)[number]["key"];
+
+const TARGET_LABEL: Record<ReviewType, string> = {
+  PRODUCT: "Product", PACK: "Pack", SUPPLIER: "Supplier", MAINTENANCE: "Maintenance",
+  BARISTA_MARKETPLACE: "Barista", ACADEMY: "Academy", DRIVER: "Driver", PRINT: "Printer", MARKETING: "Marketing provider",
+};
 
 export default function AdminReviewsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<ReviewTab>("products");
+  const [activeTab, setActiveTab] = useState<ReviewType>("PRODUCT");
   const [showReportedOnly, setShowReportedOnly] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
-  const reviewType = activeTab === "products" ? "PRODUCT" : activeTab === "supplier" ? "SUPPLIER" : "MAINTENANCE";
-
   const { data: reviews = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/admin/reviews", reviewType],
+    queryKey: ["/api/admin/reviews", activeTab],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/reviews?reviewType=${reviewType}`);
+      const res = await fetch(`/api/admin/reviews?reviewType=${activeTab}`);
       if (!res.ok) return [];
       return res.json();
     },
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/reviews/${id}?reviewType=${reviewType}`),
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/reviews/${id}?reviewType=${activeTab}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/reviews"] });
       invalidateMarketplace(qc);
@@ -58,7 +77,7 @@ export default function AdminReviewsPage() {
   });
 
   const resolveMut = useMutation({
-      mutationFn: (id: number) => apiRequest("PATCH", `/api/admin/reviews/${id}/resolve?reviewType=${reviewType}`),
+    mutationFn: (id: number) => apiRequest("PATCH", `/api/admin/reviews/${id}/resolve?reviewType=${activeTab}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/reviews"] });
       toast({ title: "Report resolved" });
@@ -66,24 +85,24 @@ export default function AdminReviewsPage() {
     onError: () => toast({ title: "Error resolving report", variant: "destructive" }),
   });
 
-  const displayed = activeTab === "maintenance" && showReportedOnly
-    ? reviews.filter((r: any) => !!r.reportedAt)
-    : reviews;
-  const reportedCount = activeTab === "maintenance"
-    ? reviews.filter((r: any) => !!r.reportedAt && !r.resolvedAt).length
-    : 0;
+  const displayed = showReportedOnly ? reviews.filter((r: any) => !!r.reportedAt) : reviews;
+  const reportedCount = reviews.filter((r: any) => !!r.reportedAt && !r.resolvedAt).length;
 
-  // Stats
-  const avg = reviews.length
-    ? (reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length).toFixed(1)
-    : "—";
-  const fiveStars = reviews.filter((r: any) => r.rating === 5).length;
+  const avg = reviews.length ? (reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length).toFixed(1) : "—";
+
+  const targetLine = (r: any) => {
+    if (activeTab === "PRODUCT" && r.productName) return { label: "Product", value: r.productName };
+    if (activeTab === "PACK" && (r.productName || r.packId)) return { label: "Pack", value: r.productName || `#${r.packId}` };
+    if (activeTab === "SUPPLIER" && r.supplierId) return { label: "Supplier ID", value: `#${r.supplierId}` };
+    if (r.targetName) return { label: TARGET_LABEL[activeTab], value: r.targetName };
+    return null;
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
         <h1 className="text-2xl font-bold">Reviews</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage all product and supplier reviews across the platform.</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Manage all reviews across the platform from one place.</p>
       </div>
 
       {/* Stats */}
@@ -119,36 +138,25 @@ export default function AdminReviewsPage() {
         </Card>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-xl p-1 bg-secondary/50 w-fit flex-wrap">
-        <button
-          onClick={() => setActiveTab("products")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-            activeTab === "products" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Package className="w-4 h-4" /> Product Reviews
-        </button>
-        <button
-          onClick={() => setActiveTab("supplier")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-            activeTab === "supplier" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Store className="w-4 h-4" /> Supplier Reviews
-        </button>
-        <button
-          onClick={() => { setActiveTab("maintenance"); setShowReportedOnly(false); }}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-            activeTab === "maintenance" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Wrench className="w-4 h-4" /> Maintenance Reviews
-        </button>
+      {/* Tabs — horizontally scrollable, same responsive treatment as Admin Barista's
+          switcher (task requirement), since 9 tabs no longer fit on narrow screens. */}
+      <div className="flex gap-1 rounded-xl p-1 bg-secondary/50 overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => { setActiveTab(tab.key); setShowReportedOnly(false); }}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all shrink-0 whitespace-nowrap ${
+              activeTab === tab.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+            data-testid={`tab-admin-reviews-${tab.key.toLowerCase()}`}
+          >
+            <tab.icon className="w-4 h-4" /> {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Filter bar */}
-      {activeTab === "maintenance" && <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3">
         <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
           <input
             type="checkbox"
@@ -164,7 +172,7 @@ export default function AdminReviewsPage() {
             )}
           </span>
         </label>
-      </div>}
+      </div>
 
       {/* Review list */}
       {isLoading ? (
@@ -182,19 +190,20 @@ export default function AdminReviewsPage() {
           {displayed.map((r: any) => {
             const isReported = !!r.reportedAt;
             const isResolved = !!r.resolvedAt;
+            const target = targetLine(r);
             return (
               <Card key={r.id} className={isReported && !isResolved ? "border-orange-200 dark:border-orange-900" : ""}>
                 <CardContent className="p-5">
                   <div className="flex items-start gap-4">
                     <Avatar className="w-9 h-9 shrink-0">
                       <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
-                        {(r.cafeName || "?").charAt(0).toUpperCase()}
+                        {(r.cafeOwnerName || r.cafeName || "?").charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-sm">{r.cafeName || "—"}</span>
+                          <span className="font-semibold text-sm">{r.cafeOwnerName || r.cafeName || "—"}</span>
                           {isReported && !isResolved && (
                             <Badge variant="outline" className="text-xs border-orange-300 text-orange-600 bg-orange-50 dark:bg-orange-950/30">
                               <Flag className="w-3 h-3 mr-1" /> Reported
@@ -208,20 +217,9 @@ export default function AdminReviewsPage() {
                         </div>
                         <span className="text-xs text-muted-foreground">{formatDate(r.createdAt)}</span>
                       </div>
-                      {(r.productName || activeTab === "maintenance") && (
+                      {target && (
                         <p className="text-xs text-muted-foreground mb-1.5">
-                          {activeTab === "maintenance" ? "Maintenance: " : "Product: "}
-                          <span className="font-medium text-foreground">{activeTab === "maintenance" ? (r.maintenanceName || "—") : r.productName}</span>
-                        </p>
-                      )}
-                      {r.supplierId && activeTab === "supplier" && (
-                        <p className="text-xs text-muted-foreground mb-1.5">
-                          Supplier ID: <span className="font-medium text-foreground">#{r.supplierId}</span>
-                        </p>
-                      )}
-                      {activeTab === "maintenance" && (
-                        <p className="text-xs text-muted-foreground mb-1.5">
-                          Intervention: <span className="font-medium text-foreground">{r.reservationId ? `#${r.reservationId}` : "—"}</span>
+                          {target.label}: <span className="font-medium text-foreground">{target.value}</span>
                         </p>
                       )}
                       <Stars rating={r.rating} />

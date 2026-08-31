@@ -9,14 +9,30 @@ export type BaristaMissionStatus = "UPCOMING" | "ACTIVE" | "COMPLETED" | "CANCEL
 
 export type BaristaSkill = { id: number; name: string; isActive: boolean; isFrozen: boolean };
 
+export type BaristaWorkHistory = {
+  id: number;
+  baristaUserId: number;
+  cafeName: string;
+  role: string;
+  startPeriod: string;
+  endPeriod: string | null;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type BaristaMarketplaceCard = {
   id: number;
   userId: number;
   name: string;
   phone: string | null;
+  profileImageUrl: string | null;
   level: BaristaLevel;
   bio: string;
   skills: string[];
+  certifications: string[];
+  experienceYears: number | null;
+  portfolioUrls: string[];
   dailyRateInCents: number;
   city: string;
   location: string;
@@ -28,6 +44,8 @@ export type BaristaMarketplaceCard = {
   available: boolean;
   rating: number; // x10, e.g. 47 = 4.7
   reviewCount: number;
+  workHistory: BaristaWorkHistory[];
+  distanceKm?: number | null;
   updatedAt: string;
 };
 
@@ -128,6 +146,77 @@ export function useBaristaProfiles(filters?: { search?: string; level?: string; 
   });
 }
 
+// ── Entity-level report (Coffee Owner → Barista account, distinct from review-reporting) ──
+
+export function useReportBarista() {
+  return useMutation({
+    mutationFn: ({ baristaUserId, reason }: { baristaUserId: number; reason: string }) =>
+      mutate("POST", `/api/barista/${baristaUserId}/report`, { reason }),
+  });
+}
+
+export type BaristaReport = {
+  id: number;
+  cafeOwnerId: number;
+  baristaUserId: number;
+  reason: string;
+  status: "PENDING" | "RESOLVED" | "DISMISSED";
+  createdAt: string;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  cafeOwnerName: string;
+  baristaName: string;
+};
+
+// Coffee Owner's own "Blacklist" (Part 18-21) — reports they personally submitted.
+export type MyBaristaReport = {
+  id: number;
+  cafeOwnerId: number;
+  baristaUserId: number;
+  reason: string;
+  status: "PENDING" | "RESOLVED" | "DISMISSED";
+  createdAt: string;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  baristaName: string;
+  baristaProfileImageUrl: string | null;
+  baristaLocation: string | null;
+};
+
+export function useMyBaristaReports() {
+  return useQuery<MyBaristaReport[]>({
+    queryKey: ["/api/barista/reports/mine"],
+    queryFn: () => getJson("/api/barista/reports/mine"),
+  });
+}
+
+export function useAdminBaristaReports(status?: string) {
+  return useQuery<BaristaReport[]>({
+    queryKey: ["/api/admin/barista/reports", status ?? "ALL"],
+    queryFn: () => getJson(`/api/admin/barista/reports${status ? `?status=${status}` : ""}`),
+  });
+}
+
+export function useResolveBaristaReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status, resolutionNote }: { id: number; status: "RESOLVED" | "DISMISSED"; resolutionNote?: string }) =>
+      mutate("PATCH", `/api/admin/barista/reports/${id}/resolve`, { status, resolutionNote }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/barista/reports"] }),
+  });
+}
+
+// Coffee-Owner-facing detail read for ANY Barista (not just self) — same route as
+// useMyBaristaProfile; the server sanitizes the payload down to the public `card`
+// for non-self/non-admin viewers (see GET /api/barista/profile/:userId).
+export function useBaristaProfileDetail(userId: number | null) {
+  return useQuery<{ card?: BaristaMarketplaceCard; user?: any; profile?: any }>({
+    queryKey: ["/api/barista/profile", userId],
+    queryFn: () => getJson(`/api/barista/profile/${userId}`),
+    enabled: userId != null,
+  });
+}
+
 export function useBaristaReviews(baristaUserId: number | null) {
   return useQuery<BaristaReview[]>({
     queryKey: [api.barista.reviews.list.path, baristaUserId],
@@ -139,7 +228,7 @@ export function useBaristaReviews(baristaUserId: number | null) {
 // ── Barista self-service ──
 
 export function useMyBaristaProfile(userId: number | null) {
-  return useQuery<{ user: any; profile: any }>({
+  return useQuery<{ user: any; profile: any; card: BaristaMarketplaceCard }>({
     queryKey: ["/api/barista/profile", userId],
     queryFn: () => getJson(`/api/barista/profile/${userId}`),
     enabled: userId != null,
@@ -149,8 +238,47 @@ export function useMyBaristaProfile(userId: number | null) {
 export function useUpdateBaristaProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { level?: BaristaLevel; bio?: string; skills?: string[]; dailyRateInCents?: number; city?: string; marketplaceVisible?: boolean }) =>
-      mutate("PATCH", api.barista.profile.path, data),
+    mutationFn: (data: {
+      level?: BaristaLevel; bio?: string; skills?: string[]; dailyRateInCents?: number; city?: string; marketplaceVisible?: boolean;
+      certifications?: string[]; experienceYears?: number | null; portfolioUrls?: string[];
+    }) => mutate("PATCH", api.barista.profile.path, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/barista/profile"] });
+      qc.invalidateQueries({ queryKey: [api.barista.profiles.path] });
+    },
+  });
+}
+
+// ── Work history ("Cafés précédents") ──
+
+export function useCreateBaristaWorkHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { cafeName: string; role?: string; startPeriod?: string; endPeriod?: string | null; description?: string }) =>
+      mutate("POST", api.barista.workHistory.create.path, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/barista/profile"] });
+      qc.invalidateQueries({ queryKey: [api.barista.profiles.path] });
+    },
+  });
+}
+
+export function useUpdateBaristaWorkHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; cafeName?: string; role?: string; startPeriod?: string; endPeriod?: string | null; description?: string }) =>
+      mutate("PATCH", buildUrl(api.barista.workHistory.update.path, { id }), data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/barista/profile"] });
+      qc.invalidateQueries({ queryKey: [api.barista.profiles.path] });
+    },
+  });
+}
+
+export function useDeleteBaristaWorkHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => mutate("DELETE", buildUrl(api.barista.workHistory.delete.path, { id })),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/barista/profile"] });
       qc.invalidateQueries({ queryKey: [api.barista.profiles.path] });

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -6,6 +7,7 @@ import {
   useAcademyCourses, useAcademyCourseSessions, useCreateAcademyRegistration,
   useAcademyRegistrations, useUpdateAcademyRegistrationStatus,
   useCreateAcademyReview, useAcademyReviewForRegistration,
+  startAcademyConversation,
   type AcademyCourseCard, type AcademyCourseLevel, type AcademyRegistrationWithParties, type AcademyRegistrationStatus,
 } from "@/hooks/use-barista-academy";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   GraduationCap, Search, Clock, Award, MapPin, Star, Users, Calendar,
-  CheckCircle, Send, RotateCcw, SlidersHorizontal, BookOpen,
+  CheckCircle, Send, RotateCcw, SlidersHorizontal, BookOpen, MessageCircle,
 } from "lucide-react";
 
 // Personal Academy workspace for the Barista — reuses the EXACT SAME Academy
@@ -53,16 +55,34 @@ function StatusBadge({ status }: { status: AcademyRegistrationStatus }) {
 function EnrollDialog({ course, alreadyRegistered, onClose }: { course: AcademyCourseCard | null; alreadyRegistered: boolean; onClose: () => void }) {
   const fmt = useFormatCurrency();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const createRegistration = useCreateAcademyRegistration();
   const { data: sessions = [] } = useAcademyCourseSessions(course?.id ?? null);
   const [sessionId, setSessionId] = useState<string>("");
   const [notes, setNotes] = useState("");
+  const [messaging, setMessaging] = useState(false);
 
   useEffect(() => {
     if (course) { setSessionId(""); setNotes(""); }
   }, [course?.id]);
 
   if (!course) return null;
+
+  // "Message" (Part 13) — opens the existing discussion with this Academy
+  // (service='ACADEMY'), reusing the exact same conversation system as everywhere
+  // else; no separate Barista↔Academy message table.
+  const handleMessage = async () => {
+    setMessaging(true);
+    try {
+      const res = await startAcademyConversation(course.academyUserId);
+      navigate(`/barista-marketplace/messages?service=ACADEMY&conversationId=${res.conversation.id}`);
+      onClose();
+    } catch (err: any) {
+      toast({ title: "Contact impossible", description: err?.message ?? "Veuillez réessayer.", variant: "destructive" });
+    } finally {
+      setMessaging(false);
+    }
+  };
 
   const submit = () => {
     createRegistration.mutate(
@@ -128,6 +148,16 @@ function EnrollDialog({ course, alreadyRegistered, onClose }: { course: AcademyC
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{alreadyRegistered ? "Fermer" : "Annuler"}</Button>
+          {/* Messaging is only eligible once a registration exists (server-side rule,
+              see storage.ts's isAcademyCustomerRole/academyRegistrations check) — the
+              same rule the Coffee Owner side of Academy is subject to, so the button
+              is only offered once that's true rather than presenting an action that
+              would 403. */}
+          {alreadyRegistered && (
+            <Button variant="outline" onClick={handleMessage} disabled={messaging} className="gap-1.5" data-testid="button-message-academy">
+              <MessageCircle className="w-4 h-4" />{messaging ? "…" : "Message"}
+            </Button>
+          )}
           {!alreadyRegistered && (
             <Button disabled={createRegistration.isPending} onClick={submit} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-submit-enroll">
               <Send className="w-4 h-4 mr-1.5" />{createRegistration.isPending ? "Envoi…" : "S'inscrire"}

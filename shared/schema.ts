@@ -760,8 +760,33 @@ export const baristaMarketplaceProfiles = pgTable("barista_marketplace_profiles"
   isAvailable: boolean("is_available").notNull().default(true),
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
   marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  // Certifications & expérience section (Barista Marketplace → Profil public) — real,
+  // Barista-entered values only, never hardcoded examples.
+  certifications: text("certifications").array().notNull().default([]),
+  experienceYears: integer("experience_years"), // nullable — no fabricated default
+  portfolioUrls: text("portfolio_urls").array().notNull().default([]),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Previous café / work-experience entries — one row per employer, own table (not a jsonb
+// blob) so entries can be added/removed individually like every other list-of-records
+// pattern in this schema (e.g. baristaSkills, vehicles).
+export const baristaWorkHistory = pgTable("barista_work_history", {
+  id: serial("id").primaryKey(),
+  baristaUserId: integer("barista_user_id").notNull(),
+  cafeName: text("cafe_name").notNull(),
+  role: text("role").notNull().default(""),
+  startPeriod: text("start_period").notNull().default(""), // free text (e.g. "2022" or "Jan 2022"), matches this schema's existing free-text date convention
+  endPeriod: text("end_period"), // nullable — null means "current"
+  description: text("description").notNull().default(""),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  baristaUserIdx: index("barista_work_history_user_idx").on(table.baristaUserId),
+}));
+
+export type BaristaWorkHistory = typeof baristaWorkHistory.$inferSelect;
+export type InsertBaristaWorkHistory = typeof baristaWorkHistory.$inferInsert;
 
 // Barista favorites — mirrors maintenanceFavorites exactly (same shape, same
 // dedicated-table pattern) so Coffee Owner favorites persist and stay in sync
@@ -817,6 +842,31 @@ export const baristaMarketplaceMissions = pgTable("barista_marketplace_missions"
   statusIdx: index("barista_missions_status_idx").on(table.status),
 }));
 
+// Entity-level report — a Coffee Owner flagging a Barista account itself (fraud,
+// no-show, abusive behavior, etc.), distinct from review-reporting (reportedAt/
+// reportReason on supplierProductReviews, which is a reviewed party disputing a
+// specific review about them). Resolved centrally by Admin, mirroring the same
+// reportedAt/resolvedAt shape used for reviews so the moderation shape is familiar,
+// but kept in its own table since it targets an account, not a review row.
+export const baristaReportStatusEnum = pgEnum('barista_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+
+export const baristaReports = pgTable("barista_reports", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  baristaUserId: integer("barista_user_id").notNull(),
+  reason: text("reason").notNull(),
+  status: baristaReportStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNote: text("resolution_note"),
+}, (table) => ({
+  baristaUserIdx: index("barista_reports_barista_user_idx").on(table.baristaUserId),
+  statusIdx: index("barista_reports_status_idx").on(table.status),
+}));
+export type BaristaReport = typeof baristaReports.$inferSelect;
+export type InsertBaristaReport = typeof baristaReports.$inferInsert;
+export const insertBaristaReportSchema = createInsertSchema(baristaReports).omit({ id: true, createdAt: true, resolvedAt: true });
+
 export type BaristaLevel = 'BEGINNER' | 'ADVANCED' | 'EXPERT';
 export type BaristaRequestStatus = 'PENDING' | 'DISCUSSION' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
 export type BaristaMissionStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
@@ -842,6 +892,10 @@ export type BaristaMarketplaceCard = BaristaMarketplaceProfile & {
   available: boolean;
   rating: number; // 0-50, i.e. x10 (mirrors maintenanceProfiles.rating convention)
   reviewCount: number;
+  workHistory: BaristaWorkHistory[];
+  // Haversine distance (km) between the viewing Coffee Owner's stored location and this
+  // Barista's — null when either party has no valid coordinates (never fabricated).
+  distanceKm?: number | null;
 };
 
 export type BaristaRequestWithParties = BaristaMarketplaceRequest & {
@@ -1509,6 +1563,7 @@ export const insertBaristaSkillSchema = createInsertSchema(baristaSkills).omit({
 export const insertBaristaMarketplaceProfileSchema = createInsertSchema(baristaMarketplaceProfiles).omit({ id: true, updatedAt: true });
 export const insertBaristaMarketplaceRequestSchema = createInsertSchema(baristaMarketplaceRequests).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertBaristaMarketplaceFavoriteSchema = createInsertSchema(baristaMarketplaceFavorites).omit({ id: true, createdAt: true });
+export const insertBaristaWorkHistorySchema = createInsertSchema(baristaWorkHistory).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertAcademyProfileSchema = createInsertSchema(academyProfiles).omit({ id: true, updatedAt: true });
 export const insertAcademyCourseSchema = createInsertSchema(academyCourses).omit({ id: true, createdAt: true, updatedAt: true });

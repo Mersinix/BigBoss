@@ -37,6 +37,10 @@ export interface BaristaMktFavItem {
   location: string;
   rating: number;
   available: boolean;
+  // Real Barista profile picture (users.profileImageUrl) — without this the
+  // Favorites card had no image to show and always fell back to the generic
+  // default avatar, even for Baristas with a real picture set.
+  profileImageUrl?: string | null;
 }
 
 export interface MarketingFavItem {
@@ -310,6 +314,7 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
           location: profile.location,
           rating: profile.rating / 10,
           available: profile.available,
+          profileImageUrl: profile.profileImageUrl,
         };
       }
       return { baristaMarket: next };

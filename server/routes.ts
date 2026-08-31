@@ -1248,12 +1248,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/barista/profiles", async (req: any, res) => {
     try {
       const available = req.query.available === undefined ? undefined : req.query.available === "true";
+      // Distance is only computed for a logged-in viewer with a real stored
+      // location (currently meaningful for Coffee Owners browsing /barista) —
+      // never fabricated, reuses the same haversine helper as Delivery pricing.
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
       res.json(await storage.getBaristaMarketplaceProfiles({
         search: typeof req.query.search === "string" ? req.query.search : undefined,
         level: typeof req.query.level === "string" ? req.query.level : undefined,
         skill: typeof req.query.skill === "string" ? req.query.skill : undefined,
         city: typeof req.query.city === "string" ? req.query.city : undefined,
         available,
+        viewerLocation,
       }));
     } catch (err) {
       console.error(err);
@@ -1264,12 +1273,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/barista/profile/:userId", requireAuth, async (req: any, res) => {
     const targetUserId = Number(req.params.userId);
     const viewer = await storage.getUser(req.session.userId);
-    if (!viewer || (viewer.id !== targetUserId && !["ADMIN", "SUPER_ADMIN"].includes(viewer.role))) {
+    const isSelfOrAdmin = viewer && (viewer.id === targetUserId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role));
+    const isCafeOwner = viewer?.role === "CAFE_OWNER";
+    if (!viewer || (!isSelfOrAdmin && !isCafeOwner)) {
       return res.status(403).json({ message: "Forbidden" });
     }
     const target = await storage.getUser(targetUserId);
     if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Not found" });
-    res.json({ user: target, profile: await storage.getBaristaMarketplaceProfile(targetUserId) });
+    const card = await storage.getBaristaMarketplaceCard(targetUserId, { lat: viewer.locationLat, lng: viewer.locationLng });
+    // Coffee Owners (and any non-self/non-admin viewer) only ever see the sanitized
+    // public `card` — never the raw user row (which carries password hash, email,
+    // etc.); the full `user`/`profile` payload stays reserved for the Barista
+    // themself and Admin, matching Part 21's "never expose private account info".
+    if (!isSelfOrAdmin) return res.json({ card });
+    res.json({ user: target, profile: await storage.getBaristaMarketplaceProfile(targetUserId), card });
   });
 
   app.patch("/api/barista/profile", requireAuth, async (req: any, res) => {
@@ -1283,6 +1300,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         dailyRateInCents: z.number().int().min(0).optional(),
         city: z.string().max(120).optional(),
         marketplaceVisible: z.boolean().optional(),
+        // "Certifications & expérience" (Part 18) — real, Barista-entered values only.
+        certifications: z.array(z.string().max(120)).optional(),
+        experienceYears: z.number().int().min(0).max(80).nullable().optional(),
+        portfolioUrls: z.array(z.string().max(2000)).optional(),
       }).parse(req.body);
       const profile = await storage.upsertBaristaMarketplaceProfile(user.id, body);
       broadcast("barista_profile_updated", { userId: user.id, kind: "profile" });
@@ -1311,6 +1332,109 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: "Invalid availability data" });
+    }
+  });
+
+  // ── Work history ("Cafés précédents / Expérience", Part 19) — own table, own
+  // ownership-scoped CRUD, exactly like the Skills list. Only the owning Barista
+  // may create/update/delete their own entries; entries are publicly readable as
+  // part of the Barista card (see getBaristaMarketplaceCard) — no separate route
+  // needed for viewing since they're already embedded in /api/barista/profile/:userId.
+  app.post("/api/barista/work-history", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    try {
+      const body = z.object({
+        cafeName: z.string().min(1).max(200),
+        role: z.string().max(200).optional(),
+        startPeriod: z.string().max(40).optional(),
+        endPeriod: z.string().max(40).optional().nullable(),
+        description: z.string().max(2000).optional(),
+      }).parse(req.body);
+      const entry = await storage.createBaristaWorkHistory(user.id, body);
+      broadcast("barista_profile_updated", { userId: user.id, kind: "workHistory" });
+      res.status(201).json(entry);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid work history data" });
+    }
+  });
+
+  app.patch("/api/barista/work-history/:id", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    try {
+      const body = z.object({
+        cafeName: z.string().min(1).max(200).optional(),
+        role: z.string().max(200).optional(),
+        startPeriod: z.string().max(40).optional(),
+        endPeriod: z.string().max(40).optional().nullable(),
+        description: z.string().max(2000).optional(),
+      }).parse(req.body);
+      const entry = await storage.updateBaristaWorkHistory(Number(req.params.id), user.id, body);
+      if (!entry) return res.status(404).json({ message: "Not found" });
+      broadcast("barista_profile_updated", { userId: user.id, kind: "workHistory" });
+      res.json(entry);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid work history data" });
+    }
+  });
+
+  app.delete("/api/barista/work-history/:id", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    await storage.deleteBaristaWorkHistory(Number(req.params.id), user.id);
+    broadcast("barista_profile_updated", { userId: user.id, kind: "workHistory" });
+    res.json({ ok: true });
+  });
+
+  // Entity-level report — a Coffee Owner flagging a Barista account (distinct
+  // from review-reporting). Admin resolves centrally; see /api/admin/barista/reports below.
+  app.post("/api/barista/:userId/report", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const baristaUserId = Number(req.params.userId);
+    const target = await storage.getUser(baristaUserId);
+    if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Barista not found" });
+    try {
+      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
+      const report = await storage.createBaristaReport(user.id, baristaUserId, reason);
+      broadcast("admin_barista_report_created", { baristaUserId });
+      res.status(201).json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid report data" });
+    }
+  });
+
+  // Coffee Owner's own "Blacklist" — reports THEY submitted, never another
+  // Coffee Owner's (Part 21). Same baristaReports table as Admin's queue below;
+  // this is a scoped read, not a second system.
+  app.get("/api/barista/reports/mine", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    res.json(await storage.getBaristaReportsByOwner(user.id));
+  });
+
+  app.get("/api/admin/barista/reports", requireAdmin, async (req: any, res) => {
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    res.json(await storage.getBaristaReports(status));
+  });
+
+  app.patch("/api/admin/barista/reports/:id/resolve", requireAdmin, async (req: any, res) => {
+    try {
+      const { status, resolutionNote } = z.object({
+        status: z.enum(["RESOLVED", "DISMISSED"]),
+        resolutionNote: z.string().max(1000).optional(),
+      }).parse(req.body);
+      const report = await storage.resolveBaristaReport(Number(req.params.id), status, resolutionNote);
+      if (!report) return res.status(404).json({ message: "Not found" });
+      broadcast("admin_barista_report_created", { baristaUserId: report.baristaUserId });
+      res.json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid data" });
     }
   });
 

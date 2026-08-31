@@ -20,7 +20,8 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useAuth } from "@/hooks/use-auth";
 import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
-import { MessagesPanel } from "@/components/messages/messages-panel";
+import { AlertTriangle } from "lucide-react";
+import { useAdminBaristaReports, useResolveBaristaReport } from "@/hooks/use-barista-marketplace";
 
 // Mirrors admin/print-page.tsx's architecture exactly: one aggregate overview
 // endpoint (/api/admin/barista), client-side tabs/filters over it, no
@@ -229,6 +230,8 @@ export default function AdminBaristaPage() {
   const [missionStatus, setMissionStatus] = useState("all");
 
   const { data, isLoading } = useQuery<Overview>({ queryKey: ["/api/admin/barista"] });
+  const { data: pendingReports = [] } = useAdminBaristaReports("PENDING");
+  const resolveReport = useResolveBaristaReport();
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["/api/admin/barista"] });
@@ -325,20 +328,53 @@ export default function AdminBaristaPage() {
       </div>
 
       <Tabs value={section} onValueChange={setSection}>
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-          <TabsTrigger value="baristas">Baristas</TabsTrigger>
-          <TabsTrigger value="requests">Demandes</TabsTrigger>
-          <TabsTrigger value="missions">Missions</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="reviews">Avis</TabsTrigger>
-          <TabsTrigger value="finance">Finance</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="skills">Compétences</TabsTrigger>
+        {/* Horizontally scrollable rather than wrapping — keeps every tab reachable and on
+            one line down to small/mobile screens instead of growing the header's height. */}
+        <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
+          <TabsTrigger value="overview" className="shrink-0">Vue d'ensemble</TabsTrigger>
+          <TabsTrigger value="baristas" className="shrink-0">Baristas</TabsTrigger>
+          <TabsTrigger value="requests" className="shrink-0">Demandes</TabsTrigger>
+          <TabsTrigger value="missions" className="shrink-0">Missions</TabsTrigger>
+          <TabsTrigger value="finance" className="shrink-0">Finance</TabsTrigger>
+          <TabsTrigger value="analytics" className="shrink-0">Analytics</TabsTrigger>
+          <TabsTrigger value="skills" className="shrink-0">Compétences</TabsTrigger>
         </TabsList>
 
         {/* ── Overview ── */}
         <TabsContent value="overview" className="mt-4 space-y-6">
+          {/* Entity-level reports — a Coffee Owner flagging a Barista account
+              (distinct from review-reporting, which stays under Admin → Reviews →
+              Barista). Kept inside the existing "Vue d'ensemble" tab rather than a
+              new switcher entry, per the requested final tab structure. */}
+          {pendingReports.length > 0 && (
+            <Card className="border-amber-300 dark:border-amber-700">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="w-4 h-4" /> Signalements en attente ({pendingReports.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 divide-y divide-border/50">
+                {pendingReports.map((r) => (
+                  <div key={r.id} className="p-3 flex items-start justify-between gap-3" data-testid={`row-barista-report-${r.id}`}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{r.baristaName} <span className="text-muted-foreground font-normal">signalé par {r.cafeOwnerName}</span></p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{r.reason}</p>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={resolveReport.isPending}
+                        onClick={() => resolveReport.mutate({ id: r.id, status: "DISMISSED" })} data-testid={`button-dismiss-report-${r.id}`}>
+                        Ignorer
+                      </Button>
+                      <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white" disabled={resolveReport.isPending}
+                        onClick={() => resolveReport.mutate({ id: r.id, status: "RESOLVED" })} data-testid={`button-resolve-report-${r.id}`}>
+                        Marquer résolu
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader><CardTitle className="text-base">Demandes récentes</CardTitle></CardHeader>
             <CardContent className="p-0 overflow-x-auto">
@@ -492,40 +528,11 @@ export default function AdminBaristaPage() {
           </Card>
         </TabsContent>
 
-        {/* ── Messages — reuses the exact same MessagesPanel + central Messages System
-        that Admin → Messages already uses, scoped to service="BARISTA". No second
-        messaging system: this is the same conversations Coffee Owner ↔ Barista already
-        see, governed by the same visibility/export/broadcast controls. ── */}
-        <TabsContent value="messages" className="mt-4">
-          <Card className="overflow-hidden">
-            {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service="BARISTA" />}
-          </Card>
-          <p className="text-xs text-muted-foreground mt-2">Pour la modération avancée (masquer/supprimer des conversations, export, broadcast), utilisez Admin → Messages → BARISTA.</p>
-        </TabsContent>
-
-        {/* ── Reviews (Avis) ── */}
-        <TabsContent value="reviews" className="mt-4">
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.reviews ?? []).length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucun avis Barista pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Barista</th><th className="p-3">Client</th><th className="p-3">Note</th><th className="p-3">Commentaire</th><th className="p-3">Date</th></tr></thead>
-                  <tbody>
-                    {(data?.reviews ?? []).map((r) => (
-                      <tr key={r.id} className="border-b last:border-0">
-                        <td className="p-3">{r.baristaName}</td>
-                        <td className="p-3">{r.cafeOwnerName || r.cafeName}</td>
-                        <td className="p-3 flex items-center gap-1 text-amber-500"><Star className="h-3.5 w-3.5 fill-current" />{r.rating}</td>
-                        <td className="p-3 max-w-[280px] truncate">{r.comment || "—"}</td>
-                        <td className="p-3 text-muted-foreground">{r.createdAt ? new Date(r.createdAt).toLocaleDateString("fr-FR") : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Messages and Avis (Reviews) tabs intentionally removed — Barista conversations
+        remain fully manageable via the central Admin → Messages → BARISTA area, and Barista
+        reviews via the central Admin → Reviews → Barista tab (see admin/messages-page.tsx
+        and admin/reviews-page.tsx). No data was removed — only this page's redundant
+        duplicate views into that same data. */}
 
         {/* ── Finance — derived entirely from mission.rateInCents, exactly like the
         Barista's own Revenus page (getBaristaRevenueSummary): no platform commission

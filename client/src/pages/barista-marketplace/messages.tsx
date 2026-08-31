@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -12,14 +13,18 @@ import { MessageCircle, Send, ChevronLeft } from "lucide-react";
 import { getAvatarUrl } from "@/lib/avatar";
 
 // Reuses the exact same conversations/messages API as every other service
-// (Shop, Maintenance) — same tables, same endpoints, filtered to service
-// "BARISTA". This mirrors the Maintenance provider's own inline Messages tab
-// (client/src/pages/maintenance/dashboard.tsx) so Coffee Owner <-> Barista
-// conversations stay in the one shared messaging system.
+// (Shop, Maintenance) — same tables, same endpoints. A Barista legitimately has
+// two kinds of correspondents: Coffee Owners (service="BARISTA") and Academies
+// they're registered/registering with (service="ACADEMY", Part 14) — both are
+// shown here rather than splitting into a second messaging surface. Supports
+// deep-linking via ?service=&conversationId= (Part 13's "Message" action from
+// the Academy formation modal), mirroring client/src/pages/delivery/messages-page.tsx's
+// existing ?conversationId= convention.
 export default function BaristaMarketplaceMessagesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const search = useSearch();
   const [activeId, setActiveId] = useState<number | null>(null);
   const [input, setInput] = useState("");
 
@@ -28,8 +33,21 @@ export default function BaristaMarketplaceMessagesPage() {
     enabled: !!user,
     refetchInterval: 30000,
   });
-  const baristaConversations = conversations.filter((conversation) => conversation.service === "BARISTA");
+  const baristaConversations = conversations.filter((conversation) => conversation.service === "BARISTA" || conversation.service === "ACADEMY");
   const activeConversation = baristaConversations.find((conversation) => conversation.id === activeId) ?? null;
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const deepLinkId = params.get("conversationId");
+    if (!deepLinkId) return;
+    const id = Number(deepLinkId);
+    setActiveId(id);
+    apiRequest("PATCH", `/api/messages/conversations/${id}/read`).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const { data: messagesData, isLoading: messagesLoading } = useQuery<{ messages: ConversationMessageRow[] }>({
     queryKey: ["/api/messages/conversations", activeId, "messages"],
@@ -64,7 +82,7 @@ export default function BaristaMarketplaceMessagesPage() {
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Messages</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Vos conversations avec les cafés.</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Vos conversations avec les cafés et les académies.</p>
       </div>
 
       <Card className="rounded-2xl overflow-hidden">
@@ -119,7 +137,9 @@ export default function BaristaMarketplaceMessagesPage() {
                 <p className="text-sm font-semibold truncate">
                   {activeConversation.title ?? (activeConversation.otherParticipants.map((participant) => participant.name).join(", ") || "Café")}
                 </p>
-                <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700">BARISTA</span>
+                <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded ${activeConversation.service === "ACADEMY" ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"}`}>
+                  {activeConversation.service === "ACADEMY" ? "ACADEMY" : "BARISTA"}
+                </span>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
                 {messagesLoading ? <p className="text-xs text-muted-foreground text-center pt-6">Chargement…</p> : (messagesData?.messages ?? []).map((message) => {

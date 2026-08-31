@@ -289,6 +289,9 @@ export const api = {
         dailyRateInCents: z.number().int().min(0).optional(),
         city: z.string().optional(),
         marketplaceVisible: z.boolean().optional(),
+        certifications: z.array(z.string()).optional(),
+        experienceYears: z.number().int().min(0).nullable().optional(),
+        portfolioUrls: z.array(z.string()).optional(),
       }),
       responses: { 200: z.custom<any>() },
     },
@@ -301,6 +304,37 @@ export const api = {
         isOnVacation: z.boolean(),
       }),
       responses: { 200: z.custom<any>() },
+    },
+    workHistory: {
+      create: {
+        method: 'POST' as const,
+        path: '/api/barista/work-history' as const,
+        input: z.object({
+          cafeName: z.string(),
+          role: z.string().optional(),
+          startPeriod: z.string().optional(),
+          endPeriod: z.string().optional().nullable(),
+          description: z.string().optional(),
+        }),
+        responses: { 201: z.custom<any>() },
+      },
+      update: {
+        method: 'PATCH' as const,
+        path: '/api/barista/work-history/:id' as const,
+        input: z.object({
+          cafeName: z.string().optional(),
+          role: z.string().optional(),
+          startPeriod: z.string().optional(),
+          endPeriod: z.string().optional().nullable(),
+          description: z.string().optional(),
+        }),
+        responses: { 200: z.custom<any>() },
+      },
+      delete: {
+        method: 'DELETE' as const,
+        path: '/api/barista/work-history/:id' as const,
+        responses: { 200: z.custom<any>() },
+      },
     },
     requests: {
       list: {

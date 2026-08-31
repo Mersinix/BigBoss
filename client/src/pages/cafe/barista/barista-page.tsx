@@ -39,6 +39,8 @@ import {
   Sun,
   Moon,
   Send,
+  Zap,
+  Ban,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import {
@@ -47,6 +49,9 @@ import {
   useCreateBaristaRequest,
   type BaristaMarketplaceCard,
 } from "@/hooks/use-barista-marketplace";
+import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
+import { BaristaFastSearch } from "@/components/barista/barista-fast-search";
+import { BaristaBlacklistModal } from "@/components/barista/barista-blacklist-modal";
 
 // This page is now Marketplace Baristas ONLY — Barista Academy was split out
 // into its own independent page/service, client/src/pages/cafe/barista/barista-academy-page.tsx
@@ -108,7 +113,7 @@ function StarRating({ rating }: { rating: number }) {
 
 // ── Recruit Dialog ─────────────────────────────────────────────────────────────
 
-function RecruitDialog({
+export function RecruitDialog({
   barista,
   open,
   onClose,
@@ -119,7 +124,6 @@ function RecruitDialog({
   onClose: () => void;
   isDark: boolean;
 }) {
-  const t = useTheme(isDark);
   const fmt = useFormatCurrency();
   const { toast } = useToast();
   const createRequest = useCreateBaristaRequest();
@@ -163,18 +167,25 @@ function RecruitDialog({
     );
   };
 
+  // Theme fix: this app's dark mode is NOT Tailwind's `dark:` class strategy —
+  // nothing ever adds a `.dark` class to the DOM (see useTheme() above), so
+  // `bg-background`/`text-foreground`/the Input/Textarea base components' own
+  // CSS-var tokens never actually change with the navbar toggle. Reusing the
+  // same `useTheme(isDark)` ternary-class helper this page already relies on
+  // everywhere else that IS correctly dark-mode-aware.
+  const t = useTheme(isDark);
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
-      <DialogContent className="sm:max-w-md rounded-2xl border-0 shadow-2xl">
+      <DialogContent className={`sm:max-w-md rounded-2xl border-0 shadow-2xl ${t.pageBg}`}>
         <VisuallyHidden><DialogTitle>Recruter {barista.name}</DialogTitle></VisuallyHidden>
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <Avatar className="w-10 h-10">
               <AvatarImage src={getAvatarUrl(barista as any)} alt={barista.name} />
-              <AvatarFallback className="bg-green-100 text-green-700 font-bold text-sm">{barista.initials}</AvatarFallback>
+              <AvatarFallback className={`font-bold text-sm ${isDark ? "bg-green-900/50 text-green-300" : "bg-green-100 text-green-700"}`}>{barista.initials}</AvatarFallback>
             </Avatar>
             <div>
-              <h2 className="font-bold text-base leading-tight">{barista.name}</h2>
+              <h2 className={`font-bold text-base leading-tight ${t.textPrimary}`}>{barista.name}</h2>
               <p className={`text-xs ${t.textMuted}`}>Tarif indicatif : {fmt(barista.dailyRateInCents)} / jour</p>
             </div>
           </div>
@@ -207,7 +218,7 @@ function RecruitDialog({
             data-testid="input-recruit-message"
           />
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={onClose}>Annuler</Button>
+            <Button variant="outline" className={`${t.textPrimary} ${isDark ? "border-gray-700" : ""}`} onClick={onClose}>Annuler</Button>
             <Button
               disabled={!missionType.trim() || !startDate || createRequest.isPending}
               onClick={submit}
@@ -231,12 +242,14 @@ function BaristaCard({
   canAct,
   onRecruit,
   onChat,
+  onOpenDetail,
   isDark,
 }: {
   barista: BaristaMarketplaceCard;
   canAct: boolean;
   onRecruit: (barista: BaristaMarketplaceCard) => void;
   onChat: (barista: BaristaMarketplaceCard) => void;
+  onOpenDetail: (barista: BaristaMarketplaceCard) => void;
   isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
@@ -244,10 +257,14 @@ function BaristaCard({
   const faved = useFavorites((s) => !!s.baristaMarket[barista.userId]);
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
 
+  // Wide card (Part 23): left half = photo, right half = information. Same
+  // visual language (colors/badges/icons) as before, just laid out horizontally
+  // instead of the previous small-avatar-on-top layout.
   return (
     <div
       data-testid={`card-barista-${barista.userId}`}
-      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
+      onClick={() => onOpenDetail(barista)}
+      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
     >
       <button
         className="absolute top-2 right-2 z-10 w-6 h-6 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
@@ -261,44 +278,43 @@ function BaristaCard({
             location: barista.location,
             rating: barista.rating / 10,
             available: barista.available,
+            profileImageUrl: barista.profileImageUrl,
           });
         }}
         data-testid={`button-fav-barista-${barista.userId}`}
       >
         <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
       </button>
-      <div className="p-3 flex flex-col gap-2">
-        <div className="flex items-start gap-3">
-          <Avatar className="w-10 h-10 shrink-0">
-            <AvatarImage src={getAvatarUrl(barista as any)} alt={barista.name} />
-            <AvatarFallback className="bg-green-100 text-green-700 font-bold text-sm">
-              {barista.initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-1">
-              <h3 className="font-bold text-sm leading-tight truncate group-hover:text-green-600 transition-colors">
-                {barista.name}
-              </h3>
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 mr-5 ${barista.available ? "bg-green-500" : "bg-gray-300"}`}
-                title={barista.available ? "Disponible" : "Indisponible"}
-              />
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <Badge
-                className={`text-[10px] border-0 px-1.5 ${BARISTA_LEVEL_COLORS[barista.level]}`}
-              >
-                {BARISTA_LEVEL_LABELS[barista.level]}
-              </Badge>
-              {barista.location && (
-                <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
-                  <MapPin className="w-2.5 h-2.5" />
-                  {barista.location}
-                </span>
-              )}
-            </div>
-          </div>
+
+      {/* Left half — photo, real profile picture with existing avatar fallback */}
+      <div className="w-2/5 shrink-0 relative">
+        <Avatar className="w-full h-full rounded-none">
+          <AvatarImage src={getAvatarUrl(barista as any)} alt={barista.name} className="object-cover" />
+          <AvatarFallback className="rounded-none bg-green-100 text-green-700 font-bold text-2xl">
+            {barista.initials}
+          </AvatarFallback>
+        </Avatar>
+        <span
+          className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${barista.available ? "bg-green-500" : "bg-gray-300"}`}
+          title={barista.available ? "Disponible" : "Indisponible"}
+        />
+      </div>
+
+      {/* Right half — information */}
+      <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
+        <h3 className="font-bold text-sm leading-tight truncate group-hover:text-green-600 transition-colors pr-5">
+          {barista.name}
+        </h3>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={`text-[10px] border-0 px-1.5 ${BARISTA_LEVEL_COLORS[barista.level]}`}>
+            {BARISTA_LEVEL_LABELS[barista.level]}
+          </Badge>
+          {barista.location && (
+            <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
+              <MapPin className="w-2.5 h-2.5" />
+              {barista.location}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -308,7 +324,7 @@ function BaristaCard({
 
         {barista.skills.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {barista.skills.map((skill) => (
+            {barista.skills.slice(0, 4).map((skill) => (
               <span
                 key={skill}
                 className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${t.mutedBg} ${t.textMuted}`}
@@ -322,19 +338,19 @@ function BaristaCard({
         {barista.availableDays.length > 0 && (
           <div className={`flex items-center gap-1 text-[11px] ${t.textMuted}`}>
             <CalendarDays className="w-3 h-3 shrink-0" />
-            <span>{barista.availableDays.join(" · ")}</span>
+            <span className="truncate">{barista.availableDays.join(" · ")}</span>
           </div>
         )}
 
         <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <p className={`text-[10px] ${t.textSubtle}`}>Tarif / jour</p>
               <p className="font-bold text-sm text-green-600">
                 {fmt(barista.dailyRateInCents)}
               </p>
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
               <Button
                 size="sm"
                 variant="outline"
@@ -381,6 +397,9 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   const [baristaLocation, setBaristaLocation] = useState("");
 
   const [recruitTarget, setRecruitTarget] = useState<BaristaMarketplaceCard | null>(null);
+  const [detailBaristaId, setDetailBaristaId] = useState<number | null>(null);
+  const [fastSearchOpen, setFastSearchOpen] = useState(false);
+  const [blacklistOpen, setBlacklistOpen] = useState(false);
 
   const { data: profiles = [], isLoading: profilesLoading, isError: profilesError } = useBaristaProfiles();
   const { data: skillOptions = [] } = useBaristaSkills();
@@ -489,6 +508,28 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         {/* Content */}
         <div className="relative">
           <div className="flex justify-end items-center gap-2 mb-9">
+            {canAct && (
+              <button
+                onClick={() => setBlacklistOpen(true)}
+                aria-label="Baristas signalés"
+                title="Baristas signalés"
+                data-testid="button-open-blacklist"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+              >
+                <Ban className="w-4 h-4" />
+              </button>
+            )}
+            {canAct && (
+              <button
+                onClick={() => setFastSearchOpen(true)}
+                aria-label="Fast Search"
+                title="Fast Search — parcourir les baristas"
+                data-testid="button-open-fast-search"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-green-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+              >
+                <Zap className="w-4 h-4" />
+              </button>
+            )}
             <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
@@ -627,9 +668,11 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
           </div>
 
           {profilesLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <Skeleton key={i} className="h-52 rounded-2xl" />
+            // ~2x the previous card width (Part 23-24): fewer columns per breakpoint,
+            // 1 per row on mobile.
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-36 rounded-2xl" />
               ))}
             </div>
           ) : profilesError ? (
@@ -645,7 +688,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
               <p className="text-sm text-gray-400">Essayez d'ajuster vos filtres.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredBaristas.map((barista) => (
                  <BaristaCard
                   key={barista.userId}
@@ -653,6 +696,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   canAct={canAct}
                   onRecruit={handleRecruit}
                   onChat={handleChat}
+                  onOpenDetail={(b) => setDetailBaristaId(b.userId)}
                   isDark={isDark}
                 />
               ))}
@@ -663,12 +707,34 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
       </>
       )}
 
+      {/* Fast Search (Parts 30-32) — same `profiles` list as the grid above,
+          same visibility/availability rules, no separate data copy. Rendered
+          BEFORE Details/Recruit below so — when both are open at once — the
+          Details/Recruit dialog mounts later in the DOM and stacks visually
+          above Fast Search, which stays open underneath instead of closing. */}
+      <BaristaFastSearch
+        open={fastSearchOpen}
+        onClose={() => setFastSearchOpen(false)}
+        baristas={profiles}
+        onRecruit={(b) => handleRecruit(b)}
+        onOpenDetail={(b) => setDetailBaristaId(b.userId)}
+      />
+
       <RecruitDialog
         barista={recruitTarget}
         open={!!recruitTarget}
         onClose={() => setRecruitTarget(null)}
         isDark={isDark}
       />
+
+      <BaristaDetailModal
+        baristaUserId={detailBaristaId}
+        open={detailBaristaId != null}
+        onClose={() => setDetailBaristaId(null)}
+        onRecruit={(b) => { setDetailBaristaId(null); handleRecruit(b); }}
+      />
+
+      <BaristaBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} />
     </div>
   );
 }

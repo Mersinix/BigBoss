@@ -10,7 +10,7 @@ import {
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
   landingConfig, messagingSettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
-  maintenanceCompetencies, maintenanceZones,
+  maintenanceCompetencies, maintenanceZones, maintenanceReports,
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   baristaWorkHistory, baristaReports,
@@ -62,6 +62,7 @@ import {
   type BaristaMarketplaceCard, type BaristaRequestWithParties, type BaristaMissionWithParties,
   type BaristaWorkHistory, type InsertBaristaWorkHistory,
   type BaristaReport, type InsertBaristaReport,
+  type MaintenanceReport, type InsertMaintenanceReport,
   type BaristaRequestStatus, type BaristaMissionStatus,
   type AcademyProfile, type InsertAcademyProfile, type AcademyCourse, type InsertAcademyCourse,
   type AcademyCourseSession, type AcademyRegistration,
@@ -292,8 +293,8 @@ export interface IStorage {
   deleteMaintenanceReview(reviewId: number): Promise<boolean>;
   getMaintenanceAdminOverview(): Promise<any>;
   getMaintenanceTaxonomy(): Promise<{ competencies: MaintenanceCompetency[]; zones: MaintenanceZone[] }>;
-  createMaintenanceCompetency(name: string): Promise<MaintenanceCompetency>;
-  updateMaintenanceCompetency(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceCompetency | undefined>;
+  createMaintenanceCompetency(name: string, icon?: string | null): Promise<MaintenanceCompetency>;
+  updateMaintenanceCompetency(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceCompetency | undefined>;
   deleteMaintenanceCompetency(id: number): Promise<void>;
   createMaintenanceZone(name: string): Promise<MaintenanceZone>;
   updateMaintenanceZone(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceZone | undefined>;
@@ -3102,6 +3103,7 @@ export class DatabaseStorage implements IStorage {
     profileType?: string;
     available?: boolean;
     location?: string;
+    viewerLocation?: { lat?: string | null; lng?: string | null } | null;
   }): Promise<MaintenanceMarketplaceCard[]> {
     const rows = await db.select({ profile: maintenanceProfiles, user: users })
       .from(maintenanceProfiles)
@@ -3110,7 +3112,8 @@ export class DatabaseStorage implements IStorage {
         eq(users.role, "MAINTENANCE" as any),
         eq(users.status, "approved"),
         eq(maintenanceProfiles.marketplaceVisible, true),
-       eq(maintenanceProfiles.isOnVacation, false),
+        eq(maintenanceProfiles.isOnVacation, false),
+        eq(maintenanceProfiles.isFrozen, false),
       ));
 
     const maintenanceUserIds = rows.map(({ profile }) => profile.userId);
@@ -3132,6 +3135,8 @@ export class DatabaseStorage implements IStorage {
       reviewStats.set(review.maintenanceUserId, current);
     }
 
+    const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
+
     const cards = rows.map(({ profile, user }) => {
       const available = profile.isAvailable && !profile.isOnVacation;
       const location = user.locationAddress ?? profile.coverageArea ?? "";
@@ -3139,6 +3144,8 @@ export class DatabaseStorage implements IStorage {
       const workingHours = profile.workingDays.length
         ? `${profile.workingDays.join(", ")} · ${profile.startTime}–${profile.endTime}`
         : `${profile.startTime}–${profile.endTime}`;
+      const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+      const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
       return {
         ...profile,
         rating: stats ? Math.round((stats.sum / stats.total) * 10) : 0,
@@ -3152,6 +3159,7 @@ export class DatabaseStorage implements IStorage {
         type: profile.profileType,
         specialty: profile.categories[0] ?? "Maintenance",
         workingHours,
+        distanceKm,
       } as MaintenanceMarketplaceCard;
     });
 
@@ -3195,6 +3203,41 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  // Single-provider public card — sanitized shape used for the Coffee-Owner-
+  // facing Details modal (Part 17), mirroring getBaristaMarketplaceCard exactly.
+  async getMaintenanceCard(userId: number, viewerLocation?: { lat?: string | null; lng?: string | null } | null): Promise<MaintenanceMarketplaceCard | undefined> {
+    const [row] = await db.select({ profile: maintenanceProfiles, user: users })
+      .from(maintenanceProfiles)
+      .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
+      .where(eq(maintenanceProfiles.userId, userId));
+    if (!row) return undefined;
+    const reviews = await db.select({ rating: supplierProductReviews.rating }).from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.reviewType, "MAINTENANCE"), eq(supplierProductReviews.maintenanceUserId as any, userId)));
+    const rating = reviews.length ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) : 0;
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const providerPos = this.parseLatLng({ lat: row.user.locationLat, lng: row.user.locationLng });
+    const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+    const workingHours = row.profile.workingDays.length
+      ? `${row.profile.workingDays.join(", ")} · ${row.profile.startTime}–${row.profile.endTime}`
+      : `${row.profile.startTime}–${row.profile.endTime}`;
+    return {
+      ...row.profile,
+      userId: row.user.id,
+      name: row.user.name,
+      phone: row.user.phone ?? null,
+      profileImageUrl: row.user.profileImageUrl ?? null,
+      location: row.user.locationAddress ?? row.profile.coverageArea ?? "",
+      initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+      available: row.profile.isAvailable && !row.profile.isOnVacation,
+      type: row.profile.profileType,
+      specialty: row.profile.categories[0] ?? "Maintenance",
+      workingHours,
+      distanceKm,
+      rating,
+      reviewCount: reviews.length,
+    };
+  }
+
   async upsertMaintenanceProfile(userId: number, updates: Partial<InsertMaintenanceProfile>): Promise<MaintenanceProfile> {
     const current = await this.getMaintenanceProfile(userId);
     const [updated] = await db.update(maintenanceProfiles)
@@ -3232,6 +3275,56 @@ export class DatabaseStorage implements IStorage {
   async createMaintenanceReservation(data: InsertMaintenanceReservation): Promise<MaintenanceReservation> {
     const [created] = await db.insert(maintenanceReservations).values(data as any).returning();
     return created;
+  }
+
+  // Coffee Owner self-service cancellation (Part 18) — only valid while the
+  // Maintenance professional hasn't confirmed yet, matching the existing
+  // status vocabulary exactly (PENDING → CANCELLED); no new state introduced.
+  async cancelMaintenanceReservationByOwner(id: number, cafeOwnerId: number): Promise<MaintenanceReservation | undefined> {
+    const [updated] = await db.update(maintenanceReservations)
+      .set({ status: "CANCELLED", updatedAt: new Date() })
+      .where(and(
+        eq(maintenanceReservations.id, id),
+        eq(maintenanceReservations.cafeOwnerId, cafeOwnerId),
+        eq(maintenanceReservations.status, "PENDING"),
+      ))
+      .returning();
+    return updated;
+  }
+
+  // Admin reservation management (Part 9) — unlike the provider-scoped
+  // updateMaintenanceReservationStatus above, these are not ownership-scoped
+  // since Admin acts on any reservation; EDIT still goes through the same
+  // status vocabulary (no invalid transition is possible client-side beyond
+  // what the existing enum allows), FREEZE only touches the new administrative
+  // isFrozen flag (never the business status), DELETE is a genuine hard delete
+  // gated by requireAdmin + a confirmation step client-side.
+  async adminUpdateMaintenanceReservation(id: number, data: Partial<{
+    service: string; date: string; time: string | null; location: string; description: string;
+    category: string; urgency: string; contactPhone: string; status: string;
+  }>): Promise<MaintenanceReservation | undefined> {
+    const [updated] = await db.update(maintenanceReservations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(maintenanceReservations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async setMaintenanceReservationFrozen(id: number, isFrozen: boolean): Promise<MaintenanceReservation | undefined> {
+    const [updated] = await db.update(maintenanceReservations)
+      .set({ isFrozen, updatedAt: new Date() })
+      .where(eq(maintenanceReservations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteMaintenanceReservation(id: number): Promise<void> {
+    await db.delete(maintenanceReservations).where(eq(maintenanceReservations.id, id));
+  }
+
+  async getMaintenanceReservationById(id: number): Promise<MaintenanceReservation | undefined> {
+    const [row] = await db.select().from(maintenanceReservations).where(eq(maintenanceReservations.id, id));
+    return row;
   }
 
   async updateMaintenanceReservationStatus(id: number, providerId: number, status: string, schedule?: { date?: string; time?: string | null }): Promise<MaintenanceReservation | undefined> {
@@ -3397,14 +3490,14 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createMaintenanceCompetency(name: string): Promise<MaintenanceCompetency> {
-    const [created] = await db.insert(maintenanceCompetencies).values({ name: name.trim() }).returning();
+  async createMaintenanceCompetency(name: string, icon?: string | null): Promise<MaintenanceCompetency> {
+    const [created] = await db.insert(maintenanceCompetencies).values({ name: name.trim(), icon: icon?.trim() || null }).returning();
     return created;
   }
 
-  async updateMaintenanceCompetency(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceCompetency | undefined> {
+  async updateMaintenanceCompetency(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceCompetency | undefined> {
     const [updated] = await db.update(maintenanceCompetencies)
-      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), ...(data.icon !== undefined ? { icon: data.icon?.trim() || null } : {}), updatedAt: new Date() })
       .where(eq(maintenanceCompetencies.id, id)).returning();
     return updated;
   }
@@ -3507,6 +3600,50 @@ export class DatabaseStorage implements IStorage {
       eq(maintenanceFavorites.userId, userId),
       eq(maintenanceFavorites.maintenanceUserId, maintenanceUserId),
     ));
+  }
+
+  // ── Entity-level Maintenance reports (Coffee Owner "Blacklist", Part 22) —
+  // own table (maintenanceReports), own service scope, mirrors baristaReports
+  // exactly (Part 23: service data must never cross). ──────────────────────
+
+  async createMaintenanceReport(cafeOwnerId: number, maintenanceUserId: number, reason: string): Promise<MaintenanceReport> {
+    const [created] = await db.insert(maintenanceReports).values({ cafeOwnerId, maintenanceUserId, reason }).returning();
+    return created;
+  }
+
+  async getMaintenanceReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(MaintenanceReport & { cafeOwnerName: string; maintenanceName: string })[]> {
+    const rows = await db.select().from(maintenanceReports)
+      .where(status ? eq(maintenanceReports.status, status) : undefined)
+      .orderBy(desc(maintenanceReports.createdAt));
+    if (rows.length === 0) return [];
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.maintenanceUserId])));
+    const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
+    return rows.map((r) => ({ ...r, cafeOwnerName: userMap.get(r.cafeOwnerId) ?? "—", maintenanceName: userMap.get(r.maintenanceUserId) ?? "—" }));
+  }
+
+  async getMaintenanceReportsByOwner(cafeOwnerId: number): Promise<(MaintenanceReport & {
+    maintenanceName: string; maintenanceProfileImageUrl: string | null; maintenanceLocation: string | null;
+  })[]> {
+    const rows = await db.select().from(maintenanceReports)
+      .where(eq(maintenanceReports.cafeOwnerId, cafeOwnerId))
+      .orderBy(desc(maintenanceReports.createdAt));
+    if (rows.length === 0) return [];
+    const maintenanceIds = Array.from(new Set(rows.map((r) => r.maintenanceUserId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl, locationAddress: users.locationAddress })
+      .from(users).where(inArray(users.id, maintenanceIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    return rows.map((r) => {
+      const m = map.get(r.maintenanceUserId);
+      return { ...r, maintenanceName: m?.name ?? "—", maintenanceProfileImageUrl: m?.profileImageUrl ?? null, maintenanceLocation: m?.locationAddress ?? null };
+    });
+  }
+
+  async resolveMaintenanceReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<MaintenanceReport | undefined> {
+    const [updated] = await db.update(maintenanceReports)
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .where(eq(maintenanceReports.id, id))
+      .returning();
+    return updated;
   }
 
   // ── PRINT ────────────────────────────────────────────────────────────────────

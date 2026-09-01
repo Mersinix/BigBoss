@@ -170,6 +170,7 @@ function AccountPanel({
   // registrations). No duplicate data source.
   const { data: academyRegistrations = [], isLoading: academyRegistrationsLoading } = useAcademyRegistrations();
   const [detailPrintOrder, setDetailPrintOrder] = useState<PrintOrderWithParties | null>(null);
+  const [detailMaintenanceReservation, setDetailMaintenanceReservation] = useState<any | null>(null);
   const [detailBaristaMission, setDetailBaristaMission] = useState<BaristaMission | null>(null);
   const [detailBaristaRequest, setDetailBaristaRequest] = useState<BaristaRequest | null>(null);
 
@@ -247,6 +248,15 @@ function AccountPanel({
       apiRequest("PATCH", `/api/maintenance/reservations/${id}/reschedule-response`, { accepted }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
+    },
+  });
+  // Part 18 — Coffee Owner cancellation, only valid while still PENDING (server
+  // enforces this too via cancelMaintenanceReservationByOwner's WHERE clause).
+  const cancelMaintenanceReservation = useMutation({
+    mutationFn: (id: number) => apiRequest("PATCH", `/api/maintenance/reservations/${id}/cancel`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
+      setDetailMaintenanceReservation(null);
     },
   });
 
@@ -582,7 +592,11 @@ function AccountPanel({
                       return (
                         <div
                           key={reservation.id}
-                          className={`border rounded-2xl p-4 space-y-3 ${cardBg}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setDetailMaintenanceReservation(reservation)}
+                          className={`w-full text-left border rounded-2xl p-4 space-y-3 cursor-pointer ${cardBg}`}
+                          data-testid={`card-reservation-maintenance-${reservation.id}`}
                         >
                           {/* Header */}
                           <div className="flex items-start justify-between gap-3">
@@ -663,12 +677,13 @@ function AccountPanel({
                                     size="sm"
                                     className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white"
                                     disabled={respondToReschedule.isPending}
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       respondToReschedule.mutate({
                                         id: reservation.id,
                                         accepted: true,
-                                      })
-                                    }
+                                      });
+                                    }}
                                   >
                                     Confirmer modification
                                   </Button>
@@ -678,18 +693,38 @@ function AccountPanel({
                                     variant="outline"
                                     className="h-8 rounded-xl border-red-200 text-red-600"
                                     disabled={respondToReschedule.isPending}
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       respondToReschedule.mutate({
                                         id: reservation.id,
                                         accepted: false,
-                                      })
-                                    }
+                                      });
+                                    }}
                                   >
                                     Rejeter modification
                                   </Button>
                                 </div>
                               </div>
                             )}
+
+                          {/* Part 18 — cancellation only while still unconfirmed */}
+                          {reservation.status === "PENDING" && (
+                            <div className="pt-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-xl border-red-200 text-red-600 hover:bg-red-50"
+                                disabled={cancelMaintenanceReservation.isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelMaintenanceReservation.mutate(reservation.id);
+                                }}
+                                data-testid={`button-cancel-reservation-${reservation.id}`}
+                              >
+                                Annuler
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -877,6 +912,51 @@ function AccountPanel({
                   </div>
                   {order.deliveryAddress && <div><p className={`text-xs ${textMuted}`}>Livraison</p><p>{order.deliveryAddress}</p></div>}
                   {order.notes && <div><p className={`text-xs ${textMuted}`}>Notes</p><p>{order.notes}</p></div>}
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Maintenance reservation details (Part 19) — resolved live from the
+            same maintenanceReservations query, same status vocabulary/meta as
+            the card above. */}
+        <Dialog open={!!detailMaintenanceReservation} onOpenChange={(o) => !o && setDetailMaintenanceReservation(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogTitle>Réservation Maintenance {detailMaintenanceReservation ? `#${detailMaintenanceReservation.id}` : ""}</DialogTitle>
+            <DialogDescription className="sr-only">Détails de la réservation Maintenance</DialogDescription>
+            {(() => {
+              const reservation = detailMaintenanceReservation
+                ? (maintenanceReservations.find((r: any) => r.id === detailMaintenanceReservation.id) ?? detailMaintenanceReservation)
+                : null;
+              if (!reservation) return null;
+              const meta = reservationStatus[reservation.status] ?? reservationStatus.PENDING;
+              return (
+                <div className="space-y-3 text-sm">
+                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><p className={`text-xs ${textMuted}`}>Maintenance</p><p className="font-medium">{reservation.maintenanceName || "—"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Service / catégorie</p><p className="font-medium">{reservation.service}{reservation.category ? ` · ${reservation.category}` : ""}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Date / heure</p><p>{reservation.date} {reservation.time || ""}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Urgence</p><p>{reservation.urgency || "NORMAL"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Lieu</p><p>{reservation.location || "—"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Contact</p><p>{reservation.contactPhone || reservation.ownerPhone || "—"}</p></div>
+                  </div>
+                  {reservation.description && <div><p className={`text-xs ${textMuted}`}>Besoin</p><p>{reservation.description}</p></div>}
+                  {reservation.status === "PENDING" && (
+                    <div className="pt-2 border-t border-border/50 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                        disabled={cancelMaintenanceReservation.isPending}
+                        onClick={() => cancelMaintenanceReservation.mutate(reservation.id)}
+                        data-testid="button-cancel-reservation-modal"
+                      >
+                        {cancelMaintenanceReservation.isPending ? "Annulation…" : "Annuler la réservation"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })()}

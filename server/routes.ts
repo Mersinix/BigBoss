@@ -502,12 +502,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const available = req.query.available === undefined
         ? undefined
         : req.query.available === "true";
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
       res.json(await storage.getMaintenanceProfiles({
         search: typeof req.query.search === "string" ? req.query.search : undefined,
         category: typeof req.query.category === "string" ? req.query.category : undefined,
         profileType: typeof req.query.profileType === "string" ? req.query.profileType : undefined,
         available,
         location: typeof req.query.location === "string" ? req.query.location : undefined,
+        viewerLocation,
       }));
     } catch (err) {
       console.error(err);
@@ -534,12 +540,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/maintenance/profile/:userId", requireAuth, async (req: any, res) => {
     const targetUserId = Number(req.params.userId);
     const viewer = await storage.getUser(req.session.userId);
-    if (!viewer || (viewer.id !== targetUserId && !["ADMIN", "SUPER_ADMIN"].includes(viewer.role))) {
+    const isSelfOrAdmin = viewer && (viewer.id === targetUserId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role));
+    const isCafeOwner = viewer?.role === "CAFE_OWNER";
+    if (!viewer || (!isSelfOrAdmin && !isCafeOwner)) {
       return res.status(403).json({ message: "Forbidden" });
     }
     const target = await storage.getUser(targetUserId);
     if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Not found" });
-    res.json({ user: target, profile: await storage.getMaintenanceProfile(targetUserId) });
+    const card = await storage.getMaintenanceCard(targetUserId, { lat: viewer.locationLat, lng: viewer.locationLng });
+    // Coffee Owners only ever see the sanitized public `card` — never the raw
+    // user row (password hash, email, etc.) — matching the same fix applied to
+    // the equivalent Barista route.
+    if (!isSelfOrAdmin) return res.json({ card });
+    res.json({ user: target, profile: await storage.getMaintenanceProfile(targetUserId), card });
   });
 
   app.patch("/api/maintenance/profile", requireAuth, async (req: any, res) => {
@@ -1122,8 +1135,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/maintenance/competencies", requireAdmin, async (req, res) => {
     try {
-      const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
-      const item = await storage.createMaintenanceCompetency(name);
+      const { name, icon } = z.object({ name: z.string().trim().min(1).max(120), icon: z.string().max(8).optional().nullable() }).parse(req.body);
+      const item = await storage.createMaintenanceCompetency(name, icon);
       broadcast("maintenance_updated", { kind: "taxonomy" });
       res.status(201).json(item);
     } catch (err) {
@@ -1136,6 +1149,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const body = z.object({
         name: z.string().trim().min(1).max(120).optional(),
+        icon: z.string().max(8).optional().nullable(),
         isActive: z.boolean().optional(),
         isFrozen: z.boolean().optional(),
       }).parse(req.body);
@@ -1192,6 +1206,170 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       broadcast("maintenance_updated", { kind: "taxonomy" });
       res.json({ ok: true });
     } catch { res.status(500).json({ message: "Failed to delete zone" }); }
+  });
+
+  // ── Admin Maintenance account actions (Part 6-7) — EDIT reuses the existing
+  // upsertMaintenanceProfile (the same method the Maintenance user's own
+  // self-service PATCH /api/maintenance/profile calls); FREEZE toggles the new
+  // admin-only isFrozen flag; DELETE reuses the existing generic user deletion
+  // (storage.deleteUser) rather than a Maintenance-specific one. ──────────────
+  app.patch("/api/admin/maintenance/accounts/:userId", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Maintenance account not found" });
+      const { name, email, phone, profileImageUrl, ...profileFields } = z.object({
+        name: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        profileImageUrl: z.string().optional().nullable(),
+        jobTitle: z.string().optional(),
+        profileType: z.string().optional(),
+        categories: z.array(z.string()).optional(),
+        skills: z.array(z.string()).optional(),
+        certifications: z.array(z.string()).optional(),
+        yearsExperience: z.number().int().min(0).optional(),
+        responseTime: z.string().optional(),
+        dailyRateInCents: z.number().int().min(0).optional(),
+        description: z.string().optional(),
+        coverageArea: z.string().optional(),
+      }).parse(req.body);
+      const userUpdates: any = {};
+      if (name !== undefined) userUpdates.name = name;
+      if (email !== undefined) userUpdates.email = email;
+      if (phone !== undefined) userUpdates.phone = phone;
+      if (profileImageUrl !== undefined) userUpdates.profileImageUrl = profileImageUrl?.trim() || null;
+      if (Object.keys(userUpdates).length) await storage.updateUser(userId, userUpdates);
+      const profile = Object.keys(profileFields).length ? await storage.upsertMaintenanceProfile(userId, profileFields) : await storage.getMaintenanceProfile(userId);
+      broadcastToUsers([userId], "user_profile_updated");
+      broadcast("maintenance_updated", { userId, kind: "profile" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid account data" });
+    }
+  });
+
+  app.patch("/api/admin/maintenance/accounts/:userId/freeze", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Maintenance account not found" });
+      const { isFrozen } = z.object({ isFrozen: z.boolean() }).parse(req.body);
+      const profile = await storage.upsertMaintenanceProfile(userId, { isFrozen });
+      broadcast("maintenance_updated", { userId, kind: "freeze" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  // ── Admin Maintenance reservation actions (Part 8-9) ────────────────────────
+  app.patch("/api/admin/maintenance/reservations/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        service: z.string().optional(),
+        date: z.string().optional(),
+        time: z.string().nullable().optional(),
+        location: z.string().optional(),
+        description: z.string().optional(),
+        category: z.string().optional(),
+        urgency: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
+        contactPhone: z.string().optional(),
+        status: z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "RESCHEDULED", "RESCHEDULE_PENDING", "RESCHEDULE_REJECTED"]).optional(),
+      }).parse(req.body);
+      const updated = await storage.adminUpdateMaintenanceReservation(Number(req.params.id), body);
+      if (!updated) return res.status(404).json({ message: "Reservation not found" });
+      broadcast("maintenance_reservation_updated", { reservationId: updated.id });
+      broadcastToUsers([updated.cafeOwnerId, updated.maintenanceUserId], "maintenance_reservation_updated", { reservationId: updated.id });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid reservation data" });
+    }
+  });
+
+  app.patch("/api/admin/maintenance/reservations/:id/freeze", requireAdmin, async (req, res) => {
+    try {
+      const { isFrozen } = z.object({ isFrozen: z.boolean() }).parse(req.body);
+      const updated = await storage.setMaintenanceReservationFrozen(Number(req.params.id), isFrozen);
+      if (!updated) return res.status(404).json({ message: "Reservation not found" });
+      broadcast("maintenance_reservation_updated", { reservationId: updated.id });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  app.delete("/api/admin/maintenance/reservations/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getMaintenanceReservationById(id);
+      if (!existing) return res.status(404).json({ message: "Reservation not found" });
+      await storage.deleteMaintenanceReservation(id);
+      broadcast("maintenance_reservation_updated", { reservationId: id, kind: "deleted" });
+      broadcastToUsers([existing.cafeOwnerId, existing.maintenanceUserId], "maintenance_reservation_updated", { reservationId: id, kind: "deleted" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete reservation" }); }
+  });
+
+  // Coffee Owner self-service cancellation (Part 18) — only while still PENDING.
+  app.patch("/api/maintenance/reservations/:id/cancel", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const updated = await storage.cancelMaintenanceReservationByOwner(Number(req.params.id), user.id);
+    if (!updated) return res.status(400).json({ message: "Reservation can only be cancelled while still pending" });
+    await storage.refreshMaintenanceMessagingState(updated.id);
+    broadcast("maintenance_reservation_updated", { reservationId: updated.id });
+    broadcastToUsers([user.id, updated.maintenanceUserId], "maintenance_reservation_updated", { reservationId: updated.id });
+    res.json(updated);
+  });
+
+  // ── Entity-level Maintenance reports — "Blacklist" (Parts 20-23) ───────────
+  app.post("/api/maintenance/:userId/report", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const maintenanceUserId = Number(req.params.userId);
+    const target = await storage.getUser(maintenanceUserId);
+    if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Maintenance account not found" });
+    try {
+      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
+      const report = await storage.createMaintenanceReport(user.id, maintenanceUserId, reason);
+      broadcast("admin_maintenance_report_created", { maintenanceUserId });
+      res.status(201).json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid report data" });
+    }
+  });
+
+  app.get("/api/maintenance/reports/mine", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    res.json(await storage.getMaintenanceReportsByOwner(user.id));
+  });
+
+  app.get("/api/admin/maintenance/reports", requireAdmin, async (req: any, res) => {
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    res.json(await storage.getMaintenanceReports(status));
+  });
+
+  app.patch("/api/admin/maintenance/reports/:id/resolve", requireAdmin, async (req: any, res) => {
+    try {
+      const { status, resolutionNote } = z.object({
+        status: z.enum(["RESOLVED", "DISMISSED"]),
+        resolutionNote: z.string().max(1000).optional(),
+      }).parse(req.body);
+      const report = await storage.resolveMaintenanceReport(Number(req.params.id), status, resolutionNote);
+      if (!report) return res.status(404).json({ message: "Not found" });
+      broadcast("admin_maintenance_report_created", { maintenanceUserId: report.maintenanceUserId });
+      res.json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid data" });
+    }
   });
 
   app.get("/api/maintenance-favorites", requireAuth, async (req: any, res) => {

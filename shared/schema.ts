@@ -1126,6 +1126,11 @@ export const maintenanceProfiles = pgTable("maintenance_profiles", {
   isAvailable: boolean("is_available").notNull().default(true),
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
   marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  // Admin-only override — distinct from marketplaceVisible (the Maintenance
+  // user's own self-service toggle, see PATCH /api/maintenance/profile) so a
+  // freeze can't be silently undone by the account itself, mirroring the
+  // isFrozen convention already used on maintenanceCompetencies/-Zones above.
+  isFrozen: boolean("is_frozen").notNull().default(false),
   rating: integer("rating").notNull().default(0),
   reviewCount: integer("review_count").notNull().default(0),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1153,6 +1158,11 @@ export const maintenanceReservations = pgTable("maintenance_reservations", {
   status: text("status").notNull().default("PENDING"),
   proposedDate: text("proposed_date"),
   proposedTime: text("proposed_time"),
+  // Admin-only administrative flag (Part 9's reservation "FREEZE" action) — does
+  // NOT participate in the PENDING/CONFIRMED/COMPLETED/CANCELLED/RESCHEDULE_*
+  // state machine, so it can never cause an invalid status transition; it just
+  // marks a reservation as held for review.
+  isFrozen: boolean("is_frozen").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -1163,6 +1173,11 @@ export const maintenanceReservations = pgTable("maintenance_reservations", {
 export const maintenanceCompetencies = pgTable("maintenance_competencies", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
+  // Free-text emoji icon — same convention as categories/subCategories/flavors/
+  // sizes/brands (shared/schema.ts, all `icon: text("icon")`), rendered directly
+  // as a <span>, not a lucide icon-name lookup. Nullable: existing skills without
+  // one keep working and fall back to a generic icon client-side.
+  icon: text("icon"),
   isActive: boolean("is_active").notNull().default(true),
   isFrozen: boolean("is_frozen").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1177,6 +1192,31 @@ export const maintenanceZones = pgTable("maintenance_zones", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Entity-level report — a Coffee Owner flagging a Maintenance account itself,
+// mirroring baristaReports exactly (own table, own service scope — Part 23's
+// "service data separation": a Barista report must never appear in the
+// Maintenance blacklist and vice versa). Distinct from review-reporting
+// (POST /api/maintenance/reviews/:id/report, the reviewed party disputing a
+// specific review — already exists and is untouched by this).
+export const maintenanceReportStatusEnum = pgEnum('maintenance_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+
+export const maintenanceReports = pgTable("maintenance_reports", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  maintenanceUserId: integer("maintenance_user_id").notNull(),
+  reason: text("reason").notNull(),
+  status: maintenanceReportStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNote: text("resolution_note"),
+}, (table) => ({
+  maintenanceUserIdx: index("maintenance_reports_maintenance_user_idx").on(table.maintenanceUserId),
+  statusIdx: index("maintenance_reports_status_idx").on(table.status),
+}));
+export type MaintenanceReport = typeof maintenanceReports.$inferSelect;
+export type InsertMaintenanceReport = typeof maintenanceReports.$inferInsert;
+export const insertMaintenanceReportSchema = createInsertSchema(maintenanceReports).omit({ id: true, createdAt: true, resolvedAt: true });
 
 // ── PRINT ────────────────────────────────────────────────────────────────────
 // Unlike Maintenance/Barista (one profile per provider, a flat day-rate), a
@@ -1666,6 +1706,10 @@ export type MaintenanceMarketplaceCard = MaintenanceProfile & {
   type: string;
   specialty: string;
   workingHours: string;
+  // Haversine distance (km) between the viewing Coffee Owner's stored location
+  // and this Maintenance professional's — null when either has no coordinates
+  // (never fabricated), same convention as BaristaMarketplaceCard.distanceKm.
+  distanceKm?: number | null;
 };
 export type InsertMaintenanceReservation = z.infer<typeof insertMaintenanceReservationSchema>;
 export type InsertPackFavorite = z.infer<typeof insertPackFavoriteSchema>;

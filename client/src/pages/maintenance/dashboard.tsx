@@ -13,7 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { getAvatarUrl } from "@/lib/avatar";
+import LocationPickerModal from "@/components/location-picker-modal";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -46,6 +48,8 @@ import {
   LogOut,
   Flag,
   X,
+  Navigation,
+  Bell,
 } from "lucide-react";
 
 type MaintenanceReservationRow = {
@@ -91,15 +95,25 @@ function getTab(date: string): "today" | "upcoming" | "past" {
 
 // ── Reservation Card ──────────────────────────────────────────────────────────
 
-function ReservationCard({ res, onConfirm, onCancel, onReschedule, onComplete }: {
+function ReservationCard({ res, onConfirm, onCancel, onReschedule, onComplete, fromAddress }: {
   res: MaintenanceReservationRow;
   onConfirm: (id: number) => void;
   onCancel: (id: number) => void;
   onReschedule: (id: number) => void;
   onComplete: (id: number) => void;
+  fromAddress?: string | null;
 }) {
   const meta = STATUS_META[res.status] ?? STATUS_META.PENDING;
   const Icon = meta.icon;
+  // GO (Part 12) — real saved addresses only: FROM the Maintenance professional's
+  // own account location (users.locationAddress), TO the reservation's stored
+  // location. Google Maps resolves plain addresses itself, no geocoding needed
+  // client-side. Gracefully hidden (not a broken/invalid link) when either side
+  // is missing — never falls back to browser geolocation or a hardcoded point.
+  const canNavigate = !!(fromAddress?.trim() && res.location?.trim());
+  const mapsUrl = canNavigate
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(fromAddress!)}&destination=${encodeURIComponent(res.location)}`
+    : null;
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
@@ -111,10 +125,17 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule, onComplete }:
           <Icon className="w-3 h-3" />{meta.label}
         </span>
       </div>
-      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
         <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-orange-500" />{res.date} à {res.time}</span>
         <span className="flex items-center gap-1"><MapPin className="w-3 h-3 text-orange-500" />{res.location}</span>
         <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-orange-500" />{res.contactPhone || res.ownerPhone || "—"}</span>
+        {mapsUrl && (res.status === "PENDING" || res.status === "CONFIRMED") && (
+          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg bg-orange-600 text-white hover:bg-orange-700"
+            data-testid={`link-go-reservation-${res.id}`}>
+            <Navigation className="w-3 h-3" />GO
+          </a>
+        )}
       </div>
       <p className="text-xs text-gray-600 bg-gray-50 rounded-xl px-3 py-2 leading-relaxed">{res.description}</p>
       <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-200 bg-orange-50">{res.category}</Badge>
@@ -362,6 +383,170 @@ function MaintenanceReviews() {
   );
 }
 
+// ── Settings (Part 10-11) — same design logic as the Barista Marketplace
+// Settings page (client/src/pages/barista-marketplace/settings.tsx), adapted
+// to Maintenance: Account info / Location / Security / Notifications /
+// Marketplace visibility. Reuses the same generic self-service endpoints
+// (PATCH /api/auth/me/profile, PATCH /api/auth/me/location) plus the existing
+// PATCH /api/maintenance/profile for marketplaceVisible — no second
+// visibility/account system. ─────────────────────────────────────────────────
+
+function MaintenanceSettings({ profile }: { profile: any }) {
+  const { user, logout, isLoggingOut } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [name, setName] = useState(user?.name ?? "");
+  const [phone, setPhone] = useState(user?.phone ?? "");
+  const [profileImageUrl, setProfileImageUrl] = useState((user as any)?.profileImageUrl ?? "");
+  const [savingAccount, setSavingAccount] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [visible, setVisible] = useState(profile?.marketplaceVisible ?? true);
+  const [savingVisibility, setSavingVisibility] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setName(user.name ?? "");
+    setPhone(user.phone ?? "");
+    setProfileImageUrl((user as any).profileImageUrl ?? "");
+  }, [user?.id]);
+  useEffect(() => {
+    if (profile) setVisible(profile.marketplaceVisible);
+  }, [profile?.updatedAt]);
+
+  const saveAccount = async () => {
+    setSavingAccount(true);
+    try {
+      await apiRequest("PATCH", "/api/auth/me/profile", { name, phone, profileImageUrl: profileImageUrl.trim() || null });
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Informations mises à jour" });
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message ?? "Impossible de sauvegarder.", variant: "destructive" });
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  const changePassword = async () => {
+    if (!currentPassword || !newPassword) return;
+    setSavingPassword(true);
+    try {
+      await apiRequest("PATCH", "/api/auth/me/profile", { password: newPassword, currentPassword });
+      setCurrentPassword(""); setNewPassword("");
+      toast({ title: "Mot de passe mis à jour" });
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message ?? "Mot de passe actuel incorrect.", variant: "destructive" });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleLocationConfirm = async (loc: any) => {
+    try {
+      await apiRequest("PATCH", "/api/auth/me/location", loc);
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] });
+      setLocationModalOpen(false);
+      toast({ title: "📍 Adresse mise à jour" });
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message ?? "Impossible de mettre à jour l'adresse.", variant: "destructive" });
+    }
+  };
+
+  const handleToggleVisible = async (value: boolean) => {
+    setVisible(value);
+    setSavingVisibility(true);
+    try {
+      await apiRequest("PATCH", "/api/maintenance/profile", { marketplaceVisible: value });
+      await queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profiles"] });
+      toast({ title: value ? "Profil visible sur la marketplace" : "Profil masqué de la marketplace" });
+    } catch (err: any) {
+      setVisible(!value);
+      toast({ title: "Erreur", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingVisibility(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="rounded-2xl border-gray-100 shadow-sm">
+        <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><User className="w-4 h-4 text-orange-500" />Informations du compte</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><Label className="text-xs text-gray-500">Nom / Structure</Label><Input value={name} onChange={(e) => setName(e.target.value)} className="h-9 rounded-xl mt-0.5" data-testid="input-settings-name" /></div>
+            <div><Label className="text-xs text-gray-500">Téléphone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} className="h-9 rounded-xl mt-0.5" data-testid="input-settings-phone" /></div>
+            <div className="sm:col-span-2"><Label className="text-xs text-gray-500">Email</Label><Input value={user?.email ?? ""} disabled className="h-9 rounded-xl mt-0.5" /></div>
+            <div className="sm:col-span-2"><Label className="text-xs text-gray-500">Photo de profil (URL)</Label><Input type="url" value={profileImageUrl} onChange={(e) => setProfileImageUrl(e.target.value)} placeholder="https://…" className="h-9 rounded-xl mt-0.5" data-testid="input-settings-picture" /></div>
+          </div>
+          <Button onClick={saveAccount} disabled={savingAccount} className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl" data-testid="button-save-settings-account">
+            {savingAccount ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-gray-100 shadow-sm">
+        <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" />Localisation</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm">{user?.locationAddress || "Aucune adresse enregistrée."}</p>
+          <p className="text-xs text-gray-500">Cette adresse détermine votre disponibilité, votre position sur la marketplace, la distance affichée aux cafés, et l'itinéraire GO vers vos interventions.</p>
+          <Button variant="outline" onClick={() => setLocationModalOpen(true)} className="rounded-xl" data-testid="button-edit-settings-location">
+            {user?.locationAddress ? "Modifier l'adresse" : "Ajouter une adresse"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-gray-100 shadow-sm">
+        <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><Shield className="w-4 h-4 text-orange-500" />Sécurité</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><Label className="text-xs text-gray-500">Mot de passe actuel</Label><Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="h-9 rounded-xl mt-0.5" /></div>
+            <div><Label className="text-xs text-gray-500">Nouveau mot de passe</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="h-9 rounded-xl mt-0.5" /></div>
+          </div>
+          <Button variant="outline" onClick={changePassword} disabled={savingPassword || !currentPassword || !newPassword} className="rounded-xl">Changer le mot de passe</Button>
+          <div className="border-t border-gray-100 pt-3">
+            <Button variant="ghost" className="text-destructive hover:text-destructive gap-2" onClick={() => logout()} disabled={isLoggingOut}><LogOut className="w-4 h-4" />Se déconnecter</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-gray-100 shadow-sm">
+        <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><Bell className="w-4 h-4 text-orange-500" />Notifications</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {[{ key: "reservations", label: "Réservations" }, { key: "messages", label: "Messages" }, { key: "reviews", label: "Avis" }].map((n) => (
+            <div key={n.key} className="flex items-center justify-between py-1"><span className="text-sm">{n.label}</span><Switch defaultChecked /></div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-gray-100 shadow-sm">
+        <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><Settings className="w-4 h-4 text-orange-500" />Visibilité marketplace</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div><p className="text-sm font-medium">Afficher mon profil sur la marketplace</p><p className="text-xs text-gray-500 mt-0.5">Lorsque désactivé, les cafés ne peuvent plus vous trouver ni réserver.</p></div>
+            <Switch checked={visible} onCheckedChange={handleToggleVisible} disabled={savingVisibility} data-testid="switch-settings-visible" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <LocationPickerModal
+        open={locationModalOpen}
+        mode="account"
+        title="Choisissez votre adresse"
+        initialAddress={user?.locationAddress ?? undefined}
+        onClose={() => setLocationModalOpen(false)}
+        onConfirm={handleLocationConfirm}
+      />
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 export default function MaintenanceDashboard() {
@@ -370,7 +555,7 @@ export default function MaintenanceDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   useRealtime(user?.id);
-  const [activeTab, setActiveTab] = useState<"planning" | "profile" | "availability" | "messages" | "reviews">("planning");
+  const [activeTab, setActiveTab] = useState<"planning" | "profile" | "availability" | "messages" | "reviews" | "settings">("planning");
   const [planTab, setPlanTab] = useState<"today" | "upcoming" | "past">("upcoming");
   const { data: reservations = [] } = useQuery<MaintenanceReservationRow[]>({
     queryKey: ["/api/maintenance/reservations"],
@@ -521,6 +706,7 @@ export default function MaintenanceDashboard() {
     { key: "availability" as const, label: "Disponibilité", icon: Calendar },
     { key: "messages" as const, label: "Messages", icon: MessageCircle },
     { key: "reviews" as const, label: "Avis", icon: Star },
+    { key: "settings" as const, label: "Settings", icon: Settings },
   ];
 
   return (
@@ -576,6 +762,7 @@ export default function MaintenanceDashboard() {
         {/* ── MESSAGES ── */}
         {activeTab === "messages" && <MaintenanceMessages />}
         {activeTab === "reviews" && <MaintenanceReviews />}
+        {activeTab === "settings" && <MaintenanceSettings profile={profile} />}
 
         {/* ── PLANNING ── */}
         {activeTab === "planning" && (
@@ -613,6 +800,7 @@ export default function MaintenanceDashboard() {
                     onCancel={handleCancel}
                     onReschedule={handleReschedule}
                     onComplete={handleComplete}
+                    fromAddress={user?.locationAddress}
                   />
                 ))}
               </div>

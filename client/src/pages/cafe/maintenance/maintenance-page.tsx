@@ -8,6 +8,8 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
+import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
+import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +25,7 @@ import {
 import {
   Wrench, Search, MapPin, Star, MessageCircle, SlidersHorizontal,
   RotateCcw, X, Heart, Clock, Calendar, Shield, Zap, Award, Users, Sun, Moon,
-  Building2, User, Send,
+  Building2, User, Send, Flag, Navigation, Ban,
 } from "lucide-react";
 
 type AccessLevel = "visitor" | "pending" | "approved";
@@ -36,11 +38,11 @@ function useAccessLevel(): AccessLevel {
   return "pending";
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  Machines: "⚙️", Infrastructure: "🔌", "Digital & IT": "💻",
-  "Mobilier & Design": "🪑", Plomberie: "🚿", Électricité: "⚡",
-  Climatisation: "❄️", Menuiserie: "🪵",
-};
+// Fallback only — the real icon (Part 2-3) comes from Admin → Maintenance →
+// Compétences demandées (maintenanceCompetencies.icon), fetched below via
+// /api/maintenance/taxonomy and used wherever it's set. No separate icon
+// definitions per frontend.
+const DEFAULT_CATEGORY_ICON = "🛠️";
 const TYPE_COLORS: Record<string, string> = {
   Freelance: "bg-blue-100 text-blue-700",
   Company: "bg-purple-100 text-purple-700",
@@ -59,6 +61,14 @@ function useTheme(isDark: boolean) {
     border: isDark ? "border-gray-700/60" : "border-gray-100",
     mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    // Part 15 fix — SelectContent (the dropdown popup) previously had no
+    // className override at all and relied on the shadcn base's inert
+    // bg-popover CSS-var token (this app's dark mode never adds a `.dark`
+    // class — see barista-detail-modal.tsx's note), so the picklists stayed
+    // white regardless of the navbar theme.
+    selectContent: isDark
+      ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
+      : "bg-white border-gray-200 text-gray-900",
   };
 }
 
@@ -90,10 +100,13 @@ function AgentCard({
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
   const TypeIcon = TYPE_ICONS[agent.profileType] ?? User;
 
+  // Wide card (Part 16) — left half = photo, right half = information, same
+  // dimensions/visual-hierarchy concept as the /barista card redesign (visual
+  // reference only — all data/logic below stays Maintenance-specific).
   return (
     <div
       data-testid={`card-maintenance-${agent.userId}`}
-      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col cursor-pointer ${t.cardBg}`}
+      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
       onClick={() => onOpenDetail(agent)}
     >
       <button
@@ -102,7 +115,7 @@ function AgentCard({
           event.stopPropagation();
           toggleMaintenance({
             id: favoriteId, name: agent.name, initials: agent.initials,
-            specialty: agent.specialty, categories: agent.categories,
+            specialty: agent.specialty, categories: agent.categories, skills: agent.skills,
             location: agent.location, rating: Number(ratingValue(agent)) || 0,
             available: agent.available,
           });
@@ -111,21 +124,21 @@ function AgentCard({
       >
         <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
       </button>
-      <div className="h-2 bg-gradient-to-r from-orange-500 to-amber-500" />
-      <div className="p-3 flex flex-col gap-2">
-        <div className="flex items-start gap-3">
-          <Avatar className="w-10 h-10 shrink-0">
-            <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} />
-            <AvatarFallback className="bg-orange-100 text-orange-700 font-bold text-sm">{agent.initials}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0 pr-6">
-            <div className="flex items-center justify-between gap-1">
-              <h3 className="font-bold text-sm leading-tight truncate group-hover:text-orange-600 transition-colors">{agent.name}</h3>
-              <span className={`w-2 h-2 rounded-full shrink-0 ${agent.available ? "bg-green-500" : "bg-gray-300"}`} />
-            </div>
-            <p className={`text-[11px] truncate ${t.textMuted}`}>{agent.jobTitle}</p>
-          </div>
-        </div>
+
+      <div className="w-2/5 shrink-0 relative">
+        <Avatar className="w-full h-full rounded-none">
+          <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />
+          <AvatarFallback className="rounded-none bg-orange-100 text-orange-700 font-bold text-2xl">{agent.initials}</AvatarFallback>
+        </Avatar>
+        <span
+          className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${agent.available ? "bg-green-500" : "bg-gray-300"}`}
+          title={agent.available ? "Disponible" : "Indisponible"}
+        />
+      </div>
+
+      <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
+        <h3 className="font-bold text-sm leading-tight truncate group-hover:text-orange-600 transition-colors pr-5">{agent.name}</h3>
+        <p className={`text-[11px] truncate ${t.textMuted}`}>{agent.jobTitle}</p>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className={`text-[10px] border-0 px-1.5 flex items-center gap-0.5 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>
             <TypeIcon className="w-2.5 h-2.5" />{agent.profileType}
@@ -138,19 +151,21 @@ function AgentCard({
           <span className={`text-[11px] ${t.textSubtle}`}>({agent.reviewCount} avis)</span>
           <span className={`text-[11px] ${t.textSubtle}`}>· {agent.yearsExperience} ans exp.</span>
         </div>
-        <div className="flex flex-wrap gap-1">
-          {agent.skills.slice(0, 3).map((skill) => <span key={skill} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{skill}</span>)}
-        </div>
+        {agent.skills.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {agent.skills.slice(0, 4).map((skill) => <span key={skill} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{skill}</span>)}
+          </div>
+        )}
         {agent.certifications.length > 0 && (
           <div className="flex items-center gap-1 text-[10px] text-amber-600"><Award className="w-2.5 h-2.5" />{agent.certifications[0]}{agent.certifications.length > 1 ? ` +${agent.certifications.length - 1}` : ""}</div>
         )}
-          <div className={`mt-auto pt-2 border-t flex items-center justify-between gap-2 ${t.border}`}>
+        <div className={`mt-auto pt-2 border-t flex items-center justify-between gap-2 flex-wrap ${t.border}`}>
           <div><p className={`text-[10px] ${t.textSubtle}`}>Tarif / jour</p><p className="font-bold text-sm text-orange-600">{fmt(agent.dailyRateInCents)}</p></div>
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" className={`h-7 text-[11px] rounded-lg px-2 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`} onClick={(e) => { e.stopPropagation(); onContact(agent); }}>
+          <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <Button size="sm" variant="outline" className={`h-7 text-[11px] rounded-lg px-2 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`} onClick={() => onContact(agent)}>
               <MessageCircle className="w-3 h-3" />
             </Button>
-            <Button size="sm" className="h-7 text-[11px] bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-3" disabled={!agent.available} onClick={(e) => { e.stopPropagation(); onOpenDetail(agent); }}>
+            <Button size="sm" className="h-7 text-[11px] bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-3" disabled={!agent.available} onClick={() => onOpenDetail(agent)}>
               {agent.available ? "Réserver" : "Indisponible"}
             </Button>
           </div>
@@ -234,6 +249,14 @@ export function AgentDetailModal({
   }, [agent?.userId]);
   const faved = useFavorites((s) => agent ? !!s.maintenance[agent.userId] : false);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const { toast } = useToast();
+  const submitReport = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/maintenance/${agent!.userId}/report`, { reason: reportReason.trim() }),
+    onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportOpen(false); setReportReason(""); },
+    onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+  });
   if (!agent) return null;
 
   return (
@@ -256,10 +279,23 @@ export function AgentDetailModal({
                 </div>
               </div>
               <div className="flex gap-2">
+                <button onClick={() => setReportOpen((v) => !v)} title="Signaler" className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg} hover:bg-red-50`}><Flag className="w-4 h-4 text-red-500" /></button>
                 <button onClick={() => toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, skills: agent.skills, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available })} className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg} hover:bg-rose-50`}><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} /></button>
                 <button onClick={onClose} className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg}`}><X className={`w-4 h-4 ${t.textMuted}`} /></button>
               </div>
             </div>
+            {reportOpen && (
+              <div className={`mb-4 rounded-xl p-3 space-y-2 border ${isDark ? "border-red-900/50 bg-red-950/20" : "border-red-200 bg-red-50/50"}`}>
+                <p className={`text-xs font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler ce professionnel</p>
+                <Textarea placeholder="Décrivez le problème…" rows={2} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-maintenance-report-reason" />
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => setReportOpen(false)}>Annuler</Button>
+                  <Button size="sm" variant="destructive" onClick={() => submitReport.mutate()} disabled={!reportReason.trim() || submitReport.isPending} data-testid="button-submit-maintenance-report">
+                    {submitReport.isPending ? "Envoi…" : "Envoyer le signalement"}
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-3 mb-4">
               {[{ icon: Star, val: ratingValue(agent), label: `${agent.reviewCount} avis`, color: "text-amber-500" }, { icon: Shield, val: `${agent.yearsExperience} ans`, label: "Expérience", color: "text-blue-500" }, { icon: Zap, val: agent.responseTime, label: "Réponse", color: "text-green-500" }].map((stat) => (
                 <div key={stat.label} className={`${t.mutedBg} rounded-xl p-3 text-center`}><stat.icon className={`w-4 h-4 mx-auto mb-1 ${stat.color}`} /><p className={`font-bold text-sm ${t.textPrimary}`}>{stat.val}</p><p className={`text-[10px] ${t.textSubtle}`}>{stat.label}</p></div>
@@ -268,7 +304,7 @@ export function AgentDetailModal({
              <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>À propos</h3><p className={`text-sm ${t.textMuted} leading-relaxed`}>{agent.description || "Aucune description disponible."}</p></div>
              <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Catégories & Compétences</h3><div className="flex flex-wrap gap-1.5">{agent.categories.map((item) => <span key={item} className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}{agent.skills.map((item) => <span key={item} className={`text-[11px] px-2 py-0.5 rounded-full ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{item}</span>)}</div></div>
              {agent.certifications.length > 0 && <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 flex items-center gap-1 ${t.textPrimary}`}><Award className="w-3.5 h-3.5 text-amber-500" /> Certifications</h3><div className="flex flex-wrap gap-1.5">{agent.certifications.map((item) => <span key={item} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}</div></div>}
-             <div className={`mb-4 ${t.mutedBg} rounded-xl p-3 space-y-2`}><h3 className={`font-semibold text-sm mb-2 ${t.textPrimary}`}>Infos pratiques</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />Zone d'intervention : {agent.coverageArea || agent.location || "—"}</div><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><Clock className="w-3.5 h-3.5 text-orange-500" />Horaires : {agent.workingHours}</div></div>
+             <div className={`mb-4 ${t.mutedBg} rounded-xl p-3 space-y-2`}><h3 className={`font-semibold text-sm mb-2 ${t.textPrimary}`}>Infos pratiques</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />Zone d'intervention : {agent.coverageArea || agent.location || "—"}</div><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><Clock className="w-3.5 h-3.5 text-orange-500" />Horaires : {agent.workingHours}</div>{agent.distanceKm != null && <div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><Navigation className="w-3.5 h-3.5 text-orange-500" />Distance : {agent.distanceKm} km</div>}</div>
              {agent.portfolioImages.length > 0 && <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Portfolio</h3><div className="grid grid-cols-2 gap-2">{agent.portfolioImages.map((image, i) => <img key={i} src={image} alt={`Portfolio ${i + 1}`} className="w-full h-28 object-cover rounded-xl" />)}</div></div>}
              <div className="mb-4">
                <h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Avis ({reviewsQuery.data?.length ?? 0})</h3>
@@ -311,8 +347,8 @@ export function AgentDetailModal({
                  <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Demander une intervention</h3>
                  <div className="grid grid-cols-2 gap-3"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
                  <div className="grid grid-cols-2 gap-3">
-                   <Select value={category} onValueChange={setCategory}><SelectTrigger className={t.inputBg}><SelectValue placeholder="Compétence" /></SelectTrigger><SelectContent>{Array.from(new Set([...agent.categories, ...agent.skills])).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-                   <Select value={urgency} onValueChange={setUrgency}><SelectTrigger className={t.inputBg}><SelectValue placeholder="Urgence" /></SelectTrigger><SelectContent><SelectItem value="LOW">Faible</SelectItem><SelectItem value="NORMAL">Normale</SelectItem><SelectItem value="HIGH">Élevée</SelectItem><SelectItem value="URGENT">Urgente</SelectItem></SelectContent></Select>
+                   <Select value={category} onValueChange={setCategory}><SelectTrigger className={t.inputBg}><SelectValue placeholder="Compétence" /></SelectTrigger><SelectContent className={t.selectContent}>{Array.from(new Set([...agent.categories, ...agent.skills])).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
+                   <Select value={urgency} onValueChange={setUrgency}><SelectTrigger className={t.inputBg}><SelectValue placeholder="Urgence" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="LOW">Faible</SelectItem><SelectItem value="NORMAL">Normale</SelectItem><SelectItem value="HIGH">Élevée</SelectItem><SelectItem value="URGENT">Urgente</SelectItem></SelectContent></Select>
                  </div>
                  <div className="flex gap-2"><Input className="flex-1" placeholder="Lieu d'intervention" value={location} onChange={(e) => setLocation(e.target.value)} /><Button type="button" variant="outline" onClick={() => setLocationPickerOpen(true)}><MapPin className="w-4 h-4" /></Button></div>
                  <Input placeholder="Téléphone pour cette intervention" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
@@ -353,9 +389,17 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const [filterAvailability, setFilterAvailability] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<MaintenanceMarketplaceCard | null>(null);
+  const [fastSearchOpen, setFastSearchOpen] = useState(false);
+  const [blacklistOpen, setBlacklistOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const { data: profiles = [], isLoading: profilesLoading } = useQuery<MaintenanceMarketplaceCard[]>({ queryKey: ["/api/maintenance/profiles"] });
   const { data: categories = [] } = useQuery<string[]>({ queryKey: ["/api/maintenance/categories"] });
+  const { data: taxonomy } = useQuery<{ competencies: { name: string; icon: string | null }[]; zones: any[] }>({ queryKey: ["/api/maintenance/taxonomy"] });
+  const categoryIcons = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of taxonomy?.competencies ?? []) if (c.icon) map.set(c.name, c.icon);
+    return map;
+  }, [taxonomy]);
   const { data: favoriteIds = [] } = useQuery<number[]>({ queryKey: ["/api/maintenance-favorites"], enabled: !!user && accessLevel === "approved" });
   const syncMaintenance = useFavorites((s) => s.syncMaintenance);
 
@@ -417,6 +461,16 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
       <section className="relative pt-5 pb-12 px-5 overflow-hidden">
         {t.dk ? <><div className="absolute inset-0 bg-gray-900" /><div className="absolute inset-0 bg-gradient-to-br from-orange-900/25 via-gray-900 to-gray-900" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" /></> : <><div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600" /><div className="absolute inset-0 bg-black/10" /></>}
         <div className="relative flex justify-end items-center gap-2 mb-9">
+          {accessLevel === "approved" && (
+            <button onClick={() => setBlacklistOpen(true)} aria-label="Professionnels signalés" title="Professionnels signalés" data-testid="button-open-maintenance-blacklist" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
+              <Ban className="w-4 h-4" />
+            </button>
+          )}
+          {accessLevel === "approved" && (
+            <button onClick={() => setFastSearchOpen(true)} aria-label="Fast Search" title="Fast Search — parcourir les professionnels" data-testid="button-open-maintenance-fastsearch" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-orange-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
+              <Zap className="w-4 h-4" />
+            </button>
+          )}
           <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
             {t.dk ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -430,14 +484,18 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
       </section>
       {comingSoon ? <div className="max-w-3xl mx-auto px-4 py-20 text-center"><Clock className="w-8 h-8 text-orange-600 mx-auto mb-5" /><h2 className={`text-xl font-bold mb-2 ${t.textPrimary}`}>Bientôt disponible</h2><p className={`text-sm ${t.textMuted}`}>Ce service est en cours de préparation. Revenez bientôt pour le découvrir.</p></div> : (
         <>
-          <div className={`border-b sticky top-0 z-20 ${t.cardBg}`}><div className="max-w-7xl mx-auto px-4 py-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}><button onClick={() => setFilterCategory("")} className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 border ${!filterCategory ? "bg-orange-600 text-white border-orange-600" : `${t.mutedBg} ${t.textMuted} ${t.border}`}`}>Tous</button>{categories.map((category) => <button key={category} onClick={() => setFilterCategory(filterCategory === category ? "" : category)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 border ${filterCategory === category ? "bg-orange-600 text-white border-orange-600" : `${t.mutedBg} ${t.textMuted} ${t.border}`}`}><span>{CATEGORY_ICONS[category] ?? "🛠️"}</span>{category}</button>)}</div></div>
+          <div className={`border-b sticky top-0 z-20 ${t.cardBg}`}><div className="max-w-7xl mx-auto px-4 py-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}><button onClick={() => setFilterCategory("")} className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 border ${!filterCategory ? "bg-orange-600 text-white border-orange-600" : `${t.mutedBg} ${t.textMuted} ${t.border}`}`}>Tous</button>{categories.map((category) => <button key={category} onClick={() => setFilterCategory(filterCategory === category ? "" : category)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 border ${filterCategory === category ? "bg-orange-600 text-white border-orange-600" : `${t.mutedBg} ${t.textMuted} ${t.border}`}`}><span>{categoryIcons.get(category) ?? DEFAULT_CATEGORY_ICON}</span>{category}</button>)}</div></div>
            <div className="max-w-7xl mx-auto px-4 py-8">
-             <div className={`border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}><div className="flex items-center gap-2 flex-wrap"><SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle}`} /><div className="relative flex-1 min-w-[180px] max-w-xs"><Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom, compétence, service..." className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`} /></div><Select value={filterType || "__all__"} onValueChange={(value) => setFilterType(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`}><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="__all__">Tous types</SelectItem><SelectItem value="Freelance">Freelance</SelectItem><SelectItem value="Company">Entreprise</SelectItem><SelectItem value="Agency">Agence</SelectItem></SelectContent></Select><Select value={filterAvailability || "__all__"} onValueChange={(value) => setFilterAvailability(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`}><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent><SelectItem value="__all__">Toutes disponibilités</SelectItem><SelectItem value="available">Disponible</SelectItem><SelectItem value="unavailable">Indisponible</SelectItem></SelectContent></Select><Select value={filterLocation || "__all__"} onValueChange={(value) => setFilterLocation(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`}><SelectValue placeholder="Ville" /></SelectTrigger><SelectContent><SelectItem value="__all__">Toutes villes</SelectItem>{allLocations.map((location) => <SelectItem key={location} value={location}>{location}</SelectItem>)}</SelectContent></Select>{hasFilters && <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterType(""); setFilterAvailability(""); setFilterLocation(""); }} className="flex items-center gap-1 text-xs text-destructive"><RotateCcw className="w-3 h-3" />Reset</button>}</div></div>
-             {filtered.length === 0 ? <div className="flex flex-col items-center justify-center py-16 gap-3 text-center"><Wrench className={`w-12 h-12 ${t.textSubtle}`} /><p className={`font-semibold ${t.textPrimary}`}>Aucun technicien trouvé</p><p className={`text-sm ${t.textMuted}`}>{profiles.length === 0 ? "Aucun profil Maintenance publié pour le moment." : "Essayez d'ajuster vos filtres."}</p></div> : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">{filtered.map((agent) => <AgentCard key={agent.userId} agent={agent} onOpenDetail={openDetail} onContact={contact} isDark={isDark} />)}</div>}
+             <div className={`border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}><div className="flex items-center gap-2 flex-wrap"><SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle}`} /><div className="relative flex-1 min-w-[180px] max-w-xs"><Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom, compétence, service..." className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`} /></div><Select value={filterType || "__all__"} onValueChange={(value) => setFilterType(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`}><SelectValue placeholder="Type" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Tous types</SelectItem><SelectItem value="Freelance">Freelance</SelectItem><SelectItem value="Company">Entreprise</SelectItem><SelectItem value="Agency">Agence</SelectItem></SelectContent></Select><Select value={filterAvailability || "__all__"} onValueChange={(value) => setFilterAvailability(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`}><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes disponibilités</SelectItem><SelectItem value="available">Disponible</SelectItem><SelectItem value="unavailable">Indisponible</SelectItem></SelectContent></Select><Select value={filterLocation || "__all__"} onValueChange={(value) => setFilterLocation(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`}><SelectValue placeholder="Ville" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes villes</SelectItem>{allLocations.map((location) => <SelectItem key={location} value={location}>{location}</SelectItem>)}</SelectContent></Select>{hasFilters && <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterType(""); setFilterAvailability(""); setFilterLocation(""); }} className="flex items-center gap-1 text-xs text-destructive"><RotateCcw className="w-3 h-3" />Reset</button>}</div></div>
+             {filtered.length === 0 ? <div className="flex flex-col items-center justify-center py-16 gap-3 text-center"><Wrench className={`w-12 h-12 ${t.textSubtle}`} /><p className={`font-semibold ${t.textPrimary}`}>Aucun technicien trouvé</p><p className={`text-sm ${t.textMuted}`}>{profiles.length === 0 ? "Aucun profil Maintenance publié pour le moment." : "Essayez d'ajuster vos filtres."}</p></div> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((agent) => <AgentCard key={agent.userId} agent={agent} onOpenDetail={openDetail} onContact={contact} isDark={isDark} />)}</div>}
           </div>
            <AgentDetailModal agent={selectedAgent} open={detailOpen} onClose={() => setDetailOpen(false)} onContact={contact} onReserve={(agent, data) => reserve.mutate({ agent, data })} isDark={isDark} />
         </>
       )}
+      {/* Fast Search / Blacklist (Parts 20-22) — same `profiles` list, own
+          Maintenance-only components (no Barista data reused). */}
+      <MaintenanceFastSearch open={fastSearchOpen} onClose={() => setFastSearchOpen(false)} providers={profiles} onOpenDetail={(agent) => { setFastSearchOpen(false); openDetail(agent); }} />
+      <MaintenanceBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} />
     </div>
   );
 }

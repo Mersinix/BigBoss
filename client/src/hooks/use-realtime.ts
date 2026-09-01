@@ -25,7 +25,7 @@ const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 const DELIVERY_ECOSYSTEM_EVENTS = ["vehicle_updated", "delivery_pricing_updated", "driver_review_created", "delivery_opportunity_updated"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
-const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated"];
+const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created"];
 const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated"];
 const USER_PROFILE_EVENTS = ["user_profile_updated"];
 const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
@@ -295,6 +295,8 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/maintenance/profile"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/reviews"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/maintenance/reports"] });
+            qc.invalidateQueries({ queryKey: ["/api/maintenance/reports/mine"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MAINTENANCE"] });
             invalidateMessagingQueries(qc);
           }

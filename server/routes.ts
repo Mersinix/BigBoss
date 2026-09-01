@@ -1519,10 +1519,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
     try {
+      const dayHoursSchema = z.object({ open: z.string(), close: z.string(), closed: z.boolean() });
       const body = z.object({
         availableDays: z.array(z.string()),
         isAvailable: z.boolean().optional(),
         isOnVacation: z.boolean(),
+        // Per-day schedule — optional so existing callers that only send
+        // availableDays keep working unchanged.
+        weeklyHours: z.object({
+          monday: dayHoursSchema, tuesday: dayHoursSchema, wednesday: dayHoursSchema,
+          thursday: dayHoursSchema, friday: dayHoursSchema, saturday: dayHoursSchema, sunday: dayHoursSchema,
+        }).optional(),
       }).parse(req.body);
       const profile = await storage.upsertBaristaMarketplaceProfile(user.id, {
         ...body,

@@ -21,9 +21,10 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Briefcase, Pencil, Trash2 } from "lucide-react";
+import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Briefcase, Pencil, Trash2, Calendar, Zap } from "lucide-react";
+import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
+import type { OpeningHoursMap } from "@shared/schema";
 
-const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const LEVEL_LABELS: Record<BaristaLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 
 export default function BaristaProfilePage() {
@@ -41,8 +42,11 @@ export default function BaristaProfilePage() {
   const [rate, setRate] = useState("");
   const [city, setCity] = useState("");
   const [visible, setVisible] = useState(true);
-  const [availableDays, setAvailableDays] = useState<string[]>([]);
   const [onVacation, setOnVacation] = useState(false);
+  // Per-day schedule (Barista availability update) — legacy availableDays kept
+  // (still derived and sent on save for backward compatibility) alongside the
+  // new per-day schedule that now actually drives the editor UI.
+  const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([]));
 
   // Certifications & expérience (Part 18) — real, Barista-entered values only.
   const [certifications, setCertifications] = useState<string[]>([]);
@@ -64,8 +68,8 @@ export default function BaristaProfilePage() {
     setRate(String((data.profile.dailyRateInCents ?? 0) / 100));
     setCity(data.profile.city ?? "");
     setVisible(data.profile.marketplaceVisible);
-    setAvailableDays(data.profile.availableDays ?? []);
     setOnVacation(data.profile.isOnVacation);
+    setWeeklyHours(data.profile.weeklyHours ?? buildWeeklyHoursFallback(data.profile.availableDays ?? []));
     setCertifications(data.profile.certifications ?? []);
     setExperienceYears(data.profile.experienceYears != null ? String(data.profile.experienceYears) : "");
     setPortfolioUrls(data.profile.portfolioUrls ?? []);
@@ -74,8 +78,8 @@ export default function BaristaProfilePage() {
   const toggleSkill = (name: string) => {
     setSkills((prev) => (prev.includes(name) ? prev.filter((s) => s !== name) : [...prev, name]));
   };
-  const toggleDay = (day: string) => {
-    setAvailableDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
+    setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   };
   const addCertification = () => {
     const v = newCertification.trim();
@@ -102,8 +106,11 @@ export default function BaristaProfilePage() {
       },
       { onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }) }
     );
+    // Legacy availableDays derived from the per-day schedule for backward
+    // compatibility — weeklyHours is now the real source of truth.
+    const derivedAvailableDays = WEEKLY_DAY_DEFS.filter((d) => !weeklyHours[d.key].closed).map((d) => d.short);
     updateAvailability.mutate(
-      { availableDays, isOnVacation: onVacation, isAvailable: !onVacation },
+      { availableDays: derivedAvailableDays, isOnVacation: onVacation, isAvailable: !onVacation, weeklyHours },
       {
         onSuccess: () => toast({ title: "Profil enregistré" }),
         onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
@@ -332,24 +339,57 @@ export default function BaristaProfilePage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Disponibilité</CardTitle>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-green-600" />Disponibilité</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Per-day schedule — each day configured independently instead of a
+              single global toggle, mirroring the same Maintenance update. */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-2 block">Jours disponibles</label>
-            <div className="flex flex-wrap gap-1.5">
-              {DAYS.map((day) => (
-                <button key={day} type="button" onClick={() => toggleDay(day)} data-testid={`chip-day-${day}`}>
-                  <Badge
-                    variant={availableDays.includes(day) ? "default" : "outline"}
-                    className={availableDays.includes(day) ? "bg-blue-600 hover:bg-blue-700 cursor-pointer" : "cursor-pointer"}
-                  >
-                    {day}
-                  </Badge>
-                </button>
-              ))}
+            <label className="text-xs font-medium text-muted-foreground mb-2 block">Jours et horaires disponibles</label>
+            <div className="space-y-2">
+              {WEEKLY_DAY_DEFS.map((d) => {
+                const day = weeklyHours[d.key];
+                return (
+                  <div key={d.key} className="flex items-center gap-3 rounded-xl border border-border/50 p-2.5">
+                    <button
+                      type="button"
+                      onClick={() => updateDayHours(d.key, { closed: !day.closed })}
+                      className={`w-16 shrink-0 h-9 rounded-xl text-xs font-semibold transition-all ${
+                        !day.closed ? "bg-green-600 text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-muted/70"
+                      }`}
+                      data-testid={`button-toggle-day-${d.key}`}
+                    >
+                      {d.short}
+                    </button>
+                    {day.closed ? (
+                      <span className="text-xs font-medium text-muted-foreground flex-1">Fermé</span>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-1">
+                        <Input type="time" value={day.open} onChange={(e) => updateDayHours(d.key, { open: e.target.value })} className="h-9 text-xs" data-testid={`input-day-open-${d.key}`} />
+                        <span className="text-muted-foreground text-xs">–</span>
+                        <Input type="time" value={day.close} onChange={(e) => updateDayHours(d.key, { close: e.target.value })} className="h-9 text-xs" data-testid={`input-day-close-${d.key}`} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
+
+          {/* Dynamic summary — reflects the actual saved per-day schedule. */}
+          <div className="rounded-xl bg-muted/40 p-3">
+            <p className="font-semibold text-xs mb-2 text-green-700 dark:text-green-400 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" />Résumé de disponibilité</p>
+            <div className="text-xs text-muted-foreground space-y-0.5">
+              {WEEKLY_DAY_DEFS.map((d) => {
+                const day = weeklyHours[d.key];
+                return <p key={d.key}><strong className="text-foreground">{d.label} :</strong> {day.closed ? "Fermé" : `${day.open} – ${day.close}`}</p>;
+              })}
+              <p className="pt-1"><strong className="text-foreground">Statut :</strong> {onVacation ? "🔴 En congé" : "🟢 Disponible"}</p>
+            </div>
+          </div>
+
+          {/* Vacation mode — separate concept from the weekly schedule, kept
+              exactly as-is (Part 4). */}
           <div className="flex items-center justify-between pt-2 border-t border-border/50">
             <div>
               <p className="text-sm font-medium">En vacances / indisponible</p>

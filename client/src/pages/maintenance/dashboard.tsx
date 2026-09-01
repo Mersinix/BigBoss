@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import type { ConversationSummary, ConversationMessageRow, OpeningHoursMap } from "@shared/schema";
+import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -79,33 +80,6 @@ const STATUS_META: Record<string, { label: string; color: string; icon: any }> =
   RESCHEDULE_REJECTED: { label: "Modification refusée", color: "bg-gray-100 text-gray-700 border-gray-200", icon: XCircle },
 };
 
-// ── Per-day schedule (Part 2) ────────────────────────────────────────────────
-// Reuses the exact same { monday: {open, close, closed}, ... } shape as
-// supplierStores.openingHours (shared/schema.ts's OpeningHoursMap) rather than
-// inventing a parallel one — also exported so the Coffee-Owner-facing
-// Availability modal (maintenance-page.tsx) shares the same day key/label map.
-
-export const WEEKLY_DAY_DEFS: { key: keyof OpeningHoursMap; label: string; short: string }[] = [
-  { key: "monday", label: "Lundi", short: "Lun" },
-  { key: "tuesday", label: "Mardi", short: "Mar" },
-  { key: "wednesday", label: "Mercredi", short: "Mer" },
-  { key: "thursday", label: "Jeudi", short: "Jeu" },
-  { key: "friday", label: "Vendredi", short: "Ven" },
-  { key: "saturday", label: "Samedi", short: "Sam" },
-  { key: "sunday", label: "Dimanche", short: "Dim" },
-];
-
-// Migration fallback — derives a per-day schedule from the legacy global
-// workingDays/startTime/endTime fields so an account that never touched the
-// new per-day editor still gets a sensible starting point (Part 6: no data
-// loss, nothing hardcoded that isn't actually the saved schedule).
-export function buildWeeklyHoursFallback(workingDays: string[], startTime: string, endTime: string): OpeningHoursMap {
-  const map = {} as OpeningHoursMap;
-  for (const d of WEEKLY_DAY_DEFS) {
-    map[d.key] = { open: startTime || "08:00", close: endTime || "18:00", closed: !workingDays.includes(d.short) };
-  }
-  return map;
-}
 
 // ── Today's date helpers ──────────────────────────────────────────────────────
 

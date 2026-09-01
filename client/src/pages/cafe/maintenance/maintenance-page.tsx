@@ -11,7 +11,7 @@ import LocationPickerModal, { type PickedLocation } from "@/components/location-
 import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
 import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
 import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema";
-import { WEEKLY_DAY_DEFS } from "@/pages/maintenance/dashboard";
+import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";

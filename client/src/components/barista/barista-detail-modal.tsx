@@ -24,8 +24,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Award, Image as ImageIcon, Briefcase, MessageCircle,
-  Flag, Heart, CalendarDays, Navigation,
+  Flag, Heart, Navigation, X,
 } from "lucide-react";
+import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
+import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<string, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 
@@ -53,6 +55,95 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
         </button>
       ))}
     </div>
+  );
+}
+
+// Availability modal — same UX concept as the Maintenance one (own component,
+// Shop Opening Hours visual reference, no Shop business logic), reusing the
+// same WEEKLY_DAY_DEFS shared list and OpeningHoursMap data shape.
+function BaristaAvailabilityModal({
+  open, onClose, baristaName, weeklyHours, isDark,
+}: {
+  open: boolean;
+  onClose: () => void;
+  baristaName: string;
+  weeklyHours: OpeningHoursMap | null;
+  isDark: boolean;
+}) {
+  const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+  const todayKey = WEEKLY_DAY_DEFS[todayIndex].key;
+
+  const dk = isDark;
+  const bg = dk ? "bg-gray-900" : "bg-white";
+  const textPrimary = dk ? "text-white" : "text-gray-900";
+  const textMuted = dk ? "text-gray-400" : "text-gray-500";
+  const rowBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
+  const rowToday = dk ? "bg-amber-500/15 border-amber-500/30" : "bg-amber-50 border-amber-200";
+  const timeColor = dk ? "text-gray-300" : "text-gray-700";
+  const closedColor = dk ? "text-red-400" : "text-red-500";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+        <VisuallyHidden><DialogTitle>Disponibilité — {baristaName}</DialogTitle></VisuallyHidden>
+        <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
+          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={onClose} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
+                <X className="w-4 h-4" />
+              </button>
+              <div className="flex flex-col items-center gap-0.5">
+                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>{baristaName}</span>
+                <span className={`text-[11px] font-medium ${textMuted}`}>Disponibilité</span>
+              </div>
+              <div className="w-8 h-8" />
+            </div>
+            <div className={`h-px w-full ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
+          </div>
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-5 pb-6
+              [&::-webkit-scrollbar]:w-1
+              [&::-webkit-scrollbar-track]:bg-transparent
+              [&::-webkit-scrollbar-thumb]:rounded-full
+              [&::-webkit-scrollbar-thumb]:bg-gray-700
+              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {weeklyHours ? (
+              <div className="space-y-2 pb-2">
+                {WEEKLY_DAY_DEFS.map(({ key, label }) => {
+                  const day = weeklyHours[key];
+                  const isToday = key === todayKey;
+                  return (
+                    <div key={key} className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-amber-400" : "text-amber-600") : textPrimary}`}>{label}</span>
+                        {isToday && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-amber-500/30 text-amber-300" : "bg-amber-100 text-amber-700"}`}>Today</span>
+                        )}
+                      </div>
+                      {day?.closed ? (
+                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
+                      ) : day ? (
+                        <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-amber-300" : "text-amber-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
+                      ) : (
+                        <span className={`text-[12px] ${textMuted}`}>—</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={`text-center py-12 ${textMuted}`}>
+                <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className={`text-sm font-medium ${textPrimary}`}>Aucun horaire configuré</p>
+                <p className="text-xs mt-1 opacity-50">Ce Barista n'a pas encore défini ses disponibilités.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -103,8 +194,11 @@ export function BaristaDetailModal({
   const [reviewMissionId, setReviewMissionId] = useState<number | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
-  const [reportOpen, setReportOpen] = useState(false);
+  // Signaler now opens its own separate Dialog instead of an inline
+  // collapsible panel — same mutation/validation/success-error behavior.
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
 
   // Review eligibility mirrors the existing server rule exactly (POST /api/barista/reviews):
@@ -123,7 +217,7 @@ export function BaristaDetailModal({
 
   const handleClose = () => {
     setReviewMissionId(null);
-    setReportOpen(false);
+    setReportModalOpen(false);
     setReportReason("");
     onClose();
   };
@@ -158,18 +252,19 @@ export function BaristaDetailModal({
     reportBarista.mutate(
       { baristaUserId: card.userId, reason: reportReason.trim() },
       {
-        onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportOpen(false); setReportReason(""); },
+        onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
         onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
       }
     );
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
       {/* Scrollbar treatment (Part 10) matches the existing My Favorites modal
           scroll container exactly (client/src/components/cafe/marketplace-layout.tsx) —
           same thin thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
+      <DialogContent className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
         <VisuallyHidden><DialogTitle>{card?.name ?? "Profil Barista"}</DialogTitle></VisuallyHidden>
         {isLoading || !card ? (
           <div className="p-6 space-y-4">
@@ -187,13 +282,26 @@ export function BaristaDetailModal({
                   <span className="text-white font-bold text-6xl">{card.initials}</span>
                 </AvatarFallback>
               </Avatar>
-              <button
-                className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
-                onClick={() => toggleBaristaMarket({ id: card.userId, name: card.name, initials: card.initials, skills: card.skills, location: card.location, rating: card.rating / 10, available: card.available, profileImageUrl: card.profileImageUrl })}
-                data-testid={`button-fav-modal-${card.userId}`}
-              >
-                <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
-              </button>
+              {/* Top right — Close + Favorite, unchanged position (same
+                  placement as the Maintenance details modal). */}
+              <div className="absolute top-3 right-3 flex gap-2">
+                <button
+                  className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
+                  onClick={() => toggleBaristaMarket({ id: card.userId, name: card.name, initials: card.initials, skills: card.skills, location: card.location, rating: card.rating / 10, available: card.available, profileImageUrl: card.profileImageUrl })}
+                  data-testid={`button-fav-modal-${card.userId}`}
+                >
+                  <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
+                </button>
+                <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} data-testid="button-close-barista-modal">
+                  <X className="w-4 h-4 text-white" />
+                </button>
+              </div>
+              {/* Bottom right — Signaler + Disponibilité, same placement as the
+                  Maintenance details modal. */}
+              <div className="absolute bottom-3 right-3 flex gap-2">
+                <button onClick={() => setReportModalOpen(true)} title="Signaler" data-testid="button-open-barista-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-barista-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+              </div>
               <span
                 className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${card.available ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}
               >
@@ -250,11 +358,9 @@ export function BaristaDetailModal({
                 </div>
               )}
 
-              {card.availableDays.length > 0 && (
-                <div className={`flex items-center gap-1.5 text-xs ${t.textMuted}`}>
-                  <CalendarDays className="w-3.5 h-3.5" /> {card.availableDays.join(" · ")}
-                </div>
-              )}
+              {/* Old inline "Lun · Mar · Mer..." availability line removed from
+                  the main body — now reachable via the Disponibilité icon on
+                  the profile picture, which opens BaristaAvailabilityModal. */}
 
               {card.portfolioUrls.length > 0 && (
                 <div>
@@ -335,25 +441,11 @@ export function BaristaDetailModal({
                 )}
               </div>
 
-              {reportOpen && (
-                <div className={`p-3 rounded-xl border space-y-2 ${isDark ? "border-red-900/50 bg-red-950/20" : "border-red-200 bg-red-50/50"}`}>
-                  <p className={`text-xs font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler ce Barista</p>
-                  <Textarea placeholder="Décrivez le problème…" rows={2} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
-                  <div className="flex gap-2 justify-end">
-                    <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => setReportOpen(false)}>Annuler</Button>
-                    <Button size="sm" variant="destructive" onClick={submitReport} disabled={!reportReason.trim() || reportBarista.isPending} data-testid="button-submit-report">
-                      {reportBarista.isPending ? "Envoi…" : "Envoyer le signalement"}
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Actions */}
+            {/* Actions — Signaler moved to the profile picture (Part 11);
+                Message/Recruter unchanged. */}
             <div className={`p-5 sm:p-6 pt-0 flex flex-wrap gap-2 justify-end border-t mt-1 pt-4 ${t.border}`}>
-              <Button variant="outline" size="sm" className={`gap-1.5 text-red-500 hover:text-red-500 ${isDark ? "border-gray-700" : ""}`} onClick={() => setReportOpen((v) => !v)} data-testid="button-report-barista">
-                <Flag className="w-3.5 h-3.5" /> Signaler
-              </Button>
               <Button variant="outline" size="sm" className={`gap-1.5 ${t.textPrimary} ${isDark ? "border-gray-700" : ""}`} onClick={handleMessage} disabled={messaging} data-testid="button-message-barista">
                 <MessageCircle className="w-3.5 h-3.5" /> Message
               </Button>
@@ -365,5 +457,34 @@ export function BaristaDetailModal({
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Signaler — own modal (Part 17), same mutation/validation/success-error
+        behavior as before, just no longer an inline panel. */}
+    <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
+      <DialogContent className={`sm:max-w-md ${t.modalBg}`}>
+        <VisuallyHidden><DialogTitle>Signaler {card?.name ?? ""}</DialogTitle></VisuallyHidden>
+        <div className="space-y-2">
+          <p className={`text-sm font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card?.name}</p>
+          <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
+          <div className="flex gap-2 justify-end pt-1">
+            <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
+            <Button size="sm" variant="destructive" onClick={submitReport} disabled={!reportReason.trim() || reportBarista.isPending} data-testid="button-submit-report">
+              {reportBarista.isPending ? "Envoi…" : "Envoyer le signalement"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Disponibilité — weekly schedule, Shop Opening Hours visual reference,
+        real saved Barista data only. */}
+    <BaristaAvailabilityModal
+      open={availabilityModalOpen}
+      onClose={() => setAvailabilityModalOpen(false)}
+      baristaName={card?.name ?? ""}
+      weeklyHours={card?.weeklyHours ?? null}
+      isDark={isDark}
+    />
+    </>
   );
 }

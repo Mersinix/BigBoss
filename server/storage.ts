@@ -4452,6 +4452,22 @@ export class DatabaseStorage implements IStorage {
     const profile = await this.getBaristaMarketplaceProfile(data.baristaUserId);
     if (!profile.marketplaceVisible) throw new Error("This Barista is not currently visible on the marketplace");
 
+    // Integrate the new per-day schedule into the existing recruitment flow
+    // (Barista availability update, Part 21) — a day marked Closed must never
+    // be offered as if the Barista were working. Only enforced once a
+    // weeklyHours schedule has actually been saved; additive, not a behavior
+    // change for Baristas who haven't configured one yet.
+    if (profile.weeklyHours) {
+      const WEEKDAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+      const requestedDate = new Date(`${data.startDate}T00:00:00`);
+      if (!Number.isNaN(requestedDate.getTime())) {
+        const dayKey = WEEKDAY_KEYS[requestedDate.getDay()];
+        if (profile.weeklyHours[dayKey]?.closed) {
+          throw new Error("This Barista is closed on the selected start date");
+        }
+      }
+    }
+
     // Duplicate-active-request guard: one cafe may not have more than one
     // open (PENDING/DISCUSSION) request against the same Barista at a time.
     const existingActive = await db.select().from(baristaMarketplaceRequests).where(and(

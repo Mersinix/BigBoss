@@ -757,6 +757,12 @@ export const baristaMarketplaceProfiles = pgTable("barista_marketplace_profiles"
   // Weekly recurring availability, e.g. ['Lun','Mar','Mer'] — matches the labels
   // already used across the app's date displays.
   availableDays: text("available_days").array().notNull().default([]),
+  // Per-day schedule (Barista availability update) — same { monday: {open,
+  // close, closed}, ... } shape as supplierStores.openingHours and
+  // maintenanceProfiles.weeklyHours (see OpeningHoursMap), reused rather than
+  // inventing a parallel type. Nullable: falls back to availableDays until the
+  // Barista saves a per-day schedule for the first time.
+  weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
   isAvailable: boolean("is_available").notNull().default(true),
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
   marketplaceVisible: boolean("marketplace_visible").notNull().default(true),

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import type { OpeningHoursMap } from "@shared/schema";
 
 // ── Types (kept local — no dedicated Barista types file existed before this) ──
 
@@ -38,6 +39,9 @@ export type BaristaMarketplaceCard = {
   location: string;
   initials: string;
   availableDays: string[];
+  // Per-day schedule (Barista availability update) — same shape as
+  // MaintenanceMarketplaceCard.weeklyHours; null until the Barista saves one.
+  weeklyHours: OpeningHoursMap | null;
   isAvailable: boolean;
   isOnVacation: boolean;
   marketplaceVisible: boolean;
@@ -289,7 +293,7 @@ export function useDeleteBaristaWorkHistory() {
 export function useUpdateBaristaAvailability() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { availableDays: string[]; isAvailable?: boolean; isOnVacation: boolean }) =>
+    mutationFn: (data: { availableDays: string[]; isAvailable?: boolean; isOnVacation: boolean; weeklyHours?: OpeningHoursMap }) =>
       mutate("PATCH", api.barista.availability.path, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/barista/profile"] });

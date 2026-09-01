@@ -26,7 +26,7 @@ import {
 import {
   Wrench, Search, MapPin, Star, MessageCircle, SlidersHorizontal,
   RotateCcw, X, Heart, Clock, Calendar, Shield, Zap, Award, Users, Sun, Moon,
-  Building2, User, Send, Flag, Navigation, Ban,
+  Building2, User, Send, Flag, Navigation, Ban, Image as ImageIcon,
 } from "lucide-react";
 
 type AccessLevel = "visitor" | "pending" | "approved";
@@ -350,13 +350,16 @@ export function AgentDetailModal({
       {/* Scrollbar treatment (Part 10) matches the existing My Favorites modal
           scroll container exactly (marketplace-layout.tsx) — same thin
           thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-0 gap-0 rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      {/* Dimensions/scrolling now match the Barista Details Modal exactly:
+          same sm:max-w-2xl, same themed background on DialogContent itself
+          (not just an inner wrapper), same scrollbar treatment. */}
+      <DialogContent className={`sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0 rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${isDark ? "bg-gray-900" : "bg-white"}`}>
         <VisuallyHidden><DialogTitle>Profil Technicien Maintenance</DialogTitle></VisuallyHidden>
-        <div className={t.cardBg}>
+        <div className="flex flex-col">
           {/* Large real profile picture (Part 7) — same treatment as the
               Barista Details Modal reference: full-width banner instead of a
               small avatar, favorite/report/close overlaid on the image. */}
-          <div className="relative w-full h-56 sm:h-72 shrink-0 overflow-hidden">
+          <div className={`relative w-full h-56 sm:h-72 shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
             <Avatar className="w-full h-full rounded-none">
               <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />
               <AvatarFallback className="rounded-none bg-gradient-to-br from-orange-500 to-amber-600">
@@ -378,49 +381,66 @@ export function AgentDetailModal({
               {agent.available ? "Disponible" : "Indisponible"}
             </span>
           </div>
-          <div className="p-5">
-            {/* Name → title → business type (Part 6) */}
-            <div className="mb-4">
-              <h2 className={`font-bold text-lg leading-tight ${t.textPrimary}`}>{agent.name}</h2>
-              <p className={`text-sm ${t.textMuted}`}>{agent.jobTitle}</p>
-              <Badge className={`text-[10px] border-0 px-1.5 mt-1.5 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>{agent.profileType}</Badge>
+          <div className="p-5 sm:p-6 space-y-5">
+            {/* Name + type badge share a row, subtitle underneath — same DOM
+                shape as the Barista modal's Name+Level/bio header (Part 5). */}
+            <div>
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <h2 className={`font-bold text-xl leading-tight ${t.textPrimary}`}>{agent.name}</h2>
+                <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>{agent.profileType}</Badge>
+              </div>
+              <p className={`text-sm leading-relaxed mt-1.5 ${t.textMuted}`}>{agent.jobTitle}</p>
+              {/* Rating / location / distance inline row — same treatment as
+                  the Barista modal's identity-row. */}
+              <div className={`flex items-center gap-3 mt-2.5 text-xs flex-wrap ${t.textMuted}`}>
+                <span className="flex items-center gap-1 text-amber-500"><Star className="w-3 h-3 fill-amber-400" /> {ratingValue(agent)} ({agent.reviewCount} avis)</span>
+                {agent.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {agent.location}</span>}
+                {agent.distanceKm != null && <span className="flex items-center gap-1"><Navigation className="w-3 h-3" /> {agent.distanceKm} km</span>}
+              </div>
             </div>
 
-            {/* Rating / reviews / experience / response (Part 6) */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              {[{ icon: Star, val: ratingValue(agent), label: `${agent.reviewCount} avis`, color: "text-amber-500" }, { icon: Shield, val: `${agent.yearsExperience} ans`, label: "Expérience", color: "text-blue-500" }, { icon: Zap, val: agent.responseTime, label: "Réponse", color: "text-green-500" }].map((stat) => (
-                <div key={stat.label} className={`${t.mutedBg} rounded-xl p-3 text-center`}><stat.icon className={`w-4 h-4 mx-auto mb-1 ${stat.color}`} /><p className={`font-bold text-sm ${t.textPrimary}`}>{stat.val}</p><p className={`text-[10px] ${t.textSubtle}`}>{stat.label}</p></div>
-              ))}
+            {/* Tarif journalier + Expérience/Réponse — same 2-column boxed-tile
+                treatment as the Barista modal's Tarif/Expérience grid (Part 6),
+                adapted to Maintenance's own real fields (response time has no
+                Barista equivalent, kept as a third tile). */}
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className={`p-3 rounded-xl ${t.mutedBg}`}>
+                <p className={`text-[11px] ${t.textSubtle}`}>Tarif / jour</p>
+                <p className="font-bold text-orange-600">{fmt(agent.dailyRateInCents)}</p>
+              </div>
+              <div className={`p-3 rounded-xl ${t.mutedBg}`}>
+                <p className={`text-[11px] ${t.textSubtle}`}>Expérience</p>
+                <p className={`font-bold ${t.textPrimary}`}>{agent.yearsExperience} ans</p>
+              </div>
+              <div className={`p-3 rounded-xl ${t.mutedBg}`}>
+                <p className={`text-[11px] ${t.textSubtle}`}>Réponse</p>
+                <p className={`font-bold ${t.textPrimary}`}>{agent.responseTime}</p>
+              </div>
             </div>
 
-            {/* Location / distance, then daily rate (Part 6) */}
-            <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mb-4 ${t.textMuted}`}>
-              <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.location || "—"}</span>
-              {agent.distanceKm != null && <span className="flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5 text-orange-500" />{agent.distanceKm} km</span>}
-            </div>
-            <div className={`mb-4 ${t.mutedBg} rounded-xl p-3`}>
-              <p className={`text-[11px] ${t.textSubtle}`}>Tarif journalier</p>
-              <p className="font-bold text-xl text-orange-600">{fmt(agent.dailyRateInCents)}</p>
-            </div>
-
-            <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>À propos</h3><p className={`text-sm ${t.textMuted} leading-relaxed`}>{agent.description || "Aucune description disponible."}</p></div>
+            {/* Section headings unified to the same text-xs/muted style the
+                Barista modal uses (Part 3/5/8-10) — content stays Maintenance's
+                own real data throughout. */}
+            <div><h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>À propos</h3><p className={`text-sm leading-relaxed ${t.textMuted}`}>{agent.description || "Aucune description disponible."}</p></div>
             {/* Categories + skills deduplicated into one set — the same union
                 already used by the booking form's Select below, so a taxonomy
                 name stored in both arrays no longer renders as two identical
-                chips (Part 8). */}
-            <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Catégories & Compétences</h3><div className="flex flex-wrap gap-1.5">{Array.from(new Set([...agent.categories, ...agent.skills])).map((item) => <span key={item} className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}</div></div>
-             {agent.certifications.length > 0 && <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 flex items-center gap-1 ${t.textPrimary}`}><Award className="w-3.5 h-3.5 text-amber-500" /> Certifications</h3><div className="flex flex-wrap gap-1.5">{agent.certifications.map((item) => <span key={item} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}</div></div>}
+                chips (Part 8). Chips now carry a real dark-mode variant instead
+                of the previous hardcoded light-only orange-50/amber-50 colors,
+                which is exactly the "no mixed light/dark" bug this task flags. */}
+            <div><h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Catégories & Compétences</h3><div className="flex flex-wrap gap-1.5">{Array.from(new Set([...agent.categories, ...agent.skills])).map((item) => <span key={item} className={`text-[11px] px-2 py-0.5 rounded-full font-medium border ${isDark ? "bg-orange-900/30 text-orange-300 border-orange-800" : "bg-orange-50 text-orange-700 border-orange-200"}`}>{item}</span>)}</div></div>
+             {agent.certifications.length > 0 && <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Award className="w-3.5 h-3.5 text-amber-500" /> Certifications</h3><div className="flex flex-wrap gap-1.5">{agent.certifications.map((item) => <span key={item} className={`text-[11px] px-2 py-0.5 rounded-full font-medium border ${isDark ? "bg-amber-900/30 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{item}</span>)}</div></div>}
              {/* Old "Disponibilité / Horaires" section removed from the main
                  body (Part 8) — now reachable via the Disponibilité icon on
                  the profile picture, which opens MaintenanceAvailabilityModal. */}
-             <div className={`mb-4 ${t.mutedBg} rounded-xl p-3`}><h3 className={`font-semibold text-sm mb-2 ${t.textPrimary}`}>Zone d'intervention</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.coverageArea || agent.location || "—"}</div></div>
-             {agent.portfolioImages.length > 0 && <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Portfolio</h3><div className="grid grid-cols-2 gap-2">{agent.portfolioImages.map((image, i) => <img key={i} src={image} alt={`Portfolio ${i + 1}`} className="w-full h-28 object-cover rounded-xl" />)}</div></div>}
-             <div className="mb-4">
-               <h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Avis ({reviewsQuery.data?.length ?? 0})</h3>
-               {(reviewsQuery.data ?? []).length === 0 ? <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p> : <div className="space-y-2">{reviewsQuery.data!.slice(0, 4).map((review) => <div key={review.id} className={`${t.mutedBg} rounded-xl p-3`}><div className="flex items-center justify-between"><span className={`text-xs font-semibold ${t.textPrimary}`}>{review.cafeOwnerName || review.cafeName}</span><span className="text-amber-500 text-xs">{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</span></div>{review.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{review.comment}</p>}</div>)}</div>}
+             <div className={`${t.mutedBg} rounded-xl p-3`}><h3 className={`text-xs font-semibold mb-2 ${t.textMuted}`}>Zone d'intervention</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.coverageArea || agent.location || "—"}</div></div>
+             {agent.portfolioImages.length > 0 && <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</h3><div className="grid grid-cols-4 gap-2">{agent.portfolioImages.map((image, i) => <div key={i} className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`}><img src={image} alt={`Portfolio ${i + 1}`} className="w-full h-full object-cover" /></div>)}</div></div>}
+             <div>
+               <h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviewsQuery.data?.length ?? 0})</h3>
+               {(reviewsQuery.data ?? []).length === 0 ? <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p> : <div className="space-y-2 max-h-40 overflow-y-auto">{reviewsQuery.data!.slice(0, 4).map((review) => <div key={review.id} className={`p-2.5 rounded-lg text-sm ${t.mutedBg}`}><div className="flex items-center justify-between"><span className={`font-medium text-xs ${t.textPrimary}`}>{review.cafeOwnerName || review.cafeName}</span><span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {review.rating}</span></div>{review.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{review.comment}</p>}</div>)}</div>}
              </div>
               {reviewReservation && (
-                <div className={`mb-4 ${t.mutedBg} rounded-xl p-3 space-y-2.5`}>
+                <div className={`${t.mutedBg} rounded-xl p-3 space-y-2.5`}>
                   <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Évaluer votre intervention</h3>
                   <div className="flex items-center gap-1">
                     {[1, 2, 3, 4, 5].map((value) => (
@@ -477,13 +497,16 @@ export function AgentDetailModal({
     {/* Signaler — own modal (Part 11), same mutation/validation/success-error
         behavior as before, just no longer an inline panel. */}
     <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent className="sm:max-w-md">
+      {/* Explicit theme bg — this modal previously had none and relied on the
+          inert bg-background default, which is exactly why it stayed white in
+          Dark Mode (same fix as the Barista report modal reference). */}
+      <DialogContent className={`sm:max-w-md ${isDark ? "bg-gray-900" : "bg-white"}`}>
         <VisuallyHidden><DialogTitle>Signaler {agent.name}</DialogTitle></VisuallyHidden>
         <div className="space-y-2">
           <p className={`text-sm font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {agent.name}</p>
           <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-maintenance-report-reason" />
           <div className="flex gap-2 justify-end pt-1">
-            <Button size="sm" variant="ghost" onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
+            <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
             <Button size="sm" variant="destructive" onClick={() => submitReport.mutate()} disabled={!reportReason.trim() || submitReport.isPending} data-testid="button-submit-maintenance-report">
               {submitReport.isPending ? "Envoi…" : "Envoyer le signalement"}
             </Button>

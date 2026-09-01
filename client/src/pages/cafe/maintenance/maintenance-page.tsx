@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
 import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
-import type { MaintenanceMarketplaceCard } from "@shared/schema";
+import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema";
+import { WEEKLY_DAY_DEFS } from "@/pages/maintenance/dashboard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -117,7 +118,7 @@ function AgentCard({
             id: favoriteId, name: agent.name, initials: agent.initials,
             specialty: agent.specialty, categories: agent.categories, skills: agent.skills,
             location: agent.location, rating: Number(ratingValue(agent)) || 0,
-            available: agent.available,
+            available: agent.available, profileImageUrl: agent.profileImageUrl,
           });
         }}
         data-testid={`button-fav-maintenance-${agent.userId}`}
@@ -151,27 +152,107 @@ function AgentCard({
           <span className={`text-[11px] ${t.textSubtle}`}>({agent.reviewCount} avis)</span>
           <span className={`text-[11px] ${t.textSubtle}`}>· {agent.yearsExperience} ans exp.</span>
         </div>
-        {agent.skills.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {agent.skills.slice(0, 4).map((skill) => <span key={skill} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{skill}</span>)}
-          </div>
-        )}
-        {agent.certifications.length > 0 && (
-          <div className="flex items-center gap-1 text-[10px] text-amber-600"><Award className="w-2.5 h-2.5" />{agent.certifications[0]}{agent.certifications.length > 1 ? ` +${agent.certifications.length - 1}` : ""}</div>
-        )}
-        <div className={`mt-auto pt-2 border-t flex items-center justify-between gap-2 flex-wrap ${t.border}`}>
-          <div><p className={`text-[10px] ${t.textSubtle}`}>Tarif / jour</p><p className="font-bold text-sm text-orange-600">{fmt(agent.dailyRateInCents)}</p></div>
-          <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <Button size="sm" variant="outline" className={`h-7 text-[11px] rounded-lg px-2 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`} onClick={() => onContact(agent)}>
-              <MessageCircle className="w-3 h-3" />
-            </Button>
-            <Button size="sm" className="h-7 text-[11px] bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-3" disabled={!agent.available} onClick={() => onOpenDetail(agent)}>
-              {agent.available ? "Réserver" : "Indisponible"}
-            </Button>
-          </div>
+        {/* Skills/certifications/actions intentionally removed from the card
+            (Part 1) — the details modal already covers them; the marketplace
+            card stays a compact summary, matching the Barista card's cleaner
+            hierarchy (reference only, Maintenance fields kept below). */}
+        <div className={`mt-auto pt-2 border-t ${t.border}`}>
+          <p className={`text-[10px] ${t.textSubtle}`}>Tarif / jour</p>
+          <p className="font-bold text-sm text-orange-600">{fmt(agent.dailyRateInCents)}</p>
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Availability modal (Parts 12-14) — visually inspired by the existing
+// Shop Store → Opening Hours component (client/src/pages/cafe/store-detail-page.tsx's
+// InfoModal), reusing the exact same day list (WEEKLY_DAY_DEFS, imported from
+// the Maintenance account's own Disponibilités editor — no separate day/label
+// list) and OpeningHoursMap data shape. No Shop business logic copied. ──────
+function MaintenanceAvailabilityModal({
+  open, onClose, agentName, weeklyHours, isDark,
+}: {
+  open: boolean;
+  onClose: () => void;
+  agentName: string;
+  weeklyHours: OpeningHoursMap | null;
+  isDark: boolean;
+}) {
+  const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+  const todayKey = WEEKLY_DAY_DEFS[todayIndex].key;
+
+  const dk = isDark;
+  const bg = dk ? "bg-gray-900" : "bg-white";
+  const textPrimary = dk ? "text-white" : "text-gray-900";
+  const textMuted = dk ? "text-gray-400" : "text-gray-500";
+  const rowBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
+  const rowToday = dk ? "bg-amber-500/15 border-amber-500/30" : "bg-amber-50 border-amber-200";
+  const timeColor = dk ? "text-gray-300" : "text-gray-700";
+  const closedColor = dk ? "text-red-400" : "text-red-500";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+        <VisuallyHidden><DialogTitle>Disponibilité — {agentName}</DialogTitle></VisuallyHidden>
+        <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
+          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={onClose} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
+                <X className="w-4 h-4" />
+              </button>
+              <div className="flex flex-col items-center gap-0.5">
+                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>{agentName}</span>
+                <span className={`text-[11px] font-medium ${textMuted}`}>Disponibilité</span>
+              </div>
+              <div className="w-8 h-8" />
+            </div>
+            <div className={`h-px w-full ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
+          </div>
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-5 pb-6
+              [&::-webkit-scrollbar]:w-1
+              [&::-webkit-scrollbar-track]:bg-transparent
+              [&::-webkit-scrollbar-thumb]:rounded-full
+              [&::-webkit-scrollbar-thumb]:bg-gray-700
+              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {weeklyHours ? (
+              <div className="space-y-2 pb-2">
+                {WEEKLY_DAY_DEFS.map(({ key, label }) => {
+                  const day = weeklyHours[key];
+                  const isToday = key === todayKey;
+                  return (
+                    <div key={key} className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-amber-400" : "text-amber-600") : textPrimary}`}>{label}</span>
+                        {isToday && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-amber-500/30 text-amber-300" : "bg-amber-100 text-amber-700"}`}>Today</span>
+                        )}
+                      </div>
+                      {day?.closed ? (
+                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
+                      ) : day ? (
+                        <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-amber-300" : "text-amber-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
+                      ) : (
+                        <span className={`text-[12px] ${textMuted}`}>—</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={`text-center py-12 ${textMuted}`}>
+                <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className={`text-sm font-medium ${textPrimary}`}>Aucun horaire configuré</p>
+                <p className="text-xs mt-1 opacity-50">Ce professionnel n'a pas encore défini ses disponibilités.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -249,62 +330,90 @@ export function AgentDetailModal({
   }, [agent?.userId]);
   const faved = useFavorites((s) => agent ? !!s.maintenance[agent.userId] : false);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
-  const [reportOpen, setReportOpen] = useState(false);
+  // Signaler (Part 11) now opens its own separate Dialog instead of an inline
+  // collapsible panel inside the main modal — same mutation/validation/
+  // success-error behavior, just presented in its own modal.
+  const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const { toast } = useToast();
   const submitReport = useMutation({
     mutationFn: () => apiRequest("POST", `/api/maintenance/${agent!.userId}/report`, { reason: reportReason.trim() }),
-    onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportOpen(false); setReportReason(""); },
+    onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
     onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
   });
   if (!agent) return null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-0 gap-0 rounded-2xl border-0 shadow-2xl [&>button]:hidden">
+      {/* Scrollbar treatment (Part 10) matches the existing My Favorites modal
+          scroll container exactly (marketplace-layout.tsx) — same thin
+          thumb/track/hover classes, not a new scrollbar style. */}
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-0 gap-0 rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <VisuallyHidden><DialogTitle>Profil Technicien Maintenance</DialogTitle></VisuallyHidden>
         <div className={t.cardBg}>
-          <div className="h-3 bg-gradient-to-r from-orange-500 to-amber-500" />
-          <div className="p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-3">
-                <Avatar className="w-14 h-14"><AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} /><AvatarFallback className="bg-orange-100 text-orange-700 font-bold text-lg">{agent.initials}</AvatarFallback></Avatar>
-                <div>
-                  <h2 className="font-bold text-lg leading-tight">{agent.name}</h2>
-                <p className={`text-sm ${t.textMuted}`}>{agent.jobTitle}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge className={`text-[10px] border-0 px-1.5 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>{agent.profileType}</Badge>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${agent.available ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{agent.available ? "✓ Disponible" : "Indisponible"}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setReportOpen((v) => !v)} title="Signaler" className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg} hover:bg-red-50`}><Flag className="w-4 h-4 text-red-500" /></button>
-                <button onClick={() => toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, skills: agent.skills, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available })} className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg} hover:bg-rose-50`}><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} /></button>
-                <button onClick={onClose} className={`w-9 h-9 rounded-full flex items-center justify-center ${t.mutedBg}`}><X className={`w-4 h-4 ${t.textMuted}`} /></button>
-              </div>
+          {/* Large real profile picture (Part 7) — same treatment as the
+              Barista Details Modal reference: full-width banner instead of a
+              small avatar, favorite/report/close overlaid on the image. */}
+          <div className="relative w-full h-56 sm:h-72 shrink-0 overflow-hidden">
+            <Avatar className="w-full h-full rounded-none">
+              <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />
+              <AvatarFallback className="rounded-none bg-gradient-to-br from-orange-500 to-amber-600">
+                <span className="text-white font-bold text-6xl">{agent.initials}</span>
+              </AvatarFallback>
+            </Avatar>
+            {/* Top right — Close + Favorite, unchanged position (Part 9/20) */}
+            <div className="absolute top-3 right-3 flex gap-2">
+              <button onClick={() => toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, skills: agent.skills, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available, profileImageUrl: agent.profileImageUrl })} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-white"}`} /></button>
+              <button onClick={onClose} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center"><X className="w-4 h-4 text-white" /></button>
             </div>
-            {reportOpen && (
-              <div className={`mb-4 rounded-xl p-3 space-y-2 border ${isDark ? "border-red-900/50 bg-red-950/20" : "border-red-200 bg-red-50/50"}`}>
-                <p className={`text-xs font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler ce professionnel</p>
-                <Textarea placeholder="Décrivez le problème…" rows={2} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-maintenance-report-reason" />
-                <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="ghost" onClick={() => setReportOpen(false)}>Annuler</Button>
-                  <Button size="sm" variant="destructive" onClick={() => submitReport.mutate()} disabled={!reportReason.trim() || submitReport.isPending} data-testid="button-submit-maintenance-report">
-                    {submitReport.isPending ? "Envoi…" : "Envoyer le signalement"}
-                  </Button>
-                </div>
-              </div>
-            )}
+            {/* Bottom right — Signaler (moved here) + new Disponibilité (Part 9-10) */}
+            <div className="absolute bottom-3 right-3 flex gap-2">
+              <button onClick={() => setReportModalOpen(true)} title="Signaler" data-testid="button-open-maintenance-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+              <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-maintenance-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+            </div>
+            <span className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${agent.available ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${agent.available ? "bg-white" : "bg-white/60"}`} />
+              {agent.available ? "Disponible" : "Indisponible"}
+            </span>
+          </div>
+          <div className="p-5">
+            {/* Name → title → business type (Part 6) */}
+            <div className="mb-4">
+              <h2 className={`font-bold text-lg leading-tight ${t.textPrimary}`}>{agent.name}</h2>
+              <p className={`text-sm ${t.textMuted}`}>{agent.jobTitle}</p>
+              <Badge className={`text-[10px] border-0 px-1.5 mt-1.5 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>{agent.profileType}</Badge>
+            </div>
+
+            {/* Rating / reviews / experience / response (Part 6) */}
             <div className="grid grid-cols-3 gap-3 mb-4">
               {[{ icon: Star, val: ratingValue(agent), label: `${agent.reviewCount} avis`, color: "text-amber-500" }, { icon: Shield, val: `${agent.yearsExperience} ans`, label: "Expérience", color: "text-blue-500" }, { icon: Zap, val: agent.responseTime, label: "Réponse", color: "text-green-500" }].map((stat) => (
                 <div key={stat.label} className={`${t.mutedBg} rounded-xl p-3 text-center`}><stat.icon className={`w-4 h-4 mx-auto mb-1 ${stat.color}`} /><p className={`font-bold text-sm ${t.textPrimary}`}>{stat.val}</p><p className={`text-[10px] ${t.textSubtle}`}>{stat.label}</p></div>
               ))}
             </div>
-             <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>À propos</h3><p className={`text-sm ${t.textMuted} leading-relaxed`}>{agent.description || "Aucune description disponible."}</p></div>
-             <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Catégories & Compétences</h3><div className="flex flex-wrap gap-1.5">{agent.categories.map((item) => <span key={item} className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}{agent.skills.map((item) => <span key={item} className={`text-[11px] px-2 py-0.5 rounded-full ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-600"}`}>{item}</span>)}</div></div>
+
+            {/* Location / distance, then daily rate (Part 6) */}
+            <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mb-4 ${t.textMuted}`}>
+              <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.location || "—"}</span>
+              {agent.distanceKm != null && <span className="flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5 text-orange-500" />{agent.distanceKm} km</span>}
+            </div>
+            <div className={`mb-4 ${t.mutedBg} rounded-xl p-3`}>
+              <p className={`text-[11px] ${t.textSubtle}`}>Tarif journalier</p>
+              <p className="font-bold text-xl text-orange-600">{fmt(agent.dailyRateInCents)}</p>
+            </div>
+
+            <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>À propos</h3><p className={`text-sm ${t.textMuted} leading-relaxed`}>{agent.description || "Aucune description disponible."}</p></div>
+            {/* Categories + skills deduplicated into one set — the same union
+                already used by the booking form's Select below, so a taxonomy
+                name stored in both arrays no longer renders as two identical
+                chips (Part 8). */}
+            <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Catégories & Compétences</h3><div className="flex flex-wrap gap-1.5">{Array.from(new Set([...agent.categories, ...agent.skills])).map((item) => <span key={item} className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}</div></div>
              {agent.certifications.length > 0 && <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 flex items-center gap-1 ${t.textPrimary}`}><Award className="w-3.5 h-3.5 text-amber-500" /> Certifications</h3><div className="flex flex-wrap gap-1.5">{agent.certifications.map((item) => <span key={item} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">{item}</span>)}</div></div>}
-             <div className={`mb-4 ${t.mutedBg} rounded-xl p-3 space-y-2`}><h3 className={`font-semibold text-sm mb-2 ${t.textPrimary}`}>Infos pratiques</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />Zone d'intervention : {agent.coverageArea || agent.location || "—"}</div><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><Clock className="w-3.5 h-3.5 text-orange-500" />Horaires : {agent.workingHours}</div>{agent.distanceKm != null && <div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><Navigation className="w-3.5 h-3.5 text-orange-500" />Distance : {agent.distanceKm} km</div>}</div>
+             {/* Old "Disponibilité / Horaires" section removed from the main
+                 body (Part 8) — now reachable via the Disponibilité icon on
+                 the profile picture, which opens MaintenanceAvailabilityModal. */}
+             <div className={`mb-4 ${t.mutedBg} rounded-xl p-3`}><h3 className={`font-semibold text-sm mb-2 ${t.textPrimary}`}>Zone d'intervention</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.coverageArea || agent.location || "—"}</div></div>
              {agent.portfolioImages.length > 0 && <div className="mb-4"><h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Portfolio</h3><div className="grid grid-cols-2 gap-2">{agent.portfolioImages.map((image, i) => <img key={i} src={image} alt={`Portfolio ${i + 1}`} className="w-full h-28 object-cover rounded-xl" />)}</div></div>}
              <div className="mb-4">
                <h3 className={`font-semibold text-sm mb-1.5 ${t.textPrimary}`}>Avis ({reviewsQuery.data?.length ?? 0})</h3>
@@ -338,9 +447,12 @@ export function AgentDetailModal({
                 </div>
               )}
             {!booking ? (
-               <div className={`border-t ${t.border} pt-4 flex items-center justify-between gap-3`}>
-                 <div><p className={`text-xs ${t.textSubtle}`}>Tarif journalier</p><p className="font-bold text-xl text-orange-600">{fmt(agent.dailyRateInCents)}</p></div>
-                 <div className="flex gap-2"><Button variant="outline" onClick={() => onContact(agent)} className={`rounded-xl px-4 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`}><MessageCircle className="w-4 h-4 mr-1.5" />Contacter</Button><Button onClick={() => setBooking(true)} disabled={!agent.available} className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl px-5"><Calendar className="w-4 h-4 mr-1.5" />{agent.available ? "Réserver" : "Indisponible"}</Button></div>
+              // Tarif already shown once above (Part 8) — action bar keeps just
+              // the two primary actions, matching the Barista modal's own
+              // actions-row convention.
+               <div className={`border-t ${t.border} pt-4 flex items-center justify-end gap-2`}>
+                 <Button variant="outline" onClick={() => onContact(agent)} className={`rounded-xl px-4 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`}><MessageCircle className="w-4 h-4 mr-1.5" />Contacter</Button>
+                 <Button onClick={() => setBooking(true)} disabled={!agent.available} className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl px-5"><Calendar className="w-4 h-4 mr-1.5" />{agent.available ? "Réserver" : "Indisponible"}</Button>
               </div>
             ) : (
                <div className={`border-t ${t.border} pt-4 space-y-3`}>
@@ -361,6 +473,35 @@ export function AgentDetailModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Signaler — own modal (Part 11), same mutation/validation/success-error
+        behavior as before, just no longer an inline panel. */}
+    <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
+      <DialogContent className="sm:max-w-md">
+        <VisuallyHidden><DialogTitle>Signaler {agent.name}</DialogTitle></VisuallyHidden>
+        <div className="space-y-2">
+          <p className={`text-sm font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {agent.name}</p>
+          <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-maintenance-report-reason" />
+          <div className="flex gap-2 justify-end pt-1">
+            <Button size="sm" variant="ghost" onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
+            <Button size="sm" variant="destructive" onClick={() => submitReport.mutate()} disabled={!reportReason.trim() || submitReport.isPending} data-testid="button-submit-maintenance-report">
+              {submitReport.isPending ? "Envoi…" : "Envoyer le signalement"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Disponibilité (Part 12-14) — weekly schedule, Shop Opening Hours
+        visual reference, real saved Maintenance data only. */}
+    <MaintenanceAvailabilityModal
+      open={availabilityModalOpen}
+      onClose={() => setAvailabilityModalOpen(false)}
+      agentName={agent.name}
+      weeklyHours={agent.weeklyHours ?? null}
+      isDark={isDark}
+    />
+    </>
   );
 }
 

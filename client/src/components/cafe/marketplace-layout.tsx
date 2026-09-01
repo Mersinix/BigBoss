@@ -1661,10 +1661,12 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           )
         )}
 
-        {/* MAINTENANCE */}
+        {/* MAINTENANCE — same left-photo/right-info Favorites layout as
+            BARISTA_MARKETPLACE above (visual reference only); skills/categories
+            and actions dropped from the card, kept in the details modal. */}
         {activeService === "MAINTENANCE" && (
           maintenanceItems.length === 0 ? renderEmpty() : (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {maintenanceItems.map((item) => (
                 <div
                   key={item.id}
@@ -1677,35 +1679,36 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                       openMaintenanceDetail(item.id);
                     }
                   }}
-                  className={`group flex items-center gap-3 border rounded-2xl p-3 cursor-pointer hover:shadow-lg hover:border-orange-300 transition-shadow ${cardBg}`}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden cursor-pointer h-28 ${cardBg}`}
                   data-testid={`card-fav-maintenance-${item.id}`}
                 >
-                  <Avatar className="w-11 h-11 shrink-0">
-                    <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} />
-                    <AvatarFallback className={`${dk ? "bg-orange-900 text-orange-300" : "bg-orange-100 text-orange-700"} font-bold text-xs`}>{item.initials}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.available ? "bg-green-400" : "bg-gray-500"}`} />
-                    </div>
-                    <p className={`text-xs mt-0.5 truncate ${textMuted}`}>{item.specialty}</p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-                      <span className="text-[11px] text-amber-400">{item.rating.toFixed(1)}</span>
-                      <span className={`min-w-0 truncate text-[10px] ${dk ? "text-gray-300" : "text-gray-600"}`}>
-                        {(item.skills.length ? item.skills : item.categories).join(" · ")}
-                      </span>
-                    </div>
+                  <div className="w-2/5 shrink-0 relative">
+                    <Avatar className="w-full h-full rounded-none">
+                      <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} className="object-cover" />
+                      <AvatarFallback className={`rounded-none font-bold text-xl ${dk ? "bg-orange-900 text-orange-300" : "bg-orange-100 text-orange-700"}`}>{item.initials}</AvatarFallback>
+                    </Avatar>
+                    <span
+                      className={`absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full border-2 border-white ${item.available ? "bg-green-500" : "bg-gray-300"}`}
+                      title={item.available ? "Disponible" : "Indisponible"}
+                    />
                   </div>
-                  <button
-                    className="p-1.5 rounded-xl hover:bg-rose-500/10 transition-colors shrink-0"
-                    onClick={(event) => { event.stopPropagation(); removeMaintenance(item.id); }}
-                    data-testid={`button-fav-remove-maintenance-${item.id}`}
-                    aria-label={`Remove ${item.name} from favorites`}
-                  >
-                    <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                  </button>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1 justify-center">
+                    <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
+                    <p className={`text-xs flex items-center gap-1 ${textMuted}`}>
+                      <MapPinIcon className="w-2.5 h-2.5 shrink-0" />{item.location || "—"}
+                    </p>
+                    <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      onClick={(event) => { event.stopPropagation(); removeMaintenance(item.id); }}
+                      data-testid={`button-fav-remove-maintenance-${item.id}`}
+                      aria-label={`Remove ${item.name} from favorites`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

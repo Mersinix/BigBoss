@@ -46,7 +46,7 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail }
     toggleMaintenance({
       id: current.userId, name: current.name, initials: current.initials, specialty: current.specialty,
       categories: current.categories, skills: current.skills, location: current.location,
-      rating: current.rating / 10, available: current.available,
+      rating: current.rating / 10, available: current.available, profileImageUrl: current.profileImageUrl,
     });
     setHeartAnim(true);
     setTimeout(() => setHeartAnim(false), 800);

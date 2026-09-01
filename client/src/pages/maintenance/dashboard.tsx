@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
-import type { ConversationSummary, ConversationMessageRow } from "@shared/schema";
+import type { ConversationSummary, ConversationMessageRow, OpeningHoursMap } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -78,6 +78,34 @@ const STATUS_META: Record<string, { label: string; color: string; icon: any }> =
   RESCHEDULE_PENDING: { label: "Modification à confirmer", color: "bg-purple-100 text-purple-800 border-purple-200", icon: RotateCcw },
   RESCHEDULE_REJECTED: { label: "Modification refusée", color: "bg-gray-100 text-gray-700 border-gray-200", icon: XCircle },
 };
+
+// ── Per-day schedule (Part 2) ────────────────────────────────────────────────
+// Reuses the exact same { monday: {open, close, closed}, ... } shape as
+// supplierStores.openingHours (shared/schema.ts's OpeningHoursMap) rather than
+// inventing a parallel one — also exported so the Coffee-Owner-facing
+// Availability modal (maintenance-page.tsx) shares the same day key/label map.
+
+export const WEEKLY_DAY_DEFS: { key: keyof OpeningHoursMap; label: string; short: string }[] = [
+  { key: "monday", label: "Lundi", short: "Lun" },
+  { key: "tuesday", label: "Mardi", short: "Mar" },
+  { key: "wednesday", label: "Mercredi", short: "Mer" },
+  { key: "thursday", label: "Jeudi", short: "Jeu" },
+  { key: "friday", label: "Vendredi", short: "Ven" },
+  { key: "saturday", label: "Samedi", short: "Sam" },
+  { key: "sunday", label: "Dimanche", short: "Dim" },
+];
+
+// Migration fallback — derives a per-day schedule from the legacy global
+// workingDays/startTime/endTime fields so an account that never touched the
+// new per-day editor still gets a sensible starting point (Part 6: no data
+// loss, nothing hardcoded that isn't actually the saved schedule).
+export function buildWeeklyHoursFallback(workingDays: string[], startTime: string, endTime: string): OpeningHoursMap {
+  const map = {} as OpeningHoursMap;
+  for (const d of WEEKLY_DAY_DEFS) {
+    map[d.key] = { open: startTime || "08:00", close: endTime || "18:00", closed: !workingDays.includes(d.short) };
+  }
+  return map;
+}
 
 // ── Today's date helpers ──────────────────────────────────────────────────────
 
@@ -596,11 +624,14 @@ export default function MaintenanceDashboard() {
   const [proposedDate, setProposedDate] = useState("");
   const [proposedTime, setProposedTime] = useState("");
 
-  // Availability state
+  // Availability state — legacy global fields kept (still sent on save, derived
+  // from weeklyHours, for backward compatibility) alongside the new per-day
+  // schedule that now actually drives the editor UI.
   const [workingDays, setWorkingDays] = useState<string[]>([]);
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("18:00");
   const [isOnVacation, setIsOnVacation] = useState(false);
+  const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([], "08:00", "18:00"));
 
   useEffect(() => {
     if (!profileData) return;
@@ -621,9 +652,8 @@ export default function MaintenanceDashboard() {
     setStartTime(p.startTime);
     setEndTime(p.endTime);
     setIsOnVacation(p.isOnVacation);
+    setWeeklyHours(p.weeklyHours ?? buildWeeklyHoursFallback(p.workingDays ?? [], p.startTime ?? "08:00", p.endTime ?? "18:00"));
   }, [profileData, user?.name, user?.phone]);
-
-  const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
   const filtered = useMemo(() => reservations.filter((r) => getTab(r.date) === planTab), [reservations, planTab]);
   const todayCount = reservations.filter((r) => getTab(r.date) === "today").length;
@@ -659,9 +689,20 @@ export default function MaintenanceDashboard() {
     onError: (error: Error) => toast({ title: "Impossible de sauvegarder le profil", description: error.message, variant: "destructive" }),
   });
   const saveAvailability = useMutation({
-    mutationFn: () => apiRequest("PATCH", "/api/maintenance/availability", {
-      workingDays, startTime, endTime, isOnVacation, isAvailable: !isOnVacation,
-    }),
+    mutationFn: () => {
+      // Legacy global fields derived from the per-day schedule for backward
+      // compatibility — the per-day weeklyHours is now the real source of truth.
+      const openDays = WEEKLY_DAY_DEFS.filter((d) => !weeklyHours[d.key].closed);
+      const derivedWorkingDays = openDays.map((d) => d.short);
+      const firstOpen = openDays[0] ? weeklyHours[openDays[0].key] : null;
+      return apiRequest("PATCH", "/api/maintenance/availability", {
+        workingDays: derivedWorkingDays,
+        startTime: firstOpen?.open ?? startTime,
+        endTime: firstOpen?.close ?? endTime,
+        isOnVacation, isAvailable: !isOnVacation,
+        weeklyHours,
+      });
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] }); toast({ title: "Disponibilités sauvegardées" }); },
     onError: (error: Error) => toast({ title: "Impossible de sauvegarder les disponibilités", description: error.message, variant: "destructive" }),
   });
@@ -696,8 +737,8 @@ export default function MaintenanceDashboard() {
   const toggleArea = (a: string) => {
     setSelectedAreas((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
   };
-  const toggleDay = (d: string) => {
-    setWorkingDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
+  const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
+    setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   };
 
   const tabs = [
@@ -1034,58 +1075,59 @@ export default function MaintenanceDashboard() {
               </CardContent>
             </Card>
 
-            {/* Working days */}
+            {/* Working days & hours — per-day (Part 2): each day is configured
+                independently instead of one global toggle + one global time
+                range. Same card/typography/spacing language as the rest of
+                this page, just extended. */}
             <Card className="rounded-2xl border-gray-100 shadow-sm">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" />Jours de travail</CardTitle>
+                <CardTitle className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" />Jours et horaires de travail</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex gap-2 flex-wrap">
-                  {DAYS.map((day) => (
-                    <button
-                      key={day}
-                      onClick={() => toggleDay(day)}
-                      className={`w-12 h-12 rounded-2xl text-sm font-semibold transition-all ${
-                        workingDays.includes(day)
-                          ? "bg-orange-600 text-white shadow-md"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                      }`}>
-                      {day}
-                    </button>
-                  ))}
-                </div>
+              <CardContent className="space-y-2">
+                {WEEKLY_DAY_DEFS.map((d) => {
+                  const day = weeklyHours[d.key];
+                  return (
+                    <div key={d.key} className="flex items-center gap-3 rounded-xl border border-gray-100 p-2.5">
+                      <button
+                        onClick={() => updateDayHours(d.key, { closed: !day.closed })}
+                        className={`w-16 shrink-0 h-9 rounded-xl text-xs font-semibold transition-all ${
+                          !day.closed ? "bg-orange-600 text-white shadow-md" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        }`}
+                        data-testid={`button-toggle-day-${d.key}`}
+                      >
+                        {d.short}
+                      </button>
+                      {day.closed ? (
+                        <span className="text-xs font-medium text-gray-400 flex-1">Fermé</span>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-1">
+                          <Input type="time" value={day.open} onChange={(e) => updateDayHours(d.key, { open: e.target.value })} className="h-9 rounded-xl text-xs" data-testid={`input-day-open-${d.key}`} />
+                          <span className="text-gray-300 text-xs">–</span>
+                          <Input type="time" value={day.close} onChange={(e) => updateDayHours(d.key, { close: e.target.value })} className="h-9 rounded-xl text-xs" data-testid={`input-day-close-${d.key}`} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-xs text-gray-400 pt-1">Les cafés ne verront que les créneaux disponibles dans ces plages horaires, jour par jour.</p>
               </CardContent>
             </Card>
 
-            {/* Working hours */}
-            <Card className="rounded-2xl border-gray-100 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2"><Clock className="w-4 h-4 text-orange-500" />Horaires de travail</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-xs text-gray-500">Début</Label>
-                    <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-10 rounded-xl mt-0.5" />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Fin</Label>
-                    <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-10 rounded-xl mt-0.5" />
-                  </div>
-                </div>
-                <p className="text-xs text-gray-400 mt-2">Les cafés ne verront que les créneaux disponibles dans ces plages horaires.</p>
-              </CardContent>
-            </Card>
-
-            {/* Summary */}
+            {/* Summary — dynamic, reflects the actual saved per-day schedule (Part 5) */}
             <Card className="rounded-2xl border-gray-100 shadow-sm bg-gradient-to-br from-orange-50 to-amber-50">
               <CardContent className="pt-4">
                 <p className="font-semibold text-sm mb-2 text-orange-700 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" />Résumé de disponibilité</p>
-                <p className="text-xs text-gray-600">
-                  <strong>Jours :</strong> {workingDays.join(", ") || "Aucun"}<br />
-                  <strong>Horaires :</strong> {startTime} – {endTime}<br />
-                  <strong>Statut :</strong> {isOnVacation ? "🔴 En congé" : "🟢 Disponible"}
-                </p>
+                <div className="text-xs text-gray-600 space-y-0.5">
+                  {WEEKLY_DAY_DEFS.map((d) => {
+                    const day = weeklyHours[d.key];
+                    return (
+                      <p key={d.key}>
+                        <strong>{d.label} :</strong> {day.closed ? "Fermé" : `${day.open} – ${day.close}`}
+                      </p>
+                    );
+                  })}
+                  <p className="pt-1"><strong>Statut :</strong> {isOnVacation ? "🔴 En congé" : "🟢 Disponible"}</p>
+                </div>
               </CardContent>
             </Card>
 

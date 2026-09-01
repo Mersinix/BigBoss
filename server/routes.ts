@@ -580,12 +580,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/maintenance/availability", requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    const dayHoursSchema = z.object({ open: z.string(), close: z.string(), closed: z.boolean() });
     const body = z.object({
       workingDays: z.array(z.string()),
       startTime: z.string(),
       endTime: z.string(),
       isAvailable: z.boolean().optional(),
       isOnVacation: z.boolean(),
+      // Per-day schedule (Part 2) — optional so the legacy global fields above
+      // keep working unchanged for any caller that doesn't send it.
+      weeklyHours: z.object({
+        monday: dayHoursSchema, tuesday: dayHoursSchema, wednesday: dayHoursSchema,
+        thursday: dayHoursSchema, friday: dayHoursSchema, saturday: dayHoursSchema, sunday: dayHoursSchema,
+      }).optional(),
     }).parse(req.body);
     const profile = await storage.upsertMaintenanceProfile(user.id, {
       ...body,
@@ -623,6 +630,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const competencies = new Set([...provider.categories, ...provider.skills]);
     if (body.category && !competencies.has(body.category)) {
       return res.status(400).json({ message: "Selected competency is not offered by this Maintenance professional" });
+    }
+    // Part 17 — integrate the new per-day schedule into the existing booking
+    // flow: a closed day must never be offered as if the professional were
+    // working. Only enforced when a weeklyHours schedule has actually been
+    // saved; the legacy global workingDays/startTime/endTime never had this
+    // check either, so this is additive, not a behavior change for accounts
+    // that haven't configured a per-day schedule yet.
+    if (provider.weeklyHours) {
+      const WEEKDAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+      const requestedDate = new Date(`${body.date}T00:00:00`);
+      if (!Number.isNaN(requestedDate.getTime())) {
+        const dayKey = WEEKDAY_KEYS[requestedDate.getDay()];
+        if (provider.weeklyHours[dayKey]?.closed) {
+          return res.status(400).json({ message: "This Maintenance professional is closed on the selected day" });
+        }
+      }
     }
     const reservation = await storage.createMaintenanceReservation({
       ...body,

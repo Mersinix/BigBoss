@@ -1123,6 +1123,12 @@ export const maintenanceProfiles = pgTable("maintenance_profiles", {
   workingDays: text("working_days").array().notNull().default([]),
   startTime: text("start_time").notNull().default("08:00"),
   endTime: text("end_time").notNull().default("18:00"),
+  // Per-day schedule (Part 2) — same { monday: {open, close, closed}, ... }
+  // shape as supplierStores.openingHours (see OpeningHoursMap below), reused
+  // rather than inventing a parallel type. Nullable: falls back to the legacy
+  // workingDays/startTime/endTime fields above (kept, not removed) until the
+  // Maintenance professional saves a per-day schedule for the first time.
+  weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
   isAvailable: boolean("is_available").notNull().default(true),
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
   marketplaceVisible: boolean("marketplace_visible").notNull().default(true),

@@ -62,6 +62,11 @@ export interface MaintenanceFavItem {
   location: string;
   rating: number;
   available: boolean;
+  // Real Maintenance profile picture (users.profileImageUrl) — without this the
+  // Favorites card had no image to show and always fell back to the generic
+  // default avatar, even for professionals with a real picture set (same fix
+  // already applied to BaristaMktFavItem above).
+  profileImageUrl?: string | null;
 }
 
 interface FavoritesStore {
@@ -275,6 +280,7 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
           location: profile.location,
           rating: profile.rating / 10,
           available: profile.available,
+          profileImageUrl: profile.profileImageUrl,
         };
       }
       return { maintenance: next };

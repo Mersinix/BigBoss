@@ -166,7 +166,10 @@ export function BaristaDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 ${t.modalBg}`}>
+      {/* Scrollbar treatment (Part 10) matches the existing My Favorites modal
+          scroll container exactly (client/src/components/cafe/marketplace-layout.tsx) —
+          same thin thumb/track/hover classes, not a new scrollbar style. */}
+      <DialogContent className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
         <VisuallyHidden><DialogTitle>{card?.name ?? "Profil Barista"}</DialogTitle></VisuallyHidden>
         {isLoading || !card ? (
           <div className="p-6 space-y-4">

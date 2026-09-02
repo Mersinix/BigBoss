@@ -31,7 +31,7 @@ import {
   Star, Package, Trash2, CheckCircle, Clock, Calendar, Box, Truck,
   AlertCircle, DollarSign, ClipboardList, Phone, Globe, MapPinIcon, AlertTriangle,
   Printer, Megaphone, Wrench, User, Users, GraduationCap, Sun, Moon, X, Plus, Loader2,
-  Archive, RotateCcw,
+  Archive, RotateCcw, Bell,
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount, type MaintenanceFavItem } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
@@ -46,6 +46,10 @@ import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
 import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/maintenance/maintenance-page";
+import { NotificationModal } from "@/components/cafe/notification-modal";
+import { useUnreadNotificationCount } from "@/hooks/use-notifications";
+import { useNotificationPreferences, useUpdateNotificationPreferences } from "@/hooks/use-notification-preferences";
+import { NOTIFICATION_PREF_DEFS, ROLE_NOTIFICATION_PREF_KEYS } from "@shared/notification-preferences";
 import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties } from "@shared/schema";
 import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
@@ -233,7 +237,8 @@ function AccountPanel({
   ].sort((a, b) => new Date(b.data.createdAt).getTime() - new Date(a.data.createdAt).getTime());
 
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
-  const [notifs, setNotifs] = useState({ orderUpdates: true, promotions: false, newSuppliers: true });
+  const { isEnabled: isNotifCategoryEnabled } = useNotificationPreferences();
+  const updateNotifPrefs = useUpdateNotificationPreferences();
   const fmt = useFormatCurrency();
   const reservationStatus: Record<string, { label: string; color: string }> = {
     PENDING: { label: "En attente", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
@@ -1096,12 +1101,19 @@ function AccountPanel({
             <div className={`border rounded-2xl p-4 ${cardBg}`}>
               <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>Notifications</p>
               <div className="space-y-3">
-                {[{ key: "orderUpdates", label: "Order Updates" }, { key: "promotions", label: "Promotions" }, { key: "newSuppliers", label: "New Suppliers" }].map((n) => (
-                  <div key={n.key} className={`flex items-center justify-between py-1 border-b last:border-0 ${borderClr}`}>
-                    <span className={`text-sm ${textPrimary}`}>{n.label}</span>
-                    <Switch checked={notifs[n.key as keyof typeof notifs]} onCheckedChange={(v) => setNotifs((p) => ({ ...p, [n.key]: v }))} />
-                  </div>
-                ))}
+                {(ROLE_NOTIFICATION_PREF_KEYS.CAFE_OWNER ?? []).map((key) => {
+                  const def = NOTIFICATION_PREF_DEFS[key];
+                  return (
+                    <div key={key} className={`flex items-center justify-between py-1 border-b last:border-0 ${borderClr}`}>
+                      <span className={`text-sm ${textPrimary}`}>{def.label}</span>
+                      <Switch
+                        checked={isNotifCategoryEnabled(key)}
+                        onCheckedChange={(v) => updateNotifPrefs.mutate({ [key]: v })}
+                        data-testid={`switch-notif-pref-${key}`}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <button
@@ -2427,6 +2439,7 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileInitialTab, setProfileInitialTab] = useState<"orders" | "reservations" | "dashboard" | "settings" | null>(null);
   const [favOpen, setFavOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInitialService, setChatInitialService] = useState<ServiceId | undefined>(undefined);
   const [chatInitialConversationId, setChatInitialConversationId] = useState<number | null>(null);
@@ -2462,6 +2475,8 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   }, [shouldOpen, shouldOpenChat, initialChatService, initialConversationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cartCount = getTotalItemCount();
+  const { data: unreadNotifData } = useUnreadNotificationCount();
+  const unreadNotifCount = unreadNotifData?.count ?? 0;
 
   const isOnPrint = location.startsWith("/print");
 
@@ -2556,6 +2571,24 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
                   <span>Awaiting approval</span>
                 </div>
               )}
+
+              {/* Notifications */}
+              <button
+                onClick={() => setNotifOpen(true)}
+                className={`relative p-2 rounded-xl transition-colors ${
+                  isDark
+                    ? "text-gray-400 hover:text-white hover:bg-gray-800"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                }`}
+                data-testid="button-notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadNotifCount > 0 && (
+                  <span className="absolute top-0.5 right-0.5 flex items-center justify-center w-4 h-4 text-[9px] font-bold text-white bg-amber-500 rounded-full">
+                    {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
+                  </span>
+                )}
+              </button>
 
               {/* Favorites — approved/admin only */}
               {hasCommercial && (
@@ -2721,6 +2754,9 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ── Notifications Modal ── */}
+      {user && <NotificationModal open={notifOpen} onOpenChange={setNotifOpen} isDark={isDark} />}
 
       {/* ── Favorites Modal ── */}
       {user && hasCommercial && (

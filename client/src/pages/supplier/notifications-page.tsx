@@ -1,24 +1,20 @@
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bell, ShoppingBag, CreditCard, Package, AlertTriangle } from "lucide-react";
-
-const fakeNotifications = [
-  { id: 1, type: "order", icon: ShoppingBag, color: "bg-primary/10 text-primary", title: "New order received", desc: "ORD-88 placed by Ariana Lounge for TND 487", time: "2 min ago", read: false },
-  { id: 2, type: "payment", icon: CreditCard, color: "bg-green-500/10 text-green-600", title: "Payment received", desc: "TND 217 for ORD-61 from Cafe des Nattes", time: "1h ago", read: false },
-  { id: 3, type: "stock", icon: AlertTriangle, color: "bg-amber-500/10 text-amber-600", title: "Low stock alert", desc: "Decaf House Blend 500g — only 8 units left", time: "3h ago", read: false },
-  { id: 4, type: "order", icon: ShoppingBag, color: "bg-primary/10 text-primary", title: "Order delivered", desc: "ORD-55 was delivered to Saffron Lounge", time: "Yesterday", read: true },
-  { id: 5, type: "product", icon: Package, color: "bg-blue-500/10 text-blue-600", title: "Product approved", desc: "Arabic Coffee Blend — now live on the marketplace", time: "Yesterday", read: true },
-  { id: 6, type: "payment", icon: CreditCard, color: "bg-green-500/10 text-green-600", title: "Payout processed", desc: "TND 2,546 transferred to your bank account", time: "Apr 5, 2026", read: true },
-];
+import { Bell, AlertTriangle, ShoppingBag } from "lucide-react";
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
+import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
 
 export default function SupplierNotificationsPage() {
-  const [notifs, setNotifs] = useState(fakeNotifications);
-  const unread = notifs.filter((n) => !n.read).length;
+  // Real, persisted SHOP-service notifications — orders, low stock, deliveries.
+  // No mock data (this page previously seeded a static fakeNotifications array).
+  const { data: notifications = [], isLoading } = useNotifications("SHOP", { limit: 50 });
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
 
-  const markAll = () => setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
-  const markOne = (id: number) => setNotifs((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+  const unread = notifications.filter((n) => !n.isRead).length;
+  const stockAlerts = notifications.filter((n) => n.type === "low_stock" || n.type === "out_of_stock").length;
+  const orderNotifications = notifications.filter((n) => n.type.startsWith("order") || n.type.startsWith("suborder")).length;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -28,7 +24,7 @@ export default function SupplierNotificationsPage() {
           <p className="text-sm text-muted-foreground mt-0.5">Stay updated on orders, payments and alerts.</p>
         </div>
         {unread > 0 && (
-          <Button variant="outline" size="sm" onClick={markAll} data-testid="button-mark-all-read">Mark all as read</Button>
+          <Button variant="outline" size="sm" onClick={() => markAllRead.mutate("SHOP")} data-testid="button-mark-all-read">Mark all as read</Button>
         )}
       </div>
 
@@ -42,13 +38,13 @@ export default function SupplierNotificationsPage() {
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-amber-500/10 rounded-xl p-3"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Low Stock Alerts</p><p className="text-2xl font-bold">1</p></div>
+            <div><p className="text-xs text-muted-foreground">Low Stock Alerts</p><p className="text-2xl font-bold">{stockAlerts}</p></div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3"><CreditCard className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Payment Alerts</p><p className="text-2xl font-bold">2</p></div>
+            <div className="bg-blue-500/10 rounded-xl p-3"><ShoppingBag className="w-5 h-5 text-blue-600" /></div>
+            <div><p className="text-xs text-muted-foreground">Order Notifications</p><p className="text-2xl font-bold">{orderNotifications}</p></div>
           </CardContent>
         </Card>
       </div>
@@ -56,28 +52,32 @@ export default function SupplierNotificationsPage() {
       <Card>
         <CardHeader><CardTitle className="text-base font-semibold">All Notifications</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {notifs.map((n) => (
-            <button
-              key={n.id}
-              data-testid={`button-notif-${n.id}`}
-              onClick={() => markOne(n.id)}
-              className={`w-full flex items-start gap-4 p-4 rounded-lg text-left transition-colors border ${
-                n.read ? "border-border/30 bg-transparent" : "border-primary/20 bg-primary/5"
-              }`}
-            >
-              <div className={`rounded-lg p-2 mt-0.5 shrink-0 ${n.color.split(" ")[0]}`}>
-                <n.icon className={`w-4 h-4 ${n.color.split(" ")[1]}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-foreground">{n.title}</p>
-                  {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+          {!isLoading && notifications.length === 0 ? (
+            <div className="text-center text-muted-foreground py-10">Aucune nouvelle notification</div>
+          ) : (
+            notifications.map((n) => (
+              <button
+                key={n.id}
+                data-testid={`button-notif-${n.id}`}
+                onClick={() => !n.isRead && markRead.mutate(n.id)}
+                className={`w-full flex items-start gap-4 p-4 rounded-lg text-left transition-colors border ${
+                  n.isRead ? "border-border/30 bg-transparent" : "border-primary/20 bg-primary/5"
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${NOTIFICATION_PRIORITY_DOT[n.priority]}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">{n.title}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{n.desc}</p>
-              </div>
-              <span className="text-xs text-muted-foreground shrink-0">{n.time}</span>
-            </button>
-          ))}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <Badge variant="outline" className="text-xs">{n.type.replace(/_/g, " ")}</Badge>
+                  <span className="text-xs text-muted-foreground">{formatNotificationTime(n.createdAt)}</span>
+                </div>
+              </button>
+            ))
+          )}
         </CardContent>
       </Card>
     </div>

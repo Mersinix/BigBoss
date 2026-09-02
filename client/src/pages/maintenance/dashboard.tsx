@@ -7,6 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import type { ConversationSummary, ConversationMessageRow, OpeningHoursMap } from "@shared/schema";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
+import ProviderNotificationsPage from "@/pages/shared/provider-notifications-page";
+import { useUnreadNotificationCount } from "@/hooks/use-notifications";
+import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -518,14 +521,7 @@ function MaintenanceSettings({ profile }: { profile: any }) {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 shadow-sm">
-        <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><Bell className="w-4 h-4 text-orange-500" />Notifications</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {[{ key: "reservations", label: "Réservations" }, { key: "messages", label: "Messages" }, { key: "reviews", label: "Avis" }].map((n) => (
-            <div key={n.key} className="flex items-center justify-between py-1"><span className="text-sm">{n.label}</span><Switch defaultChecked /></div>
-          ))}
-        </CardContent>
-      </Card>
+      <NotificationPreferencesCard role="MAINTENANCE" />
 
       <Card className="rounded-2xl border-gray-100 shadow-sm">
         <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><Settings className="w-4 h-4 text-orange-500" />Visibilité marketplace</CardTitle></CardHeader>
@@ -557,7 +553,7 @@ export default function MaintenanceDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   useRealtime(user?.id);
-  const [activeTab, setActiveTab] = useState<"planning" | "profile" | "availability" | "messages" | "reviews" | "settings">("planning");
+  const [activeTab, setActiveTab] = useState<"planning" | "profile" | "availability" | "messages" | "notifications" | "reviews" | "settings">("planning");
   const [planTab, setPlanTab] = useState<"today" | "upcoming" | "past">("upcoming");
   const { data: reservations = [] } = useQuery<MaintenanceReservationRow[]>({
     queryKey: ["/api/maintenance/reservations"],
@@ -720,9 +716,12 @@ export default function MaintenanceDashboard() {
     { key: "profile" as const, label: "Profil", icon: User },
     { key: "availability" as const, label: "Disponibilité", icon: Calendar },
     { key: "messages" as const, label: "Messages", icon: MessageCircle },
+    { key: "notifications" as const, label: "Notifications", icon: Bell },
     { key: "reviews" as const, label: "Avis", icon: Star },
     { key: "settings" as const, label: "Settings", icon: Settings },
   ];
+  const { data: unreadNotifData } = useUnreadNotificationCount("MAINTENANCE");
+  const unreadNotifCount = unreadNotifData?.count ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -766,6 +765,11 @@ export default function MaintenanceDashboard() {
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}>
                 <tab.icon className="w-4 h-4" />{tab.label}
+                {tab.key === "notifications" && unreadNotifCount > 0 && (
+                  <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-600 text-white text-[10px] font-bold flex items-center justify-center">
+                    {unreadNotifCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -776,6 +780,7 @@ export default function MaintenanceDashboard() {
 
         {/* ── MESSAGES ── */}
         {activeTab === "messages" && <MaintenanceMessages />}
+        {activeTab === "notifications" && <ProviderNotificationsPage />}
         {activeTab === "reviews" && <MaintenanceReviews />}
         {activeTab === "settings" && <MaintenanceSettings profile={profile} />}
 

@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { Button } from "@/components/ui/button";
 import {
   GraduationCap,
@@ -12,6 +13,7 @@ import {
   CalendarDays,
   DollarSign,
   MessageCircle,
+  Bell,
   Star,
   BarChart2,
   Settings,
@@ -26,6 +28,7 @@ const TABS = [
   { path: "/barista-academy/calendar", label: "Calendrier", icon: CalendarDays },
   { path: "/barista-academy/revenue", label: "Revenus", icon: DollarSign },
   { path: "/barista-academy/messages", label: "Messages", icon: MessageCircle },
+  { path: "/barista-academy/notifications", label: "Notifications", icon: Bell },
   { path: "/barista-academy/reviews", label: "Avis", icon: Star },
   { path: "/barista-academy/analytics", label: "Analytics", icon: BarChart2 },
   { path: "/barista-academy/settings", label: "Settings", icon: Settings },
@@ -54,6 +57,8 @@ export function AcademyAccountShell({ children }: { children: React.ReactNode })
     refetchInterval: 30000,
   });
   const unreadCount = unreadData?.count ?? 0;
+  const { data: unreadNotifData } = useUnreadNotificationCount("ACADEMY");
+  const unreadNotifCount = unreadNotifData?.count ?? 0;
 
   const isActive = (tab: (typeof TABS)[number]) =>
     tab.exact ? location === tab.path : location === tab.path || location.startsWith(`${tab.path}/`);
@@ -106,6 +111,11 @@ export function AcademyAccountShell({ children }: { children: React.ReactNode })
                     {tab.label === "Messages" && unreadCount > 0 && (
                       <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
                         {unreadCount}
+                      </span>
+                    )}
+                    {tab.label === "Notifications" && unreadNotifCount > 0 && (
+                      <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {unreadNotifCount}
                       </span>
                     )}
                   </a>

@@ -72,6 +72,14 @@ export const users = pgTable("users", {
   // Set only on DRIVER accounts owned directly by a supplier's own delivery operation
   // (as opposed to a DELIVERY_COMPANY's fleet). References another users.id with role SUPPLIER.
   supplierId: integer("supplier_id"),
+  // Per-user notification opt-outs, keyed by a coarse NotificationPrefKey (see
+  // shared/notification-preferences.ts) — e.g. { shop_orders: false }. Absence of a
+  // key, or the whole column being null (every existing account today), means
+  // enabled: this is a pure opt-OUT store, so a new key introduced later stays
+  // enabled for everyone until they explicitly disable it. Lives on `users` (not a
+  // separate table) so it free-rides the existing user_profile_updated broadcast +
+  // /api/auth/me refetch for cross-tab/session sync — no new realtime plumbing.
+  notificationPreferences: jsonb("notification_preferences").$type<Record<string, boolean> | null>(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   driverSingleOwnerCheck: check(
@@ -1424,6 +1432,37 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ── Notifications ────────────────────────────────────────────────────────────
+// Single coherent notification source for every service — not a per-module table.
+// Service classification drives the Coffee Owner modal's tab switcher; dedupeKey
+// gives every notification-creation call site a `.onConflictDoNothing()` path
+// (same idempotency pattern already used by createDeliveryForSubOrder etc.),
+// so retries/reconnects/duplicate WS listeners can never double-insert.
+
+export const notificationServiceEnum = pgEnum('notification_service', ['ADMIN', 'SHOP', 'PRINT', 'MAINTENANCE', 'BARISTA', 'ACADEMY', 'MARKETING']);
+export const notificationPriorityEnum = pgEnum('notification_priority', ['INFO', 'SUCCESS', 'WARNING', 'URGENT']);
+
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  service: notificationServiceEnum("service").notNull(),
+  type: text("type").notNull(),
+  priority: notificationPriorityEnum("priority").notNull().default('INFO'),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  entityType: text("entity_type"),
+  entityId: integer("entity_id"),
+  dedupeKey: text("dedupe_key"),
+  isRead: boolean("is_read").notNull().default(false),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdx: index("notifications_user_id_idx").on(table.userId),
+  userReadIdx: index("notifications_user_read_idx").on(table.userId, table.isRead),
+  userServiceIdx: index("notifications_user_service_idx").on(table.userId, table.service),
+  dedupeKeyUnique: uniqueIndex("notifications_dedupe_key_unique").on(table.dedupeKey),
+}));
+
 export const usersRelations = relations(users, ({ many, one }) => ({
   supplierProducts: many(products, { relationName: 'supplierProducts' }),
   cafeOrders: many(orders, { relationName: 'cafeOrders' }),
@@ -1630,6 +1669,7 @@ export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omi
 
 export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, lastMessageAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true, isRead: true, readAt: true });
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -2432,6 +2472,13 @@ export type ConversationMessageRow = {
 };
 
 export type EligibleContact = { id: number; name: string; role: string; profileImageUrl?: string | null };
+
+// ── Notification types ───────────────────────────────────────────────────────
+
+export type NotificationService = 'ADMIN' | 'SHOP' | 'PRINT' | 'MAINTENANCE' | 'BARISTA' | 'ACADEMY' | 'MARKETING';
+export type NotificationPriority = 'INFO' | 'SUCCESS' | 'WARNING' | 'URGENT';
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 // ── Returns types ─────────────────────────────────────────────────────────────
 export const insertOrderReturnSchema = createInsertSchema(orderReturns);

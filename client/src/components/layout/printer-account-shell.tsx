@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -11,6 +12,7 @@ import {
   FileText,
   BarChart2,
   MessageCircle,
+  Bell,
   Star,
   Layers,
   Settings,
@@ -25,6 +27,7 @@ const TABS = [
   { path: "/printer/invoices", label: "Facturation", icon: FileText },
   { path: "/printer/analytics", label: "Analytics", icon: BarChart2 },
   { path: "/printer/messages", label: "Messages", icon: MessageCircle },
+  { path: "/printer/notifications", label: "Notifications", icon: Bell },
   { path: "/printer/reviews", label: "Avis", icon: Star },
   { path: "/printer/categories", label: "Catégories", icon: Layers },
   { path: "/printer/settings", label: "Settings", icon: Settings },
@@ -55,6 +58,8 @@ export function PrinterAccountShell({ children }: { children: React.ReactNode })
     refetchInterval: 30000,
   });
   const unreadCount = unreadData?.count ?? 0;
+  const { data: unreadNotifData } = useUnreadNotificationCount("PRINT");
+  const unreadNotifCount = unreadNotifData?.count ?? 0;
 
   const isActive = (tab: (typeof TABS)[number]) =>
     tab.exact ? location === tab.path : location === tab.path || location.startsWith(`${tab.path}/`);
@@ -107,6 +112,11 @@ export function PrinterAccountShell({ children }: { children: React.ReactNode })
                     {tab.label === "Messages" && unreadCount > 0 && (
                       <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
                         {unreadCount}
+                      </span>
+                    )}
+                    {tab.label === "Notifications" && unreadNotifCount > 0 && (
+                      <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {unreadNotifCount}
                       </span>
                     )}
                   </a>

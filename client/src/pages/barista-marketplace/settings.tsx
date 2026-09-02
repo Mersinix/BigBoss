@@ -11,9 +11,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { User, MapPin, Lock, Bell, Settings as SettingsIcon, LogOut } from "lucide-react";
+import { User, MapPin, Lock, Settings as SettingsIcon, LogOut } from "lucide-react";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import type { AddressDetails } from "@shared/schema";
+import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 
 // Settings — grouped into: Account information / Location information / Security /
 // Notifications / Marketplace visibility. Every section reuses an existing generic
@@ -43,11 +44,6 @@ export default function BaristaSettingsPage() {
   // Owner card view); editing it here keeps every surface synchronized, no
   // second location value.
   const [locationModalOpen, setLocationModalOpen] = useState(false);
-
-  // Notifications — client-side preferences only; no notification-preferences
-  // table exists in the schema (same honest limitation already documented on
-  // Driver Settings), so these are not claimed to persist server-side.
-  const [notifs, setNotifs] = useState({ requests: true, missions: true, messages: true, academy: true });
 
   // Marketplace visibility — existing field, kept exactly as before.
   const [visible, setVisible] = useState(true);
@@ -217,26 +213,7 @@ export default function BaristaSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Bell className="w-4 h-4 text-green-600" /> Notifications
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[
-            { key: "requests" as const, label: "Nouvelles demandes" },
-            { key: "missions" as const, label: "Missions" },
-            { key: "messages" as const, label: "Messages" },
-            { key: "academy" as const, label: "Academy" },
-          ].map((n) => (
-            <div key={n.key} className="flex items-center justify-between py-1">
-              <span className="text-sm text-foreground">{n.label}</span>
-              <Switch checked={notifs[n.key]} onCheckedChange={(v) => setNotifs((p) => ({ ...p, [n.key]: v }))} data-testid={`switch-settings-notif-${n.key}`} />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <NotificationPreferencesCard role="BARISTA_MARKETPLACE" />
 
       <Card>
         <CardHeader className="pb-2">

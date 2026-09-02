@@ -48,6 +48,7 @@ const ACADEMY_EVENTS = [
   "academy_registration_status_changed",
   "academy_review_created",
 ];
+const NOTIFICATION_EVENTS = ["notification_created"];
 
 function invalidateInventoryQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
@@ -108,6 +109,14 @@ function invalidateMessagingQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/messages/unread-count"] });
 }
 
+// Notification list/unread-count queries are keyed ["/api/notifications", {service}]
+// / ["/api/notifications/unread-count", {service}] — invalidate every variant
+// (Tous + each service tab) in one predicate rather than one call per service.
+function invalidateNotificationQueries(qc: QueryClient) {
+  qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/notifications" });
+  qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/notifications/unread-count" });
+}
+
 export function useRealtime(userId?: number) {
   const qc = useQueryClient();
 
@@ -130,6 +139,10 @@ export function useRealtime(userId?: number) {
         // revalidate the cart's Pack availability on every (re)connect so it can never
         // stay stale indefinitely; a no-op if the cart has no Packs.
         qc.invalidateQueries({ queryKey: [PACK_AVAILABILITY_KEY] });
+        // Same reasoning for notifications — a notification created while this tab was
+        // offline is still persisted server-side (see server/notify.ts), but the badge/list
+        // only reflects it once we refetch; do that on every (re)connect, not just live events.
+        if (userId) invalidateNotificationQueries(qc);
       };
 
       ws.onmessage = (e) => {
@@ -329,6 +342,9 @@ export function useRealtime(userId?: number) {
             if (event === "academy_registration_created" || event === "academy_registration_status_changed") {
               invalidateMessagingQueries(qc);
             }
+          }
+          if (NOTIFICATION_EVENTS.includes(event)) {
+            invalidateNotificationQueries(qc);
           }
         } catch {}
       };

@@ -5,6 +5,13 @@ import { ShoppingBag } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { Link } from "wouter";
 import { useRealtime } from "@/hooks/use-realtime";
+import { NotificationBellDropdown } from "@/components/notifications/notification-bell-dropdown";
+
+const NOTIFICATIONS_PAGE_BY_ROLE: Record<string, string> = {
+  ADMIN: "/admin/notifications",
+  SUPER_ADMIN: "/admin/notifications",
+  SUPPLIER: "/supplier/notifications",
+};
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -29,6 +36,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </div>
             
             <div className="flex items-center gap-4">
+              <NotificationBellDropdown notificationsHref={NOTIFICATIONS_PAGE_BY_ROLE[user.role]} />
               {user.role === 'CAFE_OWNER' && (
                 <Link 
                   href="/cart" 

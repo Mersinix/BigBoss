@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { broadcast, broadcastToUsers } from "./ws";
+import { notify, notifyMany } from "./notify";
 import { storage } from "./storage";
 import { sendPasswordResetEmail } from "./email";
 import {
@@ -27,6 +28,7 @@ import {
   orders, orderItems,
   supplierProductVariants,
   type InventoryFilters, type InventorySort,
+  type NotificationPriority,
 } from "@shared/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 
@@ -214,6 +216,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = await storage.createUser(userData);
       req.session.userId = user.id;
       broadcast("admin_user_directory_changed");
+      if (status === 'pending') {
+        const adminIds = await storage.getAdminUserIds();
+        await notifyMany({
+          userIds: adminIds,
+          service: "ADMIN", type: "account_registration_pending", priority: "WARNING",
+          title: "Nouvelle inscription à approuver",
+          message: `${user.name} (${role}) attend une approbation.`,
+          entityType: "user", entityId: user.id,
+          prefKey: "accounts",
+          dedupeKeyPrefix: `admin:registration_pending:${user.id}`,
+        });
+      }
       res.status(201).json(user);
     } catch (err) {
       if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
@@ -660,6 +674,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       service: "MAINTENANCE",
       reservationId: reservation.id,
     });
+    await notify({
+      userId: body.maintenanceUserId,
+      service: "MAINTENANCE", type: "maintenance_reservation_created", priority: "WARNING",
+      title: "Nouvelle demande de maintenance",
+      message: `${user.name} a demandé une intervention (${body.service}).`,
+      entityType: "maintenance_reservation", entityId: reservation.id,
+      prefKey: "maintenance_requests",
+      dedupeKey: `maintenance:reservation_created:${reservation.id}:provider`,
+    });
+    await notify({
+      userId: user.id,
+      service: "MAINTENANCE", type: "maintenance_reservation_created", priority: "INFO",
+      title: "Demande envoyée",
+      message: `Votre demande d'intervention (${body.service}) a été envoyée avec succès.`,
+      entityType: "maintenance_reservation", entityId: reservation.id,
+      prefKey: "maintenance_status",
+      dedupeKey: `maintenance:reservation_created:${reservation.id}:owner`,
+    });
     res.status(201).json(reservation);
   });
 
@@ -681,6 +713,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         service: "MAINTENANCE",
         reservationId: proposed.id,
       });
+      await notify({
+        userId: proposed.cafeOwnerId,
+        service: "MAINTENANCE", type: "maintenance_reschedule_requested", priority: "WARNING",
+        title: "Nouvelle date proposée",
+        message: `${user.name} propose une nouvelle date pour votre intervention (${proposed.service}).`,
+        entityType: "maintenance_reservation", entityId: proposed.id,
+        prefKey: "maintenance_status",
+        dedupeKey: `maintenance:reschedule_requested:${proposed.id}:${proposed.proposedDate}`,
+      });
       return res.json(proposed);
     }
     const updated = await storage.updateMaintenanceReservationStatus(Number(req.params.id), user.id, body.status, {
@@ -695,6 +736,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       service: "MAINTENANCE",
       reservationId: updated.id,
     });
+    const STATUS_TEXT_FR: Partial<Record<string, { title: string; message: string; priority: NotificationPriority }>> = {
+      CONFIRMED: { title: "Intervention confirmée", message: `${user.name} a confirmé votre intervention (${updated.service}).`, priority: "SUCCESS" },
+      COMPLETED: { title: "Intervention terminée", message: `${user.name} a terminé l'intervention (${updated.service}). N'hésitez pas à laisser un avis.`, priority: "INFO" },
+      CANCELLED: { title: "Intervention annulée", message: `${user.name} a annulé votre intervention (${updated.service}).`, priority: "WARNING" },
+    };
+    const statusText = STATUS_TEXT_FR[body.status];
+    if (statusText) {
+      await notify({
+        userId: updated.cafeOwnerId,
+        service: "MAINTENANCE", type: "maintenance_reservation_status_changed", priority: statusText.priority,
+        title: statusText.title, message: statusText.message,
+        entityType: "maintenance_reservation", entityId: updated.id,
+        prefKey: "maintenance_status",
+        dedupeKey: `maintenance:reservation_status:${updated.id}:${body.status}`,
+      });
+    }
     res.json(updated);
   });
 
@@ -711,6 +768,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         service: "MAINTENANCE",
         reservationId: updated.id,
       });
+    await notify({
+      userId: updated.maintenanceUserId,
+      service: "MAINTENANCE", type: "maintenance_reschedule_response", priority: body.accepted ? "SUCCESS" : "WARNING",
+      title: body.accepted ? "Reprogrammation acceptée" : "Reprogrammation refusée",
+      message: `${user.name} a ${body.accepted ? "accepté" : "refusé"} la nouvelle date pour l'intervention (${updated.service}).`,
+      entityType: "maintenance_reservation", entityId: updated.id,
+      prefKey: "maintenance_requests",
+      dedupeKey: `maintenance:reschedule_response:${updated.id}:${body.accepted}`,
+    });
     res.json(updated);
   });
 
@@ -760,6 +826,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cafeOwnerName: user.name,
     });
     broadcast("maintenance_review_updated", { maintenanceUserId: body.maintenanceUserId, reservationId: body.reservationId });
+    if (!result.isUpdate) {
+      await notify({
+        userId: body.maintenanceUserId,
+        service: "MAINTENANCE", type: "maintenance_review_created", priority: "INFO",
+        title: "Nouvel avis reçu",
+        message: `${user.name} vous a laissé un avis (${body.rating}/5).`,
+        entityType: "maintenance_reservation", entityId: body.reservationId,
+        prefKey: "reviews",
+        dedupeKey: `maintenance:review_created:${body.reservationId}`,
+      });
+    }
     res.status(result.isUpdate ? 200 : 201).json(result.review);
   });
 
@@ -988,6 +1065,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const result = await storage.upsertPrintReview({ ...body, cafeId: user.id, cafeName: user.name });
       broadcast("print_review_updated", { printerId: body.printerId, printOrderId: body.printOrderId });
+      if (!result.isUpdate) {
+        await notify({
+          userId: body.printerId,
+          service: "PRINT", type: "print_review_created", priority: "INFO",
+          title: "Nouvel avis reçu",
+          message: `${user.name} vous a laissé un avis (${body.rating}/5).`,
+          entityType: "print_order", entityId: body.printOrderId,
+          prefKey: "reviews",
+          dedupeKey: `print:review_created:${body.printOrderId}`,
+        });
+      }
       res.status(result.isUpdate ? 200 : 201).json(result.review);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1021,6 +1109,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       broadcast("print_order_updated", { orderId: order.id });
       broadcastToUsers([user.id, order.printerId], "print_order_updated", { orderId: order.id });
       broadcastToUsers([user.id, order.printerId], "conversation_updated", { service: "PRINT", orderId: order.id });
+      await notify({
+        userId: order.printerId,
+        service: "PRINT", type: "print_order_created", priority: "WARNING",
+        title: "Nouvelle demande d'impression",
+        message: `${user.name} a passé une nouvelle commande d'impression #${order.id}.`,
+        entityType: "print_order", entityId: order.id,
+        prefKey: "print_requests",
+        dedupeKey: `print:order_created:${order.id}:printer`,
+      });
+      await notify({
+        userId: user.id,
+        service: "PRINT", type: "print_order_created", priority: "INFO",
+        title: "Demande envoyée",
+        message: `Votre commande d'impression #${order.id} a été envoyée.`,
+        entityType: "print_order", entityId: order.id,
+        prefKey: "print_status",
+        dedupeKey: `print:order_created:${order.id}:owner`,
+      });
       res.status(201).json(order);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1037,6 +1143,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!updated) return res.status(404).json({ message: "Order not found" });
       broadcast("print_order_updated", { orderId: updated.id });
       broadcastToUsers([user.id, updated.cafeOwnerId], "print_order_updated", { orderId: updated.id });
+      const PRINT_STATUS_TEXT_FR: Partial<Record<string, { title: string; priority: NotificationPriority; text: string }>> = {
+        CONFIRMED: { title: "Commande confirmée", priority: "SUCCESS", text: "a accepté votre demande d'impression" },
+        PREPARING: { title: "Impression en préparation", priority: "INFO", text: "prépare votre commande d'impression" },
+        READY: { title: "Commande prête", priority: "SUCCESS", text: "a terminé votre commande d'impression — prête" },
+        DELIVERED: { title: "Commande livrée", priority: "SUCCESS", text: "a livré votre commande d'impression" },
+        CANCELLED: { title: "Commande annulée", priority: "WARNING", text: "a annulé votre commande d'impression" },
+      };
+      const printStatusText = PRINT_STATUS_TEXT_FR[status];
+      if (printStatusText) {
+        await notify({
+          userId: updated.cafeOwnerId,
+          service: "PRINT", type: "print_order_status_changed", priority: printStatusText.priority,
+          title: printStatusText.title,
+          message: `${user.name} ${printStatusText.text} #${updated.id}.`,
+          entityType: "print_order", entityId: updated.id,
+          prefKey: "print_status",
+          dedupeKey: `print:order_status:${updated.id}:${status}`,
+        });
+      }
       res.json(updated);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1361,6 +1486,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
       const report = await storage.createMaintenanceReport(user.id, maintenanceUserId, reason);
       broadcast("admin_maintenance_report_created", { maintenanceUserId });
+      const adminIds = await storage.getAdminUserIds();
+      await notifyMany({
+        userIds: adminIds,
+        service: "ADMIN", type: "maintenance_report_created", priority: "URGENT",
+        title: "Professionnel Maintenance signalé",
+        message: `${user.name} a signalé ${target.name} (Maintenance) : "${reason}".`,
+        entityType: "maintenance_report", entityId: report.id,
+        prefKey: "reports",
+        dedupeKeyPrefix: `admin:maintenance_report_created:${report.id}`,
+      });
       res.status(201).json(report);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1609,6 +1744,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
       const report = await storage.createBaristaReport(user.id, baristaUserId, reason);
       broadcast("admin_barista_report_created", { baristaUserId });
+      const adminIds = await storage.getAdminUserIds();
+      await notifyMany({
+        userIds: adminIds,
+        service: "ADMIN", type: "barista_report_created", priority: "URGENT",
+        title: "Barista signalé",
+        message: `${user.name} a signalé ${target.name} (Barista) : "${reason}".`,
+        entityType: "barista_report", entityId: report.id,
+        prefKey: "reports",
+        dedupeKeyPrefix: `admin:barista_report_created:${report.id}`,
+      });
       res.status(201).json(report);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1669,6 +1814,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.refreshBaristaMessagingState(request.id);
       broadcastToUsers([request.baristaUserId], "barista_request_created", { requestId: request.id });
       broadcastToUsers([request.cafeOwnerId, request.baristaUserId], "conversation_updated", { service: "BARISTA", requestId: request.id });
+      await notify({
+        userId: request.baristaUserId,
+        service: "BARISTA", type: "barista_request_created", priority: "WARNING",
+        title: "Nouvelle demande de mission",
+        message: `${user!.name} vous a envoyé une demande pour "${body.missionType}".`,
+        entityType: "barista_request", entityId: request.id,
+        prefKey: "barista_requests",
+        dedupeKey: `barista:request_created:${request.id}`,
+      });
       res.status(201).json(request);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1695,6 +1849,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (mission) {
         broadcastToUsers(recipients, "barista_mission_created", { missionId: mission.id, requestId: request.id });
       }
+      const otherPartyId = user.id === request.cafeOwnerId ? request.baristaUserId : request.cafeOwnerId;
+      const STATUS_TEXT_FR: Partial<Record<string, { title: string; priority: NotificationPriority; verb: string }>> = {
+        ACCEPTED: { title: "Demande acceptée", priority: "SUCCESS", verb: "a accepté" },
+        REJECTED: { title: "Demande refusée", priority: "WARNING", verb: "a refusé" },
+        CANCELLED: { title: "Demande annulée", priority: "WARNING", verb: "a annulé" },
+      };
+      const statusText = STATUS_TEXT_FR[body.status];
+      if (statusText) {
+        await notify({
+          userId: otherPartyId,
+          service: "BARISTA", type: "barista_request_status_changed", priority: statusText.priority,
+          title: statusText.title,
+          message: `${user.name} ${statusText.verb} la demande pour "${request.missionType}".`,
+          entityType: "barista_request", entityId: request.id,
+          prefKey: "barista_missions",
+          dedupeKey: `barista:request_status:${request.id}:${body.status}`,
+        });
+      }
+      if (mission) {
+        await notify({
+          userId: otherPartyId,
+          service: "BARISTA", type: "barista_mission_created", priority: "SUCCESS",
+          title: "Mission confirmée",
+          message: `Votre mission "${request.missionType}" est confirmée.`,
+          entityType: "barista_mission", entityId: mission.id,
+          prefKey: "barista_missions",
+          dedupeKey: `barista:mission_created:${mission.id}`,
+        });
+      }
       res.json({ request, mission });
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1719,6 +1902,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const recipients = [mission.cafeOwnerId, mission.baristaUserId];
       broadcastToUsers(recipients, "barista_mission_status_changed", { missionId: mission.id, status: mission.status });
       broadcast("barista_mission_status_changed", { missionId: mission.id, status: mission.status });
+      const otherPartyId = user.id === mission.cafeOwnerId ? mission.baristaUserId : mission.cafeOwnerId;
+      const MISSION_STATUS_TEXT_FR: Partial<Record<string, { title: string; priority: NotificationPriority; text: string }>> = {
+        ACTIVE: { title: "Mission démarrée", priority: "INFO", text: "a démarré la mission" },
+        COMPLETED: { title: "Mission terminée", priority: "SUCCESS", text: "a marqué la mission comme terminée. N'hésitez pas à laisser un avis" },
+        CANCELLED: { title: "Mission annulée", priority: "WARNING", text: "a annulé la mission" },
+      };
+      const missionText = MISSION_STATUS_TEXT_FR[status];
+      if (missionText) {
+        await notify({
+          userId: otherPartyId,
+          service: "BARISTA", type: "barista_mission_status_changed", priority: missionText.priority,
+          title: missionText.title,
+          message: `${user.name} ${missionText.text}.`,
+          entityType: "barista_mission", entityId: mission.id,
+          prefKey: "barista_missions",
+          dedupeKey: `barista:mission_status:${mission.id}:${status}`,
+        });
+      }
       res.json(mission);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1763,6 +1964,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ...body, cafeId: user.id, cafeName: user.name, cafeOwnerName: user.name,
       });
       broadcast("barista_review_created", { baristaUserId: body.baristaUserId, missionId: body.missionId });
+      if (!result.isUpdate) {
+        await notify({
+          userId: body.baristaUserId,
+          service: "BARISTA", type: "barista_review_created", priority: "INFO",
+          title: "Nouvel avis reçu",
+          message: `${user.name} vous a laissé un avis (${body.rating}/5).`,
+          entityType: "barista_mission", entityId: body.missionId,
+          prefKey: "reviews",
+          dedupeKey: `barista:review_created:${body.missionId}`,
+        });
+      }
       res.status(result.isUpdate ? 200 : 201).json(result.review);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -2033,6 +2245,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.refreshAcademyMessagingState(registration.id);
       broadcastToUsers([registration.academyUserId], "academy_registration_created", { registrationId: registration.id });
       broadcastToUsers([registration.cafeOwnerId, registration.academyUserId], "conversation_updated", { service: "ACADEMY", registrationId: registration.id });
+      const course = await storage.getAcademyCourseById(registration.courseId);
+      await notify({
+        userId: registration.academyUserId,
+        service: "ACADEMY", type: "academy_registration_created", priority: "WARNING",
+        title: "Nouvelle inscription",
+        message: `${user!.name} s'est inscrit à "${course?.title ?? "une formation"}".`,
+        entityType: "academy_registration", entityId: registration.id,
+        prefKey: "academy",
+        dedupeKey: `academy:registration_created:${registration.id}:academy`,
+      });
+      await notify({
+        userId: registration.cafeOwnerId,
+        service: "ACADEMY", type: "academy_registration_created", priority: "INFO",
+        title: "Inscription envoyée",
+        message: `Votre inscription à "${course?.title ?? "la formation"}" a été envoyée.`,
+        entityType: "academy_registration", entityId: registration.id,
+        prefKey: "academy",
+        dedupeKey: `academy:registration_created:${registration.id}:registrant`,
+      });
       res.status(201).json(registration);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -2051,6 +2282,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       broadcastToUsers(recipients, "academy_registration_status_changed", { registrationId: registration.id, status: registration.status });
       broadcast("academy_registration_status_changed", { registrationId: registration.id, status: registration.status });
       broadcastToUsers(recipients, "conversation_updated", { service: "ACADEMY", registrationId: registration.id });
+      const otherPartyId = user.id === registration.cafeOwnerId ? registration.academyUserId : registration.cafeOwnerId;
+      const ACADEMY_STATUS_TEXT_FR: Partial<Record<string, { title: string; priority: NotificationPriority; text: string }>> = {
+        CONFIRMED: { title: "Inscription confirmée", priority: "SUCCESS", text: "a confirmé votre inscription" },
+        COMPLETED: { title: "Formation terminée", priority: "INFO", text: "a marqué la formation comme terminée. N'hésitez pas à laisser un avis" },
+        CANCELLED: { title: "Inscription annulée", priority: "WARNING", text: "a annulé l'inscription" },
+      };
+      const academyStatusText = ACADEMY_STATUS_TEXT_FR[body.status];
+      if (academyStatusText) {
+        await notify({
+          userId: otherPartyId,
+          service: "ACADEMY", type: "academy_registration_status_changed", priority: academyStatusText.priority,
+          title: academyStatusText.title,
+          message: `${user.name} ${academyStatusText.text}.`,
+          entityType: "academy_registration", entityId: registration.id,
+          prefKey: "academy",
+          dedupeKey: `academy:registration_status:${registration.id}:${body.status}`,
+        });
+      }
       res.json(registration);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -2095,6 +2344,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ...body, cafeId: user.id, cafeName: user.name, cafeOwnerName: user.name,
       });
       broadcast("academy_review_created", { academyUserId: body.academyUserId, registrationId: body.registrationId });
+      if (!result.isUpdate) {
+        await notify({
+          userId: body.academyUserId,
+          service: "ACADEMY", type: "academy_review_created", priority: "INFO",
+          title: "Nouvel avis reçu",
+          message: `${user.name} vous a laissé un avis (${body.rating}/5).`,
+          entityType: "academy_registration", entityId: body.registrationId,
+          prefKey: "reviews",
+          dedupeKey: `academy:review_created:${body.registrationId}`,
+        });
+      }
       res.status(result.isUpdate ? 200 : 201).json(result.review);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -2525,6 +2785,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       broadcastToUsers([cafeId, ...involvedSupplierIds], 'conversation_updated', { orderId: order.id, service: "SHOP" });
       broadcast('inventory_updated', { orderId: order.id });
 
+      const cafeUser = await storage.getUser(cafeId);
+      await notifyMany({
+        userIds: involvedSupplierIds,
+        service: "SHOP", type: "order_created", priority: "URGENT",
+        title: "Nouvelle commande reçue",
+        message: `${cafeUser?.name ?? "Un café"} a passé une nouvelle commande #${order.id}.`,
+        entityType: "order", entityId: order.id,
+        prefKey: "shop_orders",
+        dedupeKeyPrefix: `shop:order_created:${order.id}`,
+      });
+      await notify({
+        userId: cafeId,
+        service: "SHOP", type: "order_created", priority: "INFO",
+        title: "Commande créée",
+        message: `Votre commande #${order.id} a été transmise avec succès.`,
+        entityType: "order", entityId: order.id,
+        prefKey: "shop_orders",
+        dedupeKey: `shop:order_created_confirm:${order.id}:${cafeId}`,
+      });
+
       res.status(201).json({ ...order, promotionSavings: promoEval.totalDiscount });
     } catch (err: any) {
       if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
@@ -2552,6 +2832,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Notify cafe owner of status change in real time
       broadcastToUsers([order.cafeId], 'order_status_changed', { orderId, status: input.status });
       broadcast('order_status_changed', { orderId, status: input.status });
+      if (input.status === 'CANCELLED') {
+        await notify({
+          userId: order.cafeId,
+          service: "SHOP", type: "order_cancelled", priority: "WARNING",
+          title: "Commande annulée",
+          message: `Votre commande #${orderId} a été annulée.`,
+          entityType: "order", entityId: orderId,
+          prefKey: "shop_orders",
+          dedupeKey: `shop:order_status:${orderId}:${input.status}`,
+        });
+      }
       res.json(updated);
     } catch (err) {
       res.status(400).json({ message: "Invalid request" });
@@ -2613,6 +2904,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         broadcast('suborder_status_changed', {
           orderId: subOrder.orderId, subOrderId, status,
         });
+        // Sub-order-level notification — a multi-supplier order must never produce a
+        // misleading whole-order "confirmed"/"ready" notification when only ONE supplier's
+        // sub-order actually changed (see spec Part 28). CANCELLED is handled separately
+        // below via the suborder_rejected cart-recovery notification, which carries the
+        // richer "items returned to your cart" context — skipped here to avoid a duplicate.
+        const STATUS_LABELS_FR: Record<string, string> = {
+          CONFIRMED: `a confirmé votre commande #${subOrder.orderId}`,
+          PREPARING: `prépare votre commande #${subOrder.orderId}`,
+          READY: `a terminé de préparer votre commande #${subOrder.orderId} — prête`,
+        };
+        if (STATUS_LABELS_FR[status]) {
+          await notify({
+            userId: order.cafeId,
+            service: "SHOP", type: "suborder_status_changed", priority: status === 'READY' ? "SUCCESS" : "INFO",
+            title: "Mise à jour de commande",
+            message: `${subOrder.supplierName || "Le fournisseur"} ${STATUS_LABELS_FR[status]}.`,
+            entityType: "suborder", entityId: subOrderId,
+            prefKey: "shop_orders",
+            dedupeKey: `shop:suborder_status:${subOrderId}:${status}`,
+          });
+        }
       }
       // Broadcast inventory_updated so all Pack/product screens refresh stock in realtime
       const CONFIRMED_STATUSES = new Set(['CONFIRMED', 'APPROVED', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
@@ -2632,6 +2944,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
         // Also restore pack.quantityAvailable and component stock for already-confirmed sub-orders
         broadcast('inventory_updated', { subOrderId, orderId: subOrder.orderId });
+        await notify({
+          userId: order.cafeId,
+          service: "SHOP", type: "suborder_rejected", priority: "WARNING",
+          title: "Commande annulée par le fournisseur",
+          message: `${subOrder.supplierName || "Le fournisseur"} a annulé votre commande #${subOrder.orderId}. Les articles ont été replacés dans votre panier et doivent être mis à jour avant une nouvelle commande.`,
+          entityType: "order", entityId: subOrder.orderId,
+          prefKey: "shop_orders",
+          dedupeKey: `shop:suborder_rejected:${subOrderId}`,
+        });
       }
       res.json(updated);
     } catch (err: any) {
@@ -2665,6 +2986,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (result.subOrder.status === 'CANCELLED') {
         broadcast('inventory_updated', { subOrderId, orderId: result.order.id });
       }
+      await notify({
+        userId: result.subOrder.supplierId,
+        service: "SHOP", type: "suborder_items_cancelled_by_owner", priority: "INFO",
+        title: "Articles annulés par le client",
+        message: `Le client a annulé ${orderItemIds.length} article(s) de la commande #${result.order.id}.`,
+        entityType: "suborder", entityId: subOrderId,
+        prefKey: "shop_orders",
+        dedupeKey: `shop:suborder_items_cancelled_by_owner:${subOrderId}:${orderItemIds.sort().join(",")}`,
+      });
 
       res.json(result);
     } catch (err: any) {
@@ -2722,6 +3052,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // unlike the Coffee-Owner-initiated cancel-items route above, always notify so any other
       // Coffee Owner viewing this product/Pack sees the restored quantity without refreshing.
       broadcast('inventory_updated', { subOrderId, orderId: result.order.id });
+
+      // Reflect exactly what was cancelled (Pack vs product/variant vs both) rather than a
+      // generic "order cancelled" — see spec Part 29 (never send a generic cancellation notice
+      // when only one item type was cancelled).
+      const packCount = cartItems.packItems.length;
+      const regularCount = cartItems.regularItems.length;
+      let cancelledWhat: string;
+      if (packCount > 0 && regularCount === 0) cancelledWhat = packCount === 1 ? "un pack" : `${packCount} packs`;
+      else if (regularCount > 0 && packCount === 0) cancelledWhat = regularCount === 1 ? "un article" : `${regularCount} articles`;
+      else cancelledWhat = "des articles";
+      await notify({
+        userId: result.order.cafeId,
+        service: "SHOP", type: "suborder_items_cancelled_by_supplier", priority: "WARNING",
+        title: "Articles annulés par le fournisseur",
+        message: `${result.subOrder.supplierName || "Le fournisseur"} a annulé ${cancelledWhat} de votre commande #${result.order.id}. Ils ont été replacés dans votre panier.`,
+        entityType: "order", entityId: result.order.id,
+        prefKey: "shop_orders",
+        dedupeKey: `shop:suborder_items_cancelled_by_supplier:${subOrderId}:${result.cancelledItemIds.sort().join(",")}`,
+      });
 
       res.json(result);
     } catch (err: any) {
@@ -2871,6 +3220,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         broadcastToUsers([delivery.cafeId, delivery.supplierId], 'delivery_status_changed', {
           deliveryId, status: updated.status, orderId: delivery.orderId, subOrderId: delivery.subOrderId,
         });
+        await notify({
+          userId: driverId,
+          service: "SHOP", type: "delivery_assigned", priority: "WARNING",
+          title: "Nouvelle livraison assignée",
+          message: `Une livraison vous a été assignée pour la commande #${delivery.order.id} (${delivery.supplier.name}).`,
+          entityType: "delivery", entityId: deliveryId,
+          prefKey: "shop_delivery",
+          dedupeKey: `shop:delivery_assigned:${deliveryId}:${driverId}`,
+        });
+        await notify({
+          userId: delivery.cafeId,
+          service: "SHOP", type: "delivery_assigned", priority: "INFO",
+          title: "Livreur assigné",
+          message: `${delivery.driver?.name ?? "Un livreur"} a été assigné à votre commande #${delivery.order.id}.`,
+          entityType: "order", entityId: delivery.order.id,
+          prefKey: "shop_delivery",
+          dedupeKey: `shop:delivery_assigned_owner:${deliveryId}:${driverId}`,
+        });
       }
       res.json(storage.redactDeliveryCodes(updated, user.role));
     } catch (err: any) {
@@ -2896,6 +3263,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (previous) {
         broadcastToUsers([previous.cafeId, previous.supplierId], 'delivery_status_changed', {
           deliveryId, status: updated.status, orderId: previous.orderId, subOrderId: previous.subOrderId,
+        });
+        const newDriver = await storage.getUser(driverId);
+        await notify({
+          userId: driverId,
+          service: "SHOP", type: "delivery_assigned", priority: "WARNING",
+          title: "Nouvelle livraison assignée",
+          message: `Une livraison vous a été assignée pour la commande #${previous.order.id} (${previous.supplier.name}).`,
+          entityType: "delivery", entityId: deliveryId,
+          prefKey: "shop_delivery",
+          dedupeKey: `shop:delivery_reassigned:${deliveryId}:${driverId}`,
+        });
+        if (previous.driver && previous.driver.id !== driverId) {
+          await notify({
+            userId: previous.driver.id,
+            service: "SHOP", type: "delivery_reassigned_away", priority: "INFO",
+            title: "Livraison réattribuée",
+            message: `La livraison de la commande #${previous.order.id} a été confiée à un autre livreur.`,
+            entityType: "delivery", entityId: deliveryId,
+            prefKey: "shop_delivery",
+            dedupeKey: `shop:delivery_reassigned_away:${deliveryId}:${previous.driver.id}`,
+          });
+        }
+        await notify({
+          userId: previous.cafeId,
+          service: "SHOP", type: "delivery_assigned", priority: "INFO",
+          title: "Livreur mis à jour",
+          message: `${newDriver?.name ?? "Un nouveau livreur"} a été assigné à votre commande #${previous.order.id}.`,
+          entityType: "order", entityId: previous.order.id,
+          prefKey: "shop_delivery",
+          dedupeKey: `shop:delivery_reassigned_owner:${deliveryId}:${driverId}`,
         });
       }
       res.json(storage.redactDeliveryCodes(updated, user.role));
@@ -2934,6 +3331,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           if (status === 'DELIVERED') {
             broadcast('inventory_updated', { orderId: delivery.orderId, subOrderId: delivery.subOrderId });
           }
+        }
+        const STATUS_META: Partial<Record<string, { title: string; priority: NotificationPriority; cafeText: string; opsText: string }>> = {
+          PICKED_UP: {
+            title: "Commande récupérée", priority: "INFO",
+            cafeText: `${delivery.driver?.name ?? "Le livreur"} a récupéré votre commande chez ${delivery.supplier.name}.`,
+            opsText: `${delivery.driver?.name ?? "Le livreur"} a récupéré la commande #${delivery.order.id} chez ${delivery.supplier.name}.`,
+          },
+          IN_TRANSIT: {
+            title: "Livraison en cours", priority: "INFO",
+            cafeText: `Votre commande #${delivery.order.id} est en cours de livraison.`,
+            opsText: `La commande #${delivery.order.id} est en cours de livraison.`,
+          },
+          DELIVERED: {
+            title: "Commande livrée", priority: "SUCCESS",
+            cafeText: `Votre commande #${delivery.order.id} a été livrée avec succès.`,
+            opsText: `La commande #${delivery.order.id} a été livrée avec succès.`,
+          },
+          CANCELLED: {
+            title: "Livraison annulée", priority: "WARNING",
+            cafeText: `La livraison de votre commande #${delivery.order.id} a été annulée.`,
+            opsText: `La livraison de la commande #${delivery.order.id} a été annulée.`,
+          },
+        };
+        const meta = STATUS_META[status];
+        if (meta) {
+          await notify({
+            userId: delivery.cafeId,
+            service: "SHOP", type: `delivery_${status.toLowerCase()}`, priority: meta.priority,
+            title: meta.title, message: meta.cafeText,
+            entityType: "delivery", entityId: deliveryId,
+            prefKey: "shop_delivery",
+            dedupeKey: `shop:delivery_status:${deliveryId}:${status}:cafe`,
+          });
+          const opsRecipients = [delivery.supplierId, delivery.deliveryCompanyId].filter((x): x is number => x != null);
+          await notifyMany({
+            userIds: opsRecipients,
+            service: "SHOP", type: `delivery_${status.toLowerCase()}`, priority: "INFO",
+            title: meta.title, message: meta.opsText,
+            entityType: "delivery", entityId: deliveryId,
+            prefKey: "shop_delivery",
+            dedupeKeyPrefix: `shop:delivery_status:${deliveryId}:${status}:ops`,
+          });
         }
       }
       res.json(storage.redactDeliveryCodes(updated, user.role));
@@ -3176,6 +3615,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const result = await storage.upsertDriverReview({ ...body, cafeId: user.id, cafeName: user.name, cafeOwnerName: user.name });
       broadcast('driver_review_created', { driverId: body.driverId, deliveryId: body.deliveryId });
+      if (!result.isUpdate) {
+        await notify({
+          userId: body.driverId,
+          service: "SHOP", type: "driver_review_created", priority: "INFO",
+          title: "Nouvel avis reçu",
+          message: `${user.name} vous a laissé un avis (${body.rating}/5).`,
+          entityType: "delivery", entityId: body.deliveryId,
+          prefKey: "reviews",
+          dedupeKey: `shop:driver_review_created:${body.deliveryId}`,
+        });
+      }
       res.status(result.isUpdate ? 200 : 201).json(result.review);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -3206,6 +3656,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         startAt: body.startAt ? new Date(body.startAt) : null,
       } as any);
       broadcast('delivery_opportunity_updated', { deliveryCompanyId: req.deliveryCompany.id, kind: 'created' });
+      const roster = await storage.getDriversForOwner('DELIVERY_COMPANY', req.deliveryCompany.id);
+      await notifyMany({
+        userIds: roster.map((d) => d.id),
+        service: "SHOP", type: "delivery_opportunity_created", priority: "INFO",
+        title: "Nouvelle opportunité disponible",
+        message: `${req.deliveryCompany.name} propose une nouvelle opportunité : "${opportunity.title}".`,
+        entityType: "delivery_opportunity", entityId: opportunity.id,
+        prefKey: "delivery_opportunities",
+        dedupeKeyPrefix: `shop:opportunity_created:${opportunity.id}`,
+      });
       res.status(201).json(opportunity);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -3238,6 +3698,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const opportunity = await storage.acceptOpportunity(Number(req.params.id), user.id);
       broadcast('delivery_opportunity_updated', { deliveryCompanyId: opportunity.deliveryCompanyId, kind: 'filled' });
+      await notify({
+        userId: opportunity.deliveryCompanyId,
+        service: "SHOP", type: "delivery_opportunity_filled", priority: "INFO",
+        title: "Opportunité pourvue",
+        message: `${user.name} a accepté l'opportunité "${opportunity.title}".`,
+        entityType: "delivery_opportunity", entityId: opportunity.id,
+        prefKey: "delivery_opportunities",
+        dedupeKey: `shop:opportunity_filled:${opportunity.id}`,
+      });
       res.json(opportunity);
     } catch (err: any) {
       res.status(409).json({ message: err.message ?? 'Unable to accept opportunity' });
@@ -3537,27 +4006,49 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
+  async function notifyAccountStatusChange(userId: number, status: 'pending' | 'approved' | 'rejected') {
+    broadcastToUsers([userId], "user_profile_updated");
+    broadcast("admin_user_directory_changed");
+    if (status === 'approved' || status === 'rejected') {
+      await notify({
+        userId,
+        service: "ADMIN", type: "account_status_changed", priority: status === 'approved' ? "SUCCESS" : "URGENT",
+        title: status === 'approved' ? "Compte approuvé" : "Compte refusé",
+        message: status === 'approved'
+          ? "Votre compte a été approuvé. Vous avez maintenant accès à la plateforme."
+          : "Votre compte a été refusé. Contactez l'administration pour plus d'informations.",
+        entityType: "user", entityId: userId,
+      });
+    }
+  }
+
   app.patch("/api/admin/users/:id/status", requireAdmin, async (req, res) => {
     try {
       const { status } = req.body;
       if (!['pending', 'approved', 'rejected'].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }
-      const user = await storage.updateUserStatus(parseInt(req.params.id), status);
+      const id = parseInt(req.params.id);
+      const user = await storage.updateUserStatus(id, status);
+      await notifyAccountStatusChange(id, status);
       res.json(user);
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
   app.patch("/api/admin/users/:id/approve", requireAdmin, async (req, res) => {
     try {
-      const user = await storage.updateUserStatus(parseInt(req.params.id), 'approved');
+      const id = parseInt(req.params.id);
+      const user = await storage.updateUserStatus(id, 'approved');
+      await notifyAccountStatusChange(id, 'approved');
       res.json(user);
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
   app.patch("/api/admin/users/:id/reject", requireAdmin, async (req, res) => {
     try {
-      const user = await storage.updateUserStatus(parseInt(req.params.id), 'rejected');
+      const id = parseInt(req.params.id);
+      const user = await storage.updateUserStatus(id, 'rejected');
+      await notifyAccountStatusChange(id, 'rejected');
       res.json(user);
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -3827,6 +4318,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       res.status(201).json({ ...created, type });
       broadcast("catalog_suggestion_created", { type });
+      const adminIds = await storage.getAdminUserIds();
+      await notifyMany({
+        userIds: adminIds,
+        service: "ADMIN", type: "catalog_suggestion_created", priority: "INFO",
+        title: "Nouvelle suggestion de catalogue",
+        message: `${user!.name} propose ${type === 'category' ? 'une nouvelle catégorie' : type === 'subcategory' ? 'une nouvelle sous-catégorie' : `un nouvel élément (${type})`} : "${created.name}".`,
+        entityType: "catalog_suggestion", entityId: created.id,
+        prefKey: "catalog",
+        dedupeKeyPrefix: `admin:catalog_suggestion_created:${type}:${created.id}`,
+      });
     } catch (err: any) { res.status(500).json({ message: err?.message || "Error" }); }
   });
 
@@ -3916,6 +4417,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json({ ...updated, type });
       broadcast("catalog_suggestion_approved", { type, id });
+      if (updated.createdByUserId) {
+        await notify({
+          userId: updated.createdByUserId,
+          service: "ADMIN", type: "catalog_suggestion_approved", priority: "SUCCESS",
+          title: "Suggestion approuvée",
+          message: `Votre suggestion "${updated.name}" a été approuvée.`,
+          entityType: "catalog_suggestion", entityId: updated.id,
+          prefKey: "catalog",
+          dedupeKey: `admin:catalog_suggestion_approved:${type}:${id}`,
+        });
+      }
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -3942,6 +4454,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json({ ...updated, type });
       broadcast("catalog_suggestion_updated", { type, id });
+      if (status === 'REJECTED' && updated.createdByUserId) {
+        await notify({
+          userId: updated.createdByUserId,
+          service: "ADMIN", type: "catalog_suggestion_rejected", priority: "WARNING",
+          title: "Suggestion refusée",
+          message: `Votre suggestion "${updated.name}" a été refusée.`,
+          entityType: "catalog_suggestion", entityId: updated.id,
+          prefKey: "catalog",
+          dedupeKey: `admin:catalog_suggestion_rejected:${type}:${id}`,
+        });
+      }
     } catch { res.status(500).json({ message: "Error" }); }
   });
 
@@ -4455,13 +4978,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       broadcast("inventory_updated", { supplierId: user!.id, listingId: parseInt(req.params.listingId) });
       invalidateMarketplaceOnBroadcast();
       if (result.lowStockTriggered) {
+        const listingId = parseInt(req.params.listingId);
         broadcast("low_stock_alert", {
           supplierId: user!.id,
-          listingId: parseInt(req.params.listingId),
+          listingId,
           variantId,
           stock: result.variant.quantity,
           minStock: result.variant.minStock,
           status: result.variant.quantity <= 0 ? 'OUT_OF_STOCK' : 'LOW_STOCK',
+        });
+        const outOfStock = result.variant.quantity <= 0;
+        const [productRow] = await db.select({ name: products.name })
+          .from(supplierProductListings).innerJoin(products, eq(products.id, supplierProductListings.productId))
+          .where(eq(supplierProductListings.id, listingId));
+        await notify({
+          userId: user!.id,
+          service: "SHOP", type: outOfStock ? "out_of_stock" : "low_stock", priority: "WARNING",
+          title: outOfStock ? "Rupture de stock" : "Stock faible",
+          message: outOfStock
+            ? `${productRow?.name ?? "Un produit"} est en rupture de stock.`
+            : `${productRow?.name ?? "Un produit"} a un stock faible (${result.variant.quantity} restant(s)).`,
+          entityType: "listing", entityId: listingId,
+          prefKey: "shop_stock",
+          dedupeKey: `shop:low_stock:${result.history.id}`,
         });
       }
       res.json(result);
@@ -4755,6 +5294,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const store = await storage.setStoreApprovalStatus(parseInt(req.params.id), 'APPROVED');
       if (!store) return res.status(404).json({ message: 'Not found' });
       broadcast('store_approval_changed', { storeId: store.id, supplierId: store.supplierId, status: 'APPROVED' });
+      await notify({
+        userId: store.supplierId,
+        service: "ADMIN", type: "store_approval_changed", priority: "SUCCESS",
+        title: "Boutique approuvée",
+        message: "Votre boutique a été approuvée et est maintenant visible.",
+        entityType: "store", entityId: store.id,
+        prefKey: "stores",
+        dedupeKey: `admin:store_approval:${store.id}:APPROVED`,
+      });
       res.json(store);
     } catch { res.status(500).json({ message: 'Error' }); }
   });
@@ -4764,6 +5312,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const store = await storage.setStoreApprovalStatus(parseInt(req.params.id), 'REJECTED');
       if (!store) return res.status(404).json({ message: 'Not found' });
       broadcast('store_approval_changed', { storeId: store.id, supplierId: store.supplierId, status: 'REJECTED' });
+      await notify({
+        userId: store.supplierId,
+        service: "ADMIN", type: "store_approval_changed", priority: "WARNING",
+        title: "Boutique refusée",
+        message: "Votre boutique a été refusée. Contactez l'administration pour plus d'informations.",
+        entityType: "store", entityId: store.id,
+        prefKey: "stores",
+        dedupeKey: `admin:store_approval:${store.id}:REJECTED`,
+      });
       res.json(store);
     } catch { res.status(500).json({ message: 'Error' }); }
   });
@@ -4974,6 +5531,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cafeOwnerName: user.name,
         productName: productName ?? null,
       });
+      if (!isUpdate && !isProductReview) {
+        await notify({
+          userId: Number(supplierId),
+          service: "SHOP", type: "supplier_review_created", priority: "INFO",
+          title: "Nouvel avis reçu",
+          message: `${user.name} vous a laissé un avis (${rating}/5).`,
+          entityType: "review", entityId: review.id,
+          prefKey: "reviews",
+          dedupeKey: `shop:supplier_review_created:${review.id}`,
+        });
+      }
       res.status(isUpdate ? 200 : 201).json(review);
     } catch { res.status(500).json({ message: "Error" }); }
   });
@@ -5096,6 +5664,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         comment: body.comment ?? null,
         cafeName: user.name,
         cafeOwnerName: user.name,
+      });
+      await notify({
+        userId: pack.supplierId,
+        service: "SHOP", type: "pack_review_created", priority: "INFO",
+        title: "Nouvel avis reçu",
+        message: `${user.name} vous a laissé un avis (${body.rating}/5) sur "${pack.name}".`,
+        entityType: "review", entityId: review.id,
+        prefKey: "reviews",
+        dedupeKey: `shop:pack_review_created:${review.id}`,
       });
       res.status(201).json(review);
     } catch (err) {
@@ -5750,6 +6327,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const participantIds = await storage.getConversationParticipantIds(convId);
       broadcast("new_message", { conversationId: convId, message: msg });
       broadcastToUsers(participantIds, "new_message", { conversationId: convId, message: msg });
+      // A lightweight pointer into the notification center (Part 16/31 — never the
+      // message content itself, no second conversation) for every OTHER participant.
+      const convService = await storage.getConversationService(convId);
+      const preview = msg.content.length > 80 ? `${msg.content.slice(0, 80)}…` : msg.content;
+      const recipients = participantIds.filter((id) => id !== userId);
+      await notifyMany({
+        userIds: recipients,
+        service: (convService as any) ?? "SHOP", type: "new_message", priority: "INFO",
+        title: `Nouveau message de ${msg.senderName}`,
+        message: preview,
+        entityType: "conversation", entityId: convId,
+        prefKey: "messages",
+        dedupeKeyPrefix: `messages:new_message:${msg.id}`,
+      });
       res.json(msg);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -5811,6 +6402,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (content?.trim()) {
         const msg = await storage.sendMessage(conv.id, adminId, content.trim());
         broadcastToUsers(targetUserIds, "new_message", { conversationId: conv.id, message: msg });
+        const preview = msg.content.length > 80 ? `${msg.content.slice(0, 80)}…` : msg.content;
+        await notifyMany({
+          userIds: targetUserIds,
+          service: "ADMIN", type: "new_message", priority: "INFO",
+          title: `Message de l'administration : ${title}`,
+          message: preview,
+          entityType: "conversation", entityId: conv.id,
+          prefKey: "messages",
+          dedupeKeyPrefix: `messages:broadcast:${msg.id}`,
+        });
       }
       res.json({ conversation: conv });
     } catch (err: any) {
@@ -5921,6 +6522,95 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const conversations = await storage.adminGetAllConversations(service);
       res.json(conversations);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Notification preferences ────────────────────────────────────────────
+  // Stored on the user's own row (users.notificationPreferences) — reuses the
+  // same PATCH-then-broadcast pattern as /api/auth/me/profile below, so a
+  // preference change syncs to every open tab/device the same way a profile
+  // edit already does (user_profile_updated → invalidate /api/auth/me), with no
+  // new realtime plumbing.
+  app.get("/api/notification-preferences", requireAuth, async (req: any, res) => {
+    try {
+      const prefs = await storage.getNotificationPreferences(req.session.userId);
+      res.json({ preferences: prefs ?? {} });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/notification-preferences", requireAuth, async (req: any, res) => {
+    try {
+      const patch = z.record(z.string(), z.boolean()).parse(req.body);
+      const merged = await storage.updateNotificationPreferences(req.session.userId, patch);
+      broadcastToUsers([req.session.userId], "user_profile_updated");
+      res.json({ preferences: merged });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid preferences payload" });
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Notifications ────────────────────────────────────────────────────────
+  const NOTIFICATION_SERVICES = ["ADMIN", "SHOP", "PRINT", "MAINTENANCE", "BARISTA", "ACADEMY", "MARKETING"];
+
+  /** GET /api/notifications — the requesting user's own notifications, optionally filtered by service */
+  app.get("/api/notifications", requireAuth, async (req: any, res) => {
+    try {
+      const userId: number = req.session.userId;
+      const service = typeof req.query.service === "string" ? req.query.service : undefined;
+      if (service && !NOTIFICATION_SERVICES.includes(service)) {
+        return res.status(400).json({ message: "Invalid service" });
+      }
+      const unreadOnly = req.query.unreadOnly === "true";
+      const limit = req.query.limit ? Math.min(parseInt(req.query.limit), 200) : undefined;
+      const items = await storage.getNotificationsForUser(userId, { service: service as any, unreadOnly, limit });
+      res.json(items);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** GET /api/notifications/unread-count — badge count, optionally scoped to a service */
+  app.get("/api/notifications/unread-count", requireAuth, async (req: any, res) => {
+    try {
+      const userId: number = req.session.userId;
+      const service = typeof req.query.service === "string" ? req.query.service : undefined;
+      if (service && !NOTIFICATION_SERVICES.includes(service)) {
+        return res.status(400).json({ message: "Invalid service" });
+      }
+      const count = await storage.getUnreadNotificationCount(userId, service as any);
+      res.json({ count });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** PATCH /api/notifications/:id/read — mark one notification read (ownership-scoped in storage) */
+  app.patch("/api/notifications/:id/read", requireAuth, async (req: any, res) => {
+    try {
+      const userId: number = req.session.userId;
+      const id = parseInt(req.params.id);
+      await storage.markNotificationRead(id, userId);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** PATCH /api/notifications/read-all — mark all (optionally: all within one service) as read */
+  app.patch("/api/notifications/read-all", requireAuth, async (req: any, res) => {
+    try {
+      const userId: number = req.session.userId;
+      const service = typeof req.body?.service === "string" ? req.body.service : undefined;
+      if (service && !NOTIFICATION_SERVICES.includes(service)) {
+        return res.status(400).json({ message: "Invalid service" });
+      }
+      await storage.markAllNotificationsRead(userId, service as any);
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,7 +10,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getAvatarUrl } from "@/lib/avatar";
-import { User, Bell, CreditCard, MapPin, Building2, FileText, Landmark } from "lucide-react";
+import { User, CreditCard, MapPin, Building2, FileText, Landmark } from "lucide-react";
+import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 
 // ── Company Details Modal ─────────────────────────────────────────────────────
 
@@ -143,7 +143,6 @@ export default function SupplierSettingsPage() {
     isWhatsapp: (user as any)?.isWhatsapp ?? false,
     profileImageUrl: (user as any)?.profileImageUrl ?? "",
   });
-  const [notifs, setNotifs] = useState({ newOrders: true, payouts: true, reviews: false, lowStock: true });
   const [companyOpen, setCompanyOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
   const [bankingOpen, setBankingOpen] = useState(false);
@@ -245,25 +244,7 @@ export default function SupplierSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Notifications */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold flex items-center gap-2"><Bell className="w-4 h-4" /> Notifications</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {[
-            { key: "newOrders", label: "Nouvelles commandes" },
-            { key: "payouts", label: "Virements" },
-            { key: "reviews", label: "Avis clients" },
-            { key: "lowStock", label: "Stock bas" },
-          ].map(({ key, label }) => (
-            <div key={key} className="flex items-center justify-between">
-              <p className="text-sm font-medium text-foreground">{label}</p>
-              <Switch data-testid={`switch-${key}`} checked={notifs[key as keyof typeof notifs]} onCheckedChange={(v) => setNotifs({ ...notifs, [key]: v })} />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <NotificationPreferencesCard role="SUPPLIER" />
 
       <Button data-testid="button-save-settings" onClick={save} className="w-fit">Sauvegarder</Button>
 

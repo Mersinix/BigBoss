@@ -146,11 +146,16 @@ export function AppSidebar() {
             { title: "Delivery", url: "/admin/delivery", icon: Truck },
             { title: "Invoices", url: "/admin/invoices", icon: FileText },
             { title: "Payments", url: "/admin/payments", icon: DollarSign },
-            
-           
+
+
           ],
         },
-        
+        {
+          label: "ACCOUNT",
+          items: [
+            { title: "Settings", url: "/admin/settings", icon: Settings },
+          ],
+        },
       ];
     }
 
@@ -213,6 +218,12 @@ export function AppSidebar() {
             { title: "Drivers", url: "/delivery/drivers", icon: Users },
             { title: "Vehicles", url: "/delivery/vehicles", icon: Truck },
             { title: "Messages", url: "/delivery/messages", icon: MessageCircle },
+          ],
+        },
+        {
+          label: "ACCOUNT",
+          items: [
+            { title: "Settings", url: "/delivery/settings", icon: Settings },
           ],
         },
       ];

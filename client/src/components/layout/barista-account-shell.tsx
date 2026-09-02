@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { Button } from "@/components/ui/button";
 import {
   Coffee,
@@ -11,6 +12,7 @@ import {
   ClipboardList,
   DollarSign,
   MessageCircle,
+  Bell,
   Star,
   GraduationCap,
   Settings,
@@ -23,6 +25,7 @@ import {
 const TABS = [
   { path: "/barista-marketplace", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { path: "/barista-marketplace/messages", label: "Messages", icon: MessageCircle },
+  { path: "/barista-marketplace/notifications", label: "Notifications", icon: Bell },
   { path: "/barista-marketplace/profile", label: "Profil public", icon: UserCheck },
   { path: "/barista-marketplace/requests", label: "Demandes", icon: Briefcase },
   { path: "/barista-marketplace/missions", label: "Missions", icon: ClipboardList },
@@ -56,6 +59,8 @@ export function BaristaAccountShell({ children }: { children: React.ReactNode })
     refetchInterval: 30000,
   });
   const unreadCount = unreadData?.count ?? 0;
+  const { data: unreadNotifData } = useUnreadNotificationCount("BARISTA");
+  const unreadNotifCount = unreadNotifData?.count ?? 0;
 
   const isActive = (tab: (typeof TABS)[number]) =>
     tab.exact ? location === tab.path : location === tab.path || location.startsWith(`${tab.path}/`);
@@ -108,6 +113,11 @@ export function BaristaAccountShell({ children }: { children: React.ReactNode })
                     {tab.label === "Messages" && unreadCount > 0 && (
                       <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-green-600 text-white text-[10px] font-bold flex items-center justify-center">
                         {unreadCount}
+                      </span>
+                    )}
+                    {tab.label === "Notifications" && unreadNotifCount > 0 && (
+                      <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-green-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {unreadNotifCount}
                       </span>
                     )}
                   </a>

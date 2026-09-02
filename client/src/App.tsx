@@ -42,6 +42,7 @@ import SupplierMessagesPage from "@/pages/supplier/messages-page";
 import AdminMessagesPage from "@/pages/admin/messages-page";
 import DeliveryMessagesPage from "@/pages/delivery/messages-page";
 import DeliveryDashboard from "@/pages/delivery/dashboard";
+import DeliveryCompanySettingsPage from "@/pages/delivery/settings-page";
 import AvailableDeliveriesPage from "@/pages/delivery/available-deliveries-page";
 import MyDeliveriesPage from "@/pages/delivery/my-deliveries-page";
 import DeliveryCompanyDriversPage from "@/pages/delivery/drivers-page";
@@ -73,6 +74,7 @@ import PrinterReviews from "@/pages/printer/reviews";
 import PrinterCategories from "@/pages/printer/categories";
 import PrinterSettings from "@/pages/printer/settings";
 import MarketingDashboard from "@/pages/marketing/dashboard";
+import MarketingSettingsPage from "@/pages/marketing/settings-page";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
 import BaristaAcademyCoursesPage from "@/pages/barista-academy/courses";
 import BaristaAcademyRegistrationsPage from "@/pages/barista-academy/registrations";
@@ -96,6 +98,7 @@ import BaristaMarketplaceAcademyPage from "@/pages/barista-marketplace/academy";
 import { BaristaAccountShell } from "@/components/layout/barista-account-shell";
 import MaintenanceDashboard from "@/pages/maintenance/dashboard";
 import MaintenancePage from "@/pages/cafe/maintenance/maintenance-page";
+import ProviderNotificationsPage from "@/pages/shared/provider-notifications-page";
 
 // Admin pages
 import AdminCategoriesPage from "@/pages/admin/categories-page";
@@ -112,6 +115,7 @@ import AnalyticsPage from "@/pages/admin/analytics-page";
 import NotificationsPage from "@/pages/admin/notifications-page";
 import EarningsPage from "@/pages/admin/earnings-page";
 import SystemManagementPage from "@/pages/admin/system-management-page";
+import AdminSettingsPage from "@/pages/admin/settings-page";
 import ProspectingPage from "@/pages/admin/prospecting-page";
 import AdminReviewsPage from "@/pages/admin/reviews-page";
 import AdminMaintenancePage from "@/pages/admin/maintenance-page";
@@ -388,6 +392,9 @@ function Router() {
       <Route path="/printer/messages">
         {() => (<PrinterAccountShell><ProtectedRoute component={PrinterMessages} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
+      <Route path="/printer/notifications">
+        {() => (<PrinterAccountShell><ProtectedRoute component={ProviderNotificationsPage} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
+      </Route>
       <Route path="/printer/reviews">
         {() => (<PrinterAccountShell><ProtectedRoute component={PrinterReviews} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
@@ -402,6 +409,9 @@ function Router() {
       </Route>
 
       {/* ── Marketing Panel routes ── */}
+      <Route path="/marketing-panel/settings">
+        {() => (<DashboardLayout><ProtectedRoute component={MarketingSettingsPage} allowedRoles={["MARKETING"]} requireApproved /></DashboardLayout>)}
+      </Route>
       <Route path="/marketing-panel/:rest*">
         {() => (<DashboardLayout><ProtectedRoute component={MarketingDashboard} allowedRoles={["MARKETING"]} requireApproved /></DashboardLayout>)}
       </Route>
@@ -428,6 +438,9 @@ function Router() {
       </Route>
       <Route path="/barista-academy/messages">
         {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyMessagesPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      </Route>
+      <Route path="/barista-academy/notifications">
+        {() => (<AcademyAccountShell><ProtectedRoute component={ProviderNotificationsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
       </Route>
       <Route path="/barista-academy/reviews">
         {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyReviewsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
@@ -457,6 +470,9 @@ function Router() {
       </Route>
       <Route path="/barista-marketplace/messages">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceMessagesPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
+      </Route>
+      <Route path="/barista-marketplace/notifications">
+        {() => (<BaristaAccountShell><ProtectedRoute component={ProviderNotificationsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/reviews">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceReviewsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
@@ -601,6 +617,9 @@ function Router() {
       <Route path="/admin/system-management">
         {() => (<DashboardLayout><ProtectedRoute component={SystemManagementPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
+      <Route path="/admin/settings">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminSettingsPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
       <Route path="/admin/prospecting">
         {() => (<DashboardLayout><ProtectedRoute component={ProspectingPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
@@ -639,6 +658,9 @@ function Router() {
       </Route>
       <Route path="/delivery/vehicles">
         {() => (<DashboardLayout><ProtectedRoute component={DeliveryVehiclesPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DashboardLayout>)}
+      </Route>
+      <Route path="/delivery/settings">
+        {() => (<DashboardLayout><ProtectedRoute component={DeliveryCompanySettingsPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DashboardLayout>)}
       </Route>
 
       {/* ── Driver routes ── */}
@@ -683,6 +705,9 @@ function Router() {
       </Route>
       <Route path="/driver/messages">
         {() => (<DriverAccountShell><ProtectedRoute component={DeliveryMessagesPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      </Route>
+      <Route path="/driver/notifications">
+        {() => (<DriverAccountShell><ProtectedRoute component={ProviderNotificationsPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
       <Route path="/driver/reviews">
         {() => (<DriverAccountShell><ProtectedRoute component={DriverReviewsPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}

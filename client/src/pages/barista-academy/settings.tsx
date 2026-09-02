@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Settings as SettingsIcon, Mail, Phone, MapPin } from "lucide-react";
+import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 
 // Public identity fields (name, contact, logo, location) live on the shared
 // users table — same canonical source every other role uses — and are edited
@@ -100,6 +101,8 @@ export default function AcademySettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <NotificationPreferencesCard role="BARISTA_ACADEMY" />
 
       <Card>
         <CardHeader className="pb-2">

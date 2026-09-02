@@ -9,17 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { User, Bell, Lock, LogOut, Truck } from "lucide-react";
+import { User, Lock, LogOut, Truck } from "lucide-react";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMyVehicle, useCreateMyVehicle, useUpdateMyVehicle, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
+import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 
 // "Paramètres" — reuses the app's existing generic profile-update endpoint (PATCH
 // /api/auth/me/profile, already used by Supplier/Maintenance settings pages) rather than
-// introducing a Driver-specific one. Notification toggles are local/client-side preferences
-// only, matching the same convention already used on the Coffee Owner account settings tab
-// (components/cafe/marketplace-layout.tsx) — there is no notification-preferences table in
-// the schema to persist them to, so this does not pretend to save them server-side.
+// introducing a Driver-specific one.
 export default function DriverSettingsPage() {
   const { user, logout, isLoggingOut } = useAuth();
   const { toast } = useToast();
@@ -30,7 +28,6 @@ export default function DriverSettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
-  const [notifs, setNotifs] = useState({ deliveries: true, messages: true, assignments: true, payments: true });
 
   // Vehicle — synchronized with the same vehicles row a Delivery Company/Supplier manages
   // (see use-delivery-ecosystem.ts). If the operator hasn't assigned one yet, the Driver can
@@ -174,21 +171,7 @@ export default function DriverSettingsPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="Notifications" icon={Bell}>
-        <div className="space-y-3">
-          {[
-            { key: "deliveries" as const, label: "Livraisons" },
-            { key: "assignments" as const, label: "Nouvelles affectations" },
-            { key: "messages" as const, label: "Messages" },
-            { key: "payments" as const, label: "Paiements" },
-          ].map((n) => (
-            <div key={n.key} className="flex items-center justify-between py-1">
-              <span className="text-sm text-foreground">{n.label}</span>
-              <Switch checked={notifs[n.key]} onCheckedChange={(v) => setNotifs((p) => ({ ...p, [n.key]: v }))} />
-            </div>
-          ))}
-        </div>
-      </SectionCard>
+      <NotificationPreferencesCard role="DRIVER" />
 
       <SectionCard title="Sécurité" icon={Lock}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

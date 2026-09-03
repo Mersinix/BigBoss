@@ -1416,6 +1416,11 @@ export const printCatalogItems = pgTable("print_catalog_items", {
 export const printCategoryTaxonomy = pgTable("print_category_taxonomy", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
+  // Free-text emoji icon — same convention as maintenanceCompetencies.icon /
+  // marketingCategoryTaxonomy.icon (all `icon: text("icon")`), rendered directly
+  // as a <span>, not a lucide icon-name lookup. Nullable: existing categories
+  // without one fall back to a client-side default map, then a generic icon.
+  icon: text("icon"),
   isActive: boolean("is_active").notNull().default(true),
   isFrozen: boolean("is_frozen").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1432,6 +1437,8 @@ export const printSubCategoryTaxonomy = pgTable("print_subcategory_taxonomy", {
   id: serial("id").primaryKey(),
   categoryId: integer("category_id").notNull(),
   name: text("name").notNull(),
+  // Same free-text emoji convention as printCategoryTaxonomy.icon above.
+  icon: text("icon"),
   isActive: boolean("is_active").notNull().default(true),
   isFrozen: boolean("is_frozen").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),

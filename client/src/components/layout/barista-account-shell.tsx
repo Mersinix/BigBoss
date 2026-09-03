@@ -1,134 +1,59 @@
-import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/use-auth";
-import { useRealtime } from "@/hooks/use-realtime";
-import { useUnreadNotificationCount } from "@/hooks/use-notifications";
-import { Button } from "@/components/ui/button";
 import {
   Coffee,
   LayoutDashboard,
   UserCheck,
   Briefcase,
   ClipboardList,
-  DollarSign,
-  MessageCircle,
-  Bell,
-  Star,
+  Eye,
+  MessageSquare,
+  TrendingUp,
   GraduationCap,
   Settings,
-  LogOut,
 } from "lucide-react";
+import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Order: Dashboard, Messages, Profil public, Demandes, Missions, Academy, Revenus, Avis,
-// Settings — matches the requested switcher order exactly; no functionality changed, only
-// tab order (each is still its own real /barista-marketplace/... route).
-const TABS = [
+// Standard cross-account structure (Part 5/14) — same as every other
+// professional account shell now. "Profil" (the self-editor, previously
+// mislabeled "Profil public") stays as its own business-specific tab; the new
+// "Profil Public" tab is the actual Coffee-Owner-facing preview (Part 4).
+const TABS: ProfessionalAccountTab[] = [
   { path: "/barista-marketplace", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { path: "/barista-marketplace/messages", label: "Messages", icon: MessageCircle },
-  { path: "/barista-marketplace/notifications", label: "Notifications", icon: Bell },
-  { path: "/barista-marketplace/profile", label: "Profil public", icon: UserCheck },
+  { path: "/barista-marketplace/profile", label: "Profil", icon: UserCheck },
   { path: "/barista-marketplace/requests", label: "Demandes", icon: Briefcase },
   { path: "/barista-marketplace/missions", label: "Missions", icon: ClipboardList },
-  // Personal Academy workspace — connects to the same real Academy ecosystem
-  // (courses/registrations) as Coffee Owner /academy, Academy Account and
-  // Admin Academy. See client/src/pages/barista-marketplace/academy.tsx.
   { path: "/barista-marketplace/academy", label: "Academy", icon: GraduationCap },
-  { path: "/barista-marketplace/revenue", label: "Revenus", icon: DollarSign },
-  { path: "/barista-marketplace/reviews", label: "Avis", icon: Star },
-  { path: "/barista-marketplace/settings", label: "Settings", icon: Settings },
+  { path: "/barista-marketplace/profil-public", label: "Profil Public", icon: Eye },
+  { path: "/barista-marketplace/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
+  { path: "/barista-marketplace/performance", label: "Performance", icon: TrendingUp },
+  { path: "/barista-marketplace/settings", label: "Paramètres", icon: Settings },
 ];
 
-// Replaces the generic sidebar for the Barista Marketplace account — mirrors
-// the Maintenance account's organizational concept (header + top tab
-// switcher, no sidebar) without copying its Maintenance-specific content.
-// Each tab here is still a real route (unlike Maintenance's single-file,
-// client-state tabs), so the URL stays bookmarkable/shareable.
+// Replaces the generic sidebar for the Barista Marketplace account — now a
+// thin wrapper around the shared ProfessionalAccountShell (see
+// components/layout/professional-account-shell.tsx), which supplies the
+// header/action-icons/notification-popover/tab-switcher chrome common to
+// every professional account (Marketing is the design reference). Every
+// /barista-marketplace/* page keeps its own data-fetching/business logic
+// completely unchanged; this shell only supplies the surrounding chrome.
 export function BaristaAccountShell({ children }: { children: React.ReactNode }) {
-  const { user, logout, isLoggingOut } = useAuth();
-  const [location] = useLocation();
-  useRealtime(user?.id);
-
-  const { data: unreadData } = useQuery<{ count: number }>({
-    queryKey: ["/api/messages/unread-count"],
-    queryFn: async () => {
-      const r = await fetch("/api/messages/unread-count", { credentials: "include" });
-      if (!r.ok) return { count: 0 };
-      return r.json();
-    },
-    enabled: !!user,
-    refetchInterval: 30000,
-  });
-  const unreadCount = unreadData?.count ?? 0;
-  const { data: unreadNotifData } = useUnreadNotificationCount("BARISTA");
-  const unreadNotifCount = unreadNotifData?.count ?? 0;
-
-  const isActive = (tab: (typeof TABS)[number]) =>
-    tab.exact ? location === tab.path : location === tab.path || location.startsWith(`${tab.path}/`);
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-green-600 to-emerald-700 px-4 py-5 md:py-6">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
-              <Coffee className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="font-bold text-white text-lg truncate">Espace Barista Marketplace</h1>
-              <p className="text-green-100 text-xs truncate">{user?.name}</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            onClick={() => logout()}
-            disabled={isLoggingOut}
-            className="text-white hover:bg-white/15 hover:text-white rounded-xl text-xs shrink-0"
-            data-testid="button-barista-logout"
-          >
-            <LogOut className="w-4 h-4 mr-1.5" />
-            <span className="hidden sm:inline">Se déconnecter</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Tab switcher */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700/60 sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex gap-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-            {TABS.map((tab) => {
-              const active = isActive(tab);
-              return (
-                <Link key={tab.path} href={tab.path}>
-                  <a
-                    className={`relative flex items-center gap-1.5 px-4 py-3.5 text-sm font-semibold border-b-2 transition-colors shrink-0 whitespace-nowrap ${
-                      active
-                        ? "border-green-600 text-green-600"
-                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                    }`}
-                    data-testid={`tab-barista-${tab.label.toLowerCase().replace(/\s+/g, "-")}`}
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                    {tab.label === "Messages" && unreadCount > 0 && (
-                      <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-green-600 text-white text-[10px] font-bold flex items-center justify-center">
-                        {unreadCount}
-                      </span>
-                    )}
-                    {tab.label === "Notifications" && unreadNotifCount > 0 && (
-                      <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-green-600 text-white text-[10px] font-bold flex items-center justify-center">
-                        {unreadNotifCount}
-                      </span>
-                    )}
-                  </a>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-4 py-6">{children}</div>
-    </div>
+    <ProfessionalAccountShell
+      title="Espace Barista Marketplace"
+      headerIcon={Coffee}
+      gradientClass="from-green-600 to-emerald-700"
+      subtitleTextClass="text-green-100"
+      activeBorderClass="border-green-600"
+      activeTextClass="text-green-600 dark:text-green-400"
+      badgeBgClass="bg-green-600"
+      tabs={TABS}
+      notificationService="BARISTA"
+      messagesPath="/barista-marketplace/communication?tab=messages"
+      reviewsPath="/barista-marketplace/communication?tab=avis"
+      settingsPath="/barista-marketplace/settings"
+      communicationPath="/barista-marketplace/communication"
+      testIdPrefix="barista"
+    >
+      {children}
+    </ProfessionalAccountShell>
   );
 }

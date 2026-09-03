@@ -31,7 +31,7 @@ import {
   Star, Package, Trash2, CheckCircle, Clock, Calendar, Box, Truck,
   AlertCircle, DollarSign, ClipboardList, Phone, Globe, MapPinIcon, AlertTriangle,
   Printer, Megaphone, Wrench, User, Users, GraduationCap, Sun, Moon, X, Plus, Loader2,
-  Archive, RotateCcw, Bell,
+  Archive, RotateCcw, Bell, Lock,
 } from "lucide-react";
 import { useFavorites, selectTotalFavCount, type MaintenanceFavItem } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
@@ -50,7 +50,7 @@ import { NotificationModal } from "@/components/cafe/notification-modal";
 import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { useNotificationPreferences, useUpdateNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { NOTIFICATION_PREF_DEFS, ROLE_NOTIFICATION_PREF_KEYS } from "@shared/notification-preferences";
-import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties } from "@shared/schema";
+import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties, AddressDetails } from "@shared/schema";
 import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { RecruitDialog as BaristaRecruitDialog } from "@/pages/cafe/barista/barista-page";
@@ -60,7 +60,7 @@ import { MarketingDetailModal } from "@/components/marketing/marketing-detail-mo
 import { QuoteRequestDialog as MarketingQuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
 import { useMarketingProjects, useCancelMarketingProject, useRespondToMarketingQuote, type MarketingProjectWithParties } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
-import { useAcademyRegistrations } from "@/hooks/use-barista-academy";
+import { useAcademyRegistrations, useUpdateAcademyRegistrationStatus, type AcademyRegistrationWithParties } from "@/hooks/use-barista-academy";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
 import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
 
@@ -150,6 +150,12 @@ function AccountPanel({
   const toggle = useThemeStore((s) => s.toggle);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"orders" | "reservations" | "dashboard" | "settings">(initialTab ?? "orders");
+  // Dashboard service switcher (Part 15) — each section reuses the exact same
+  // queries already fetched below for Reservations (maintenanceReservations,
+  // baristaRequests/baristaMissions, academyRegistrations, marketingProjectsForOwner,
+  // printOrders) plus the existing SHOP `allOrders` — no duplicate data sources.
+  type DashboardService = "SHOP" | "MAINTENANCE" | "BARISTA" | "ACADEMY" | "MARKETING" | "PRINT";
+  const [dashboardService, setDashboardService] = useState<DashboardService>("SHOP");
   const { isLoading: ordersLoading, sorted, byCategory, daily, listForTab, toggleFavorite, reorder, isReordering } = useCafeOrders();
   const [ordersSubTab, setOrdersSubTab] = useState<CafeOrderTabId>("today");
   const [ordersStatusFilter, setOrdersStatusFilter] = useState("ALL");
@@ -187,13 +193,14 @@ function AccountPanel({
   const [detailBaristaMission, setDetailBaristaMission] = useState<BaristaMission | null>(null);
   const [detailBaristaRequest, setDetailBaristaRequest] = useState<BaristaRequest | null>(null);
   const [detailMarketingProjectId, setDetailMarketingProjectId] = useState<number | null>(null);
+  const [detailAcademyRegistrationId, setDetailAcademyRegistrationId] = useState<number | null>(null);
 
   const RESERVATION_SERVICE_TABS: { key: string; orderId: MarketplaceServiceId; stateKey: ServiceKey; label: string; icon: any }[] = [
     { key: "maintenance", orderId: "MAINTENANCE", stateKey: "MAINTENANCE", label: "Maintenance", icon: Wrench },
     { key: "print", orderId: "PRINT", stateKey: "PRINTING", label: "PRINT", icon: Printer },
     { key: "marketing", orderId: "MARKETING", stateKey: "MARKETING", label: "Marketing", icon: Megaphone },
-    { key: "barista_academy", orderId: "BARISTA_ACADEMY", stateKey: "BARISTA_ACADEMY", label: "Barista Academy", icon: GraduationCap },
-    { key: "barista_marketplace", orderId: "BARISTA_MARKETPLACE", stateKey: "BARISTA_MARKETPLACE", label: "Marketplace Baristas", icon: Users },
+    { key: "barista_academy", orderId: "BARISTA_ACADEMY", stateKey: "BARISTA_ACADEMY", label: "Academy", icon: GraduationCap },
+    { key: "barista_marketplace", orderId: "BARISTA_MARKETPLACE", stateKey: "BARISTA_MARKETPLACE", label: "Barista", icon: Users },
   ];
   const visibleReservationTabs = serviceOrder
     .map((id) => RESERVATION_SERVICE_TABS.find((t) => t.orderId === id))
@@ -276,6 +283,58 @@ function AccountPanel({
   });
   const cancelMarketingProject = useCancelMarketingProject();
   const respondToMarketingQuote = useRespondToMarketingQuote();
+  const updateAcademyRegistrationStatus = useUpdateAcademyRegistrationStatus();
+
+  // Settings/Profile — reuses the exact same generic account endpoints as every
+  // other role's Settings page (PATCH /api/auth/me/profile, PATCH /api/auth/me/location,
+  // the same LocationPickerModal mode="account"), mirroring barista-marketplace/settings.tsx
+  // and maintenance/settings.tsx. No Coffee-Owner-specific profile system.
+  const { toast: settingsToast } = useToast();
+  const [settingsName, setSettingsName] = useState(user?.name ?? "");
+  const [settingsPhone, setSettingsPhone] = useState(user?.phone ?? "");
+  const [settingsWhatsapp, setSettingsWhatsapp] = useState<boolean>((user as any)?.isWhatsapp ?? false);
+  const [settingsProfileImageUrl, setSettingsProfileImageUrl] = useState((user as any)?.profileImageUrl ?? "");
+  const [settingsCurrentPassword, setSettingsCurrentPassword] = useState("");
+  const [settingsNewPassword, setSettingsNewPassword] = useState("");
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setSettingsName(user.name ?? "");
+    setSettingsPhone(user.phone ?? "");
+    setSettingsWhatsapp((user as any).isWhatsapp ?? false);
+    setSettingsProfileImageUrl((user as any).profileImageUrl ?? "");
+  }, [user?.id]);
+
+  const updateAccountProfile = useMutation({
+    mutationFn: (data: { name?: string; phone?: string; isWhatsapp?: boolean; profileImageUrl?: string | null }) =>
+      apiRequest("PATCH", "/api/auth/me/profile", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      settingsToast({ title: "Informations mises à jour" });
+    },
+    onError: (error: Error) => settingsToast({ title: "Erreur", description: error.message, variant: "destructive" }),
+  });
+
+  const updateAccountPassword = useMutation({
+    mutationFn: (data: { password: string; currentPassword: string }) =>
+      apiRequest("PATCH", "/api/auth/me/profile", data),
+    onSuccess: () => {
+      setSettingsCurrentPassword(""); setSettingsNewPassword("");
+      settingsToast({ title: "Mot de passe mis à jour" });
+    },
+    onError: (error: Error) => settingsToast({ title: "Erreur", description: error.message, variant: "destructive" }),
+  });
+
+  const updateAccountLocation = useMutation({
+    mutationFn: (loc: PickedLocation) => apiRequest("PATCH", "/api/auth/me/location", loc),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      setLocationModalOpen(false);
+      settingsToast({ title: "📍 Adresse mise à jour" });
+    },
+    onError: (error: Error) => settingsToast({ title: "Erreur", description: error.message, variant: "destructive" }),
+  });
 
   // Auto-open a specific order when directed from the checkout flow
   useEffect(() => {
@@ -804,7 +863,7 @@ function AccountPanel({
               ) : baristaTimelineItems.length === 0 ? (
                 <div className={`text-center py-16 ${textMuted}`}>
                   <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune réservation Marketplace Baristas pour le moment</p>
+                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune réservation Barista pour le moment</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -933,7 +992,7 @@ function AccountPanel({
               ) : academyRegistrations.length === 0 ? (
                 <div className={`text-center py-16 ${textMuted}`}>
                   <GraduationCap className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune inscription Barista Academy pour le moment</p>
+                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune inscription Academy pour le moment</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -944,7 +1003,16 @@ function AccountPanel({
                       return (
                         <div
                           key={registration.id}
-                          className={`w-full text-left border rounded-2xl p-4 space-y-3 ${cardBg}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setDetailAcademyRegistrationId(registration.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setDetailAcademyRegistrationId(registration.id);
+                            }
+                          }}
+                          className={`w-full text-left border rounded-2xl p-4 space-y-3 cursor-pointer ${cardBg}`}
                           data-testid={`card-reservation-academy-${registration.id}`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -985,8 +1053,8 @@ function AccountPanel({
         {/* PRINT order details — resolved live from the same printOrders query so a
             realtime status update shows immediately if this dialog is left open. */}
         <Dialog open={!!detailPrintOrder} onOpenChange={(o) => !o && setDetailPrintOrder(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogTitle>Commande PRINT {detailPrintOrder ? `#${detailPrintOrder.id}` : ""}</DialogTitle>
+          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            <DialogTitle className={textPrimary}>Commande PRINT {detailPrintOrder ? `#${detailPrintOrder.id}` : ""}</DialogTitle>
             <DialogDescription className="sr-only">Détails de la commande PRINT</DialogDescription>
             {(() => {
               const order = detailPrintOrder ? (printOrders.find((o) => o.id === detailPrintOrder.id) ?? detailPrintOrder) : null;
@@ -996,15 +1064,15 @@ function AccountPanel({
                 <div className="space-y-3 text-sm">
                   <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.className}`}>{meta.label}</span>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><p className={`text-xs ${textMuted}`}>Imprimeur</p><p className="font-medium">{order.printerName}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Service</p><p className="font-medium">{order.itemName}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Quantité</p><p>{order.quantity}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Prix unitaire</p><p>{fmt(order.unitPriceInCents)}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Total</p><p className="font-semibold">{fmt(order.totalInCents)}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Créée le</p><p>{order.createdAt ? formatDate(order.createdAt as any) : "—"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Imprimeur</p><p className={`font-medium ${textPrimary}`}>{order.printerName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Service</p><p className={`font-medium ${textPrimary}`}>{order.itemName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Quantité</p><p className={textPrimary}>{order.quantity}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Prix unitaire</p><p className={textPrimary}>{fmt(order.unitPriceInCents)}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Total</p><p className={`font-semibold ${textPrimary}`}>{fmt(order.totalInCents)}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Créée le</p><p className={textPrimary}>{order.createdAt ? formatDate(order.createdAt as any) : "—"}</p></div>
                   </div>
-                  {order.deliveryAddress && <div><p className={`text-xs ${textMuted}`}>Livraison</p><p>{order.deliveryAddress}</p></div>}
-                  {order.notes && <div><p className={`text-xs ${textMuted}`}>Notes</p><p>{order.notes}</p></div>}
+                  {order.deliveryAddress && <div><p className={`text-xs ${textMuted}`}>Livraison</p><p className={textPrimary}>{order.deliveryAddress}</p></div>}
+                  {order.notes && <div><p className={`text-xs ${textMuted}`}>Notes</p><p className={textPrimary}>{order.notes}</p></div>}
                 </div>
               );
             })()}
@@ -1015,8 +1083,8 @@ function AccountPanel({
             same maintenanceReservations query, same status vocabulary/meta as
             the card above. */}
         <Dialog open={!!detailMaintenanceReservation} onOpenChange={(o) => !o && setDetailMaintenanceReservation(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogTitle>Réservation Maintenance {detailMaintenanceReservation ? `#${detailMaintenanceReservation.id}` : ""}</DialogTitle>
+          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            <DialogTitle className={textPrimary}>Réservation Maintenance {detailMaintenanceReservation ? `#${detailMaintenanceReservation.id}` : ""}</DialogTitle>
             <DialogDescription className="sr-only">Détails de la réservation Maintenance</DialogDescription>
             {(() => {
               const reservation = detailMaintenanceReservation
@@ -1028,20 +1096,20 @@ function AccountPanel({
                 <div className="space-y-3 text-sm">
                   <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><p className={`text-xs ${textMuted}`}>Maintenance</p><p className="font-medium">{reservation.maintenanceName || "—"}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Service / catégorie</p><p className="font-medium">{reservation.service}{reservation.category ? ` · ${reservation.category}` : ""}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Date / heure</p><p>{reservation.date} {reservation.time || ""}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Urgence</p><p>{reservation.urgency || "NORMAL"}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Lieu</p><p>{reservation.location || "—"}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Contact</p><p>{reservation.contactPhone || reservation.ownerPhone || "—"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Maintenance</p><p className={`font-medium ${textPrimary}`}>{reservation.maintenanceName || "—"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Service / catégorie</p><p className={`font-medium ${textPrimary}`}>{reservation.service}{reservation.category ? ` · ${reservation.category}` : ""}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Date / heure</p><p className={textPrimary}>{reservation.date} {reservation.time || ""}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Urgence</p><p className={textPrimary}>{reservation.urgency || "NORMAL"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Lieu</p><p className={textPrimary}>{reservation.location || "—"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Contact</p><p className={textPrimary}>{reservation.contactPhone || reservation.ownerPhone || "—"}</p></div>
                   </div>
-                  {reservation.description && <div><p className={`text-xs ${textMuted}`}>Besoin</p><p>{reservation.description}</p></div>}
+                  {reservation.description && <div><p className={`text-xs ${textMuted}`}>Besoin</p><p className={textPrimary}>{reservation.description}</p></div>}
                   {reservation.status === "PENDING" && (
-                    <div className="pt-2 border-t border-border/50 flex justify-end">
+                    <div className={`pt-2 border-t flex justify-end ${borderClr}`}>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-red-200 text-red-600 hover:bg-red-50"
+                        className={dk ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-red-200 text-red-600 hover:bg-red-50"}
                         disabled={cancelMaintenanceReservation.isPending}
                         onClick={() => cancelMaintenanceReservation.mutate(reservation.id)}
                         data-testid="button-cancel-reservation-modal"
@@ -1058,9 +1126,9 @@ function AccountPanel({
 
         {/* Barista Marketplace mission details */}
         <Dialog open={!!detailBaristaMission} onOpenChange={(o) => !o && setDetailBaristaMission(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogTitle>Mission {detailBaristaMission ? `#${detailBaristaMission.id}` : ""}</DialogTitle>
-            <DialogDescription className="sr-only">Détails de la mission Marketplace Baristas</DialogDescription>
+          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            <DialogTitle className={textPrimary}>Mission {detailBaristaMission ? `#${detailBaristaMission.id}` : ""}</DialogTitle>
+            <DialogDescription className="sr-only">Détails de la mission Barista</DialogDescription>
             {(() => {
               const mission = detailBaristaMission ? (baristaMissions.find((m) => m.id === detailBaristaMission.id) ?? detailBaristaMission) : null;
               if (!mission) return null;
@@ -1069,10 +1137,10 @@ function AccountPanel({
                 <div className="space-y-3 text-sm">
                   <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><p className={`text-xs ${textMuted}`}>Barista</p><p className="font-medium">{mission.baristaName}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Mission</p><p className="font-medium">{mission.missionType}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Tarif</p><p>{fmt(mission.rateInCents)}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Dates</p><p>{mission.startDate}{mission.endDate ? ` → ${mission.endDate}` : ""}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Barista</p><p className={`font-medium ${textPrimary}`}>{mission.baristaName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Mission</p><p className={`font-medium ${textPrimary}`}>{mission.missionType}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Tarif</p><p className={textPrimary}>{fmt(mission.rateInCents)}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Dates</p><p className={textPrimary}>{mission.startDate}{mission.endDate ? ` → ${mission.endDate}` : ""}</p></div>
                   </div>
                 </div>
               );
@@ -1082,9 +1150,9 @@ function AccountPanel({
 
         {/* Barista Marketplace request details (not yet accepted into a mission) */}
         <Dialog open={!!detailBaristaRequest} onOpenChange={(o) => !o && setDetailBaristaRequest(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogTitle>Demande {detailBaristaRequest ? `#${detailBaristaRequest.id}` : ""}</DialogTitle>
-            <DialogDescription className="sr-only">Détails de la demande Marketplace Baristas</DialogDescription>
+          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            <DialogTitle className={textPrimary}>Demande {detailBaristaRequest ? `#${detailBaristaRequest.id}` : ""}</DialogTitle>
+            <DialogDescription className="sr-only">Détails de la demande Barista</DialogDescription>
             {(() => {
               const request = detailBaristaRequest ? (baristaRequests.find((r) => r.id === detailBaristaRequest.id) ?? detailBaristaRequest) : null;
               if (!request) return null;
@@ -1093,12 +1161,12 @@ function AccountPanel({
                 <div className="space-y-3 text-sm">
                   <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><p className={`text-xs ${textMuted}`}>Barista</p><p className="font-medium">{request.baristaName}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Mission</p><p className="font-medium">{request.missionType}</p></div>
-                    {request.proposedRateInCents != null && <div><p className={`text-xs ${textMuted}`}>Tarif proposé</p><p>{fmt(request.proposedRateInCents)}</p></div>}
-                    <div><p className={`text-xs ${textMuted}`}>Dates</p><p>{request.startDate}{request.endDate ? ` → ${request.endDate}` : ""}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Barista</p><p className={`font-medium ${textPrimary}`}>{request.baristaName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Mission</p><p className={`font-medium ${textPrimary}`}>{request.missionType}</p></div>
+                    {request.proposedRateInCents != null && <div><p className={`text-xs ${textMuted}`}>Tarif proposé</p><p className={textPrimary}>{fmt(request.proposedRateInCents)}</p></div>}
+                    <div><p className={`text-xs ${textMuted}`}>Dates</p><p className={textPrimary}>{request.startDate}{request.endDate ? ` → ${request.endDate}` : ""}</p></div>
                   </div>
-                  {request.message && <div><p className={`text-xs ${textMuted}`}>Message</p><p>{request.message}</p></div>}
+                  {request.message && <div><p className={`text-xs ${textMuted}`}>Message</p><p className={textPrimary}>{request.message}</p></div>}
                 </div>
               );
             })()}
@@ -1108,8 +1176,8 @@ function AccountPanel({
         {/* Marketing project details (Part 15) — resolved live from the same
             marketingProjects query, same status vocabulary/meta as the card above. */}
         <Dialog open={detailMarketingProjectId != null} onOpenChange={(o) => !o && setDetailMarketingProjectId(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogTitle>Projet Marketing {detailMarketingProjectId ? `#${detailMarketingProjectId}` : ""}</DialogTitle>
+          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            <DialogTitle className={textPrimary}>Projet Marketing {detailMarketingProjectId ? `#${detailMarketingProjectId}` : ""}</DialogTitle>
             <DialogDescription className="sr-only">Détails du projet Marketing</DialogDescription>
             {(() => {
               const project = marketingProjectsForOwner.find((p) => p.id === detailMarketingProjectId);
@@ -1119,23 +1187,23 @@ function AccountPanel({
                 <div className="space-y-3 text-sm">
                   <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.className}`}>{meta.label}</span>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><p className={`text-xs ${textMuted}`}>Prestataire</p><p className="font-medium">{project.marketingName || "—"}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Service</p><p className="font-medium">{project.service}</p></div>
-                    {project.title && <div><p className={`text-xs ${textMuted}`}>Titre</p><p>{project.title}</p></div>}
-                    <div><p className={`text-xs ${textMuted}`}>Créé le</p><p>{new Date(project.createdAt).toLocaleDateString("fr-FR")}</p></div>
-                    {project.startDate && <div><p className={`text-xs ${textMuted}`}>Début</p><p>{project.startDate}</p></div>}
-                    {project.deadline && <div><p className={`text-xs ${textMuted}`}>Échéance</p><p>{project.deadline}</p></div>}
-                    {project.quoteAmountInCents != null && <div><p className={`text-xs ${textMuted}`}>Devis</p><p>{fmt(project.quoteAmountInCents)}</p></div>}
-                    {project.finalAmountInCents != null && <div><p className={`text-xs ${textMuted}`}>Facture finale</p><p>{fmt(project.finalAmountInCents)}</p></div>}
-                    {project.status === "IN_PROGRESS" && <div><p className={`text-xs ${textMuted}`}>Progression</p><p>{project.progress}%</p></div>}
+                    <div><p className={`text-xs ${textMuted}`}>Prestataire</p><p className={`font-medium ${textPrimary}`}>{project.marketingName || "—"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Service</p><p className={`font-medium ${textPrimary}`}>{project.service}</p></div>
+                    {project.title && <div><p className={`text-xs ${textMuted}`}>Titre</p><p className={textPrimary}>{project.title}</p></div>}
+                    <div><p className={`text-xs ${textMuted}`}>Créé le</p><p className={textPrimary}>{new Date(project.createdAt).toLocaleDateString("fr-FR")}</p></div>
+                    {project.startDate && <div><p className={`text-xs ${textMuted}`}>Début</p><p className={textPrimary}>{project.startDate}</p></div>}
+                    {project.deadline && <div><p className={`text-xs ${textMuted}`}>Échéance</p><p className={textPrimary}>{project.deadline}</p></div>}
+                    {project.quoteAmountInCents != null && <div><p className={`text-xs ${textMuted}`}>Devis</p><p className={textPrimary}>{fmt(project.quoteAmountInCents)}</p></div>}
+                    {project.finalAmountInCents != null && <div><p className={`text-xs ${textMuted}`}>Facture finale</p><p className={textPrimary}>{fmt(project.finalAmountInCents)}</p></div>}
+                    {project.status === "IN_PROGRESS" && <div><p className={`text-xs ${textMuted}`}>Progression</p><p className={textPrimary}>{project.progress}%</p></div>}
                   </div>
-                  {project.description && <div><p className={`text-xs ${textMuted}`}>Description</p><p>{project.description}</p></div>}
+                  {project.description && <div><p className={`text-xs ${textMuted}`}>Description</p><p className={textPrimary}>{project.description}</p></div>}
                   {project.status === "QUOTED" && (
-                    <div className="pt-2 border-t border-border/50 flex justify-end gap-2">
+                    <div className={`pt-2 border-t flex justify-end gap-2 ${borderClr}`}>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-red-200 text-red-600 hover:bg-red-50"
+                        className={dk ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-red-200 text-red-600 hover:bg-red-50"}
                         disabled={respondToMarketingQuote.isPending}
                         onClick={() => respondToMarketingQuote.mutate({ id: project.id, accepted: false })}
                         data-testid="button-reject-quote-modal"
@@ -1154,16 +1222,66 @@ function AccountPanel({
                     </div>
                   )}
                   {project.status === "PENDING" && (
-                    <div className="pt-2 border-t border-border/50 flex justify-end">
+                    <div className={`pt-2 border-t flex justify-end ${borderClr}`}>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-red-200 text-red-600 hover:bg-red-50"
+                        className={dk ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-red-200 text-red-600 hover:bg-red-50"}
                         disabled={cancelMarketingProject.isPending}
                         onClick={() => cancelMarketingProject.mutate(project.id)}
                         data-testid="button-cancel-marketing-modal"
                       >
                         {cancelMarketingProject.isPending ? "Annulation…" : "Annuler la demande"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Academy reservation details — resolved live from the same
+            academyRegistrations query, same status vocabulary/meta as the card
+            above. Mirrors the Maintenance/Marketing detail dialogs exactly. */}
+        <Dialog open={detailAcademyRegistrationId != null} onOpenChange={(o) => !o && setDetailAcademyRegistrationId(null)}>
+          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            <DialogTitle className={textPrimary}>Inscription Academy {detailAcademyRegistrationId ? `#${detailAcademyRegistrationId}` : ""}</DialogTitle>
+            <DialogDescription className="sr-only">Détails de l'inscription Academy</DialogDescription>
+            {(() => {
+              const registration = academyRegistrations.find((r) => r.id === detailAcademyRegistrationId);
+              if (!registration) return null;
+              const meta = academyRegistrationStatusMeta[registration.status] ?? academyRegistrationStatusMeta.PENDING;
+              return (
+                <div className="space-y-3 text-sm">
+                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><p className={`text-xs ${textMuted}`}>Academy</p><p className={`font-medium ${textPrimary}`}>{registration.academyName}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Formation</p><p className={`font-medium ${textPrimary}`}>{registration.courseTitle}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Participants</p><p className={textPrimary}>{registration.participantCount}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Prix</p><p className={`font-semibold ${textPrimary}`}>{fmt(registration.priceInCents)}</p></div>
+                    {registration.sessionStartDate && (
+                      <div><p className={`text-xs ${textMuted}`}>Date de formation</p><p className={textPrimary}>{registration.sessionStartDate}{registration.sessionEndDate ? ` → ${registration.sessionEndDate}` : ""}</p></div>
+                    )}
+                    <div><p className={`text-xs ${textMuted}`}>Inscrit le</p><p className={textPrimary}>{registration.createdAt ? formatDate(registration.createdAt as any) : "—"}</p></div>
+                    {registration.confirmedAt && <div><p className={`text-xs ${textMuted}`}>Confirmée le</p><p className={textPrimary}>{formatDate(registration.confirmedAt as any)}</p></div>}
+                    {registration.completedAt && <div><p className={`text-xs ${textMuted}`}>Terminée le</p><p className={textPrimary}>{formatDate(registration.completedAt as any)}</p></div>}
+                  </div>
+                  {registration.participants.length > 0 && (
+                    <div><p className={`text-xs ${textMuted}`}>Participants nommés</p><p className={textPrimary}>{registration.participants.join(", ")}</p></div>
+                  )}
+                  {registration.notes && <div><p className={`text-xs ${textMuted}`}>Notes</p><p className={textPrimary}>{registration.notes}</p></div>}
+                  {registration.status === "PENDING" && (
+                    <div className={`pt-2 border-t flex justify-end ${borderClr}`}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={dk ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-red-200 text-red-600 hover:bg-red-50"}
+                        disabled={updateAcademyRegistrationStatus.isPending}
+                        onClick={() => updateAcademyRegistrationStatus.mutate({ id: registration.id, status: "CANCELLED" })}
+                        data-testid="button-cancel-academy-modal"
+                      >
+                        {updateAcademyRegistrationStatus.isPending ? "Annulation…" : "Annuler l'inscription"}
                       </Button>
                     </div>
                   )}
@@ -1241,19 +1359,111 @@ function AccountPanel({
         {/* SETTINGS */}
         {activeTab === "settings" && (
           <div className="space-y-4 pt-2">
+            {/* Profile — real Coffee Owner account fields (users.name/phone/isWhatsapp/
+                profileImageUrl), same fields every other role's Settings page edits. */}
             <div className={`border rounded-2xl p-4 ${cardBg}`}>
               <p className={`font-semibold text-sm mb-3 flex items-center gap-2 ${textPrimary}`}><User className="w-4 h-4" /> Profile</p>
+              <div className="flex items-center gap-3 mb-3">
+                <Avatar className="w-12 h-12 shrink-0">
+                  <AvatarImage src={getAvatarUrl({ profileImageUrl: settingsProfileImageUrl })} alt={settingsName || "Coffee Owner"} />
+                  <AvatarFallback className={`font-bold ${dk ? "bg-gray-700 text-amber-400" : "bg-blue-100 text-blue-700"}`}>
+                    {settingsName?.charAt(0)?.toUpperCase() ?? "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 space-y-1.5">
+                  <Label className={`text-xs ${textMuted}`}>Photo de profil (URL)</Label>
+                  <Input
+                    value={settingsProfileImageUrl}
+                    onChange={(e) => setSettingsProfileImageUrl(e.target.value)}
+                    placeholder="https://…"
+                    className={`h-9 ${inputCls}`}
+                    data-testid="input-settings-picture"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className={`text-xs ${textMuted}`}>Full Name</Label>
-                  <Input defaultValue={user?.name} className={`h-9 ${inputCls}`} />
+                  <Label className={`text-xs ${textMuted}`}>Full Name / Café</Label>
+                  <Input value={settingsName} onChange={(e) => setSettingsName(e.target.value)} className={`h-9 ${inputCls}`} data-testid="input-settings-name" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className={`text-xs ${textMuted}`}>Email</Label>
-                  <Input defaultValue={user?.email} className={`h-9 ${inputCls}`} />
+                  <Input value={user?.email ?? ""} disabled className={`h-9 ${inputCls} opacity-70`} data-testid="input-settings-email" />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className={`text-xs ${textMuted}`}>Téléphone</Label>
+                    <label className={`flex items-center gap-1.5 text-xs cursor-pointer select-none ${textMuted}`}>
+                      <input
+                        type="checkbox"
+                        className="w-3.5 h-3.5 rounded accent-blue-600"
+                        checked={settingsWhatsapp}
+                        onChange={(e) => setSettingsWhatsapp(e.target.checked)}
+                        data-testid="checkbox-settings-whatsapp"
+                      />
+                      WhatsApp
+                    </label>
+                  </div>
+                  <Input value={settingsPhone} onChange={(e) => setSettingsPhone(e.target.value)} className={`h-9 ${inputCls}`} data-testid="input-settings-phone" />
                 </div>
               </div>
+              <Button
+                onClick={() => updateAccountProfile.mutate({
+                  name: settingsName.trim() || undefined,
+                  phone: settingsPhone.trim(),
+                  isWhatsapp: settingsWhatsapp,
+                  profileImageUrl: settingsProfileImageUrl.trim() || null,
+                })}
+                disabled={updateAccountProfile.isPending || !settingsName.trim()}
+                className="mt-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                data-testid="button-save-settings-account"
+              >
+                {updateAccountProfile.isPending ? "Enregistrement…" : "Enregistrer"}
+              </Button>
             </div>
+
+            {/* Location — the same users.locationAddress/locationLat/locationLng used
+                everywhere else (delivery, distance calculations); editing it here keeps
+                every surface synchronized, reusing the existing LocationPickerModal. */}
+            <div className={`border rounded-2xl p-4 ${cardBg}`}>
+              <p className={`font-semibold text-sm mb-3 flex items-center gap-2 ${textPrimary}`}><MapPin className="w-4 h-4" /> Localisation</p>
+              <p className={`text-sm ${textPrimary}`}>{(user as any)?.locationAddress || "Aucune adresse enregistrée."}</p>
+              <p className={`text-xs mt-1 mb-3 ${textMuted}`}>Cette adresse est utilisée pour la livraison et les calculs de distance avec les prestataires.</p>
+              <Button
+                variant="outline"
+                className={`rounded-xl ${dk ? "border-gray-700 text-gray-200 hover:bg-gray-700" : ""}`}
+                onClick={() => setLocationModalOpen(true)}
+                data-testid="button-edit-settings-location"
+              >
+                {(user as any)?.locationAddress ? "Modifier l'adresse" : "Ajouter une adresse"}
+              </Button>
+            </div>
+
+            {/* Security — same generic password-change flow (currentPassword required
+                server-side) every other role's Settings page uses. */}
+            <div className={`border rounded-2xl p-4 ${cardBg}`}>
+              <p className={`font-semibold text-sm mb-3 flex items-center gap-2 ${textPrimary}`}><Lock className="w-4 h-4" /> Sécurité</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className={`text-xs ${textMuted}`}>Mot de passe actuel</Label>
+                  <Input type="password" value={settingsCurrentPassword} onChange={(e) => setSettingsCurrentPassword(e.target.value)} className={`h-9 ${inputCls}`} data-testid="input-settings-current-password" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className={`text-xs ${textMuted}`}>Nouveau mot de passe</Label>
+                  <Input type="password" value={settingsNewPassword} onChange={(e) => setSettingsNewPassword(e.target.value)} className={`h-9 ${inputCls}`} data-testid="input-settings-new-password" />
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className={`mt-3 rounded-xl ${dk ? "border-gray-700 text-gray-200 hover:bg-gray-700" : ""}`}
+                disabled={updateAccountPassword.isPending || !settingsCurrentPassword || !settingsNewPassword}
+                onClick={() => updateAccountPassword.mutate({ password: settingsNewPassword, currentPassword: settingsCurrentPassword })}
+                data-testid="button-change-settings-password"
+              >
+                {updateAccountPassword.isPending ? "Enregistrement…" : "Changer le mot de passe"}
+              </Button>
+            </div>
+
             <div className={`border rounded-2xl p-4 ${cardBg}`}>
               <p className={`font-semibold text-sm mb-3 ${textPrimary}`}>Notifications</p>
               <div className="space-y-3">
@@ -1278,6 +1488,16 @@ function AccountPanel({
             >
               <LogOut className="w-4 h-4" /> Log out
             </button>
+
+            <LocationPickerModal
+              open={locationModalOpen}
+              mode="account"
+              title="Choisissez votre adresse"
+              initialAddress={(user as any)?.locationAddress ?? undefined}
+              initialDetails={(user as any)?.locationDetails as AddressDetails | undefined}
+              onClose={() => setLocationModalOpen(false)}
+              onConfirm={(loc: PickedLocation) => updateAccountLocation.mutate(loc)}
+            />
           </div>
         )}
       </div>
@@ -1992,7 +2212,7 @@ const SERVICE_ID_TO_KEY: Record<ServiceId, "PRINTING" | "MAINTENANCE" | "BARISTA
   MARKETING: "MARKETING",
 };
 const SERVICE_ID_LABEL: Record<ServiceId, string> = {
-  SHOP: "SHOP", MAINTENANCE: "MAINTENANCE", PRINT: "PRINT", BARISTA: "Marketplace Baristas", ACADEMY: "Barista Academy", MARKETING: "MARKETING",
+  SHOP: "SHOP", MAINTENANCE: "MAINTENANCE", PRINT: "PRINT", BARISTA: "Barista", ACADEMY: "Academy", MARKETING: "MARKETING",
 };
 
 // ── Messages Panel (premium dark/light — mirrors FavoritesPanel design) ───────

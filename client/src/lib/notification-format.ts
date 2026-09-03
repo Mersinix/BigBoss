@@ -28,13 +28,13 @@ export function formatNotificationTime(iso: string | Date | null): string {
 }
 
 export const NOTIFICATION_SERVICE_LABELS: Record<NotificationService, string> = {
-  ADMIN: "Admin",
+  ADMIN: "ADMIN",
   SHOP: "SHOP",
   PRINT: "PRINT",
-  MAINTENANCE: "Maintenance",
-  BARISTA: "Barista",
-  ACADEMY: "Academy",
-  MARKETING: "Marketing",
+  MAINTENANCE: "MAINTENANCE",
+  BARISTA: "BARISTA",
+  ACADEMY: "ACADEMY",
+  MARKETING: "MARKETING",
 };
 
 export const NOTIFICATION_PRIORITY_DOT: Record<Notification["priority"], string> = {

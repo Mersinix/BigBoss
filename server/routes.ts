@@ -1507,8 +1507,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/print/categories", requireAdmin, async (req, res) => {
     try {
-      const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
-      const created = await storage.createPrintCategory(name);
+      const { name, icon } = z.object({ name: z.string().trim().min(1).max(120), icon: z.string().trim().max(8).nullable().optional() }).parse(req.body);
+      const created = await storage.createPrintCategory(name, icon ?? null);
       broadcast("print_categories_updated", { kind: "taxonomy" });
       res.status(201).json(created);
     } catch (err) {
@@ -1521,6 +1521,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const body = z.object({
         name: z.string().trim().min(1).max(120).optional(),
+        icon: z.string().trim().max(8).nullable().optional(),
         isActive: z.boolean().optional(),
         isFrozen: z.boolean().optional(),
       }).parse(req.body);
@@ -1544,8 +1545,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/print/subcategories", requireAdmin, async (req, res) => {
     try {
-      const { categoryId, name } = z.object({ categoryId: z.number().int().positive(), name: z.string().trim().min(1).max(120) }).parse(req.body);
-      const created = await storage.createPrintSubCategory(categoryId, name);
+      const { categoryId, name, icon } = z.object({ categoryId: z.number().int().positive(), name: z.string().trim().min(1).max(120), icon: z.string().trim().max(8).nullable().optional() }).parse(req.body);
+      const created = await storage.createPrintSubCategory(categoryId, name, icon ?? null);
       broadcast("print_categories_updated", { kind: "taxonomy" });
       res.status(201).json(created);
     } catch (err) {
@@ -1558,6 +1559,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const body = z.object({
         name: z.string().trim().min(1).max(120).optional(),
+        icon: z.string().trim().max(8).nullable().optional(),
         isActive: z.boolean().optional(),
         isFrozen: z.boolean().optional(),
       }).parse(req.body);

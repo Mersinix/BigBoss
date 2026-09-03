@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { Layers, Save } from "lucide-react";
 import type { PrintCategoryTaxonomy, PrintSubCategoryTaxonomy } from "@shared/schema";
+import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-icons";
 
 // The Admin-controlled PRINT taxonomy (client/src/pages/admin/print-page.tsx's
 // "Catégories" tab manages the same printCategoryTaxonomy/printSubCategoryTaxonomy
@@ -112,7 +113,7 @@ export default function PrinterCategoriesPage() {
                   <div key={category.id} className="rounded-xl border border-border/50 p-3" data-testid={`row-printer-category-${category.id}`}>
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <Checkbox checked={checked} onCheckedChange={() => toggleCategory(category.name)} data-testid={`checkbox-category-${category.id}`} />
-                      <span className="text-sm font-medium">{category.name}</span>
+                      <span className="text-sm font-medium">{printCategoryIcon(category.name, category.icon)} {category.name}</span>
                     </label>
                     {checked && subs.length > 0 && (
                       <div className="mt-2.5 ml-6 flex flex-wrap gap-2">
@@ -128,7 +129,7 @@ export default function PrinterCategoriesPage() {
                               }`}
                               data-testid={`chip-subcategory-${sub.id}`}
                             >
-                              {sub.name}
+                              {printSubCategoryIcon(sub.name, sub.icon)} {sub.name}
                             </button>
                           );
                         })}

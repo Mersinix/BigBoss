@@ -208,28 +208,12 @@ export function AppSidebar() {
       ];
     }
 
-    if (user.role === "DELIVERY_COMPANY") {
-      return [
-        {
-          label: "MAIN",
-          items: [
-            { title: "Dashboard", url: "/", icon: LayoutDashboard },
-            { title: "Available Deliveries", url: "/delivery/available", icon: Package },
-            { title: "My Deliveries", url: "/delivery/my-deliveries", icon: Truck },
-            { title: "Drivers", url: "/delivery/drivers", icon: Users },
-            { title: "Vehicles", url: "/delivery/vehicles", icon: Truck },
-            { title: "Messages", url: "/delivery/messages", icon: MessageCircle },
-          ],
-        },
-        {
-          label: "ACCOUNT",
-          items: [
-            { title: "Settings", url: "/delivery/settings", icon: Settings },
-          ],
-        },
-      ];
-    }
-
+    // DELIVERY_COMPANY no longer uses this sidebar — the Delivery Company account now uses
+    // its own top switcher shell (see components/layout/delivery-company-account-shell.tsx
+    // and App.tsx's /delivery/... routes), mirroring the Barista Marketplace account
+    // structure. HomeRoute redirects DELIVERY_COMPANY to /delivery before DashboardLayout
+    // (which renders this sidebar) is ever reached.
+    //
     // DRIVER no longer uses this sidebar — the Driver account now uses its own top switcher
     // shell (see components/layout/driver-account-shell.tsx and App.tsx's /driver/... routes),
     // mirroring the Barista Marketplace account structure. HomeRoute redirects DRIVER to

@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import type { PrintCatalogItem, PrintCategoryTaxonomy, PrintSubCategoryTaxonomy } from "@shared/schema";
+import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-icons";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,7 +195,10 @@ function ServiceFormDialog({
                 <Label>Catégorie *</Label>
                 <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v, subCategory: "" }))}>
                   <SelectTrigger data-testid="input-service-category"><SelectValue placeholder="Choisir…" /></SelectTrigger>
-                  <SelectContent>{mappedCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  <SelectContent>{mappedCategories.map((c) => {
+                    const t = taxonomy?.categories.find((tc) => tc.name === c);
+                    return <SelectItem key={c} value={c}>{printCategoryIcon(c, t?.icon)} {c}</SelectItem>;
+                  })}</SelectContent>
                 </Select>
                 {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
               </div>
@@ -202,7 +206,10 @@ function ServiceFormDialog({
                 <Label>Sous-catégorie</Label>
                 <Select value={form.subCategory || undefined} onValueChange={(v) => setForm((f) => ({ ...f, subCategory: v }))} disabled={!form.category || subCategoryOptions.length === 0}>
                   <SelectTrigger><SelectValue placeholder={subCategoryOptions.length === 0 ? "Aucune" : "Choisir…"} /></SelectTrigger>
-                  <SelectContent>{subCategoryOptions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <SelectContent>{subCategoryOptions.map((s) => {
+                    const t = taxonomy?.subcategories.find((ts) => ts.name === s);
+                    return <SelectItem key={s} value={s}>{printSubCategoryIcon(s, t?.icon)} {s}</SelectItem>;
+                  })}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -351,7 +358,7 @@ export default function PrinterServices() {
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {item.category}{item.subCategory ? ` · ${item.subCategory}` : ""}
+                    {printCategoryIcon(item.category)} {item.category}{item.subCategory ? ` · ${item.subCategory}` : ""}
                   </TableCell>
                   <TableCell className="font-semibold text-sm">{fmt(item.priceInCents)}</TableCell>
                   <TableCell className="text-sm">{item.minQuantity}</TableCell>

@@ -15,6 +15,7 @@ import {
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import type { PrintCatalogCard } from "@shared/schema";
+import { printCategoryIcon } from "@/lib/print-category-icons";
 
 // ── Production time buckets ─────────────────────────────────────────────────
 // The real schema only has a numeric productionTimeDays (no free-text delivery
@@ -83,7 +84,7 @@ function PrintCategoryStrip({ categories, loading, selected, onSelect, isDark }:
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === cat ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
                 data-testid={`button-print-cat-${cat}`}
               >
-                <span className="text-lg">🖨️</span>
+                <span className="text-lg">{printCategoryIcon(cat)}</span>
                 <span className="text-[11px] font-semibold leading-tight line-clamp-2 max-w-[64px]">{cat}</span>
               </button>
             ))
@@ -130,7 +131,7 @@ function PrintProductCard({ card, onClick, isDark }: { card: PrintCatalogCard; o
         {card.category && (
           <div className="absolute top-2 left-2">
             <Badge className={`${isDark ? "bg-gray-800/90 text-gray-200" : "bg-white/90 text-gray-700"} backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2`}>
-              {card.category}
+              {printCategoryIcon(card.category)} {card.category}
             </Badge>
           </div>
         )}

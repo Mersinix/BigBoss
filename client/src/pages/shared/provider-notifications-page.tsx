@@ -11,6 +11,7 @@ import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notific
 // not the Admin/Supplier shadcn-token convention).
 const ROLE_TO_SERVICE: Partial<Record<string, NotificationService>> = {
   DRIVER: "SHOP",
+  DELIVERY_COMPANY: "SHOP",
   PRINTER: "PRINT",
   BARISTA_ACADEMY: "ACADEMY",
   BARISTA_MARKETPLACE: "BARISTA",

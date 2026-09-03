@@ -21,6 +21,7 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
 import { PRINT_ORDER_STATUS_META, formatMonthKey } from "@/lib/print-order-status";
+import { printCategoryIcon } from "@/lib/print-category-icons";
 import { buildPrintInvoiceRows, PRINT_INVOICE_STATUS_META } from "@/lib/print-financial-rows";
 import type { PrintOrderWithParties } from "@shared/schema";
 
@@ -29,7 +30,7 @@ import type { PrintOrderWithParties } from "@shared/schema";
 // pagination, no separate per-tab fetch — same philosophy, adapted to PRINT's
 // real data (a multi-item catalog per Printer instead of one flat profile).
 
-type TaxonomyItem = { id: number; name: string; isActive: boolean; isFrozen: boolean };
+type TaxonomyItem = { id: number; name: string; icon?: string | null; isActive: boolean; isFrozen: boolean };
 type Overview = {
   stats: {
     totalPrinters: number; activePrinters: number; availablePrinters: number;
@@ -57,16 +58,19 @@ function StatusBadge({ status }: { status: string }) {
 function CategoryTaxonomy({ items, onRefresh }: { items: TaxonomyItem[]; onRefresh: () => void }) {
   const { toast } = useToast();
   const [draft, setDraft] = useState("");
+  const [draftIcon, setDraftIcon] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [iconEditing, setIconEditing] = useState<number | null>(null);
+  const [iconEditValue, setIconEditValue] = useState("");
   const create = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/print/categories", { name: draft.trim() }),
-    onSuccess: () => { setDraft(""); onRefresh(); toast({ title: "Catégorie ajoutée" }); },
+    mutationFn: () => apiRequest("POST", "/api/admin/print/categories", { name: draft.trim(), icon: draftIcon.trim() || null }),
+    onSuccess: () => { setDraft(""); setDraftIcon(""); onRefresh(); toast({ title: "Catégorie ajoutée" }); },
     onError: (e: any) => toast({ title: "Impossible d'ajouter", description: e.message, variant: "destructive" }),
   });
   const update = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/admin/print/categories/${id}`, data),
-    onSuccess: () => { setEditing(null); onRefresh(); },
+    onSuccess: () => { setEditing(null); setIconEditing(null); onRefresh(); },
     onError: () => toast({ title: "Mise à jour impossible", variant: "destructive" }),
   });
   const remove = useMutation({
@@ -79,11 +83,28 @@ function CategoryTaxonomy({ items, onRefresh }: { items: TaxonomyItem[]; onRefre
       <CardHeader className="pb-3"><CardTitle className="text-base">Catégories PRINT</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <div className="flex gap-2">
+          <Input value={draftIcon} onChange={(e) => setDraftIcon(e.target.value)} placeholder="🖨️" className="w-14 text-center text-lg shrink-0" data-testid="input-print-category-draft-icon" />
           <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Ajouter une catégorie" onKeyDown={(e) => e.key === "Enter" && draft.trim() && create.mutate()} data-testid="input-new-print-category" />
           <Button size="sm" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate()} data-testid="button-add-print-category"><Plus className="h-4 w-4 mr-1" />Ajouter</Button>
         </div>
         {items.length === 0 ? <p className="text-sm text-muted-foreground">Aucune catégorie.</p> : items.map((item) => (
           <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2" data-testid={`row-print-category-${item.id}`}>
+            {iconEditing === item.id ? (
+              <Input autoFocus value={iconEditValue} onChange={(e) => setIconEditValue(e.target.value)} onKeyDown={(e) => {
+                if (e.key === "Enter") update.mutate({ id: item.id, data: { icon: iconEditValue.trim() || null } });
+                if (e.key === "Escape") setIconEditing(null);
+              }} onBlur={() => update.mutate({ id: item.id, data: { icon: iconEditValue.trim() || null } })} className="w-12 text-center text-lg shrink-0 p-1" />
+            ) : (
+              <button
+                type="button"
+                title="Modifier l'icône"
+                className="w-8 h-8 shrink-0 flex items-center justify-center text-lg rounded-md hover:bg-muted"
+                onClick={() => { setIconEditing(item.id); setIconEditValue(item.icon ?? ""); }}
+                data-testid={`button-edit-print-category-icon-${item.id}`}
+              >
+                {item.icon || <Printer className="h-4 w-4 text-muted-foreground" />}
+              </button>
+            )}
             {editing === item.id ? (
               <Input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)} onKeyDown={(e) => {
                 if (e.key === "Enter" && editValue.trim()) update.mutate({ id: item.id, data: { name: editValue.trim() } });
@@ -114,16 +135,19 @@ function SubCategoryManager({ categories, subcategories, onRefresh }: {
   const { toast } = useToast();
   const [categoryId, setCategoryId] = useState<number | null>(categories[0]?.id ?? null);
   const [draft, setDraft] = useState("");
+  const [draftIcon, setDraftIcon] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [iconEditing, setIconEditing] = useState<number | null>(null);
+  const [iconEditValue, setIconEditValue] = useState("");
   const create = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/print/subcategories", { categoryId, name: draft.trim() }),
-    onSuccess: () => { setDraft(""); onRefresh(); toast({ title: "Sous-catégorie ajoutée" }); },
+    mutationFn: () => apiRequest("POST", "/api/admin/print/subcategories", { categoryId, name: draft.trim(), icon: draftIcon.trim() || null }),
+    onSuccess: () => { setDraft(""); setDraftIcon(""); onRefresh(); toast({ title: "Sous-catégorie ajoutée" }); },
     onError: (e: any) => toast({ title: "Impossible d'ajouter", description: e.message, variant: "destructive" }),
   });
   const update = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/admin/print/subcategories/${id}`, data),
-    onSuccess: () => { setEditing(null); onRefresh(); },
+    onSuccess: () => { setEditing(null); setIconEditing(null); onRefresh(); },
     onError: () => toast({ title: "Mise à jour impossible", variant: "destructive" }),
   });
   const remove = useMutation({
@@ -144,11 +168,28 @@ function SubCategoryManager({ categories, subcategories, onRefresh }: {
               <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
             </Select>
             <div className="flex gap-2">
+              <Input value={draftIcon} onChange={(e) => setDraftIcon(e.target.value)} placeholder="🖨️" className="w-14 text-center text-lg shrink-0" data-testid="input-print-subcategory-draft-icon" />
               <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Ajouter une sous-catégorie" onKeyDown={(e) => e.key === "Enter" && draft.trim() && categoryId && create.mutate()} data-testid="input-new-print-subcategory" />
               <Button size="sm" disabled={!draft.trim() || !categoryId || create.isPending} onClick={() => create.mutate()} data-testid="button-add-print-subcategory"><Plus className="h-4 w-4 mr-1" />Ajouter</Button>
             </div>
             {items.length === 0 ? <p className="text-sm text-muted-foreground">Aucune sous-catégorie pour cette catégorie.</p> : items.map((item) => (
               <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2" data-testid={`row-print-subcategory-${item.id}`}>
+                {iconEditing === item.id ? (
+                  <Input autoFocus value={iconEditValue} onChange={(e) => setIconEditValue(e.target.value)} onKeyDown={(e) => {
+                    if (e.key === "Enter") update.mutate({ id: item.id, data: { icon: iconEditValue.trim() || null } });
+                    if (e.key === "Escape") setIconEditing(null);
+                  }} onBlur={() => update.mutate({ id: item.id, data: { icon: iconEditValue.trim() || null } })} className="w-12 text-center text-lg shrink-0 p-1" />
+                ) : (
+                  <button
+                    type="button"
+                    title="Modifier l'icône"
+                    className="w-8 h-8 shrink-0 flex items-center justify-center text-lg rounded-md hover:bg-muted"
+                    onClick={() => { setIconEditing(item.id); setIconEditValue(item.icon ?? ""); }}
+                    data-testid={`button-edit-print-subcategory-icon-${item.id}`}
+                  >
+                    {item.icon || <Printer className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                )}
                 {editing === item.id ? (
                   <Input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)} onKeyDown={(e) => {
                     if (e.key === "Enter" && editValue.trim()) update.mutate({ id: item.id, data: { name: editValue.trim() } });
@@ -410,7 +451,14 @@ export default function AdminPrintPage() {
             <CardContent className="flex flex-wrap gap-2">
               {(data?.categories ?? []).length === 0
                 ? <p className="text-sm text-muted-foreground">Aucun service au catalogue.</p>
-                : (data?.categories ?? []).map((row) => <Badge key={row.category} variant="secondary">{row.category} · {row.count}</Badge>)}
+                : (data?.categories ?? []).map((row) => {
+                    const taxonomyMatch = (data?.taxonomy ?? []).find((t) => t.name === row.category);
+                    return (
+                      <Badge key={row.category} variant="secondary">
+                        {printCategoryIcon(row.category, taxonomyMatch?.icon)} {row.category} · {row.count}
+                      </Badge>
+                    );
+                  })}
             </CardContent>
           </Card>
           <Card>
@@ -647,7 +695,10 @@ export default function AdminPrintPage() {
             <SectionCard title="Meilleures catégories" icon={Layers}>
               {topCategories.length === 0 ? <EmptyState message="Aucune catégorie pour le moment." /> : (
                 <div className="divide-y divide-border/40">
-                  {topCategories.map((c, i) => <RankRow key={c.category} rank={i + 1} title={c.category} subtitle={`${c.count} service(s)`} value={String(c.count)} />)}
+                  {topCategories.map((c, i) => {
+                    const taxonomyMatch = (data?.taxonomy ?? []).find((t) => t.name === c.category);
+                    return <RankRow key={c.category} rank={i + 1} title={`${printCategoryIcon(c.category, taxonomyMatch?.icon)} ${c.category}`} subtitle={`${c.count} service(s)`} value={String(c.count)} />;
+                  })}
                 </div>
               )}
             </SectionCard>

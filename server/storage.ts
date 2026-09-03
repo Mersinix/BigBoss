@@ -323,14 +323,14 @@ export interface IStorage {
   updatePrintOrderStatus(id: number, printerId: number, status: string): Promise<PrintOrder | undefined>;
   getPrintRevenueSummary(printerId: number): Promise<{ totalEarnedCents: number; completedOrders: number; currentMonthCents: number; currentMonthOrders: number; history: { month: string; totalCents: number; orders: number }[] }>;
   getPrintCategoryTaxonomy(): Promise<PrintCategoryTaxonomy[]>;
-  createPrintCategory(name: string): Promise<PrintCategoryTaxonomy>;
-  updatePrintCategory(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<PrintCategoryTaxonomy | undefined>;
+  createPrintCategory(name: string, icon?: string | null): Promise<PrintCategoryTaxonomy>;
+  updatePrintCategory(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<PrintCategoryTaxonomy | undefined>;
   deletePrintCategory(id: number): Promise<void>;
   adminSetPrintCatalogItemActive(id: number, isActive: boolean): Promise<PrintCatalogItem | undefined>;
   getPrintAdminOverview(): Promise<any>;
   getPrintSubCategoryTaxonomy(categoryId?: number): Promise<PrintSubCategoryTaxonomy[]>;
-  createPrintSubCategory(categoryId: number, name: string): Promise<PrintSubCategoryTaxonomy>;
-  updatePrintSubCategory(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<PrintSubCategoryTaxonomy | undefined>;
+  createPrintSubCategory(categoryId: number, name: string, icon?: string | null): Promise<PrintSubCategoryTaxonomy>;
+  updatePrintSubCategory(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<PrintSubCategoryTaxonomy | undefined>;
   deletePrintSubCategory(id: number): Promise<void>;
   getPrintSubCategories(): Promise<string[]>;
   getPrinterCategoryMapping(printerId: number): Promise<{ categories: string[]; subCategories: string[] }>;
@@ -4386,12 +4386,12 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(printCategoryTaxonomy).orderBy(asc(printCategoryTaxonomy.name));
   }
 
-  async createPrintCategory(name: string): Promise<PrintCategoryTaxonomy> {
-    const [created] = await db.insert(printCategoryTaxonomy).values({ name: name.trim() }).returning();
+  async createPrintCategory(name: string, icon?: string | null): Promise<PrintCategoryTaxonomy> {
+    const [created] = await db.insert(printCategoryTaxonomy).values({ name: name.trim(), icon: icon ?? null }).returning();
     return created;
   }
 
-  async updatePrintCategory(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<PrintCategoryTaxonomy | undefined> {
+  async updatePrintCategory(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<PrintCategoryTaxonomy | undefined> {
     const [updated] = await db.update(printCategoryTaxonomy)
       .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
       .where(eq(printCategoryTaxonomy.id, id)).returning();
@@ -4409,12 +4409,12 @@ export class DatabaseStorage implements IStorage {
     return rows;
   }
 
-  async createPrintSubCategory(categoryId: number, name: string): Promise<PrintSubCategoryTaxonomy> {
-    const [created] = await db.insert(printSubCategoryTaxonomy).values({ categoryId, name: name.trim() }).returning();
+  async createPrintSubCategory(categoryId: number, name: string, icon?: string | null): Promise<PrintSubCategoryTaxonomy> {
+    const [created] = await db.insert(printSubCategoryTaxonomy).values({ categoryId, name: name.trim(), icon: icon ?? null }).returning();
     return created;
   }
 
-  async updatePrintSubCategory(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<PrintSubCategoryTaxonomy | undefined> {
+  async updatePrintSubCategory(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<PrintSubCategoryTaxonomy | undefined> {
     const [updated] = await db.update(printSubCategoryTaxonomy)
       .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
       .where(eq(printSubCategoryTaxonomy.id, id)).returning();

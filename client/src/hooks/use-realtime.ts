@@ -48,6 +48,7 @@ const ACADEMY_EVENTS = [
   "academy_registration_status_changed",
   "academy_review_created",
 ];
+const MARKETING_EVENTS = ["marketing_updated", "marketing_project_updated", "marketing_review_updated", "marketing_favorite_updated", "admin_marketing_report_created"];
 const NOTIFICATION_EVENTS = ["notification_created"];
 
 function invalidateInventoryQueries(qc: QueryClient) {
@@ -311,6 +312,21 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/maintenance/reports"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/reports/mine"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MAINTENANCE"] });
+            invalidateMessagingQueries(qc);
+          }
+          if (MARKETING_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/marketing/profiles"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/categories"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/taxonomy"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/projects"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/profile"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/revenue"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/reviews"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing-favorites"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/marketing"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/marketing/reports"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/reports/mine"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MARKETING"] });
             invalidateMessagingQueries(qc);
           }
           if (BARISTA_EVENTS.includes(event)) {

@@ -126,6 +126,7 @@ export function AppSidebar() {
             { title: "Print", url: "/admin/print", icon: Printer },
             { title: "Barista", url: "/admin/barista", icon: Coffee },
             { title: "Academy", url: "/admin/academy", icon: GraduationCap },
+            { title: "Marketing", url: "/admin/marketing", icon: Megaphone },
           ],
         },
         {
@@ -237,38 +238,11 @@ export function AppSidebar() {
     // PRINTER no longer uses this sidebar either — same treatment, same reasoning — see
     // components/layout/printer-account-shell.tsx and App.tsx's /printer/... routes.
     // HomeRoute redirects PRINTER to /printer before this sidebar is ever reached.
-
-    if (user.role === "MARKETING") {
-      return [
-        {
-          label: "MAIN",
-          items: [
-            { title: "Dashboard", url: "/", icon: LayoutDashboard },
-          ],
-        },
-        {
-          label: "BUSINESS",
-          items: [
-            { title: "Services", url: "/marketing-panel/services", icon: Megaphone },
-            { title: "Projets", url: "/marketing-panel/projects", icon: Briefcase },
-            { title: "Clients", url: "/marketing-panel/clients", icon: Users },
-          ],
-        },
-        {
-          label: "FINANCE",
-          items: [
-            { title: "Devis & Factures", url: "/marketing-panel/invoices", icon: FileText },
-            { title: "Analytics", url: "/marketing-panel/analytics", icon: BarChart2 },
-          ],
-        },
-        {
-          label: "ACCOUNT",
-          items: [
-            { title: "Settings", url: "/marketing-panel/settings", icon: Settings },
-          ],
-        },
-      ];
-    }
+    //
+    // MARKETING no longer uses this sidebar either — same treatment, same reasoning — see
+    // components/layout/marketing-account-shell.tsx and App.tsx's /marketing-panel/...
+    // routes. HomeRoute redirects MARKETING to /marketing-panel before this sidebar is
+    // ever reached.
 
     if (user.role === "BARISTA_ACADEMY") {
       return [

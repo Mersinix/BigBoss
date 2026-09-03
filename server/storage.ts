@@ -11,6 +11,7 @@ import {
   landingConfig, messagingSettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones, maintenanceReports,
+  marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   baristaWorkHistory, baristaReports,
@@ -65,6 +66,9 @@ import {
   type BaristaWorkHistory, type InsertBaristaWorkHistory,
   type BaristaReport, type InsertBaristaReport,
   type MaintenanceReport, type InsertMaintenanceReport,
+  type MarketingProfile, type InsertMarketingProfile, type MarketingMarketplaceCard,
+  type MarketingProject, type InsertMarketingProject,
+  type MarketingReport, type InsertMarketingReport, type MarketingCategory,
   type BaristaRequestStatus, type BaristaMissionStatus,
   type AcademyProfile, type InsertAcademyProfile, type AcademyCourse, type InsertAcademyCourse,
   type AcademyCourseSession, type AcademyRegistration,
@@ -3646,6 +3650,474 @@ export class DatabaseStorage implements IStorage {
       .where(eq(maintenanceReports.id, id))
       .returning();
     return updated;
+  }
+
+  // ── MARKETING ────────────────────────────────────────────────────────────────
+  // Mirrors the Maintenance storage section above exactly (one profile per
+  // provider, ownership-in-WHERE mutations, taxonomy seeded from existing
+  // profile data, reviews on the shared supplierProductReviews table with
+  // reviewType='MARKETING') — marketingProjects covers the whole request →
+  // quote → active project → completion lifecycle in one table, same reasoning
+  // as maintenanceReservations/academyRegistrations.
+
+  async getMarketingProfiles(filters?: {
+    search?: string;
+    category?: string;
+    profileType?: string;
+    location?: string;
+    viewerLocation?: { lat?: string | null; lng?: string | null } | null;
+  }): Promise<MarketingMarketplaceCard[]> {
+    const rows = await db.select({ profile: marketingProfiles, user: users })
+      .from(marketingProfiles)
+      .innerJoin(users, eq(marketingProfiles.userId, users.id))
+      .where(and(
+        eq(users.role, "MARKETING" as any),
+        eq(users.status, "approved"),
+        eq(marketingProfiles.marketplaceVisible, true),
+        eq(marketingProfiles.isFrozen, false),
+      ));
+
+    const marketingUserIds = rows.map(({ profile }) => profile.userId);
+    const reviewRows = marketingUserIds.length
+      ? await db.select({
+          marketingUserId: supplierProductReviews.marketingUserId,
+          rating: supplierProductReviews.rating,
+        }).from(supplierProductReviews).where(and(
+          eq(supplierProductReviews.reviewType, "MARKETING"),
+          inArray(supplierProductReviews.marketingUserId as any, marketingUserIds),
+        ))
+      : [];
+    const reviewStats = new Map<number, { total: number; sum: number }>();
+    for (const review of reviewRows) {
+      if (!review.marketingUserId) continue;
+      const current = reviewStats.get(review.marketingUserId) ?? { total: 0, sum: 0 };
+      current.total += 1;
+      current.sum += review.rating;
+      reviewStats.set(review.marketingUserId, current);
+    }
+
+    const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
+
+    const cards = rows.map(({ profile, user }) => {
+      const stats = reviewStats.get(profile.userId);
+      const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+      const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+      return {
+        ...profile,
+        rating: stats ? Math.round((stats.sum / stats.total) * 10) : 0,
+        reviewCount: stats?.total ?? 0,
+        name: user.name,
+        phone: user.phone ?? null,
+        profileImageUrl: user.profileImageUrl ?? null,
+        location: user.locationAddress ?? "",
+        initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+        distanceKm,
+      } as MarketingMarketplaceCard;
+    });
+
+    const query = filters?.search?.trim().toLowerCase();
+    return cards.filter((card) => {
+      if (query) {
+        const haystack = [card.name, card.description, card.location, card.categories.join(" ")].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (filters?.category && !card.categories.some((c) => c.toLowerCase() === filters.category!.toLowerCase())) return false;
+      if (filters?.profileType && card.profileType !== filters.profileType) return false;
+      if (filters?.location && card.location !== filters.location) return false;
+      return true;
+    });
+  }
+
+  async getMarketingCategories(): Promise<string[]> {
+    const taxonomy = await this.getMarketingTaxonomy();
+    const activeTaxonomy = taxonomy.filter((item) => item.isActive && !item.isFrozen);
+    if (activeTaxonomy.length) return activeTaxonomy.map((item) => item.name);
+    const rows = await db.select({ categories: marketingProfiles.categories })
+      .from(marketingProfiles)
+      .innerJoin(users, eq(marketingProfiles.userId, users.id))
+      .where(and(eq(users.role, "MARKETING" as any), eq(users.status, "approved"), eq(marketingProfiles.marketplaceVisible, true)));
+    return Array.from(new Set(rows.flatMap((row) => row.categories))).sort((a, b) => a.localeCompare(b));
+  }
+
+  async getMarketingProfile(userId: number): Promise<MarketingProfile> {
+    const [profile] = await db.select().from(marketingProfiles).where(eq(marketingProfiles.userId, userId));
+    if (profile) return profile;
+    const [created] = await db.insert(marketingProfiles).values({ userId }).returning();
+    return created;
+  }
+
+  async getMarketingCard(userId: number, viewerLocation?: { lat?: string | null; lng?: string | null } | null): Promise<MarketingMarketplaceCard | undefined> {
+    const [row] = await db.select({ profile: marketingProfiles, user: users })
+      .from(marketingProfiles)
+      .innerJoin(users, eq(marketingProfiles.userId, users.id))
+      .where(eq(marketingProfiles.userId, userId));
+    if (!row) return undefined;
+    const reviews = await db.select({ rating: supplierProductReviews.rating }).from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.reviewType, "MARKETING"), eq(supplierProductReviews.marketingUserId as any, userId)));
+    const rating = reviews.length ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) : 0;
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const providerPos = this.parseLatLng({ lat: row.user.locationLat, lng: row.user.locationLng });
+    const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+    return {
+      ...row.profile,
+      userId: row.user.id,
+      name: row.user.name,
+      phone: row.user.phone ?? null,
+      profileImageUrl: row.user.profileImageUrl ?? null,
+      location: row.user.locationAddress ?? "",
+      initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+      distanceKm,
+      rating,
+      reviewCount: reviews.length,
+    };
+  }
+
+  async upsertMarketingProfile(userId: number, updates: Partial<InsertMarketingProfile>): Promise<MarketingProfile> {
+    const current = await this.getMarketingProfile(userId);
+    const [updated] = await db.update(marketingProfiles)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(marketingProfiles.id, current.id))
+      .returning();
+    return updated;
+  }
+
+  // Marketing favorites — mirrors getMaintenanceFavoritesByUser/add/remove exactly.
+  async getMarketingFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select({ marketingUserId: marketingFavorites.marketingUserId })
+      .from(marketingFavorites)
+      .where(eq(marketingFavorites.userId, userId));
+    return rows.map((row) => row.marketingUserId);
+  }
+
+  async addMarketingFavorite(userId: number, marketingUserId: number): Promise<void> {
+    const [existing] = await db.select().from(marketingFavorites).where(and(
+      eq(marketingFavorites.userId, userId),
+      eq(marketingFavorites.marketingUserId, marketingUserId),
+    ));
+    if (!existing) await db.insert(marketingFavorites).values({ userId, marketingUserId });
+  }
+
+  async removeMarketingFavorite(userId: number, marketingUserId: number): Promise<void> {
+    await db.delete(marketingFavorites).where(and(
+      eq(marketingFavorites.userId, userId),
+      eq(marketingFavorites.marketingUserId, marketingUserId),
+    ));
+  }
+
+  async getMarketingProjectsForProvider(userId: number): Promise<(MarketingProject & { cafeOwner: string; ownerPhone: string | null })[]> {
+    const rows = await db.select({ project: marketingProjects, owner: users })
+      .from(marketingProjects)
+      .innerJoin(users, eq(marketingProjects.cafeOwnerId, users.id))
+      .where(eq(marketingProjects.marketingUserId, userId))
+      .orderBy(desc(marketingProjects.createdAt));
+    return rows.map(({ project, owner }) => ({ ...project, cafeOwner: owner.name, ownerPhone: owner.phone ?? null }));
+  }
+
+  async getMarketingProjectsForOwner(userId: number): Promise<(MarketingProject & { marketingName: string })[]> {
+    const rows = await db.select({ project: marketingProjects, provider: users })
+      .from(marketingProjects)
+      .innerJoin(users, eq(marketingProjects.marketingUserId, users.id))
+      .where(eq(marketingProjects.cafeOwnerId, userId))
+      .orderBy(desc(marketingProjects.createdAt));
+    return rows.map(({ project, provider }) => ({ ...project, marketingName: provider.name }));
+  }
+
+  async createMarketingProject(data: InsertMarketingProject): Promise<MarketingProject> {
+    const [created] = await db.insert(marketingProjects).values(data as any).returning();
+    return created;
+  }
+
+  async getMarketingProjectById(id: number): Promise<MarketingProject | undefined> {
+    const [row] = await db.select().from(marketingProjects).where(eq(marketingProjects.id, id));
+    return row;
+  }
+
+  // Provider-side lifecycle move (quote a PENDING request, start/progress an
+  // ACCEPTED project, mark COMPLETED) — ownership-scoped in the WHERE clause,
+  // mirroring updateMaintenanceReservationStatus.
+  async updateMarketingProjectStatus(id: number, providerId: number, updates: {
+    status?: string; quoteAmountInCents?: number; finalAmountInCents?: number; progress?: number;
+    startDate?: string; deadline?: string;
+  }): Promise<MarketingProject | undefined> {
+    const [updated] = await db.update(marketingProjects)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(marketingProjects.id, id), eq(marketingProjects.marketingUserId, providerId)))
+      .returning();
+    return updated;
+  }
+
+  // Owner responds to a QUOTED project — accept (→ ACCEPTED, active project) or
+  // reject (→ REJECTED, terminal, mirrors Maintenance's reschedule-response shape).
+  async respondToMarketingQuote(id: number, ownerId: number, accepted: boolean): Promise<MarketingProject | undefined> {
+    const [updated] = await db.update(marketingProjects)
+      .set({ status: accepted ? "ACCEPTED" : "REJECTED", updatedAt: new Date() })
+      .where(and(eq(marketingProjects.id, id), eq(marketingProjects.cafeOwnerId, ownerId), eq(marketingProjects.status, "QUOTED")))
+      .returning();
+    return updated;
+  }
+
+  // Coffee Owner self-service cancellation — only while still PENDING (no quote
+  // sent yet), mirroring cancelMaintenanceReservationByOwner.
+  async cancelMarketingProjectByOwner(id: number, cafeOwnerId: number): Promise<MarketingProject | undefined> {
+    const [updated] = await db.update(marketingProjects)
+      .set({ status: "CANCELLED", updatedAt: new Date() })
+      .where(and(eq(marketingProjects.id, id), eq(marketingProjects.cafeOwnerId, cafeOwnerId), eq(marketingProjects.status, "PENDING")))
+      .returning();
+    return updated;
+  }
+
+  async adminUpdateMarketingProject(id: number, data: Partial<{
+    service: string; title: string; description: string; status: string;
+    quoteAmountInCents: number; finalAmountInCents: number; progress: number; startDate: string; deadline: string;
+  }>): Promise<MarketingProject | undefined> {
+    const [updated] = await db.update(marketingProjects)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(marketingProjects.id, id))
+      .returning();
+    return updated;
+  }
+
+  async setMarketingProjectFrozen(id: number, isFrozen: boolean): Promise<MarketingProject | undefined> {
+    const [updated] = await db.update(marketingProjects).set({ isFrozen, updatedAt: new Date() }).where(eq(marketingProjects.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingProject(id: number): Promise<void> {
+    await db.delete(marketingProjects).where(eq(marketingProjects.id, id));
+  }
+
+  async getMarketingReviews(marketingUserId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.marketingUserId as any, marketingUserId), eq(supplierProductReviews.reviewType, "MARKETING")))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getMarketingReviewForProject(projectId: number, cafeId: number): Promise<SupplierProductReview | undefined> {
+    const [row] = await db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.marketingProjectId as any, projectId),
+        eq(supplierProductReviews.cafeId, cafeId),
+        eq(supplierProductReviews.reviewType, "MARKETING"),
+      ));
+    return row;
+  }
+
+  async upsertMarketingReview(data: {
+    marketingUserId: number; projectId: number; cafeId: number; rating: number; comment?: string | null;
+    cafeName: string; cafeOwnerName: string;
+  }): Promise<{ review: SupplierProductReview; isUpdate: boolean }> {
+    const existing = await this.getMarketingReviewForProject(data.projectId, data.cafeId);
+    if (existing) {
+      const [review] = await db.update(supplierProductReviews)
+        .set({ rating: data.rating, comment: data.comment ?? null, updatedAt: new Date() } as any)
+        .where(eq(supplierProductReviews.id, existing.id))
+        .returning();
+      await this.refreshMarketingReviewStats(data.marketingUserId);
+      return { review, isUpdate: true };
+    }
+    const [review] = await db.insert(supplierProductReviews).values({
+      reviewType: "MARKETING",
+      marketingUserId: data.marketingUserId,
+      marketingProjectId: data.projectId,
+      cafeId: data.cafeId,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.cafeName,
+      cafeOwnerName: data.cafeOwnerName,
+      supplierId: null, productId: null, listingId: null, packId: null, productName: null,
+    } as any).returning();
+    await this.refreshMarketingReviewStats(data.marketingUserId);
+    return { review, isUpdate: false };
+  }
+
+  async deleteMarketingReview(reviewId: number): Promise<boolean> {
+    const [review] = await db.select({ id: supplierProductReviews.id, marketingUserId: supplierProductReviews.marketingUserId })
+      .from(supplierProductReviews).where(and(eq(supplierProductReviews.id, reviewId), eq(supplierProductReviews.reviewType, "MARKETING")));
+    if (!review) return false;
+    await db.delete(supplierProductReviews).where(eq(supplierProductReviews.id, reviewId));
+    if (review.marketingUserId) await this.refreshMarketingReviewStats(review.marketingUserId);
+    return true;
+  }
+
+  private async refreshMarketingReviewStats(marketingUserId: number): Promise<void> {
+    const reviews = await this.getMarketingReviews(marketingUserId);
+    const reviewCount = reviews.length;
+    const rating = reviewCount ? Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviewCount) * 10) : 0;
+    await db.update(marketingProfiles).set({ rating, reviewCount, updatedAt: new Date() }).where(eq(marketingProfiles.userId, marketingUserId));
+  }
+
+  // Monthly revenue breakdown from COMPLETED projects' finalAmountInCents —
+  // same shape/reasoning as getBaristaRevenueSummary (Dashboard/Analytics chart).
+  async getMarketingRevenueSummary(userId: number): Promise<{
+    totalEarnedCents: number; completedProjects: number; currentMonthCents: number; currentMonthProjects: number;
+    history: { month: string; totalCents: number; projects: number }[];
+  }> {
+    const rows = await db.select().from(marketingProjects)
+      .where(and(eq(marketingProjects.marketingUserId, userId), eq(marketingProjects.status, "COMPLETED")));
+    const now = new Date();
+    const months: { key: string }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` });
+    }
+    const byMonth = new Map<string, { totalCents: number; projects: number }>();
+    for (const row of rows) {
+      const updated = row.updatedAt ?? row.createdAt ?? now;
+      const key = `${updated.getFullYear()}-${String(updated.getMonth() + 1).padStart(2, "0")}`;
+      const current = byMonth.get(key) ?? { totalCents: 0, projects: 0 };
+      current.totalCents += row.finalAmountInCents ?? 0;
+      current.projects += 1;
+      byMonth.set(key, current);
+    }
+    const currentKey = months[months.length - 1].key;
+    const currentMonth = byMonth.get(currentKey) ?? { totalCents: 0, projects: 0 };
+    return {
+      totalEarnedCents: rows.reduce((sum, r) => sum + (r.finalAmountInCents ?? 0), 0),
+      completedProjects: rows.length,
+      currentMonthCents: currentMonth.totalCents,
+      currentMonthProjects: currentMonth.projects,
+      history: months.map((m) => ({ month: m.key, totalCents: byMonth.get(m.key)?.totalCents ?? 0, projects: byMonth.get(m.key)?.projects ?? 0 })),
+    };
+  }
+
+  private async seedMarketingTaxonomyIfEmpty(): Promise<void> {
+    const [count] = await db.select({ count: sql<number>`count(*)::int` }).from(marketingCategoryTaxonomy);
+    if (count && count.count > 0) return;
+    const DEFAULTS = ["Website", "SEO", "Ads", "Social", "Vidéo", "Photo", "Branding"];
+    await db.insert(marketingCategoryTaxonomy).values(DEFAULTS.map((name) => ({ name }))).onConflictDoNothing();
+  }
+
+  async getMarketingTaxonomy(): Promise<MarketingCategory[]> {
+    await this.seedMarketingTaxonomyIfEmpty();
+    return db.select().from(marketingCategoryTaxonomy).orderBy(asc(marketingCategoryTaxonomy.name));
+  }
+
+  async getAvailableMarketingTaxonomy(): Promise<MarketingCategory[]> {
+    const taxonomy = await this.getMarketingTaxonomy();
+    return taxonomy.filter((item) => item.isActive && !item.isFrozen);
+  }
+
+  async createMarketingCategory(name: string, icon?: string | null): Promise<MarketingCategory> {
+    const [created] = await db.insert(marketingCategoryTaxonomy).values({ name: name.trim(), icon: icon?.trim() || null }).returning();
+    return created;
+  }
+
+  async updateMarketingCategory(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<MarketingCategory | undefined> {
+    const [updated] = await db.update(marketingCategoryTaxonomy)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), ...(data.icon !== undefined ? { icon: data.icon?.trim() || null } : {}), updatedAt: new Date() })
+      .where(eq(marketingCategoryTaxonomy.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingCategory(id: number): Promise<void> {
+    await db.delete(marketingCategoryTaxonomy).where(eq(marketingCategoryTaxonomy.id, id));
+  }
+
+  async getMarketingAdminOverview(): Promise<any> {
+    const taxonomy = await this.getMarketingTaxonomy();
+    const accounts = await db.select({ profile: marketingProfiles, user: users })
+      .from(marketingProfiles)
+      .innerJoin(users, eq(marketingProfiles.userId, users.id))
+      .where(eq(users.role, "MARKETING" as any));
+    const projects = await db.select().from(marketingProjects);
+    const reviews = await db.select().from(supplierProductReviews).where(eq(supplierProductReviews.reviewType, "MARKETING"));
+    const allUsers = await db.select().from(users);
+    const userMap = new Map(allUsers.map((user) => [user.id, user]));
+    const categoryCounts = new Map<string, number>();
+    for (const row of accounts) for (const category of row.profile.categories) {
+      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+    }
+    const averageRating = reviews.length ? reviews.reduce((sum, row) => sum + row.rating, 0) / reviews.length : 0;
+    const totalRevenueCents = projects.filter((p) => p.status === "COMPLETED").reduce((sum, p) => sum + (p.finalAmountInCents ?? 0), 0);
+    return {
+      stats: {
+        totalAccounts: accounts.length,
+        activeAccounts: accounts.filter(({ user }) => user.status === "approved").length,
+        visibleAccounts: accounts.filter(({ user, profile }) => user.status === "approved" && profile.marketplaceVisible).length,
+        totalProjects: projects.length,
+        pendingProjects: projects.filter((row) => row.status === "PENDING").length,
+        activeProjects: projects.filter((row) => ["ACCEPTED", "IN_PROGRESS"].includes(row.status)).length,
+        completedProjects: projects.filter((row) => row.status === "COMPLETED").length,
+        cancelledProjects: projects.filter((row) => ["CANCELLED", "REJECTED"].includes(row.status)).length,
+        reviewCount: reviews.length,
+        averageRating,
+        totalRevenueCents,
+      },
+      categories: Array.from(categoryCounts, ([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
+      taxonomy,
+      accounts: accounts.map(({ profile, user }) => ({
+        ...profile,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        profileImageUrl: user.profileImageUrl,
+        status: user.status,
+        location: user.locationAddress,
+        initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+      })),
+      projects: projects
+        .map((project) => ({
+          ...project,
+          marketingName: userMap.get(project.marketingUserId)?.name ?? "—",
+          cafeOwner: userMap.get(project.cafeOwnerId)?.name ?? "—",
+          ownerPhone: userMap.get(project.cafeOwnerId)?.phone ?? null,
+        }))
+        .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)),
+      reviews: reviews.map((review) => ({
+        ...review,
+        marketingName: userMap.get(review.marketingUserId ?? 0)?.name ?? "—",
+        reviewerName: userMap.get(review.cafeId)?.name ?? review.cafeName,
+      })),
+    };
+  }
+
+  // ── Entity-level Marketing reports (Coffee Owner "Blacklist") — own table
+  // (marketingReports), own service scope, mirrors maintenanceReports exactly. ──
+
+  async createMarketingReport(cafeOwnerId: number, marketingUserId: number, reason: string): Promise<MarketingReport> {
+    const [created] = await db.insert(marketingReports).values({ cafeOwnerId, marketingUserId, reason }).returning();
+    return created;
+  }
+
+  async getMarketingReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(MarketingReport & { cafeOwnerName: string; marketingName: string })[]> {
+    const rows = await db.select().from(marketingReports)
+      .where(status ? eq(marketingReports.status, status) : undefined)
+      .orderBy(desc(marketingReports.createdAt));
+    if (rows.length === 0) return [];
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.marketingUserId])));
+    const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
+    return rows.map((r) => ({ ...r, cafeOwnerName: userMap.get(r.cafeOwnerId) ?? "—", marketingName: userMap.get(r.marketingUserId) ?? "—" }));
+  }
+
+  async getMarketingReportsByOwner(cafeOwnerId: number): Promise<(MarketingReport & {
+    marketingName: string; marketingProfileImageUrl: string | null; marketingLocation: string | null;
+  })[]> {
+    const rows = await db.select().from(marketingReports)
+      .where(eq(marketingReports.cafeOwnerId, cafeOwnerId))
+      .orderBy(desc(marketingReports.createdAt));
+    if (rows.length === 0) return [];
+    const marketingIds = Array.from(new Set(rows.map((r) => r.marketingUserId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl, locationAddress: users.locationAddress })
+      .from(users).where(inArray(users.id, marketingIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    return rows.map((r) => {
+      const m = map.get(r.marketingUserId);
+      return { ...r, marketingName: m?.name ?? "—", marketingProfileImageUrl: m?.profileImageUrl ?? null, marketingLocation: m?.locationAddress ?? null };
+    });
+  }
+
+  async resolveMarketingReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<MarketingReport | undefined> {
+    const [updated] = await db.update(marketingReports)
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .where(eq(marketingReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async refreshMarketingMessagingState(projectId: number): Promise<void> {
+    const [project] = await db.select().from(marketingProjects).where(eq(marketingProjects.id, projectId));
+    if (project) await this.syncMessagingRelationship(project.cafeOwnerId, project.marketingUserId, "MARKETING");
   }
 
   // ── PRINT ────────────────────────────────────────────────────────────────────

@@ -74,7 +74,16 @@ import PrinterReviews from "@/pages/printer/reviews";
 import PrinterCategories from "@/pages/printer/categories";
 import PrinterSettings from "@/pages/printer/settings";
 import MarketingDashboard from "@/pages/marketing/dashboard";
+import MarketingServices from "@/pages/marketing/services";
+import MarketingProjects from "@/pages/marketing/projects";
+import MarketingClients from "@/pages/marketing/clients";
+import MarketingInvoices from "@/pages/marketing/invoices";
+import MarketingAnalytics from "@/pages/marketing/analytics";
+import MarketingMessages from "@/pages/marketing/messages";
+import MarketingNotifications from "@/pages/marketing/notifications";
+import MarketingReviewsPage from "@/pages/marketing/reviews";
 import MarketingSettingsPage from "@/pages/marketing/settings-page";
+import { MarketingAccountShell } from "@/components/layout/marketing-account-shell";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
 import BaristaAcademyCoursesPage from "@/pages/barista-academy/courses";
 import BaristaAcademyRegistrationsPage from "@/pages/barista-academy/registrations";
@@ -119,6 +128,7 @@ import AdminSettingsPage from "@/pages/admin/settings-page";
 import ProspectingPage from "@/pages/admin/prospecting-page";
 import AdminReviewsPage from "@/pages/admin/reviews-page";
 import AdminMaintenancePage from "@/pages/admin/maintenance-page";
+import AdminMarketingPage from "@/pages/admin/marketing-page";
 import AdminPrintPage from "@/pages/admin/print-page";
 import AdminBaristaPage from "@/pages/admin/barista-page";
 import AdminAcademyPage from "@/pages/admin/academy-page";
@@ -267,6 +277,9 @@ function HomeRoute() {
   // Printer account switcher (same pattern) replaces the generic sidebar for Printers —
   // see components/layout/printer-account-shell.tsx.
   if (user.role === "PRINTER") return <Redirect to="/printer" />;
+  // Marketing account switcher (same pattern) replaces the generic sidebar for
+  // Marketing providers — see components/layout/marketing-account-shell.tsx.
+  if (user.role === "MARKETING") return <Redirect to="/marketing-panel" />;
   return (
     <DashboardLayout>
       <SmartDashboard />
@@ -408,12 +421,37 @@ function Router() {
         {() => (<PrinterAccountShell><ProtectedRoute component={PrinterDashboard} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
 
-      {/* ── Marketing Panel routes ── */}
-      <Route path="/marketing-panel/settings">
-        {() => (<DashboardLayout><ProtectedRoute component={MarketingSettingsPage} allowedRoles={["MARKETING"]} requireApproved /></DashboardLayout>)}
+      {/* ── Marketing account routes — top switcher shell instead of the sidebar,
+          same organizational pattern as Print, see marketing-account-shell.tsx ── */}
+      <Route path="/marketing-panel">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingDashboard} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
       </Route>
-      <Route path="/marketing-panel/:rest*">
-        {() => (<DashboardLayout><ProtectedRoute component={MarketingDashboard} allowedRoles={["MARKETING"]} requireApproved /></DashboardLayout>)}
+      <Route path="/marketing-panel/services">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingServices} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      </Route>
+      <Route path="/marketing-panel/projects">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingProjects} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      </Route>
+      <Route path="/marketing-panel/clients">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingClients} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      </Route>
+      <Route path="/marketing-panel/invoices">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingInvoices} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      </Route>
+      <Route path="/marketing-panel/analytics">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingAnalytics} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      </Route>
+      <Route path="/marketing-panel/messages">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingMessages} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      </Route>
+      <Route path="/marketing-panel/notifications">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingNotifications} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      </Route>
+      <Route path="/marketing-panel/reviews">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingReviewsPage} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      </Route>
+      <Route path="/marketing-panel/settings">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingSettingsPage} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
       </Route>
 
       {/* ── Barista Academy routes — top switcher shell instead of the sidebar, same
@@ -631,6 +669,9 @@ function Router() {
       </Route>
       <Route path="/admin/print">
         {() => (<DashboardLayout><ProtectedRoute component={AdminPrintPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      <Route path="/admin/marketing">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminMarketingPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
       {/* Admin Barista management — mirrors Admin PRINT's own route/layout pattern.
           Marketplace Baristas only — Barista Academy is its own separate Admin

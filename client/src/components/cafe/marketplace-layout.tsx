@@ -55,6 +55,11 @@ import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/h
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { RecruitDialog as BaristaRecruitDialog } from "@/pages/cafe/barista/barista-page";
 import { useBaristaRequests, useBaristaMissions } from "@/hooks/use-barista-marketplace";
+import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
+import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
+import { QuoteRequestDialog as MarketingQuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
+import { useMarketingProjects, useCancelMarketingProject, useRespondToMarketingQuote, type MarketingProjectWithParties } from "@/hooks/use-marketing";
+import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
 import { useAcademyRegistrations } from "@/hooks/use-barista-academy";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
 import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
@@ -173,10 +178,15 @@ function AccountPanel({
   // already scopes by session role, returning only this Coffee Owner's own
   // registrations). No duplicate data source.
   const { data: academyRegistrations = [], isLoading: academyRegistrationsLoading } = useAcademyRegistrations();
+  // Marketing — real marketingProjects lifecycle (request → devis → project →
+  // completion), the same table/hooks the Marketing Account's own Projets tab
+  // and Admin → Services → Marketing read from. No duplicate data source.
+  const { data: marketingProjectsForOwner = [], isLoading: marketingProjectsLoading } = useMarketingProjects();
   const [detailPrintOrder, setDetailPrintOrder] = useState<PrintOrderWithParties | null>(null);
   const [detailMaintenanceReservation, setDetailMaintenanceReservation] = useState<any | null>(null);
   const [detailBaristaMission, setDetailBaristaMission] = useState<BaristaMission | null>(null);
   const [detailBaristaRequest, setDetailBaristaRequest] = useState<BaristaRequest | null>(null);
+  const [detailMarketingProjectId, setDetailMarketingProjectId] = useState<number | null>(null);
 
   const RESERVATION_SERVICE_TABS: { key: string; orderId: MarketplaceServiceId; stateKey: ServiceKey; label: string; icon: any }[] = [
     { key: "maintenance", orderId: "MAINTENANCE", stateKey: "MAINTENANCE", label: "Maintenance", icon: Wrench },
@@ -264,6 +274,8 @@ function AccountPanel({
       setDetailMaintenanceReservation(null);
     },
   });
+  const cancelMarketingProject = useCancelMarketingProject();
+  const respondToMarketingQuote = useRespondToMarketingQuote();
 
   // Auto-open a specific order when directed from the checkout flow
   useEffect(() => {
@@ -825,13 +837,89 @@ function AccountPanel({
               )
             )}
 
-            {/* ── Marketing — intentionally empty until that module exists;
-                real empty state, no fake data. ── */}
+            {/* ── Marketing — real marketingProjects lifecycle (request → devis →
+                project → completion), the same table the Marketing Account's own
+                Projets tab and Admin → Services → Marketing read from. ── */}
             {reservationsService === "marketing" && (
-              <div className={`text-center py-16 ${textMuted}`}>
-                <Megaphone className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                <p className={`font-medium text-sm ${textPrimary}`}>Aucune activité Marketing pour le moment</p>
-              </div>
+              marketingProjectsLoading ? (
+                <div className="space-y-3">
+                  {[...Array(2)].map((_, i) => <div key={i} className={`h-28 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}
+                </div>
+              ) : marketingProjectsForOwner.length === 0 ? (
+                <div className={`text-center py-16 ${textMuted}`}>
+                  <Megaphone className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune activité Marketing pour le moment</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {[...marketingProjectsForOwner]
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .map((project) => {
+                      const meta = MARKETING_PROJECT_STATUS_META[project.status] ?? MARKETING_PROJECT_STATUS_META.PENDING;
+                      return (
+                        <div
+                          key={project.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setDetailMarketingProjectId(project.id)}
+                          className={`w-full text-left border rounded-2xl p-4 space-y-3 cursor-pointer ${cardBg}`}
+                          data-testid={`card-reservation-marketing-${project.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className={`font-semibold text-sm truncate ${textPrimary}`}>{project.marketingName || "Prestataire Marketing"}</p>
+                              <p className={`text-xs mt-0.5 ${textMuted}`}>{project.service}{project.title ? ` · ${project.title}` : ""}</p>
+                            </div>
+                            <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.className}`}>{meta.label}</span>
+                          </div>
+                          <div className={`flex flex-wrap items-center gap-3 text-xs ${textMuted}`}>
+                            <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-purple-500" />{new Date(project.createdAt).toLocaleDateString("fr-FR")}</span>
+                            {project.quoteAmountInCents != null && (
+                              <span className="flex items-center gap-1"><DollarSign className="w-3 h-3 text-purple-500" />{fmt(project.finalAmountInCents ?? project.quoteAmountInCents)}</span>
+                            )}
+                          </div>
+                          {project.status === "QUOTED" && (
+                            <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                size="sm"
+                                className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white"
+                                disabled={respondToMarketingQuote.isPending}
+                                onClick={() => respondToMarketingQuote.mutate({ id: project.id, accepted: true })}
+                                data-testid={`button-accept-quote-${project.id}`}
+                              >
+                                Accepter le devis
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-xl border-red-200 text-red-600 hover:bg-red-50"
+                                disabled={respondToMarketingQuote.isPending}
+                                onClick={() => respondToMarketingQuote.mutate({ id: project.id, accepted: false })}
+                                data-testid={`button-reject-quote-${project.id}`}
+                              >
+                                Refuser
+                              </Button>
+                            </div>
+                          )}
+                          {project.status === "PENDING" && (
+                            <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-xl border-red-200 text-red-600 hover:bg-red-50"
+                                disabled={cancelMarketingProject.isPending}
+                                onClick={() => cancelMarketingProject.mutate(project.id)}
+                                data-testid={`button-cancel-marketing-${project.id}`}
+                              >
+                                Annuler
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )
             )}
 
             {/* ── Barista Academy — real registrations from the same
@@ -1017,6 +1105,74 @@ function AccountPanel({
           </DialogContent>
         </Dialog>
 
+        {/* Marketing project details (Part 15) — resolved live from the same
+            marketingProjects query, same status vocabulary/meta as the card above. */}
+        <Dialog open={detailMarketingProjectId != null} onOpenChange={(o) => !o && setDetailMarketingProjectId(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogTitle>Projet Marketing {detailMarketingProjectId ? `#${detailMarketingProjectId}` : ""}</DialogTitle>
+            <DialogDescription className="sr-only">Détails du projet Marketing</DialogDescription>
+            {(() => {
+              const project = marketingProjectsForOwner.find((p) => p.id === detailMarketingProjectId);
+              if (!project) return null;
+              const meta = MARKETING_PROJECT_STATUS_META[project.status] ?? MARKETING_PROJECT_STATUS_META.PENDING;
+              return (
+                <div className="space-y-3 text-sm">
+                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.className}`}>{meta.label}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><p className={`text-xs ${textMuted}`}>Prestataire</p><p className="font-medium">{project.marketingName || "—"}</p></div>
+                    <div><p className={`text-xs ${textMuted}`}>Service</p><p className="font-medium">{project.service}</p></div>
+                    {project.title && <div><p className={`text-xs ${textMuted}`}>Titre</p><p>{project.title}</p></div>}
+                    <div><p className={`text-xs ${textMuted}`}>Créé le</p><p>{new Date(project.createdAt).toLocaleDateString("fr-FR")}</p></div>
+                    {project.startDate && <div><p className={`text-xs ${textMuted}`}>Début</p><p>{project.startDate}</p></div>}
+                    {project.deadline && <div><p className={`text-xs ${textMuted}`}>Échéance</p><p>{project.deadline}</p></div>}
+                    {project.quoteAmountInCents != null && <div><p className={`text-xs ${textMuted}`}>Devis</p><p>{fmt(project.quoteAmountInCents)}</p></div>}
+                    {project.finalAmountInCents != null && <div><p className={`text-xs ${textMuted}`}>Facture finale</p><p>{fmt(project.finalAmountInCents)}</p></div>}
+                    {project.status === "IN_PROGRESS" && <div><p className={`text-xs ${textMuted}`}>Progression</p><p>{project.progress}%</p></div>}
+                  </div>
+                  {project.description && <div><p className={`text-xs ${textMuted}`}>Description</p><p>{project.description}</p></div>}
+                  {project.status === "QUOTED" && (
+                    <div className="pt-2 border-t border-border/50 flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                        disabled={respondToMarketingQuote.isPending}
+                        onClick={() => respondToMarketingQuote.mutate({ id: project.id, accepted: false })}
+                        data-testid="button-reject-quote-modal"
+                      >
+                        Refuser
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        disabled={respondToMarketingQuote.isPending}
+                        onClick={() => respondToMarketingQuote.mutate({ id: project.id, accepted: true })}
+                        data-testid="button-accept-quote-modal"
+                      >
+                        Accepter le devis
+                      </Button>
+                    </div>
+                  )}
+                  {project.status === "PENDING" && (
+                    <div className="pt-2 border-t border-border/50 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                        disabled={cancelMarketingProject.isPending}
+                        onClick={() => cancelMarketingProject.mutate(project.id)}
+                        data-testid="button-cancel-marketing-modal"
+                      >
+                        {cancelMarketingProject.isPending ? "Annulation…" : "Annuler la demande"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
         {/* DASHBOARD */}
         {activeTab === "dashboard" && (
           dashLoading
@@ -1167,11 +1323,15 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   // used on /barista (Part 22) — no separate favorites-only barista view.
   const [detailBaristaId, setDetailBaristaId] = useState<number | null>(null);
   const [recruitBarista, setRecruitBarista] = useState<BaristaMarketplaceCard | null>(null);
+  // Clicking a favorite Marketing card opens the same comprehensive detail
+  // modal used on /marketing — no separate favorites-only Marketing view.
+  const [detailMarketingId, setDetailMarketingId] = useState<number | null>(null);
+  const [quoteMarketingProvider, setQuoteMarketingProvider] = useState<MarketingMarketplaceCard | null>(null);
 
   const {
     shop, print, academy, baristaMarket, marketing, maintenance, pack,
     removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removeMaintenance, removePack,
-    syncMaintenance, syncBaristaMarket,
+    syncMaintenance, syncBaristaMarket, syncMarketing,
   } = useFavorites();
   const { stores, toggleStore: toggleStoreFav } = useStoreFavorites();
 
@@ -1233,6 +1393,20 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
     syncBaristaMarket(baristaFavoriteIds, baristaProfiles);
   }, [baristaFavoriteIds, baristaProfiles, baristaProfilesLoading, syncBaristaMarket]);
 
+  // Favorites persist as Marketing provider IDs. Resolve them against the
+  // live profiles, mirroring the Maintenance/Barista favorites sync above.
+  const { data: marketingFavoriteIds } = useQuery<number[]>({
+    queryKey: ["/api/marketing-favorites"],
+  });
+  const { data: marketingProfiles = [], isLoading: marketingProfilesLoading } = useQuery<MarketingMarketplaceCard[]>({
+    queryKey: ["/api/marketing/profiles"],
+    enabled: (marketingFavoriteIds?.length ?? 0) > 0,
+  });
+  useEffect(() => {
+    if (marketingFavoriteIds === undefined || marketingProfilesLoading) return;
+    syncMarketing(marketingFavoriteIds, marketingProfiles);
+  }, [marketingFavoriteIds, marketingProfiles, marketingProfilesLoading, syncMarketing]);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const openMaintenanceDetail = (agentId: number) => {
@@ -1241,6 +1415,9 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
     setSelectedMaintenanceAgent(agent);
     setMaintenanceDetailOpen(true);
   };
+  // Opens the same MarketingDetailModal used on /marketing — it resolves the
+  // full profile itself via useMarketingProfileDetail, no lookup needed here.
+  const openMarketingDetail = (marketingUserId: number) => setDetailMarketingId(marketingUserId);
   const contactMaintenance = async (agent: MaintenanceMarketplaceCard) => {
     try {
       const response = await apiRequest("POST", "/api/messages/conversations", {
@@ -1641,31 +1818,62 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         )}
 
         {/* MARKETING */}
+        {/* MARKETING — same left-photo/right-info Favorites layout as
+            MAINTENANCE above; clicking opens the same MarketingDetailModal
+            used on /marketing (Part 11) — no separate favorites-only view. */}
         {activeService === "MARKETING" && (
           marketingItems.length === 0 ? renderEmpty() : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               {marketingItems.map((item) => (
-                <div key={item.id} className={`group border rounded-2xl overflow-hidden ${cardBg}`}>
-                  <div className="h-16 grid grid-cols-3 gap-0.5 overflow-hidden">
-                    {item.portfolioImages.slice(0, 3).map((img, i) => (
-                      <div key={i} className={`relative overflow-hidden ${dk ? "bg-gray-700" : "bg-gray-100"}`}>
-                        <img src={img} alt="" className="w-full h-full object-cover" />
-                      </div>
-                    ))}
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openMarketingDetail(item.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openMarketingDetail(item.id);
+                    }
+                  }}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden cursor-pointer h-28 ${cardBg}`}
+                  data-testid={`card-fav-marketing-${item.id}`}
+                >
+                  <div className="w-2/5 shrink-0 relative">
+                    {item.portfolioImages[0] ? (
+                      <img src={item.portfolioImages[0]} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Avatar className="w-full h-full rounded-none">
+                        <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} className="object-cover" />
+                        <AvatarFallback className={`rounded-none font-bold text-xl ${dk ? "bg-purple-900 text-purple-300" : "bg-purple-100 text-purple-700"}`}>{item.initials}</AvatarFallback>
+                      </Avatar>
+                    )}
+                    {item.available != null && (
+                      <span
+                        className={`absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full border-2 border-white ${item.available ? "bg-green-500" : "bg-gray-300"}`}
+                        title={item.available ? "Disponible" : "Indisponible"}
+                      />
+                    )}
                   </div>
-                  <div className="p-3">
-                    <div className="flex items-start justify-between gap-1">
-                      <p className={`font-semibold text-sm leading-tight line-clamp-1 flex-1 ${textPrimary}`}>{item.name}</p>
-                      <button
-                        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
-                        onClick={() => removeMarketing(item.id)}
-                        data-testid={`button-fav-remove-marketing-${item.id}`}
-                      >
-                        <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                      </button>
-                    </div>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1 justify-center">
+                    <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
                     <p className={`text-xs mt-0.5 ${textMuted}`}>{item.type}</p>
-                    <span className="text-[11px] text-amber-400 mt-1 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                    {item.location && (
+                      <p className={`text-xs flex items-center gap-1 ${textMuted}`}>
+                        <MapPinIcon className="w-2.5 h-2.5 shrink-0" />{item.location}
+                      </p>
+                    )}
+                    <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      onClick={(event) => { event.stopPropagation(); removeMarketing(item.id); }}
+                      data-testid={`button-fav-remove-marketing-${item.id}`}
+                      aria-label={`Remove ${item.name} from favorites`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1752,6 +1960,14 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         onClose={() => setRecruitBarista(null)}
         isDark={dk}
       />
+
+      <MarketingDetailModal
+        marketingUserId={detailMarketingId}
+        open={detailMarketingId != null}
+        onClose={() => setDetailMarketingId(null)}
+        onRequestQuote={(p) => { setDetailMarketingId(null); setQuoteMarketingProvider(p); }}
+      />
+      <MarketingQuoteRequestDialog provider={quoteMarketingProvider} onClose={() => setQuoteMarketingProvider(null)} />
     </div>
   );
 }

@@ -26,6 +26,8 @@ export type NotificationPrefKey =
   | "barista_requests"
   | "barista_missions"
   | "academy"
+  | "marketing_requests"
+  | "marketing_status"
   | "delivery_opportunities"
   | "accounts"
   | "reports";
@@ -54,6 +56,8 @@ export const NOTIFICATION_PREF_DEFS: Record<NotificationPrefKey, { label: string
   barista_requests: { label: "Nouvelles demandes", group: "Services" },
   barista_missions: { label: "Missions", group: "Services" },
   academy: { label: "Academy", group: "Services" },
+  marketing_requests: { label: "Nouvelles demandes", group: "Services" },
+  marketing_status: { label: "Suivi Marketing", group: "Services", description: "Devis, changement de statut de projet, fin de projet." },
   delivery_opportunities: { label: "Opportunités", group: "Livraison" },
   accounts: { label: "Inscriptions & approbations", group: "Administration" },
   reports: { label: "Signalements", group: "Administration" },
@@ -67,14 +71,14 @@ export const ROLE_NOTIFICATION_PREF_KEYS: Partial<Record<string, NotificationPre
   ADMIN: ["messages", "catalog", "shop_orders", "shop_stock", "shop_delivery", "accounts", "reports"],
   SUPER_ADMIN: ["messages", "catalog", "shop_orders", "shop_stock", "shop_delivery", "accounts", "reports"],
   SUPPLIER: ["messages", "reviews", "shop_orders", "shop_stock", "shop_delivery", "catalog", "stores"],
-  CAFE_OWNER: ["messages", "shop_orders", "shop_delivery", "maintenance_status", "print_status", "barista_missions", "academy"],
+  CAFE_OWNER: ["messages", "shop_orders", "shop_delivery", "maintenance_status", "print_status", "barista_missions", "academy", "marketing_status"],
   DELIVERY_COMPANY: ["messages", "shop_delivery", "delivery_opportunities"],
   DRIVER: ["messages", "reviews", "shop_delivery", "delivery_opportunities"],
   PRINTER: ["messages", "reviews", "print_requests"],
   MAINTENANCE: ["messages", "reviews", "maintenance_requests"],
   BARISTA_MARKETPLACE: ["barista_requests", "barista_missions", "messages", "academy", "reviews"],
   BARISTA_ACADEMY: ["messages", "reviews", "academy"],
-  MARKETING: ["messages"],
+  MARKETING: ["messages", "reviews", "marketing_requests"],
 };
 
 export function isNotificationCategoryEnabled(prefs: Record<string, boolean> | null | undefined, key: NotificationPrefKey): boolean {

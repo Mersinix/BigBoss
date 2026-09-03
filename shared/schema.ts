@@ -684,7 +684,7 @@ export const supplierStores = pgTable("supplier_stores", {
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id"), // nullable for product-level reviews
-  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT' | 'ACADEMY' | 'DRIVER'
+  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT' | 'ACADEMY' | 'DRIVER' | 'MARKETING'
   cafeId: integer("cafe_id").notNull(),
   productId: integer("product_id"),
   listingId: integer("listing_id"),
@@ -699,6 +699,8 @@ export const supplierProductReviews = pgTable("supplier_product_reviews", {
   academyRegistrationId: integer("academy_registration_id"), // completed registration this review is for
   driverId: integer("driver_id"), // for DRIVER reviews
   deliveryId: integer("delivery_id"), // completed delivery this review is for
+  marketingUserId: integer("marketing_user_id"), // for MARKETING reviews
+  marketingProjectId: integer("marketing_project_id"), // completed project this review is for
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   cafeName: text("cafe_name").notNull().default(''),
@@ -1237,6 +1239,136 @@ export const maintenanceReports = pgTable("maintenance_reports", {
 export type MaintenanceReport = typeof maintenanceReports.$inferSelect;
 export type InsertMaintenanceReport = typeof maintenanceReports.$inferInsert;
 export const insertMaintenanceReportSchema = createInsertSchema(maintenanceReports).omit({ id: true, createdAt: true, resolvedAt: true });
+
+// ── MARKETING ────────────────────────────────────────────────────────────────
+// Mirrors Maintenance's shape (one profile per provider, a flat starting price)
+// rather than Print's catalog-of-items shape, since a Marketing provider's real
+// offering is closer to Maintenance's "book my time for a service" model.
+// marketingProjects covers the whole request → quote → active project →
+// completion lifecycle in one table (same reasoning as maintenanceReservations
+// and academyRegistrations: one lifecycle table, not separate "requests" /
+// "projects" / "invoices" tables) — Devis & Factures and Clients are views over
+// this same table (grouped/filtered client-side), not parallel financial or
+// relationship systems, matching Print's own "Factures" page (a filtered view
+// over printOrders, not a separate invoice table).
+
+export const marketingProfiles = pgTable("marketing_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  profileType: text("profile_type").notNull().default("Agency"), // 'Agency' | 'Freelancer' | 'Studio'
+  categories: text("categories").array().notNull().default([]), // offered services, from marketingCategoryTaxonomy names
+  responseTime: text("response_time").notNull().default("< 24h"),
+  startingPriceInCents: integer("starting_price_in_cents").notNull().default(0),
+  description: text("description").notNull().default(""),
+  portfolioImages: text("portfolio_images").array().notNull().default([]), // max 10, enforced at the API layer
+  websiteUrl: text("website_url"),
+  // Same { monday: {open, close, closed}, ... } shape as maintenanceProfiles.weeklyHours /
+  // supplierStores.openingHours (see OpeningHoursMap below), reused rather than inventing
+  // a parallel type. Nullable: no availability set yet.
+  weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
+  isAvailable: boolean("is_available").notNull().default(true),
+  isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  // Admin-only override — distinct from marketplaceVisible, same convention as
+  // maintenanceProfiles.isFrozen (a freeze can't be silently undone by the account itself).
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  rating: integer("rating").notNull().default(0), // x10 convention, e.g. 47 = 4.7
+  reviewCount: integer("review_count").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const marketingProjects = pgTable("marketing_projects", {
+  id: serial("id").primaryKey(),
+  marketingUserId: integer("marketing_user_id").notNull(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  service: text("service").notNull(), // category name at request time
+  title: text("title").notNull().default(""),
+  description: text("description").notNull().default(""),
+  // Lifecycle: PENDING (new request) → QUOTED (provider sent a devis) →
+  // ACCEPTED (owner accepted the quote, active project) → IN_PROGRESS →
+  // COMPLETED | CANCELLED | REJECTED (owner rejected the quote).
+  status: text("status").notNull().default("PENDING"),
+  quoteAmountInCents: integer("quote_amount_in_cents"), // set when status becomes QUOTED
+  finalAmountInCents: integer("final_amount_in_cents"), // set on COMPLETED — the "facture" amount
+  progress: integer("progress").notNull().default(0), // 0-100, provider-updatable while IN_PROGRESS
+  startDate: text("start_date"),
+  deadline: text("deadline"),
+  isFrozen: boolean("is_frozen").notNull().default(false), // admin-only, mirrors maintenanceReservations.isFrozen
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  providerIdx: index("marketing_projects_provider_idx").on(table.marketingUserId),
+  ownerIdx: index("marketing_projects_owner_idx").on(table.cafeOwnerId),
+  statusIdx: index("marketing_projects_status_idx").on(table.status),
+}));
+
+// Admin-managed Marketing taxonomy (Website/SEO/Ads/Social/Vidéo/Photo/Branding)
+// — flat list, same shape as maintenanceCompetencies (Marketing services don't
+// have a category→subcategory split the way Print does).
+export const marketingCategoryTaxonomy = pgTable("marketing_category_taxonomy", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  icon: text("icon"), // free-text emoji, same convention as maintenanceCompetencies.icon
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Entity-level report — mirrors maintenanceReports exactly (own table, own
+// service scope — never shared with another service's blacklist).
+export const marketingReportStatusEnum = pgEnum('marketing_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+
+export const marketingReports = pgTable("marketing_reports", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  marketingUserId: integer("marketing_user_id").notNull(),
+  reason: text("reason").notNull(),
+  status: marketingReportStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNote: text("resolution_note"),
+}, (table) => ({
+  marketingUserIdx: index("marketing_reports_marketing_user_idx").on(table.marketingUserId),
+  statusIdx: index("marketing_reports_status_idx").on(table.status),
+}));
+
+// Marketing favorites — mirrors maintenanceFavorites exactly (same shape,
+// same persistence pattern). Task A left this out of scope; the Coffee Owner
+// side only ever had a client-only Zustand entry with no DB-backed hydrate,
+// so favorites silently didn't survive a reload. Added here to match every
+// other service's favorites behavior.
+export const marketingFavorites = pgTable("marketing_favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  marketingUserId: integer("marketing_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertMarketingProfileSchema = createInsertSchema(marketingProfiles).omit({ id: true, updatedAt: true });
+export const insertMarketingProjectSchema = createInsertSchema(marketingProjects).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMarketingReportSchema = createInsertSchema(marketingReports).omit({ id: true, createdAt: true, resolvedAt: true });
+export const insertMarketingFavoriteSchema = createInsertSchema(marketingFavorites).omit({ id: true, createdAt: true });
+
+export type MarketingProfile = typeof marketingProfiles.$inferSelect;
+export type InsertMarketingProfile = z.infer<typeof insertMarketingProfileSchema>;
+export type MarketingProject = typeof marketingProjects.$inferSelect;
+export type InsertMarketingProject = z.infer<typeof insertMarketingProjectSchema>;
+export type MarketingReport = typeof marketingReports.$inferSelect;
+export type InsertMarketingReport = typeof marketingReports.$inferInsert;
+export type MarketingFavorite = typeof marketingFavorites.$inferSelect;
+export type MarketingCategory = typeof marketingCategoryTaxonomy.$inferSelect;
+
+/** Public marketplace card shown on Coffee Owner /marketing — mirrors MaintenanceMarketplaceCard. */
+export type MarketingMarketplaceCard = MarketingProfile & {
+  userId: number;
+  name: string;
+  phone: string | null;
+  profileImageUrl: string | null;
+  location: string;
+  initials: string;
+  distanceKm?: number | null;
+};
 
 // ── PRINT ────────────────────────────────────────────────────────────────────
 // Unlike Maintenance/Barista (one profile per provider, a flat day-rate), a

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { apiRequest } from "@/lib/queryClient";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
+import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
 
 export interface ShopFavItem {
   id: number;
@@ -50,6 +51,12 @@ export interface MarketingFavItem {
   type: string;
   rating: number;
   portfolioImages: string[];
+  location?: string;
+  available?: boolean;
+  // Real Marketing provider profile picture (users.profileImageUrl) — same fix
+  // already applied to Barista/Maintenance Favorites (without it the card always
+  // fell back to initials even when a real picture is set).
+  profileImageUrl?: string | null;
 }
 
 export interface MaintenanceFavItem {
@@ -100,6 +107,8 @@ interface FavoritesStore {
   syncMaintenance: (ids: number[], profiles: MaintenanceMarketplaceCard[]) => void;
   hydrateBaristaMarket: (ids: number[]) => void;
   syncBaristaMarket: (ids: number[], profiles: BaristaMarketplaceCard[]) => void;
+  hydrateMarketing: (ids: number[]) => void;
+  syncMarketing: (ids: number[], profiles: MarketingMarketplaceCard[]) => void;
 }
 
 export const useFavorites = create<FavoritesStore>((set, get) => ({
@@ -186,12 +195,20 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     })(),
 
   toggleMarketing: (item) =>
-    set((s) => {
-      const next = { ...s.marketing };
-      if (next[item.id]) delete next[item.id];
-      else next[item.id] = item;
-      return { marketing: next };
-    }),
+    (() => {
+      const wasFav = !!get().marketing[item.id];
+      set((s) => {
+        const next = { ...s.marketing };
+        if (wasFav) delete next[item.id];
+        else next[item.id] = item;
+        return { marketing: next };
+      });
+      if (wasFav) {
+        apiRequest("DELETE", `/api/marketing-favorites/${item.id}`).catch(() => {});
+      } else {
+        apiRequest("POST", "/api/marketing-favorites", { marketingUserId: item.id }).catch(() => {});
+      }
+    })(),
 
   toggleMaintenance: (item) =>
     (() => {
@@ -234,7 +251,10 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     })(),
 
   removeMarketing: (id) =>
-    set((s) => { const next = { ...s.marketing }; delete next[id]; return { marketing: next }; }),
+    (() => {
+      set((s) => { const next = { ...s.marketing }; delete next[id]; return { marketing: next }; });
+      apiRequest("DELETE", `/api/marketing-favorites/${id}`).catch(() => {});
+    })(),
 
   removeMaintenance: (id) =>
     (() => {
@@ -324,6 +344,39 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
         };
       }
       return { baristaMarket: next };
+    }),
+
+  hydrateMarketing: (ids) =>
+    set((s) => {
+      const next = { ...s.marketing };
+      for (const id of ids) {
+        if (!next[id]) {
+          next[id] = { id, name: "Marketing", initials: "M", type: "Agency", rating: 0, portfolioImages: [] };
+        }
+      }
+      return { marketing: next };
+    }),
+
+  syncMarketing: (ids, profiles) =>
+    set(() => {
+      const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
+      const next: Record<number, MarketingFavItem> = {};
+      for (const id of ids) {
+        const profile = profileMap.get(id);
+        if (!profile) continue;
+        next[id] = {
+          id: profile.userId,
+          name: profile.name,
+          initials: profile.initials,
+          type: profile.profileType,
+          rating: profile.rating / 10,
+          portfolioImages: profile.portfolioImages,
+          location: profile.location,
+          available: profile.isAvailable,
+          profileImageUrl: profile.profileImageUrl,
+        };
+      }
+      return { marketing: next };
     }),
 }));
 

@@ -15,6 +15,7 @@ const ROLE_TO_SERVICE: Partial<Record<string, NotificationService>> = {
   BARISTA_ACADEMY: "ACADEMY",
   BARISTA_MARKETPLACE: "BARISTA",
   MAINTENANCE: "MAINTENANCE",
+  MARKETING: "MARKETING",
 };
 
 export default function ProviderNotificationsPage() {

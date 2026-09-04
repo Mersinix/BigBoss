@@ -56,7 +56,6 @@ import DeliveryCommunication from "@/pages/delivery/communication";
 import DeliveryPerformance from "@/pages/delivery/performance";
 import DeliveryProfilPublic from "@/pages/delivery/profil-public";
 import { PrinterAccountShell } from "@/components/layout/printer-account-shell";
-import DriverAccountPage from "@/pages/driver/account";
 import DriverPlanningPage from "@/pages/driver/planning";
 import DriverWalletPage from "@/pages/driver/wallet";
 import DriverPaymentsPage from "@/pages/driver/payments";
@@ -472,13 +471,13 @@ function Router() {
         {() => (<PrinterAccountShell><ProtectedRoute component={PrinterProfilPublic} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
       <Route path="/printer">
-        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterDashboard} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterPerformance} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
 
       {/* ── Marketing account routes — top switcher shell instead of the sidebar,
           same organizational pattern as Print, see marketing-account-shell.tsx ── */}
       <Route path="/marketing-panel">
-        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingDashboard} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingPerformance} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
       </Route>
       <Route path="/marketing-panel/services">
         {() => (<MarketingAccountShell><ProtectedRoute component={MarketingServices} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
@@ -524,7 +523,7 @@ function Router() {
       {/* ── Barista Academy routes — top switcher shell instead of the sidebar, same
           organizational pattern as Barista Marketplace, see academy-account-shell.tsx ── */}
       <Route path="/barista-academy">
-        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyDashboard} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+        {() => (<AcademyAccountShell><ProtectedRoute component={AcademyPerformance} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
       </Route>
       <Route path="/barista-academy/courses">
         {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyCoursesPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
@@ -568,7 +567,7 @@ function Router() {
 
       {/* ── Barista Marketplace routes — top switcher shell instead of the sidebar, see barista-account-shell.tsx ── */}
       <Route path="/barista-marketplace">
-        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceDashboard} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplacePerformance} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/profile">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceProfilePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
@@ -611,6 +610,9 @@ function Router() {
           single wildcard route, same organizational pattern as every other
           professional account, see maintenance-account-shell.tsx ── */}
       <Route path="/maintenance-panel">
+        {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenancePerformancePage} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
+      </Route>
+      <Route path="/maintenance-panel/planning">
         {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenancePlanningPage} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
       </Route>
       <Route path="/maintenance-panel/profile">
@@ -798,7 +800,7 @@ function Router() {
           DashboardLayout for Supplier/Driver via DeliveryCompanyOrDashboardLayout — only the
           Delivery Company gets the new shell, matching this task's scope exactly. ── */}
       <Route path="/delivery">
-        {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryDashboard} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
+        {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryPerformance} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
       </Route>
       <Route path="/delivery/available">
         {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={AvailableDeliveriesPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
@@ -842,7 +844,7 @@ function Router() {
           by DELIVERY_COMPANY as-is) — Driver navigation now happens exclusively through
           these /driver/... routes instead. ── */}
       <Route path="/driver">
-        {() => (<DriverAccountShell><ProtectedRoute component={DriverAccountPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverPerformance} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
       <Route path="/driver/planning">
         {() => (<DriverAccountShell><ProtectedRoute component={DriverPlanningPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}

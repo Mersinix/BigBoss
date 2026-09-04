@@ -74,6 +74,7 @@ import {
   type AcademyCourseSession, type AcademyRegistration,
   type AcademyCourseCard, type AcademyRegistrationWithParties, type AcademyCourseSessionWithCourse,
   type AcademyRegistrationStatus, type AcademySessionStatus,
+  academyFavorites, academyReports, type AcademyFavorite, type AcademyReport,
 } from "@shared/schema";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
 
@@ -377,6 +378,13 @@ export interface IStorage {
   deleteAcademyCourse(id: number, academyUserId: number): Promise<void>;
   getPublishedAcademyCourses(filters?: { search?: string; level?: string; certification?: boolean }): Promise<AcademyCourseCard[]>;
   getAcademyCourseCard(id: number): Promise<AcademyCourseCard | undefined>;
+  getAcademyFavoritesByUser(userId: number): Promise<number[]>;
+  addAcademyFavorite(userId: number, courseId: number): Promise<void>;
+  removeAcademyFavorite(userId: number, courseId: number): Promise<void>;
+  createAcademyReport(cafeOwnerId: number, academyUserId: number, reason: string): Promise<AcademyReport>;
+  getAcademyReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(AcademyReport & { cafeOwnerName: string; academyName: string })[]>;
+  getAcademyReportsByOwner(cafeOwnerId: number): Promise<(AcademyReport & { academyName: string; academyProfileImageUrl: string | null; academyLocation: string | null })[]>;
+  resolveAcademyReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<AcademyReport | undefined>;
   getAcademySessionsForCourse(courseId: number): Promise<AcademyCourseSession[]>;
   getAcademySessionsForAcademy(academyUserId: number): Promise<AcademyCourseSessionWithCourse[]>;
   createAcademySession(academyUserId: number, data: { courseId: number; startDate: string; endDate?: string | null; capacity?: number | null }): Promise<AcademyCourseSession>;
@@ -5448,12 +5456,15 @@ export class DatabaseStorage implements IStorage {
     const academyUserIds = Array.from(new Set(filteredRows.map(({ course }) => course.academyUserId)));
     const statsMap = await this.computeAcademyReviewStats(academyUserIds);
 
-    const cards = filteredRows.map(({ course, user }) => {
+    const cards = filteredRows.map(({ course, user, profile }) => {
       const stats = statsMap.get(course.academyUserId);
       return {
         ...course,
         academyName: user.name,
         academyLocation: user.locationAddress ?? "",
+        academyProfileImageUrl: user.profileImageUrl ?? null,
+        academyDescription: profile?.description ?? "",
+        academyPhone: user.phone ?? null,
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
       } as AcademyCourseCard;
@@ -5472,9 +5483,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAcademyCourseCard(id: number): Promise<AcademyCourseCard | undefined> {
-    const [row] = await db.select({ course: academyCourses, user: users })
+    const [row] = await db.select({ course: academyCourses, user: users, profile: academyProfiles })
       .from(academyCourses)
       .innerJoin(users, eq(academyCourses.academyUserId, users.id))
+      .leftJoin(academyProfiles, eq(academyProfiles.userId, academyCourses.academyUserId))
       .where(eq(academyCourses.id, id));
     if (!row) return undefined;
     const stats = (await this.computeAcademyReviewStats([row.course.academyUserId])).get(row.course.academyUserId);
@@ -5482,9 +5494,79 @@ export class DatabaseStorage implements IStorage {
       ...row.course,
       academyName: row.user.name,
       academyLocation: row.user.locationAddress ?? "",
+      academyProfileImageUrl: row.user.profileImageUrl ?? null,
+      academyDescription: row.profile?.description ?? "",
+      academyPhone: row.user.phone ?? null,
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
     };
+  }
+
+  // Academy favorites — mirrors getMaintenanceFavoritesByUser/add/remove, but
+  // keyed by courseId (a Coffee Owner saves individual formations, not the
+  // Academy provider itself).
+  async getAcademyFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select({ courseId: academyFavorites.courseId })
+      .from(academyFavorites)
+      .where(eq(academyFavorites.userId, userId));
+    return rows.map((row) => row.courseId);
+  }
+
+  async addAcademyFavorite(userId: number, courseId: number): Promise<void> {
+    const [existing] = await db.select().from(academyFavorites).where(and(
+      eq(academyFavorites.userId, userId),
+      eq(academyFavorites.courseId, courseId),
+    ));
+    if (!existing) await db.insert(academyFavorites).values({ userId, courseId });
+  }
+
+  async removeAcademyFavorite(userId: number, courseId: number): Promise<void> {
+    await db.delete(academyFavorites).where(and(
+      eq(academyFavorites.userId, userId),
+      eq(academyFavorites.courseId, courseId),
+    ));
+  }
+
+  // Entity-level Academy reports ("Blacklist") — mirrors createMarketingReport/
+  // getMarketingReportsByOwner/resolveMarketingReport exactly.
+  async createAcademyReport(cafeOwnerId: number, academyUserId: number, reason: string): Promise<AcademyReport> {
+    const [created] = await db.insert(academyReports).values({ cafeOwnerId, academyUserId, reason }).returning();
+    return created;
+  }
+
+  async getAcademyReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(AcademyReport & { cafeOwnerName: string; academyName: string })[]> {
+    const rows = await db.select().from(academyReports)
+      .where(status ? eq(academyReports.status, status) : undefined)
+      .orderBy(desc(academyReports.createdAt));
+    if (rows.length === 0) return [];
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.academyUserId])));
+    const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
+    return rows.map((r) => ({ ...r, cafeOwnerName: userMap.get(r.cafeOwnerId) ?? "—", academyName: userMap.get(r.academyUserId) ?? "—" }));
+  }
+
+  async getAcademyReportsByOwner(cafeOwnerId: number): Promise<(AcademyReport & {
+    academyName: string; academyProfileImageUrl: string | null; academyLocation: string | null;
+  })[]> {
+    const rows = await db.select().from(academyReports)
+      .where(eq(academyReports.cafeOwnerId, cafeOwnerId))
+      .orderBy(desc(academyReports.createdAt));
+    if (rows.length === 0) return [];
+    const academyIds = Array.from(new Set(rows.map((r) => r.academyUserId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl, locationAddress: users.locationAddress })
+      .from(users).where(inArray(users.id, academyIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    return rows.map((r) => {
+      const a = map.get(r.academyUserId);
+      return { ...r, academyName: a?.name ?? "—", academyProfileImageUrl: a?.profileImageUrl ?? null, academyLocation: a?.locationAddress ?? null };
+    });
+  }
+
+  async resolveAcademyReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<AcademyReport | undefined> {
+    const [updated] = await db.update(academyReports)
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .where(eq(academyReports.id, id))
+      .returning();
+    return updated;
   }
 
   // ── Sessions ("Calendrier") ──

@@ -32,6 +32,9 @@ export type AcademyCourse = {
 export type AcademyCourseCard = AcademyCourse & {
   academyName: string;
   academyLocation: string;
+  academyProfileImageUrl: string | null;
+  academyDescription: string;
+  academyPhone: string | null;
   rating: number; // x10, e.g. 47 = 4.7
   reviewCount: number;
 };
@@ -135,6 +138,17 @@ export function useAcademyCourses(filters?: { search?: string; level?: string; c
   });
 }
 
+// Single published course detail — real-data source for the Coffee Owner
+// details modal (Part 6/8). Same shape as the list cards (AcademyCourseCard),
+// just resolved for one id via GET /api/academy/courses/:id.
+export function useAcademyCourseDetail(courseId: number | null) {
+  return useQuery<AcademyCourseCard>({
+    queryKey: ["/api/academy/courses", courseId],
+    queryFn: () => getJson(`/api/academy/courses/${courseId}`),
+    enabled: courseId != null,
+  });
+}
+
 export function useAcademyCourseSessions(courseId: number | null) {
   return useQuery<AcademyCourseSession[]>({
     queryKey: ["/api/academy/courses", courseId, "sessions"],
@@ -201,6 +215,36 @@ export function useCreateAcademyReview() {
       qc.invalidateQueries({ queryKey: ["/api/academy/courses"] });
       qc.invalidateQueries({ queryKey: ["/api/academy/registrations"] });
     },
+  });
+}
+
+// Entity-level report ("Blacklist") — a Coffee Owner flagging an Academy
+// account itself, mirrors useReportMarketingProvider/useMyMarketingReports.
+export function useReportAcademy() {
+  return useMutation({
+    mutationFn: ({ academyUserId, reason }: { academyUserId: number; reason: string }) =>
+      mutate("POST", `/api/academy/${academyUserId}/report`, { reason }),
+  });
+}
+
+export type MyAcademyReport = {
+  id: number;
+  cafeOwnerId: number;
+  academyUserId: number;
+  reason: string;
+  status: "PENDING" | "RESOLVED" | "DISMISSED";
+  createdAt: string;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  academyName: string;
+  academyProfileImageUrl: string | null;
+  academyLocation: string | null;
+};
+
+export function useMyAcademyReports() {
+  return useQuery<MyAcademyReport[]>({
+    queryKey: ["/api/academy/reports/mine"],
+    queryFn: () => getJson("/api/academy/reports/mine"),
   });
 }
 

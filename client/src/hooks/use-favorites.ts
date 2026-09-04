@@ -3,6 +3,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
+import type { AcademyCourseCard } from "@/hooks/use-barista-academy";
 
 export interface ShopFavItem {
   id: number;
@@ -28,6 +29,12 @@ export interface AcademyFavItem {
   duration: string;
   rating: number;
   price: number;
+  level?: string;
+  location?: string;
+  hasCertification?: boolean;
+  // Real formation image (imageUrl) or Academy public photo fallback — without
+  // this the Favorites entry had no image to show.
+  imageUrl?: string | null;
 }
 
 export interface BaristaMktFavItem {
@@ -109,6 +116,8 @@ interface FavoritesStore {
   syncBaristaMarket: (ids: number[], profiles: BaristaMarketplaceCard[]) => void;
   hydrateMarketing: (ids: number[]) => void;
   syncMarketing: (ids: number[], profiles: MarketingMarketplaceCard[]) => void;
+  hydrateAcademy: (ids: number[]) => void;
+  syncAcademy: (ids: number[], courses: AcademyCourseCard[]) => void;
 }
 
 export const useFavorites = create<FavoritesStore>((set, get) => ({
@@ -171,12 +180,20 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     }),
 
   toggleAcademy: (item) =>
-    set((s) => {
-      const next = { ...s.academy };
-      if (next[item.id]) delete next[item.id];
-      else next[item.id] = item;
-      return { academy: next };
-    }),
+    (() => {
+      const wasFav = !!get().academy[item.id];
+      set((s) => {
+        const next = { ...s.academy };
+        if (wasFav) delete next[item.id];
+        else next[item.id] = item;
+        return { academy: next };
+      });
+      if (wasFav) {
+        apiRequest("DELETE", `/api/academy-favorites/${item.id}`).catch(() => {});
+      } else {
+        apiRequest("POST", "/api/academy-favorites", { courseId: item.id }).catch(() => {});
+      }
+    })(),
 
   toggleBaristaMarket: (item) =>
     (() => {
@@ -242,7 +259,10 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     set((s) => { const next = { ...s.print }; delete next[id]; return { print: next }; }),
 
   removeAcademy: (id) =>
-    set((s) => { const next = { ...s.academy }; delete next[id]; return { academy: next }; }),
+    (() => {
+      set((s) => { const next = { ...s.academy }; delete next[id]; return { academy: next }; });
+      apiRequest("DELETE", `/api/academy-favorites/${id}`).catch(() => {});
+    })(),
 
   removeBaristaMarket: (id) =>
     (() => {
@@ -377,6 +397,40 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
         };
       }
       return { marketing: next };
+    }),
+
+  hydrateAcademy: (ids) =>
+    set((s) => {
+      const next = { ...s.academy };
+      for (const id of ids) {
+        if (!next[id]) {
+          next[id] = { id, title: "Formation", provider: "Academy", duration: "", rating: 0, price: 0 };
+        }
+      }
+      return { academy: next };
+    }),
+
+  syncAcademy: (ids, courses) =>
+    set(() => {
+      const courseMap = new Map(courses.map((course) => [course.id, course]));
+      const next: Record<number, AcademyFavItem> = {};
+      for (const id of ids) {
+        const course = courseMap.get(id);
+        if (!course) continue;
+        next[id] = {
+          id: course.id,
+          title: course.title,
+          provider: course.academyName,
+          duration: course.duration,
+          rating: course.rating / 10,
+          price: course.priceInCents,
+          level: course.level,
+          location: course.location || course.academyLocation,
+          hasCertification: course.hasCertification,
+          imageUrl: course.imageUrl ?? course.academyProfileImageUrl,
+        };
+      }
+      return { academy: next };
     }),
 }));
 

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import baristaHeroImg from "@assets/8d80708f-be87-4e8d-8805-f60e3c292914-1000x562.5-rjZKXkudAsN4bH_1780680229193.jpg";
 import { useAuth } from "@/hooks/use-auth";
@@ -9,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAvatarUrl } from "@/lib/avatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
@@ -32,12 +35,17 @@ import {
   Moon,
   MapPin,
   Send,
+  Zap,
+  Ban,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import {
   useAcademyCourses, useAcademyCourseSessions, useCreateAcademyRegistration,
   type AcademyCourseCard, type AcademyCourseLevel,
 } from "@/hooks/use-barista-academy";
+import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
+import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
+import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-modal";
 
 // Barista Academy — split out of the former combined /barista page into its
 // own independent page/service (route /academy). This is now backed by REAL
@@ -86,18 +94,18 @@ const LEVEL_LABELS: Record<AcademyCourseLevel, string> = {
   BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert",
 };
 
-function StarRating({ rating }: { rating: number }) {
+function StarRating({ rating, isDark = false }: { rating: number; isDark?: boolean }) {
   return (
     <span className="flex items-center gap-0.5 text-amber-400">
       <Star className="w-3 h-3 fill-amber-400" />
-      <span className="text-[11px] font-semibold text-gray-700">{rating.toFixed(1)}</span>
+      <span className={`text-[11px] font-semibold ${isDark ? "text-gray-200" : "text-gray-700"}`}>{rating.toFixed(1)}</span>
     </span>
   );
 }
 
 // ── Enrollment dialog ─────────────────────────────────────────────────────────
 
-function EnrollDialog({ course, open, onClose, isDark }: { course: AcademyCourseCard | null; open: boolean; onClose: () => void; isDark: boolean }) {
+export function EnrollDialog({ course, open, onClose, isDark }: { course: AcademyCourseCard | null; open: boolean; onClose: () => void; isDark: boolean }) {
   const t = useTheme(isDark);
   const fmt = useFormatCurrency();
   const { toast } = useToast();
@@ -139,16 +147,16 @@ function EnrollDialog({ course, open, onClose, isDark }: { course: AcademyCourse
 
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
-      <DialogContent className="sm:max-w-md rounded-2xl border-0 shadow-2xl">
+      <DialogContent className={`sm:max-w-md rounded-2xl border-0 shadow-2xl ${t.cardBg} ${t.textPrimary}`}>
         <VisuallyHidden><DialogTitle>S'inscrire à {course.title}</DialogTitle></VisuallyHidden>
         <div className="space-y-3">
           <div>
-            <h2 className="font-bold text-base leading-tight">{course.title}</h2>
+            <h2 className={`font-bold text-base leading-tight ${t.textPrimary}`}>{course.title}</h2>
             <p className={`text-xs ${t.textMuted}`}>{course.academyName} · {fmt(course.priceInCents)} / participant</p>
           </div>
           {sessions.length > 0 && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Session</label>
+              <label className={`text-xs font-medium mb-1 block ${t.textMuted}`}>Session</label>
               <Select value={sessionId} onValueChange={setSessionId}>
                 <SelectTrigger className={t.inputBg} data-testid="select-enroll-session"><SelectValue placeholder="Choisir une session (optionnel)" /></SelectTrigger>
                 <SelectContent className={t.selectContent}>
@@ -160,7 +168,7 @@ function EnrollDialog({ course, open, onClose, isDark }: { course: AcademyCourse
             </div>
           )}
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Nombre de participants</label>
+            <label className={`text-xs font-medium mb-1 block ${t.textMuted}`}>Nombre de participants</label>
             <Input type="number" min={1} value={participantCount} onChange={(e) => setParticipantCount(e.target.value)} className={t.inputBg} data-testid="input-enroll-participants" />
           </div>
           <Textarea
@@ -172,7 +180,13 @@ function EnrollDialog({ course, open, onClose, isDark }: { course: AcademyCourse
             data-testid="input-enroll-notes"
           />
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={onClose}>Annuler</Button>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className={isDark ? "border-gray-700 text-gray-200 hover:bg-gray-700 hover:text-white" : "border-gray-200 text-gray-700 hover:bg-gray-50"}
+            >
+              Annuler
+            </Button>
             <Button
               disabled={createRegistration.isPending}
               onClick={submit}
@@ -190,16 +204,21 @@ function EnrollDialog({ course, open, onClose, isDark }: { course: AcademyCourse
 }
 
 // ── Training Card ─────────────────────────────────────────────────────────────
+// Barista marketplace card as the visual/UX reference (Part 3): left = photo,
+// right = info, whole card is the click target opening the details modal.
+// Unlike Marketing's card, Barista's OWN card keeps its action buttons
+// (Heart favorite + primary action) with stopPropagation — Academy follows
+// that same reference exactly (Part 24).
 
 function TrainingCard({
   course,
   canAct,
-  onEnroll,
+  onOpenDetail,
   isDark,
 }: {
   course: AcademyCourseCard;
   canAct: boolean;
-  onEnroll: (course: AcademyCourseCard) => void;
+  onOpenDetail: (course: AcademyCourseCard) => void;
   isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
@@ -207,95 +226,97 @@ function TrainingCard({
   const faved = useFavorites((s) => !!s.academy[course.id]);
   const toggleAcademy = useFavorites((s) => s.toggleAcademy);
 
+  // First real image: the formation's own imageUrl if the Academy set one,
+  // otherwise the Academy's public photo/logo, otherwise the existing
+  // platform-safe avatar fallback (Part 4) — never a fabricated image.
+  const coverImage = course.imageUrl || course.academyProfileImageUrl;
+
   return (
     <div
       data-testid={`card-training-${course.id}`}
-      className={`group rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
+      onClick={() => onOpenDetail(course)}
+      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
     >
-      <div className="h-16 bg-gradient-to-br from-indigo-500 to-violet-700 flex items-center justify-center relative">
-        <button
-          className="absolute top-2 left-2 w-6 h-6 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform z-10"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleAcademy({
-              id: course.id,
-              title: course.title,
-              provider: course.academyName,
-              duration: course.duration,
-              rating: course.rating / 10,
-              price: course.priceInCents,
-            });
-          }}
-          data-testid={`button-fav-academy-${course.id}`}
-        >
-          <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
-        </button>
-        <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-          <GraduationCap className="w-5 h-5 text-white" />
-        </div>
+      <button
+        className="absolute top-2 right-2 z-10 w-6 h-6 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleAcademy({
+            id: course.id,
+            title: course.title,
+            provider: course.academyName,
+            duration: course.duration,
+            rating: course.rating / 10,
+            price: course.priceInCents,
+            level: course.level,
+            location: course.location || course.academyLocation,
+            hasCertification: course.hasCertification,
+            imageUrl: coverImage,
+          });
+        }}
+        data-testid={`button-fav-academy-${course.id}`}
+      >
+        <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+      </button>
+
+      {/* Left — photo (formation/Academy image, existing avatar fallback) */}
+      <div className="w-2/5 shrink-0 relative">
+        <Avatar className="w-full h-full rounded-none">
+          <AvatarImage src={getAvatarUrl({ profileImageUrl: coverImage })} alt={course.title} className="object-cover" />
+          <AvatarFallback className="rounded-none bg-indigo-100 flex items-center justify-center">
+            <GraduationCap className="w-8 h-8 text-indigo-500" />
+          </AvatarFallback>
+        </Avatar>
         {course.hasCertification && (
-          <div className="absolute top-2 right-2">
-            <Badge className="bg-amber-400/90 text-amber-900 text-[10px] border-0 px-1.5 py-0 font-semibold">
-              <Award className="w-2.5 h-2.5 mr-0.5 inline" />
-              Certifié
-            </Badge>
-          </div>
+          <span className="absolute bottom-2 left-2 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/90 text-amber-900">
+            <Award className="w-2.5 h-2.5" /> Certifié
+          </span>
         )}
       </div>
 
-      <div className="p-3 flex-1 flex flex-col gap-2">
-        <div className="flex items-start justify-between gap-1">
-          <h3 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-indigo-600 transition-colors">
-            {course.title}
-          </h3>
-          <Badge className={`text-[10px] shrink-0 border-0 px-1.5 ${LEVEL_COLORS[course.level]}`}>
+      {/* Right — information */}
+      <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
+        <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-indigo-600 transition-colors pr-5 ${t.textPrimary}`}>
+          {course.title}
+        </h3>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={`text-[10px] border-0 px-1.5 ${LEVEL_COLORS[course.level]}`}>
             {LEVEL_LABELS[course.level]}
           </Badge>
+          {(course.location || course.academyLocation) && (
+            <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
+              <MapPin className="w-2.5 h-2.5" />
+              {course.location || course.academyLocation}
+            </span>
+          )}
         </div>
 
-        <p className={`text-xs font-medium ${t.textMuted}`}>{course.academyName}</p>
-        <p className={`text-xs line-clamp-2 ${t.textSubtle}`}>{course.description}</p>
+        <p className={`text-xs font-medium truncate ${t.textMuted}`}>{course.academyName}</p>
 
-        <div className={`flex items-center gap-3 text-[11px] flex-wrap ${t.textMuted}`}>
+        <div className="flex items-center gap-2">
           {course.reviewCount > 0 ? (
             <>
-              <StarRating rating={course.rating / 10} />
-              <span>({course.reviewCount})</span>
+              <StarRating rating={course.rating / 10} isDark={isDark} />
+              <span className="text-[11px] text-gray-400">({course.reviewCount})</span>
             </>
           ) : (
-            <span className={t.textSubtle}>Aucun avis</span>
+            <span className="text-[11px] text-gray-400">Aucun avis</span>
           )}
           {course.duration && (
-            <span className="flex items-center gap-0.5">
-              <Clock className="w-3 h-3" />
+            <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
+              <Clock className="w-2.5 h-2.5" />
               {course.duration}
             </span>
           )}
-          {course.academyLocation && (
-            <span className="flex items-center gap-0.5">
-              <MapPin className="w-3 h-3" />
-              {course.academyLocation}
-            </span>
-          )}
         </div>
 
+        {/* S'inscrire moved into the details modal (Part 4) — the card itself
+            is now the sole click target, mirroring the Barista mapped card. */}
         <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-[10px] ${t.textSubtle}`}>Prix</p>
-              <p className="font-bold text-sm text-indigo-600">
-                {fmt(course.priceInCents)}
-              </p>
-            </div>
-            <Button
-              size="sm"
-              className="h-7 text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3"
-              onClick={() => onEnroll(course)}
-              data-testid={`button-enroll-${course.id}`}
-            >
-              S'inscrire
-            </Button>
-          </div>
+          <p className={`text-[10px] ${t.textSubtle}`}>Prix</p>
+          <p className="font-bold text-sm text-indigo-600">
+            {fmt(course.priceInCents)}
+          </p>
         </div>
       </div>
     </div>
@@ -317,6 +338,9 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   const [trainingLevel, setTrainingLevel] = useState("");
   const [trainingCert, setTrainingCert] = useState("");
   const [enrollTarget, setEnrollTarget] = useState<AcademyCourseCard | null>(null);
+  const [detailCourseId, setDetailCourseId] = useState<number | null>(null);
+  const [fastSearchOpen, setFastSearchOpen] = useState(false);
+  const [blacklistOpen, setBlacklistOpen] = useState(false);
 
   const { data: courses = [], isLoading } = useAcademyCourses({
     search: trainingSearch || undefined,
@@ -329,6 +353,18 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   const certifiedCount = useMemo(() => courses.filter((c) => c.hasCertification).length, [courses]);
 
   const canAct = !!user && user.role === "CAFE_OWNER" && accessLevel === "approved";
+
+  // Hydrate favorite hearts from the database, mirroring barista-page.tsx's
+  // pattern — without this Academy favorites never survived a page reload.
+  const { data: favoriteIds = [] } = useQuery<number[]>({
+    queryKey: ["/api/academy-favorites"],
+    enabled: !!user && accessLevel === "approved",
+  });
+  const syncAcademy = useFavorites((s) => s.syncAcademy);
+  useEffect(() => {
+    if (isLoading) return;
+    syncAcademy(favoriteIds, courses);
+  }, [favoriteIds, courses, isLoading, syncAcademy]);
 
   const handleEnroll = (course: AcademyCourseCard) => {
     if (!canAct) {
@@ -350,6 +386,28 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
         <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-indigo-950/90" : "bg-gradient-to-br from-indigo-600/90 via-indigo-700/85 to-violet-700/90"}`} />
         <div className="relative">
           <div className="flex justify-end items-center gap-2 mb-9">
+            {canAct && (
+              <button
+                onClick={() => setBlacklistOpen(true)}
+                aria-label="Académies signalées"
+                title="Académies signalées"
+                data-testid="button-open-blacklist"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+              >
+                <Ban className="w-4 h-4" />
+              </button>
+            )}
+            {canAct && (
+              <button
+                onClick={() => setFastSearchOpen(true)}
+                aria-label="Fast Search"
+                title="Fast Search — parcourir les formations"
+                data-testid="button-open-fast-search"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-indigo-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+              >
+                <Zap className="w-4 h-4" />
+              </button>
+            )}
             <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
@@ -461,9 +519,9 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {[...Array(10)].map((_, i) => (
-                <div key={i} className={`h-56 rounded-2xl border animate-pulse ${t.cardBg}`} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className={`h-36 rounded-2xl border animate-pulse ${t.cardBg}`} />
               ))}
             </div>
           ) : filteredTraining.length === 0 ? (
@@ -477,13 +535,13 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredTraining.map((course) => (
                 <TrainingCard
                   key={course.id}
                   course={course}
                   canAct={canAct}
-                  onEnroll={handleEnroll}
+                  onOpenDetail={(c) => setDetailCourseId(c.id)}
                   isDark={isDark}
                 />
               ))}
@@ -493,6 +551,25 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
       </div>
       </>
       )}
+
+      {/* Fast Search — same `courses` list as the grid above, rendered before
+          the Details modal so it stays open underneath when both are mounted. */}
+      <AcademyFastSearch
+        open={fastSearchOpen}
+        onClose={() => setFastSearchOpen(false)}
+        courses={courses}
+        onEnroll={(c) => handleEnroll(c)}
+        onOpenDetail={(c) => setDetailCourseId(c.id)}
+      />
+
+      <AcademyDetailModal
+        courseId={detailCourseId}
+        open={detailCourseId != null}
+        onClose={() => setDetailCourseId(null)}
+        onEnroll={(c) => { setDetailCourseId(null); handleEnroll(c); }}
+      />
+
+      <AcademyBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} />
 
       <EnrollDialog course={enrollTarget} open={!!enrollTarget} onClose={() => setEnrollTarget(null)} isDark={isDark} />
     </div>

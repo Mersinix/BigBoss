@@ -1952,6 +1952,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.get("/api/admin/academy/reports", requireAdmin, async (req: any, res) => {
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    res.json(await storage.getAcademyReports(status));
+  });
+
+  app.patch("/api/admin/academy/reports/:id/resolve", requireAdmin, async (req: any, res) => {
+    try {
+      const { status, resolutionNote } = z.object({
+        status: z.enum(["RESOLVED", "DISMISSED"]),
+        resolutionNote: z.string().max(1000).optional(),
+      }).parse(req.body);
+      const report = await storage.resolveAcademyReport(Number(req.params.id), status, resolutionNote);
+      if (!report) return res.status(404).json({ message: "Not found" });
+      broadcast("admin_academy_report_created", { academyUserId: report.academyUserId });
+      res.json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid data" });
+    }
+  });
+
   // Coffee Owner self-service cancellation (Part 18) — only while still PENDING.
   app.patch("/api/maintenance/reservations/:id/cancel", requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
@@ -2575,6 +2596,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const course = await storage.getAcademyCourseCard(Number(req.params.id));
       if (!course || !course.isPublished) return res.status(404).json({ message: "Course not found" });
+      // Same visibility rule as the list endpoint (getPublishedAcademyCourses):
+      // an Academy that disabled "Afficher mon académie sur /academy" must not
+      // be reachable via a direct course id either (e.g. a stale favorite/link).
+      const academy = await storage.getUser(course.academyUserId);
+      const profile = await storage.getAcademyProfile(course.academyUserId);
+      if (!academy || academy.status !== "approved" || profile?.marketplaceVisible === false) {
+        return res.status(404).json({ message: "Course not found" });
+      }
       res.json(course);
     } catch { res.status(500).json({ message: "Failed to load course" }); }
   });
@@ -2584,6 +2613,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sessions = await storage.getAcademySessionsForCourse(Number(req.params.id));
       res.json(sessions.filter((s) => s.status === "UPCOMING"));
     } catch { res.status(500).json({ message: "Failed to load sessions" }); }
+  });
+
+  // ── Academy favorites — mirrors maintenance-favorites endpoint-for-endpoint,
+  // keyed by courseId instead of a provider id (see academyFavorites note). ──
+
+  app.get("/api/academy-favorites", requireAuth, async (req: any, res) => {
+    res.json(await storage.getAcademyFavoritesByUser(req.session.userId));
+  });
+
+  app.post("/api/academy-favorites", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const courseId = Number(req.body?.courseId);
+    if (!courseId) return res.status(400).json({ message: "courseId is required" });
+    await storage.addAcademyFavorite(user.id, courseId);
+    broadcastToUsers([user.id], "academy_favorite_updated", { courseId });
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete("/api/academy-favorites/:courseId", requireAuth, async (req: any, res) => {
+    await storage.removeAcademyFavorite(req.session.userId, Number(req.params.courseId));
+    broadcastToUsers([req.session.userId], "academy_favorite_updated", { courseId: Number(req.params.courseId) });
+    res.json({ ok: true });
+  });
+
+  // Entity-level report ("Blacklist") — a Coffee Owner flagging an Academy
+  // account itself, mirrors POST /api/marketing/:userId/report exactly.
+  app.post("/api/academy/:userId/report", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const academyUserId = Number(req.params.userId);
+    const target = await storage.getUser(academyUserId);
+    if (!target || target.role !== "BARISTA_ACADEMY") return res.status(404).json({ message: "Academy account not found" });
+    try {
+      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
+      const report = await storage.createAcademyReport(user.id, academyUserId, reason);
+      broadcast("admin_academy_report_created", { academyUserId });
+      const adminIds = await storage.getAdminUserIds();
+      await notifyMany({
+        userIds: adminIds,
+        service: "ADMIN", type: "academy_report_created", priority: "URGENT",
+        title: "Académie signalée",
+        message: `${user.name} a signalé ${target.name} (Academy) : "${reason}".`,
+        entityType: "academy_report", entityId: report.id,
+        prefKey: "reports",
+        dedupeKeyPrefix: `admin:academy_report_created:${report.id}`,
+      });
+      res.status(201).json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid report data" });
+    }
+  });
+
+  app.get("/api/academy/reports/mine", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    res.json(await storage.getAcademyReportsByOwner(user.id));
   });
 
   app.get("/api/academy/profile/:userId", requireAuth, async (req: any, res) => {

@@ -1,6 +1,5 @@
 import {
   Truck,
-  LayoutDashboard,
   CalendarClock,
   Receipt,
   Briefcase,
@@ -12,13 +11,14 @@ import {
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure (Part 5/14) — same as every other
-// professional account shell now. "Mon Compte" is relabeled "Dashboard" for
-// cross-account consistency (same route/page, unchanged); Portefeuille and
-// Informations sur les activités move into the new Performance switcher
-// (Revenue/Analytics), Paiements stays its own business-specific tab.
+// Standard cross-account structure — Performance first (replaces the former
+// standalone "Mon Compte"/Dashboard tab; its content is already reused as
+// Performance > Dashboard, see pages/driver/performance.tsx), then
+// business-specific tabs (Planification stays a real separate page — never
+// to be confused with Performance > Dashboard), Profil Public, Communication,
+// Paramètres.
 const TABS: ProfessionalAccountTab[] = [
-  { path: "/driver", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { path: "/driver", label: "Performance", icon: TrendingUp, exact: true },
   { path: "/driver/planning", label: "Planification", icon: CalendarClock },
   { path: "/driver/deliveries", label: "Livraisons", icon: Truck },
   { path: "/driver/payments", label: "Paiements", icon: Receipt },
@@ -26,7 +26,6 @@ const TABS: ProfessionalAccountTab[] = [
   { path: "/driver/rewards", label: "Récompenses", icon: Award },
   { path: "/driver/profil-public", label: "Profil Public", icon: Eye },
   { path: "/driver/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
-  { path: "/driver/performance", label: "Performance", icon: TrendingUp },
   { path: "/driver/settings", label: "Paramètres", icon: Settings },
 ];
 

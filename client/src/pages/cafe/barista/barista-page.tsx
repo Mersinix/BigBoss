@@ -102,11 +102,11 @@ const BARISTA_LEVEL_LABELS: Record<string, string> = {
 
 // ── Star Rating ───────────────────────────────────────────────────────────────
 
-function StarRating({ rating }: { rating: number }) {
+function StarRating({ rating, isDark = false }: { rating: number; isDark?: boolean }) {
   return (
     <span className="flex items-center gap-0.5 text-amber-400">
       <Star className="w-3 h-3 fill-amber-400" />
-      <span className="text-[11px] font-semibold text-gray-700">{rating.toFixed(1)}</span>
+      <span className={`text-[11px] font-semibold ${isDark ? "text-gray-200" : "text-gray-700"}`}>{rating.toFixed(1)}</span>
     </span>
   );
 }
@@ -240,14 +240,12 @@ export function RecruitDialog({
 function BaristaCard({
   barista,
   canAct,
-  onRecruit,
   onChat,
   onOpenDetail,
   isDark,
 }: {
   barista: BaristaMarketplaceCard;
   canAct: boolean;
-  onRecruit: (barista: BaristaMarketplaceCard) => void;
   onChat: (barista: BaristaMarketplaceCard) => void;
   onOpenDetail: (barista: BaristaMarketplaceCard) => void;
   isDark: boolean;
@@ -302,7 +300,7 @@ function BaristaCard({
 
       {/* Right half — information */}
       <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
-        <h3 className="font-bold text-sm leading-tight truncate group-hover:text-green-600 transition-colors pr-5">
+        <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-green-600 transition-colors pr-5 ${t.textPrimary}`}>
           {barista.name}
         </h3>
         <div className="flex items-center gap-2 flex-wrap">
@@ -318,7 +316,7 @@ function BaristaCard({
         </div>
 
         <div className="flex items-center gap-2">
-          <StarRating rating={barista.rating / 10} />
+          <StarRating rating={barista.rating / 10} isDark={isDark} />
           <span className="text-[11px] text-gray-400">({barista.reviewCount} avis)</span>
         </div>
 
@@ -342,6 +340,9 @@ function BaristaCard({
           </div>
         )}
 
+        {/* Recruter moved into the details modal (Part 6/8) — the card itself
+            is now the primary click target for it; the quick Message shortcut
+            stays here since only Recruter was asked to move. */}
         <div className={`mt-auto pt-2 border-t ${t.border}`}>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
@@ -360,15 +361,6 @@ function BaristaCard({
                 onClick={() => onChat(barista)}
               >
                 <MessageCircle className="w-3 h-3" />
-              </Button>
-              <Button
-                size="sm"
-                className="h-7 text-[11px] bg-green-600 hover:bg-green-700 text-white rounded-lg px-3"
-                data-testid={`button-hire-barista-${barista.userId}`}
-                disabled={!canAct || !barista.available}
-                onClick={() => onRecruit(barista)}
-              >
-                {barista.available ? "Recruter" : "Indisponible"}
               </Button>
             </div>
           </div>
@@ -694,7 +686,6 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   key={barista.userId}
                   barista={barista}
                   canAct={canAct}
-                  onRecruit={handleRecruit}
                   onChat={handleChat}
                   onOpenDetail={(b) => setDetailBaristaId(b.userId)}
                   isDark={isDark}

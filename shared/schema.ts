@@ -1041,6 +1041,40 @@ export type AcademyCourseLevel = 'BEGINNER' | 'ADVANCED' | 'EXPERT';
 export type AcademyRegistrationStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
 export type AcademySessionStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
+// Coffee Owner favorites over Academy formations (courses) — mirrors
+// maintenanceFavorites/marketingFavorites exactly (same shape, same
+// persistence pattern), but keyed by courseId rather than a provider id since
+// a Coffee Owner browses/saves individual formations, not the Academy itself.
+export const academyFavorites = pgTable("academy_favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  courseId: integer("course_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Entity-level report ("Blacklist") — a Coffee Owner flagging an Academy
+// account itself, mirrors marketingReports/maintenanceReports/baristaReports
+// exactly (own table, own service scope, never shared with another service's
+// blacklist).
+export const academyReportStatusEnum = pgEnum('academy_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+
+export const academyReports = pgTable("academy_reports", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  academyUserId: integer("academy_user_id").notNull(),
+  reason: text("reason").notNull(),
+  status: academyReportStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNote: text("resolution_note"),
+}, (table) => ({
+  academyUserIdx: index("academy_reports_academy_user_idx").on(table.academyUserId),
+  statusIdx: index("academy_reports_status_idx").on(table.status),
+}));
+
+export const insertAcademyFavoriteSchema = createInsertSchema(academyFavorites).omit({ id: true, createdAt: true });
+export const insertAcademyReportSchema = createInsertSchema(academyReports).omit({ id: true, createdAt: true, resolvedAt: true });
+
 export type AcademyProfile = typeof academyProfiles.$inferSelect;
 export type InsertAcademyProfile = typeof academyProfiles.$inferInsert;
 export type AcademyCourse = typeof academyCourses.$inferSelect;
@@ -1049,13 +1083,22 @@ export type AcademyCourseSession = typeof academyCourseSessions.$inferSelect;
 export type InsertAcademyCourseSession = typeof academyCourseSessions.$inferInsert;
 export type AcademyRegistration = typeof academyRegistrations.$inferSelect;
 export type InsertAcademyRegistration = typeof academyRegistrations.$inferInsert;
+export type AcademyFavorite = typeof academyFavorites.$inferSelect;
+export type AcademyReport = typeof academyReports.$inferSelect;
+export type InsertAcademyReport = typeof academyReports.$inferInsert;
 
 // Public marketplace card — what /academy actually renders. Rating/reviewCount
 // are always computed live from supplierProductReviews (mirrors
-// BaristaMarketplaceCard's own approach) rather than stored.
+// BaristaMarketplaceCard's own approach) rather than stored. academyXxx fields
+// beyond name/location surface the Academy's own public profile (Espace
+// Barista Academy → Profil Public) so the card/modal never need a second
+// fetch — same reasoning as MarketingMarketplaceCard's card shape.
 export type AcademyCourseCard = AcademyCourse & {
   academyName: string;
   academyLocation: string;
+  academyProfileImageUrl: string | null;
+  academyDescription: string;
+  academyPhone: string | null;
   rating: number; // 0-50, i.e. x10
   reviewCount: number;
 };

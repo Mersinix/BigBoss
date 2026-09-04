@@ -94,11 +94,11 @@ function providerTypeColor(type: string) { return PROVIDER_TYPE_COLORS[type] ?? 
 
 // ── Star Rating ───────────────────────────────────────────────────────────────
 
-function StarRating({ rating }: { rating: number }) {
+function StarRating({ rating, isDark = false }: { rating: number; isDark?: boolean }) {
   return (
     <span className="flex items-center gap-0.5 text-amber-400">
       <Star className="w-3 h-3 fill-amber-400" />
-      <span className="text-[11px] font-semibold text-gray-700">{rating.toFixed(1)}</span>
+      <span className={`text-[11px] font-semibold ${isDark ? "text-gray-200" : "text-gray-700"}`}>{rating.toFixed(1)}</span>
     </span>
   );
 }
@@ -227,7 +227,7 @@ function ProviderCard({
 
       {/* Right — information */}
       <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
-        <h3 className="font-bold text-sm leading-tight truncate group-hover:text-purple-600 transition-colors pr-5">
+        <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-purple-600 transition-colors pr-5 ${t.textPrimary}`}>
           {provider.name}
         </h3>
         <div className="flex items-center gap-2 flex-wrap">
@@ -240,7 +240,7 @@ function ProviderCard({
         </div>
 
         <div className="flex items-center gap-2">
-          <StarRating rating={provider.rating / 10} />
+          <StarRating rating={provider.rating / 10} isDark={isDark} />
           <span className="text-[11px] text-gray-400">({provider.reviewCount} avis)</span>
         </div>
 

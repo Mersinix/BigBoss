@@ -138,7 +138,7 @@ function AgentCard({
       </div>
 
       <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
-        <h3 className="font-bold text-sm leading-tight truncate group-hover:text-orange-600 transition-colors pr-5">{agent.name}</h3>
+        <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-orange-600 transition-colors pr-5 ${t.textPrimary}`}>{agent.name}</h3>
         <p className={`text-[11px] truncate ${t.textMuted}`}>{agent.jobTitle}</p>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className={`text-[10px] border-0 px-1.5 flex items-center gap-0.5 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>

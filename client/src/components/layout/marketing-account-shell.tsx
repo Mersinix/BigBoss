@@ -1,5 +1,4 @@
 import {
-  LayoutDashboard,
   Megaphone,
   Briefcase,
   Users,
@@ -11,19 +10,19 @@ import {
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure (Part 5/14): Dashboard, business-specific
-// tabs, Profil Public, Communication, Performance, Paramètres — Marketing is
-// the visual/structural reference every other professional account shell now
+// Standard cross-account structure: Performance (first, replaces the former
+// standalone Dashboard tab — see professional-account-shell.tsx/performance.tsx),
+// business-specific tabs, Profil Public, Communication, Paramètres — Marketing
+// is the visual/structural reference every other professional account shell
 // follows via the shared ProfessionalAccountShell.
 const TABS: ProfessionalAccountTab[] = [
-  { path: "/marketing-panel", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { path: "/marketing-panel", label: "Performance", icon: TrendingUp, exact: true },
   { path: "/marketing-panel/services", label: "Services", icon: Megaphone },
   { path: "/marketing-panel/projects", label: "Projets", icon: Briefcase },
   { path: "/marketing-panel/clients", label: "Clients", icon: Users },
   { path: "/marketing-panel/invoices", label: "Devis & Factures", icon: FileText },
   { path: "/marketing-panel/profil-public", label: "Profil Public", icon: Eye },
   { path: "/marketing-panel/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
-  { path: "/marketing-panel/performance", label: "Performance", icon: TrendingUp },
   { path: "/marketing-panel/settings", label: "Paramètres", icon: Settings },
 ];
 

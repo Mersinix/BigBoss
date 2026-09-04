@@ -1,5 +1,4 @@
 import {
-  LayoutDashboard,
   Printer as PrinterIcon,
   ClipboardList,
   Package,
@@ -12,10 +11,11 @@ import {
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure (Part 5/14) — same as every other
-// professional account shell now.
+// Standard cross-account structure — Performance first (replaces the former
+// standalone Dashboard tab), then business-specific tabs, Profil Public,
+// Communication, Paramètres.
 const TABS: ProfessionalAccountTab[] = [
-  { path: "/printer", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { path: "/printer", label: "Performance", icon: TrendingUp, exact: true },
   { path: "/printer/services", label: "Services", icon: PrinterIcon },
   { path: "/printer/orders", label: "Commandes", icon: ClipboardList },
   { path: "/printer/catalog", label: "Catalogue", icon: Package },
@@ -23,7 +23,6 @@ const TABS: ProfessionalAccountTab[] = [
   { path: "/printer/categories", label: "Catégories", icon: Layers },
   { path: "/printer/profil-public", label: "Profil Public", icon: Eye },
   { path: "/printer/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
-  { path: "/printer/performance", label: "Performance", icon: TrendingUp },
   { path: "/printer/settings", label: "Paramètres", icon: Settings },
 ];
 

@@ -47,6 +47,8 @@ const ACADEMY_EVENTS = [
   "academy_registration_created",
   "academy_registration_status_changed",
   "academy_review_created",
+  "academy_favorite_updated",
+  "admin_academy_report_created",
 ];
 const MARKETING_EVENTS = ["marketing_updated", "marketing_project_updated", "marketing_review_updated", "marketing_favorite_updated", "admin_marketing_report_created"];
 const NOTIFICATION_EVENTS = ["notification_created"];
@@ -355,6 +357,9 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/academy/reviews") });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/academy/profile") });
             qc.invalidateQueries({ queryKey: ["/api/admin/academy"] });
+            qc.invalidateQueries({ queryKey: ["/api/academy-favorites"] });
+            qc.invalidateQueries({ queryKey: ["/api/academy/reports/mine"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/academy/reports"] });
             if (event === "academy_registration_created" || event === "academy_registration_status_changed") {
               invalidateMessagingQueries(qc);
             }

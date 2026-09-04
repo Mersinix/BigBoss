@@ -60,7 +60,9 @@ import { MarketingDetailModal } from "@/components/marketing/marketing-detail-mo
 import { QuoteRequestDialog as MarketingQuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
 import { useMarketingProjects, useCancelMarketingProject, useRespondToMarketingQuote, type MarketingProjectWithParties } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
-import { useAcademyRegistrations, useUpdateAcademyRegistrationStatus, type AcademyRegistrationWithParties } from "@/hooks/use-barista-academy";
+import { useAcademyRegistrations, useUpdateAcademyRegistrationStatus, type AcademyRegistrationWithParties, type AcademyCourseCard } from "@/hooks/use-barista-academy";
+import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
+import { EnrollDialog as AcademyEnrollDialog } from "@/pages/cafe/barista/barista-academy-page";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
 import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
 
@@ -1547,11 +1549,15 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   // modal used on /marketing — no separate favorites-only Marketing view.
   const [detailMarketingId, setDetailMarketingId] = useState<number | null>(null);
   const [quoteMarketingProvider, setQuoteMarketingProvider] = useState<MarketingMarketplaceCard | null>(null);
+  // Clicking a favorite Academy formation opens the same comprehensive detail
+  // modal used on /academy — no separate favorites-only Academy view.
+  const [detailAcademyCourseId, setDetailAcademyCourseId] = useState<number | null>(null);
+  const [enrollAcademyTarget, setEnrollAcademyTarget] = useState<AcademyCourseCard | null>(null);
 
   const {
     shop, print, academy, baristaMarket, marketing, maintenance, pack,
     removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removeMaintenance, removePack,
-    syncMaintenance, syncBaristaMarket, syncMarketing,
+    syncMaintenance, syncBaristaMarket, syncMarketing, syncAcademy,
   } = useFavorites();
   const { stores, toggleStore: toggleStoreFav } = useStoreFavorites();
 
@@ -1626,6 +1632,20 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
     if (marketingFavoriteIds === undefined || marketingProfilesLoading) return;
     syncMarketing(marketingFavoriteIds, marketingProfiles);
   }, [marketingFavoriteIds, marketingProfiles, marketingProfilesLoading, syncMarketing]);
+
+  // Favorites persist as Academy course (formation) IDs. Resolve them against
+  // the live published courses, mirroring the Marketing favorites sync above.
+  const { data: academyFavoriteIds } = useQuery<number[]>({
+    queryKey: ["/api/academy-favorites"],
+  });
+  const { data: academyCourses = [], isLoading: academyCoursesLoading } = useQuery<AcademyCourseCard[]>({
+    queryKey: ["/api/academy/courses"],
+    enabled: (academyFavoriteIds?.length ?? 0) > 0,
+  });
+  useEffect(() => {
+    if (academyFavoriteIds === undefined || academyCoursesLoading) return;
+    syncAcademy(academyFavoriteIds, academyCourses);
+  }, [academyFavoriteIds, academyCourses, academyCoursesLoading, syncAcademy]);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1955,30 +1975,59 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           )
         )}
 
-        {/* BARISTA — Academy */}
+        {/* BARISTA — Academy. Same left-photo/right-info clickable layout as
+            BARISTA_MARKETPLACE below — mirrors the /academy card design (Part 10),
+            clicking opens the same AcademyDetailModal used on /academy (Part 9). */}
         {activeService === "BARISTA_ACADEMY" && (
           academyItems.length === 0 ? renderEmpty() : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               {academyItems.map((item) => (
-                <div key={item.id} className={`group border rounded-2xl overflow-hidden ${cardBg}`}>
-                  <div className="h-16 bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center relative">
-                    <GraduationCap className="w-6 h-6 text-white opacity-80" />
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailAcademyCourseId(item.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailAcademyCourseId(item.id); } }}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden cursor-pointer h-28 ${cardBg}`}
+                  data-testid={`row-fav-academy-${item.id}`}
+                >
+                  <div className="w-2/5 shrink-0 relative">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`w-full h-full flex items-center justify-center ${dk ? "bg-indigo-950" : "bg-indigo-100"}`}>
+                        <GraduationCap className={`w-6 h-6 ${dk ? "text-indigo-300" : "text-indigo-500"}`} />
+                      </div>
+                    )}
+                    {item.hasCertification && (
+                      <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/90 text-amber-900">
+                        Certifié
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1 justify-center">
+                    <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.title}</p>
+                    <p className={`text-xs truncate ${textMuted}`}>{item.provider}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                      {item.duration && <span className={`text-[10px] ${textMuted}`}>{item.duration}</span>}
+                      {item.location && (
+                        <span className={`text-[10px] flex items-center gap-0.5 ${textMuted}`}>
+                          <MapPinIcon className="w-2.5 h-2.5 shrink-0" />{item.location}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-bold text-indigo-600 mt-0.5">{fmt(item.price)}</p>
+                  </div>
+                  <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <button
-                      className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => removeAcademy(item.id)}
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); removeAcademy(item.id); }}
                       data-testid={`button-fav-remove-academy-${item.id}`}
+                      aria-label={`Remove ${item.title} from favorites`}
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                     </button>
-                  </div>
-                  <div className="p-3">
-                    <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{item.title}</p>
-                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.provider}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
-                      <span className={`text-[10px] ${textMuted}`}>{item.duration}</span>
-                    </div>
-                    <p className="text-sm font-bold text-green-400 mt-1">{fmt(item.price)}</p>
                   </div>
                 </div>
               ))}
@@ -2188,6 +2237,14 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         onRequestQuote={(p) => { setDetailMarketingId(null); setQuoteMarketingProvider(p); }}
       />
       <MarketingQuoteRequestDialog provider={quoteMarketingProvider} onClose={() => setQuoteMarketingProvider(null)} />
+
+      <AcademyDetailModal
+        courseId={detailAcademyCourseId}
+        open={detailAcademyCourseId != null}
+        onClose={() => setDetailAcademyCourseId(null)}
+        onEnroll={(c) => { setDetailAcademyCourseId(null); setEnrollAcademyTarget(c); }}
+      />
+      <AcademyEnrollDialog course={enrollAcademyTarget} open={!!enrollAcademyTarget} onClose={() => setEnrollAcademyTarget(null)} isDark={dk} />
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import {
   Truck,
-  LayoutDashboard,
   Package,
   Users,
   Eye,
@@ -10,17 +9,17 @@ import {
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure (Part 5/14) — same as every other
-// professional account shell now (Marketing is the design reference).
+// Standard cross-account structure — Performance first (replaces the former
+// standalone Dashboard tab), then business-specific tabs, Profil Public,
+// Communication, Paramètres (Marketing is the design reference).
 const TABS: ProfessionalAccountTab[] = [
-  { path: "/delivery", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { path: "/delivery", label: "Performance", icon: TrendingUp, exact: true },
   { path: "/delivery/available", label: "Livraisons disponibles", icon: Package },
   { path: "/delivery/my-deliveries", label: "Mes livraisons", icon: Truck },
   { path: "/delivery/drivers", label: "Chauffeurs", icon: Users },
   { path: "/delivery/vehicles", label: "Véhicules", icon: Truck },
   { path: "/delivery/profil-public", label: "Profil Public", icon: Eye },
   { path: "/delivery/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
-  { path: "/delivery/performance", label: "Performance", icon: TrendingUp },
   { path: "/delivery/settings", label: "Paramètres", icon: Settings },
 ];
 

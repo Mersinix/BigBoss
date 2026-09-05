@@ -258,7 +258,7 @@ function MaintenanceAvailabilityModal({
 }
 
 export function AgentDetailModal({
-  agent, open, onClose, onContact, onReserve, isDark,
+  agent, open, onClose, onContact, onReserve, isDark, readOnly = false,
 }: {
   agent: MaintenanceMarketplaceCard | null;
   open: boolean;
@@ -266,6 +266,13 @@ export function AgentDetailModal({
   onContact: (agent: MaintenanceMarketplaceCard) => void;
   onReserve: (agent: MaintenanceMarketplaceCard, data: MaintenanceReservationData) => void;
   isDark: boolean;
+  // Used by the Maintenance agent's own "preview my profile" (Eye icon on
+  // Business → Profil): renders the exact same modal a Coffee Owner sees, but
+  // Favorite/Report/Contacter/Réserver/Avis become inert (no self-favorite,
+  // self-message, self-reservation, self-report, or self-review) — only
+  // Disponibilité stays functional, since it just displays the agent's own
+  // real saved availability.
+  readOnly?: boolean;
 }) {
   const fmt = useFormatCurrency();
   const t = useTheme(isDark);
@@ -297,7 +304,7 @@ export function AgentDetailModal({
   const reviewReservation = eligibleReservations.find((reservation) => !reviewedReservationIds.has(reservation.id));
   const submitReview = useMutation({
     mutationFn: () => {
-      if (!agent || !reviewReservation) throw new Error("Aucune intervention terminée à évaluer");
+      if (!agent || !reviewReservation || readOnly) throw new Error("Aucune intervention terminée à évaluer");
       return apiRequest("POST", "/api/maintenance/reviews", {
         maintenanceUserId: agent.userId,
         reservationId: reviewReservation.id,
@@ -339,7 +346,10 @@ export function AgentDetailModal({
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const { toast } = useToast();
   const submitReport = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/maintenance/${agent!.userId}/report`, { reason: reportReason.trim() }),
+    mutationFn: () => {
+      if (readOnly) throw new Error("Aperçu en lecture seule");
+      return apiRequest("POST", `/api/maintenance/${agent!.userId}/report`, { reason: reportReason.trim() });
+    },
     onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
     onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
   });
@@ -369,12 +379,12 @@ export function AgentDetailModal({
             </Avatar>
             {/* Top right — Close + Favorite, unchanged position (Part 9/20) */}
             <div className="absolute top-3 right-3 flex gap-2">
-              <button onClick={() => toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, skills: agent.skills, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available, profileImageUrl: agent.profileImageUrl })} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-white"}`} /></button>
+              <button onClick={() => { if (!readOnly) toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, skills: agent.skills, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available, profileImageUrl: agent.profileImageUrl }); }} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-white"}`} /></button>
               <button onClick={onClose} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center"><X className="w-4 h-4 text-white" /></button>
             </div>
             {/* Bottom right — Signaler (moved here) + new Disponibilité (Part 9-10) */}
             <div className="absolute bottom-3 right-3 flex gap-2">
-              <button onClick={() => setReportModalOpen(true)} title="Signaler" data-testid="button-open-maintenance-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+              <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-maintenance-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
               <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-maintenance-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
             </div>
             <span className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${agent.available ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
@@ -472,8 +482,8 @@ export function AgentDetailModal({
               // the two primary actions, matching the Barista modal's own
               // actions-row convention.
                <div className={`border-t ${t.border} pt-4 flex items-center justify-end gap-2`}>
-                 <Button variant="outline" onClick={() => onContact(agent)} className={`rounded-xl px-4 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`}><MessageCircle className="w-4 h-4 mr-1.5" />Contacter</Button>
-                 <Button onClick={() => setBooking(true)} disabled={!agent.available} className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl px-5"><Calendar className="w-4 h-4 mr-1.5" />{agent.available ? "Réserver" : "Indisponible"}</Button>
+                 <Button variant="outline" onClick={() => { if (!readOnly) onContact(agent); }} className={`rounded-xl px-4 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`}><MessageCircle className="w-4 h-4 mr-1.5" />Contacter</Button>
+                 <Button onClick={() => { if (!readOnly) setBooking(true); }} disabled={!agent.available} className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl px-5"><Calendar className="w-4 h-4 mr-1.5" />{agent.available ? "Réserver" : "Indisponible"}</Button>
               </div>
             ) : (
                <div className={`border-t ${t.border} pt-4 space-y-3`}>

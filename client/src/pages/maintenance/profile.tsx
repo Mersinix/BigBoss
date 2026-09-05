@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAvatarUrl } from "@/lib/avatar";
+import { useThemeStore } from "@/store/theme-store";
 import {
   Select,
   SelectContent,
@@ -18,7 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { User, Award, Wrench, MapPin, XCircle, X } from "lucide-react";
+import { User, Award, Wrench, MapPin, XCircle, X, Eye } from "lucide-react";
+import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
+import type { MaintenanceMarketplaceCard } from "@shared/schema";
+import Availability from "@/pages/maintenance/availability";
 
 // ── Profile tab ────────────────────────────────────────────────────────────────
 
@@ -27,8 +31,10 @@ export default function Profile() {
   const currency = useCurrency();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isDark = useThemeStore((s) => s.isDark);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
-  const { data: profileData } = useQuery<{ user: any; profile: any }>({
+  const { data: profileData } = useQuery<{ user: any; profile: any; card: MaintenanceMarketplaceCard }>({
     queryKey: ["/api/maintenance/profile", user?.id],
     queryFn: async () => {
       const response = await fetch(`/api/maintenance/profile/${user!.id}`, { credentials: "include" });
@@ -104,6 +110,16 @@ export default function Profile() {
 
   return (
     <div className="space-y-4">
+      {/* Preview — opens the exact same modal a Coffee Owner sees on
+          /maintenance (read-only there: Favorite/Report/Contacter/Réserver/Avis
+          are inert, only Disponibilité stays functional), fed by this same real
+          profile data (profileData.card), never a separate/fake preview dataset. */}
+      <div className="flex justify-end">
+        <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+          <Eye className="w-3.5 h-3.5" /> Aperçu
+        </Button>
+      </div>
+
       {/* Basic info */}
       <Card className="rounded-2xl border-gray-100 shadow-sm">
         <CardHeader className="pb-3">
@@ -298,6 +314,22 @@ export default function Profile() {
       <Button onClick={() => saveProfile.mutate()} disabled={saveProfile.isPending} className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5">
         Sauvegarder le profil
       </Button>
+
+      {/* Disponibilité — moved here from its former separate main tab (Part 1).
+          Reuses the existing Availability component unchanged (own query/
+          mutation/save button), so the real availability data/behavior is
+          untouched, just relocated. */}
+      <Availability />
+
+      <AgentDetailModal
+        agent={profileData?.card ?? null}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        onContact={() => {}}
+        onReserve={() => {}}
+        isDark={isDark}
+        readOnly
+      />
     </div>
   );
 }

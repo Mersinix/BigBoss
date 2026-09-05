@@ -111,9 +111,7 @@ import AcademyPerformance from "@/pages/barista-academy/performance";
 import AcademyProfilPublic from "@/pages/barista-academy/profil-public";
 import { AcademyAccountShell } from "@/components/layout/academy-account-shell";
 import BaristaMarketplaceDashboard from "@/pages/barista-marketplace/dashboard";
-import BaristaMarketplaceProfilePage from "@/pages/barista-marketplace/profile";
-import BaristaMarketplaceRequestsPage from "@/pages/barista-marketplace/requests";
-import BaristaMarketplaceMissionsPage from "@/pages/barista-marketplace/missions";
+import BaristaMarketplaceBusiness from "@/pages/barista-marketplace/business";
 import BaristaMarketplaceRevenuePage from "@/pages/barista-marketplace/revenue";
 import BaristaMarketplaceSettingsPage from "@/pages/barista-marketplace/settings";
 import BaristaMarketplaceMessagesPage from "@/pages/barista-marketplace/messages";
@@ -121,16 +119,12 @@ import BaristaMarketplaceReviewsPage from "@/pages/barista-marketplace/reviews";
 import BaristaMarketplaceAcademyPage from "@/pages/barista-marketplace/academy";
 import BaristaMarketplaceCommunication from "@/pages/barista-marketplace/communication";
 import BaristaMarketplacePerformance from "@/pages/barista-marketplace/performance";
-import BaristaMarketplaceProfilPublic from "@/pages/barista-marketplace/profil-public";
 import { BaristaAccountShell } from "@/components/layout/barista-account-shell";
 import MaintenanceDashboard from "@/pages/maintenance/dashboard";
-import MaintenancePlanningPage from "@/pages/maintenance/planning";
-import MaintenanceProfilePage from "@/pages/maintenance/profile";
-import MaintenanceAvailabilityPage from "@/pages/maintenance/availability";
+import MaintenanceBusiness from "@/pages/maintenance/business";
 import MaintenanceSettingsPage from "@/pages/maintenance/settings";
 import MaintenanceCommunicationPage from "@/pages/maintenance/communication";
 import MaintenancePerformancePage from "@/pages/maintenance/performance";
-import MaintenanceProfilPublicPage from "@/pages/maintenance/profil-public";
 import { MaintenanceAccountShell } from "@/components/layout/maintenance-account-shell";
 import MaintenancePage from "@/pages/cafe/maintenance/maintenance-page";
 import ProviderNotificationsPage from "@/pages/shared/provider-notifications-page";
@@ -569,15 +563,20 @@ function Router() {
       <Route path="/barista-marketplace">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplacePerformance} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
-      <Route path="/barista-marketplace/profile">
-        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceProfilePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
+      {/* Business — Demandes/Missions/Profil, now one tab with an internal
+          ?tab= switcher (business.tsx) instead of three separate top-level
+          tabs. Old direct links keep working via redirect, deep-linked to the
+          matching sub-tab, so nothing that used to work is now a dead link. */}
+      <Route path="/barista-marketplace/business">
+        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceBusiness} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
-      <Route path="/barista-marketplace/requests">
-        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceRequestsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
-      </Route>
-      <Route path="/barista-marketplace/missions">
-        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceMissionsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
-      </Route>
+      <Route path="/barista-marketplace/profile">{() => <Redirect to="/barista-marketplace/business?tab=profile" />}</Route>
+      <Route path="/barista-marketplace/requests">{() => <Redirect to="/barista-marketplace/business?tab=requests" />}</Route>
+      <Route path="/barista-marketplace/missions">{() => <Redirect to="/barista-marketplace/business?tab=missions" />}</Route>
+      {/* Old standalone "Profil Public" tab is retired — its role (previewing
+          the real profile the way a Coffee Owner sees it) is now the Eye icon
+          inside Business → Profil, reusing the actual BaristaDetailModal. */}
+      <Route path="/barista-marketplace/profil-public">{() => <Redirect to="/barista-marketplace/business?tab=profile" />}</Route>
       <Route path="/barista-marketplace/revenue">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceRevenuePage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
@@ -602,9 +601,6 @@ function Router() {
       <Route path="/barista-marketplace/performance">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplacePerformance} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
-      <Route path="/barista-marketplace/profil-public">
-        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceProfilPublic} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
-      </Route>
 
       {/* ── Maintenance Agent routes — top switcher shell instead of the previous
           single wildcard route, same organizational pattern as every other
@@ -612,18 +608,23 @@ function Router() {
       <Route path="/maintenance-panel">
         {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenancePerformancePage} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
       </Route>
-      <Route path="/maintenance-panel/planning">
-        {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenancePlanningPage} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
+      {/* Business — Profil/Planning, now one tab with an internal ?tab=
+          switcher (business.tsx) instead of two separate top-level tabs. Old
+          direct links keep working via redirect, deep-linked to the matching
+          sub-tab, so nothing that used to work is now a dead link. */}
+      <Route path="/maintenance-panel/business">
+        {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenanceBusiness} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
       </Route>
-      <Route path="/maintenance-panel/profile">
-        {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenanceProfilePage} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
-      </Route>
-      <Route path="/maintenance-panel/availability">
-        {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenanceAvailabilityPage} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
-      </Route>
-      <Route path="/maintenance-panel/profil-public">
-        {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenanceProfilPublicPage} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
-      </Route>
+      <Route path="/maintenance-panel/profile">{() => <Redirect to="/maintenance-panel/business?tab=profile" />}</Route>
+      <Route path="/maintenance-panel/planning">{() => <Redirect to="/maintenance-panel/business?tab=planning" />}</Route>
+      {/* Disponibilité is no longer a separate tab — its content now lives
+          inside Business → Profil (see profile.tsx, which renders the
+          existing Availability component inline). */}
+      <Route path="/maintenance-panel/availability">{() => <Redirect to="/maintenance-panel/business?tab=profile" />}</Route>
+      {/* Old standalone "Profil Public" tab is retired — its role (previewing
+          the real profile the way a Coffee Owner sees it) is now the Eye icon
+          inside Business → Profil, reusing the actual AgentDetailModal. */}
+      <Route path="/maintenance-panel/profil-public">{() => <Redirect to="/maintenance-panel/business?tab=profile" />}</Route>
       <Route path="/maintenance-panel/communication">
         {() => (<MaintenanceAccountShell><ProtectedRoute component={MaintenanceCommunicationPage} allowedRoles={["MAINTENANCE"]} requireApproved /></MaintenanceAccountShell>)}
       </Route>

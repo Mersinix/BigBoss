@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Briefcase, Pencil, Trash2, Calendar, Zap } from "lucide-react";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
+import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<BaristaLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -59,6 +60,7 @@ export default function BaristaProfilePage() {
   const updateWorkHistory = useUpdateBaristaWorkHistory();
   const deleteWorkHistory = useDeleteBaristaWorkHistory();
   const [workHistoryForm, setWorkHistoryForm] = useState<Partial<BaristaWorkHistory> | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!data?.profile) return;
@@ -146,9 +148,18 @@ export default function BaristaProfilePage() {
 
   return (
     <div className="flex flex-col gap-5 p-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Mon profil public</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Ce profil est visible par les cafés sur la marketplace Barista.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Mon profil public</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Ce profil est visible par les cafés sur la marketplace Barista.</p>
+        </div>
+        {/* Preview — opens the exact same modal a Coffee Owner sees on /barista
+            (read-only there: Favorite/Report/Message/Avis/Recruter are inert,
+            only Disponibilité stays functional), fed by this same real profile
+            data, never a separate/fake preview dataset. */}
+        <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+          <Eye className="w-3.5 h-3.5" /> Aperçu
+        </Button>
       </div>
 
       <Card>
@@ -408,6 +419,14 @@ export default function BaristaProfilePage() {
           {saving ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </div>
+
+      <BaristaDetailModal
+        baristaUserId={user?.id ?? null}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        onRecruit={() => {}}
+        readOnly
+      />
     </div>
   );
 }

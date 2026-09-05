@@ -1,9 +1,6 @@
 import {
   Coffee,
-  UserCheck,
   Briefcase,
-  ClipboardList,
-  Eye,
   MessageSquare,
   TrendingUp,
   GraduationCap,
@@ -11,18 +8,16 @@ import {
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure — Performance first (replaces the former
-// standalone Dashboard tab), then business-specific tabs, Profil Public,
-// Communication, Paramètres. "Profil" (the self-editor, previously mislabeled
-// "Profil public") stays as its own business-specific tab; "Profil Public" is
-// the actual Coffee-Owner-facing preview.
+// Performance first, then the new "Business" tab (Demandes/Missions/Profil —
+// see business.tsx's internal SubTabSwitcher), Academy, Communication,
+// Paramètres. The former separate "Profil Public" tab is gone — its role (a
+// Coffee-Owner-style preview of the real profile) is now the Eye icon inside
+// Business → Profil (profile.tsx), reusing the exact Coffee Owner
+// BaristaDetailModal instead of a second preview design.
 const TABS: ProfessionalAccountTab[] = [
   { path: "/barista-marketplace", label: "Performance", icon: TrendingUp, exact: true },
-  { path: "/barista-marketplace/profile", label: "Profil", icon: UserCheck },
-  { path: "/barista-marketplace/requests", label: "Demandes", icon: Briefcase },
-  { path: "/barista-marketplace/missions", label: "Missions", icon: ClipboardList },
+  { path: "/barista-marketplace/business", label: "Business", icon: Briefcase },
   { path: "/barista-marketplace/academy", label: "Academy", icon: GraduationCap },
-  { path: "/barista-marketplace/profil-public", label: "Profil Public", icon: Eye },
   { path: "/barista-marketplace/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
   { path: "/barista-marketplace/settings", label: "Paramètres", icon: Settings },
 ];

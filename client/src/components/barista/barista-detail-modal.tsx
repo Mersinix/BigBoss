@@ -156,11 +156,18 @@ export function BaristaDetailModal({
   open,
   onClose,
   onRecruit,
+  readOnly = false,
 }: {
   baristaUserId: number | null;
   open: boolean;
   onClose: () => void;
   onRecruit: (barista: BaristaMarketplaceCard) => void;
+  // Used by the Barista's own "preview my profile" (Eye icon on Business →
+  // Profil): renders the exact same modal a Coffee Owner sees, but Favorite/
+  // Report/Message/Avis/Recruter become inert (no self-favorite, self-message,
+  // self-report, or self-review) — only Disponibilité stays functional, since
+  // it's just displaying the Barista's own real saved availability.
+  readOnly?: boolean;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -223,7 +230,7 @@ export function BaristaDetailModal({
   };
 
   const handleMessage = async () => {
-    if (!card) return;
+    if (!card || readOnly) return;
     setMessaging(true);
     try {
       const res = await startBaristaConversation(card.userId);
@@ -237,7 +244,7 @@ export function BaristaDetailModal({
   };
 
   const submitReview = () => {
-    if (!card || !activeMissionId) return;
+    if (!card || !activeMissionId || readOnly) return;
     createReview.mutate(
       { baristaUserId: card.userId, missionId: activeMissionId, rating: reviewRating, comment: reviewComment.trim() || undefined },
       {
@@ -248,7 +255,7 @@ export function BaristaDetailModal({
   };
 
   const submitReport = () => {
-    if (!card || !reportReason.trim()) return;
+    if (!card || !reportReason.trim() || readOnly) return;
     reportBarista.mutate(
       { baristaUserId: card.userId, reason: reportReason.trim() },
       {
@@ -287,7 +294,7 @@ export function BaristaDetailModal({
               <div className="absolute top-3 right-3 flex gap-2">
                 <button
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
-                  onClick={() => toggleBaristaMarket({ id: card.userId, name: card.name, initials: card.initials, skills: card.skills, location: card.location, rating: card.rating / 10, available: card.available, profileImageUrl: card.profileImageUrl })}
+                  onClick={() => { if (!readOnly) toggleBaristaMarket({ id: card.userId, name: card.name, initials: card.initials, skills: card.skills, location: card.location, rating: card.rating / 10, available: card.available, profileImageUrl: card.profileImageUrl }); }}
                   data-testid={`button-fav-modal-${card.userId}`}
                 >
                   <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
@@ -299,7 +306,7 @@ export function BaristaDetailModal({
               {/* Bottom right — Signaler + Disponibilité, same placement as the
                   Maintenance details modal. */}
               <div className="absolute bottom-3 right-3 flex gap-2">
-                <button onClick={() => setReportModalOpen(true)} title="Signaler" data-testid="button-open-barista-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+                <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-barista-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-barista-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
               </div>
               <span
@@ -449,7 +456,7 @@ export function BaristaDetailModal({
               <Button variant="outline" size="sm" className={`gap-1.5 ${t.textPrimary} ${isDark ? "border-gray-700" : ""}`} onClick={handleMessage} disabled={messaging} data-testid="button-message-barista">
                 <MessageCircle className="w-3.5 h-3.5" /> Message
               </Button>
-              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5" disabled={!card.available} onClick={() => onRecruit(card)} data-testid="button-recruit-barista-modal">
+              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5" disabled={!card.available} onClick={() => { if (!readOnly) onRecruit(card); }} data-testid="button-recruit-barista-modal">
                 {card.available ? "Recruter" : "Indisponible"}
               </Button>
             </div>

@@ -1,29 +1,24 @@
 import {
   Wrench,
-  ClipboardList,
-  User,
-  Calendar,
-  Eye,
+  Briefcase,
   MessageSquare,
   TrendingUp,
   Settings,
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure — Performance first (replaces the former
-// standalone Dashboard/Planning-as-dashboard tab). Planning is a real,
-// separate functional page (appointments/interventions) and must never be
-// confused with Performance > Dashboard — it keeps its own dedicated route
-// and tab, unchanged, immediately after Performance. Maintenance previously
-// drove its tabs from client-side state inside a single wildcard route
-// (/maintenance-panel/:rest*) rather than real routes; it now follows the
-// same real-route-per-tab pattern as every other professional account.
+// Performance first, then the new "Business" tab (Profil/Planning — see
+// business.tsx's internal SubTabSwitcher), Communication, Paramètres. The
+// former separate "Disponibilité" and "Profil Public" tabs are gone:
+// Disponibilité's content now lives inside Business → Profil (profile.tsx
+// renders the existing Availability component inline), and Profil Public's
+// role (a Coffee-Owner-style preview of the real profile) is now the Eye icon
+// inside Business → Profil, reusing the exact Coffee Owner AgentDetailModal
+// instead of a second preview design. Same reorg pattern as
+// barista-account-shell.tsx.
 const TABS: ProfessionalAccountTab[] = [
   { path: "/maintenance-panel", label: "Performance", icon: TrendingUp, exact: true },
-  { path: "/maintenance-panel/planning", label: "Planning", icon: ClipboardList },
-  { path: "/maintenance-panel/profile", label: "Profil", icon: User },
-  { path: "/maintenance-panel/availability", label: "Disponibilité", icon: Calendar },
-  { path: "/maintenance-panel/profil-public", label: "Profil Public", icon: Eye },
+  { path: "/maintenance-panel/business", label: "Business", icon: Briefcase },
   { path: "/maintenance-panel/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
   { path: "/maintenance-panel/settings", label: "Paramètres", icon: Settings },
 ];

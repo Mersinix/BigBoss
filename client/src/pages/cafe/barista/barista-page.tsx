@@ -36,13 +36,12 @@ import {
   Users,
   CalendarDays,
   Heart,
-  Sun,
-  Moon,
   Send,
   Zap,
   Ban,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import {
   useBaristaProfiles,
   useBaristaSkills,
@@ -376,8 +375,8 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   const { user } = useAuth();
   const accessLevel = useAccessLevel();
   const isDark = useThemeStore((s) => s.isDark);
-  const toggleTheme = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
+  const { settings: heroActions } = useHeroActionSettings();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -499,8 +498,11 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-green-950/90" : "bg-gradient-to-br from-green-600/90 via-green-700/85 to-emerald-700/90"}`} />
         {/* Content */}
         <div className="relative">
+          {/* The global navbar theme control is the single Dark/Light toggle
+              now, so the duplicated hero one is gone; Fast Search/Report stay
+              Admin-toggleable per service (see /api/hero-actions). */}
           <div className="flex justify-end items-center gap-2 mb-9">
-            {canAct && (
+            {canAct && heroActions.BARISTA.reportEnabled && (
               <button
                 onClick={() => setBlacklistOpen(true)}
                 aria-label="Baristas signalés"
@@ -511,7 +513,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 <Ban className="w-4 h-4" />
               </button>
             )}
-            {canAct && (
+            {canAct && heroActions.BARISTA.fastSearchEnabled && (
               <button
                 onClick={() => setFastSearchOpen(true)}
                 aria-label="Fast Search"
@@ -522,9 +524,6 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 <Zap className="w-4 h-4" />
               </button>
             )}
-            <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
           </div>
           <div className="max-w-3xl mx-auto text-center">
           <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>

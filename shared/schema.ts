@@ -607,6 +607,31 @@ export const platformServices = pgTable("platform_services", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Admin-controlled visibility of the Coffee Owner hero "Fast Search"/"Report"
+// icons, per service. Deliberately a separate table/key set from
+// platformServices/serviceKeyEnum above: that mechanism controls whether a
+// whole service is VISIBLE/HIDDEN/COMING_SOON on the marketplace, a different
+// concern from "does this service's hero show these two icons" — and it uses
+// a different, narrower key set (no SHOP) than the six Coffee-Owner-facing
+// services this needs (SHOP/BARISTA/ACADEMY/MAINTENANCE/PRINT/MARKETING —
+// the same short names already used by NotificationService). Defaults to
+// enabled for every service so introducing this control never silently hides
+// the Fast Search/Report icons that already work today (Barista/Academy/
+// Maintenance/Marketing) — see server/storage.ts's seeding.
+export const heroServiceEnum = pgEnum('hero_service', ['SHOP', 'BARISTA', 'ACADEMY', 'MAINTENANCE', 'PRINT', 'MARKETING']);
+
+export const heroActionSettings = pgTable("hero_action_settings", {
+  id: serial("id").primaryKey(),
+  service: heroServiceEnum("service").notNull().unique(),
+  fastSearchEnabled: boolean("fast_search_enabled").notNull().default(true),
+  reportEnabled: boolean("report_enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type HeroService = 'SHOP' | 'BARISTA' | 'ACADEMY' | 'MAINTENANCE' | 'PRINT' | 'MARKETING';
+export type HeroActionSetting = typeof heroActionSettings.$inferSelect;
+export type HeroActionSettingsMap = Record<HeroService, { fastSearchEnabled: boolean; reportEnabled: boolean }>;
+
 // Admin-controlled messaging behavior. This is intentionally separate from
 // marketplace service visibility: hiding Messages must never delete data and
 // must not remove an admin's ability to manage it.
@@ -1491,6 +1516,27 @@ export const printSubCategoryTaxonomy = pgTable("print_subcategory_taxonomy", {
   uniqueNamePerCategory: uniqueIndex("print_subcategory_taxonomy_unique").on(table.categoryId, table.name),
 }));
 
+// Entity-level report ("Blacklist") — a Coffee Owner flagging a Printer
+// account itself, mirrors marketingReports/maintenanceReports/academyReports/
+// baristaReports exactly (own table, own service scope).
+export const printReportStatusEnum = pgEnum('print_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+
+export const printReports = pgTable("print_reports", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  printerId: integer("printer_id").notNull(),
+  reason: text("reason").notNull(),
+  status: printReportStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNote: text("resolution_note"),
+}, (table) => ({
+  printerIdx: index("print_reports_printer_idx").on(table.printerId),
+  statusIdx: index("print_reports_status_idx").on(table.status),
+}));
+
+export const insertPrintReportSchema = createInsertSchema(printReports).omit({ id: true, createdAt: true, resolvedAt: true });
+
 export const printOrders = pgTable("print_orders", {
   id: serial("id").primaryKey(),
   printerId: integer("printer_id").notNull(),
@@ -1953,6 +1999,8 @@ export type InsertPrintCatalogItem = z.infer<typeof insertPrintCatalogItemSchema
 export type PrintOrder = typeof printOrders.$inferSelect;
 export type InsertPrintOrder = z.infer<typeof insertPrintOrderSchema>;
 export type PrintOrderStatus = 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'IN_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+export type PrintReport = typeof printReports.$inferSelect;
+export type InsertPrintReport = typeof printReports.$inferInsert;
 /** A catalog item joined with its printer's identity/location — the card shown on /print. */
 export type PrintCatalogCard = PrintCatalogItem & {
   printerName: string;

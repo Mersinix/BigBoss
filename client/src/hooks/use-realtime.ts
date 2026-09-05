@@ -14,6 +14,7 @@ const CATALOG_EVENTS = [
 
 const TAXONOMY_EVENTS = ["taxonomy_updated"];
 const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
+const HERO_ACTIONS_EVENTS = ["hero_actions_updated"];
 const LANDING_CONFIG_EVENTS = ["landing_config_updated"];
 const CURRENCY_EVENTS = ["currency_updated"];
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
@@ -26,7 +27,7 @@ const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assi
 const DELIVERY_ECOSYSTEM_EVENTS = ["vehicle_updated", "delivery_pricing_updated", "driver_review_created", "delivery_opportunity_updated"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created"];
-const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated"];
+const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated", "admin_print_report_created"];
 const USER_PROFILE_EVENTS = ["user_profile_updated"];
 const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
 const BARISTA_EVENTS = [
@@ -167,6 +168,9 @@ export function useRealtime(userId?: number) {
               invalidateMarketplace(qc);
             }
           }
+          if (HERO_ACTIONS_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/hero-actions"] });
+          }
           if (SYSTEM_SERVICES_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/system-services"] });
             qc.invalidateQueries({ queryKey: ["/api/system-service-order"] });
@@ -298,6 +302,8 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/print/orders"] });
             qc.invalidateQueries({ queryKey: ["/api/print/revenue"] });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/print/reviews") });
+            qc.invalidateQueries({ queryKey: ["/api/print/reports/mine"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/print/reports"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/print"] });
             invalidateMessagingQueries(qc);
           }

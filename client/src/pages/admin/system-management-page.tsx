@@ -9,12 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
 import { useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
+import { useHeroActionSettings, type HeroService, type HeroActionSettingsMap } from "@/hooks/use-hero-actions";
 import type { LandingConfig, HeroSlide } from "@shared/schema";
 
 // ── Service visibility ────────────────────────────────────────────────────────
@@ -139,6 +140,104 @@ function MessagesSystemSection() {
             <p className="text-xs text-muted-foreground">Admins always retain access to manage Messages, including when visibility is hidden.</p>
           </>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Hero Actions (Fast Search / Report icons, per service) ────────────────────
+
+// Independent of SERVICES/STATE_OPTIONS above (whole-service visibility) — this
+// only shows/hides the two hero icons (Fast Search, Report) that already exist
+// on a service's Coffee Owner page, one switch per icon per service, reusing the
+// same card/switch language as MessagesSystemSection. SHOP has no Fast
+// Search/Report icons yet (it uses its own separate Flash Mode feature), but its
+// switches stay here for forward-consistency with the six-service naming used
+// elsewhere — flipping them today has no visible effect on /shop until such
+// icons exist there.
+const HERO_SERVICES: { key: HeroService; label: string; icon: any }[] = [
+  { key: "SHOP",        label: "Shop",                  icon: ShoppingBag },
+  { key: "BARISTA",     label: "Marketplace Baristas",  icon: Users },
+  { key: "ACADEMY",     label: "Barista Academy",       icon: GraduationCap },
+  { key: "MAINTENANCE", label: "Maintenance",           icon: Wrench },
+  { key: "PRINT",       label: "Printing",              icon: Printer },
+  { key: "MARKETING",   label: "Marketing",             icon: Megaphone },
+];
+
+function HeroActionsSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { settings } = useHeroActionSettings();
+  const [local, setLocal] = useState<HeroActionSettingsMap | null>(null);
+
+  useEffect(() => {
+    setLocal(settings);
+  }, [settings]);
+
+  const updateMutation = useMutation({
+    mutationFn: ({ service, updates }: { service: HeroService; updates: Partial<{ fastSearchEnabled: boolean; reportEnabled: boolean }> }) =>
+      apiRequest("PATCH", `/api/admin/hero-actions/${service}`, updates),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      queryClient.setQueryData(["/api/hero-actions"], saved);
+      toast({ title: "Actions Hero Services mises à jour" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message }),
+  });
+
+  const value = local ?? settings;
+  const update = (service: HeroService, field: "fastSearchEnabled" | "reportEnabled", next: boolean) => {
+    setLocal({ ...value, [service]: { ...value[service], [field]: next } });
+    updateMutation.mutate({ service, updates: { [field]: next } });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-amber-500/10 rounded-xl p-3"><Zap className="w-5 h-5 text-amber-600" /></div>
+          <div>
+            <CardTitle className="text-base">Actions Hero Services</CardTitle>
+            <CardDescription className="pt-1">Activer ou désactiver la Recherche rapide et Signaler sur le hero de chaque service, indépendamment.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {HERO_SERVICES.map(({ key, label, icon: Icon }) => (
+          <div key={key} className="rounded-xl border border-border/50 p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <Icon className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm font-medium">{label}</p>
+            </div>
+            <div className="flex items-center justify-between gap-4 pl-6">
+              <div className="flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">Recherche rapide</p>
+              </div>
+              <Switch
+                checked={value[key]?.fastSearchEnabled ?? true}
+                onCheckedChange={(checked) => update(key, "fastSearchEnabled", checked)}
+                disabled={updateMutation.isPending}
+                aria-label={`Recherche rapide — ${label}`}
+                data-testid={`switch-hero-fastsearch-${key.toLowerCase()}`}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 pl-6">
+              <div className="flex items-center gap-2">
+                <Flag className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">Signaler</p>
+              </div>
+              <Switch
+                checked={value[key]?.reportEnabled ?? true}
+                onCheckedChange={(checked) => update(key, "reportEnabled", checked)}
+                disabled={updateMutation.isPending}
+                aria-label={`Signaler — ${label}`}
+                data-testid={`switch-hero-report-${key.toLowerCase()}`}
+              />
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
@@ -708,6 +807,9 @@ export default function SystemManagementPage() {
 
       {/* ── Messages System ── */}
       <MessagesSystemSection />
+
+      {/* ── Hero Actions (Fast Search / Report per service) ── */}
+      <HeroActionsSection />
 
       {/* ── Delivery Pricing ── */}
       <DeliveryPricingSection />

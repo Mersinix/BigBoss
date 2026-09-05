@@ -5,6 +5,7 @@ import { useThemeStore } from "@/store/theme-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import {
   Wrench, Search, MapPin, Star, MessageCircle, SlidersHorizontal,
-  RotateCcw, X, Heart, Clock, Calendar, Shield, Zap, Award, Users, Sun, Moon,
+  RotateCcw, X, Heart, Clock, Calendar, Shield, Zap, Award, Users,
   Building2, User, Send, Flag, Navigation, Ban, Image as ImageIcon,
 } from "lucide-react";
 
@@ -545,8 +546,8 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isDark = useThemeStore((s) => s.isDark);
-  const toggleTheme = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
+  const { settings: heroActions } = useHeroActionSettings();
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterType, setFilterType] = useState("");
@@ -624,20 +625,20 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       <section className="relative pt-5 pb-12 px-5 overflow-hidden">
         {t.dk ? <><div className="absolute inset-0 bg-gray-900" /><div className="absolute inset-0 bg-gradient-to-br from-orange-900/25 via-gray-900 to-gray-900" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" /></> : <><div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600" /><div className="absolute inset-0 bg-black/10" /></>}
+        {/* The global navbar theme control is the single Dark/Light toggle
+            now, so the duplicated hero one is gone; Fast Search/Report stay
+            Admin-toggleable per service (see /api/hero-actions). */}
         <div className="relative flex justify-end items-center gap-2 mb-9">
-          {accessLevel === "approved" && (
+          {accessLevel === "approved" && heroActions.MAINTENANCE.reportEnabled && (
             <button onClick={() => setBlacklistOpen(true)} aria-label="Professionnels signalés" title="Professionnels signalés" data-testid="button-open-maintenance-blacklist" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
               <Ban className="w-4 h-4" />
             </button>
           )}
-          {accessLevel === "approved" && (
+          {accessLevel === "approved" && heroActions.MAINTENANCE.fastSearchEnabled && (
             <button onClick={() => setFastSearchOpen(true)} aria-label="Fast Search" title="Fast Search — parcourir les professionnels" data-testid="button-open-maintenance-fastsearch" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-orange-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
               <Zap className="w-4 h-4" />
             </button>
           )}
-          <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
-            {t.dk ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
         </div>
         <div className="relative max-w-3xl mx-auto text-center">
           <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}><Wrench className={`w-8 h-8 ${t.dk ? "text-amber-400" : "text-white"}`} /></div>

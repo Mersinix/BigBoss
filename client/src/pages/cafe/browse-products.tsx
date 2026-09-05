@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import {
   Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation,
-  Plus, ShoppingBag, Layers, Star, MapPin, Zap, Sun, Moon,
+  Plus, ShoppingBag, Layers, Star, MapPin, Zap,
 } from "lucide-react";
 import type { ListingPromotion } from "@shared/schema";
 import { useCurrency } from "@/hooks/use-currency";
@@ -909,7 +909,6 @@ export default function BrowseProducts() {
 
   // ── Dark / light mode (dark by default — matches Favorites modal) ──────────
   const isDark = useThemeStore((s) => s.isDark);
-  const toggle = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
   const [flashOpen, setFlashOpen] = useState(false);
@@ -1045,19 +1044,10 @@ export default function BrowseProducts() {
           </>
         )}
 
-        {/* Top-right controls: Flash + Dark/Light toggle */}
+        {/* Top-right controls: Flash Mode only — the duplicated Dark/Light
+            toggle is gone, the global navbar theme control is now the single
+            source for this page too (still driven by the same isDark below). */}
         <div className="relative flex justify-end items-center gap-2 mb-9">
-          
-          <button
-            onClick={() => toggle()}
-            aria-label="Toggle theme"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
-          >
-            {t.dk
-              ? <Sun className="w-4 h-4" />
-              : <Moon className="w-4 h-4" />
-            }
-          </button>
           {(allProducts.length > 0 || packs.length > 0) && (
             <button
               onClick={() => setFlashOpen(true)}

@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import printBannerImg from "@assets/1000_F_446608261_m4mqK7D6A8O68SkqWo4ea4VQgrGVbRHY_(1)_1780853922496.jpg";
-import { useLocation, useSearch, Link } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { useThemeStore } from "@/store/theme-store";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,12 +11,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart, Sun, Moon, ClipboardList
+  Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart, Zap, Ban
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import type { PrintCatalogCard } from "@shared/schema";
 import { printCategoryIcon } from "@/lib/print-category-icons";
+import { PrintFastSearch } from "@/components/print/print-fast-search";
+import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
 
 // ── Production time buckets ─────────────────────────────────────────────────
 // The real schema only has a numeric productionTimeDays (no free-text delivery
@@ -29,6 +33,18 @@ const PRODUCTION_TIME_BUCKETS = [
 
 function bucketLabelFor(days: number): string {
   return PRODUCTION_TIME_BUCKETS.find((b) => b.test(days))?.label ?? "";
+}
+
+// ── Access helper (mirrors barista-page.tsx's own copy) ──────────────────────
+
+type AccessLevel = "visitor" | "pending" | "approved";
+
+function useAccessLevel(): AccessLevel {
+  const { user } = useAuth();
+  if (!user) return "visitor";
+  if (["SUPER_ADMIN", "ADMIN", "SUPPLIER"].includes(user.role)) return "approved";
+  if (user.role === "CAFE_OWNER" && (user as any).status === "approved") return "approved";
+  return "pending";
 }
 
 // ── Theme helper ─────────────────────────────────────────────────────────────
@@ -307,9 +323,12 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
 export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean }) {
   const [, navigate] = useLocation();
   const searchStr = useSearch();
+  const accessLevel = useAccessLevel();
   const isDark = useThemeStore((s) => s.isDark);
-  const toggleTheme = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
+  const { settings: heroActions } = useHeroActionSettings();
+  const [fastSearchOpen, setFastSearchOpen] = useState(false);
+  const [blacklistOpen, setBlacklistOpen] = useState(false);
 
   const { data: cards = [], isLoading: cardsLoading } = useQuery<PrintCatalogCard[]>({
     queryKey: ["/api/print/marketplace"],
@@ -359,6 +378,13 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
 
   const isLoading = cardsLoading || categoriesLoading;
   const distinctPrinterCount = useMemo(() => new Set(cards.map((c) => c.printerId)).size, [cards]);
+  const distinctPrinters = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const c of cards) if (!map.has(c.printerId)) map.set(c.printerId, c.printerName);
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [cards]);
+  const { user } = useAuth();
+  const canAct = !!user && user.role === "CAFE_OWNER" && accessLevel === "approved";
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
@@ -373,21 +399,35 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-blue-950/90" : "bg-gradient-to-br from-blue-600/90 via-blue-700/85 to-indigo-700/90"}`} />
         {/* Content */}
         <div className="relative">
+          {/* "Mes commandes" removed — Print orders stay reachable from My
+              Account → Réservations (unchanged). The global navbar theme
+              control is the single Dark/Light toggle now, so the duplicated
+              hero one is gone too; Fast Search/Report (Admin-toggleable per
+              service — see /api/hero-actions) follow the exact /barista
+              hero pattern. */}
           <div className="flex justify-end items-center gap-2 mb-9">
-            {!comingSoon && (
-              <Link href="/print/orders">
-                <button
-                  aria-label="Mes commandes PRINT"
-                  className={`h-8 px-3 rounded-full flex items-center gap-1.5 text-xs font-semibold transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200" : "bg-white/20 hover:bg-white/30 text-white"}`}
-                  data-testid="link-print-my-orders"
-                >
-                  <ClipboardList className="w-3.5 h-3.5" /> Mes commandes
-                </button>
-              </Link>
+            {!comingSoon && canAct && heroActions.PRINT.reportEnabled && (
+              <button
+                onClick={() => setBlacklistOpen(true)}
+                aria-label="Imprimeurs signalés"
+                title="Imprimeurs signalés"
+                data-testid="button-open-blacklist"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+              >
+                <Ban className="w-4 h-4" />
+              </button>
             )}
-            <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
+            {!comingSoon && canAct && heroActions.PRINT.fastSearchEnabled && (
+              <button
+                onClick={() => setFastSearchOpen(true)}
+                aria-label="Fast Search"
+                title="Fast Search — parcourir les services PRINT"
+                data-testid="button-open-fast-search"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-blue-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+              >
+                <Zap className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <div className="max-w-3xl mx-auto text-center">
           <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
@@ -497,6 +537,14 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
       </div>
       </>
       )}
+
+      <PrintFastSearch
+        open={fastSearchOpen}
+        onClose={() => setFastSearchOpen(false)}
+        cards={cards}
+        onOpenDetail={(card) => { setFastSearchOpen(false); navigate(`/print/${card.id}`); }}
+      />
+      <PrintBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} printers={distinctPrinters} />
     </div>
   );
 }

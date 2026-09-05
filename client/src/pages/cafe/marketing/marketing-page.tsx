@@ -31,12 +31,11 @@ import {
   Users,
   Heart,
   Clock,
-  Sun,
-  Moon,
   Zap,
   Ban,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import {
   useMarketingProfiles,
   useMarketingTaxonomy,
@@ -269,8 +268,8 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const { user } = useAuth();
   const accessLevel = useAccessLevel();
   const isDark = useThemeStore((s) => s.isDark);
-  const toggleTheme = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
+  const { settings: heroActions } = useHeroActionSettings();
 
   const searchStr = useSearch();
   const initialService = new URLSearchParams(searchStr).get("service") ?? "";
@@ -328,8 +327,11 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80" style={{ backgroundImage: `url(${marketingHeroImg})` }} />
         <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-purple-950/90" : "bg-gradient-to-br from-purple-600/90 via-purple-700/85 to-violet-700/90"}`} />
         <div className="relative">
+          {/* The global navbar theme control is the single Dark/Light toggle
+              now, so the duplicated hero one is gone; Fast Search/Report stay
+              Admin-toggleable per service (see /api/hero-actions). */}
           <div className="flex justify-end items-center gap-2 mb-9">
-            {canAct && (
+            {canAct && heroActions.MARKETING.reportEnabled && (
               <button
                 onClick={() => setBlacklistOpen(true)}
                 aria-label="Prestataires signalés"
@@ -340,7 +342,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                 <Ban className="w-4 h-4" />
               </button>
             )}
-            {canAct && (
+            {canAct && heroActions.MARKETING.fastSearchEnabled && (
               <button
                 onClick={() => setFastSearchOpen(true)}
                 aria-label="Fast Search"
@@ -351,9 +353,6 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                 <Zap className="w-4 h-4" />
               </button>
             )}
-            <button onClick={toggleTheme} aria-label="Toggle theme" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-amber-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
           </div>
           <div className="max-w-3xl mx-auto text-center">
             <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>

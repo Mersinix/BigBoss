@@ -357,6 +357,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Hero action settings (Fast Search / Report icon visibility per service) ──
+  app.get("/api/hero-actions", async (_req, res) => {
+    try {
+      res.json(await storage.getHeroActionSettings());
+    } catch { res.status(500).json({ message: "Failed to load hero action settings" }); }
+  });
+
+  app.patch("/api/admin/hero-actions/:service", requireAdmin, async (req, res) => {
+    try {
+      const service = req.params.service as string;
+      const VALID_SERVICES = ['SHOP', 'BARISTA', 'ACADEMY', 'MAINTENANCE', 'PRINT', 'MARKETING'];
+      if (!VALID_SERVICES.includes(service)) return res.status(400).json({ message: "Invalid service" });
+      const { fastSearchEnabled, reportEnabled } = z.object({
+        fastSearchEnabled: z.boolean().optional(),
+        reportEnabled: z.boolean().optional(),
+      }).parse(req.body);
+      const settings = await storage.setHeroActionSettings(service as any, { fastSearchEnabled, reportEnabled });
+      broadcast("hero_actions_updated", settings);
+      res.json(settings);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update hero action settings" });
+    }
+  });
+
   app.get("/api/system-service-order", async (_req, res) => {
     try {
       res.json(await storage.getServiceOrder());
@@ -1328,6 +1353,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Failed to load PRINT taxonomy" }); }
   });
 
+  // Entity-level report ("Blacklist") — a Coffee Owner flagging a Printer
+  // account itself, mirrors POST /api/marketing/:userId/report exactly.
+  app.post("/api/print/:printerId/report", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const printerId = Number(req.params.printerId);
+    const target = await storage.getUser(printerId);
+    if (!target || target.role !== "PRINTER") return res.status(404).json({ message: "Printer account not found" });
+    try {
+      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
+      const report = await storage.createPrintReport(user.id, printerId, reason);
+      broadcast("admin_print_report_created", { printerId });
+      const adminIds = await storage.getAdminUserIds();
+      await notifyMany({
+        userIds: adminIds,
+        service: "ADMIN", type: "print_report_created", priority: "URGENT",
+        title: "Imprimeur signalé",
+        message: `${user.name} a signalé ${target.name} (PRINT) : "${reason}".`,
+        entityType: "print_report", entityId: report.id,
+        prefKey: "reports",
+        dedupeKeyPrefix: `admin:print_report_created:${report.id}`,
+      });
+      res.status(201).json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid report data" });
+    }
+  });
+
+  app.get("/api/print/reports/mine", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    res.json(await storage.getPrintReportsByOwner(user.id));
+  });
+
   app.get("/api/print/me/categories", requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
@@ -1966,6 +2026,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const report = await storage.resolveAcademyReport(Number(req.params.id), status, resolutionNote);
       if (!report) return res.status(404).json({ message: "Not found" });
       broadcast("admin_academy_report_created", { academyUserId: report.academyUserId });
+      res.json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid data" });
+    }
+  });
+
+  app.get("/api/admin/print/reports", requireAdmin, async (req: any, res) => {
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    res.json(await storage.getPrintReports(status));
+  });
+
+  app.patch("/api/admin/print/reports/:id/resolve", requireAdmin, async (req: any, res) => {
+    try {
+      const { status, resolutionNote } = z.object({
+        status: z.enum(["RESOLVED", "DISMISSED"]),
+        resolutionNote: z.string().max(1000).optional(),
+      }).parse(req.body);
+      const report = await storage.resolvePrintReport(Number(req.params.id), status, resolutionNote);
+      if (!report) return res.status(404).json({ message: "Not found" });
+      broadcast("admin_print_report_created", { printerId: report.printerId });
       res.json(report);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });

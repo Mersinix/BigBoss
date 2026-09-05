@@ -12,7 +12,8 @@ import {
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones, maintenanceReports,
   marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
-  printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy,
+  printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport,
+  heroActionSettings, type HeroService, type HeroActionSettingsMap,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   baristaWorkHistory, baristaReports,
   academyProfiles, academyCourses, academyCourseSessions, academyRegistrations,
@@ -4431,6 +4432,78 @@ export class DatabaseStorage implements IStorage {
 
   async deletePrintSubCategory(id: number): Promise<void> {
     await db.delete(printSubCategoryTaxonomy).where(eq(printSubCategoryTaxonomy.id, id));
+  }
+
+  // Entity-level Print reports ("Blacklist") — mirrors createMarketingReport/
+  // getMarketingReportsByOwner/resolveMarketingReport exactly, keyed by printerId.
+  async createPrintReport(cafeOwnerId: number, printerId: number, reason: string): Promise<PrintReport> {
+    const [created] = await db.insert(printReports).values({ cafeOwnerId, printerId, reason }).returning();
+    return created;
+  }
+
+  async getPrintReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(PrintReport & { cafeOwnerName: string; printerName: string })[]> {
+    const rows = await db.select().from(printReports)
+      .where(status ? eq(printReports.status, status) : undefined)
+      .orderBy(desc(printReports.createdAt));
+    if (rows.length === 0) return [];
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.printerId])));
+    const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
+    return rows.map((r) => ({ ...r, cafeOwnerName: userMap.get(r.cafeOwnerId) ?? "—", printerName: userMap.get(r.printerId) ?? "—" }));
+  }
+
+  async getPrintReportsByOwner(cafeOwnerId: number): Promise<(PrintReport & {
+    printerName: string; printerProfileImageUrl: string | null; printerLocation: string | null;
+  })[]> {
+    const rows = await db.select().from(printReports)
+      .where(eq(printReports.cafeOwnerId, cafeOwnerId))
+      .orderBy(desc(printReports.createdAt));
+    if (rows.length === 0) return [];
+    const printerIds = Array.from(new Set(rows.map((r) => r.printerId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl, locationAddress: users.locationAddress })
+      .from(users).where(inArray(users.id, printerIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    return rows.map((r) => {
+      const p = map.get(r.printerId);
+      return { ...r, printerName: p?.name ?? "—", printerProfileImageUrl: p?.profileImageUrl ?? null, printerLocation: p?.locationAddress ?? null };
+    });
+  }
+
+  async resolvePrintReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<PrintReport | undefined> {
+    const [updated] = await db.update(printReports)
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .where(eq(printReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Admin-controlled per-service Coffee-Owner hero "Fast Search"/"Report" icon
+  // visibility — mirrors getServiceStates/setServiceState exactly (auto-seeds
+  // missing rows, defaults preserve today's behavior: enabled everywhere).
+  async getHeroActionSettings(): Promise<HeroActionSettingsMap> {
+    const ALL_SERVICES: HeroService[] = ['SHOP', 'BARISTA', 'ACADEMY', 'MAINTENANCE', 'PRINT', 'MARKETING'];
+    const rows = await db.select().from(heroActionSettings);
+    const map = {} as HeroActionSettingsMap;
+    for (const service of ALL_SERVICES) map[service] = { fastSearchEnabled: true, reportEnabled: true };
+    for (const row of rows) {
+      map[row.service as HeroService] = { fastSearchEnabled: row.fastSearchEnabled, reportEnabled: row.reportEnabled };
+    }
+    const missing = ALL_SERVICES.filter((s) => !rows.some((r) => r.service === s));
+    if (missing.length) {
+      for (const service of missing) {
+        await db.insert(heroActionSettings).values({ service }).onConflictDoNothing();
+      }
+    }
+    return map;
+  }
+
+  async setHeroActionSettings(service: HeroService, updates: Partial<{ fastSearchEnabled: boolean; reportEnabled: boolean }>): Promise<HeroActionSettingsMap> {
+    const existing = await db.select().from(heroActionSettings).where(eq(heroActionSettings.service, service));
+    if (existing.length) {
+      await db.update(heroActionSettings).set({ ...updates, updatedAt: new Date() }).where(eq(heroActionSettings.service, service));
+    } else {
+      await db.insert(heroActionSettings).values({ service, ...updates });
+    }
+    return this.getHeroActionSettings();
   }
 
   /** The Printer's own account (users.printCategories/printSubCategories) is

@@ -40,6 +40,35 @@ export type MarketingMarketplaceCard = MarketingProfile & {
   distanceKm?: number | null;
 };
 
+// Agency → Multiple Services split: category/price/responseTime/description/image now
+// live on their own row per service (see shared/schema.ts marketingServices) instead of
+// as one flat set of fields on the agency profile — mirrors AcademyCourse/AcademyCourseCard.
+export type MarketingService = {
+  id: number;
+  marketingUserId: number;
+  category: string;
+  startingPriceInCents: number;
+  responseTime: string;
+  description: string;
+  imageUrl: string | null;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MarketingServiceCard = MarketingService & {
+  agencyName: string;
+  agencyLocation: string;
+  agencyProfileImageUrl: string | null;
+  agencyDescription: string;
+  agencyWebsiteUrl: string | null;
+  agencyProfileType: string;
+  agencyIsAvailable: boolean;
+  rating: number;
+  reviewCount: number;
+  distanceKm?: number | null;
+};
+
 export type MarketingProject = {
   id: number;
   marketingUserId: number;
@@ -134,10 +163,66 @@ export function useMarketingTaxonomy() {
 }
 
 export function useMarketingProfileDetail(userId: number | null) {
-  return useQuery<{ card?: MarketingMarketplaceCard; user?: any; profile?: any }>({
+  return useQuery<{ card?: MarketingMarketplaceCard & { services: MarketingService[] }; user?: any; profile?: any }>({
     queryKey: ["/api/marketing/profile", userId],
     queryFn: () => getJson(`/api/marketing/profile/${userId}`),
     enabled: userId != null,
+  });
+}
+
+// ── Marketing Services (Agency → Multiple Services) ──
+
+export function useMarketingServices(filters?: { search?: string; category?: string; profileType?: string; location?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.search) params.set("search", filters.search);
+  if (filters?.category) params.set("category", filters.category);
+  if (filters?.profileType) params.set("profileType", filters.profileType);
+  if (filters?.location) params.set("location", filters.location);
+  const qs = params.toString();
+  return useQuery<MarketingServiceCard[]>({
+    queryKey: ["/api/marketing/services", qs],
+    queryFn: () => getJson(`/api/marketing/services${qs ? `?${qs}` : ""}`),
+  });
+}
+
+export function useMarketingServiceDetail(id: number | null) {
+  return useQuery<MarketingServiceCard>({
+    queryKey: ["/api/marketing/services", id],
+    queryFn: () => getJson(`/api/marketing/services/${id}`),
+    enabled: id != null,
+  });
+}
+
+export function useMyMarketingServices() {
+  return useQuery<MarketingService[]>({
+    queryKey: ["/api/marketing/services/mine"],
+    queryFn: () => getJson("/api/marketing/services/mine"),
+  });
+}
+
+export function useCreateMarketingService() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<Pick<MarketingService, "category" | "startingPriceInCents" | "responseTime" | "description" | "imageUrl" | "isPublished">>) =>
+      mutate("POST", "/api/marketing/services", data),
+    onSuccess: () => qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/marketing/service") }),
+  });
+}
+
+export function useUpdateMarketingService() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number } & Partial<Pick<MarketingService, "category" | "startingPriceInCents" | "responseTime" | "description" | "imageUrl" | "isPublished">>) =>
+      mutate("PATCH", `/api/marketing/services/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/marketing/service") }),
+  });
+}
+
+export function useDeleteMarketingService() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => mutate("DELETE", `/api/marketing/services/${id}`),
+    onSuccess: () => qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/marketing/service") }),
   });
 }
 
@@ -238,7 +323,7 @@ export function useMyMarketingReports() {
 // ── Marketing provider self-service ──
 
 export function useMyMarketingProfile(userId: number | null) {
-  return useQuery<{ user: any; profile: MarketingProfile; card: MarketingMarketplaceCard }>({
+  return useQuery<{ user: any; profile: MarketingProfile; card: MarketingMarketplaceCard & { services: MarketingService[] } }>({
     queryKey: ["/api/marketing/profile", userId],
     queryFn: () => getJson(`/api/marketing/profile/${userId}`),
     enabled: userId != null,

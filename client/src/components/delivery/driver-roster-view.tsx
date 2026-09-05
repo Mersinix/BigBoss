@@ -1,18 +1,17 @@
 import { useState } from "react";
 import { useDeliveries } from "@/hooks/use-deliveries";
-import { useVehicles, useAssignVehicle, useDriverReviews, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
+import { useVehicles, useAssignVehicle, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
+import { DriverDetailModal } from "@/components/driver/driver-detail-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Truck, Plus, Loader2, Search, Phone, Mail, Calendar, Star, Package, User as UserIcon } from "lucide-react";
+import { Truck, Plus, Loader2, Search, Phone, User as UserIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getAvatarUrl } from "@/lib/avatar";
-import { formatDate } from "@/lib/format";
 import type { User } from "@shared/schema";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 
@@ -27,39 +26,6 @@ type Props = {
    *  Supplier drivers just display whichever vehicle they already have (if any). */
   ownerType?: "DELIVERY_COMPANY" | "SUPPLIER";
 };
-
-function DriverDetailModal({ driver, deliveries, vehicle, onClose }: { driver: User | null; deliveries: any[]; vehicle: any; onClose: () => void }) {
-  const { data: reviews = [] } = useDriverReviews(driver?.id ?? null);
-  if (!driver) return null;
-  const active = deliveries.filter((d) => d.driverId === driver.id && ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(d.status)).length;
-  const completed = deliveries.filter((d) => d.driverId === driver.id && d.status === "DELIVERED").length;
-  const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <Avatar><AvatarImage src={getAvatarUrl(driver)} alt={driver.name} /><AvatarFallback className="bg-primary/10 text-primary font-bold">{driver.name.charAt(0)}</AvatarFallback></Avatar>
-            <span>{driver.name}</span>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="grid sm:grid-cols-2 gap-4 text-sm">
-          <div className="sm:col-span-2 flex flex-wrap gap-2">
-            <Badge variant="outline">{driver.status}</Badge>
-            {(driver as any).isWhatsapp && driver.phone && <Badge variant="outline" className="text-green-600 border-green-200">WhatsApp</Badge>}
-          </div>
-          <div className="flex gap-2"><Mail className="h-4 w-4 text-primary mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Email</p><p>{driver.email}</p></div></div>
-          <div className="flex gap-2"><Phone className="h-4 w-4 text-primary mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Téléphone</p><p>{driver.phone || "—"}</p></div></div>
-          <div className="flex gap-2"><Calendar className="h-4 w-4 text-primary mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscrit le</p><p>{driver.createdAt ? formatDate(driver.createdAt as any) : "—"}</p></div></div>
-          <div className="flex gap-2"><Truck className="h-4 w-4 text-primary mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Véhicule</p><p>{vehicle ? `${VEHICLE_TYPE_LABELS[vehicle.type as DeliveryVehicleType]} — ${vehicle.brand} ${vehicle.model}${vehicle.plateNumber ? ` (${vehicle.plateNumber})` : ""}` : "Aucun véhicule assigné"}</p></div></div>
-          <div className="flex gap-2"><Package className="h-4 w-4 text-primary mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Livraisons</p><p>{active} en cours / {completed} terminée(s)</p></div></div>
-          <div className="flex gap-2"><Star className="h-4 w-4 text-primary mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{reviews.length > 0 ? `${avgRating.toFixed(1)} (${reviews.length} avis)` : "Aucun avis"}</p></div></div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /**
  * Driver roster UI shared by the Delivery Company "Drivers" page and the Supplier "Drivers"
@@ -252,7 +218,7 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
         </DialogContent>
       </Dialog>
 
-      <DriverDetailModal driver={detail} deliveries={deliveries} vehicle={detail ? vehicleByDriver.get(detail.id) : null} onClose={() => setDetail(null)} />
+      <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
     </div>
   );
 }

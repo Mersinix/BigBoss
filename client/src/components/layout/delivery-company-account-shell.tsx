@@ -1,24 +1,23 @@
 import {
   Truck,
-  Package,
-  Users,
-  Eye,
+  Briefcase,
   MessageSquare,
   TrendingUp,
   Settings,
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure — Performance first (replaces the former
-// standalone Dashboard tab), then business-specific tabs, Profil Public,
-// Communication, Paramètres (Marketing is the design reference).
+// Performance first, then the new "Business" tab (Livraisons disponibles/Mes
+// livraisons/Chauffeurs/Véhicules/Profil — see business.tsx's internal
+// SubTabSwitcher), Communication, Paramètres. The former separate "Profil
+// Public" tab is gone: its role (a Coffee-Owner-marketplace-style preview) is
+// now the Eye icon inside Business → Profil, reusing the exact same visual
+// reference as the Barista/Maintenance details modals via
+// DeliveryCompanyDetailModal — no second preview design. Same reorg pattern
+// as barista-account-shell.tsx / maintenance-account-shell.tsx.
 const TABS: ProfessionalAccountTab[] = [
   { path: "/delivery", label: "Performance", icon: TrendingUp, exact: true },
-  { path: "/delivery/available", label: "Livraisons disponibles", icon: Package },
-  { path: "/delivery/my-deliveries", label: "Mes livraisons", icon: Truck },
-  { path: "/delivery/drivers", label: "Chauffeurs", icon: Users },
-  { path: "/delivery/vehicles", label: "Véhicules", icon: Truck },
-  { path: "/delivery/profil-public", label: "Profil Public", icon: Eye },
+  { path: "/delivery/business", label: "Business", icon: Briefcase },
   { path: "/delivery/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
   { path: "/delivery/settings", label: "Paramètres", icon: Settings },
 ];

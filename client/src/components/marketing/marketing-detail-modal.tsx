@@ -23,8 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Clock, Image as ImageIcon, Users, Globe, MessageCircle,
-  Flag, Heart, Navigation, X, FileText,
+  Star, MapPin, Clock, Image as ImageIcon, Globe, MessageCircle,
+  Flag, Heart, Navigation, X, Megaphone,
 } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -148,11 +148,25 @@ export function MarketingDetailModal({
   open,
   onClose,
   onRequestQuote,
+  onOpenService,
+  readOnly = false,
 }: {
   marketingUserId: number | null;
   open: boolean;
   onClose: () => void;
   onRequestQuote: (provider: MarketingMarketplaceCard) => void;
+  // Clicking a service in the "Services" list (Part 2-3) hands the serviceId back to the
+  // caller, which opens the Service Details Modal — same nested-navigation pattern as
+  // AcademyDetailModal/AcademyProfileModal, kept as a callback (not a direct import) so
+  // the two modal files never import each other.
+  onOpenService?: (serviceId: number) => void;
+  // Used by the Marketing provider's own "preview my profile" (Eye icon on
+  // Business → Profil) and by Admin's inspection view: renders the exact same
+  // modal a Coffee Owner sees, but Favorite/Report/Message/Avis/Devis become
+  // inert (no self-favorite, self-message, self-report, self-review, or
+  // self-quote-request) — only Disponibilité and the Portfolio album stay
+  // functional, since they're just displaying real saved data.
+  readOnly?: boolean;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -188,6 +202,7 @@ export function MarketingDetailModal({
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
   const [messaging, setMessaging] = useState(false);
+  const services = card?.services ?? [];
 
   // Review eligibility mirrors the existing server rule exactly (POST /api/marketing/reviews):
   // one review per COMPLETED marketingProject between this Coffee Owner and this provider.
@@ -217,7 +232,7 @@ export function MarketingDetailModal({
   };
 
   const handleMessage = async () => {
-    if (!card) return;
+    if (!card || readOnly) return;
     setMessaging(true);
     try {
       const res = await startMarketingConversation(card.userId);
@@ -231,7 +246,7 @@ export function MarketingDetailModal({
   };
 
   const submitReview = () => {
-    if (!card || !activeProjectId) return;
+    if (!card || !activeProjectId || readOnly) return;
     createReview.mutate(
       { marketingUserId: card.userId, projectId: activeProjectId, rating: reviewRating, comment: reviewComment.trim() || undefined },
       {
@@ -242,7 +257,7 @@ export function MarketingDetailModal({
   };
 
   const submitReport = () => {
-    if (!card || !reportReason.trim()) return;
+    if (!card || !reportReason.trim() || readOnly) return;
     reportProvider.mutate(
       { marketingUserId: card.userId, reason: reportReason.trim() },
       {
@@ -276,7 +291,7 @@ export function MarketingDetailModal({
               <div className="absolute top-3 right-3 flex gap-2">
                 <button
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
-                  onClick={() => toggleMarketing({ id: card.userId, name: card.name, initials: card.initials, type: providerTypeLabel(card.profileType), rating: card.rating / 10, portfolioImages: card.portfolioImages, location: card.location, available: card.isAvailable, profileImageUrl: card.profileImageUrl })}
+                  onClick={() => { if (!readOnly) toggleMarketing({ id: card.userId, name: card.name, initials: card.initials, type: providerTypeLabel(card.profileType), rating: card.rating / 10, portfolioImages: card.portfolioImages, location: card.location, available: card.isAvailable, profileImageUrl: card.profileImageUrl }); }}
                   data-testid={`button-fav-modal-${card.userId}`}
                 >
                   <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
@@ -286,7 +301,7 @@ export function MarketingDetailModal({
                 </button>
               </div>
               <div className="absolute bottom-3 right-3 flex gap-2">
-                <button onClick={() => setReportModalOpen(true)} title="Signaler" data-testid="button-open-marketing-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+                <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-marketing-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-marketing-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
               </div>
               <span
@@ -312,32 +327,36 @@ export function MarketingDetailModal({
                 </div>
               </div>
 
-              {/* Services */}
-              {card.categories.length > 0 && (
+              {/* About — the agency's own description (never a service's) */}
+              {card.description && (
                 <div>
-                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Users className="w-3.5 h-3.5" /> Services proposés</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {card.categories.map((cat) => (
-                      <Badge key={cat} variant="outline" className={isDark ? "border-gray-700 text-gray-200" : ""}>{cat}</Badge>
-                    ))}
-                  </div>
+                  <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>À propos</p>
+                  <p className={`text-sm leading-relaxed ${t.textMuted}`}>{card.description}</p>
                 </div>
               )}
 
-              {/* Pricing */}
+              {/* Services — the agency's real published services (Part 3), each with its own
+                  price/response time; clicking one opens the Service Details Modal. */}
               <div>
-                <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><FileText className="w-3.5 h-3.5" /> Tarif & délai</p>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className={`p-3 rounded-xl ${t.sectionBg}`}>
-                    <p className={`text-[11px] ${t.textMuted}`}>À partir de</p>
-                    <p className="font-bold text-purple-600">{fmt(card.startingPriceInCents)}</p>
+                <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Megaphone className="w-3.5 h-3.5" /> Services ({services.length})</p>
+                {services.length === 0 ? (
+                  <p className={`text-xs ${t.textMuted}`}>Aucun service publié pour le moment.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {services.map((service) => (
+                      <button
+                        key={service.id}
+                        type="button"
+                        onClick={() => onOpenService?.(service.id)}
+                        className={`text-left p-3 rounded-xl border transition-colors ${t.border} ${isDark ? "hover:border-purple-600" : "hover:border-purple-300"} ${t.sectionBg}`}
+                        data-testid={`button-agency-service-${service.id}`}
+                      >
+                        <p className={`text-sm font-medium truncate ${t.textPrimary}`}>{service.category}</p>
+                        <p className={`text-xs mt-1 ${t.textMuted}`}>{fmt(service.startingPriceInCents)} · {service.responseTime}</p>
+                      </button>
+                    ))}
                   </div>
-                  <div className={`p-3 rounded-xl ${t.sectionBg}`}>
-                    <p className={`text-[11px] ${t.textMuted}`}>Temps de réponse</p>
-                    <p className={`font-bold ${t.textPrimary}`}>{card.responseTime}</p>
-                  </div>
-                </div>
-                {card.description && <p className={`text-sm leading-relaxed mt-2.5 ${t.textMuted}`}>{card.description}</p>}
+                )}
               </div>
 
               {/* Website — never fabricated, omitted entirely when not set */}
@@ -432,7 +451,7 @@ export function MarketingDetailModal({
               <Button variant="outline" size="sm" className={`gap-1.5 ${t.textPrimary} ${isDark ? "border-gray-700" : ""}`} onClick={handleMessage} disabled={messaging} data-testid="button-message-marketing">
                 <MessageCircle className="w-3.5 h-3.5" /> Message
               </Button>
-              <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-1.5" onClick={() => onRequestQuote(card)} data-testid="button-quote-marketing-modal">
+              <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white gap-1.5" onClick={() => { if (!readOnly) onRequestQuote(card); }} data-testid="button-quote-marketing-modal">
                 Demander un devis
               </Button>
             </div>

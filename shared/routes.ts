@@ -184,7 +184,12 @@ export const api = {
     dispatch: {
       method: 'PATCH' as const,
       path: '/api/deliveries/:id/dispatch' as const,
-      input: z.object({ mode: z.enum(['DELIVERY_COMPANY', 'SUPPLIER']) }),
+      input: z.object({
+        mode: z.enum(['DELIVERY_COMPANY', 'SUPPLIER']),
+        // Optional targeted dispatch — Supplier picked one specific company card instead of
+        // broadcasting to every partner. Omitted = today's exact broadcast behavior.
+        deliveryCompanyId: z.number().int().positive().optional(),
+      }),
       responses: {
         200: z.custom<typeof deliveries.$inferSelect>(),
         400: errorSchemas.validation,

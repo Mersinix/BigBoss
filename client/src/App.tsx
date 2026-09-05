@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect, useLocation } from "wouter";
+import { Switch, Route, Redirect, useLocation, useSearch } from "wouter";
 import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -43,10 +43,7 @@ import AdminMessagesPage from "@/pages/admin/messages-page";
 import DeliveryMessagesPage from "@/pages/delivery/messages-page";
 import DeliveryDashboard from "@/pages/delivery/dashboard";
 import DeliveryCompanySettingsPage from "@/pages/delivery/settings-page";
-import AvailableDeliveriesPage from "@/pages/delivery/available-deliveries-page";
-import MyDeliveriesPage from "@/pages/delivery/my-deliveries-page";
-import DeliveryCompanyDriversPage from "@/pages/delivery/drivers-page";
-import DeliveryVehiclesPage from "@/pages/delivery/vehicles-page";
+import DeliveryCompanyBusiness from "@/pages/delivery/business";
 import DriverDeliveriesPage from "@/pages/delivery/driver-deliveries-page";
 import SupplierMyDeliveriesPage from "@/pages/supplier/my-deliveries-page";
 import SupplierDeliveryDriversPage from "@/pages/supplier/delivery-drivers-page";
@@ -54,19 +51,14 @@ import { DriverAccountShell } from "@/components/layout/driver-account-shell";
 import { DeliveryCompanyAccountShell } from "@/components/layout/delivery-company-account-shell";
 import DeliveryCommunication from "@/pages/delivery/communication";
 import DeliveryPerformance from "@/pages/delivery/performance";
-import DeliveryProfilPublic from "@/pages/delivery/profil-public";
 import { PrinterAccountShell } from "@/components/layout/printer-account-shell";
-import DriverPlanningPage from "@/pages/driver/planning";
 import DriverWalletPage from "@/pages/driver/wallet";
-import DriverPaymentsPage from "@/pages/driver/payments";
-import DriverOpportunitiesPage from "@/pages/driver/opportunities";
 import DriverActivityPage from "@/pages/driver/activity";
-import DriverRewardsPage from "@/pages/driver/rewards";
 import DriverReviewsPage from "@/pages/driver/reviews";
 import DriverSettingsPage from "@/pages/driver/settings";
 import DriverCommunication from "@/pages/driver/communication";
 import DriverPerformance from "@/pages/driver/performance";
-import DriverProfilPublic from "@/pages/driver/profil-public";
+import DriverBusiness from "@/pages/driver/business";
 
 // New role dashboards
 import PrinterDashboard from "@/pages/printer/dashboard";
@@ -83,10 +75,7 @@ import PrinterCommunication from "@/pages/printer/communication";
 import PrinterPerformance from "@/pages/printer/performance";
 import PrinterProfilPublic from "@/pages/printer/profil-public";
 import MarketingDashboard from "@/pages/marketing/dashboard";
-import MarketingServices from "@/pages/marketing/services";
-import MarketingProjects from "@/pages/marketing/projects";
-import MarketingClients from "@/pages/marketing/clients";
-import MarketingInvoices from "@/pages/marketing/invoices";
+import MarketingBusiness from "@/pages/marketing/business";
 import MarketingAnalytics from "@/pages/marketing/analytics";
 import MarketingMessages from "@/pages/marketing/messages";
 import MarketingNotifications from "@/pages/marketing/notifications";
@@ -94,13 +83,9 @@ import MarketingReviewsPage from "@/pages/marketing/reviews";
 import MarketingSettingsPage from "@/pages/marketing/settings-page";
 import MarketingCommunication from "@/pages/marketing/communication";
 import MarketingPerformance from "@/pages/marketing/performance";
-import MarketingProfilPublic from "@/pages/marketing/profil-public";
 import { MarketingAccountShell } from "@/components/layout/marketing-account-shell";
 import BaristaAcademyDashboard from "@/pages/barista-academy/dashboard";
-import BaristaAcademyCoursesPage from "@/pages/barista-academy/courses";
-import BaristaAcademyRegistrationsPage from "@/pages/barista-academy/registrations";
-import BaristaAcademyStudentsPage from "@/pages/barista-academy/students";
-import BaristaAcademyCalendarPage from "@/pages/barista-academy/calendar";
+import AcademyBusiness from "@/pages/barista-academy/business";
 import BaristaAcademyRevenuePage from "@/pages/barista-academy/revenue";
 import BaristaAcademyMessagesPage from "@/pages/barista-academy/messages";
 import BaristaAcademyReviewsPage from "@/pages/barista-academy/reviews";
@@ -108,7 +93,6 @@ import BaristaAcademyAnalyticsPage from "@/pages/barista-academy/analytics";
 import BaristaAcademySettingsPage from "@/pages/barista-academy/settings";
 import AcademyCommunication from "@/pages/barista-academy/communication";
 import AcademyPerformance from "@/pages/barista-academy/performance";
-import AcademyProfilPublic from "@/pages/barista-academy/profil-public";
 import { AcademyAccountShell } from "@/components/layout/academy-account-shell";
 import BaristaMarketplaceDashboard from "@/pages/barista-marketplace/dashboard";
 import BaristaMarketplaceBusiness from "@/pages/barista-marketplace/business";
@@ -266,15 +250,27 @@ function SmartDashboard() {
 // exactly one operator (Delivery Company or Supplier — see users.deliveryCompanyId /
 // users.supplierId), and each operator gets its own page at the same URL rather than a
 // second set of routes. Mirrors the SmartDashboard role-branch pattern above.
+// Delivery Company's own view of these two shared routes now lives under
+// Business (business.tsx's internal switcher) instead of directly at these
+// URLs — Supplier's branch is completely untouched, still rendered at the
+// exact same path via DashboardLayout as before.
 function MyDeliveriesRoute() {
   const { user } = useAuth();
   if (user?.role === "SUPPLIER") return <SupplierMyDeliveriesPage />;
-  return <MyDeliveriesPage />;
+  return <Redirect to="/delivery/business?tab=my-deliveries" />;
 }
 function DriversRoute() {
   const { user } = useAuth();
   if (user?.role === "SUPPLIER") return <SupplierDeliveryDriversPage />;
-  return <DeliveryCompanyDriversPage />;
+  return <Redirect to="/delivery/business?tab=drivers" />;
+}
+
+// /driver/deliveries redirects into Business → Livraisons, but preserves the page's own
+// ?focus= deep-link param (used to jump straight to one delivery from a notification) —
+// dropping it here would silently break those existing links.
+function DriverDeliveriesRedirect() {
+  const search = useSearch();
+  return <Redirect to={`/driver/business?tab=deliveries${search ? `&${search}` : ""}`} />;
 }
 
 // /delivery/my-deliveries, /delivery/drivers and /delivery/messages are also shared
@@ -473,18 +469,16 @@ function Router() {
       <Route path="/marketing-panel">
         {() => (<MarketingAccountShell><ProtectedRoute component={MarketingPerformance} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
       </Route>
-      <Route path="/marketing-panel/services">
-        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingServices} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
+      {/* Business — Services/Projets/Clients/Devis & Factures/Profil, now one tab with an
+          internal ?tab= switcher (business.tsx) instead of five separate top-level tabs. Old
+          direct links keep working via redirect, deep-linked to the matching sub-tab. */}
+      <Route path="/marketing-panel/business">
+        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingBusiness} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
       </Route>
-      <Route path="/marketing-panel/projects">
-        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingProjects} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
-      </Route>
-      <Route path="/marketing-panel/clients">
-        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingClients} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
-      </Route>
-      <Route path="/marketing-panel/invoices">
-        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingInvoices} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
-      </Route>
+      <Route path="/marketing-panel/services">{() => <Redirect to="/marketing-panel/business?tab=services" />}</Route>
+      <Route path="/marketing-panel/projects">{() => <Redirect to="/marketing-panel/business?tab=projects" />}</Route>
+      <Route path="/marketing-panel/clients">{() => <Redirect to="/marketing-panel/business?tab=clients" />}</Route>
+      <Route path="/marketing-panel/invoices">{() => <Redirect to="/marketing-panel/business?tab=invoices" />}</Route>
       <Route path="/marketing-panel/analytics">
         {() => (<MarketingAccountShell><ProtectedRoute component={MarketingAnalytics} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
       </Route>
@@ -510,27 +504,26 @@ function Router() {
       <Route path="/marketing-panel/performance">
         {() => (<MarketingAccountShell><ProtectedRoute component={MarketingPerformance} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
       </Route>
-      <Route path="/marketing-panel/profil-public">
-        {() => (<MarketingAccountShell><ProtectedRoute component={MarketingProfilPublic} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
-      </Route>
+      {/* Old standalone "Profil Public" tab is retired — its role (previewing the real
+          profile the way a Coffee Owner sees it) is now the Eye icon inside
+          Business → Profil, reusing the existing MarketingDetailModal. */}
+      <Route path="/marketing-panel/profil-public">{() => <Redirect to="/marketing-panel/business?tab=profile" />}</Route>
 
       {/* ── Barista Academy routes — top switcher shell instead of the sidebar, same
           organizational pattern as Barista Marketplace, see academy-account-shell.tsx ── */}
       <Route path="/barista-academy">
         {() => (<AcademyAccountShell><ProtectedRoute component={AcademyPerformance} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
       </Route>
-      <Route path="/barista-academy/courses">
-        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyCoursesPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
+      {/* Business — Formations/Inscriptions/Étudiants/Calendrier/Profil, now one tab with an
+          internal ?tab= switcher (business.tsx) instead of five separate top-level tabs. Old
+          direct links keep working via redirect, deep-linked to the matching sub-tab. */}
+      <Route path="/barista-academy/business">
+        {() => (<AcademyAccountShell><ProtectedRoute component={AcademyBusiness} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
       </Route>
-      <Route path="/barista-academy/registrations">
-        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyRegistrationsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
-      </Route>
-      <Route path="/barista-academy/students">
-        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyStudentsPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
-      </Route>
-      <Route path="/barista-academy/calendar">
-        {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyCalendarPage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
-      </Route>
+      <Route path="/barista-academy/courses">{() => <Redirect to="/barista-academy/business?tab=courses" />}</Route>
+      <Route path="/barista-academy/registrations">{() => <Redirect to="/barista-academy/business?tab=registrations" />}</Route>
+      <Route path="/barista-academy/students">{() => <Redirect to="/barista-academy/business?tab=students" />}</Route>
+      <Route path="/barista-academy/calendar">{() => <Redirect to="/barista-academy/business?tab=calendar" />}</Route>
       <Route path="/barista-academy/revenue">
         {() => (<AcademyAccountShell><ProtectedRoute component={BaristaAcademyRevenuePage} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
       </Route>
@@ -555,9 +548,10 @@ function Router() {
       <Route path="/barista-academy/performance">
         {() => (<AcademyAccountShell><ProtectedRoute component={AcademyPerformance} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
       </Route>
-      <Route path="/barista-academy/profil-public">
-        {() => (<AcademyAccountShell><ProtectedRoute component={AcademyProfilPublic} allowedRoles={["BARISTA_ACADEMY"]} requireApproved /></AcademyAccountShell>)}
-      </Route>
+      {/* Old standalone "Profil Public" tab is retired — its role (previewing the real
+          profile the way a Coffee Owner sees it) is now the Eye icon inside
+          Business → Profil, reusing the new AcademyProfileModal. */}
+      <Route path="/barista-academy/profil-public">{() => <Redirect to="/barista-academy/business?tab=profile" />}</Route>
 
       {/* ── Barista Marketplace routes — top switcher shell instead of the sidebar, see barista-account-shell.tsx ── */}
       <Route path="/barista-marketplace">
@@ -803,18 +797,21 @@ function Router() {
       <Route path="/delivery">
         {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryPerformance} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
       </Route>
-      <Route path="/delivery/available">
-        {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={AvailableDeliveriesPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
+      {/* Business — Livraisons disponibles/Mes livraisons/Chauffeurs/Véhicules/Profil, now
+          one tab with an internal ?tab= switcher (business.tsx) instead of five separate
+          top-level tabs. Old direct links keep working via redirect, deep-linked to the
+          matching sub-tab, so nothing that used to work is now a dead link. */}
+      <Route path="/delivery/business">
+        {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryCompanyBusiness} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
       </Route>
+      <Route path="/delivery/available">{() => <Redirect to="/delivery/business?tab=available" />}</Route>
       <Route path="/delivery/my-deliveries">
         {() => (<DeliveryCompanyOrDashboardLayout><ProtectedRoute component={MyDeliveriesRoute} allowedRoles={["DELIVERY_COMPANY", "SUPPLIER"]} requireApproved /></DeliveryCompanyOrDashboardLayout>)}
       </Route>
       <Route path="/delivery/drivers">
         {() => (<DeliveryCompanyOrDashboardLayout><ProtectedRoute component={DriversRoute} allowedRoles={["DELIVERY_COMPANY", "SUPPLIER"]} requireApproved /></DeliveryCompanyOrDashboardLayout>)}
       </Route>
-      <Route path="/delivery/vehicles">
-        {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryVehiclesPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
-      </Route>
+      <Route path="/delivery/vehicles">{() => <Redirect to="/delivery/business?tab=vehicles" />}</Route>
       <Route path="/delivery/settings">
         {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryCompanySettingsPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
       </Route>
@@ -824,9 +821,10 @@ function Router() {
       <Route path="/delivery/performance">
         {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryPerformance} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
       </Route>
-      <Route path="/delivery/profil-public">
-        {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryProfilPublic} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
-      </Route>
+      {/* Old standalone "Profil Public" tab is retired — its role (previewing the real
+          profile the way a Supplier sees it) is now the Eye icon inside Business → Profil,
+          reusing the actual DeliveryCompanyDetailModal. */}
+      <Route path="/delivery/profil-public">{() => <Redirect to="/delivery/business?tab=profile" />}</Route>
 
       {/* ── Driver routes ── */}
       <Route path="/delivery/deliveries">
@@ -847,27 +845,27 @@ function Router() {
       <Route path="/driver">
         {() => (<DriverAccountShell><ProtectedRoute component={DriverPerformance} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
-      <Route path="/driver/planning">
-        {() => (<DriverAccountShell><ProtectedRoute component={DriverPlanningPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
+      {/* Business — Planification/Livraisons/Paiements/Récompenses/Profil, now one tab with
+          an internal ?tab= switcher (business.tsx) instead of five separate top-level tabs.
+          Old direct links keep working via redirect, deep-linked to the matching sub-tab —
+          /driver/deliveries additionally forwards its own ?focus= deep-link param (used to
+          jump straight to one delivery) so that still works post-redirect too. */}
+      <Route path="/driver/business">
+        {() => (<DriverAccountShell><ProtectedRoute component={DriverBusiness} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
-      <Route path="/driver/deliveries">
-        {() => (<DriverAccountShell><ProtectedRoute component={DriverDeliveriesPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
-      </Route>
+      <Route path="/driver/planning">{() => <Redirect to="/driver/business?tab=planning" />}</Route>
+      <Route path="/driver/deliveries">{() => <DriverDeliveriesRedirect />}</Route>
       <Route path="/driver/wallet">
         {() => (<DriverAccountShell><ProtectedRoute component={DriverWalletPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
-      <Route path="/driver/payments">
-        {() => (<DriverAccountShell><ProtectedRoute component={DriverPaymentsPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
-      </Route>
-      <Route path="/driver/opportunities">
-        {() => (<DriverAccountShell><ProtectedRoute component={DriverOpportunitiesPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
-      </Route>
+      <Route path="/driver/payments">{() => <Redirect to="/driver/business?tab=payments" />}</Route>
+      {/* "Opportunités" is retired entirely (task Part 7/32) — not moved into Business,
+          redirected to the account's home instead of left as a dead link. */}
+      <Route path="/driver/opportunities">{() => <Redirect to="/driver" />}</Route>
       <Route path="/driver/activity">
         {() => (<DriverAccountShell><ProtectedRoute component={DriverActivityPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
-      <Route path="/driver/rewards">
-        {() => (<DriverAccountShell><ProtectedRoute component={DriverRewardsPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
-      </Route>
+      <Route path="/driver/rewards">{() => <Redirect to="/driver/business?tab=rewards" />}</Route>
       <Route path="/driver/messages">
         {() => (<DriverAccountShell><ProtectedRoute component={DeliveryMessagesPage} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
@@ -886,9 +884,10 @@ function Router() {
       <Route path="/driver/performance">
         {() => (<DriverAccountShell><ProtectedRoute component={DriverPerformance} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
       </Route>
-      <Route path="/driver/profil-public">
-        {() => (<DriverAccountShell><ProtectedRoute component={DriverProfilPublic} allowedRoles={["DRIVER"]} requireApproved /></DriverAccountShell>)}
-      </Route>
+      {/* Old standalone "Profil Public" tab is retired — its role (a marketplace-style
+          preview) is now the Eye icon inside Business → Profil, reusing the shared
+          DriverDetailModal. */}
+      <Route path="/driver/profil-public">{() => <Redirect to="/driver/business?tab=profile" />}</Route>
 
       <Route component={NotFound} />
     </Switch>

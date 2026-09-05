@@ -12,6 +12,7 @@ import {
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones, maintenanceReports,
   marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
+  marketingServices, type MarketingService, type InsertMarketingService, type MarketingServiceCard,
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport,
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
@@ -22,6 +23,10 @@ import {
   notifications,
   orderReturns,
   deliveries, vehicles, deliveryPricingSettings, deliveryOpportunities,
+  deliveryCompanyProfiles, deliveryCompanyReports,
+  type DeliveryCompanyProfile, type InsertDeliveryCompanyProfile, type DeliveryCompanyMarketplaceCard,
+  type DeliveryCompanyReport, type InsertDeliveryCompanyReport,
+  driverProfiles, type DriverProfile, type InsertDriverProfile,
   passwordResetCodes,
   type Notification, type InsertNotification, type NotificationService,
   type OrderReturn, type InsertOrderReturn,
@@ -1254,10 +1259,17 @@ export class DatabaseStorage implements IStorage {
    * compare-and-swap on (id, supplierId=caller, status=PENDING) — reuses the same Delivery
    * row, never creates a second one.
    */
-  async dispatchDelivery(deliveryId: number, supplierId: number, mode: DeliveryMode): Promise<Delivery> {
+  // targetDeliveryCompanyId (Part 24) — when given, this delivery is pre-assigned to that
+  // one company instead of entering the shared broadcast pool: getDeliveries' DELIVERY_COMPANY
+  // branch only surfaces an AVAILABLE delivery to companies where deliveryCompanyId is either
+  // null (the existing pool, unchanged) or equal to their own id, and acceptDelivery refuses a
+  // different company from taking it — so it can never be "stolen". Leaving it undefined
+  // reproduces today's exact broadcast-to-all behavior.
+  async dispatchDelivery(deliveryId: number, supplierId: number, mode: DeliveryMode, targetDeliveryCompanyId?: number): Promise<Delivery> {
     const updates: any = { deliveryMode: mode };
     if (mode === 'DELIVERY_COMPANY') {
       updates.status = 'AVAILABLE';
+      if (targetDeliveryCompanyId != null) updates.deliveryCompanyId = targetDeliveryCompanyId;
     } else {
       updates.status = 'ACCEPTED';
       updates.acceptedAt = new Date();
@@ -1540,7 +1552,14 @@ export class DatabaseStorage implements IStorage {
     } else if (role === 'DRIVER') {
       rows = await db.select().from(deliveries).where(eq(deliveries.driverId, userId));
     } else if (role === 'DELIVERY_COMPANY') {
-      rows = await db.select().from(deliveries).where(or(eq(deliveries.deliveryCompanyId, userId), eq(deliveries.status, 'AVAILABLE')));
+      // A company always sees its own deliveries (accepted, or specifically targeted at it —
+      // see dispatchDelivery's targetDeliveryCompanyId), plus the untargeted broadcast pool
+      // (AVAILABLE + deliveryCompanyId still null) exactly as before — never another
+      // company's targeted delivery.
+      rows = await db.select().from(deliveries).where(or(
+        eq(deliveries.deliveryCompanyId, userId),
+        and(eq(deliveries.status, 'AVAILABLE'), isNull(deliveries.deliveryCompanyId)),
+      ));
     } else if (role === 'SUPPLIER') {
       rows = await db.select().from(deliveries).where(eq(deliveries.supplierId, userId));
     } else if (role === 'CAFE_OWNER') {
@@ -1596,9 +1615,16 @@ export class DatabaseStorage implements IStorage {
 
   /** AVAILABLE → ACCEPTED. Atomic compare-and-swap: fails (0 rows) if another company already accepted it. */
   async acceptDelivery(deliveryId: number, deliveryCompanyId: number): Promise<Delivery> {
+    // Guards against a targeted delivery (dispatchDelivery's targetDeliveryCompanyId) being
+    // accepted by a different company than the one it was sent to — untargeted (null) stays
+    // first-come-first-served exactly as before.
     const [updated] = await db.update(deliveries)
       .set({ status: 'ACCEPTED', deliveryCompanyId, acceptedAt: new Date() })
-      .where(and(eq(deliveries.id, deliveryId), eq(deliveries.status, 'AVAILABLE')))
+      .where(and(
+        eq(deliveries.id, deliveryId),
+        eq(deliveries.status, 'AVAILABLE'),
+        or(isNull(deliveries.deliveryCompanyId), eq(deliveries.deliveryCompanyId, deliveryCompanyId)),
+      ))
       .returning();
     if (!updated) throw new Error('Delivery is no longer available');
     return updated;
@@ -2000,6 +2026,24 @@ export class DatabaseStorage implements IStorage {
   async getVehicleForDriver(driverId: number): Promise<Vehicle | undefined> {
     const [row] = await db.select().from(vehicles).where(eq(vehicles.assignedDriverId, driverId));
     return row;
+  }
+
+  // Driver's own editable profile extension (bio/experience/certifications/availability) —
+  // same getOrCreate-on-read pattern as getMaintenanceProfile/getDeliveryCompanyProfile.
+  async getDriverProfile(userId: number): Promise<DriverProfile> {
+    const [profile] = await db.select().from(driverProfiles).where(eq(driverProfiles.userId, userId));
+    if (profile) return profile;
+    const [created] = await db.insert(driverProfiles).values({ userId }).returning();
+    return created;
+  }
+
+  async upsertDriverProfile(userId: number, updates: Partial<InsertDriverProfile>): Promise<DriverProfile> {
+    const current = await this.getDriverProfile(userId);
+    const [updated] = await db.update(driverProfiles)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(driverProfiles.id, current.id))
+      .returning();
+    return updated;
   }
 
   async createVehicle(ownerType: DeliveryMode, ownerId: number, data: Partial<InsertVehicle>): Promise<Vehicle> {
@@ -3661,6 +3705,263 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // ── DELIVERY COMPANY ─────────────────────────────────────────────────────────
+  // Mirrors the Maintenance storage section above exactly (one profile per
+  // owner, ownership-in-WHERE mutations, reviews on the shared
+  // supplierProductReviews table) — the difference is drivers/vehicles are
+  // NEVER stored here: getDeliveryCompanyCard/-Profiles call the existing
+  // getDriversForOwner/getVehiclesForOwner methods (already used by Espace
+  // Livraison's own Chauffeurs/Véhicules pages) and sanitize down to safe
+  // public fields, so there is exactly one real driver/vehicle list, not a
+  // second copy for the marketplace card.
+
+  async getDeliveryCompanyProfile(userId: number): Promise<DeliveryCompanyProfile> {
+    const [profile] = await db.select().from(deliveryCompanyProfiles)
+      .where(eq(deliveryCompanyProfiles.userId, userId));
+    if (profile) return profile;
+    const [created] = await db.insert(deliveryCompanyProfiles).values({ userId }).returning();
+    return created;
+  }
+
+  async upsertDeliveryCompanyProfile(userId: number, updates: Partial<InsertDeliveryCompanyProfile>): Promise<DeliveryCompanyProfile> {
+    const current = await this.getDeliveryCompanyProfile(userId);
+    const [updated] = await db.update(deliveryCompanyProfiles)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(deliveryCompanyProfiles.id, current.id))
+      .returning();
+    return updated;
+  }
+
+  /** Sanitized driver list for a public card/modal — never the raw User row
+   *  (password hash, email, etc.). "busy" is derived from real active
+   *  deliveries (ASSIGNED/PICKED_UP/IN_TRANSIT), never an invented status. */
+  private async getDeliveryCompanyDriverCards(companyId: number): Promise<{ id: number; name: string; profileImageUrl: string | null; busy: boolean }[]> {
+    const drivers = await this.getDriversForOwner('DELIVERY_COMPANY', companyId);
+    if (drivers.length === 0) return [];
+    const driverIds = drivers.map((d) => d.id);
+    const activeDeliveries = await db.select({ driverId: deliveries.driverId }).from(deliveries)
+      .where(and(inArray(deliveries.driverId, driverIds), inArray(deliveries.status, ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'])));
+    const busyIds = new Set(activeDeliveries.map((d) => d.driverId));
+    return drivers.map((d) => ({ id: d.id, name: d.name, profileImageUrl: d.profileImageUrl ?? null, busy: busyIds.has(d.id) }));
+  }
+
+  private async getDeliveryCompanyVehicleCards(companyId: number): Promise<Vehicle[]> {
+    return this.getVehiclesForOwner('DELIVERY_COMPANY', companyId);
+  }
+
+  async getDeliveryCompanyProfiles(filters?: {
+    search?: string;
+    available?: boolean;
+    location?: string;
+    viewerLocation?: { lat?: string | null; lng?: string | null } | null;
+  }): Promise<DeliveryCompanyMarketplaceCard[]> {
+    const rows = await db.select({ profile: deliveryCompanyProfiles, user: users })
+      .from(deliveryCompanyProfiles)
+      .innerJoin(users, eq(deliveryCompanyProfiles.userId, users.id))
+      .where(and(
+        eq(users.role, "DELIVERY_COMPANY" as any),
+        eq(users.status, "approved"),
+        eq(deliveryCompanyProfiles.marketplaceVisible, true),
+        eq(deliveryCompanyProfiles.isOnVacation, false),
+      ));
+
+    const companyIds = rows.map(({ profile }) => profile.userId);
+    const reviewRows = companyIds.length
+      ? await db.select({
+          deliveryCompanyUserId: supplierProductReviews.deliveryCompanyUserId,
+          rating: supplierProductReviews.rating,
+        }).from(supplierProductReviews).where(and(
+          eq(supplierProductReviews.reviewType, "DELIVERY_COMPANY"),
+          inArray(supplierProductReviews.deliveryCompanyUserId as any, companyIds),
+        ))
+      : [];
+    const reviewStats = new Map<number, { total: number; sum: number }>();
+    for (const review of reviewRows) {
+      if (!review.deliveryCompanyUserId) continue;
+      const current = reviewStats.get(review.deliveryCompanyUserId) ?? { total: 0, sum: 0 };
+      current.total += 1;
+      current.sum += review.rating;
+      reviewStats.set(review.deliveryCompanyUserId, current);
+    }
+
+    const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
+
+    const cards = await Promise.all(rows.map(async ({ profile, user }) => {
+      const stats = reviewStats.get(profile.userId);
+      const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+      const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+      const [drivers, vehicleList] = await Promise.all([
+        this.getDeliveryCompanyDriverCards(profile.userId),
+        this.getDeliveryCompanyVehicleCards(profile.userId),
+      ]);
+      return {
+        ...profile,
+        rating: stats ? Math.round((stats.sum / stats.total) * 10) : 0,
+        reviewCount: stats?.total ?? 0,
+        name: user.name,
+        phone: user.phone ?? null,
+        profileImageUrl: user.profileImageUrl ?? null,
+        location: user.locationAddress ?? profile.deliveryZones ?? "",
+        initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+        available: !profile.isOnVacation,
+        driverCount: drivers.length,
+        vehicleCount: vehicleList.length,
+        distanceKm,
+      } as DeliveryCompanyMarketplaceCard;
+    }));
+
+    const query = filters?.search?.trim().toLowerCase();
+    return cards.filter((card) => {
+      if (query) {
+        const haystack = [card.name, card.description, card.location, card.deliveryZones].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (filters?.available !== undefined && card.available !== filters.available) return false;
+      if (filters?.location && card.location !== filters.location) return false;
+      return true;
+    });
+  }
+
+  // Single-company public card — sanitized shape used for the Supplier-facing
+  // Details modal and the Delivery Company's own Eye preview, mirroring
+  // getMaintenanceCard exactly.
+  async getDeliveryCompanyCard(userId: number, viewerLocation?: { lat?: string | null; lng?: string | null } | null): Promise<DeliveryCompanyMarketplaceCard | undefined> {
+    const [row] = await db.select({ profile: deliveryCompanyProfiles, user: users })
+      .from(deliveryCompanyProfiles)
+      .innerJoin(users, eq(deliveryCompanyProfiles.userId, users.id))
+      .where(eq(deliveryCompanyProfiles.userId, userId));
+    if (!row) return undefined;
+    const reviews = await db.select({ rating: supplierProductReviews.rating }).from(supplierProductReviews)
+      .where(and(eq(supplierProductReviews.reviewType, "DELIVERY_COMPANY"), eq(supplierProductReviews.deliveryCompanyUserId as any, userId)));
+    const rating = reviews.length ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) : 0;
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const providerPos = this.parseLatLng({ lat: row.user.locationLat, lng: row.user.locationLng });
+    const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+    const [drivers, vehicleList] = await Promise.all([
+      this.getDeliveryCompanyDriverCards(userId),
+      this.getDeliveryCompanyVehicleCards(userId),
+    ]);
+    return {
+      ...row.profile,
+      userId: row.user.id,
+      name: row.user.name,
+      phone: row.user.phone ?? null,
+      profileImageUrl: row.user.profileImageUrl ?? null,
+      location: row.user.locationAddress ?? row.profile.deliveryZones ?? "",
+      initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+      available: !row.profile.isOnVacation,
+      driverCount: drivers.length,
+      vehicleCount: vehicleList.length,
+      distanceKm,
+      rating,
+      reviewCount: reviews.length,
+    };
+  }
+
+  /** The real driver/vehicle sections shown inside the details modal — never a
+   *  second data source, always the same rosters Business → Chauffeurs/Véhicules use. */
+  async getDeliveryCompanyDrivers(userId: number) { return this.getDeliveryCompanyDriverCards(userId); }
+  async getDeliveryCompanyVehicles(userId: number) { return this.getDeliveryCompanyVehicleCards(userId); }
+
+  async getDeliveryCompanyReviews(deliveryCompanyUserId: number): Promise<SupplierProductReview[]> {
+    return db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.deliveryCompanyUserId as any, deliveryCompanyUserId),
+        eq(supplierProductReviews.reviewType, "DELIVERY_COMPANY"),
+      ))
+      .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  async getDeliveryCompanyReviewForDelivery(deliveryId: number, supplierId: number): Promise<SupplierProductReview | undefined> {
+    const [review] = await db.select().from(supplierProductReviews).where(and(
+      eq(supplierProductReviews.deliveryId as any, deliveryId),
+      eq(supplierProductReviews.cafeId, supplierId),
+      eq(supplierProductReviews.reviewType, "DELIVERY_COMPANY"),
+    ));
+    return review;
+  }
+
+  async upsertDeliveryCompanyReview(data: {
+    deliveryCompanyUserId: number;
+    deliveryId: number;
+    supplierId: number;
+    rating: number;
+    comment?: string | null;
+    supplierName: string;
+  }): Promise<{ review: SupplierProductReview; isUpdate: boolean }> {
+    const existing = await this.getDeliveryCompanyReviewForDelivery(data.deliveryId, data.supplierId);
+    if (existing) {
+      const [review] = await db.update(supplierProductReviews)
+        .set({ rating: data.rating, comment: data.comment ?? null, updatedAt: new Date() } as any)
+        .where(eq(supplierProductReviews.id, existing.id))
+        .returning();
+      await this.refreshDeliveryCompanyReviewStats(data.deliveryCompanyUserId);
+      return { review, isUpdate: true };
+    }
+    const [review] = await db.insert(supplierProductReviews).values({
+      reviewType: "DELIVERY_COMPANY",
+      deliveryCompanyUserId: data.deliveryCompanyUserId,
+      deliveryId: data.deliveryId,
+      cafeId: data.supplierId,
+      rating: data.rating,
+      comment: data.comment ?? null,
+      cafeName: data.supplierName,
+      cafeOwnerName: data.supplierName,
+      supplierId: null,
+      productId: null,
+      listingId: null,
+      packId: null,
+      productName: null,
+    } as any).returning();
+    await this.refreshDeliveryCompanyReviewStats(data.deliveryCompanyUserId);
+    return { review, isUpdate: false };
+  }
+
+  private async refreshDeliveryCompanyReviewStats(deliveryCompanyUserId: number): Promise<void> {
+    const reviews = await this.getDeliveryCompanyReviews(deliveryCompanyUserId);
+    const reviewCount = reviews.length;
+    const rating = reviewCount
+      ? Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviewCount) * 10)
+      : 0;
+    await db.update(deliveryCompanyProfiles)
+      .set({ rating, reviewCount, updatedAt: new Date() })
+      .where(eq(deliveryCompanyProfiles.userId, deliveryCompanyUserId));
+  }
+
+  async createDeliveryCompanyReport(supplierId: number, deliveryCompanyUserId: number, reason: string): Promise<DeliveryCompanyReport> {
+    const [created] = await db.insert(deliveryCompanyReports).values({ supplierId, deliveryCompanyUserId, reason }).returning();
+    return created;
+  }
+
+  async getDeliveryCompanyReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(DeliveryCompanyReport & { supplierName: string; companyName: string })[]> {
+    const rows = await db.select().from(deliveryCompanyReports)
+      .where(status ? eq(deliveryCompanyReports.status, status) : undefined)
+      .orderBy(desc(deliveryCompanyReports.createdAt));
+    if (rows.length === 0) return [];
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.supplierId, r.deliveryCompanyUserId])));
+    const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
+    return rows.map((r) => ({ ...r, supplierName: userMap.get(r.supplierId) ?? "—", companyName: userMap.get(r.deliveryCompanyUserId) ?? "—" }));
+  }
+
+  async getDeliveryCompanyReportsBySupplier(supplierId: number): Promise<(DeliveryCompanyReport & { companyName: string })[]> {
+    const rows = await db.select().from(deliveryCompanyReports)
+      .where(eq(deliveryCompanyReports.supplierId, supplierId))
+      .orderBy(desc(deliveryCompanyReports.createdAt));
+    if (rows.length === 0) return [];
+    const companyIds = Array.from(new Set(rows.map((r) => r.deliveryCompanyUserId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, companyIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u.name]));
+    return rows.map((r) => ({ ...r, companyName: map.get(r.deliveryCompanyUserId) ?? "—" }));
+  }
+
+  async resolveDeliveryCompanyReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<DeliveryCompanyReport | undefined> {
+    const [updated] = await db.update(deliveryCompanyReports)
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .where(eq(deliveryCompanyReports.id, id))
+      .returning();
+    return updated;
+  }
+
   // ── MARKETING ────────────────────────────────────────────────────────────────
   // Mirrors the Maintenance storage section above exactly (one profile per
   // provider, ownership-in-WHERE mutations, taxonomy seeded from existing
@@ -3791,6 +4092,192 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Marketing favorites — mirrors getMaintenanceFavoritesByUser/add/remove exactly.
+  // ── Marketing Services (Agency → Multiple Services) ──────────────────────────
+  // Mirrors the academyCourses/getAcademyCoursesForAcademy/getPublishedAcademyCourses/
+  // getAcademyCourseCard section exactly — same "one profile + many offerings" split.
+
+  /** Self-healing one-time migration: an agency's pre-existing categories/price/
+   *  responseTime/description (all agency-level before this task) become one real
+   *  service per category the FIRST time its services are ever read, if it has none
+   *  yet — never destroys the old fields (they stay on marketingProfiles, now simply
+   *  unused by new UI), never re-runs once services exist. Preserves real data
+   *  instead of resetting it, exactly as required. */
+  private async migrateMarketingServicesIfNeeded(marketingUserId: number): Promise<void> {
+    const [existingCount] = await db.select({ count: sql<number>`count(*)::int` }).from(marketingServices)
+      .where(eq(marketingServices.marketingUserId, marketingUserId));
+    if (existingCount && existingCount.count > 0) return;
+    const profile = await this.getMarketingProfile(marketingUserId);
+    if (!profile.categories.length) return;
+    await db.insert(marketingServices).values(profile.categories.map((category) => ({
+      marketingUserId,
+      category,
+      startingPriceInCents: profile.startingPriceInCents,
+      responseTime: profile.responseTime,
+      description: profile.description,
+      imageUrl: profile.portfolioImages[0] ?? null,
+      isPublished: true,
+    }))).onConflictDoNothing();
+  }
+
+  async getMarketingServicesForProvider(marketingUserId: number): Promise<MarketingService[]> {
+    await this.migrateMarketingServicesIfNeeded(marketingUserId);
+    return db.select().from(marketingServices).where(eq(marketingServices.marketingUserId, marketingUserId)).orderBy(desc(marketingServices.createdAt));
+  }
+
+  async getMarketingServiceById(id: number): Promise<MarketingService | undefined> {
+    const [row] = await db.select().from(marketingServices).where(eq(marketingServices.id, id));
+    return row;
+  }
+
+  async createMarketingService(marketingUserId: number, data: Partial<InsertMarketingService>): Promise<MarketingService> {
+    const { marketingUserId: _ignored, id: _ignoredId, ...safeData } = data as any;
+    const [created] = await db.insert(marketingServices).values({
+      ...safeData, marketingUserId, isPublished: data.isPublished ?? true,
+    } as any).returning();
+    await this.syncMarketingProfileCategories(marketingUserId);
+    return created;
+  }
+
+  async updateMarketingService(id: number, marketingUserId: number, data: Partial<InsertMarketingService>): Promise<MarketingService | undefined> {
+    const { marketingUserId: _ignored, id: _ignoredId, ...safeData } = data as any;
+    const [updated] = await db.update(marketingServices)
+      .set({ ...safeData, updatedAt: new Date() })
+      .where(and(eq(marketingServices.id, id), eq(marketingServices.marketingUserId, marketingUserId)))
+      .returning();
+    if (updated) await this.syncMarketingProfileCategories(marketingUserId);
+    return updated;
+  }
+
+  async deleteMarketingService(id: number, marketingUserId: number): Promise<void> {
+    await db.delete(marketingServices).where(and(eq(marketingServices.id, id), eq(marketingServices.marketingUserId, marketingUserId)));
+    await this.syncMarketingProfileCategories(marketingUserId);
+  }
+
+  /** Keeps the legacy marketingProfiles.categories field (still read by
+   *  MarketingFastSearch/MarketingBlacklistModal and the agency-level
+   *  /api/marketing/profiles list — deliberately left in place, unmigrated,
+   *  as peripheral/out-of-scope surfaces) in sync with the agency's real,
+   *  currently PUBLISHED services — never a second, independently-edited
+   *  category list drifting out of sync with the new source of truth. */
+  private async syncMarketingProfileCategories(marketingUserId: number): Promise<void> {
+    const services = await db.select({ category: marketingServices.category, isPublished: marketingServices.isPublished })
+      .from(marketingServices).where(eq(marketingServices.marketingUserId, marketingUserId));
+    const categories = Array.from(new Set(services.filter((s) => s.isPublished).map((s) => s.category)));
+    await db.update(marketingProfiles).set({ categories, updatedAt: new Date() }).where(eq(marketingProfiles.userId, marketingUserId));
+  }
+
+  /** Public /marketing listing — one card per published SERVICE (mirrors
+   *  getPublishedAcademyCourses exactly): only from approved, marketplace-visible,
+   *  non-frozen, non-vacationing agencies. Runs the lazy migration for every
+   *  agency with categories but no services row yet, so existing real data
+   *  surfaces here automatically instead of silently disappearing. */
+  async getPublishedMarketingServices(filters?: {
+    search?: string; category?: string; profileType?: string; location?: string;
+    viewerLocation?: { lat?: string | null; lng?: string | null } | null;
+  }): Promise<MarketingServiceCard[]> {
+    const agencyRows = await db.select({ profile: marketingProfiles, user: users })
+      .from(marketingProfiles)
+      .innerJoin(users, eq(marketingProfiles.userId, users.id))
+      .where(and(
+        eq(users.role, "MARKETING" as any),
+        eq(users.status, "approved"),
+        eq(marketingProfiles.marketplaceVisible, true),
+        eq(marketingProfiles.isFrozen, false),
+      ));
+    for (const { profile } of agencyRows) await this.migrateMarketingServicesIfNeeded(profile.userId);
+
+    const agencyIds = agencyRows.map(({ profile }) => profile.userId);
+    if (!agencyIds.length) return [];
+    const serviceRows = agencyIds.length
+      ? await db.select().from(marketingServices).where(and(eq(marketingServices.isPublished, true), inArray(marketingServices.marketingUserId, agencyIds)))
+      : [];
+    const agencyById = new Map(agencyRows.map((r) => [r.profile.userId, r]));
+    const statsMap = await this.computeMarketingReviewStats(agencyIds);
+    const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
+
+    const cards = serviceRows
+      .filter((service) => !agencyById.get(service.marketingUserId)!.profile.isOnVacation)
+      .map((service) => {
+        const { profile, user } = agencyById.get(service.marketingUserId)!;
+        const stats = statsMap.get(service.marketingUserId);
+        const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+        const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+        return {
+          ...service,
+          agencyName: user.name,
+          agencyLocation: user.locationAddress ?? "",
+          agencyProfileImageUrl: user.profileImageUrl ?? null,
+          agencyDescription: profile.description,
+          agencyWebsiteUrl: profile.websiteUrl ?? null,
+          agencyProfileType: profile.profileType,
+          agencyIsAvailable: profile.isAvailable && !profile.isOnVacation,
+          rating: stats?.rating ?? 0,
+          reviewCount: stats?.reviewCount ?? 0,
+          distanceKm,
+        } as MarketingServiceCard;
+      });
+
+    const query = filters?.search?.trim().toLowerCase();
+    return cards.filter((card) => {
+      if (query) {
+        const haystack = [card.category, card.description, card.agencyName, card.agencyLocation].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (filters?.category && card.category.toLowerCase() !== filters.category.toLowerCase()) return false;
+      if (filters?.profileType && card.agencyProfileType !== filters.profileType) return false;
+      if (filters?.location && card.agencyLocation !== filters.location) return false;
+      return true;
+    });
+  }
+
+  async getMarketingServiceCard(id: number): Promise<MarketingServiceCard | undefined> {
+    const service = await this.getMarketingServiceById(id);
+    if (!service) return undefined;
+    const [row] = await db.select({ profile: marketingProfiles, user: users })
+      .from(marketingProfiles)
+      .innerJoin(users, eq(marketingProfiles.userId, users.id))
+      .where(eq(marketingProfiles.userId, service.marketingUserId));
+    if (!row) return undefined;
+    const stats = (await this.computeMarketingReviewStats([service.marketingUserId])).get(service.marketingUserId);
+    return {
+      ...service,
+      agencyName: row.user.name,
+      agencyLocation: row.user.locationAddress ?? "",
+      agencyProfileImageUrl: row.user.profileImageUrl ?? null,
+      agencyDescription: row.profile.description,
+      agencyWebsiteUrl: row.profile.websiteUrl ?? null,
+      agencyProfileType: row.profile.profileType,
+      agencyIsAvailable: row.profile.isAvailable && !row.profile.isOnVacation,
+      rating: stats?.rating ?? 0,
+      reviewCount: stats?.reviewCount ?? 0,
+    };
+  }
+
+  /** Live rating/reviewCount for one or more agencies — shared by the service list
+   *  builder, the single-service card, and the agency card. Mirrors
+   *  computeAcademyReviewStats exactly. */
+  private async computeMarketingReviewStats(marketingUserIds: number[]): Promise<Map<number, { rating: number; reviewCount: number }>> {
+    if (!marketingUserIds.length) return new Map();
+    const reviewRows = await db.select({
+      marketingUserId: supplierProductReviews.marketingUserId,
+      rating: supplierProductReviews.rating,
+    }).from(supplierProductReviews).where(and(
+      eq(supplierProductReviews.reviewType, "MARKETING"),
+      inArray(supplierProductReviews.marketingUserId as any, marketingUserIds),
+    ));
+    const sums = new Map<number, { total: number; sum: number }>();
+    for (const row of reviewRows) {
+      if (!row.marketingUserId) continue;
+      const current = sums.get(row.marketingUserId) ?? { total: 0, sum: 0 };
+      current.total += 1;
+      current.sum += row.rating;
+      sums.set(row.marketingUserId, current);
+    }
+    const result = new Map<number, { rating: number; reviewCount: number }>();
+    for (const [userId, s] of Array.from(sums.entries())) result.set(userId, { rating: Math.round((s.sum / s.total) * 10), reviewCount: s.total });
+    return result;
+  }
+
   async getMarketingFavoritesByUser(userId: number): Promise<number[]> {
     const rows = await db.select({ marketingUserId: marketingFavorites.marketingUserId })
       .from(marketingFavorites)
@@ -4028,6 +4515,19 @@ export class DatabaseStorage implements IStorage {
       .from(marketingProfiles)
       .innerJoin(users, eq(marketingProfiles.userId, users.id))
       .where(eq(users.role, "MARKETING" as any));
+    // Agency → Multiple Services (Part 10-11): Admin must see the real services belonging
+    // to each agency, never a disconnected/duplicate model — same migration + real table
+    // every other Marketing surface reads.
+    for (const { profile } of accounts) await this.migrateMarketingServicesIfNeeded(profile.userId);
+    const allServices = accounts.length
+      ? await db.select().from(marketingServices).where(inArray(marketingServices.marketingUserId, accounts.map(({ profile }) => profile.userId)))
+      : [];
+    const servicesByAgency = new Map<number, MarketingService[]>();
+    for (const service of allServices) {
+      const list = servicesByAgency.get(service.marketingUserId) ?? [];
+      list.push(service);
+      servicesByAgency.set(service.marketingUserId, list);
+    }
     const projects = await db.select().from(marketingProjects);
     const reviews = await db.select().from(supplierProductReviews).where(eq(supplierProductReviews.reviewType, "MARKETING"));
     const allUsers = await db.select().from(users);
@@ -4064,6 +4564,7 @@ export class DatabaseStorage implements IStorage {
         status: user.status,
         location: user.locationAddress,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+        services: servicesByAgency.get(user.id) ?? [],
       })),
       projects: projects
         .map((project) => ({
@@ -5669,6 +6170,53 @@ export class DatabaseStorage implements IStorage {
       courseTitle: courseMap.get(s.courseId)?.title ?? "—",
       registeredCount: countMap.get(s.id) ?? 0,
     }));
+  }
+
+  /** Academy-level public/admin card — the single synchronized representation reused by
+   *  the Coffee Owner's "click Académie inside a Formation" flow, Admin's Academy card, and
+   *  the Academy's own Eye preview (Part 43's "one details modal per entity type"). Never a
+   *  duplicate profile: built from the exact same academyProfiles/users/academyCourses/
+   *  academyCourseSessions/supplierProductReviews rows every other Academy surface reads. */
+  async getAcademyProfileCard(userId: number): Promise<{
+    userId: number; name: string; profileImageUrl: string | null; location: string; phone: string | null;
+    description: string; marketplaceVisible: boolean; rating: number; reviewCount: number;
+    courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
+  } | undefined> {
+    const user = await this.getUser(userId);
+    if (!user || user.role !== 'BARISTA_ACADEMY') return undefined;
+    const [profile, allCourses, stats, allSessions] = await Promise.all([
+      this.getAcademyProfile(userId),
+      this.getAcademyCoursesForAcademy(userId),
+      this.computeAcademyReviewStats([userId]),
+      this.getAcademySessionsForAcademy(userId),
+    ]);
+    const publishedCourses = allCourses.filter((c) => c.isPublished);
+    const courses: AcademyCourseCard[] = publishedCourses.map((course) => ({
+      ...course,
+      academyName: user.name,
+      academyLocation: user.locationAddress ?? '',
+      academyProfileImageUrl: user.profileImageUrl ?? null,
+      academyDescription: profile.description,
+      academyPhone: user.phone ?? null,
+      rating: stats.get(userId)?.rating ?? 0,
+      reviewCount: stats.get(userId)?.reviewCount ?? 0,
+    }));
+    const publishedCourseIds = new Set(publishedCourses.map((c) => c.id));
+    const now = new Date();
+    const upcomingSessions = allSessions.filter((s) => publishedCourseIds.has(s.courseId) && new Date(s.startDate) >= now);
+    return {
+      userId: user.id,
+      name: user.name,
+      profileImageUrl: user.profileImageUrl ?? null,
+      location: user.locationAddress ?? '',
+      phone: user.phone ?? null,
+      description: profile.description,
+      marketplaceVisible: profile.marketplaceVisible,
+      rating: stats.get(userId)?.rating ?? 0,
+      reviewCount: stats.get(userId)?.reviewCount ?? 0,
+      courses,
+      upcomingSessions,
+    };
   }
 
   async createAcademySession(academyUserId: number, data: { courseId: number; startDate: string; endDate?: string | null; capacity?: number | null }): Promise<AcademyCourseSession> {

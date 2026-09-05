@@ -924,11 +924,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!viewer || (!isSelfOrAdmin && !isCafeOwner)) return res.status(403).json({ message: "Forbidden" });
     const target = await storage.getUser(targetUserId);
     if (!target || target.role !== "MARKETING") return res.status(404).json({ message: "Not found" });
-    const card = await storage.getMarketingCard(targetUserId, { lat: viewer.locationLat, lng: viewer.locationLng });
+    const [card, allServices] = await Promise.all([
+      storage.getMarketingCard(targetUserId, { lat: viewer.locationLat, lng: viewer.locationLng }),
+      storage.getMarketingServicesForProvider(targetUserId),
+    ]);
+    // Agency Details Modal / Eye preview always shows exactly what a Coffee Owner would
+    // see — published services only, for every viewer including self (Part 3/6-7).
+    const cardWithServices = card ? { ...card, services: allServices.filter((s) => s.isPublished) } : card;
     // Coffee Owners only ever see the sanitized public `card` — never the raw
     // user row (password hash, email, etc.), matching the Maintenance/Barista fix.
-    if (!isSelfOrAdmin) return res.json({ card });
-    res.json({ user: target, profile: await storage.getMarketingProfile(targetUserId), card });
+    if (!isSelfOrAdmin) return res.json({ card: cardWithServices });
+    res.json({ user: target, profile: await storage.getMarketingProfile(targetUserId), card: cardWithServices });
   });
 
   app.patch("/api/marketing/profile", requireAuth, async (req: any, res) => {
@@ -967,6 +973,108 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     broadcast("marketing_updated", { userId: user.id, kind: "availability" });
     res.json(profile);
+  });
+
+  // ── Marketing Services (Agency → Multiple Services) — mirrors the Academy
+  // Formations routes (/api/academy/my/courses, /api/academy/courses, POST/PATCH/DELETE
+  // /api/academy/courses/:id) exactly, same self-scoped CRUD + public list/detail shape. ──
+
+  const marketingServiceInputSchema = z.object({
+    category: z.string().min(1).optional(),
+    startingPriceInCents: z.number().int().min(0).optional(),
+    responseTime: z.string().optional(),
+    description: z.string().optional(),
+    imageUrl: z.string().optional().nullable(),
+    isPublished: z.boolean().optional(),
+  });
+
+  app.get("/api/marketing/services/mine", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MARKETING") return res.status(403).json({ message: "Marketing access required" });
+    try { res.json(await storage.getMarketingServicesForProvider(user.id)); }
+    catch { res.status(500).json({ message: "Failed to load services" }); }
+  });
+
+  app.post("/api/marketing/services", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MARKETING") return res.status(403).json({ message: "Marketing access required" });
+    try {
+      const data = marketingServiceInputSchema.parse(req.body);
+      if (!data.category) return res.status(400).json({ message: "La catégorie est requise" });
+      const service = await storage.createMarketingService(user.id, data as any);
+      broadcast("marketing_service_updated", { userId: user.id, serviceId: service.id, kind: "created" });
+      res.status(201).json(service);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? "Error creating service" });
+    }
+  });
+
+  app.patch("/api/marketing/services/:id", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MARKETING") return res.status(403).json({ message: "Marketing access required" });
+    try {
+      const data = marketingServiceInputSchema.parse(req.body);
+      const service = await storage.updateMarketingService(Number(req.params.id), user.id, data as any);
+      if (!service) return res.status(404).json({ message: "Service not found" });
+      broadcast("marketing_service_updated", { userId: user.id, serviceId: service.id, kind: "updated" });
+      res.json(service);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? "Error updating service" });
+    }
+  });
+
+  app.delete("/api/marketing/services/:id", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MARKETING") return res.status(403).json({ message: "Marketing access required" });
+    try {
+      await storage.deleteMarketingService(Number(req.params.id), user.id);
+      broadcast("marketing_service_updated", { userId: user.id, serviceId: Number(req.params.id), kind: "deleted" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error deleting service" }); }
+  });
+
+  // Public /marketing listing — one card per published service (Part 1/9/12).
+  app.get("/api/marketing/services", async (req: any, res) => {
+    try {
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
+      res.json(await storage.getPublishedMarketingServices({
+        search: typeof req.query.search === "string" ? req.query.search : undefined,
+        category: typeof req.query.category === "string" ? req.query.category : undefined,
+        profileType: typeof req.query.profileType === "string" ? req.query.profileType : undefined,
+        location: typeof req.query.location === "string" ? req.query.location : undefined,
+        viewerLocation,
+      }));
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to load Marketing services" });
+    }
+  });
+
+  app.get("/api/marketing/services/:id", async (req: any, res) => {
+    try {
+      const service = await storage.getMarketingServiceCard(Number(req.params.id));
+      if (!service) return res.status(404).json({ message: "Service not found" });
+      // The owning agency (previewing a draft/unpublished service via "Aperçu") and Admin
+      // (moderating regardless of publish state) bypass the public visibility rules below —
+      // everyone else keeps the exact same rules, mirroring /api/academy/courses/:id.
+      const viewer = req.session?.userId ? await storage.getUser(req.session.userId) : null;
+      const isSelfOrAdmin = !!viewer && (viewer.id === service.marketingUserId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role));
+      if (!isSelfOrAdmin) {
+        if (!service.isPublished) return res.status(404).json({ message: "Service not found" });
+        const agency = await storage.getUser(service.marketingUserId);
+        const profile = await storage.getMarketingProfile(service.marketingUserId);
+        if (!agency || agency.status !== "approved" || !profile.marketplaceVisible || profile.isFrozen || profile.isOnVacation) {
+          return res.status(404).json({ message: "Service not found" });
+        }
+      }
+      res.json(service);
+    } catch { res.status(500).json({ message: "Failed to load service" }); }
   });
 
   app.get("/api/marketing/projects", requireAuth, async (req: any, res) => {
@@ -2673,17 +2781,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/academy/courses/:id", async (req, res) => {
+  app.get("/api/academy/courses/:id", async (req: any, res) => {
     try {
       const course = await storage.getAcademyCourseCard(Number(req.params.id));
-      if (!course || !course.isPublished) return res.status(404).json({ message: "Course not found" });
-      // Same visibility rule as the list endpoint (getPublishedAcademyCourses):
-      // an Academy that disabled "Afficher mon académie sur /academy" must not
-      // be reachable via a direct course id either (e.g. a stale favorite/link).
-      const academy = await storage.getUser(course.academyUserId);
-      const profile = await storage.getAcademyProfile(course.academyUserId);
-      if (!academy || academy.status !== "approved" || profile?.marketplaceVisible === false) {
-        return res.status(404).json({ message: "Course not found" });
+      if (!course) return res.status(404).json({ message: "Course not found" });
+      // The owning Academy (previewing a draft/unpublished formation via the same
+      // Formation details modal, Part 12) and Admin (moderating any formation
+      // regardless of publish state, Part 40) bypass the public visibility rules
+      // below — everyone else keeps the exact same rules as before.
+      const viewer = req.session?.userId ? await storage.getUser(req.session.userId) : null;
+      const isSelfOrAdmin = !!viewer && (viewer.id === course.academyUserId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role));
+      if (!isSelfOrAdmin) {
+        if (!course.isPublished) return res.status(404).json({ message: "Course not found" });
+        // Same visibility rule as the list endpoint (getPublishedAcademyCourses):
+        // an Academy that disabled "Afficher mon académie sur /academy" must not
+        // be reachable via a direct course id either (e.g. a stale favorite/link).
+        const academy = await storage.getUser(course.academyUserId);
+        const profile = await storage.getAcademyProfile(course.academyUserId);
+        if (!academy || academy.status !== "approved" || profile?.marketplaceVisible === false) {
+          return res.status(404).json({ message: "Course not found" });
+        }
       }
       res.json(course);
     } catch { res.status(500).json({ message: "Failed to load course" }); }
@@ -2757,12 +2874,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/academy/profile/:userId", requireAuth, async (req: any, res) => {
     const targetUserId = Number(req.params.userId);
     const viewer = await storage.getUser(req.session.userId);
-    if (!viewer || (viewer.id !== targetUserId && !["ADMIN", "SUPER_ADMIN"].includes(viewer.role))) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!viewer) return res.status(401).json({ message: "Unauthorized" });
     const target = await storage.getUser(targetUserId);
     if (!target || target.role !== "BARISTA_ACADEMY") return res.status(404).json({ message: "Not found" });
-    res.json({ user: target, profile: await storage.getAcademyProfile(targetUserId) });
+    const isSelfOrAdmin = viewer.id === targetUserId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role);
+    // Any other authenticated viewer (Coffee Owner clicking "Académie" inside a Formation
+    // modal) only ever gets the sanitized public `card` — same convention as every other
+    // service's profile route (Barista/Maintenance/Marketing/Delivery Company).
+    if (!isSelfOrAdmin) {
+      const card = await storage.getAcademyProfileCard(targetUserId);
+      if (!card) return res.status(404).json({ message: "Not found" });
+      return res.json({ card });
+    }
+    const card = await storage.getAcademyProfileCard(targetUserId);
+    res.json({ user: target, profile: await storage.getAcademyProfile(targetUserId), card });
   });
 
   app.patch("/api/academy/profile", requireAuth, async (req: any, res) => {
@@ -3835,12 +3960,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const deliveryId = parseInt(req.params.id);
       const supplier = req.session.userId!;
-      const { mode } = z.object({ mode: z.enum(['DELIVERY_COMPANY', 'SUPPLIER']) }).parse(req.body);
-      const updated = await storage.dispatchDelivery(deliveryId, supplier, mode);
+      const { mode, deliveryCompanyId } = z.object({
+        mode: z.enum(['DELIVERY_COMPANY', 'SUPPLIER']),
+        // Optional targeted dispatch (Part 24) — Supplier picked one specific company from the
+        // real mapped cards instead of broadcasting to every partner. Validated below.
+        deliveryCompanyId: z.number().int().positive().optional(),
+      }).parse(req.body);
+      if (deliveryCompanyId != null) {
+        const target = await storage.getUser(deliveryCompanyId);
+        if (!target || target.role !== 'DELIVERY_COMPANY' || target.status !== 'approved') {
+          return res.status(400).json({ message: 'Invalid delivery company' });
+        }
+      }
+      const updated = await storage.dispatchDelivery(deliveryId, supplier, mode, deliveryCompanyId);
       const delivery = await storage.getDelivery(deliveryId);
       if (mode === 'DELIVERY_COMPANY') {
-        // Only now does the delivery become visible to Delivery Companies.
-        const companyIds = await storage.getApprovedDeliveryCompanyIds();
+        // Targeted → only that one company is notified; untargeted → every partner, unchanged.
+        const companyIds = deliveryCompanyId != null ? [deliveryCompanyId] : await storage.getApprovedDeliveryCompanyIds();
         broadcastToUsers(companyIds, 'delivery_created', { deliveryId, status: updated.status });
       }
       if (delivery) {
@@ -4092,6 +4228,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const data = driverRosterSchema.parse(req.body);
       const driver = await storage.createDriverForOwner('DELIVERY_COMPANY', req.deliveryCompany.id, data);
+      // So the Supplier-facing details modal's Chauffeurs section (never a duplicate driver
+      // list — see getDeliveryCompanyDriverCards) reflects a new driver without a refresh.
+      broadcast('delivery_company_profile_updated', { userId: req.deliveryCompany.id });
       res.status(201).json(driver);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -4232,6 +4371,237 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: err.message ?? 'Error updating vehicle' });
+    }
+  });
+
+  // ── DRIVER profile + shared Chauffeur details ────────────────────────────────
+  // Espace Chauffeur → Business → Profil (self-editable: bio/experience/
+  // certifications/availability — vehicle stays on the existing /api/driver/
+  // vehicle self-service routes above, never duplicated). The one shared GET
+  // below powers the SAME DriverDetailModal wherever a driver is displayed
+  // (Supplier → Drivers, Espace Livraison → Chauffeurs, Admin → Chauffeurs,
+  // and the Driver's own Eye preview) — permission-checked per viewer instead
+  // of a public route, since unlike Barista/Maintenance/Delivery Company a
+  // Driver is never independently browsed by the public.
+
+  app.patch('/api/driver/profile', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DRIVER') return res.status(403).json({ message: 'Driver access required' });
+    try {
+      const body = z.object({
+        bio: z.string().optional(),
+        experienceYears: z.number().int().min(0).optional(),
+        certifications: z.array(z.string()).optional(),
+        isOnVacation: z.boolean().optional(),
+        weeklyHours: z.object({
+          monday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+          tuesday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+          wednesday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+          thursday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+          friday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+          saturday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+          sunday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+        }).optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertDriverProfile(user.id, body);
+      broadcast('driver_profile_updated', { userId: user.id });
+      res.json(profile);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error updating profile' });
+    }
+  });
+
+  app.get('/api/drivers/:driverId/details', requireAuth, async (req: any, res) => {
+    const viewer = await storage.getUser(req.session.userId);
+    if (!viewer) return res.status(401).json({ message: 'Unauthorized' });
+    const driverId = Number(req.params.driverId);
+    const target = await storage.getUser(driverId);
+    if (!target || target.role !== 'DRIVER') return res.status(404).json({ message: 'Driver not found' });
+    const isSelf = viewer.id === driverId;
+    const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(viewer.role);
+    const isOwnOperator =
+      (viewer.role === 'SUPPLIER' && target.supplierId === viewer.id) ||
+      (viewer.role === 'DELIVERY_COMPANY' && target.deliveryCompanyId === viewer.id);
+    if (!isSelf && !isAdmin && !isOwnOperator) return res.status(403).json({ message: 'Forbidden' });
+    const [profile, vehicle] = await Promise.all([
+      storage.getDriverProfile(driverId),
+      storage.getVehicleForDriver(driverId),
+    ]);
+    // Real driver/company relationship (Part 17) — resolved from the actual
+    // users.deliveryCompanyId/supplierId column, never invented.
+    let operator: { type: 'DELIVERY_COMPANY' | 'SUPPLIER'; name: string } | null = null;
+    if (target.deliveryCompanyId) {
+      const company = await storage.getUser(target.deliveryCompanyId);
+      if (company) operator = { type: 'DELIVERY_COMPANY', name: company.name };
+    } else if (target.supplierId) {
+      const supplier = await storage.getUser(target.supplierId);
+      if (supplier) operator = { type: 'SUPPLIER', name: supplier.name };
+    }
+    res.json({ profile, vehicle: vehicle ?? null, operator });
+  });
+
+  // ── DELIVERY COMPANY marketplace/profile ─────────────────────────────────────
+  // Mirrors the Maintenance marketplace routes structurally (public browsing
+  // endpoint, self-management endpoint ownership-enforced server-side, reviews
+  // on the shared supplierProductReviews table) — see shared/schema.ts
+  // deliveryCompanyProfiles and server/storage.ts's DELIVERY COMPANY section.
+  // The reviewer/reporter here is a Supplier (not a Cafe Owner) since Suppliers
+  // are the ones who actually deal with Delivery Companies via Order Delivery.
+
+  app.get('/api/delivery-company/profiles', async (req: any, res) => {
+    try {
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
+      res.json(await storage.getDeliveryCompanyProfiles({
+        search: typeof req.query.search === 'string' ? req.query.search : undefined,
+        available: req.query.available === undefined ? undefined : req.query.available === 'true',
+        location: typeof req.query.location === 'string' ? req.query.location : undefined,
+        viewerLocation,
+      }));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching delivery companies' });
+    }
+  });
+
+  app.get('/api/delivery-company/profile/:userId', requireAuth, async (req: any, res) => {
+    const targetUserId = Number(req.params.userId);
+    const viewer = await storage.getUser(req.session.userId);
+    const isSelfOrAdmin = viewer && (viewer.id === targetUserId || ['ADMIN', 'SUPER_ADMIN'].includes(viewer.role));
+    const isSupplier = viewer?.role === 'SUPPLIER';
+    if (!viewer || (!isSelfOrAdmin && !isSupplier)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const target = await storage.getUser(targetUserId);
+    if (!target || target.role !== 'DELIVERY_COMPANY') return res.status(404).json({ message: 'Not found' });
+    const [card, drivers, vehicleList] = await Promise.all([
+      storage.getDeliveryCompanyCard(targetUserId, { lat: viewer.locationLat, lng: viewer.locationLng }),
+      storage.getDeliveryCompanyDrivers(targetUserId),
+      storage.getDeliveryCompanyVehicles(targetUserId),
+    ]);
+    // A Supplier only ever sees the sanitized public `card`/drivers/vehicles — never the raw
+    // user row (password hash, email, etc.), same convention as every other service. Drivers/
+    // vehicles are the exact same rosters Business → Chauffeurs/Véhicules use, never a copy.
+    if (!isSelfOrAdmin) return res.json({ card, drivers, vehicles: vehicleList });
+    res.json({ user: target, profile: await storage.getDeliveryCompanyProfile(targetUserId), card, drivers, vehicles: vehicleList });
+  });
+
+  app.patch('/api/delivery-company/profile', requireApprovedDeliveryCompany, async (req: any, res) => {
+    const body = z.object({
+      companyType: z.string().optional(),
+      description: z.string().optional(),
+      deliveryZones: z.string().optional(),
+      dailyRateInCents: z.number().int().min(0).optional(),
+      responseTime: z.string().optional(),
+      experienceYears: z.number().int().min(0).optional(),
+      certifications: z.array(z.string()).optional(),
+      portfolioImages: z.array(z.string()).optional(),
+      marketplaceVisible: z.boolean().optional(),
+      isOnVacation: z.boolean().optional(),
+      weeklyHours: z.object({
+        monday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+        tuesday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+        wednesday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+        thursday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+        friday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+        saturday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+        sunday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
+      }).optional(),
+    }).parse(req.body);
+    const profile = await storage.upsertDeliveryCompanyProfile(req.deliveryCompany.id, body);
+    broadcast('delivery_company_profile_updated', { userId: req.deliveryCompany.id });
+    res.json(profile);
+  });
+
+  app.get('/api/delivery-company/reviews/:userId', async (req, res) => {
+    try { res.json(await storage.getDeliveryCompanyReviews(Number(req.params.userId))); }
+    catch { res.status(500).json({ message: 'Failed to load Delivery Company reviews' }); }
+  });
+
+  app.post('/api/delivery-company/reviews', requireApprovedSupplier, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+    try {
+      const body = z.object({
+        deliveryCompanyUserId: z.number().int().positive(),
+        deliveryId: z.number().int().positive(),
+        rating: z.number().int().min(1).max(5),
+        comment: z.string().max(2000).optional(),
+      }).parse(req.body);
+      const delivery = await storage.getDelivery(body.deliveryId, 'ADMIN');
+      if (!delivery || delivery.supplierId !== user.id || delivery.deliveryCompanyId !== body.deliveryCompanyUserId || delivery.status !== 'DELIVERED') {
+        return res.status(400).json({ message: 'Reviews are only available after a completed delivery' });
+      }
+      const result = await storage.upsertDeliveryCompanyReview({ ...body, supplierId: user.id, supplierName: user.name });
+      broadcast('delivery_company_review_updated', { deliveryCompanyUserId: body.deliveryCompanyUserId, deliveryId: body.deliveryId });
+      if (!result.isUpdate) {
+        await notify({
+          userId: body.deliveryCompanyUserId,
+          service: 'SHOP', type: 'delivery_company_review_created', priority: 'INFO',
+          title: 'Nouvel avis reçu',
+          message: `${user.name} vous a laissé un avis (${body.rating}/5).`,
+          entityType: 'delivery', entityId: body.deliveryId,
+          prefKey: 'reviews',
+        });
+      }
+      res.status(result.isUpdate ? 200 : 201).json(result.review);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Invalid review data' });
+    }
+  });
+
+  app.post('/api/delivery-company/:userId/report', requireApprovedSupplier, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+    const deliveryCompanyUserId = Number(req.params.userId);
+    const target = await storage.getUser(deliveryCompanyUserId);
+    if (!target || target.role !== 'DELIVERY_COMPANY') return res.status(404).json({ message: 'Delivery company not found' });
+    try {
+      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
+      const report = await storage.createDeliveryCompanyReport(user.id, deliveryCompanyUserId, reason);
+      broadcast('admin_delivery_company_report_created', { deliveryCompanyUserId });
+      const adminIds = await storage.getAdminUserIds();
+      await notifyMany({
+        userIds: adminIds,
+        service: 'ADMIN', type: 'delivery_company_report_created', priority: 'URGENT',
+        title: 'Entreprise de livraison signalée',
+        message: `${user.name} a signalé ${target.name} (Livraison) : "${reason}".`,
+        entityType: 'delivery_company_report', entityId: report.id,
+        prefKey: 'reports',
+        dedupeKeyPrefix: `admin:delivery_company_report_created:${report.id}`,
+      });
+      res.status(201).json(report);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: 'Invalid report data' });
+    }
+  });
+
+  app.get('/api/delivery-company/reports/mine', requireApprovedSupplier, async (req: any, res) => {
+    res.json(await storage.getDeliveryCompanyReportsBySupplier(req.session.userId!));
+  });
+
+  app.get('/api/admin/delivery-company/reports', requireAdmin, async (req, res) => {
+    const status = typeof req.query.status === 'string' ? (req.query.status as 'PENDING' | 'RESOLVED' | 'DISMISSED') : undefined;
+    res.json(await storage.getDeliveryCompanyReports(status));
+  });
+
+  app.patch('/api/admin/delivery-company/reports/:id/resolve', requireAdmin, async (req, res) => {
+    try {
+      const { status, resolutionNote } = z.object({
+        status: z.enum(['RESOLVED', 'DISMISSED']),
+        resolutionNote: z.string().max(1000).optional(),
+      }).parse(req.body);
+      const updated = await storage.resolveDeliveryCompanyReport(Number(req.params.id), status, resolutionNote);
+      if (!updated) return res.status(404).json({ message: 'Report not found' });
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: 'Failed to resolve report' });
     }
   });
 

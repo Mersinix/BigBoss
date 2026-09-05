@@ -1,26 +1,23 @@
 import {
   GraduationCap,
-  BookOpen,
-  ClipboardList,
-  Users,
-  CalendarDays,
-  Eye,
+  Briefcase,
   MessageSquare,
   TrendingUp,
   Settings,
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure — Performance first (replaces the former
-// standalone Dashboard tab), then business-specific tabs, Profil Public,
-// Communication, Paramètres.
+// Performance first, then the new "Business" tab (Formations/Inscriptions/
+// Étudiants/Calendrier/Profil — see business.tsx's internal SubTabSwitcher),
+// Communication, Paramètres. The former separate "Profil Public" tab is gone:
+// its role (a marketplace-style preview) is now the Eye icon inside
+// Business → Profil, reusing the new AcademyProfileModal — no second
+// preview design. Same reorg pattern as barista-account-shell.tsx /
+// maintenance-account-shell.tsx / delivery-company-account-shell.tsx /
+// driver-account-shell.tsx.
 const TABS: ProfessionalAccountTab[] = [
   { path: "/barista-academy", label: "Performance", icon: TrendingUp, exact: true },
-  { path: "/barista-academy/courses", label: "Formations", icon: BookOpen },
-  { path: "/barista-academy/registrations", label: "Inscriptions", icon: ClipboardList },
-  { path: "/barista-academy/students", label: "Étudiants", icon: Users },
-  { path: "/barista-academy/calendar", label: "Calendrier", icon: CalendarDays },
-  { path: "/barista-academy/profil-public", label: "Profil Public", icon: Eye },
+  { path: "/barista-academy/business", label: "Business", icon: Briefcase },
   { path: "/barista-academy/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
   { path: "/barista-academy/settings", label: "Paramètres", icon: Settings },
 ];

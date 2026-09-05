@@ -1,27 +1,23 @@
 import {
   Megaphone,
   Briefcase,
-  Users,
-  FileText,
-  Eye,
   MessageSquare,
   TrendingUp,
   Settings,
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure: Performance (first, replaces the former
-// standalone Dashboard tab — see professional-account-shell.tsx/performance.tsx),
-// business-specific tabs, Profil Public, Communication, Paramètres — Marketing
-// is the visual/structural reference every other professional account shell
-// follows via the shared ProfessionalAccountShell.
+// Performance first, then the new "Business" tab (Services/Projets/Clients/
+// Devis & Factures/Profil — see business.tsx's internal SubTabSwitcher),
+// Communication, Paramètres. The former separate "Profil Public" tab is gone:
+// its role (a marketplace-style preview) is now the Eye icon inside
+// Business → Profil, reusing the existing MarketingDetailModal — no second
+// preview design. Same reorg pattern as barista-account-shell.tsx /
+// maintenance-account-shell.tsx / delivery-company-account-shell.tsx /
+// driver-account-shell.tsx / academy-account-shell.tsx.
 const TABS: ProfessionalAccountTab[] = [
   { path: "/marketing-panel", label: "Performance", icon: TrendingUp, exact: true },
-  { path: "/marketing-panel/services", label: "Services", icon: Megaphone },
-  { path: "/marketing-panel/projects", label: "Projets", icon: Briefcase },
-  { path: "/marketing-panel/clients", label: "Clients", icon: Users },
-  { path: "/marketing-panel/invoices", label: "Devis & Factures", icon: FileText },
-  { path: "/marketing-panel/profil-public", label: "Profil Public", icon: Eye },
+  { path: "/marketing-panel/business", label: "Business", icon: Briefcase },
   { path: "/marketing-panel/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
   { path: "/marketing-panel/settings", label: "Paramètres", icon: Settings },
 ];

@@ -258,6 +258,23 @@ export function useMyAcademyProfile(userId: number | null) {
   });
 }
 
+export type AcademyProfileCard = {
+  userId: number; name: string; profileImageUrl: string | null; location: string; phone: string | null;
+  description: string; marketplaceVisible: boolean; rating: number; reviewCount: number;
+  courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
+};
+
+// Same query key/route as useMyAcademyProfile — the server sanitizes the payload down to
+// {card} for non-self/non-admin viewers (see GET /api/academy/profile/:userId), so this is
+// the exact same cache entry, never a second profile fetch/representation.
+export function useAcademyProfileDetail(userId: number | null) {
+  return useQuery<{ card?: AcademyProfileCard; user?: any; profile?: any }>({
+    queryKey: ["/api/academy/profile", userId],
+    queryFn: () => getJson(`/api/academy/profile/${userId}`),
+    enabled: userId != null,
+  });
+}
+
 export function useUpdateAcademyProfile() {
   const qc = useQueryClient();
   return useMutation({

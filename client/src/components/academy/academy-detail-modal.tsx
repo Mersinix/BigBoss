@@ -28,6 +28,7 @@ import {
   Star, MapPin, Clock, Award, MessageCircle,
   Flag, Heart, X, GraduationCap, Layers, Users, Calendar,
 } from "lucide-react";
+import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 
 const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 // This app's dark mode is NOT Tailwind's `dark:` class strategy on the Coffee
@@ -158,11 +159,19 @@ export function AcademyDetailModal({
   open,
   onClose,
   onEnroll,
+  readOnly = false,
 }: {
   courseId: number | null;
   open: boolean;
   onClose: () => void;
   onEnroll: (course: AcademyCourseCard) => void;
+  // Used by the Academy's own "preview my formation" (Eye icon on Business →
+  // Formations/Profil): renders the exact same modal a Coffee Owner sees, but
+  // Favorite/Report/Message/Avis/S'inscrire become inert (no self-favorite,
+  // self-message, self-report, or self-registration) — only Disponibilité
+  // stays functional, and the "Académie" section still opens the real
+  // AcademyProfileModal (also read-only there).
+  readOnly?: boolean;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -179,7 +188,13 @@ export function AcademyDetailModal({
     sectionBgAlt: isDark ? "bg-gray-800/40" : "bg-gray-50",
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
   };
-  const { data: course, isLoading } = useAcademyCourseDetail(courseId);
+  // Nested navigation (Part 16): clicking a related formation inside the Academy Profile
+  // modal (opened from the "Académie" section below) swaps which course this SAME dialog
+  // queries, instead of requiring every caller to manage a second piece of state.
+  const [navCourseId, setNavCourseId] = useState<number | null>(null);
+  const [academyProfileOpen, setAcademyProfileOpen] = useState(false);
+  const effectiveCourseId = navCourseId ?? courseId;
+  const { data: course, isLoading } = useAcademyCourseDetail(effectiveCourseId);
   const { data: reviews = [] } = useAcademyReviews(course?.academyUserId ?? null);
   const { data: registrations = [] } = useAcademyRegistrations();
   const createReview = useCreateAcademyReview();
@@ -224,11 +239,13 @@ export function AcademyDetailModal({
     setReviewRegistrationId(null);
     setReportModalOpen(false);
     setReportReason("");
+    setNavCourseId(null);
+    setAcademyProfileOpen(false);
     onClose();
   };
 
   const handleMessage = async () => {
-    if (!course) return;
+    if (!course || readOnly) return;
     setMessaging(true);
     try {
       const res = await startAcademyConversation(course.academyUserId);
@@ -242,7 +259,7 @@ export function AcademyDetailModal({
   };
 
   const submitReview = () => {
-    if (!course || !activeRegistrationId) return;
+    if (!course || !activeRegistrationId || readOnly) return;
     createReview.mutate(
       { academyUserId: course.academyUserId, registrationId: activeRegistrationId, rating: reviewRating, comment: reviewComment.trim() || undefined },
       {
@@ -253,7 +270,7 @@ export function AcademyDetailModal({
   };
 
   const submitReport = () => {
-    if (!course || !reportReason.trim()) return;
+    if (!course || !reportReason.trim() || readOnly) return;
     reportAcademy.mutate(
       { academyUserId: course.academyUserId, reason: reportReason.trim() },
       {
@@ -287,12 +304,12 @@ export function AcademyDetailModal({
               <div className="absolute top-3 right-3 flex gap-2">
                 <button
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
-                  onClick={() => toggleAcademy({
+                  onClick={() => { if (!readOnly) toggleAcademy({
                     id: course.id, title: course.title, provider: course.academyName, duration: course.duration,
                     rating: course.rating / 10, price: course.priceInCents, level: course.level,
                     location: course.location || course.academyLocation, hasCertification: course.hasCertification,
                     imageUrl: heroImage,
-                  })}
+                  }); }}
                   data-testid={`button-fav-modal-${course.id}`}
                 >
                   <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
@@ -302,7 +319,7 @@ export function AcademyDetailModal({
                 </button>
               </div>
               <div className="absolute bottom-3 right-3 flex gap-2">
-                <button onClick={() => setReportModalOpen(true)} title="Signaler" data-testid="button-open-academy-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+                <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-academy-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-academy-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
               </div>
               {course.hasCertification && (
@@ -351,8 +368,15 @@ export function AcademyDetailModal({
                 )}
               </div>
 
-              {/* Academy */}
-              <div className={`p-3 rounded-xl border ${t.border} ${t.sectionBgAlt}`}>
+              {/* Academy — clicking opens the Academy Profile Details modal (Part 14),
+                  the same synchronized representation reused everywhere an Academy is
+                  shown (Eye preview, Admin card). */}
+              <button
+                type="button"
+                onClick={() => setAcademyProfileOpen(true)}
+                className={`w-full text-left p-3 rounded-xl border transition-colors ${t.border} ${isDark ? "hover:border-indigo-600" : "hover:border-indigo-300"} ${t.sectionBgAlt}`}
+                data-testid="button-open-academy-profile"
+              >
                 <p className={`text-xs font-semibold mb-2 flex items-center gap-1 ${t.textMuted}`}><Layers className="w-3.5 h-3.5" /> Académie</p>
                 <div className="flex items-center gap-3">
                   <Avatar className="w-10 h-10 shrink-0">
@@ -367,7 +391,7 @@ export function AcademyDetailModal({
                   </div>
                 </div>
                 {course.academyDescription && <p className={`text-xs mt-2.5 leading-relaxed ${t.textMuted}`}>{course.academyDescription}</p>}
-              </div>
+              </button>
 
               {/* Reviews */}
               <div>
@@ -430,7 +454,7 @@ export function AcademyDetailModal({
                   {REGISTRATION_STATUS_LABELS[myActiveRegistration.status] ?? myActiveRegistration.status}
                 </Badge>
               ) : (
-                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5" onClick={() => onEnroll(course)} data-testid="button-enroll-academy-modal">
+                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5" onClick={() => { if (!readOnly) onEnroll(course); }} data-testid="button-enroll-academy-modal">
                   S'inscrire
                 </Button>
               )}
@@ -462,6 +486,14 @@ export function AcademyDetailModal({
       courseId={course?.id ?? null}
       courseTitle={course?.title ?? ""}
       isDark={isDark}
+    />
+
+    <AcademyProfileModal
+      academyUserId={course?.academyUserId ?? null}
+      open={academyProfileOpen}
+      onClose={() => setAcademyProfileOpen(false)}
+      onOpenCourse={(newCourseId) => { setNavCourseId(newCourseId); setAcademyProfileOpen(false); }}
+      readOnly={readOnly}
     />
     </>
   );

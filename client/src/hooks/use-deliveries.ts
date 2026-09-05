@@ -31,11 +31,11 @@ export function useDelivery(id: number | null) {
 export function useDispatchDelivery() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ deliveryId, mode }: { deliveryId: number; mode: "DELIVERY_COMPANY" | "SUPPLIER" }) => {
+    mutationFn: async ({ deliveryId, mode, deliveryCompanyId }: { deliveryId: number; mode: "DELIVERY_COMPANY" | "SUPPLIER"; deliveryCompanyId?: number }) => {
       const res = await fetch(buildUrl(api.deliveries.dispatch.path, { id: deliveryId }), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify(deliveryCompanyId != null ? { mode, deliveryCompanyId } : { mode }),
         credentials: "include",
       });
       if (!res.ok) {

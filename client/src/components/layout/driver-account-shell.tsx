@@ -1,30 +1,24 @@
 import {
   Truck,
-  CalendarClock,
-  Receipt,
   Briefcase,
-  Award,
-  Eye,
   MessageSquare,
   TrendingUp,
   Settings,
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure — Performance first (replaces the former
-// standalone "Mon Compte"/Dashboard tab; its content is already reused as
-// Performance > Dashboard, see pages/driver/performance.tsx), then
-// business-specific tabs (Planification stays a real separate page — never
-// to be confused with Performance > Dashboard), Profil Public, Communication,
-// Paramètres.
+// Performance first, then the new "Business" tab (Planification/Livraisons/
+// Paiements/Récompenses/Profil — see business.tsx's internal SubTabSwitcher),
+// Communication, Paramètres. "Opportunités" is retired entirely (not moved
+// anywhere — task Part 7/32); the former separate "Profil Public" tab is also
+// gone: its role (a marketplace-style preview) is now the Eye icon inside
+// Business → Profil, reusing the same shared DriverDetailModal used by
+// Supplier/Delivery Company/Admin. Same reorg pattern as
+// barista-account-shell.tsx / maintenance-account-shell.tsx /
+// delivery-company-account-shell.tsx.
 const TABS: ProfessionalAccountTab[] = [
   { path: "/driver", label: "Performance", icon: TrendingUp, exact: true },
-  { path: "/driver/planning", label: "Planification", icon: CalendarClock },
-  { path: "/driver/deliveries", label: "Livraisons", icon: Truck },
-  { path: "/driver/payments", label: "Paiements", icon: Receipt },
-  { path: "/driver/opportunities", label: "Opportunités", icon: Briefcase },
-  { path: "/driver/rewards", label: "Récompenses", icon: Award },
-  { path: "/driver/profil-public", label: "Profil Public", icon: Eye },
+  { path: "/driver/business", label: "Business", icon: Briefcase },
   { path: "/driver/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
   { path: "/driver/settings", label: "Paramètres", icon: Settings },
 ];

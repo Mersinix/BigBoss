@@ -11,8 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   GraduationCap, Users, CheckCircle, XCircle, Star, Search,
-  MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, BookOpen, Award, CalendarDays,
+  MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, BookOpen, Award, CalendarDays, Eye,
 } from "lucide-react";
+import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
+import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -100,8 +102,9 @@ function SessionStatusBadge({ status }: { status: string }) {
 
 // ── Academy detail dialog ──────────────────────────────────────────────────────
 
-function AcademyDetail({ academy, onClose }: { academy: AdminAcademy | null; onClose: () => void }) {
+function AcademyDetail({ academy, onClose, onOpenCourse }: { academy: AdminAcademy | null; onClose: () => void; onOpenCourse: (courseId: number) => void }) {
   const fmt = useFormatCurrency();
+  const [profileOpen, setProfileOpen] = useState(false);
   if (!academy) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -109,7 +112,13 @@ function AcademyDetail({ academy, onClose }: { academy: AdminAcademy | null; onC
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold">{academy.initials}</AvatarFallback></Avatar>
-            <span>{academy.name}</span>
+            <span className="flex-1">{academy.name}</span>
+            {/* Same synchronized Academy Profile Details modal reused by the Academy's own
+                Eye preview and the Coffee Owner "click Académie" flow (Part 38-39) — read-only
+                here, Admin's approval/moderation controls stay on the card outside this dialog. */}
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setProfileOpen(true)} data-testid="button-preview-academy-marketplace">
+              <Eye className="w-3.5 h-3.5" /> Aperçu marketplace
+            </Button>
           </DialogTitle>
         </DialogHeader>
         <div className="grid sm:grid-cols-2 gap-4 text-sm">
@@ -129,6 +138,13 @@ function AcademyDetail({ academy, onClose }: { academy: AdminAcademy | null; onC
           {academy.description && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{academy.description}</p></div>}
         </div>
       </DialogContent>
+      <AcademyProfileModal
+        academyUserId={academy.userId}
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        onOpenCourse={(courseId) => { setProfileOpen(false); onOpenCourse(courseId); }}
+        readOnly
+      />
     </Dialog>
   );
 }
@@ -146,6 +162,7 @@ export default function AdminAcademyPage() {
 
   const [section, setSection] = useState("overview");
   const [selectedAcademy, setSelectedAcademy] = useState<AdminAcademy | null>(null);
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
 
   const [academySearch, setAcademySearch] = useState("");
   const [academyStatus, setAcademyStatus] = useState("all");
@@ -389,7 +406,7 @@ export default function AdminAcademyPage() {
                   <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Formation</th><th className="p-3">Académie</th><th className="p-3">Niveau</th><th className="p-3">Prix</th><th className="p-3">Certification</th><th className="p-3">Statut</th></tr></thead>
                   <tbody>
                     {courses.map((c) => (
-                      <tr key={c.id} className="border-b last:border-0" data-testid={`row-course-${c.id}`}>
+                      <tr key={c.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCourseId(c.id)} data-testid={`row-course-${c.id}`}>
                         <td className="p-3 font-medium">{c.title}</td>
                         <td className="p-3">{c.academyName}</td>
                         <td className="p-3"><Badge variant="outline" className={LEVEL_COLORS[c.level] ?? ""}>{LEVEL_LABELS[c.level] ?? c.level}</Badge></td>
@@ -584,7 +601,10 @@ export default function AdminAcademyPage() {
         </TabsContent>
       </Tabs>
 
-      <AcademyDetail academy={selectedAcademy} onClose={() => setSelectedAcademy(null)} />
+      <AcademyDetail academy={selectedAcademy} onClose={() => setSelectedAcademy(null)} onOpenCourse={(courseId) => setSelectedCourseId(courseId)} />
+      {/* Same synchronized Formation details modal used everywhere a formation is shown
+          (Part 40) — read-only for Admin, moderation stays via the table's own controls. */}
+      <AcademyDetailModal courseId={selectedCourseId} open={selectedCourseId != null} onClose={() => setSelectedCourseId(null)} onEnroll={() => {}} readOnly />
     </div>
   );
 }

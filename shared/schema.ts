@@ -425,6 +425,26 @@ export const vehicles = pgTable("vehicles", {
 export type Vehicle = typeof vehicles.$inferSelect;
 export type InsertVehicle = typeof vehicles.$inferInsert;
 
+// A Driver's own editable profile extension — bio/experience/certifications/
+// availability. Nothing like this existed before (a DRIVER account previously
+// had only bare `users` fields); mirrors the deliveryCompanyProfiles pattern
+// exactly (same weeklyHours/isOnVacation shape). Vehicle is NEVER duplicated
+// here — always the real vehicles row via getVehicleForDriver(userId).
+// Reviews are NEVER duplicated either — always the existing
+// supplierProductReviews (reviewType='DRIVER') via getDriverReviews(userId).
+export const driverProfiles = pgTable("driver_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  bio: text("bio").notNull().default(""),
+  experienceYears: integer("experience_years").notNull().default(0),
+  certifications: text("certifications").array().notNull().default([]),
+  weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
+  isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type DriverProfile = typeof driverProfiles.$inferSelect;
+export type InsertDriverProfile = typeof driverProfiles.$inferInsert;
+
 // Admin-configured pricing — singleton row, same pattern as messagingSettings/
 // landingConfig (getOrCreate on first read, one UPDATE thereafter).
 export const deliveryPricingSettings = pgTable("delivery_pricing_settings", {
@@ -709,7 +729,7 @@ export const supplierStores = pgTable("supplier_stores", {
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
   supplierId: integer("supplier_id"), // nullable for product-level reviews
-  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT' | 'ACADEMY' | 'DRIVER' | 'MARKETING'
+  reviewType: text("review_type").notNull().default('SUPPLIER'), // 'PRODUCT' | 'SUPPLIER' | 'PACK' | 'MAINTENANCE' | 'BARISTA_MARKETPLACE' | 'PRINT' | 'ACADEMY' | 'DRIVER' | 'MARKETING' | 'DELIVERY_COMPANY'
   cafeId: integer("cafe_id").notNull(),
   productId: integer("product_id"),
   listingId: integer("listing_id"),
@@ -723,7 +743,14 @@ export const supplierProductReviews = pgTable("supplier_product_reviews", {
   academyUserId: integer("academy_user_id"), // for ACADEMY reviews
   academyRegistrationId: integer("academy_registration_id"), // completed registration this review is for
   driverId: integer("driver_id"), // for DRIVER reviews
-  deliveryId: integer("delivery_id"), // completed delivery this review is for
+  deliveryId: integer("delivery_id"), // completed delivery this review is for (DRIVER and DELIVERY_COMPANY reviews)
+  // For DELIVERY_COMPANY reviews: the reviewer is a Supplier (not a Cafe Owner —
+  // Suppliers are the ones who actually deal with Delivery Companies via the
+  // Order Delivery dispatch flow). cafeId/cafeName/cafeOwnerName below already
+  // mean "the reviewer" for every other type here, so DELIVERY_COMPANY reuses
+  // them the same way (cafeId holds the reviewing Supplier's user id) rather
+  // than adding a parallel reviewer-identity column.
+  deliveryCompanyUserId: integer("delivery_company_user_id"), // for DELIVERY_COMPANY reviews
   marketingUserId: integer("marketing_user_id"), // for MARKETING reviews
   marketingProjectId: integer("marketing_project_id"), // completed project this review is for
   rating: integer("rating").notNull(), // 1-5
@@ -1406,12 +1433,51 @@ export const marketingReports = pgTable("marketing_reports", {
 // side only ever had a client-only Zustand entry with no DB-backed hydrate,
 // so favorites silently didn't survive a reload. Added here to match every
 // other service's favorites behavior.
+// serviceId (Agency → Multiple Services task): now that /marketing lists
+// individual services rather than agencies, a favorite should reference the
+// specific service where possible — nullable so pre-existing agency-level
+// favorites keep working unchanged (never destroyed), lazily resolved to a
+// real service by storage.getMarketingFavoritesByUser (see the migration
+// note on marketingServices below). marketingUserId is kept alongside for
+// the agency relationship, never removed.
 export const marketingFavorites = pgTable("marketing_favorites", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   marketingUserId: integer("marketing_user_id").notNull(),
+  serviceId: integer("service_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// A single service offered by a Marketing agency (Agency → Multiple Services,
+// mirrors academyCourses field-for-field, same "one profile + many offerings"
+// split already proven for Academy Profile + Formations). Before this, an
+// agency's category/price/responseTime/description lived as ONE flat set of
+// fields directly on marketingProfiles — genuinely agency-level fields
+// (description/website/portfolio/availability/visibility) stay there
+// untouched; category/price/responseTime/description/image move here, one row
+// per service, so an agency can offer Ads, Branding and Photo as three
+// separate real, independently priced/described/imaged services instead of
+// one combined blob. isPublished mirrors academyCourses.isPublished exactly
+// (the agency's own publish/unpublish control — the public /marketing
+// marketplace only ever lists published services from approved, visible
+// agencies, same rule academyCourses/getPublishedAcademyCourses already uses).
+export const marketingServices = pgTable("marketing_services", {
+  id: serial("id").primaryKey(),
+  marketingUserId: integer("marketing_user_id").notNull(),
+  category: text("category").notNull(), // from marketingCategoryTaxonomy, same taxonomy — never a second one
+  startingPriceInCents: integer("starting_price_in_cents").notNull().default(0),
+  responseTime: text("response_time").notNull().default("< 24h"),
+  description: text("description").notNull().default(""),
+  imageUrl: text("image_url"),
+  isPublished: boolean("is_published").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  providerIdx: index("marketing_services_provider_idx").on(table.marketingUserId),
+}));
+export type MarketingService = typeof marketingServices.$inferSelect;
+export type InsertMarketingService = typeof marketingServices.$inferInsert;
+export const insertMarketingServiceSchema = createInsertSchema(marketingServices).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const insertMarketingProfileSchema = createInsertSchema(marketingProfiles).omit({ id: true, updatedAt: true });
 export const insertMarketingProjectSchema = createInsertSchema(marketingProjects).omit({ id: true, createdAt: true, updatedAt: true });
@@ -1427,7 +1493,12 @@ export type InsertMarketingReport = typeof marketingReports.$inferInsert;
 export type MarketingFavorite = typeof marketingFavorites.$inferSelect;
 export type MarketingCategory = typeof marketingCategoryTaxonomy.$inferSelect;
 
-/** Public marketplace card shown on Coffee Owner /marketing — mirrors MaintenanceMarketplaceCard. */
+/** Agency-level card — the agency's own identity/description/website/portfolio/
+ *  availability/visibility, used by the Agency Details Modal (Eye preview, the
+ *  "Agence" section inside a Service modal, Admin's agency card). Pricing/
+ *  category/response-time/service-description/service-image are NOT here
+ *  anymore — see MarketingServiceCard below — mirrors MaintenanceMarketplaceCard's
+ *  shape structurally, adapted to the Agency/Services split. */
 export type MarketingMarketplaceCard = MarketingProfile & {
   userId: number;
   name: string;
@@ -1435,6 +1506,25 @@ export type MarketingMarketplaceCard = MarketingProfile & {
   profileImageUrl: string | null;
   location: string;
   initials: string;
+  distanceKm?: number | null;
+};
+
+/** Public marketplace card shown on Coffee Owner /marketing — one per published
+ *  SERVICE (mirrors AcademyCourseCard exactly: a course/formation card carrying
+ *  its academy's identity fields alongside it, so the card/modal never need a
+ *  second fetch). Real agency identity/rating/reviews are joined in from the
+ *  same marketingProfiles/users/supplierProductReviews rows the Agency Details
+ *  Modal reads — never a second, disconnected agency representation. */
+export type MarketingServiceCard = MarketingService & {
+  agencyName: string;
+  agencyLocation: string;
+  agencyProfileImageUrl: string | null;
+  agencyDescription: string;
+  agencyWebsiteUrl: string | null;
+  agencyProfileType: string;
+  agencyIsAvailable: boolean;
+  rating: number; // x10, agency-level aggregate — reviews are tied to the agency, not per-service
+  reviewCount: number;
   distanceKm?: number | null;
 };
 
@@ -1991,6 +2081,82 @@ export type MaintenanceMarketplaceCard = MaintenanceProfile & {
   // (never fabricated), same convention as BaristaMarketplaceCard.distanceKm.
   distanceKm?: number | null;
 };
+
+// ── DELIVERY COMPANY ─────────────────────────────────────────────────────────
+// Mirrors the Maintenance marketplace pattern (maintenanceProfiles/
+// getMaintenanceCard/getMaintenanceProfiles) field-for-field, adapted to
+// Delivery Company semantics — the single public source of truth for a
+// Delivery Company's own Business → Profil page, its Eye preview, and the
+// Supplier-facing mapped card / details modal (Part 26 "one source of
+// truth"). No profile of this kind existed before this task: Delivery
+// Companies previously only had bare `users` fields (name/photo/phone/
+// address) and no marketplace representation at all. Reviews reuse
+// supplierProductReviews (reviewType='DELIVERY_COMPANY') exactly like every
+// other service — see deliveryCompanyUserId below — and drivers/vehicles are
+// NEVER duplicated here: the card/modal always call the existing
+// getDriversForOwner('DELIVERY_COMPANY', ...) / getVehiclesForOwner(...)
+// storage methods already used by Espace Livraison's own Chauffeurs/Véhicules
+// pages, sanitized down to safe public fields.
+export const deliveryCompanyProfiles = pgTable("delivery_company_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  companyType: text("company_type").notNull().default("Entreprise"),
+  description: text("description").notNull().default(""),
+  deliveryZones: text("delivery_zones").notNull().default(""), // comma-separated, same convention as maintenanceProfiles.coverageArea
+  dailyRateInCents: integer("daily_rate_in_cents").notNull().default(0),
+  responseTime: text("response_time").notNull().default("< 24h"),
+  experienceYears: integer("experience_years").notNull().default(0),
+  certifications: text("certifications").array().notNull().default([]),
+  portfolioImages: text("portfolio_images").array().notNull().default([]),
+  // Same { monday: {open, close, closed}, ... } shape as maintenanceProfiles.weeklyHours — reused, not reinvented.
+  weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
+  isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  rating: integer("rating").notNull().default(0),
+  reviewCount: integer("review_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type DeliveryCompanyProfile = typeof deliveryCompanyProfiles.$inferSelect;
+export type InsertDeliveryCompanyProfile = typeof deliveryCompanyProfiles.$inferInsert;
+
+export type DeliveryCompanyMarketplaceCard = DeliveryCompanyProfile & {
+  userId: number;
+  name: string;
+  phone: string | null;
+  profileImageUrl: string | null;
+  location: string;
+  initials: string;
+  available: boolean;
+  driverCount: number;
+  vehicleCount: number;
+  distanceKm?: number | null;
+};
+
+// Entity-level report — a Supplier flagging a Delivery Company itself (the
+// Supplier is the one who actually interacts with Delivery Companies via the
+// Order Delivery dispatch flow — Coffee Owners never see delivery-company
+// identity), mirroring maintenanceReports/baristaReports exactly (own table,
+// own service scope) but with supplierId as the reporter instead of
+// cafeOwnerId.
+export const deliveryCompanyReportStatusEnum = pgEnum('delivery_company_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+
+export const deliveryCompanyReports = pgTable("delivery_company_reports", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").notNull(),
+  deliveryCompanyUserId: integer("delivery_company_user_id").notNull(),
+  reason: text("reason").notNull(),
+  status: deliveryCompanyReportStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNote: text("resolution_note"),
+}, (table) => ({
+  companyIdx: index("delivery_company_reports_company_idx").on(table.deliveryCompanyUserId),
+  statusIdx: index("delivery_company_reports_status_idx").on(table.status),
+}));
+export type DeliveryCompanyReport = typeof deliveryCompanyReports.$inferSelect;
+export type InsertDeliveryCompanyReport = typeof deliveryCompanyReports.$inferInsert;
+export const insertDeliveryCompanyReportSchema = createInsertSchema(deliveryCompanyReports).omit({ id: true, createdAt: true, resolvedAt: true });
 export type InsertMaintenanceReservation = z.infer<typeof insertMaintenanceReservationSchema>;
 export type InsertPackFavorite = z.infer<typeof insertPackFavoriteSchema>;
 

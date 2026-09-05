@@ -14,6 +14,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Truck, Clock, CheckCircle, XCircle, Search, Building2, Store } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
+import { DriverDetailModal } from "@/components/driver/driver-detail-modal";
+import { DeliveryCompanyDetailModal } from "@/components/delivery/delivery-company-detail-modal";
+import { SupplierDriverFleetModal } from "@/components/delivery/supplier-driver-fleet-modal";
 import type { DeliveryWithDetails, User } from "@shared/schema";
 
 // ── Entreprises + Chauffeurs / Chauffeurs fournisseurs tabs (task Part 37/39/40) — built
@@ -22,8 +25,11 @@ import type { DeliveryWithDetails, User } from "@shared/schema";
 
 function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: DeliveryWithDetails[] }) {
   const [search, setSearch] = useState("");
+  const [detail, setDetail] = useState<User | null>(null);
+  const [companyDetailId, setCompanyDetailId] = useState<number | null>(null);
   const companies = users.filter((u) => u.role === "DELIVERY_COMPANY");
   const drivers = users.filter((u) => u.role === "DRIVER" && u.deliveryCompanyId);
+  const driversById = new Map(drivers.map((d) => [d.id, d]));
 
   const rows = useMemo(() => companies
     .map((c) => {
@@ -48,7 +54,11 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
         <div className="space-y-4">
           {rows.map(({ company, ownDrivers, active, completed, total }) => (
             <Card key={company.id} data-testid={`card-admin-company-${company.id}`}>
-              <CardHeader className="pb-3">
+              <CardHeader
+                className="pb-3 cursor-pointer hover:bg-muted/40 transition-colors rounded-t-xl"
+                onClick={() => setCompanyDetailId(company.id)}
+                data-testid={`button-open-admin-company-${company.id}`}
+              >
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-base flex items-center gap-2"><Building2 className="w-4 h-4 text-indigo-600" />{company.name}</CardTitle>
                   <div className="flex gap-2">
@@ -68,7 +78,13 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
                       const driverActive = deliveries.filter((del) => del.driverId === d.id && ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(del.status)).length;
                       const driverCompleted = deliveries.filter((del) => del.driverId === d.id && del.status === "DELIVERED").length;
                       return (
-                        <div key={d.id} className="flex items-center justify-between gap-2 rounded-xl border p-2.5 text-sm" data-testid={`row-admin-driver-${d.id}`}>
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => setDetail(d)}
+                          className="flex items-center justify-between gap-2 rounded-xl border p-2.5 text-sm text-left hover:border-primary hover:bg-primary/5 transition-colors"
+                          data-testid={`row-admin-driver-${d.id}`}
+                        >
                           <div className="min-w-0">
                             <p className="font-medium truncate">{d.name}</p>
                             <p className="text-xs text-muted-foreground truncate">{d.phone || "—"}</p>
@@ -78,7 +94,7 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
                             <span>{driverActive} en cours</span>
                             <span>{driverCompleted} livrée(s)</span>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -88,28 +104,45 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
           ))}
         </div>
       )}
+      <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
+      {/* Clicking the company card header above opens this — same synchronized
+          Delivery Company details modal used everywhere a company is shown (Eye
+          preview, Supplier dispatch flow). Its own "Chauffeurs" list is clickable
+          too (onOpenDriver), resolved here to the real User row already in `users`. */}
+      <DeliveryCompanyDetailModal
+        companyUserId={companyDetailId}
+        open={companyDetailId != null}
+        onClose={() => setCompanyDetailId(null)}
+        onOpenDriver={(driverId) => { const d = driversById.get(driverId); if (d) { setCompanyDetailId(null); setDetail(d); } }}
+        readOnly
+      />
     </div>
   );
 }
 
 function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: DeliveryWithDetails[] }) {
   const [search, setSearch] = useState("");
+  const [detail, setDetail] = useState<User | null>(null);
+  const [supplierDetailId, setSupplierDetailId] = useState<number | null>(null);
   const suppliers = users.filter((u) => u.role === "SUPPLIER");
   const drivers = users.filter((u) => u.role === "DRIVER" && u.supplierId);
-  const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
 
-  const rows = useMemo(() => drivers
-    .map((d) => {
-      const own = deliveries.filter((del) => del.driverId === d.id);
-      return {
-        driver: d,
-        supplierName: supplierMap.get(d.supplierId!)?.name ?? "—",
-        active: own.filter((del) => ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(del.status)).length,
-        completed: own.filter((del) => del.status === "DELIVERED").length,
-      };
+  // Same "one card per operator, real drivers mapped inside" structure as
+  // CompanyDriversTab above — grouped by supplier instead of delivery company.
+  const rows = useMemo(() => suppliers
+    .map((s) => {
+      const ownDrivers = drivers.filter((d) => d.supplierId === s.id);
+      const ownDeliveries = deliveries.filter((d) => ownDrivers.some((driver) => driver.id === d.driverId));
+      const active = ownDeliveries.filter((d) => ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(d.status)).length;
+      const completed = ownDeliveries.filter((d) => d.status === "DELIVERED").length;
+      return { supplier: s, ownDrivers, active, completed, total: ownDeliveries.length };
     })
-    .filter((r) => !search || `${r.driver.name} ${r.supplierName}`.toLowerCase().includes(search.toLowerCase()))
-  , [drivers, deliveries, supplierMap, search]);
+    .filter((r) => r.ownDrivers.length > 0)
+    .filter((r) => !search || `${r.supplier.name} ${r.ownDrivers.map((d) => d.name).join(" ")}`.toLowerCase().includes(search.toLowerCase()))
+  , [suppliers, drivers, deliveries, search]);
+
+  const selectedSupplier = rows.find((r) => r.supplier.id === supplierDetailId)?.supplier ?? null;
+  const selectedSupplierDrivers = rows.find((r) => r.supplier.id === supplierDetailId)?.ownDrivers ?? [];
 
   return (
     <div className="space-y-4">
@@ -117,34 +150,70 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un chauffeur, un fournisseur…" data-testid="input-search-supplier-drivers" />
       </div>
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          {rows.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucun chauffeur fournisseur.</p> : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Chauffeur</TableHead>
-                  <TableHead>Fournisseur</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>En cours</TableHead>
-                  <TableHead>Terminées</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(({ driver, supplierName, active, completed }) => (
-                  <TableRow key={driver.id} data-testid={`row-admin-supplier-driver-${driver.id}`}>
-                    <TableCell className="font-medium">{driver.name}</TableCell>
-                    <TableCell className="flex items-center gap-1.5"><Store className="w-3.5 h-3.5 text-muted-foreground" />{supplierName}</TableCell>
-                    <TableCell><Badge variant="outline">{driver.status}</Badge></TableCell>
-                    <TableCell>{active}</TableCell>
-                    <TableCell>{completed}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {rows.length === 0 ? (
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun fournisseur avec des chauffeurs.</CardContent></Card>
+      ) : (
+        <div className="space-y-4">
+          {rows.map(({ supplier, ownDrivers, active, completed, total }) => (
+            <Card key={supplier.id} data-testid={`card-admin-supplier-${supplier.id}`}>
+              <CardHeader
+                className="pb-3 cursor-pointer hover:bg-muted/40 transition-colors rounded-t-xl"
+                onClick={() => setSupplierDetailId(supplier.id)}
+                data-testid={`button-open-admin-supplier-${supplier.id}`}
+              >
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-base flex items-center gap-2"><Store className="w-4 h-4 text-slate-600" />{supplier.name}</CardTitle>
+                  <div className="flex gap-2">
+                    <Badge variant="outline">{supplier.status}</Badge>
+                    <Badge variant="secondary">{ownDrivers.length} chauffeur(s)</Badge>
+                    <Badge variant="secondary">{active} en cours</Badge>
+                    <Badge variant="secondary">{completed}/{total} livrée(s)</Badge>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {ownDrivers.map((d) => {
+                    const driverActive = deliveries.filter((del) => del.driverId === d.id && ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(del.status)).length;
+                    const driverCompleted = deliveries.filter((del) => del.driverId === d.id && del.status === "DELIVERED").length;
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => setDetail(d)}
+                        className="flex items-center justify-between gap-2 rounded-xl border p-2.5 text-sm text-left hover:border-primary hover:bg-primary/5 transition-colors"
+                        data-testid={`row-admin-supplier-driver-${d.id}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{d.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{d.phone || "—"}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5 text-[10px] text-muted-foreground shrink-0">
+                          <span className={`h-2 w-2 rounded-full ${driverActive > 0 ? "bg-amber-500" : "bg-green-500"}`} />
+                          <span>{driverActive} en cours</span>
+                          <span>{driverCompleted} livrée(s)</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+      <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
+      <SupplierDriverFleetModal
+        supplier={selectedSupplier}
+        drivers={selectedSupplierDrivers}
+        deliveries={deliveries}
+        open={supplierDetailId != null}
+        onClose={() => setSupplierDetailId(null)}
+        onOpenDriver={(driverId) => {
+          const d = selectedSupplierDrivers.find((driver) => driver.id === driverId);
+          if (d) { setSupplierDetailId(null); setDetail(d); }
+        }}
+      />
     </div>
   );
 }

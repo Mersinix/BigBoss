@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useDeliveries, useDispatchDelivery, useSupplierDrivers } from "@/hooks/use-deliveries";
 import { useReassignDriver } from "@/hooks/use-delivery-ecosystem";
+import { useDeliveryCompanyProfiles } from "@/hooks/use-delivery-company-marketplace";
+import { DeliveryCompanyDetailModal } from "@/components/delivery/delivery-company-detail-modal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Truck, CheckCircle, Clock, MapPin, Package, Search, X, Building2, User as UserIcon } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getAvatarUrl } from "@/lib/avatar";
+import { Truck, CheckCircle, Clock, MapPin, Package, Search, X, Building2, User as UserIcon, Star, ChevronLeft, Users as UsersIcon } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
@@ -41,9 +45,70 @@ function matchesDateFilter(createdAt: Date | null, filter: string): boolean {
   return true;
 }
 
+// Browsing real mapped Delivery Company cards (Part 20-22) — clicking one opens the same
+// DeliveryCompanyDetailModal used everywhere else (Barista modal as the visual reference),
+// whose "Choisir cette entreprise" action dispatches straight to that company (Part 24-25:
+// targeted dispatch, see storage.dispatchDelivery's targetDeliveryCompanyId) instead of the
+// broadcast-to-all-partners pool. The broadcast option below stays completely unchanged.
+function CompanyBrowseView({ delivery, onBack, onClose }: { delivery: DeliveryWithDetails; onBack: () => void; onClose: () => void }) {
+  const { data: companies = [], isLoading } = useDeliveryCompanyProfiles({ available: true });
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const dispatch = useDispatchDelivery();
+  const { toast } = useToast();
+
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="gap-1 -ml-2" onClick={onBack}><ChevronLeft className="w-4 h-4" />Retour</Button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[55vh] overflow-y-auto pt-1">
+        {isLoading ? (
+          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
+        ) : companies.length === 0 ? (
+          <p className="text-sm text-muted-foreground col-span-2 text-center py-8">Aucune entreprise de livraison disponible pour le moment.</p>
+        ) : (
+          companies.map((c) => (
+            <button
+              key={c.userId}
+              onClick={() => setSelectedCompanyId(c.userId)}
+              className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
+              data-testid={`card-delivery-company-${c.userId}`}
+            >
+              <Avatar className="w-10 h-10 shrink-0">
+                <AvatarImage src={getAvatarUrl(c as any)} alt={c.name} />
+                <AvatarFallback className="bg-teal-100 text-teal-700 font-semibold">{c.initials}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{c.name}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> {(c.rating / 10).toFixed(1)} ({c.reviewCount})
+                  <span className="flex items-center gap-1"><UsersIcon className="w-3 h-3" />{c.driverCount}</span>
+                </p>
+                {c.location && <p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="w-3 h-3 shrink-0" />{c.location}</p>}
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+      <DeliveryCompanyDetailModal
+        companyUserId={selectedCompanyId}
+        open={selectedCompanyId != null}
+        onClose={() => setSelectedCompanyId(null)}
+        onSelect={(card) => {
+          dispatch.mutate({ deliveryId: delivery.id, mode: "DELIVERY_COMPANY", deliveryCompanyId: card.userId }, {
+            onSuccess: () => { toast({ title: `Envoyée à ${card.name}` }); onClose(); },
+            onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+          });
+        }}
+      />
+    </>
+  );
+}
+
 function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDetails; onClose: () => void }) {
   const dispatch = useDispatchDelivery();
   const { toast } = useToast();
+  const [view, setView] = useState<"choose" | "browse">("choose");
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent>
@@ -51,6 +116,9 @@ function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDetails; 
         <p className="text-sm text-muted-foreground">
           Commande #{delivery.orderId} · {delivery.cafe.name}
         </p>
+        {view === "browse" ? (
+          <CompanyBrowseView delivery={delivery} onBack={() => setView("choose")} onClose={onClose} />
+        ) : (
         <div className="grid grid-cols-1 gap-3 pt-2">
           <button
             onClick={() => dispatch.mutate({ deliveryId: delivery.id, mode: "DELIVERY_COMPANY" }, {
@@ -64,6 +132,17 @@ function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDetails; 
             <div>
               <p className="font-medium text-sm">Entreprise de livraison</p>
               <p className="text-xs text-muted-foreground">Publier dans la file des entreprises de livraison partenaires.</p>
+            </div>
+          </button>
+          <button
+            onClick={() => setView("browse")}
+            className="flex items-center gap-3 p-4 rounded-xl border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
+            data-testid="button-browse-delivery-companies"
+          >
+            <Search className="w-5 h-5 text-primary shrink-0" />
+            <div>
+              <p className="font-medium text-sm">Choisir une entreprise</p>
+              <p className="text-xs text-muted-foreground">Parcourir les entreprises partenaires et en choisir une précise.</p>
             </div>
           </button>
           <button
@@ -81,6 +160,7 @@ function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDetails; 
             </div>
           </button>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

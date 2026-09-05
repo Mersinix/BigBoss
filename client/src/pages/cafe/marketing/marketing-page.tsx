@@ -38,11 +38,14 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import {
   useMarketingProfiles,
+  useMarketingServices,
   useMarketingTaxonomy,
   useCreateMarketingProject,
   type MarketingMarketplaceCard,
+  type MarketingServiceCard,
 } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
+import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { MarketingBlacklistModal } from "@/components/marketing/marketing-blacklist-modal";
 
@@ -160,34 +163,34 @@ export function QuoteRequestDialog({ provider, onClose }: { provider: MarketingM
   );
 }
 
-// ── Provider Card ─────────────────────────────────────────────────────────────
-// Barista marketplace card as the visual/UX reference (Part 3/27): left =
-// image, right = info, whole card is the click target. Unlike Barista's own
-// card, action buttons are intentionally removed (Part 4) — Message/Voir
-// profil/Devis all moved into MarketingDetailModal, opened by the card click.
+// ── Service Card ──────────────────────────────────────────────────────────────
+// Agency → Multiple Services: /marketing now maps one card per published
+// SERVICE rather than one per agency (mirrors Academy's /academy — one card
+// per formation, not per academy). Same visual/UX reference and left-image/
+// right-info layout as before; the favorite heart still targets the AGENCY
+// (see marketing-service-detail-modal.tsx's own note — no per-service
+// favorites system exists yet, an intentional, documented scope limit).
 
-function ProviderCard({
-  provider,
+function ServiceCard({
+  service,
   onOpenDetail,
   isDark,
 }: {
-  provider: MarketingMarketplaceCard;
-  onOpenDetail: (p: MarketingMarketplaceCard) => void;
+  service: MarketingServiceCard;
+  onOpenDetail: (s: MarketingServiceCard) => void;
   isDark: boolean;
 }) {
   const fmt = useFormatCurrency();
   const t = useTheme(isDark);
-  const faved = useFavorites((s) => !!s.marketing[provider.userId]);
+  const faved = useFavorites((s) => !!s.marketing[service.marketingUserId]);
   const toggleMarketing = useFavorites((s) => s.toggleMarketing);
 
-  // First portfolio image is the card's main image (Part 2) — existing avatar
-  // fallback (real profile picture or initials) when the provider has none yet.
-  const coverImage = provider.portfolioImages[0];
+  const coverImage = service.imageUrl;
 
   return (
     <div
-      data-testid={`card-provider-${provider.userId}`}
-      onClick={() => onOpenDetail(provider)}
+      data-testid={`card-service-${service.id}`}
+      onClick={() => onOpenDetail(service)}
       className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
     >
       <button
@@ -195,67 +198,58 @@ function ProviderCard({
         onClick={(e) => {
           e.stopPropagation();
           toggleMarketing({
-            id: provider.userId, name: provider.name, initials: provider.initials,
-            type: providerTypeLabel(provider.profileType), rating: provider.rating / 10,
-            portfolioImages: provider.portfolioImages, location: provider.location,
-            available: provider.isAvailable, profileImageUrl: provider.profileImageUrl,
+            id: service.marketingUserId, name: service.agencyName,
+            initials: service.agencyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+            type: providerTypeLabel(service.agencyProfileType), rating: service.rating / 10,
+            portfolioImages: coverImage ? [coverImage] : [], location: service.agencyLocation,
+            available: service.agencyIsAvailable, profileImageUrl: service.agencyProfileImageUrl,
           });
         }}
-        data-testid={`button-fav-marketing-${provider.userId}`}
+        data-testid={`button-fav-marketing-service-${service.id}`}
       >
         <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
       </button>
 
-      {/* Left — photo (first portfolio image, existing avatar fallback) */}
+      {/* Left — photo (the service's own image, agency photo fallback) */}
       <div className="w-2/5 shrink-0 relative">
         {coverImage ? (
-          <img src={coverImage} alt={provider.name} className="w-full h-full object-cover" />
+          <img src={coverImage} alt={service.category} className="w-full h-full object-cover" />
         ) : (
           <Avatar className="w-full h-full rounded-none">
-            <AvatarImage src={provider.profileImageUrl ?? undefined} alt={provider.name} className="object-cover" />
+            <AvatarImage src={service.agencyProfileImageUrl ?? undefined} alt={service.agencyName} className="object-cover" />
             <AvatarFallback className="rounded-none bg-purple-100 text-purple-700 font-bold text-2xl">
-              {provider.initials}
+              {service.agencyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
         )}
         <span
-          className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${provider.isAvailable ? "bg-green-500" : "bg-gray-300"}`}
-          title={provider.isAvailable ? "Disponible" : "Indisponible"}
+          className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${service.agencyIsAvailable ? "bg-green-500" : "bg-gray-300"}`}
+          title={service.agencyIsAvailable ? "Disponible" : "Indisponible"}
         />
       </div>
 
       {/* Right — information */}
       <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
         <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-purple-600 transition-colors pr-5 ${t.textPrimary}`}>
-          {provider.name}
+          {service.category}
         </h3>
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={`text-[10px] border-0 px-1.5 ${providerTypeColor(provider.profileType)}`}>{providerTypeLabel(provider.profileType)}</Badge>
-          {provider.location && (
+          <Badge className={`text-[10px] border-0 px-1.5 ${providerTypeColor(service.agencyProfileType)}`}>{service.agencyName}</Badge>
+          {service.agencyLocation && (
             <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
-              <MapPin className="w-2.5 h-2.5" />{provider.location}
+              <MapPin className="w-2.5 h-2.5" />{service.agencyLocation}
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          <StarRating rating={provider.rating / 10} isDark={isDark} />
-          <span className="text-[11px] text-gray-400">({provider.reviewCount} avis)</span>
+          <StarRating rating={service.rating / 10} isDark={isDark} />
+          <span className="text-[11px] text-gray-400">({service.reviewCount} avis)</span>
         </div>
-
-        {provider.categories.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {provider.categories.slice(0, 4).map((cat) => (
-              <span key={cat} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${t.mutedBg} ${t.textMuted}`}>
-                {cat}
-              </span>
-            ))}
-          </div>
-        )}
 
         <div className={`mt-auto pt-2 border-t ${t.border}`}>
           <p className={`text-[10px] ${t.textSubtle}`}>À partir de</p>
-          <p className="font-bold text-sm text-purple-600">{fmt(provider.startingPriceInCents)}</p>
+          <p className="font-bold text-sm text-purple-600">{fmt(service.startingPriceInCents)}</p>
         </div>
       </div>
     </div>
@@ -278,18 +272,24 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const [filterRating, setFilterRating] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [filterType, setFilterType] = useState("");
-  const [detailProviderId, setDetailProviderId] = useState<number | null>(null);
+  const [detailServiceId, setDetailServiceId] = useState<number | null>(null);
+  const [detailAgencyId, setDetailAgencyId] = useState<number | null>(null);
   const [quoteProvider, setQuoteProvider] = useState<MarketingMarketplaceCard | null>(null);
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
 
   const { data: taxonomy = [] } = useMarketingTaxonomy();
-  const { data: providers = [], isLoading } = useMarketingProfiles({
+  // /marketing now maps one card per published SERVICE (Agency → Multiple Services),
+  // mirroring Academy's /academy (one card per formation, not per academy).
+  const { data: services = [], isLoading } = useMarketingServices({
     search: search.trim() || undefined,
     category: selectedService || undefined,
     profileType: filterType || undefined,
     location: filterLocation || undefined,
   });
+  // Agency list — kept only for Fast Search/Blacklist (still agency-centric browsing,
+  // unchanged) and to hydrate the favorite hearts below (favorites stay agency-scoped).
+  const { data: providers = [] } = useMarketingProfiles();
 
   // Hydrate favorite hearts from the database, mirroring barista-page.tsx's pattern —
   // without this the Marketing favorites never survived a page reload.
@@ -299,17 +299,16 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   });
   const syncMarketing = useFavorites((s) => s.syncMarketing);
   useEffect(() => {
-    if (isLoading) return;
     syncMarketing(favoriteIds, providers);
-  }, [favoriteIds, providers, isLoading, syncMarketing]);
+  }, [favoriteIds, providers, syncMarketing]);
 
-  const allLocations = useMemo(() => Array.from(new Set(providers.map((p) => p.location).filter(Boolean))).sort(), [providers]);
+  const allLocations = useMemo(() => Array.from(new Set(services.map((s) => s.agencyLocation).filter(Boolean))).sort(), [services]);
 
-  const filteredProviders = useMemo(() => {
-    if (!filterRating) return providers;
+  const filteredServices = useMemo(() => {
+    if (!filterRating) return services;
     const min = parseFloat(filterRating) * 10;
-    return providers.filter((p) => p.rating >= min);
-  }, [providers, filterRating]);
+    return services.filter((s) => s.rating >= min);
+  }, [services, filterRating]);
 
   const hasFilters = !!(selectedService || search || filterRating || filterLocation || filterType);
 
@@ -317,7 +316,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
     setSelectedService(""); setSearch(""); setFilterRating(""); setFilterLocation(""); setFilterType("");
   };
 
-  const averageRating = providers.length > 0 ? providers.reduce((s, p) => s + p.rating, 0) / providers.length / 10 : 0;
+  const averageRating = services.length > 0 ? services.reduce((s, v) => s + v.rating, 0) / services.length / 10 : 0;
   const canAct = accessLevel === "approved";
 
   return (
@@ -488,20 +487,20 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[...Array(8)].map((_, i) => <div key={i} className={`h-36 rounded-2xl animate-pulse ${t.mutedBg}`} />)}
             </div>
-          ) : filteredProviders.length === 0 ? (
+          ) : filteredServices.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <Users className={`w-12 h-12 ${t.textSubtle}`} />
-              <p className={`font-semibold ${t.textPrimary}`}>Aucun prestataire trouvé</p>
+              <p className={`font-semibold ${t.textPrimary}`}>Aucun service trouvé</p>
               <p className={`text-sm ${t.textMuted}`}>Essayez d'ajuster vos filtres.</p>
               <Button size="sm" variant="outline" onClick={resetFilters} data-testid="button-reset-empty">Réinitialiser les filtres</Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredProviders.map((provider) => (
-                <ProviderCard
-                  key={provider.userId}
-                  provider={provider}
-                  onOpenDetail={(p) => setDetailProviderId(p.userId)}
+              {filteredServices.map((service) => (
+                <ServiceCard
+                  key={service.id}
+                  service={service}
+                  onOpenDetail={(s) => setDetailServiceId(s.id)}
                   isDark={isDark}
                 />
               ))}
@@ -512,21 +511,36 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
       </>
       )}
 
-      {/* Fast Search — same `providers` list as the grid above, rendered before
-          the Details modal so it stays open underneath when both are mounted. */}
+      {/* Fast Search — still browses agencies (Part 20's scope: peripheral, unchanged),
+          rendered before the Details modals so it stays open underneath when both are
+          mounted. Opens the Agency Details Modal, same as before this task. */}
       <MarketingFastSearch
         open={fastSearchOpen}
         onClose={() => setFastSearchOpen(false)}
         providers={providers}
         onRequestQuote={(p) => setQuoteProvider(p)}
-        onOpenDetail={(p) => setDetailProviderId(p.userId)}
+        onOpenDetail={(p) => setDetailAgencyId(p.userId)}
+      />
+
+      {/* Service Details Modal (Part 1) — the new primary entry point from a mapped card.
+          Its "Agence" section hands agencyUserId back here (onOpenAgency) to open the
+          Agency Details Modal below, which in turn can hand a serviceId back
+          (onOpenService) to swap back to this same modal — same nested-navigation
+          ping-pong as Academy's Formation ↔ Académie modals. */}
+      <MarketingServiceDetailModal
+        serviceId={detailServiceId}
+        open={detailServiceId != null}
+        onClose={() => setDetailServiceId(null)}
+        onRequestQuote={(p) => { setDetailServiceId(null); setQuoteProvider(p); }}
+        onOpenAgency={(agencyId) => { setDetailServiceId(null); setDetailAgencyId(agencyId); }}
       />
 
       <MarketingDetailModal
-        marketingUserId={detailProviderId}
-        open={detailProviderId != null}
-        onClose={() => setDetailProviderId(null)}
-        onRequestQuote={(p) => { setDetailProviderId(null); setQuoteProvider(p); }}
+        marketingUserId={detailAgencyId}
+        open={detailAgencyId != null}
+        onClose={() => setDetailAgencyId(null)}
+        onRequestQuote={(p) => { setDetailAgencyId(null); setQuoteProvider(p); }}
+        onOpenService={(serviceId) => { setDetailAgencyId(null); setDetailServiceId(serviceId); }}
       />
 
       <MarketingBlacklistModal

@@ -12,11 +12,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import {
   Megaphone, Users, Briefcase, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
-  Trash2, Snowflake, Search, MapPin, Phone, Image, DollarSign,
+  Trash2, Snowflake, Search, MapPin, Phone, Image, DollarSign, Eye,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
+import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
+import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 
 // Mirrors admin/maintenance-page.tsx's architecture exactly: one aggregate
 // overview endpoint (/api/admin/marketing), client-side tabs/filters over it,
@@ -116,6 +118,8 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
 
   const startEdit = () => {
     setForm({
@@ -148,7 +152,13 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader><DialogTitle className="flex items-center gap-3">
         <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-fuchsia-100 text-fuchsia-700 font-bold">{account.initials}</AvatarFallback></Avatar>
-        <span>{account.name}</span>
+        <span className="flex-1">{account.name}</span>
+        {/* Same synchronized Marketing Profile Details modal reused by the provider's own
+            Eye preview and Coffee Owner /marketing (Part 41-42) — read-only here, Admin's
+            approval/freeze/delete controls stay on this dialog's own actions below. */}
+        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setProfileOpen(true)} data-testid="button-preview-marketing-marketplace">
+          <Eye className="w-3.5 h-3.5" /> Aperçu marketplace
+        </Button>
       </DialogTitle></DialogHeader>
       <div className="grid sm:grid-cols-2 gap-4 text-sm">
         <div className="sm:col-span-2 flex flex-wrap gap-2">
@@ -180,10 +190,33 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
         ) : <>
           <Info icon={MapPin} label="Localisation" value={account.location} />
           <Info icon={Phone} label="Téléphone" value={account.phone} />
-          <Info icon={Clock} label="Temps de réponse" value={account.responseTime} />
           <Info icon={Star} label="Évaluation" value={<><Stars value={account.rating} /> ({account.reviewCount} avis)</>} />
-          <Info icon={DollarSign} label="Prix de départ" value={`${((account.startingPriceInCents ?? 0) / 100).toFixed(2)} DT`} />
-          <div><p className="text-xs text-muted-foreground mb-1">Services proposés</p><div className="flex flex-wrap gap-1">{(account.categories ?? []).map((x: string) => <Badge key={x} variant="secondary" className="text-xs">{x}</Badge>)}</div></div>
+          {/* Agency → Multiple Services: price/response-time now live per-service below,
+              not as one flat agency-level figure. */}
+          <div className="sm:col-span-2">
+            <p className="text-xs text-muted-foreground mb-1.5">Services ({(account.services ?? []).length})</p>
+            {(account.services ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun service créé.</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-2">
+                {account.services.map((s: any) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedServiceId(s.id)}
+                    className="text-left rounded-lg border p-2.5 text-sm hover:border-fuchsia-400 transition-colors"
+                    data-testid={`button-admin-service-${s.id}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium truncate">{s.category}</span>
+                      <Badge variant={s.isPublished ? "default" : "secondary"} className={`text-[10px] shrink-0 ${s.isPublished ? "bg-green-600" : ""}`}>{s.isPublished ? "Publié" : "Brouillon"}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{fmt(s.startingPriceInCents)} · {s.responseTime}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="sm:col-span-2"><p className="text-xs text-muted-foreground mb-1">Description</p><p className="whitespace-pre-wrap">{account.description || "—"}</p></div>
           <div className="sm:col-span-2">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Image className="h-3.5 w-3.5" />Portfolio</p>
@@ -214,6 +247,8 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
         </div>
       </div>
     </DialogContent>
+    <MarketingDetailModal marketingUserId={account.userId} open={profileOpen} onClose={() => setProfileOpen(false)} onRequestQuote={() => {}} readOnly />
+    <MarketingServiceDetailModal serviceId={selectedServiceId} open={selectedServiceId != null} onClose={() => setSelectedServiceId(null)} readOnly />
   </Dialog>;
 }
 
@@ -409,21 +444,25 @@ export default function MarketingAdminPage() {
     qc.invalidateQueries({ queryKey: ["/api/marketing/taxonomy"] });
   };
   const stats = data?.stats;
+  // Agency → Multiple Services: categories now live on each agency's real services
+  // (account.services), not the legacy profile.categories field (kept but no longer
+  // maintained — see storage.migrateMarketingServicesIfNeeded).
   const filterOptions = useMemo(() => {
     const accounts = data?.accounts ?? [];
     return {
       types: Array.from(new Set(accounts.map((a) => a.profileType).filter(Boolean))).sort(),
-      categories: Array.from(new Set(accounts.flatMap((a) => a.categories ?? []))).sort(),
+      categories: Array.from(new Set(accounts.flatMap((a) => (a.services ?? []).map((s: any) => s.category)))).sort(),
     };
   }, [data?.accounts]);
   const accounts = useMemo(() => (data?.accounts ?? []).filter((a) => {
-    const haystack = [a.name, a.location, ...(a.categories ?? [])].join(" ").toLowerCase();
+    const serviceCategories = (a.services ?? []).map((s: any) => s.category);
+    const haystack = [a.name, a.location, ...serviceCategories].join(" ").toLowerCase();
     const accountRating = (a.rating ?? 0) / 10;
     return (!search || haystack.includes(search.toLowerCase()))
       && (status === "all" || a.status === status)
       && (visibility === "all" || (visibility === "visible" ? a.marketplaceVisible : !a.marketplaceVisible))
       && (profileType === "all" || a.profileType === profileType)
-      && (category === "all" || (a.categories ?? []).includes(category))
+      && (category === "all" || serviceCategories.includes(category))
       && (rating === "all" || (rating === "rated" ? accountRating > 0 : accountRating >= Number(rating)));
   }), [data?.accounts, search, status, visibility, profileType, category, rating]);
   const kpis = [
@@ -461,7 +500,7 @@ export default function MarketingAdminPage() {
           <Select value={category} onValueChange={setCategory}><SelectTrigger className="w-[180px]"><SelectValue placeholder="Service" /></SelectTrigger><SelectContent><SelectItem value="all">Tous services</SelectItem>{filterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
           <Select value={rating} onValueChange={setRating}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Note" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les notes</SelectItem><SelectItem value="rated">Avec avis</SelectItem><SelectItem value="4">4+ étoiles</SelectItem><SelectItem value="3">3+ étoiles</SelectItem></SelectContent></Select>
         </div>
-        {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{accounts.map((account) => <Card key={account.userId} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedAccount(account)}><CardContent className="p-4 space-y-3"><div className="flex items-start gap-3"><Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-fuchsia-100 text-fuchsia-700 font-bold">{account.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.location || "—"}</p></div><span className={`h-2.5 w-2.5 rounded-full mt-1 ${account.marketplaceVisible ? "bg-green-500" : "bg-gray-300"}`} /></div><div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">{account.profileType}</Badge><Badge variant="outline" className="text-xs">{account.status}</Badge></div><div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis</span></div><div className="flex flex-wrap gap-1">{(account.categories ?? []).slice(0, 4).map((x: string) => <span key={x} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{x}</span>)}</div></CardContent></Card>)}</div>}
+        {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{accounts.map((account) => <Card key={account.userId} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedAccount(account)}><CardContent className="p-4 space-y-3"><div className="flex items-start gap-3"><Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-fuchsia-100 text-fuchsia-700 font-bold">{account.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.location || "—"}</p></div><span className={`h-2.5 w-2.5 rounded-full mt-1 ${account.marketplaceVisible ? "bg-green-500" : "bg-gray-300"}`} /></div><div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">{account.profileType}</Badge><Badge variant="outline" className="text-xs">{account.status}</Badge></div><div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis</span></div>{/* Real services (Part 10), not the legacy profile.categories field */}<div className="flex flex-wrap gap-1">{(account.services ?? []).slice(0, 4).map((s: any) => <span key={s.id} className={`rounded-full px-2 py-0.5 text-[10px] ${s.isPublished ? "bg-muted" : "bg-muted/50 text-muted-foreground/70 italic"}`}>{s.category}</span>)}{(account.services ?? []).length === 0 && <span className="text-[10px] text-muted-foreground italic">Aucun service</span>}</div></CardContent></Card>)}</div>}
       </TabsContent>
       <TabsContent value="projects" className="mt-4">
         {!data?.projects?.length ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun projet.</CardContent></Card> : (

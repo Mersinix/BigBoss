@@ -27,6 +27,8 @@ const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assi
 const DELIVERY_ECOSYSTEM_EVENTS = ["vehicle_updated", "delivery_pricing_updated", "driver_review_created", "delivery_opportunity_updated"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created"];
+const DELIVERY_COMPANY_MARKETPLACE_EVENTS = ["delivery_company_profile_updated", "delivery_company_review_updated", "admin_delivery_company_report_created"];
+const DRIVER_PROFILE_EVENTS = ["driver_profile_updated"];
 const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated", "admin_print_report_created"];
 const USER_PROFILE_EVENTS = ["user_profile_updated"];
 const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
@@ -51,7 +53,7 @@ const ACADEMY_EVENTS = [
   "academy_favorite_updated",
   "admin_academy_report_created",
 ];
-const MARKETING_EVENTS = ["marketing_updated", "marketing_project_updated", "marketing_review_updated", "marketing_favorite_updated", "admin_marketing_report_created"];
+const MARKETING_EVENTS = ["marketing_updated", "marketing_service_updated", "marketing_project_updated", "marketing_review_updated", "marketing_favorite_updated", "admin_marketing_report_created"];
 const NOTIFICATION_EVENTS = ["notification_created"];
 
 function invalidateInventoryQueries(qc: QueryClient) {
@@ -278,6 +280,14 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/vehicles") });
             qc.invalidateQueries({ queryKey: ["/api/driver/vehicle"] });
+            // A vehicle add/edit/delete changes the driver/vehicle counts shown on the Delivery
+            // Company's real card/details modal (never a duplicate list — see
+            // getDeliveryCompanyVehicleCards) — refresh those too.
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/profiles"] });
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/profile"] });
+            // A vehicle assignment change also changes what the shared DriverDetailModal
+            // shows for that driver (Part 27 "real-time vehicle synchronization").
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/drivers/") });
             qc.invalidateQueries({ queryKey: ["/api/admin/delivery-pricing"] });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/driver/reviews") });
             qc.invalidateQueries({ queryKey: ["/api/delivery-company/opportunities"] });
@@ -322,8 +332,29 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MAINTENANCE"] });
             invalidateMessagingQueries(qc);
           }
+          if (DELIVERY_COMPANY_MARKETPLACE_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/profiles"] });
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/profile"] });
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/reviews"] });
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/reports/mine"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/delivery-company/reports"] });
+            // Drivers/vehicles are never duplicated for the card/modal — refresh those too
+            // so a driver/vehicle change is reflected everywhere the profile is shown.
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/drivers"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/vehicles") });
+          }
+          if (DRIVER_PROFILE_EVENTS.includes(event)) {
+            // The same DriverDetailModal is used by the Driver's own preview, Supplier →
+            // Drivers, Espace Livraison → Chauffeurs, and Admin → Chauffeurs — all key off
+            // this one query, so a single invalidation refreshes every surface.
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/drivers/") });
+          }
           if (MARKETING_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/marketing/profiles"] });
+            // Covers the public services list (["/api/marketing/services", filters]), a single
+            // service detail (["/api/marketing/services", id]) and the self "mine" list
+            // (["/api/marketing/services/mine"]) — one predicate, no separate invalidation per key.
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/marketing/service") });
             qc.invalidateQueries({ queryKey: ["/api/marketing/categories"] });
             qc.invalidateQueries({ queryKey: ["/api/marketing/taxonomy"] });
             qc.invalidateQueries({ queryKey: ["/api/marketing/projects"] });

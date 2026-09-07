@@ -238,6 +238,7 @@ function ServiceCard({
           {service.agencyLocation && (
             <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
               <MapPin className="w-2.5 h-2.5" />{service.agencyLocation}
+              {service.distanceKm != null && <> · {service.distanceKm} km</>}
             </span>
           )}
         </div>
@@ -511,15 +512,18 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
       </>
       )}
 
-      {/* Fast Search — still browses agencies (Part 20's scope: peripheral, unchanged),
-          rendered before the Details modals so it stays open underneath when both are
-          mounted. Opens the Agency Details Modal, same as before this task. */}
+      {/* Fast Search — now returns individual published SERVICES (Part 25),
+          matching /marketing's own card-per-service model, rendered before the
+          Details modals so it stays open underneath when both are mounted.
+          Opens the Service Details Modal, same entry point as a mapped card;
+          the Agency Details Modal stays reachable only via that modal's own
+          "Agence" section, unchanged. */}
       <MarketingFastSearch
         open={fastSearchOpen}
         onClose={() => setFastSearchOpen(false)}
-        providers={providers}
-        onRequestQuote={(p) => setQuoteProvider(p)}
-        onOpenDetail={(p) => setDetailAgencyId(p.userId)}
+        services={services}
+        onRequestQuote={(s) => setQuoteProvider({ userId: s.marketingUserId, name: s.agencyName, categories: [s.category] } as any)}
+        onOpenDetail={(s) => setDetailServiceId(s.id)}
       />
 
       {/* Service Details Modal (Part 1) — the new primary entry point from a mapped card.

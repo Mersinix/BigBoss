@@ -307,7 +307,7 @@ export function AcademyDetailModal({
                   onClick={() => { if (!readOnly) toggleAcademy({
                     id: course.id, title: course.title, provider: course.academyName, duration: course.duration,
                     rating: course.rating / 10, price: course.priceInCents, level: course.level,
-                    location: course.location || course.academyLocation, hasCertification: course.hasCertification,
+                    location: course.academyLocation || course.location, hasCertification: course.hasCertification,
                     imageUrl: heroImage,
                   }); }}
                   data-testid={`button-fav-modal-${course.id}`}
@@ -338,7 +338,7 @@ export function AcademyDetailModal({
                 </div>
                 <div className={`flex items-center gap-3 mt-2.5 text-xs flex-wrap ${t.textMuted}`}>
                   <span className="flex items-center gap-1 text-amber-500"><Star className="w-3 h-3 fill-amber-400" /> {(course.rating / 10).toFixed(1)} ({course.reviewCount} avis)</span>
-                  {(course.location || course.academyLocation) && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {course.location || course.academyLocation}</span>}
+                  {(course.academyLocation || course.location) && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {course.academyLocation || course.location}{course.distanceKm != null && <> · {course.distanceKm} km</>}</span>}
                   {course.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {course.duration}</span>}
                 </div>
                 {course.description && <p className={`text-sm leading-relaxed mt-2.5 ${t.textMuted}`}>{course.description}</p>}

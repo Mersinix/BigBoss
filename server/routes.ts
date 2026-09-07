@@ -1425,10 +1425,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/print/marketplace", async (req: any, res) => {
     try {
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
       res.json(await storage.getPrintMarketplaceCards({
         search: typeof req.query.search === "string" ? req.query.search : undefined,
         category: typeof req.query.category === "string" ? req.query.category : undefined,
         printerId: req.query.printerId ? Number(req.query.printerId) : undefined,
+        viewerLocation,
       }));
     } catch (err) {
       res.status(500).json({ message: "Failed to load PRINT marketplace" });
@@ -1438,7 +1444,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/print/marketplace/:id", async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const card = await storage.getPrintMarketplaceCard(id);
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
+      const card = await storage.getPrintMarketplaceCard(id, viewerLocation);
       if (card) return res.json(card);
       // Not publicly visible (inactive, unapproved printer, or a currently-hidden
       // company) — the owning Printer/Admin can still preview it (Business →
@@ -2308,6 +2319,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── Print favorites — mirrors maintenance-favorites endpoint-for-endpoint,
+  // keyed by the catalog item (service), not the printer account. ──
+
+  app.get("/api/print-favorites", requireAuth, async (req: any, res) => {
+    res.json(await storage.getPrintFavoritesByUser(req.session.userId));
+  });
+
+  app.post("/api/print-favorites", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const printItemId = Number(req.body?.printItemId);
+    if (!printItemId) return res.status(400).json({ message: "printItemId is required" });
+    await storage.addPrintFavorite(user.id, printItemId);
+    broadcastToUsers([user.id], "print_favorite_updated", { printItemId });
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete("/api/print-favorites/:printItemId", requireAuth, async (req: any, res) => {
+    await storage.removePrintFavorite(req.session.userId, Number(req.params.printItemId));
+    broadcastToUsers([req.session.userId], "print_favorite_updated", { printItemId: Number(req.params.printItemId) });
+    res.json({ ok: true });
+  });
+
   // ── Barista Marketplace favorites — mirrors maintenance-favorites endpoint-for-endpoint ──
 
   app.get("/api/barista-favorites", requireAuth, async (req: any, res) => {
@@ -2829,10 +2863,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/academy/courses", async (req: any, res) => {
     try {
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
       res.json(await storage.getPublishedAcademyCourses({
         search: typeof req.query.search === "string" ? req.query.search : undefined,
         level: typeof req.query.level === "string" ? req.query.level : undefined,
         certification: req.query.certification === undefined ? undefined : req.query.certification === "true",
+        viewerLocation,
       }));
     } catch (err) {
       console.error(err);
@@ -2842,13 +2882,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/academy/courses/:id", async (req: any, res) => {
     try {
-      const course = await storage.getAcademyCourseCard(Number(req.params.id));
+      const viewer = req.session?.userId ? await storage.getUser(req.session.userId) : null;
+      const viewerLocation = viewer ? { lat: viewer.locationLat, lng: viewer.locationLng } : null;
+      const course = await storage.getAcademyCourseCard(Number(req.params.id), viewerLocation);
       if (!course) return res.status(404).json({ message: "Course not found" });
       // The owning Academy (previewing a draft/unpublished formation via the same
       // Formation details modal, Part 12) and Admin (moderating any formation
       // regardless of publish state, Part 40) bypass the public visibility rules
       // below — everyone else keeps the exact same rules as before.
-      const viewer = req.session?.userId ? await storage.getUser(req.session.userId) : null;
       const isSelfOrAdmin = !!viewer && (viewer.id === course.academyUserId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role));
       if (!isSelfOrAdmin) {
         if (!course.isPublished) return res.status(404).json({ message: "Course not found" });

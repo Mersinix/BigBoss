@@ -29,7 +29,7 @@ const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_d
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created"];
 const DELIVERY_COMPANY_MARKETPLACE_EVENTS = ["delivery_company_profile_updated", "delivery_company_review_updated", "admin_delivery_company_report_created"];
 const DRIVER_PROFILE_EVENTS = ["driver_profile_updated"];
-const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated", "admin_print_report_created", "print_profile_updated"];
+const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated", "admin_print_report_created", "print_profile_updated", "print_favorite_updated"];
 const USER_PROFILE_EVENTS = ["user_profile_updated"];
 const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
 const BARISTA_EVENTS = [
@@ -255,6 +255,12 @@ export function useRealtime(userId?: number) {
           if (ADMIN_USER_DIRECTORY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/print"] });
+            // Academy's public /academy marketplace is course-driven (AcademyCourseCard
+            // embeds the academy's own location/identity at fetch time, no separate
+            // "/api/academy/profiles" list) — invalidate it too so an Admin-changed
+            // official location (or any identity edit) reaches it, same as every other
+            // service's marketplace list below.
+            qc.invalidateQueries({ queryKey: ["/api/academy/courses"] });
             // admin_user_directory_changed is already broadcast globally (to every
             // connected client, not just the editor's own tabs) on every
             // PATCH /api/auth/me/profile and PATCH /api/auth/me/location — reused here
@@ -328,6 +334,7 @@ export function useRealtime(userId?: number) {
           if (PRINT_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/print/catalog"] });
             qc.invalidateQueries({ queryKey: ["/api/print/marketplace"] });
+            qc.invalidateQueries({ queryKey: ["/api/print-favorites"] });
             qc.invalidateQueries({ queryKey: ["/api/print/categories"] });
             qc.invalidateQueries({ queryKey: ["/api/print/taxonomy"] });
             qc.invalidateQueries({ queryKey: ["/api/print/me/categories"] });

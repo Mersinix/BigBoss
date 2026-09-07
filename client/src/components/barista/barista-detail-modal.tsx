@@ -27,6 +27,7 @@ import {
   Flag, Heart, Navigation, X,
 } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
+import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<string, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -207,6 +208,10 @@ export function BaristaDetailModal({
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
+  // Portfolio gallery — reuses the exact same lightbox already used by the
+  // Marketing details modal (Part 25), no separate gallery component.
+  const [albumOpen, setAlbumOpen] = useState(false);
+  const [albumIndex, setAlbumIndex] = useState(0);
 
   // Review eligibility mirrors the existing server rule exactly (POST /api/barista/reviews):
   // one review per COMPLETED mission between this Coffee Owner and this Barista.
@@ -387,10 +392,16 @@ export function BaristaDetailModal({
                 <div>
                   <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</p>
                   <div className="grid grid-cols-4 gap-2">
-                    {card.portfolioUrls.map((url) => (
-                      <div key={url} className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+                    {card.portfolioUrls.map((url, i) => (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => { setAlbumIndex(i); setAlbumOpen(true); }}
+                        className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`}
+                        data-testid={`button-portfolio-thumb-${i}`}
+                      >
                         <img src={url} alt="Portfolio" className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -505,6 +516,14 @@ export function BaristaDetailModal({
       baristaName={card?.name ?? ""}
       weeklyHours={card?.weeklyHours ?? null}
       isDark={isDark}
+    />
+
+    <MarketingPortfolioAlbumModal
+      open={albumOpen}
+      onClose={() => setAlbumOpen(false)}
+      images={card?.portfolioUrls ?? []}
+      initialIndex={albumIndex}
+      providerName={card?.name ?? ""}
     />
     </>
   );

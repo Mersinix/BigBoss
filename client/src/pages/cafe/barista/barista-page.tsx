@@ -34,7 +34,6 @@ import {
   RotateCcw,
   CheckCircle,
   Users,
-  CalendarDays,
   Heart,
   Send,
   Zap,
@@ -310,6 +309,7 @@ function BaristaCard({
             <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
               <MapPin className="w-2.5 h-2.5" />
               {barista.location}
+              {barista.distanceKm != null && <> · {barista.distanceKm} km</>}
             </span>
           )}
         </div>
@@ -318,26 +318,6 @@ function BaristaCard({
           <StarRating rating={barista.rating / 10} isDark={isDark} />
           <span className="text-[11px] text-gray-400">({barista.reviewCount} avis)</span>
         </div>
-
-        {barista.skills.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {barista.skills.slice(0, 4).map((skill) => (
-              <span
-                key={skill}
-                className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${t.mutedBg} ${t.textMuted}`}
-              >
-                {skill}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {barista.availableDays.length > 0 && (
-          <div className={`flex items-center gap-1 text-[11px] ${t.textMuted}`}>
-            <CalendarDays className="w-3 h-3 shrink-0" />
-            <span className="truncate">{barista.availableDays.join(" · ")}</span>
-          </div>
-        )}
 
         {/* Recruter moved into the details modal (Part 6/8) — the card itself
             is now the primary click target for it; the quick Message shortcut

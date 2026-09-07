@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 import { Progress } from "@/components/ui/progress";
@@ -24,6 +25,7 @@ import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
+import { AddressDetailsModal } from "@/components/settings/address-details-modal";
 import { useSearchLocationStore, formatLocationLabel, pickedToGeoLocation } from "@/store/search-location-store";
 import {
   Coffee, MapPin, ChevronDown, ChevronLeft, ShoppingBag, Heart, MessageCircle,
@@ -50,7 +52,7 @@ import { NotificationModal } from "@/components/cafe/notification-modal";
 import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { useNotificationPreferences, useUpdateNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { NOTIFICATION_PREF_DEFS, ROLE_NOTIFICATION_PREF_KEYS } from "@shared/notification-preferences";
-import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties, AddressDetails } from "@shared/schema";
+import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties, PrintCatalogCard } from "@shared/schema";
 import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { RecruitDialog as BaristaRecruitDialog } from "@/pages/cafe/barista/barista-page";
@@ -324,16 +326,6 @@ function AccountPanel({
     onSuccess: () => {
       setSettingsCurrentPassword(""); setSettingsNewPassword("");
       settingsToast({ title: "Mot de passe mis à jour" });
-    },
-    onError: (error: Error) => settingsToast({ title: "Erreur", description: error.message, variant: "destructive" }),
-  });
-
-  const updateAccountLocation = useMutation({
-    mutationFn: (loc: PickedLocation) => apiRequest("PATCH", "/api/auth/me/location", loc),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setLocationModalOpen(false);
-      settingsToast({ title: "📍 Adresse mise à jour" });
     },
     onError: (error: Error) => settingsToast({ title: "Erreur", description: error.message, variant: "destructive" }),
   });
@@ -1424,9 +1416,14 @@ function AccountPanel({
               </Button>
             </div>
 
-            {/* Location — the same users.locationAddress/locationLat/locationLng used
-                everywhere else (delivery, distance calculations); editing it here keeps
-                every surface synchronized, reusing the existing LocationPickerModal. */}
+            {/* Location — the official geographical location (users.locationAddress/
+                locationLat/locationLng) stays exclusively Admin-authoritative (see
+                Admin → Users → Modifier la localisation); "Modifier l'adresse" here
+                opens the shared AddressDetailsModal (human-readable detail fields
+                only, never the map/coordinates) — same PATCH /api/auth/me/profile
+                { locationDetails } path every service account's own Settings →
+                Localisation already uses, so this can never override the official
+                coordinates used for delivery/distance calculations. */}
             <div className={`border rounded-2xl p-4 ${cardBg}`}>
               <p className={`font-semibold text-sm mb-3 flex items-center gap-2 ${textPrimary}`}><MapPin className="w-4 h-4" /> Localisation</p>
               <p className={`text-sm ${textPrimary}`}>{(user as any)?.locationAddress || "Aucune adresse enregistrée."}</p>
@@ -1491,14 +1488,9 @@ function AccountPanel({
               <LogOut className="w-4 h-4" /> Log out
             </button>
 
-            <LocationPickerModal
+            <AddressDetailsModal
               open={locationModalOpen}
-              mode="account"
-              title="Choisissez votre adresse"
-              initialAddress={(user as any)?.locationAddress ?? undefined}
-              initialDetails={(user as any)?.locationDetails as AddressDetails | undefined}
               onClose={() => setLocationModalOpen(false)}
-              onConfirm={(loc: PickedLocation) => updateAccountLocation.mutate(loc)}
             />
           </div>
         )}
@@ -1557,7 +1549,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const {
     shop, print, academy, baristaMarket, marketing, maintenance, pack,
     removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removeMaintenance, removePack,
-    syncMaintenance, syncBaristaMarket, syncMarketing, syncAcademy,
+    syncMaintenance, syncBaristaMarket, syncMarketing, syncAcademy, syncPrint,
   } = useFavorites();
   const { stores, toggleStore: toggleStoreFav } = useStoreFavorites();
 
@@ -1646,6 +1638,21 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
     if (academyFavoriteIds === undefined || academyCoursesLoading) return;
     syncAcademy(academyFavoriteIds, academyCourses);
   }, [academyFavoriteIds, academyCourses, academyCoursesLoading, syncAcademy]);
+
+  // Favorites persist as Print catalog item IDs. Resolve them against the live
+  // marketplace cards, mirroring the Maintenance/Barista/Marketing/Academy
+  // favorites sync above — Print no longer stays purely client-side (Part 25).
+  const { data: printFavoriteIds } = useQuery<number[]>({
+    queryKey: ["/api/print-favorites"],
+  });
+  const { data: printCards = [], isLoading: printCardsLoading } = useQuery<PrintCatalogCard[]>({
+    queryKey: ["/api/print/marketplace"],
+    enabled: (printFavoriteIds?.length ?? 0) > 0,
+  });
+  useEffect(() => {
+    if (printFavoriteIds === undefined || printCardsLoading) return;
+    syncPrint(printFavoriteIds, printCards);
+  }, [printFavoriteIds, printCards, printCardsLoading, syncPrint]);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1943,31 +1950,60 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           )
         )}
 
-        {/* PRINT */}
+        {/* PRINT — same left-photo/right-info horizontal card design as the
+            BARISTA_ACADEMY favorites below (Part 25), mirroring the /academy
+            mapped-card visual language while keeping Print-specific info
+            (printer name, category, location + distance, price/unit). */}
         {activeService === "PRINT" && (
           printItems.length === 0 ? renderEmpty() : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               {printItems.map((item) => (
-                <div key={item.id} className={`group border rounded-2xl overflow-hidden ${cardBg}`}>
-                  <div className="relative h-28">
-                    {item.image
-                      ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                      : <div className={`w-full h-full ${dk ? "bg-gray-700" : "bg-gray-50"} flex items-center justify-center`}><Printer className="w-8 h-8 text-gray-400 opacity-30" /></div>
-                    }
+                <div
+                  key={item.id}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden h-28 ${cardBg}`}
+                  data-testid={`row-fav-print-${item.id}`}
+                >
+                  <div className="w-2/5 shrink-0 relative">
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`w-full h-full flex items-center justify-center ${dk ? "bg-blue-950" : "bg-blue-100"}`}>
+                        <Printer className={`w-6 h-6 ${dk ? "text-blue-300" : "text-blue-500"}`} />
+                      </div>
+                    )}
+                    {item.category && (
+                      <span className="absolute bottom-1.5 left-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-500/90 text-white">
+                        {item.category}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1 justify-center">
+                    <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
+                    <p className={`text-xs truncate ${textMuted}`}>{item.brand}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {item.rating != null && item.rating > 0 && (
+                        <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                      )}
+                      {item.location && (
+                        <span className={`text-[10px] flex items-center gap-0.5 ${textMuted}`}>
+                          <MapPinIcon className="w-2.5 h-2.5 shrink-0" />{item.location}
+                          {item.distanceKm != null && <> · {item.distanceKm} km</>}
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-sm font-bold mt-0.5 ${dk ? "text-blue-400" : "text-blue-600"}`}>
+                      {fmt(item.price)}<span className={`text-[10px] font-normal ${textMuted}`}>/{item.priceUnit}</span>
+                    </p>
+                  </div>
+                  <div className="flex items-start p-2 shrink-0">
                     <button
-                      className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
                       onClick={() => removePrint(item.id)}
                       data-testid={`button-fav-remove-print-${item.id}`}
+                      aria-label={`Remove ${item.name} from favorites`}
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                     </button>
-                  </div>
-                  <div className="p-3">
-                    <p className={`font-semibold text-sm leading-tight line-clamp-1 ${textPrimary}`}>{item.name}</p>
-                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.brand}</p>
-                    <p className={`text-sm font-bold mt-1 ${dk ? "text-blue-400" : "text-blue-600"}`}>
-                      {fmt(item.price)}<span className={`text-[10px] font-normal ${textMuted}`}>/{item.priceUnit}</span>
-                    </p>
                   </div>
                 </div>
               ))}
@@ -2109,7 +2145,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   data-testid={`card-fav-marketing-${item.id}`}
                 >
                   <div className="w-2/5 shrink-0 relative">
-                    {item.portfolioImages[0] ? (
+                    {item.portfolioImages?.[0] ? (
                       <img src={item.portfolioImages[0]} alt={item.name} className="w-full h-full object-cover" />
                     ) : (
                       <Avatar className="w-full h-full rounded-none">
@@ -3229,7 +3265,14 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
           title="Où voulez-vous rechercher ?"
           onClose={() => setLocationPickerOpen(false)}
           onConfirm={handleLocationConfirm}
-          initialAddress={searchLocation?.address}
+          // Defaults to the account's own official geographic location (Admin-
+          // authoritative users.locationAddress/locationLat/locationLng) until the
+          // Coffee Owner has picked a search zone of their own — never a hardcoded
+          // fallback, and always the latest saved location on every reopen (see the
+          // [open] reset effect in location-picker-modal.tsx).
+          initialAddress={searchLocation?.address ?? (user as any)?.locationAddress ?? undefined}
+          initialLat={searchLocation?.lat ?? (user as any)?.locationLat ?? undefined}
+          initialLng={searchLocation?.lng ?? (user as any)?.locationLng ?? undefined}
         />
       )}
 
@@ -3255,7 +3298,37 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
       {user && hasCommercial && (
         <Dialog open={favOpen} onOpenChange={setFavOpen}>
           <DialogContent className="sm:max-w-md h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
-            <FavoritesPanel onClose={() => setFavOpen(false)} />
+            {/* A render error inside the Favorites panel (e.g. an unexpected
+                field shape on a favorited item) must never blank the whole
+                page — scoped boundary degrades to a retry state inside the
+                modal instead, keeping the underlying app intact (Part 25). */}
+            <ErrorBoundary
+              fallback={(retry) => (
+                <div className={`flex flex-col items-center justify-center gap-3 p-8 text-center h-full ${isDark ? "bg-gray-900 text-gray-200" : "bg-white text-gray-700"}`}>
+                  <AlertTriangle className="w-8 h-8 text-amber-500" />
+                  <p className="font-semibold text-sm">Impossible d'afficher vos favoris</p>
+                  <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>Veuillez réessayer.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={retry}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}
+                      data-testid="button-favorites-error-retry"
+                    >
+                      Réessayer
+                    </button>
+                    <button
+                      onClick={() => { retry(); setFavOpen(false); }}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-200" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}
+                      data-testid="button-favorites-error-close"
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                </div>
+              )}
+            >
+              <FavoritesPanel onClose={() => setFavOpen(false)} />
+            </ErrorBoundary>
           </DialogContent>
         </Dialog>
       )}

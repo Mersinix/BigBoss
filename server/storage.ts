@@ -13,7 +13,7 @@ import {
   maintenanceCompetencies, maintenanceZones, maintenanceReports,
   marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
   marketingServices, type MarketingService, type InsertMarketingService, type MarketingServiceCard,
-  printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport,
+  printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport, printFavorites,
   printerProfiles, type PrinterProfile, type InsertPrinterProfile, type PrintCompanyCard,
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
@@ -322,8 +322,8 @@ export interface IStorage {
   createPrintCatalogItem(printerId: number, data: Partial<InsertPrintCatalogItem>): Promise<PrintCatalogItem>;
   updatePrintCatalogItem(id: number, printerId: number, updates: Partial<InsertPrintCatalogItem>): Promise<PrintCatalogItem | undefined>;
   deletePrintCatalogItem(id: number, printerId: number): Promise<boolean>;
-  getPrintMarketplaceCards(filters?: { search?: string; category?: string; printerId?: number }): Promise<PrintCatalogCard[]>;
-  getPrintMarketplaceCard(id: number): Promise<PrintCatalogCard | undefined>;
+  getPrintMarketplaceCards(filters?: { search?: string; category?: string; printerId?: number; viewerLocation?: { lat: string | null; lng: string | null } | null }): Promise<PrintCatalogCard[]>;
+  getPrintMarketplaceCard(id: number, viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<PrintCatalogCard | undefined>;
   getPrintCatalogItemCard(id: number): Promise<PrintCatalogCard | undefined>;
   getPrintCategories(): Promise<string[]>;
   getPrintOrdersForPrinter(printerId: number): Promise<PrintOrderWithParties[]>;
@@ -350,6 +350,9 @@ export interface IStorage {
   getPrinterProfile(userId: number): Promise<PrinterProfile>;
   upsertPrinterProfile(userId: number, updates: Partial<InsertPrinterProfile>): Promise<PrinterProfile>;
   getPrintCompanyCard(userId: number): Promise<PrintCompanyCard | undefined>;
+  getPrintFavoritesByUser(userId: number): Promise<number[]>;
+  addPrintFavorite(userId: number, printItemId: number): Promise<void>;
+  removePrintFavorite(userId: number, printItemId: number): Promise<void>;
 
   // Barista Marketplace
   getBaristaSkills(activeOnly?: boolean): Promise<BaristaSkill[]>;
@@ -387,8 +390,8 @@ export interface IStorage {
   createAcademyCourse(academyUserId: number, data: Partial<InsertAcademyCourse>): Promise<AcademyCourse>;
   updateAcademyCourse(id: number, academyUserId: number, data: Partial<InsertAcademyCourse>): Promise<AcademyCourse | undefined>;
   deleteAcademyCourse(id: number, academyUserId: number): Promise<void>;
-  getPublishedAcademyCourses(filters?: { search?: string; level?: string; certification?: boolean }): Promise<AcademyCourseCard[]>;
-  getAcademyCourseCard(id: number): Promise<AcademyCourseCard | undefined>;
+  getPublishedAcademyCourses(filters?: { search?: string; level?: string; certification?: boolean; viewerLocation?: { lat: string | null; lng: string | null } | null }): Promise<AcademyCourseCard[]>;
+  getAcademyCourseCard(id: number, viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<AcademyCourseCard | undefined>;
   getAcademyFavoritesByUser(userId: number): Promise<number[]>;
   addAcademyFavorite(userId: number, courseId: number): Promise<void>;
   removeAcademyFavorite(userId: number, courseId: number): Promise<void>;
@@ -1954,6 +1957,42 @@ export class DatabaseStorage implements IStorage {
     return { lat, lng };
   }
 
+  /** Public marketplace location label — "Municipalité, Gouvernorat" (or the closest
+   *  available approximation) instead of the full street address, for every
+   *  Coffee-Owner-facing card/Details Modal across Barista/Academy/Maintenance/
+   *  Marketing/Print (the `location`/`printerLocation`/`academyLocation`/`agencyLocation`
+   *  fields those card builders already return). The full geocoded
+   *  users.locationAddress stays untouched and still used everywhere it needs to be
+   *  (Settings, Business → Profil, Admin) — this only shapes what the PUBLIC
+   *  representation shows, never a second location value. Prefers the account's own
+   *  optional locationDetails.municipality/governorate (Settings → Localisation) when
+   *  filled in; falls back to deriving a short label from the full address string
+   *  otherwise, so accounts that haven't completed those optional fields yet still get
+   *  a reasonable public label instead of leaking their full street address.
+   */
+  private formatPublicLocation(user: { locationAddress?: string | null; locationDetails?: unknown }): string {
+    const details = (user.locationDetails ?? null) as { municipality?: string; governorate?: string } | null;
+    const municipality = details?.municipality?.trim();
+    const governorate = details?.governorate?.trim();
+    if (municipality && governorate && municipality.toLowerCase() !== governorate.toLowerCase()) {
+      return `${municipality}, ${governorate}`;
+    }
+    if (municipality) return `${municipality}, Tunisie`;
+    if (governorate) return `${governorate}, Tunisie`;
+
+    const address = user.locationAddress?.trim();
+    if (!address) return "";
+    const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 0) return "";
+    const last = parts[parts.length - 1];
+    const isCountry = /tunisia|tunisie/i.test(last);
+    const country = isCountry ? last : "Tunisie";
+    const cityPart = isCountry ? parts[parts.length - 2] : parts[parts.length - 1];
+    if (!cityPart) return country;
+    const city = cityPart.replace(/^\d{3,5}\s+/, "").trim(); // strip a leading postal code, e.g. "3000 Sfax"
+    return city ? `${city}, ${country}` : country;
+  }
+
   /** True if `supplierId` has an ACTIVE Free Shipping promotion that applies to this
    *  sub-order right now (subtotal ≥ freeShippingMinAmount, cafe eligible, within date
    *  range) — reuses the existing promotions table/targeting, no second promo engine. */
@@ -3203,7 +3242,7 @@ export class DatabaseStorage implements IStorage {
 
     const cards = rows.map(({ profile, user }) => {
       const available = profile.isAvailable && !profile.isOnVacation;
-      const location = user.locationAddress ?? profile.coverageArea ?? "";
+      const location = this.formatPublicLocation(user) || profile.coverageArea || "";
       const stats = reviewStats.get(profile.userId);
       const workingHours = profile.workingDays.length
         ? `${profile.workingDays.join(", ")} · ${profile.startTime}–${profile.endTime}`
@@ -3291,7 +3330,7 @@ export class DatabaseStorage implements IStorage {
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
       coverImageUrl: row.user.coverImageUrl ?? null,
-      location: row.user.locationAddress ?? row.profile.coverageArea ?? "",
+      location: this.formatPublicLocation(row.user) || row.profile.coverageArea || "",
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       available: row.profile.isAvailable && !row.profile.isOnVacation,
       type: row.profile.profileType,
@@ -4026,7 +4065,7 @@ export class DatabaseStorage implements IStorage {
         name: user.name,
         phone: user.phone ?? null,
         profileImageUrl: user.profileImageUrl ?? null,
-        location: user.locationAddress ?? "",
+        location: this.formatPublicLocation(user),
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
         distanceKm,
       } as MarketingMarketplaceCard;
@@ -4082,7 +4121,7 @@ export class DatabaseStorage implements IStorage {
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
       coverImageUrl: row.user.coverImageUrl ?? null,
-      location: row.user.locationAddress ?? "",
+      location: this.formatPublicLocation(row.user),
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       distanceKm,
       rating,
@@ -4213,7 +4252,7 @@ export class DatabaseStorage implements IStorage {
         return {
           ...service,
           agencyName: user.name,
-          agencyLocation: user.locationAddress ?? "",
+          agencyLocation: this.formatPublicLocation(user),
           agencyProfileImageUrl: user.profileImageUrl ?? null,
           agencyDescription: profile.description,
           agencyWebsiteUrl: profile.websiteUrl ?? null,
@@ -4250,7 +4289,7 @@ export class DatabaseStorage implements IStorage {
     return {
       ...service,
       agencyName: row.user.name,
-      agencyLocation: row.user.locationAddress ?? "",
+      agencyLocation: this.formatPublicLocation(row.user),
       agencyProfileImageUrl: row.user.profileImageUrl ?? null,
       agencyDescription: row.profile.description,
       agencyWebsiteUrl: row.profile.websiteUrl ?? null,
@@ -4692,7 +4731,7 @@ export class DatabaseStorage implements IStorage {
     return deleted.length > 0;
   }
 
-  async getPrintMarketplaceCards(filters?: { search?: string; category?: string; printerId?: number }): Promise<PrintCatalogCard[]> {
+  async getPrintMarketplaceCards(filters?: { search?: string; category?: string; printerId?: number; viewerLocation?: { lat: string | null; lng: string | null } | null }): Promise<PrintCatalogCard[]> {
     const rows = await db.select({ item: printCatalogItems, printer: users })
       .from(printCatalogItems)
       .innerJoin(users, eq(printCatalogItems.printerId, users.id))
@@ -4718,18 +4757,23 @@ export class DatabaseStorage implements IStorage {
         )
       : new Set<number>();
 
+    const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
+
     const cards = rows
       .filter(({ printer }) => !hiddenPrinterIds.has(printer.id))
       .map(({ item, printer }) => {
       const stats = statsMap.get(printer.id);
+      const providerPos = this.parseLatLng({ lat: printer.locationLat, lng: printer.locationLng });
+      const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
       return {
         ...item,
         printerName: printer.name,
         printerPhone: printer.phone ?? null,
         printerImageUrl: printer.profileImageUrl ?? null,
-        printerLocation: printer.locationAddress ?? "",
+        printerLocation: this.formatPublicLocation(printer),
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
+        distanceKm,
       } as PrintCatalogCard;
     });
 
@@ -4747,7 +4791,7 @@ export class DatabaseStorage implements IStorage {
   /** Single-item detail for the Coffee Owner's PRINT product-detail page. Only
    *  active items from approved printers are visible here — same visibility
    *  rule as getPrintMarketplaceCards, just narrowed to one id. */
-  async getPrintMarketplaceCard(id: number): Promise<PrintCatalogCard | undefined> {
+  async getPrintMarketplaceCard(id: number, viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<PrintCatalogCard | undefined> {
     const [row] = await db.select({ item: printCatalogItems, printer: users })
       .from(printCatalogItems)
       .innerJoin(users, eq(printCatalogItems.printerId, users.id))
@@ -4759,14 +4803,18 @@ export class DatabaseStorage implements IStorage {
       ));
     if (!row) return undefined;
     const stats = (await this.computePrintReviewStats([row.printer.id])).get(row.printer.id);
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const providerPos = this.parseLatLng({ lat: row.printer.locationLat, lng: row.printer.locationLng });
+    const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
     return {
       ...row.item,
       printerName: row.printer.name,
       printerPhone: row.printer.phone ?? null,
       printerImageUrl: row.printer.profileImageUrl ?? null,
-      printerLocation: row.printer.locationAddress ?? "",
+      printerLocation: this.formatPublicLocation(row.printer),
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
+      distanceKm,
     };
   }
 
@@ -4787,7 +4835,7 @@ export class DatabaseStorage implements IStorage {
       printerName: row.printer.name,
       printerPhone: row.printer.phone ?? null,
       printerImageUrl: row.printer.profileImageUrl ?? null,
-      printerLocation: row.printer.locationAddress ?? "",
+      printerLocation: this.formatPublicLocation(row.printer),
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
     };
@@ -4978,6 +5026,31 @@ export class DatabaseStorage implements IStorage {
 
   async deletePrintSubCategory(id: number): Promise<void> {
     await db.delete(printSubCategoryTaxonomy).where(eq(printSubCategoryTaxonomy.id, id));
+  }
+
+  // Print favorites — mirrors getMaintenanceFavoritesByUser/addMaintenanceFavorite/
+  // removeMaintenanceFavorite exactly, keyed by the catalog item (service), not
+  // the printer account.
+  async getPrintFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select({ printItemId: printFavorites.printItemId })
+      .from(printFavorites)
+      .where(eq(printFavorites.userId, userId));
+    return rows.map((row) => row.printItemId);
+  }
+
+  async addPrintFavorite(userId: number, printItemId: number): Promise<void> {
+    const [existing] = await db.select().from(printFavorites).where(and(
+      eq(printFavorites.userId, userId),
+      eq(printFavorites.printItemId, printItemId),
+    ));
+    if (!existing) await db.insert(printFavorites).values({ userId, printItemId });
+  }
+
+  async removePrintFavorite(userId: number, printItemId: number): Promise<void> {
+    await db.delete(printFavorites).where(and(
+      eq(printFavorites.userId, userId),
+      eq(printFavorites.printItemId, printItemId),
+    ));
   }
 
   // Entity-level Print reports ("Blacklist") — mirrors createMarketingReport/
@@ -5192,7 +5265,7 @@ export class DatabaseStorage implements IStorage {
       printerName: user.name,
       printerPhone: user.phone ?? null,
       printerImageUrl: user.profileImageUrl ?? null,
-      printerLocation: user.locationAddress ?? "",
+      printerLocation: this.formatPublicLocation(user),
       rating: activeStats?.rating ?? 0,
       reviewCount: activeStats?.reviewCount ?? 0,
     }));
@@ -5201,7 +5274,7 @@ export class DatabaseStorage implements IStorage {
       name: user.name,
       profileImageUrl: user.profileImageUrl ?? null,
       coverImageUrl: user.coverImageUrl ?? null,
-      location: user.locationAddress ?? '',
+      location: this.formatPublicLocation(user),
       phone: user.phone ?? null,
       description: profile.description,
       websiteUrl: profile.websiteUrl ?? null,
@@ -5537,7 +5610,7 @@ export class DatabaseStorage implements IStorage {
         phone: user.phone ?? null,
         profileImageUrl: user.profileImageUrl ?? null,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
-        location: user.locationAddress ?? profile.city ?? "",
+        location: profile.city || this.formatPublicLocation(user),
         available,
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
@@ -5579,7 +5652,7 @@ export class DatabaseStorage implements IStorage {
       profileImageUrl: row.user.profileImageUrl ?? null,
       coverImageUrl: row.user.coverImageUrl ?? null,
       initials: row.user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
-      location: row.user.locationAddress ?? row.profile.city ?? "",
+      location: row.profile.city || this.formatPublicLocation(row.user),
       available: row.profile.isAvailable && !row.profile.isOnVacation,
       workHistory: workHistory.sort((a, b) => (b.startPeriod > a.startPeriod ? 1 : -1)),
       distanceKm,
@@ -6141,7 +6214,7 @@ export class DatabaseStorage implements IStorage {
 
   /** Public /academy listing — mirrors getBaristaMarketplaceProfiles() exactly:
    *  only published courses from approved, marketplace-visible academies. */
-  async getPublishedAcademyCourses(filters?: { search?: string; level?: string; certification?: boolean }): Promise<AcademyCourseCard[]> {
+  async getPublishedAcademyCourses(filters?: { search?: string; level?: string; certification?: boolean; viewerLocation?: { lat: string | null; lng: string | null } | null }): Promise<AcademyCourseCard[]> {
     const rows = await db.select({ course: academyCourses, user: users, profile: academyProfiles })
       .from(academyCourses)
       .innerJoin(users, eq(academyCourses.academyUserId, users.id))
@@ -6155,18 +6228,22 @@ export class DatabaseStorage implements IStorage {
     const filteredRows = rows.filter(({ profile }) => profile?.marketplaceVisible !== false);
     const academyUserIds = Array.from(new Set(filteredRows.map(({ course }) => course.academyUserId)));
     const statsMap = await this.computeAcademyReviewStats(academyUserIds);
+    const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
 
     const cards = filteredRows.map(({ course, user, profile }) => {
       const stats = statsMap.get(course.academyUserId);
+      const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+      const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
       return {
         ...course,
         academyName: user.name,
-        academyLocation: user.locationAddress ?? "",
+        academyLocation: this.formatPublicLocation(user),
         academyProfileImageUrl: user.profileImageUrl ?? null,
         academyDescription: profile?.description ?? "",
         academyPhone: user.phone ?? null,
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
+        distanceKm,
       } as AcademyCourseCard;
     });
 
@@ -6182,7 +6259,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getAcademyCourseCard(id: number): Promise<AcademyCourseCard | undefined> {
+  async getAcademyCourseCard(id: number, viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<AcademyCourseCard | undefined> {
     const [row] = await db.select({ course: academyCourses, user: users, profile: academyProfiles })
       .from(academyCourses)
       .innerJoin(users, eq(academyCourses.academyUserId, users.id))
@@ -6190,15 +6267,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(academyCourses.id, id));
     if (!row) return undefined;
     const stats = (await this.computeAcademyReviewStats([row.course.academyUserId])).get(row.course.academyUserId);
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const providerPos = this.parseLatLng({ lat: row.user.locationLat, lng: row.user.locationLng });
+    const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
     return {
       ...row.course,
       academyName: row.user.name,
-      academyLocation: row.user.locationAddress ?? "",
+      academyLocation: this.formatPublicLocation(row.user),
       academyProfileImageUrl: row.user.profileImageUrl ?? null,
       academyDescription: row.profile?.description ?? "",
       academyPhone: row.user.phone ?? null,
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
+      distanceKm,
     };
   }
 
@@ -6321,7 +6402,7 @@ export class DatabaseStorage implements IStorage {
     const courses: AcademyCourseCard[] = publishedCourses.map((course) => ({
       ...course,
       academyName: user.name,
-      academyLocation: user.locationAddress ?? '',
+      academyLocation: this.formatPublicLocation(user),
       academyProfileImageUrl: user.profileImageUrl ?? null,
       academyDescription: profile.description,
       academyPhone: user.phone ?? null,
@@ -6336,7 +6417,7 @@ export class DatabaseStorage implements IStorage {
       name: user.name,
       profileImageUrl: user.profileImageUrl ?? null,
       coverImageUrl: user.coverImageUrl ?? null,
-      location: user.locationAddress ?? '',
+      location: this.formatPublicLocation(user),
       phone: user.phone ?? null,
       description: profile.description,
       marketplaceVisible: profile.marketplaceVisible,

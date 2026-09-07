@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { apiRequest } from "@/lib/queryClient";
-import type { MaintenanceMarketplaceCard } from "@shared/schema";
+import type { MaintenanceMarketplaceCard, PrintCatalogCard } from "@shared/schema";
 import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
 import type { AcademyCourseCard } from "@/hooks/use-barista-academy";
@@ -20,6 +20,11 @@ export interface PrintFavItem {
   price: number;
   priceUnit: string;
   image: string;
+  location?: string;
+  distanceKm?: number | null;
+  rating?: number;
+  reviewCount?: number;
+  category?: string;
 }
 
 export interface AcademyFavItem {
@@ -110,6 +115,8 @@ interface FavoritesStore {
 
   hydrateShop: (items: ShopFavItem[]) => void;
   hydratePack: (ids: number[]) => void;
+  hydratePrint: (ids: number[]) => void;
+  syncPrint: (ids: number[], cards: PrintCatalogCard[]) => void;
   hydrateMaintenance: (ids: number[]) => void;
   syncMaintenance: (ids: number[], profiles: MaintenanceMarketplaceCard[]) => void;
   hydrateBaristaMarket: (ids: number[]) => void;
@@ -172,12 +179,20 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
   },
 
   togglePrint: (item) =>
-    set((s) => {
-      const next = { ...s.print };
-      if (next[item.id]) delete next[item.id];
-      else next[item.id] = item;
-      return { print: next };
-    }),
+    (() => {
+      const wasFav = !!get().print[item.id];
+      set((s) => {
+        const next = { ...s.print };
+        if (wasFav) delete next[item.id];
+        else next[item.id] = item;
+        return { print: next };
+      });
+      if (wasFav) {
+        apiRequest("DELETE", `/api/print-favorites/${item.id}`).catch(() => {});
+      } else {
+        apiRequest("POST", "/api/print-favorites", { printItemId: Number(item.id) }).catch(() => {});
+      }
+    })(),
 
   toggleAcademy: (item) =>
     (() => {
@@ -256,7 +271,46 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     }),
 
   removePrint: (id) =>
-    set((s) => { const next = { ...s.print }; delete next[id]; return { print: next }; }),
+    (() => {
+      set((s) => { const next = { ...s.print }; delete next[id]; return { print: next }; });
+      apiRequest("DELETE", `/api/print-favorites/${id}`).catch(() => {});
+    })(),
+
+  hydratePrint: (ids) =>
+    set((s) => {
+      const next = { ...s.print };
+      for (const id of ids) {
+        const key = String(id);
+        if (!next[key]) {
+          next[key] = { id: key, name: "Print", brand: "Imprimerie", price: 0, priceUnit: "unité", image: "" };
+        }
+      }
+      return { print: next };
+    }),
+
+  syncPrint: (ids, cards) =>
+    set(() => {
+      const cardMap = new Map(cards.map((card) => [card.id, card]));
+      const next: Record<string, PrintFavItem> = {};
+      for (const id of ids) {
+        const card = cardMap.get(id);
+        if (!card) continue;
+        next[String(card.id)] = {
+          id: String(card.id),
+          name: card.name,
+          brand: card.printerName,
+          price: card.priceInCents,
+          priceUnit: card.unit,
+          image: card.imageUrl ?? "",
+          location: card.printerLocation,
+          distanceKm: card.distanceKm,
+          rating: card.rating / 10,
+          reviewCount: card.reviewCount,
+          category: card.category,
+        };
+      }
+      return { print: next };
+    }),
 
   removeAcademy: (id) =>
     (() => {

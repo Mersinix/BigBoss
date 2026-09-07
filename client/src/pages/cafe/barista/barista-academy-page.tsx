@@ -282,10 +282,11 @@ function TrainingCard({
           <Badge className={`text-[10px] border-0 px-1.5 ${LEVEL_COLORS[course.level]}`}>
             {LEVEL_LABELS[course.level]}
           </Badge>
-          {(course.location || course.academyLocation) && (
+          {(course.academyLocation || course.location) && (
             <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
               <MapPin className="w-2.5 h-2.5" />
-              {course.location || course.academyLocation}
+              {course.academyLocation || course.location}
+              {course.distanceKm != null && <> · {course.distanceKm} km</>}
             </span>
           )}
         </div>

@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
 import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
+import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { Button } from "@/components/ui/button";
@@ -145,7 +146,7 @@ function AgentCard({
           <Badge className={`text-[10px] border-0 px-1.5 flex items-center gap-0.5 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>
             <TypeIcon className="w-2.5 h-2.5" />{agent.profileType}
           </Badge>
-          <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}><MapPin className="w-2.5 h-2.5" />{agent.location || "—"}</span>
+          <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}><MapPin className="w-2.5 h-2.5" />{agent.location || "—"}{agent.distanceKm != null && <> · {agent.distanceKm} km</>}</span>
           <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}><Zap className="w-2.5 h-2.5" />{agent.responseTime}</span>
         </div>
         <div className="flex items-center gap-2">
@@ -289,6 +290,10 @@ export function AgentDetailModal({
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
+  // Portfolio gallery — reuses the exact same lightbox already used by the
+  // Marketing details modal (Part 25), no separate gallery component.
+  const [albumOpen, setAlbumOpen] = useState(false);
+  const [albumIndex, setAlbumIndex] = useState(0);
   const reviewsQuery = useQuery<any[]>({
     queryKey: ["/api/maintenance/reviews", agent?.userId],
     enabled: open && !!agent,
@@ -459,7 +464,7 @@ export function AgentDetailModal({
                  body (Part 8) — now reachable via the Disponibilité icon on
                  the profile picture, which opens MaintenanceAvailabilityModal. */}
              <div className={`${t.mutedBg} rounded-xl p-3`}><h3 className={`text-xs font-semibold mb-2 ${t.textMuted}`}>Zone d'intervention</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.coverageArea || agent.location || "—"}</div></div>
-             {agent.portfolioImages.length > 0 && <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</h3><div className="grid grid-cols-4 gap-2">{agent.portfolioImages.map((image, i) => <div key={i} className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`}><img src={image} alt={`Portfolio ${i + 1}`} className="w-full h-full object-cover" /></div>)}</div></div>}
+             {agent.portfolioImages.length > 0 && <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</h3><div className="grid grid-cols-4 gap-2">{agent.portfolioImages.map((image, i) => <button key={i} type="button" onClick={() => { setAlbumIndex(i); setAlbumOpen(true); }} className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`} data-testid={`button-portfolio-thumb-${i}`}><img src={image} alt={`Portfolio ${i + 1}`} className="w-full h-full object-cover" /></button>)}</div></div>}
              <div>
                <h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviewsQuery.data?.length ?? 0})</h3>
                {(reviewsQuery.data ?? []).length === 0 ? <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p> : <div className="space-y-2 max-h-40 overflow-y-auto">{reviewsQuery.data!.slice(0, 4).map((review) => <div key={review.id} className={`p-2.5 rounded-lg text-sm ${t.mutedBg}`}><div className="flex items-center justify-between"><span className={`font-medium text-xs ${t.textPrimary}`}>{review.cafeOwnerName || review.cafeName}</span><span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {review.rating}</span></div>{review.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{review.comment}</p>}</div>)}</div>}
@@ -548,6 +553,14 @@ export function AgentDetailModal({
       agentName={agent.name}
       weeklyHours={agent.weeklyHours ?? null}
       isDark={isDark}
+    />
+
+    <MarketingPortfolioAlbumModal
+      open={albumOpen}
+      onClose={() => setAlbumOpen(false)}
+      images={agent.portfolioImages}
+      initialIndex={albumIndex}
+      providerName={agent.name}
     />
     </>
   );

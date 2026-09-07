@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { getAvatarUrl } from "@/lib/avatar";
 import type { User, AddressDetails } from "@shared/schema";
+import { ADDRESS_DETAIL_FIELDS } from "@/components/settings/address-details-fields";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -289,6 +290,37 @@ function UserDetailDialog({
             </div>
           </div>
 
+          {/* Detailed address (Part 2/9 of the address/location synchronization task) —
+              read-only here: the human-readable detail fields (street/building number/
+              postal code/governorate/municipality/building type/apartment/floor/door/
+              notes) are the account owner's own, edited from their Settings → Localisation
+              (or here via "Modifier la localisation" for the official geographic pin only).
+              Only fields that actually have a value are shown — same real
+              users.locationDetails every Settings/Business-Profil/marketplace surface reads. */}
+          {u.locationDetails && (ADDRESS_DETAIL_FIELDS.some(f => (u.locationDetails as AddressDetails)[f.key]) || (u.locationDetails as AddressDetails).additionalNotes) && (
+            <div className="rounded-lg border p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Adresse détaillée</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {ADDRESS_DETAIL_FIELDS.map(f => {
+                  const value = (u.locationDetails as AddressDetails)[f.key];
+                  if (!value) return null;
+                  return (
+                    <div key={f.key} className={f.span ? "col-span-2" : ""} data-testid={`text-detail-address-${f.key}`}>
+                      <p className="text-[11px] text-muted-foreground">{f.label.replace(" (optionnel)", "")}</p>
+                      <p className="text-sm truncate">{value}</p>
+                    </div>
+                  );
+                })}
+                {(u.locationDetails as AddressDetails).additionalNotes && (
+                  <div className="col-span-2" data-testid="text-detail-address-additionalNotes">
+                    <p className="text-[11px] text-muted-foreground">Notes complémentaires</p>
+                    <p className="text-sm">{(u.locationDetails as AddressDetails).additionalNotes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Role-specific multi-selects */}
           {user.role === "DELIVERY_COMPANY" && (
             <MultiChip label="Gouvernorats couverts" options={TUNISIAN_GOVERNORATES}
@@ -385,9 +417,11 @@ function UserDetailDialog({
         mode="account"
         title="Choisissez l'adresse de l'utilisateur"
         initialAddress={form.locationAddress}
+        initialLat={(user as any).locationLat}
+        initialLng={(user as any).locationLng}
         initialDetails={(user as any).locationDetails as AddressDetails | undefined}
         onClose={() => setLocationModalOpen(false)}
-        onConfirm={(loc) => locationMutation.mutate(loc)}
+        onConfirm={async (loc) => { await locationMutation.mutateAsync(loc); }}
       />
     </Dialog>
   );

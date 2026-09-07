@@ -52,11 +52,20 @@ export interface PickedLocation {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onConfirm: (loc: PickedLocation) => void;
+  // May return a Promise — awaited so `saving` always resets once the caller's own
+  // save (success OR failure) actually settles, instead of relying on the caller to
+  // close the modal (see the [open] reset effect below for the "stuck on reopen" fix).
+  onConfirm: (loc: PickedLocation) => void | Promise<void>;
   title?: string;
   required?: boolean;
   mode?: LocationPickerMode;
   initialAddress?: string;
+  // Seeds the Step 2 map pin from the caller's current saved location (e.g. the
+  // account's own official users.locationLat/locationLng) instead of always
+  // falling back to DEFAULT_CENTER — accepts the string form the API/DB already
+  // returns so callers never need to parseFloat first.
+  initialLat?: string | number | null;
+  initialLng?: string | number | null;
   initialDetails?: AddressDetails;
   showRadius?: boolean; // adds radius slider in step 2
   startStep?: 1 | 2 | 3; // open directly on a later step (e.g. registration skips the map picker)
@@ -102,6 +111,8 @@ export default function LocationPickerModal({
   required = false,
   mode = "account",
   initialAddress,
+  initialLat,
+  initialLng,
   initialDetails,
   showRadius = false,
   startStep = 1,
@@ -142,6 +153,36 @@ export default function LocationPickerModal({
         geocoderRef.current = new window.google.maps.Geocoder();
       });
     }
+  }, [open]);
+
+  // Fix: this component stays mounted across opens/closes (every caller renders it
+  // unconditionally, toggling only `open`), so without this its internal state
+  // (`saving`, `step`, `coords`…) used to leak from one open to the next — a
+  // confirm that never got its `saving` flag cleared left the button stuck on
+  // "Enregistrement…" forever on reopen, and the map/address shown was whatever
+  // was last picked rather than the caller's actual current location. Every time
+  // the modal (re)opens, reseed everything fresh from the latest
+  // initialAddress/initialLat/initialLng/initialDetails props (the caller's real
+  // saved location — e.g. the account's official users.locationLat/locationLng) so
+  // the admin/account-defined location is always the default shown, never stale
+  // data, and never a leftover loading state.
+  useEffect(() => {
+    if (!open) return;
+    const lat = initialLat != null && initialLat !== "" ? parseFloat(String(initialLat)) : NaN;
+    const lng = initialLng != null && initialLng !== "" ? parseFloat(String(initialLng)) : NaN;
+    const hasInitialCoords = !Number.isNaN(lat) && !Number.isNaN(lng);
+    setStep(startStep);
+    setSearch(initialAddress ?? "");
+    setSuggestions([]);
+    setSelectedAddress(initialAddress ?? "");
+    setCoords(hasInitialCoords ? { lat, lng } : DEFAULT_CENTER);
+    setPlaceId("");
+    setPositionPicked(hasInitialCoords);
+    setDetails({ ...EMPTY_DETAILS, ...initialDetails });
+    setSaving(false);
+    setRadiusKm(null);
+    mapRef.current = null;
+    markerRef.current = null;
   }, [open]);
 
   useEffect(() => {
@@ -257,21 +298,28 @@ export default function LocationPickerModal({
     );
   }, [details.street]);
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
     setSaving(true);
     const cleaned: AddressDetails = {};
     (Object.keys(details) as (keyof AddressDetails)[]).forEach((k) => {
       const v = details[k]?.trim();
       if (v) cleaned[k] = v;
     });
-    onConfirm({
-      address: selectedAddress || details.street || "",
-      lat: positionPicked ? String(coords.lat) : "",
-      lng: positionPicked ? String(coords.lng) : "",
-      placeId: positionPicked ? placeId : "",
-      details: Object.keys(cleaned).length ? cleaned : undefined,
-      ...(showRadius ? { radius: radiusKm } : {}),
-    });
+    try {
+      // Awaited so `saving` always clears once the caller's own save actually
+      // settles (success or failure) — never left stuck if the caller doesn't
+      // immediately close the modal (e.g. a failed save that stays open for retry).
+      await onConfirm({
+        address: selectedAddress || details.street || "",
+        lat: positionPicked ? String(coords.lat) : "",
+        lng: positionPicked ? String(coords.lng) : "",
+        placeId: positionPicked ? placeId : "",
+        details: Object.keys(cleaned).length ? cleaned : undefined,
+        ...(showRadius ? { radius: radiusKm } : {}),
+      });
+    } finally {
+      setSaving(false);
+    }
   }, [selectedAddress, coords, placeId, details, onConfirm, showRadius, radiusKm, positionPicked]);
 
   const reset = () => {

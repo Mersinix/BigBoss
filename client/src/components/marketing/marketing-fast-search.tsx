@@ -1,27 +1,34 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Heart, X, ChevronRight, Users, Zap, SlidersHorizontal, Check, Info, MapPin, Star } from "lucide-react";
+import { Heart, X, ChevronRight, Package, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Users } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl } from "@/lib/avatar";
-import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
+import { useFormatCurrency } from "@/hooks/use-currency";
+import type { MarketingServiceCard } from "@/hooks/use-marketing";
 
 const PROVIDER_TYPE_LABELS: Record<string, string> = { Agency: "Agence", Freelancer: "Freelancer", Studio: "Studio" };
 
-// Fast Search — mirrors BaristaFastSearch (client/src/components/barista/barista-fast-search.tsx)
+// Fast Search — mirrors PrintFastSearch (client/src/components/print/print-fast-search.tsx)
 // exactly: same visual language/interaction, own state, own real data source
-// (the same /marketing profiles list passed in — no separate copy). Favorite
+// (the same /marketing published-services list already fetched for the main
+// grid — no separate copy). Now returns individual published SERVICES
+// (Ads/Branding/Photo/…) instead of agency accounts, so an agency offering
+// several categories surfaces one result per service — matches /marketing's
+// own card-per-service model (Part 5 of the marketplace-sync task). Favorite
 // state reuses the exact same useFavorites store as /marketing and the
-// Favorites modal — a change here updates everywhere instantly.
+// Favorites modal — a change here updates everywhere instantly. Clicking
+// "Détails" opens the same MarketingServiceDetailModal used on the main
+// grid — the Agency Details Modal stays reachable only from inside that
+// modal's own "Agence" section, unchanged.
 export interface MarketingFastSearchProps {
   open: boolean;
   onClose: () => void;
-  providers: MarketingMarketplaceCard[];
-  onRequestQuote: (provider: MarketingMarketplaceCard) => void;
-  onOpenDetail: (provider: MarketingMarketplaceCard) => void;
+  services: MarketingServiceCard[];
+  onRequestQuote: (service: MarketingServiceCard) => void;
+  onOpenDetail: (service: MarketingServiceCard) => void;
 }
 
-export function MarketingFastSearch({ open, onClose, providers, onRequestQuote, onOpenDetail }: MarketingFastSearchProps) {
+export function MarketingFastSearch({ open, onClose, services, onRequestQuote, onOpenDetail }: MarketingFastSearchProps) {
+  const fmt = useFormatCurrency();
   const [idx, setIdx] = useState(0);
   const [heartAnim, setHeartAnim] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -30,31 +37,33 @@ export function MarketingFastSearch({ open, onClose, providers, onRequestQuote, 
   const [activeCategory, setActiveCategory] = useState("");
   const [activeLocation, setActiveLocation] = useState("");
 
-  const allCategories = useMemo(() => Array.from(new Set(providers.flatMap((p) => p.categories))).sort(), [providers]);
-  const allLocations = useMemo(() => Array.from(new Set(providers.map((p) => p.location).filter(Boolean))).sort(), [providers]);
+  const allCategories = useMemo(() => Array.from(new Set(services.map((s) => s.category).filter(Boolean))).sort(), [services]);
+  const allLocations = useMemo(() => Array.from(new Set(services.map((s) => s.agencyLocation).filter(Boolean))).sort(), [services]);
 
   const filtered = useMemo(() => {
-    return providers.filter((p) => {
-      if (activeCategory && !p.categories.some((c) => c.toLowerCase() === activeCategory.toLowerCase())) return false;
-      if (activeLocation && p.location.toLowerCase() !== activeLocation.toLowerCase()) return false;
+    return services.filter((s) => {
+      if (activeCategory && s.category.toLowerCase() !== activeCategory.toLowerCase()) return false;
+      if (activeLocation && s.agencyLocation.toLowerCase() !== activeLocation.toLowerCase()) return false;
       return true;
     });
-  }, [providers, activeCategory, activeLocation]);
+  }, [services, activeCategory, activeLocation]);
 
   useEffect(() => { setIdx(0); setHeartAnim(false); }, [filtered.length, open]);
 
   const current = filtered[idx] ?? null;
 
-  const faved = useFavorites((s) => (current ? !!s.marketing[current.userId] : false));
+  const faved = useFavorites((s) => (current ? !!s.marketing[current.marketingUserId] : false));
   const toggleMarketing = useFavorites((s) => s.toggleMarketing);
 
   const triggerFavorite = useCallback(() => {
     if (!current) return;
+    const coverImage = current.imageUrl;
     toggleMarketing({
-      id: current.userId, name: current.name, initials: current.initials,
-      type: PROVIDER_TYPE_LABELS[current.profileType] ?? current.profileType,
-      rating: current.rating / 10, portfolioImages: current.portfolioImages,
-      location: current.location, available: current.isAvailable, profileImageUrl: current.profileImageUrl,
+      id: current.marketingUserId, name: current.agencyName,
+      initials: current.agencyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+      type: PROVIDER_TYPE_LABELS[current.agencyProfileType] ?? current.agencyProfileType,
+      rating: current.rating / 10, portfolioImages: coverImage ? [coverImage] : [],
+      location: current.agencyLocation, available: current.agencyIsAvailable, profileImageUrl: current.agencyProfileImageUrl,
     });
     setHeartAnim(true);
     setTimeout(() => setHeartAnim(false), 800);
@@ -99,41 +108,41 @@ export function MarketingFastSearch({ open, onClose, providers, onRequestQuote, 
           {/* Main image / info area */}
           {filtered.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
-              <Users className="w-16 h-16 text-gray-600" />
-              <p className="text-white font-semibold">Aucun prestataire ne correspond à ce filtre</p>
+              <Package className="w-16 h-16 text-gray-600" />
+              <p className="text-white font-semibold">Aucun service ne correspond à ce filtre</p>
               <button onClick={openFilter} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
                 Changer le filtre
               </button>
             </div>
           ) : (
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
-              <Avatar className="w-full h-full rounded-none">
-                <AvatarImage key={idx} src={getAvatarUrl(current as any)} alt={current!.name} className="object-cover" />
-                <AvatarFallback className="rounded-none bg-gradient-to-br from-purple-900 to-violet-950">
-                  <span className="text-white/80 font-bold text-6xl">{current!.initials}</span>
-                </AvatarFallback>
-              </Avatar>
+              {current!.imageUrl ? (
+                <img key={idx} src={current!.imageUrl} alt={current!.category} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900 to-violet-950">
+                  <span className="text-white/80 font-bold text-6xl">{current!.agencyName.slice(0, 2).toUpperCase()}</span>
+                </div>
+              )}
 
               <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
 
               <div className="absolute inset-x-0 bottom-0 px-5 pb-6 pointer-events-none">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-full ${current!.isAvailable ? "bg-green-500/80" : "bg-gray-500/80"}`}>
-                    {current!.isAvailable ? "Disponible" : "Indisponible"}
+                  <span className={`backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-full ${current!.agencyIsAvailable ? "bg-green-500/80" : "bg-gray-500/80"}`}>
+                    {current!.agencyIsAvailable ? "Disponible" : "Indisponible"}
                   </span>
-                  <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-amber-300 text-amber-300" /> {(current!.rating / 10).toFixed(1)}
-                  </span>
+                  {current!.reviewCount > 0 && (
+                    <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-amber-300 text-amber-300" /> {(current!.rating / 10).toFixed(1)}
+                    </span>
+                  )}
                 </div>
-                <h2 className="text-white font-bold text-xl leading-tight mb-1" data-testid="text-fastsearch-name">{current!.name}</h2>
-                {current!.location && (
-                  <p className="text-white/70 text-xs flex items-center gap-1 mb-2"><MapPin className="w-3 h-3" /> {current!.location}</p>
+                <h2 className="text-white font-bold text-xl leading-tight mb-1" data-testid="text-fastsearch-name">{current!.category}</h2>
+                <p className="text-white/70 text-xs mb-2">{current!.agencyName}</p>
+                {current!.agencyLocation && (
+                  <p className="text-white/70 text-xs flex items-center gap-1 mb-2"><MapPin className="w-3 h-3" /> {current!.agencyLocation}{current!.distanceKm != null && <> · {current!.distanceKm} km</>}</p>
                 )}
-                <div className="flex flex-wrap gap-2">
-                  {current!.categories.slice(0, 5).map((c) => (
-                    <span key={c} className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">{c}</span>
-                  ))}
-                </div>
+                <p className="text-white font-bold text-lg">{fmt(current!.startingPriceInCents)}</p>
               </div>
 
               {heartAnim && (
@@ -193,7 +202,7 @@ export function MarketingFastSearch({ open, onClose, providers, onRequestQuote, 
           <div className={`absolute inset-x-0 top-0 z-[60] transition-transform duration-300 ease-in-out ${filterOpen ? "translate-y-0" : "-translate-y-full"}`}>
             <div className="bg-gray-900/95 backdrop-blur-xl rounded-b-3xl shadow-2xl">
               <div className="flex items-center justify-between px-5 pt-5 pb-4">
-                <h3 className="text-white font-bold text-base">Filtrer les prestataires</h3>
+                <h3 className="text-white font-bold text-base">Filtrer les services</h3>
                 <button onClick={() => setFilterOpen(false)} className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors">
                   <X className="w-4 h-4 text-white" />
                 </button>

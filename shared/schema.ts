@@ -1167,6 +1167,7 @@ export type AcademyCourseCard = AcademyCourse & {
   academyPhone: string | null;
   rating: number; // 0-50, i.e. x10
   reviewCount: number;
+  distanceKm?: number | null;
 };
 
 export type AcademyRegistrationWithParties = AcademyRegistration & {
@@ -1579,6 +1580,17 @@ export const printCatalogItems = pgTable("print_catalog_items", {
 }, (table) => ({
   printerIdx: index("print_catalog_items_printer_idx").on(table.printerId),
 }));
+
+// Print favorites — mirrors maintenanceFavorites exactly (same shape, same
+// persistence pattern). References the catalog item (service/product), not
+// the printer account, since /print favorites one product at a time (see
+// use-favorites.ts's togglePrint, keyed by the catalog item id).
+export const printFavorites = pgTable("print_favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  printItemId: integer("print_item_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
 // Public printer (company-level) profile — one per PRINTER user, mirrors
 // academyProfiles exactly (same minimal shape: users.name/phone/
@@ -2005,6 +2017,7 @@ export const insertMaintenanceReservationSchema = createInsertSchema(maintenance
 export const insertMaintenanceCompetencySchema = createInsertSchema(maintenanceCompetencies).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMaintenanceZoneSchema = createInsertSchema(maintenanceZones).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPrintCatalogItemSchema = createInsertSchema(printCatalogItems).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPrintFavoriteSchema = createInsertSchema(printFavorites).omit({ id: true, createdAt: true });
 export const insertPrintOrderSchema = createInsertSchema(printOrders).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPrintCategoryTaxonomySchema = createInsertSchema(printCategoryTaxonomy).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPrintSubCategoryTaxonomySchema = createInsertSchema(printSubCategoryTaxonomy).omit({ id: true, createdAt: true, updatedAt: true });
@@ -2100,6 +2113,8 @@ export type PackItem = typeof packItems.$inferSelect;
 export type InsertPackItem = z.infer<typeof insertPackItemSchema>;
 
 export type PackFavorite = typeof packFavorites.$inferSelect;
+export type PrintFavorite = typeof printFavorites.$inferSelect;
+export type InsertPrintFavorite = z.infer<typeof insertPrintFavoriteSchema>;
 export type MaintenanceProfile = typeof maintenanceProfiles.$inferSelect;
 export type InsertMaintenanceProfile = z.infer<typeof insertMaintenanceProfileSchema>;
 export type MaintenanceFavorite = typeof maintenanceFavorites.$inferSelect;
@@ -2218,6 +2233,7 @@ export type PrintCatalogCard = PrintCatalogItem & {
   printerLocation: string;
   rating: number; // 0-50 (x10), mirrors maintenanceProfiles/baristaMarketplaceProfiles convention
   reviewCount: number;
+  distanceKm?: number | null;
 };
 /** A print order joined with the other party's identity, for both Printer and Coffee Owner views. */
 export type PrintOrderWithParties = PrintOrder & {

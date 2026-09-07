@@ -12,6 +12,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getAvatarUrl } from "@/lib/avatar";
 import { User, CreditCard, MapPin, Building2, FileText, Landmark } from "lucide-react";
 import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
+import { AccountAddressCard } from "@/components/settings/account-address-card";
 
 // ── Company Details Modal ─────────────────────────────────────────────────────
 
@@ -243,6 +244,8 @@ export default function SupplierSettingsPage() {
           ))}
         </CardContent>
       </Card>
+
+      <AccountAddressCard />
 
       <NotificationPreferencesCard role="SUPPLIER" />
 

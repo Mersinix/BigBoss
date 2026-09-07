@@ -47,6 +47,8 @@ export function PrintFastSearch({ open, onClose, cards, onOpenDetail }: PrintFas
     togglePrint({
       id: String(current.id), name: current.name, brand: current.printerName,
       price: current.priceInCents, priceUnit: current.unit, image: current.imageUrl ?? "",
+      location: current.printerLocation, distanceKm: current.distanceKm,
+      rating: current.rating / 10, reviewCount: current.reviewCount, category: current.category,
     });
     setHeartAnim(true);
     setTimeout(() => setHeartAnim(false), 800);

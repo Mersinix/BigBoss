@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart, Zap, Ban
+  Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart, Zap, Ban, MapPin
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -164,6 +164,11 @@ function PrintProductCard({ card, onClick, isDark }: { card: PrintCatalogCard; o
               price: card.priceInCents,
               priceUnit: card.unit,
               image: card.imageUrl ?? "",
+              location: card.printerLocation,
+              distanceKm: card.distanceKm,
+              rating: card.rating / 10,
+              reviewCount: card.reviewCount,
+              category: card.category,
             });
           }}
           data-testid={`button-fav-print-${card.id}`}
@@ -174,6 +179,13 @@ function PrintProductCard({ card, onClick, isDark }: { card: PrintCatalogCard; o
       <div className="p-3 flex-1 flex flex-col gap-2">
         <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors ${t.textPrimary}`}>{card.name}</h3>
         {card.printerName && <p className={`text-xs font-medium ${t.textMuted}`}>{card.printerName}</p>}
+        {card.printerLocation && (
+          <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}>
+            <MapPin className="w-2.5 h-2.5" />
+            {card.printerLocation}
+            {card.distanceKm != null && <> · {card.distanceKm} km</>}
+          </span>
+        )}
         <div className="flex items-center gap-1.5">
           {card.reviewCount > 0 ? (
             <>
@@ -389,6 +401,18 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   }, [cards]);
   const { user } = useAuth();
   const canAct = !!user && user.role === "CAFE_OWNER" && accessLevel === "approved";
+
+  // Favorites persist as Print catalog item IDs (Part 25) — resolve them
+  // against the already-loaded cards so heart state is correct on first
+  // render, mirroring the Maintenance/Barista/Marketing/Academy pages.
+  const { data: printFavoriteIds = [] } = useQuery<number[]>({
+    queryKey: ["/api/print-favorites"],
+    enabled: !!user && accessLevel === "approved",
+  });
+  const syncPrint = useFavorites((s) => s.syncPrint);
+  useEffect(() => {
+    syncPrint(printFavoriteIds, cards);
+  }, [printFavoriteIds, cards, syncPrint]);
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>

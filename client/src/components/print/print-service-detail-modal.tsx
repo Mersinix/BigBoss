@@ -174,7 +174,7 @@ export function PrintServiceDetailModal({
               <div className="absolute top-3 right-3 flex gap-2">
                 <button
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
-                  onClick={() => { if (!readOnly) togglePrint({ id: String(service.id), name: service.name, brand: service.printerName, price: service.priceInCents, priceUnit: service.unit, image: service.imageUrl ?? "" }); }}
+                  onClick={() => { if (!readOnly) togglePrint({ id: String(service.id), name: service.name, brand: service.printerName, price: service.priceInCents, priceUnit: service.unit, image: service.imageUrl ?? "", location: service.printerLocation, distanceKm: service.distanceKm, rating: service.rating / 10, reviewCount: service.reviewCount, category: service.category }); }}
                   data-testid={`button-fav-print-service-${service.id}`}
                 >
                   <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
@@ -202,7 +202,7 @@ export function PrintServiceDetailModal({
                   ) : (
                     <span>Aucun avis</span>
                   )}
-                  {service.printerLocation && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {service.printerLocation}</span>}
+                  {service.printerLocation && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {service.printerLocation}{service.distanceKm != null && <> · {service.distanceKm} km</>}</span>}
                 </div>
               </div>
 

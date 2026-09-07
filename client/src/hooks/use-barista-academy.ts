@@ -38,6 +38,7 @@ export type AcademyCourseCard = AcademyCourse & {
   academyPhone: string | null;
   rating: number; // x10, e.g. 47 = 4.7
   reviewCount: number;
+  distanceKm?: number | null;
 };
 
 export type AcademyCourseSession = {

@@ -57,6 +57,13 @@ import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-mo
 
 // ── Access helper (mirrors barista-page.tsx's own copy) ──────────────────────
 
+// Stable shared reference for the favorites-id query default below — see
+// maintenance-page.tsx's identical constant for the full "Maximum update
+// depth exceeded" explanation (a fresh `[]` literal there never lets the
+// syncAcademy effect's dependency settle while the query stays disabled for
+// a non-approved/logged-out viewer).
+const EMPTY_IDS: number[] = [];
+
 type AccessLevel = "visitor" | "pending" | "approved";
 
 function useAccessLevel(): AccessLevel {
@@ -356,7 +363,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
 
   // Hydrate favorite hearts from the database, mirroring barista-page.tsx's
   // pattern — without this Academy favorites never survived a page reload.
-  const { data: favoriteIds = [] } = useQuery<number[]>({
+  const { data: favoriteIds = EMPTY_IDS } = useQuery<number[]>({
     queryKey: ["/api/academy-favorites"],
     enabled: !!user && accessLevel === "approved",
   });

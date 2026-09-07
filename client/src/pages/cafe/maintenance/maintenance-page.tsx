@@ -31,6 +31,16 @@ import {
   Building2, User, Send, Flag, Navigation, Ban, Image as ImageIcon,
 } from "lucide-react";
 
+// Stable shared reference for the favorites-id query default below — a fresh
+// `[]` literal there is a *different* array every render, which (while the
+// query stays disabled for a non-approved/logged-out viewer) never lets the
+// syncMaintenance effect's dependency settle: it re-fires every render,
+// calling a store setter that always returns a new object, triggering
+// another render, forever — surfaces as React's "Maximum update depth
+// exceeded" inside whichever component last mounted (e.g. the Favorites
+// panel). One shared reference breaks the cycle.
+const EMPTY_IDS: number[] = [];
+
 type AccessLevel = "visitor" | "pending" | "approved";
 
 function useAccessLevel(): AccessLevel {
@@ -602,7 +612,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     for (const c of taxonomy?.competencies ?? []) if (c.icon) map.set(c.name, c.icon);
     return map;
   }, [taxonomy]);
-  const { data: favoriteIds = [] } = useQuery<number[]>({ queryKey: ["/api/maintenance-favorites"], enabled: !!user && accessLevel === "approved" });
+  const { data: favoriteIds = EMPTY_IDS } = useQuery<number[]>({ queryKey: ["/api/maintenance-favorites"], enabled: !!user && accessLevel === "approved" });
   const syncMaintenance = useFavorites((s) => s.syncMaintenance);
 
   useEffect(() => {

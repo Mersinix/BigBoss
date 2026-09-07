@@ -27,7 +27,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[ErrorBoundary] caught render error:", error, info.componentStack);
+    // Logging the raw Error object is useless in any pipeline that
+    // JSON-serializes console arguments for transport (e.g. Replit's remote
+    // log capture) — `message`/`stack` are non-enumerable on a native Error,
+    // so `JSON.stringify(error)` collapses to "{}", which is exactly what
+    // showed up in production logs here. Log plain strings instead so the
+    // real reason survives any serialization step.
+    console.error(
+      `[ErrorBoundary] caught render error: ${error?.name ?? "Error"}: ${error?.message ?? String(error)}\n` +
+      `${error?.stack ?? "(no stack)"}\n` +
+      `Component stack:${info.componentStack}`
+    );
   }
 
   retry = () => this.setState({ hasError: false });

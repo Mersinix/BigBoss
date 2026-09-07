@@ -51,6 +51,13 @@ import { MarketingBlacklistModal } from "@/components/marketing/marketing-blackl
 
 // ── Access helper (mirrors browse-products + barista-page pattern) ────────────
 
+// Stable shared reference for the favorites-id query default below — see
+// maintenance-page.tsx's identical constant for the full "Maximum update
+// depth exceeded" explanation (a fresh `[]` literal there never lets the
+// syncMarketing effect's dependency settle while the query stays disabled
+// for a non-approved/logged-out viewer).
+const EMPTY_IDS: number[] = [];
+
 type AccessLevel = "visitor" | "pending" | "approved";
 
 function useAccessLevel(): AccessLevel {
@@ -294,7 +301,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
 
   // Hydrate favorite hearts from the database, mirroring barista-page.tsx's pattern —
   // without this the Marketing favorites never survived a page reload.
-  const { data: favoriteIds = [] } = useQuery<number[]>({
+  const { data: favoriteIds = EMPTY_IDS } = useQuery<number[]>({
     queryKey: ["/api/marketing-favorites"],
     enabled: !!user && accessLevel === "approved",
   });

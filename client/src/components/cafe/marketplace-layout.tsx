@@ -1523,6 +1523,19 @@ const FAV_SERVICE_LABEL: Record<FavService, string> = {
   BARISTA_MARKETPLACE: "BARISTA", BARISTA_ACADEMY: "ACADEMY", MARKETING: "MARKETING",
 };
 
+// Stable shared reference for every "profiles/cards not fetched yet" default
+// below (`= []`), instead of a fresh `[]` literal per render. A fresh literal
+// there is a *different* array on every render, so a useEffect depending on
+// it never sees a stable dependency list — it re-fires on every commit,
+// re-calls its syncX() store setter, which always returns a brand-new
+// object (even when empty) and so always triggers a re-render, which
+// recomputes a fresh `[]` again: an infinite render loop that surfaces as
+// React's "Maximum update depth exceeded", caught by the ErrorBoundary
+// around this panel. One shared reference breaks the cycle: once the
+// effect settles, the dependency stays referentially equal and stops
+// re-running.
+const EMPTY_LIST: never[] = [];
+
 function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const [, navigate] = useLocation();
   const { states: serviceStates } = useServiceStates();
@@ -1588,7 +1601,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const { data: maintenanceFavoriteIds } = useQuery<number[]>({
     queryKey: ["/api/maintenance-favorites"],
   });
-  const { data: maintenanceProfiles = [], isLoading: maintenanceProfilesLoading } = useQuery<MaintenanceMarketplaceCard[]>({
+  const { data: maintenanceProfiles = EMPTY_LIST, isLoading: maintenanceProfilesLoading } = useQuery<MaintenanceMarketplaceCard[]>({
     queryKey: ["/api/maintenance/profiles"],
     enabled: (maintenanceFavoriteIds?.length ?? 0) > 0,
   });
@@ -1602,7 +1615,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const { data: baristaFavoriteIds } = useQuery<number[]>({
     queryKey: ["/api/barista-favorites"],
   });
-  const { data: baristaProfiles = [], isLoading: baristaProfilesLoading } = useQuery<BaristaMarketplaceCard[]>({
+  const { data: baristaProfiles = EMPTY_LIST, isLoading: baristaProfilesLoading } = useQuery<BaristaMarketplaceCard[]>({
     queryKey: ["/api/barista/profiles"],
     enabled: (baristaFavoriteIds?.length ?? 0) > 0,
   });
@@ -1616,7 +1629,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const { data: marketingFavoriteIds } = useQuery<number[]>({
     queryKey: ["/api/marketing-favorites"],
   });
-  const { data: marketingProfiles = [], isLoading: marketingProfilesLoading } = useQuery<MarketingMarketplaceCard[]>({
+  const { data: marketingProfiles = EMPTY_LIST, isLoading: marketingProfilesLoading } = useQuery<MarketingMarketplaceCard[]>({
     queryKey: ["/api/marketing/profiles"],
     enabled: (marketingFavoriteIds?.length ?? 0) > 0,
   });
@@ -1630,7 +1643,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const { data: academyFavoriteIds } = useQuery<number[]>({
     queryKey: ["/api/academy-favorites"],
   });
-  const { data: academyCourses = [], isLoading: academyCoursesLoading } = useQuery<AcademyCourseCard[]>({
+  const { data: academyCourses = EMPTY_LIST, isLoading: academyCoursesLoading } = useQuery<AcademyCourseCard[]>({
     queryKey: ["/api/academy/courses"],
     enabled: (academyFavoriteIds?.length ?? 0) > 0,
   });
@@ -1645,7 +1658,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const { data: printFavoriteIds } = useQuery<number[]>({
     queryKey: ["/api/print-favorites"],
   });
-  const { data: printCards = [], isLoading: printCardsLoading } = useQuery<PrintCatalogCard[]>({
+  const { data: printCards = EMPTY_LIST, isLoading: printCardsLoading } = useQuery<PrintCatalogCard[]>({
     queryKey: ["/api/print/marketplace"],
     enabled: (printFavoriteIds?.length ?? 0) > 0,
   });

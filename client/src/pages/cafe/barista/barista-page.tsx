@@ -59,6 +59,13 @@ import { BaristaBlacklistModal } from "@/components/barista/barista-blacklist-mo
 
 // ── Access helper (mirrors browse-products.tsx pattern) ──────────────────────
 
+// Stable shared reference for the favorites-id query default below — see
+// maintenance-page.tsx's identical constant for the full "Maximum update
+// depth exceeded" explanation (a fresh `[]` literal there never lets the
+// syncBaristaMarket effect's dependency settle while the query stays
+// disabled for a non-approved/logged-out viewer).
+const EMPTY_IDS: number[] = [];
+
 type AccessLevel = "visitor" | "pending" | "approved";
 
 function useAccessLevel(): AccessLevel {
@@ -376,7 +383,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   const { data: skillOptions = [] } = useBaristaSkills();
 
   // Hydrate favorite hearts from the database, mirroring maintenance-page.tsx's pattern.
-  const { data: favoriteIds = [] } = useQuery<number[]>({
+  const { data: favoriteIds = EMPTY_IDS } = useQuery<number[]>({
     queryKey: ["/api/barista-favorites"],
     enabled: !!user && accessLevel === "approved",
   });

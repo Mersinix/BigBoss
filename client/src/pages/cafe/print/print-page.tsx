@@ -23,6 +23,17 @@ import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 
+// Stable shared references for "data not fetched/disabled yet" useQuery
+// defaults — a fresh `[]` literal in a destructuring default is a *different*
+// array every render, which breaks the syncPrint effect below whenever its
+// query stays disabled (e.g. not-yet-approved viewer, or comingSoon): the
+// effect's dependency never stabilizes, so it re-fires every render, calling
+// syncPrint (which always returns a new store object, even when empty),
+// triggering another render, forever — surfaces as React's "Maximum update
+// depth exceeded". One shared reference lets the dependency settle.
+const EMPTY_PRINT_CARDS: PrintCatalogCard[] = [];
+const EMPTY_IDS: number[] = [];
+
 // ── Production time buckets ─────────────────────────────────────────────────
 // The real schema only has a numeric productionTimeDays (no free-text delivery
 // string like the old mock data), so the "delivery time" filter buckets by it.
@@ -346,7 +357,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
   const [previewCompanyId, setPreviewCompanyId] = useState<number | null>(null);
 
-  const { data: cards = [], isLoading: cardsLoading } = useQuery<PrintCatalogCard[]>({
+  const { data: cards = EMPTY_PRINT_CARDS, isLoading: cardsLoading } = useQuery<PrintCatalogCard[]>({
     queryKey: ["/api/print/marketplace"],
     enabled: !comingSoon,
   });
@@ -405,7 +416,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   // Favorites persist as Print catalog item IDs (Part 25) — resolve them
   // against the already-loaded cards so heart state is correct on first
   // render, mirroring the Maintenance/Barista/Marketing/Academy pages.
-  const { data: printFavoriteIds = [] } = useQuery<number[]>({
+  const { data: printFavoriteIds = EMPTY_IDS } = useQuery<number[]>({
     queryKey: ["/api/print-favorites"],
     enabled: !!user && accessLevel === "approved",
   });

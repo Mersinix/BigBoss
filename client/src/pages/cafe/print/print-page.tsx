@@ -20,6 +20,8 @@ import type { PrintCatalogCard } from "@shared/schema";
 import { printCategoryIcon } from "@/lib/print-category-icons";
 import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
+import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
+import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 
 // ── Production time buckets ─────────────────────────────────────────────────
 // The real schema only has a numeric productionTimeDays (no free-text delivery
@@ -329,6 +331,8 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   const { settings: heroActions } = useHeroActionSettings();
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
+  const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
+  const [previewCompanyId, setPreviewCompanyId] = useState<number | null>(null);
 
   const { data: cards = [], isLoading: cardsLoading } = useQuery<PrintCatalogCard[]>({
     queryKey: ["/api/print/marketplace"],
@@ -528,7 +532,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
               <PrintProductCard
                 key={card.id}
                 card={card}
-                 onClick={() => navigate(`/print/${card.id}`)}
+                 onClick={() => setPreviewServiceId(card.id)}
                  isDark={isDark}
               />
             ))}
@@ -542,9 +546,26 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         open={fastSearchOpen}
         onClose={() => setFastSearchOpen(false)}
         cards={cards}
-        onOpenDetail={(card) => { setFastSearchOpen(false); navigate(`/print/${card.id}`); }}
+        onOpenDetail={(card) => { setFastSearchOpen(false); setPreviewServiceId(card.id); }}
       />
       <PrintBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} printers={distinctPrinters} />
+
+      {/* Service / Company details modals — replaces the old direct navigation to the
+          full-page item detail for a quick preview; the full page (with its file-upload/
+          material/quantity/cart customization) stays fully intact, one click away via
+          the modal's own "Commander" button. */}
+      <PrintServiceDetailModal
+        serviceId={previewServiceId}
+        open={previewServiceId != null}
+        onClose={() => setPreviewServiceId(null)}
+        onOpenCompany={(printerId) => { setPreviewServiceId(null); setPreviewCompanyId(printerId); }}
+      />
+      <PrintCompanyDetailModal
+        printerUserId={previewCompanyId}
+        open={previewCompanyId != null}
+        onClose={() => setPreviewCompanyId(null)}
+        onOpenService={(serviceId) => { setPreviewCompanyId(null); setPreviewServiceId(serviceId); }}
+      />
     </div>
   );
 }

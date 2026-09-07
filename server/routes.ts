@@ -1429,11 +1429,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/print/marketplace/:id", async (req, res) => {
+  app.get("/api/print/marketplace/:id", async (req: any, res) => {
     try {
-      const card = await storage.getPrintMarketplaceCard(parseInt(req.params.id));
-      if (!card) return res.status(404).json({ message: "Print service not found" });
-      res.json(card);
+      const id = parseInt(req.params.id);
+      const card = await storage.getPrintMarketplaceCard(id);
+      if (card) return res.json(card);
+      // Not publicly visible (inactive, unapproved printer, or a currently-hidden
+      // company) — the owning Printer/Admin can still preview it (Business →
+      // Services "Aperçu" must work for a draft/inactive service), same self/admin
+      // bypass pattern as GET /api/academy/courses/:id.
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        const rawCard = await storage.getPrintCatalogItemCard(id);
+        if (viewer && rawCard && (viewer.id === rawCard.printerId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role))) {
+          return res.json(rawCard);
+        }
+      }
+      return res.status(404).json({ message: "Print service not found" });
     } catch (err) {
       res.status(500).json({ message: "Failed to load PRINT item" });
     }
@@ -1516,6 +1528,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Failed to update category mapping" });
+    }
+  });
+
+  // Company-level printer profile — mirrors GET/PATCH /api/academy/profile
+  // exactly (self/admin get the full row + card, any other authenticated
+  // viewer — e.g. a Coffee Owner clicking "Imprimerie" inside a Service
+  // details modal — only ever gets the sanitized public `card`).
+  app.get("/api/print/company/:userId", requireAuth, async (req: any, res) => {
+    const targetUserId = Number(req.params.userId);
+    const viewer = await storage.getUser(req.session.userId);
+    if (!viewer) return res.status(401).json({ message: "Unauthorized" });
+    const target = await storage.getUser(targetUserId);
+    if (!target || target.role !== "PRINTER") return res.status(404).json({ message: "Not found" });
+    const isSelfOrAdmin = viewer.id === targetUserId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role);
+    const card = await storage.getPrintCompanyCard(targetUserId);
+    if (!card) return res.status(404).json({ message: "Not found" });
+    if (!isSelfOrAdmin) return res.json({ card });
+    res.json({ user: target, profile: await storage.getPrinterProfile(targetUserId), card });
+  });
+
+  app.patch("/api/print/profile", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+    try {
+      const body = z.object({
+        description: z.string().max(2000).optional(),
+        websiteUrl: z.union([z.string().trim().url(), z.literal("")]).optional().transform((v) => (v === "" ? null : v)),
+        marketplaceVisible: z.boolean().optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertPrinterProfile(user.id, body);
+      broadcast("print_profile_updated", { printerId: user.id, kind: "profile" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid profile data" });
     }
   });
 

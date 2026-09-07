@@ -7,14 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { formatDate } from "@/lib/format";
 import { buildPrintInvoiceRows, PRINT_INVOICE_STATUS_META, type PrintInvoiceRow, type PrintInvoiceStatus } from "@/lib/print-financial-rows";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
-import { FileText, DollarSign, Clock, Eye, Search } from "lucide-react";
+import { FileText, DollarSign, Clock, Eye, Search, Calendar } from "lucide-react";
 
 function InvoiceDetailDialog({ row, onClose }: { row: PrintInvoiceRow | null; onClose: () => void }) {
   const fmt = useFormatCurrency();
@@ -132,48 +131,38 @@ export default function PrinterInvoices() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-36 w-full rounded-2xl" />)}</div>
       ) : rows.length === 0 ? (
         <EmptyState message={allRows.length === 0 ? "Aucune facture pour le moment." : "Aucune facture ne correspond à ces filtres."} icon={FileText} />
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Facture</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Article</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Paiement</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.orderId} data-testid={`row-invoice-${r.orderId}`}>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{r.invoiceNumber}</TableCell>
-                    <TableCell className="font-medium text-sm">{r.cafeOwnerName}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{r.itemName}</TableCell>
-                    <TableCell className="font-semibold text-sm">{fmt(r.amount)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{r.createdAt ? formatDate(r.createdAt as any) : "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={PRINT_INVOICE_STATUS_META[r.invoiceStatus].className}>
-                        {PRINT_INVOICE_STATUS_META[r.invoiceStatus].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setViewing(r)}>
-                        <Eye className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {rows.map((r) => (
+            <Card key={r.orderId} data-testid={`card-invoice-${r.orderId}`}>
+              <CardContent className="p-4 flex flex-col gap-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs text-muted-foreground">{r.invoiceNumber}</p>
+                    <p className="font-semibold text-sm truncate mt-0.5">{r.cafeOwnerName}</p>
+                  </div>
+                  <Badge variant="secondary" className={`shrink-0 ${PRINT_INVOICE_STATUS_META[r.invoiceStatus].className}`}>
+                    {PRINT_INVOICE_STATUS_META[r.invoiceStatus].label}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground truncate">{r.itemName}</p>
+                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Total</p>
+                    <p className="font-bold text-sm text-primary">{fmt(r.amount)}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />{r.createdAt ? formatDate(r.createdAt as any) : "—"}</p>
+                </div>
+                <Button size="sm" variant="outline" className="self-end" onClick={() => setViewing(r)} data-testid={`button-view-invoice-${r.orderId}`}>
+                  <Eye className="w-3.5 h-3.5 mr-1" />Voir
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
       <InvoiceDetailDialog row={viewing} onClose={() => setViewing(null)} />

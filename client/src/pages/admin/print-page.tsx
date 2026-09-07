@@ -23,6 +23,8 @@ import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboa
 import { PRINT_ORDER_STATUS_META, formatMonthKey } from "@/lib/print-order-status";
 import { printCategoryIcon } from "@/lib/print-category-icons";
 import { buildPrintInvoiceRows, PRINT_INVOICE_STATUS_META } from "@/lib/print-financial-rows";
+import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
+import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import type { PrintOrderWithParties } from "@shared/schema";
 
 // Mirrors admin/maintenance-page.tsx's architecture exactly: one aggregate
@@ -213,39 +215,6 @@ function SubCategoryManager({ categories, subcategories, onRefresh }: {
   );
 }
 
-// ── Printer detail dialog ──────────────────────────────────────────────────────
-
-function PrinterDetail({ printer, onClose }: { printer: any | null; onClose: () => void }) {
-  const fmt = useFormatCurrency();
-  if (!printer) return null;
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <Avatar><AvatarImage src={getAvatarUrl(printer)} alt={printer.name} /><AvatarFallback className="bg-blue-100 text-blue-700 font-bold">{printer.initials}</AvatarFallback></Avatar>
-            <span>{printer.name}</span>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="grid sm:grid-cols-2 gap-4 text-sm">
-          <div className="sm:col-span-2 flex flex-wrap gap-2">
-            <Badge variant="outline">{printer.status}</Badge>
-            <Badge variant={printer.activeServiceCount > 0 ? "default" : "secondary"}>{printer.activeServiceCount > 0 ? "Disponible" : "Aucun service actif"}</Badge>
-          </div>
-          <div className="flex gap-2"><Mail className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Email</p><p>{printer.email}</p></div></div>
-          <div className="flex gap-2"><Phone className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Téléphone</p><p>{printer.phone || "—"}</p></div></div>
-          <div className="flex gap-2"><MapPin className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Localisation</p><p>{printer.location || "—"}</p></div></div>
-          <div className="flex gap-2"><Calendar className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscription</p><p>{printer.createdAt ? new Date(printer.createdAt).toLocaleDateString("fr-FR") : "—"}</p></div></div>
-          <div className="flex gap-2"><Package className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Services</p><p>{printer.activeServiceCount} actif(s) / {printer.totalServiceCount} au total</p></div></div>
-          <div className="flex gap-2"><ShoppingBag className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Commandes</p><p>{printer.totalOrders}</p></div></div>
-          <div className="flex gap-2"><Wallet className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Revenu (commandes livrées)</p><p>{fmt(printer.revenueCents)}</p></div></div>
-          <div className="flex gap-2"><Star className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{printer.reviewCount > 0 ? `${(printer.rating / 10).toFixed(1)} (${printer.reviewCount} avis)` : "Aucun avis"}</p></div></div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ── Order detail dialog ────────────────────────────────────────────────────────
 
 function OrderDetail({ order, onClose }: { order: PrintOrderWithParties | null; onClose: () => void }) {
@@ -285,7 +254,8 @@ export default function AdminPrintPage() {
   useRealtime();
 
   const [section, setSection] = useState("overview");
-  const [selectedPrinter, setSelectedPrinter] = useState<any | null>(null);
+  const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<PrintOrderWithParties | null>(null);
 
   const [printerSearch, setPrinterSearch] = useState("");
@@ -505,7 +475,7 @@ export default function AdminPrintPage() {
               {printers.map((printer) => (
                 <Card key={printer.userId} className="hover:shadow-md transition-shadow" data-testid={`card-printer-${printer.userId}`}>
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedPrinter(printer)}>
+                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedPrinterId(printer.userId)}>
                       <Avatar><AvatarImage src={getAvatarUrl(printer)} alt={printer.name} /><AvatarFallback className="bg-blue-100 text-blue-700 font-bold">{printer.initials}</AvatarFallback></Avatar>
                       <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{printer.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{printer.location || "—"}</p></div>
                       <span className={`h-2.5 w-2.5 rounded-full mt-1 ${printer.activeServiceCount > 0 ? "bg-green-500" : "bg-gray-300"}`} />
@@ -545,14 +515,14 @@ export default function AdminPrintPage() {
                   <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Service</th><th className="p-3">Imprimeur</th><th className="p-3">Catégorie</th><th className="p-3">Prix</th><th className="p-3">Minimum</th><th className="p-3">Statut</th><th className="p-3 text-right">Action</th></tr></thead>
                   <tbody>
                     {services.map((item) => (
-                      <tr key={item.id} className="border-b last:border-0" data-testid={`row-service-${item.id}`}>
+                      <tr key={item.id} className="border-b last:border-0 cursor-pointer hover:bg-secondary/30" onClick={() => setSelectedServiceId(item.id)} data-testid={`row-service-${item.id}`}>
                         <td className="p-3 font-medium">{item.name}</td>
                         <td className="p-3">{item.printerName}</td>
                         <td className="p-3">{item.category || "—"}</td>
                         <td className="p-3">{fmt(item.priceInCents)} / {item.unit}</td>
                         <td className="p-3">{item.minQuantity}</td>
                         <td className="p-3"><Badge variant={item.isActive ? "default" : "secondary"}>{item.isActive ? "Actif" : "Inactif"}</Badge></td>
-                        <td className="p-3 text-right">
+                        <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
                           <Switch
                             checked={item.isActive}
                             disabled={catalogModeration.isPending}
@@ -745,7 +715,23 @@ export default function AdminPrintPage() {
         </TabsContent>
       </Tabs>
 
-      <PrinterDetail printer={selectedPrinter} onClose={() => setSelectedPrinter(null)} />
+      {/* Same real Company/Service Details Modals used everywhere a printing company/
+          service is shown (Espace Imprimerie's own Aperçu, Coffee Owner's /print) —
+          no separate Admin-only representation, no hardcoded values. */}
+      <PrintCompanyDetailModal
+        printerUserId={selectedPrinterId}
+        open={selectedPrinterId != null}
+        onClose={() => setSelectedPrinterId(null)}
+        onOpenService={(serviceId) => { setSelectedPrinterId(null); setSelectedServiceId(serviceId); }}
+        readOnly
+      />
+      <PrintServiceDetailModal
+        serviceId={selectedServiceId}
+        open={selectedServiceId != null}
+        onClose={() => setSelectedServiceId(null)}
+        onOpenCompany={(printerId) => { setSelectedServiceId(null); setSelectedPrinterId(printerId); }}
+        readOnly
+      />
       <OrderDetail order={selectedOrder} onClose={() => setSelectedOrder(null)} />
     </div>
   );

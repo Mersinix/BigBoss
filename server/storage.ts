@@ -14,6 +14,7 @@ import {
   marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
   marketingServices, type MarketingService, type InsertMarketingService, type MarketingServiceCard,
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport,
+  printerProfiles, type PrinterProfile, type InsertPrinterProfile, type PrintCompanyCard,
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   baristaWorkHistory, baristaReports,
@@ -323,6 +324,7 @@ export interface IStorage {
   deletePrintCatalogItem(id: number, printerId: number): Promise<boolean>;
   getPrintMarketplaceCards(filters?: { search?: string; category?: string; printerId?: number }): Promise<PrintCatalogCard[]>;
   getPrintMarketplaceCard(id: number): Promise<PrintCatalogCard | undefined>;
+  getPrintCatalogItemCard(id: number): Promise<PrintCatalogCard | undefined>;
   getPrintCategories(): Promise<string[]>;
   getPrintOrdersForPrinter(printerId: number): Promise<PrintOrderWithParties[]>;
   getPrintOrdersForOwner(ownerId: number): Promise<PrintOrderWithParties[]>;
@@ -345,6 +347,9 @@ export interface IStorage {
   getPrintReviews(printerId: number): Promise<SupplierProductReview[]>;
   getPrintReviewForOrder(orderId: number, cafeId: number): Promise<SupplierProductReview | undefined>;
   upsertPrintReview(data: { printerId: number; printOrderId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }>;
+  getPrinterProfile(userId: number): Promise<PrinterProfile>;
+  upsertPrinterProfile(userId: number, updates: Partial<InsertPrinterProfile>): Promise<PrinterProfile>;
+  getPrintCompanyCard(userId: number): Promise<PrintCompanyCard | undefined>;
 
   // Barista Marketplace
   getBaristaSkills(activeOnly?: boolean): Promise<BaristaSkill[]>;
@@ -4697,8 +4702,22 @@ export class DatabaseStorage implements IStorage {
 
     const printerIds = Array.from(new Set(rows.map((r) => r.printer.id)));
     const statsMap = await this.computePrintReviewStats(printerIds);
+    // Company-level opt-out (printerProfiles.marketplaceVisible) — a printer with no
+    // profile row yet defaults to visible (see getPrinterProfile's lazy-create), so
+    // only an explicit false here hides its otherwise-active services.
+    const hiddenPrinterIds = printerIds.length
+      ? new Set(
+          (await db.select({ userId: printerProfiles.userId, marketplaceVisible: printerProfiles.marketplaceVisible })
+            .from(printerProfiles)
+            .where(inArray(printerProfiles.userId, printerIds)))
+            .filter((p) => !p.marketplaceVisible)
+            .map((p) => p.userId),
+        )
+      : new Set<number>();
 
-    const cards = rows.map(({ item, printer }) => {
+    const cards = rows
+      .filter(({ printer }) => !hiddenPrinterIds.has(printer.id))
+      .map(({ item, printer }) => {
       const stats = statsMap.get(printer.id);
       return {
         ...item,
@@ -4735,6 +4754,29 @@ export class DatabaseStorage implements IStorage {
         eq(users.role, "PRINTER" as any),
         eq(users.status, "approved"),
       ));
+    if (!row) return undefined;
+    const stats = (await this.computePrintReviewStats([row.printer.id])).get(row.printer.id);
+    return {
+      ...row.item,
+      printerName: row.printer.name,
+      printerPhone: row.printer.phone ?? null,
+      printerImageUrl: row.printer.profileImageUrl ?? null,
+      printerLocation: row.printer.locationAddress ?? "",
+      rating: stats?.rating ?? 0,
+      reviewCount: stats?.reviewCount ?? 0,
+    };
+  }
+
+  /** Unfiltered single-item lookup (no isActive/approved/marketplaceVisible gate) —
+   *  used only for the owning Printer's/Admin's own "Aperçu" preview of a
+   *  draft/inactive service or a service belonging to a currently-hidden company,
+   *  never exposed to a Coffee Owner. See GET /api/print/marketplace/:id's self/admin
+   *  bypass, same pattern as the academy courses self-preview fix. */
+  async getPrintCatalogItemCard(id: number): Promise<PrintCatalogCard | undefined> {
+    const [row] = await db.select({ item: printCatalogItems, printer: users })
+      .from(printCatalogItems)
+      .innerJoin(users, eq(printCatalogItems.printerId, users.id))
+      .where(eq(printCatalogItems.id, id));
     if (!row) return undefined;
     const stats = (await this.computePrintReviewStats([row.printer.id])).get(row.printer.id);
     return {
@@ -5094,8 +5136,77 @@ export class DatabaseStorage implements IStorage {
       rating: data.rating,
       comment: data.comment ?? null,
       cafeName: data.cafeName,
+      cafeOwnerName: data.cafeName,
     } as any).returning();
     return { review: created, isUpdate: false };
+  }
+
+  // ── Printer (company-level) profile — mirrors getAcademyProfile/upsertAcademyProfile
+  // exactly (same lazy-create-on-first-read pattern). Distinct from the catalog CRUD
+  // above: this table only ever stores company-level fields (description/website/
+  // visibility), never touched by service create/update/delete and vice versa. ──
+  async getPrinterProfile(userId: number): Promise<PrinterProfile> {
+    const [profile] = await db.select().from(printerProfiles).where(eq(printerProfiles.userId, userId));
+    if (profile) return profile;
+    const [created] = await db.insert(printerProfiles).values({ userId }).onConflictDoNothing().returning();
+    if (created) return created;
+    const [existing] = await db.select().from(printerProfiles).where(eq(printerProfiles.userId, userId));
+    return existing!;
+  }
+
+  async upsertPrinterProfile(userId: number, updates: Partial<InsertPrinterProfile>): Promise<PrinterProfile> {
+    const current = await this.getPrinterProfile(userId);
+    const [updated] = await db.update(printerProfiles)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(printerProfiles.id, current.id))
+      .returning();
+    return updated;
+  }
+
+  /** Company-level card for the printing company itself — Espace Imprimerie's own
+   *  Business → Profil → Aperçu, the Coffee Owner's Service modal "Imprimerie"
+   *  section, and Admin PRINT's company view all read this SAME derivation (no
+   *  separate/duplicate company representation). `services` reuses the exact
+   *  PrintCatalogCard shape getPrintMarketplaceCards already returns, filtered to
+   *  this printer's active items — one synchronized service list everywhere. */
+  async getPrintCompanyCard(userId: number): Promise<PrintCompanyCard | undefined> {
+    const user = await this.getUser(userId);
+    if (!user || user.role !== 'PRINTER') return undefined;
+    const [profile, items, mapping, stats] = await Promise.all([
+      this.getPrinterProfile(userId),
+      this.getPrintCatalogForPrinter(userId),
+      this.getPrinterCategoryMapping(userId),
+      this.computePrintReviewStats([userId]),
+    ]);
+    // Built directly from this printer's own active items (not the public
+    // getPrintMarketplaceCards, which also gates on printerProfiles.marketplaceVisible) —
+    // the company's own Aperçu must show its real active services even while the
+    // profile itself is temporarily hidden from the marketplace, same reasoning
+    // as getAcademyProfileCard using getAcademyCoursesForAcademy directly.
+    const activeStats = stats.get(userId);
+    const services: PrintCatalogCard[] = items.filter((i) => i.isActive).map((item) => ({
+      ...item,
+      printerName: user.name,
+      printerPhone: user.phone ?? null,
+      printerImageUrl: user.profileImageUrl ?? null,
+      printerLocation: user.locationAddress ?? "",
+      rating: activeStats?.rating ?? 0,
+      reviewCount: activeStats?.reviewCount ?? 0,
+    }));
+    return {
+      userId: user.id,
+      name: user.name,
+      profileImageUrl: user.profileImageUrl ?? null,
+      location: user.locationAddress ?? '',
+      phone: user.phone ?? null,
+      description: profile.description,
+      websiteUrl: profile.websiteUrl ?? null,
+      marketplaceVisible: profile.marketplaceVisible,
+      rating: stats.get(userId)?.rating ?? 0,
+      reviewCount: stats.get(userId)?.reviewCount ?? 0,
+      categories: mapping.categories,
+      services,
+    };
   }
 
   /** Admin moderation — toggle any printer's catalog item, no ownership check.
@@ -5118,6 +5229,10 @@ export class DatabaseStorage implements IStorage {
     const reviewRows = await db.select().from(supplierProductReviews).where(eq(supplierProductReviews.reviewType, "PRINT"));
     const allUsers = await db.select().from(users);
     const userMap = new Map(allUsers.map((u) => [u.id, u]));
+    const profileRows = printerRows.length
+      ? await db.select().from(printerProfiles).where(inArray(printerProfiles.userId, printerRows.map((p) => p.id)))
+      : [];
+    const profileMap = new Map(profileRows.map((p) => [p.userId, p]));
 
     const categoryCounts = new Map<string, number>();
     for (const item of catalogRows) if (item.category.trim()) {
@@ -5137,6 +5252,7 @@ export class DatabaseStorage implements IStorage {
       const orders = orderRows.filter((o) => o.printerId === printer.id);
       const revenueCents = orders.filter((o) => o.status === "DELIVERED").reduce((s, o) => s + o.totalInCents, 0);
       const stats = reviewStats.get(printer.id);
+      const profile = profileMap.get(printer.id);
       return {
         userId: printer.id,
         name: printer.name,
@@ -5146,6 +5262,9 @@ export class DatabaseStorage implements IStorage {
         status: printer.status,
         location: printer.locationAddress ?? "",
         createdAt: printer.createdAt,
+        description: profile?.description ?? "",
+        websiteUrl: profile?.websiteUrl ?? null,
+        marketplaceVisible: profile?.marketplaceVisible ?? true,
         activeServiceCount: items.filter((i) => i.isActive).length,
         totalServiceCount: items.length,
         totalOrders: orders.length,

@@ -62,18 +62,13 @@ import DriverBusiness from "@/pages/driver/business";
 
 // New role dashboards
 import PrinterDashboard from "@/pages/printer/dashboard";
-import PrinterServices from "@/pages/printer/services";
-import PrinterOrders from "@/pages/printer/orders";
-import PrinterCatalog from "@/pages/printer/catalog";
-import PrinterInvoices from "@/pages/printer/invoices";
 import PrinterAnalytics from "@/pages/printer/analytics";
 import PrinterMessages from "@/pages/printer/messages";
 import PrinterReviews from "@/pages/printer/reviews";
-import PrinterCategories from "@/pages/printer/categories";
 import PrinterSettings from "@/pages/printer/settings";
 import PrinterCommunication from "@/pages/printer/communication";
 import PrinterPerformance from "@/pages/printer/performance";
-import PrinterProfilPublic from "@/pages/printer/profil-public";
+import PrinterBusiness from "@/pages/printer/business";
 import MarketingDashboard from "@/pages/marketing/dashboard";
 import MarketingBusiness from "@/pages/marketing/business";
 import MarketingAnalytics from "@/pages/marketing/analytics";
@@ -421,18 +416,21 @@ function Router() {
 
       {/* ── Printer routes — account switcher replaces the generic sidebar for Printer
           (like Driver/Barista Marketplace) — see components/layout/printer-account-shell.tsx. ── */}
-      <Route path="/printer/services">
-        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterServices} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
+      <Route path="/printer">
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterPerformance} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
-      <Route path="/printer/orders">
-        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterOrders} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
+      {/* Business — Services/Commandes/Catalogue/Facturation/Profil/Catégories, now one
+          tab with an internal ?tab= switcher (business.tsx) instead of six separate
+          top-level tabs. Old direct links keep working via redirect, deep-linked to the
+          matching sub-tab. */}
+      <Route path="/printer/business">
+        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterBusiness} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
-      <Route path="/printer/catalog">
-        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterCatalog} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
-      </Route>
-      <Route path="/printer/invoices">
-        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterInvoices} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
-      </Route>
+      <Route path="/printer/services">{() => <Redirect to="/printer/business?tab=services" />}</Route>
+      <Route path="/printer/orders">{() => <Redirect to="/printer/business?tab=orders" />}</Route>
+      <Route path="/printer/catalog">{() => <Redirect to="/printer/business?tab=catalog" />}</Route>
+      <Route path="/printer/invoices">{() => <Redirect to="/printer/business?tab=invoices" />}</Route>
+      <Route path="/printer/categories">{() => <Redirect to="/printer/business?tab=categories" />}</Route>
       <Route path="/printer/analytics">
         {() => (<PrinterAccountShell><ProtectedRoute component={PrinterAnalytics} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
@@ -445,9 +443,6 @@ function Router() {
       <Route path="/printer/reviews">
         {() => (<PrinterAccountShell><ProtectedRoute component={PrinterReviews} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
-      <Route path="/printer/categories">
-        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterCategories} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
-      </Route>
       <Route path="/printer/settings">
         {() => (<PrinterAccountShell><ProtectedRoute component={PrinterSettings} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
@@ -457,12 +452,10 @@ function Router() {
       <Route path="/printer/performance">
         {() => (<PrinterAccountShell><ProtectedRoute component={PrinterPerformance} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
       </Route>
-      <Route path="/printer/profil-public">
-        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterProfilPublic} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
-      </Route>
-      <Route path="/printer">
-        {() => (<PrinterAccountShell><ProtectedRoute component={PrinterPerformance} allowedRoles={["PRINTER"]} requireApproved /></PrinterAccountShell>)}
-      </Route>
+      {/* Old standalone "Profil Public" tab is retired — its role (previewing the real
+          profile the way a Coffee Owner sees it) is now the Eye icon inside
+          Business → Profil, reusing the new PrintCompanyDetailModal. */}
+      <Route path="/printer/profil-public">{() => <Redirect to="/printer/business?tab=profile" />}</Route>
 
       {/* ── Marketing account routes — top switcher shell instead of the sidebar,
           same organizational pattern as Print, see marketing-account-shell.tsx ── */}

@@ -29,7 +29,7 @@ const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_d
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created"];
 const DELIVERY_COMPANY_MARKETPLACE_EVENTS = ["delivery_company_profile_updated", "delivery_company_review_updated", "admin_delivery_company_report_created"];
 const DRIVER_PROFILE_EVENTS = ["driver_profile_updated"];
-const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated", "admin_print_report_created"];
+const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated", "admin_print_report_created", "print_profile_updated"];
 const USER_PROFILE_EVENTS = ["user_profile_updated"];
 const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
 const BARISTA_EVENTS = [
@@ -312,6 +312,7 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/print/orders"] });
             qc.invalidateQueries({ queryKey: ["/api/print/revenue"] });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/print/reviews") });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/print/company" });
             qc.invalidateQueries({ queryKey: ["/api/print/reports/mine"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/print/reports"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/print"] });

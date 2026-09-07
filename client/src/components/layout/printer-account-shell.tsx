@@ -1,27 +1,22 @@
 import {
   Printer as PrinterIcon,
-  ClipboardList,
-  Package,
-  FileText,
-  Layers,
-  Eye,
+  Briefcase,
   MessageSquare,
   TrendingUp,
   Settings,
 } from "lucide-react";
 import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/components/layout/professional-account-shell";
 
-// Standard cross-account structure — Performance first (replaces the former
-// standalone Dashboard tab), then business-specific tabs, Profil Public,
-// Communication, Paramètres.
+// Performance first, then the new "Business" tab (Services/Commandes/
+// Catalogue/Facturation/Profil/Catégories — see business.tsx's internal
+// SubTabSwitcher), Communication, Paramètres. The former separate "Profil
+// Public" tab is gone: its role (a marketplace-style preview) is now the Eye
+// icon inside Business → Profil, reusing PrintCompanyDetailModal — no second
+// preview design. Same reorg pattern as marketing-account-shell.tsx /
+// academy-account-shell.tsx.
 const TABS: ProfessionalAccountTab[] = [
   { path: "/printer", label: "Performance", icon: TrendingUp, exact: true },
-  { path: "/printer/services", label: "Services", icon: PrinterIcon },
-  { path: "/printer/orders", label: "Commandes", icon: ClipboardList },
-  { path: "/printer/catalog", label: "Catalogue", icon: Package },
-  { path: "/printer/invoices", label: "Facturation", icon: FileText },
-  { path: "/printer/categories", label: "Catégories", icon: Layers },
-  { path: "/printer/profil-public", label: "Profil Public", icon: Eye },
+  { path: "/printer/business", label: "Business", icon: Briefcase },
   { path: "/printer/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
   { path: "/printer/settings", label: "Paramètres", icon: Settings },
 ];

@@ -13,12 +13,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
-import { Plus, Pencil, Trash2, Printer, X, Layers } from "lucide-react";
+import { Plus, Pencil, Trash2, Printer, X, Layers, Eye, Clock, Package } from "lucide-react";
 import { Link } from "wouter";
+import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
+import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 type FormState = {
   name: string;
   description: string;
@@ -288,6 +290,8 @@ export default function PrinterServices() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PrintCatalogItem | null>(null);
   const [deleting, setDeleting] = useState<PrintCatalogItem | null>(null);
+  const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
+  const [previewCompanyId, setPreviewCompanyId] = useState<number | null>(null);
 
   const toggleActiveMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
@@ -322,77 +326,84 @@ export default function PrinterServices() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-52 w-full rounded-2xl" />)}</div>
       ) : catalog.length === 0 ? (
         <EmptyState message="Aucun service pour le moment. Ajoutez votre premier service ci-dessus." icon={Printer} />
       ) : (
-        <div className="rounded-2xl border border-border/50 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Service</TableHead>
-                <TableHead>Catégorie</TableHead>
-                <TableHead>Prix</TableHead>
-                <TableHead>Qté min.</TableHead>
-                <TableHead>Délai</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {catalog.map((item) => (
-                <TableRow key={item.id} data-testid={`row-service-${item.id}`}>
-                  <TableCell>
-                    <div className="flex items-center gap-3 min-w-0">
-                      {item.imageUrl ? (
-                        <img src={item.imageUrl} alt={item.name} className="w-9 h-9 rounded-lg object-cover shrink-0 bg-secondary" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Printer className="w-4 h-4 text-primary" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{item.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{item.unit}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {printCategoryIcon(item.category)} {item.category}{item.subCategory ? ` · ${item.subCategory}` : ""}
-                  </TableCell>
-                  <TableCell className="font-semibold text-sm">{fmt(item.priceInCents)}</TableCell>
-                  <TableCell className="text-sm">{item.minQuantity}</TableCell>
-                  <TableCell className="text-sm">{item.productionTimeDays} j</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={item.isActive}
-                        onCheckedChange={(v) => toggleActiveMutation.mutate({ id: item.id, isActive: v })}
-                        aria-label={item.isActive ? "Désactiver" : "Activer"}
-                      />
-                      <Badge variant="outline" className={item.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground"}>
-                        {item.isActive ? "Actif" : "Inactif"}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(item)} data-testid={`button-edit-service-${item.id}`}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleting(item)} data-testid={`button-delete-service-${item.id}`}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {catalog.map((item) => (
+            <Card key={item.id} data-testid={`card-service-${item.id}`}>
+              <CardContent className="p-0 flex flex-col">
+                <button type="button" className="text-left" onClick={() => setPreviewServiceId(item.id)} data-testid={`button-preview-service-${item.id}`}>
+                  <div className="w-full aspect-[16/9] rounded-t-2xl overflow-hidden bg-secondary flex items-center justify-center">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Package className="w-8 h-8 text-muted-foreground" />
+                    )}
+                  </div>
+                </button>
+                <div className="p-4 flex flex-col gap-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <button type="button" className="text-left min-w-0" onClick={() => setPreviewServiceId(item.id)}>
+                      <p className="font-semibold text-sm truncate">{item.name}</p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {printCategoryIcon(item.category)} {item.category}{item.subCategory ? ` · ${item.subCategory}` : ""}
+                      </p>
+                    </button>
+                    <Badge variant="outline" className={`shrink-0 text-[10px] ${item.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground"}`}>
+                      {item.isActive ? "Actif" : "Inactif"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{item.productionTimeDays} j</span>
+                    <span>Min. {item.minQuantity} {item.unit}(s)</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                    <p className="font-bold text-sm text-primary">{fmt(item.priceInCents)}<span className="text-[10px] font-normal text-muted-foreground">/{item.unit}</span></p>
+                    <Switch
+                      checked={item.isActive}
+                      onCheckedChange={(v) => toggleActiveMutation.mutate({ id: item.id, isActive: v })}
+                      aria-label={item.isActive ? "Désactiver" : "Activer"}
+                      data-testid={`switch-service-active-${item.id}`}
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end pt-1">
+                    <Button size="sm" variant="outline" onClick={() => setPreviewServiceId(item.id)} data-testid={`button-preview-service-action-${item.id}`}>
+                      <Eye className="w-3.5 h-3.5 mr-1" />Aperçu
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => openEdit(item)} data-testid={`button-edit-service-${item.id}`}>
+                      <Pencil className="w-3.5 h-3.5 mr-1" />Modifier
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleting(item)} data-testid={`button-delete-service-${item.id}`}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
       <ServiceFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} />
+
+      {/* Aperçu — same real service/company data and design the Coffee Owner sees on
+          /print, read-only here since the printer is previewing its own listing. */}
+      <PrintServiceDetailModal
+        serviceId={previewServiceId}
+        open={previewServiceId != null}
+        onClose={() => setPreviewServiceId(null)}
+        onOpenCompany={(printerId) => setPreviewCompanyId(printerId)}
+        readOnly
+      />
+      <PrintCompanyDetailModal
+        printerUserId={previewCompanyId}
+        open={previewCompanyId != null}
+        onClose={() => setPreviewCompanyId(null)}
+        onOpenService={(serviceId) => setPreviewServiceId(serviceId)}
+        readOnly
+      />
 
       <Dialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
         <DialogContent className="sm:max-w-sm">

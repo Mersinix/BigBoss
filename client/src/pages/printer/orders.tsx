@@ -8,13 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { formatDate } from "@/lib/format";
 import { PRINT_ORDER_STATUS_META, PRINT_ORDER_NEXT_ACTIONS, PRINT_ORDER_STATUSES } from "@/lib/print-order-status";
-import { Search, ClipboardList, Eye, MapPin, Phone, Calendar, User } from "lucide-react";
+import { Search, ClipboardList, Eye, MapPin, Phone, Calendar, User, Package } from "lucide-react";
 
 function StatusBadge({ status }: { status: string }) {
   const meta = PRINT_ORDER_STATUS_META[status as PrintOrderStatus] ?? PRINT_ORDER_STATUS_META.PENDING;
@@ -149,43 +149,35 @@ export default function PrinterOrders() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
       ) : filtered.length === 0 ? (
         <EmptyState message={orders.length === 0 ? "Aucune commande pour le moment." : "Aucune commande ne correspond à ces filtres."} icon={ClipboardList} />
       ) : (
-        <div className="rounded-2xl border border-border/50 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Commande</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Article</TableHead>
-                <TableHead>Qté</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((o) => (
-                <TableRow key={o.id} data-testid={`row-order-${o.id}`}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">#{String(o.id).padStart(5, "0")}</TableCell>
-                  <TableCell className="font-medium text-sm">{o.cafeOwnerName}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{o.itemName}</TableCell>
-                  <TableCell className="text-sm">{o.quantity}</TableCell>
-                  <TableCell className="font-semibold text-sm">{fmt(o.totalInCents)}</TableCell>
-                  <TableCell><StatusBadge status={o.status} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{o.createdAt ? formatDate(o.createdAt as any) : "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setViewing(o)} data-testid={`button-view-order-${o.id}`}>
-                      <Eye className="w-3.5 h-3.5" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((o) => (
+            <Card key={o.id} data-testid={`card-order-${o.id}`}>
+              <CardContent className="p-4 flex flex-col gap-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs text-muted-foreground">#{String(o.id).padStart(5, "0")}</p>
+                    <p className="font-semibold text-sm truncate mt-0.5 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />{o.cafeOwnerName}</p>
+                  </div>
+                  <StatusBadge status={o.status} />
+                </div>
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5"><Package className="w-3.5 h-3.5 shrink-0" />{o.itemName} <span className="text-xs">×{o.quantity}</span></p>
+                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Total</p>
+                    <p className="font-bold text-sm text-primary">{fmt(o.totalInCents)}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />{o.createdAt ? formatDate(o.createdAt as any) : "—"}</p>
+                </div>
+                <Button size="sm" variant="outline" className="self-end" onClick={() => setViewing(o)} data-testid={`button-view-order-${o.id}`}>
+                  <Eye className="w-3.5 h-3.5 mr-1" />Voir
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 

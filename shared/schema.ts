@@ -1565,6 +1565,26 @@ export const printCatalogItems = pgTable("print_catalog_items", {
   printerIdx: index("print_catalog_items_printer_idx").on(table.printerId),
 }));
 
+// Public printer (company-level) profile — one per PRINTER user, mirrors
+// academyProfiles exactly (same minimal shape: users.name/phone/
+// profileImageUrl/locationAddress remain canonical for identity/contact/
+// location, this table only stores fields the generic users table has no
+// place for). Distinct from printCatalogItems (the printer's SERVICES) —
+// editing one must never touch the other (see storage.upsertPrinterProfile /
+// createPrintCatalogItem, which write to separate tables).
+export const printerProfiles = pgTable("printer_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique(),
+  description: text("description").notNull().default(""),
+  websiteUrl: text("website_url"),
+  marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPrinterProfileSchema = createInsertSchema(printerProfiles).omit({ id: true, updatedAt: true });
+export type PrinterProfile = typeof printerProfiles.$inferSelect;
+export type InsertPrinterProfile = typeof printerProfiles.$inferInsert;
+
 // Admin-managed PRINT category taxonomy — mirrors maintenanceCompetencies
 // exactly (id/name/isActive/isFrozen, hard-delete, no referential guard:
 // printCatalogItems.category stays plain text so a deleted/renamed taxonomy
@@ -2185,6 +2205,27 @@ export type PrintCategoryTaxonomy = typeof printCategoryTaxonomy.$inferSelect;
 export type InsertPrintCategoryTaxonomy = z.infer<typeof insertPrintCategoryTaxonomySchema>;
 export type PrintSubCategoryTaxonomy = typeof printSubCategoryTaxonomy.$inferSelect;
 export type InsertPrintSubCategoryTaxonomy = z.infer<typeof insertPrintSubCategoryTaxonomySchema>;
+
+/** Company-level card for the printing company itself (Espace Imprimerie's
+ *  Business → Profil → Aperçu, and everywhere a "printing company" is shown —
+ *  Coffee Owner's Service modal "Imprimerie" section, Admin PRINT). `services`
+ *  reuses the exact PrintCatalogCard shape the marketplace already returns
+ *  (published/active items only) — one synchronized representation, never a
+ *  second copy of service data. */
+export type PrintCompanyCard = {
+  userId: number;
+  name: string;
+  profileImageUrl: string | null;
+  location: string;
+  phone: string | null;
+  description: string;
+  websiteUrl: string | null;
+  marketplaceVisible: boolean;
+  rating: number;
+  reviewCount: number;
+  categories: string[];
+  services: PrintCatalogCard[];
+};
 
 export type Promotion = typeof promotions.$inferSelect;
 export type InsertPromotion = z.infer<typeof insertPromotionSchema>;

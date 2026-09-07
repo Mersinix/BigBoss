@@ -1,0 +1,317 @@
+import { useMemo, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { useFormatCurrency } from "@/hooks/use-currency";
+import { useThemeStore } from "@/store/theme-store";
+import { useQuery } from "@tanstack/react-query";
+import {
+  usePrintCompanyDetail, usePrintReviews, useCreatePrintReview, useReportPrinter, startPrintConversation,
+} from "@/hooks/use-print-marketplace";
+import type { PrintOrderWithParties } from "@shared/schema";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Star, MapPin, Flag, MessageCircle, X, Printer, Package, Globe, Tag,
+} from "lucide-react";
+
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-star-${n}`}>
+          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// PRINT Company Details Modal — the printing COMPANY itself (identity/
+// description/website/categories/real services/reviews), distinct from
+// PrintServiceDetailModal (one item). Opened from Espace Imprimerie's own
+// Business → Profil "Aperçu" (readOnly there), from the Service modal's
+// "Imprimerie" section, and from Admin PRINT's printer card — one synchronized
+// representation everywhere, fed by GET /api/print/company/:userId. Availability
+// is deliberately omitted: the real PRINT model has no availability/opening-hours
+// concept (unlike Barista/Maintenance/Marketing), so nothing is fabricated here.
+export function PrintCompanyDetailModal({
+  printerUserId,
+  open,
+  onClose,
+  onOpenService,
+  readOnly = false,
+}: {
+  printerUserId: number | null;
+  open: boolean;
+  onClose: () => void;
+  // Clicking a service in the "Services" list hands the serviceId back to the caller,
+  // which opens PrintServiceDetailModal — same nested-navigation pattern as
+  // AcademyProfileModal/MarketingDetailModal, kept as a callback so the two modal
+  // files never import each other.
+  onOpenService?: (serviceId: number) => void;
+  readOnly?: boolean;
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const fmt = useFormatCurrency();
+  const [, navigate] = useLocation();
+  const isDark = useThemeStore((s) => s.isDark);
+  const t = {
+    modalBg: isDark ? "bg-gray-900" : "bg-white",
+    textPrimary: isDark ? "text-white" : "text-gray-900",
+    textMuted: isDark ? "text-gray-400" : "text-gray-500",
+    border: isDark ? "border-gray-700/60" : "border-gray-100",
+    sectionBg: isDark ? "bg-gray-800/60" : "bg-gray-50",
+    inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+  };
+  const { data, isLoading } = usePrintCompanyDetail(printerUserId);
+  const card = data?.card;
+  const { data: reviews = [] } = usePrintReviews(printerUserId);
+  const { data: myOrders = [] } = useQuery<PrintOrderWithParties[]>({
+    queryKey: ["/api/print/orders"],
+    enabled: !readOnly && user?.role === "CAFE_OWNER",
+  });
+  const createReview = useCreatePrintReview();
+  const reportPrinter = useReportPrinter();
+
+  const [reviewOrderId, setReviewOrderId] = useState<number | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [messaging, setMessaging] = useState(false);
+
+  const eligibleOrders = useMemo(
+    () => myOrders.filter((o) => card && o.printerId === card.userId && o.status === "DELIVERED"),
+    [myOrders, card]
+  );
+  const myReviewByOrder = useMemo(() => {
+    const map = new Map<number, (typeof reviews)[number]>();
+    for (const r of reviews) if (r.cafeId === user?.id && r.printOrderId != null) map.set(r.printOrderId, r);
+    return map;
+  }, [reviews, user?.id]);
+  const activeOrderId = reviewOrderId ?? eligibleOrders.find((o) => !myReviewByOrder.has(o.id))?.id ?? eligibleOrders[0]?.id ?? null;
+  const existingReview = activeOrderId ? myReviewByOrder.get(activeOrderId) : undefined;
+
+  const handleClose = () => {
+    setReviewOrderId(null);
+    setReportModalOpen(false);
+    setReportReason("");
+    onClose();
+  };
+
+  const handleMessage = async () => {
+    if (!card || readOnly) return;
+    setMessaging(true);
+    try {
+      const res = await startPrintConversation(card.userId);
+      navigate(`/cafe/messages?service=PRINT&conversationId=${res.conversation.id}`);
+      handleClose();
+    } catch (err: any) {
+      toast({ title: "Contact impossible", description: err?.message ?? "Veuillez réessayer.", variant: "destructive" });
+    } finally {
+      setMessaging(false);
+    }
+  };
+
+  const submitReview = () => {
+    if (!card || !activeOrderId || readOnly) return;
+    createReview.mutate(
+      { printerId: card.userId, printOrderId: activeOrderId, rating: reviewRating, comment: reviewComment.trim() || undefined },
+      {
+        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
+        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+      }
+    );
+  };
+
+  const submitReport = () => {
+    if (!card || !reportReason.trim() || readOnly) return;
+    reportPrinter.mutate(
+      { printerId: card.userId, reason: reportReason.trim() },
+      {
+        onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
+        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+      }
+    );
+  };
+
+  return (
+    <>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
+        <VisuallyHidden><DialogTitle>{card?.name ?? "Imprimerie"}</DialogTitle></VisuallyHidden>
+        {isLoading || !card ? (
+          <div className="p-6 space-y-4">
+            <Skeleton className={`h-24 w-full rounded-2xl ${isDark ? "bg-gray-800" : ""}`} />
+            <Skeleton className={`h-40 w-full rounded-2xl ${isDark ? "bg-gray-800" : ""}`} />
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+              <Avatar className="w-full h-full rounded-none">
+                <AvatarImage src={card.profileImageUrl ?? undefined} alt={card.name} className="object-cover" />
+                <AvatarFallback className="rounded-none bg-gradient-to-br from-blue-600 to-cyan-700">
+                  <Printer className="w-16 h-16 text-white" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="absolute top-3 right-3 flex gap-2">
+                <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} data-testid="button-close-print-company-modal">
+                  <X className="w-4 h-4 text-white" />
+                </button>
+              </div>
+              <div className="absolute bottom-3 right-3 flex gap-2">
+                <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-print-company-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+              </div>
+              {!card.marketplaceVisible && (
+                <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm bg-black/50 text-white/80">
+                  Profil masqué
+                </span>
+              )}
+            </div>
+
+            <div className="p-5 sm:p-6 space-y-5">
+              <div>
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <h2 className={`font-bold text-xl leading-tight ${t.textPrimary}`}>{card.name}</h2>
+                  <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>Imprimerie</Badge>
+                </div>
+                {card.description && <p className={`text-sm leading-relaxed mt-1.5 ${t.textMuted}`}>{card.description}</p>}
+                <div className={`flex items-center gap-3 mt-2.5 text-xs flex-wrap ${t.textMuted}`}>
+                  {card.reviewCount > 0 && <span className="flex items-center gap-1 text-amber-500"><Star className="w-3 h-3 fill-amber-400" /> {(card.rating / 10).toFixed(1)} ({card.reviewCount} avis)</span>}
+                  {card.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {card.location}</span>}
+                </div>
+              </div>
+
+              {/* Categories — this printer's own real category selection (Business →
+                  Catégories), the same source Coffee Owner's /print marketplace derives from. */}
+              {card.categories.length > 0 && (
+                <div>
+                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Tag className="w-3.5 h-3.5" /> Catégories</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {card.categories.map((c) => (
+                      <span key={c} className={`text-xs px-2.5 py-1 rounded-full font-medium ${t.sectionBg} ${t.textPrimary}`}>{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Services — real active catalog items, clicking one opens the existing
+                  per-item PrintServiceDetailModal. */}
+              <div>
+                <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Package className="w-3.5 h-3.5" /> Services ({card.services.length})</p>
+                {card.services.length === 0 ? (
+                  <p className={`text-xs ${t.textMuted}`}>Aucun service actif pour le moment.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {card.services.map((service) => (
+                      <button
+                        key={service.id}
+                        type="button"
+                        onClick={() => onOpenService?.(service.id)}
+                        className={`text-left p-3 rounded-xl border transition-colors ${t.border} ${isDark ? "hover:border-blue-600" : "hover:border-blue-300"} ${t.sectionBg}`}
+                        data-testid={`button-print-company-service-${service.id}`}
+                      >
+                        <p className={`text-sm font-medium truncate ${t.textPrimary}`}>{service.name}</p>
+                        <p className={`text-xs mt-1 ${t.textMuted}`}>{service.category}{service.category ? " · " : ""}{fmt(service.priceInCents)}/{service.unit} · Min. {service.minQuantity} · {service.productionTimeDays}j</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {card.websiteUrl && (
+                <div>
+                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Globe className="w-3.5 h-3.5" /> Site web</p>
+                  <a href={card.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline break-all" data-testid="link-print-website">
+                    {card.websiteUrl}
+                  </a>
+                </div>
+              )}
+
+              {/* Reviews — real order-based reviews (one per DELIVERED printOrder), same
+                  data every service card shows. */}
+              <div>
+                <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
+                {reviews.length === 0 ? (
+                  <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p>
+                ) : (
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {reviews.map((r) => (
+                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBg}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
+                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
+                        </div>
+                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!readOnly && eligibleOrders.length > 0 && (
+                  <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
+                    <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
+                    {eligibleOrders.length > 1 && (
+                      <select
+                        className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+                        value={activeOrderId ?? ""}
+                        onChange={(e) => setReviewOrderId(Number(e.target.value))}
+                        data-testid="select-review-order"
+                      >
+                        {eligibleOrders.map((o) => (
+                          <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
+                        ))}
+                      </select>
+                    )}
+                    <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
+                    <Textarea
+                      placeholder="Commentaire (facultatif)"
+                      rows={2}
+                      defaultValue={existingReview?.comment ?? ""}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      className={t.inputBg}
+                      data-testid="input-review-comment"
+                    />
+                    <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-submit-review">
+                      {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={`p-5 sm:p-6 pt-0 flex flex-wrap gap-2 justify-end border-t mt-1 pt-4 ${t.border}`}>
+              <Button variant="outline" size="sm" className={`gap-1.5 ${t.textPrimary} ${isDark ? "border-gray-700" : ""}`} onClick={handleMessage} disabled={messaging} data-testid="button-message-print-company">
+                <MessageCircle className="w-3.5 h-3.5" /> Message
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
+      <DialogContent className={`sm:max-w-md ${t.modalBg}`}>
+        <VisuallyHidden><DialogTitle>Signaler {card?.name ?? ""}</DialogTitle></VisuallyHidden>
+        <div className="space-y-2">
+          <p className={`text-sm font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card?.name}</p>
+          <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
+          <div className="flex gap-2 justify-end pt-1">
+            <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
+            <Button size="sm" variant="destructive" onClick={submitReport} disabled={!reportReason.trim() || reportPrinter.isPending} data-testid="button-submit-report">
+              {reportPrinter.isPending ? "Envoi…" : "Envoyer le signalement"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
+  );
+}

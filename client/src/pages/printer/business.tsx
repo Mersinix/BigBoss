@@ -23,11 +23,11 @@ export default function PrinterBusiness() {
       testIdPrefix="printer-business"
       activeTextClass="text-blue-600 dark:text-blue-400"
       tabs={[
+        { key: "profile", label: "Profil", icon: UserCheck, content: <PrinterProfilePage /> },
         { key: "services", label: "Services", icon: Printer, content: <PrinterServices /> },
         { key: "orders", label: "Commandes", icon: ClipboardList, content: <PrinterOrders /> },
         { key: "catalog", label: "Catalogue", icon: Package, content: <PrinterCatalog /> },
         { key: "invoices", label: "Facturation", icon: FileText, content: <PrinterInvoices /> },
-        { key: "profile", label: "Profil", icon: UserCheck, content: <PrinterProfilePage /> },
         { key: "categories", label: "Catégories", icon: Layers, content: <PrinterCategoriesPage /> },
       ]}
     />

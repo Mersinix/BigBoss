@@ -371,12 +371,26 @@ export function AgentDetailModal({
               Barista Details Modal reference: full-width banner instead of a
               small avatar, favorite/report/close overlaid on the image. */}
           <div className={`relative w-full h-56 sm:h-72 shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-            <Avatar className="w-full h-full rounded-none">
-              <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />
-              <AvatarFallback className="rounded-none bg-gradient-to-br from-orange-500 to-amber-600">
-                <span className="text-white font-bold text-6xl">{agent.initials}</span>
-              </AvatarFallback>
-            </Avatar>
+            {/* Cover (Part 4) — banner background when set, logo demoted to a small
+                corner badge; falls back to the existing full-banner avatar otherwise. */}
+            {agent.coverImageUrl ? (
+              <img src={agent.coverImageUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <Avatar className="w-full h-full rounded-none">
+                <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />
+                <AvatarFallback className="rounded-none bg-gradient-to-br from-orange-500 to-amber-600">
+                  <span className="text-white font-bold text-6xl">{agent.initials}</span>
+                </AvatarFallback>
+              </Avatar>
+            )}
+            {agent.coverImageUrl && (
+              <Avatar className="absolute top-3 left-3 w-11 h-11 rounded-xl border-2 border-white/80 shadow-md">
+                <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />
+                <AvatarFallback className="rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white text-sm font-bold">
+                  {agent.initials}
+                </AvatarFallback>
+              </Avatar>
+            )}
             {/* Top right — Close + Favorite, unchanged position (Part 9/20) */}
             <div className="absolute top-3 right-3 flex gap-2">
               <button onClick={() => { if (!readOnly) toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, skills: agent.skills, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available, profileImageUrl: agent.profileImageUrl }); }} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-white"}`} /></button>

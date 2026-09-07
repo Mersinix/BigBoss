@@ -35,6 +35,7 @@ export type MarketingMarketplaceCard = MarketingProfile & {
   name: string;
   phone: string | null;
   profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   location: string;
   initials: string;
   distanceKm?: number | null;

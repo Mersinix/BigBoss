@@ -17,9 +17,9 @@ export default function BaristaMarketplaceBusiness() {
       testIdPrefix="barista-business"
       activeTextClass="text-green-600 dark:text-green-400"
       tabs={[
+        { key: "profile", label: "Profil", icon: UserCheck, content: <BaristaProfilePage /> },
         { key: "requests", label: "Demandes", icon: Briefcase, content: <BaristaMarketplaceRequestsPage /> },
         { key: "missions", label: "Missions", icon: ClipboardList, content: <BaristaMarketplaceMissionsPage /> },
-        { key: "profile", label: "Profil", icon: UserCheck, content: <BaristaProfilePage /> },
       ]}
     />
   );

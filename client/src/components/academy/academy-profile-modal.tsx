@@ -19,37 +19,38 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen, Calendar,
+  Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen,
 } from "lucide-react";
+import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
+import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 
-function formatSessionDate(d: string): string {
-  const parsed = new Date(d);
-  if (Number.isNaN(parsed.getTime())) return d;
-  return parsed.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-}
-
-// Availability modal — same container/header/scrollbar chrome as the other
-// availability modals (BaristaAvailabilityModal / AcademyAvailabilityModal in
-// academy-detail-modal.tsx), but aggregated across ALL of this Academy's
-// published formations (real academyCourseSessions rows, never fabricated
-// opening hours — an Academy has no weeklyHours concept, same reasoning as
-// the per-course availability modal it mirrors).
+// Availability modal — same container/header/scrollbar/today-highlight chrome as
+// every other synchronized service's availability modal (DeliveryCompanyAvailabilityModal/
+// MaintenanceAvailabilityModal/MarketingAvailabilityModal), fed by the academy's real
+// weekly opening hours (academyProfiles.weeklyHours/isOnVacation, edited in Settings →
+// Disponibilité) — distinct from the per-course session picker (academyCourseSessions),
+// which keeps its own separate availability icon on the per-formation AcademyDetailModal.
 function AcademyProfileAvailabilityModal({
-  open, onClose, academyName, sessions, isDark,
+  open, onClose, academyName, weeklyHours, isDark,
 }: {
   open: boolean;
   onClose: () => void;
   academyName: string;
-  sessions: { id: number; courseTitle: string; startDate: string; endDate: string | null; capacity: number | null }[];
+  weeklyHours: OpeningHoursMap | null;
   isDark: boolean;
 }) {
+  const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+  const todayKey = WEEKLY_DAY_DEFS[todayIndex].key;
   const dk = isDark;
   const bg = dk ? "bg-gray-900" : "bg-white";
   const textPrimary = dk ? "text-white" : "text-gray-900";
   const textMuted = dk ? "text-gray-400" : "text-gray-500";
   const rowBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
+  const rowToday = dk ? "bg-indigo-500/15 border-indigo-500/30" : "bg-indigo-50 border-indigo-200";
+  const timeColor = dk ? "text-gray-300" : "text-gray-700";
+  const closedColor = dk ? "text-red-400" : "text-red-500";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -70,26 +71,35 @@ function AcademyProfileAvailabilityModal({
             <div className={`h-px w-full ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
-            {sessions.length > 0 ? (
+            {weeklyHours ? (
               <div className="space-y-2 pb-2">
-                {sessions.map((session) => (
-                  <div key={session.id} className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${rowBg}`}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Calendar className={`w-3.5 h-3.5 shrink-0 ${textMuted}`} />
-                      <div className="min-w-0">
-                        <p className={`text-[13px] font-medium truncate ${textPrimary}`}>{session.courseTitle}</p>
-                        <p className={`text-[11px] ${textMuted}`}>
-                          {formatSessionDate(session.startDate)}{session.endDate ? ` → ${formatSessionDate(session.endDate)}` : ""}
-                        </p>
+                {WEEKLY_DAY_DEFS.map(({ key, label }) => {
+                  const day = weeklyHours[key];
+                  const isToday = key === todayKey;
+                  return (
+                    <div key={key} className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-indigo-400" : "text-indigo-600") : textPrimary}`}>{label}</span>
+                        {isToday && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-indigo-500/30 text-indigo-300" : "bg-indigo-100 text-indigo-700"}`}>Today</span>
+                        )}
                       </div>
+                      {day?.closed ? (
+                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
+                      ) : day ? (
+                        <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-indigo-300" : "text-indigo-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
+                      ) : (
+                        <span className={`text-[12px] ${textMuted}`}>—</span>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className={`text-center py-12 ${textMuted}`}>
-                <Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                <p className={`text-sm font-medium ${textPrimary}`}>Aucune session programmée</p>
+                <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className={`text-sm font-medium ${textPrimary}`}>Aucun horaire configuré</p>
+                <p className="text-xs mt-1 opacity-50">Cette académie n'a pas encore défini ses disponibilités.</p>
               </div>
             )}
           </div>
@@ -184,12 +194,28 @@ export function AcademyProfileModal({
         ) : (
           <div className="flex flex-col">
             <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-              <Avatar className="w-full h-full rounded-none">
-                <AvatarImage src={getAvatarUrl({ profileImageUrl: card.profileImageUrl })} alt={card.name} className="object-cover" />
-                <AvatarFallback className="rounded-none bg-gradient-to-br from-indigo-600 to-violet-700">
-                  <GraduationCap className="w-16 h-16 text-white" />
-                </AvatarFallback>
-              </Avatar>
+              {/* Cover (Part 4) — when set, shown as the banner background with the
+                  logo/profileImageUrl as a small corner badge instead of filling the
+                  whole banner; falls back to the existing full-banner avatar treatment
+                  when no cover is set, so nothing changes for accounts without one. */}
+              {card.coverImageUrl ? (
+                <img src={card.coverImageUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Avatar className="w-full h-full rounded-none">
+                  <AvatarImage src={getAvatarUrl({ profileImageUrl: card.profileImageUrl })} alt={card.name} className="object-cover" />
+                  <AvatarFallback className="rounded-none bg-gradient-to-br from-indigo-600 to-violet-700">
+                    <GraduationCap className="w-16 h-16 text-white" />
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              {card.coverImageUrl && (
+                <Avatar className="absolute top-3 left-3 w-11 h-11 rounded-xl border-2 border-white/80 shadow-md">
+                  <AvatarImage src={getAvatarUrl({ profileImageUrl: card.profileImageUrl })} alt={card.name} className="object-cover" />
+                  <AvatarFallback className="rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white text-sm font-bold">
+                    {card.name.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div className="absolute top-3 right-3 flex gap-2">
                 <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} data-testid="button-close-academy-profile-modal">
                   <X className="w-4 h-4 text-white" />
@@ -199,9 +225,14 @@ export function AcademyProfileModal({
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-academy-profile-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-academy-profile-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
               </div>
-              {!card.marketplaceVisible && (
+              {!card.marketplaceVisible ? (
                 <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm bg-black/50 text-white/80">
                   Profil masqué
+                </span>
+              ) : (
+                <span className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${!card.isOnVacation ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${!card.isOnVacation ? "bg-white" : "bg-white/60"}`} />
+                  {!card.isOnVacation ? "Disponible" : "Indisponible"}
                 </span>
               )}
             </div>
@@ -297,7 +328,7 @@ export function AcademyProfileModal({
       open={availabilityModalOpen}
       onClose={() => setAvailabilityModalOpen(false)}
       academyName={card?.name ?? ""}
-      sessions={card?.upcomingSessions ?? []}
+      weeklyHours={card?.weeklyHours ?? null}
       isDark={isDark}
     />
     </>

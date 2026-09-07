@@ -18,11 +18,11 @@ export default function AcademyBusiness() {
       testIdPrefix="academy-business"
       activeTextClass="text-indigo-600 dark:text-indigo-400"
       tabs={[
+        { key: "profile", label: "Profil", icon: UserCheck, content: <AcademyProfilePage /> },
         { key: "courses", label: "Formations", icon: BookOpen, content: <AcademyCoursesPage /> },
         { key: "registrations", label: "Inscriptions", icon: ClipboardList, content: <AcademyRegistrationsPage /> },
         { key: "students", label: "Étudiants", icon: Users, content: <AcademyStudentsPage /> },
         { key: "calendar", label: "Calendrier", icon: CalendarDays, content: <AcademyCalendarPage /> },
-        { key: "profile", label: "Profil", icon: UserCheck, content: <AcademyProfilePage /> },
       ]}
     />
   );

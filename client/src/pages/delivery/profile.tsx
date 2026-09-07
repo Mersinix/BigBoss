@@ -14,8 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getAvatarUrl } from "@/lib/avatar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import { Building2, Award, MapPin, XCircle, X, Plus, Calendar, Zap, Eye, AlertCircle } from "lucide-react";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -116,27 +115,25 @@ export default function DeliveryCompanyProfilePage() {
         </Button>
       </div>
 
+      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'entreprise" settingsPath="/delivery/settings" testIdPrefix="delivery-company" />
+
+      {/* Business/operational details — distinct from the read-only identity
+          card above (Part 10: no duplicate "Informations de l'entreprise"). */}
       <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2"><Building2 className="w-4 h-4 text-teal-500" />Informations de l'entreprise</CardTitle>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><Building2 className="w-4 h-4 text-teal-500" />Détails de l'entreprise</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Avatar className="w-16 h-16">
-              <AvatarImage src={getAvatarUrl(user)} alt={user?.name ?? "Entreprise"} />
-              <AvatarFallback className="bg-teal-100 text-teal-700 font-bold text-xl">{(user?.name ?? "E").charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <Label className="text-xs text-gray-500">Type</Label>
-              <Select value={companyType} onValueChange={setCompanyType}>
-                <SelectTrigger className="h-9 rounded-xl mt-0.5" data-testid="select-company-type"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Indépendant">Indépendant</SelectItem>
-                  <SelectItem value="Entreprise">Entreprise</SelectItem>
-                  <SelectItem value="Flotte partenaire">Flotte partenaire</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="max-w-[220px]">
+            <Label className="text-xs text-gray-500">Type</Label>
+            <Select value={companyType} onValueChange={setCompanyType}>
+              <SelectTrigger className="h-9 rounded-xl mt-0.5" data-testid="select-company-type"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Indépendant">Indépendant</SelectItem>
+                <SelectItem value="Entreprise">Entreprise</SelectItem>
+                <SelectItem value="Flotte partenaire">Flotte partenaire</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

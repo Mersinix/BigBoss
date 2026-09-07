@@ -6,21 +6,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
-import { Printer, Globe, Eye, Package } from "lucide-react";
+import { Printer, Globe, Eye, Package, Tag } from "lucide-react";
 import { usePrintCompanyDetail, useUpdatePrinterProfile } from "@/hooks/use-print-marketplace";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
-import type { PrintCatalogItem } from "@shared/schema";
+import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
+import { AccountAvailabilityCard } from "@/components/settings/account-availability-card";
+import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
+import type { PrintCatalogItem, OpeningHoursMap } from "@shared/schema";
 
-// Business → Profil — the printing COMPANY itself (description/website/
-// visibility), distinct from Business → Services (per-service category/price/
-// min-qty/delay/description/image). Editing one must never touch the other —
-// this page only ever writes to PATCH /api/print/profile (printerProfiles),
-// never printCatalogItems. "Services proposés" below is a read-only summary
-// (real active catalog, same /api/print/catalog query Business → Services
-// uses) — manage them there, not here.
+const ACCENT = "bg-blue-600 hover:bg-blue-700 text-white";
+
+// Business → Profil — the printing COMPANY's complete public/business profile
+// (identity summary/description/website/categories/services summary/
+// visibility/availability), distinct from Business → Services (per-service
+// category/price/min-qty/delay/description/image, still managed there —
+// editing one must never touch the other, this page only ever writes to
+// PATCH /api/print/profile / printerProfiles). Single source of truth for
+// this information (Settings/Business-Profil separation task) — Settings no
+// longer duplicates any of it. "Services proposés"/"Catégories approuvées"
+// below are read-only summaries; manage them from Business → Services/
+// Catégories respectively.
 export default function PrinterProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -31,6 +40,8 @@ export default function PrinterProfilePage() {
   const [description, setDescription] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [marketplaceVisible, setMarketplaceVisible] = useState(true);
+  const [isOnVacation, setIsOnVacation] = useState(false);
+  const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([], "08:00", "18:00"));
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
 
@@ -39,6 +50,8 @@ export default function PrinterProfilePage() {
     setDescription(data.profile.description ?? "");
     setWebsiteUrl(data.profile.websiteUrl ?? "");
     setMarketplaceVisible(data.profile.marketplaceVisible);
+    setIsOnVacation(data.profile.isOnVacation ?? false);
+    setWeeklyHours(data.profile.weeklyHours ?? buildWeeklyHoursFallback([], "08:00", "18:00"));
   }, [data?.profile?.updatedAt]);
 
   const saveProfile = () => {
@@ -53,6 +66,19 @@ export default function PrinterProfilePage() {
       { description, websiteUrl: url ?? "", marketplaceVisible },
       {
         onSuccess: () => toast({ title: "Profil mis à jour" }),
+        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
+    setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+  };
+  const saveAvailability = () => {
+    updateProfile.mutate(
+      { isOnVacation, weeklyHours },
+      {
+        onSuccess: () => toast({ title: "Disponibilités sauvegardées" }),
         onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
       },
     );
@@ -76,6 +102,8 @@ export default function PrinterProfilePage() {
         </Button>
       </div>
 
+      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'imprimerie" settingsPath="/printer/settings" testIdPrefix="printer" />
+
       <SectionCard title={`Services proposés (${catalog.length})`} icon={Package}>
         {catalog.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun service créé pour le moment — ajoutez-en depuis Business → Services.</p>
@@ -96,6 +124,15 @@ export default function PrinterProfilePage() {
         )}
         <p className="text-xs text-muted-foreground mt-2">Créer, modifier ou activer un service se fait depuis Business → Services.</p>
       </SectionCard>
+
+      {user?.printCategories && user.printCategories.length > 0 && (
+        <SectionCard title="Catégories approuvées" icon={Tag}>
+          <div className="flex flex-wrap gap-1.5">
+            {user.printCategories.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">Gérées depuis Business → Catégories.</p>
+        </SectionCard>
+      )}
 
       <SectionCard title="Description de l'imprimerie" icon={Printer}>
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Décrivez votre imprimerie, votre équipement, votre expérience…" data-testid="input-company-description" />
@@ -127,6 +164,18 @@ export default function PrinterProfilePage() {
       <Button onClick={saveProfile} disabled={updateProfile.isPending} className="w-full sm:w-fit rounded-2xl" data-testid="button-save-profile">
         {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
       </Button>
+
+      <AccountAvailabilityCard
+        weeklyHours={weeklyHours}
+        onChangeDay={updateDayHours}
+        isOnVacation={isOnVacation}
+        onChangeVacation={setIsOnVacation}
+        onSave={saveAvailability}
+        saving={updateProfile.isPending}
+        vacationDescription="Masque votre imprimerie et stoppe les nouvelles commandes."
+        accentClassName={ACCENT}
+        testIdPrefix="printer"
+      />
 
       <PrintCompanyDetailModal
         printerUserId={user?.id ?? null}

@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   usePrintCompanyDetail, usePrintReviews, useCreatePrintReview, useReportPrinter, startPrintConversation,
 } from "@/hooks/use-print-marketplace";
-import type { PrintOrderWithParties } from "@shared/schema";
+import type { PrintOrderWithParties, OpeningHoursMap } from "@shared/schema";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -17,8 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Flag, MessageCircle, X, Printer, Package, Globe, Tag,
+  Star, MapPin, Flag, MessageCircle, X, Printer, Package, Globe, Tag, Clock,
 } from "lucide-react";
+import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -32,14 +33,94 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
   );
 }
 
+// Availability modal — same container/header/scrollbar/today-highlight chrome as
+// every other synchronized service's availability modal (DeliveryCompanyAvailabilityModal/
+// MaintenanceAvailabilityModal/AcademyProfileAvailabilityModal), fed by the printing
+// company's real weekly opening hours (printerProfiles.weeklyHours/isOnVacation, edited
+// in Settings → Disponibilité).
+function PrintCompanyAvailabilityModal({
+  open, onClose, companyName, weeklyHours, isDark,
+}: {
+  open: boolean;
+  onClose: () => void;
+  companyName: string;
+  weeklyHours: OpeningHoursMap | null;
+  isDark: boolean;
+}) {
+  const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+  const todayKey = WEEKLY_DAY_DEFS[todayIndex].key;
+  const dk = isDark;
+  const bg = dk ? "bg-gray-900" : "bg-white";
+  const textPrimary = dk ? "text-white" : "text-gray-900";
+  const textMuted = dk ? "text-gray-400" : "text-gray-500";
+  const rowBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
+  const rowToday = dk ? "bg-blue-500/15 border-blue-500/30" : "bg-blue-50 border-blue-200";
+  const timeColor = dk ? "text-gray-300" : "text-gray-700";
+  const closedColor = dk ? "text-red-400" : "text-red-500";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+        <VisuallyHidden><DialogTitle>Disponibilité — {companyName}</DialogTitle></VisuallyHidden>
+        <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
+          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={onClose} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
+                <X className="w-4 h-4" />
+              </button>
+              <div className="flex flex-col items-center gap-0.5">
+                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>{companyName}</span>
+                <span className={`text-[11px] font-medium ${textMuted}`}>Disponibilité</span>
+              </div>
+              <div className="w-8 h-8" />
+            </div>
+            <div className={`h-px w-full ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
+            {weeklyHours ? (
+              <div className="space-y-2 pb-2">
+                {WEEKLY_DAY_DEFS.map(({ key, label }) => {
+                  const day = weeklyHours[key];
+                  const isToday = key === todayKey;
+                  return (
+                    <div key={key} className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-blue-400" : "text-blue-600") : textPrimary}`}>{label}</span>
+                        {isToday && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-blue-500/30 text-blue-300" : "bg-blue-100 text-blue-700"}`}>Today</span>
+                        )}
+                      </div>
+                      {day?.closed ? (
+                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
+                      ) : day ? (
+                        <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-blue-300" : "text-blue-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
+                      ) : (
+                        <span className={`text-[12px] ${textMuted}`}>—</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={`text-center py-12 ${textMuted}`}>
+                <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className={`text-sm font-medium ${textPrimary}`}>Aucun horaire configuré</p>
+                <p className="text-xs mt-1 opacity-50">Cette imprimerie n'a pas encore défini ses disponibilités.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // PRINT Company Details Modal — the printing COMPANY itself (identity/
-// description/website/categories/real services/reviews), distinct from
-// PrintServiceDetailModal (one item). Opened from Espace Imprimerie's own
+// description/website/categories/real services/reviews/availability), distinct
+// from PrintServiceDetailModal (one item). Opened from Espace Imprimerie's own
 // Business → Profil "Aperçu" (readOnly there), from the Service modal's
 // "Imprimerie" section, and from Admin PRINT's printer card — one synchronized
-// representation everywhere, fed by GET /api/print/company/:userId. Availability
-// is deliberately omitted: the real PRINT model has no availability/opening-hours
-// concept (unlike Barista/Maintenance/Marketing), so nothing is fabricated here.
+// representation everywhere, fed by GET /api/print/company/:userId.
 export function PrintCompanyDetailModal({
   printerUserId,
   open,
@@ -85,6 +166,7 @@ export function PrintCompanyDetailModal({
   const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
 
   const eligibleOrders = useMemo(
@@ -155,12 +237,26 @@ export function PrintCompanyDetailModal({
         ) : (
           <div className="flex flex-col">
             <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-              <Avatar className="w-full h-full rounded-none">
-                <AvatarImage src={card.profileImageUrl ?? undefined} alt={card.name} className="object-cover" />
-                <AvatarFallback className="rounded-none bg-gradient-to-br from-blue-600 to-cyan-700">
-                  <Printer className="w-16 h-16 text-white" />
-                </AvatarFallback>
-              </Avatar>
+              {/* Cover (Part 4) — banner background when set, logo demoted to a small
+                  corner badge; falls back to the existing full-banner avatar otherwise. */}
+              {card.coverImageUrl ? (
+                <img src={card.coverImageUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Avatar className="w-full h-full rounded-none">
+                  <AvatarImage src={card.profileImageUrl ?? undefined} alt={card.name} className="object-cover" />
+                  <AvatarFallback className="rounded-none bg-gradient-to-br from-blue-600 to-cyan-700">
+                    <Printer className="w-16 h-16 text-white" />
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              {card.coverImageUrl && (
+                <Avatar className="absolute top-3 left-3 w-11 h-11 rounded-xl border-2 border-white/80 shadow-md">
+                  <AvatarImage src={card.profileImageUrl ?? undefined} alt={card.name} className="object-cover" />
+                  <AvatarFallback className="rounded-xl bg-gradient-to-br from-blue-600 to-cyan-700 text-white">
+                    <Printer className="w-5 h-5" />
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div className="absolute top-3 right-3 flex gap-2">
                 <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} data-testid="button-close-print-company-modal">
                   <X className="w-4 h-4 text-white" />
@@ -168,10 +264,16 @@ export function PrintCompanyDetailModal({
               </div>
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-print-company-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-print-company-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
               </div>
-              {!card.marketplaceVisible && (
+              {!card.marketplaceVisible ? (
                 <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm bg-black/50 text-white/80">
                   Profil masqué
+                </span>
+              ) : (
+                <span className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${!card.isOnVacation ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${!card.isOnVacation ? "bg-white" : "bg-white/60"}`} />
+                  {!card.isOnVacation ? "Disponible" : "Indisponible"}
                 </span>
               )}
             </div>
@@ -312,6 +414,14 @@ export function PrintCompanyDetailModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <PrintCompanyAvailabilityModal
+      open={availabilityModalOpen}
+      onClose={() => setAvailabilityModalOpen(false)}
+      companyName={card?.name ?? ""}
+      weeklyHours={card?.weeklyHours ?? null}
+      isDark={isDark}
+    />
     </>
   );
 }

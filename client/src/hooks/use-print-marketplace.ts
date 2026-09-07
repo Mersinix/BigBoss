@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PrintCompanyCard, PrinterProfile, PrintCatalogCard, SupplierProductReview } from "@shared/schema";
+import type { PrintCompanyCard, PrinterProfile, PrintCatalogCard, SupplierProductReview, OpeningHoursMap } from "@shared/schema";
 
 // Small, focused hooks for the PRINT report/blacklist feature only — the rest
 // of Coffee Owner /print (catalog, categories, orders) already reads directly
@@ -72,7 +72,7 @@ export function usePrintCompanyDetail(userId: number | null) {
 export function useUpdatePrinterProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { description?: string; websiteUrl?: string | null; marketplaceVisible?: boolean }) =>
+    mutationFn: (data: { description?: string; websiteUrl?: string | null; marketplaceVisible?: boolean; isOnVacation?: boolean; weeklyHours?: OpeningHoursMap }) =>
       mutate("PATCH", "/api/print/profile", data),
     onSuccess: () => {
       qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/print/company" });

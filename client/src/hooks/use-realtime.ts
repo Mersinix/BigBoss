@@ -255,6 +255,28 @@ export function useRealtime(userId?: number) {
           if (ADMIN_USER_DIRECTORY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/print"] });
+            // admin_user_directory_changed is already broadcast globally (to every
+            // connected client, not just the editor's own tabs) on every
+            // PATCH /api/auth/me/profile and PATCH /api/auth/me/location — reused here
+            // so identity-field edits (Compte's name/photo/cover, Localisation's address
+            // details) reach every already-open Details Modal/marketplace card for OTHER
+            // viewers too, not just the editor's own tabs (Part 14's realtime requirement),
+            // without a second broadcast mechanism.
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (
+              (q.queryKey[0] as string).startsWith("/api/academy/profile") ||
+              (q.queryKey[0] as string).startsWith("/api/marketing/profile") ||
+              (q.queryKey[0] as string).startsWith("/api/maintenance/profile") ||
+              (q.queryKey[0] as string).startsWith("/api/barista/profile") ||
+              (q.queryKey[0] as string).startsWith("/api/delivery-company/profile") ||
+              (q.queryKey[0] as string).startsWith("/api/drivers/") ||
+              (q.queryKey[0] as string).startsWith("/api/print/company") ||
+              (q.queryKey[0] as string).startsWith("/api/print/marketplace") ||
+              (q.queryKey[0] as string).startsWith("/api/marketing/profiles") ||
+              (q.queryKey[0] as string).startsWith("/api/maintenance/profiles") ||
+              (q.queryKey[0] as string).startsWith("/api/academy/profiles") ||
+              (q.queryKey[0] as string).startsWith("/api/barista/profiles") ||
+              (q.queryKey[0] as string).startsWith("/api/delivery-company/profiles")
+            ) });
           }
           if (TAXONOMY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/categories"] });

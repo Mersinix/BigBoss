@@ -21,11 +21,11 @@ export default function MarketingBusiness() {
       testIdPrefix="marketing-business"
       activeTextClass="text-fuchsia-600 dark:text-fuchsia-400"
       tabs={[
+        { key: "profile", label: "Profil", icon: UserCheck, content: <MarketingProfilePage /> },
         { key: "services", label: "Services", icon: Megaphone, content: <MarketingServicesPage /> },
         { key: "projects", label: "Projets", icon: Briefcase, content: <MarketingProjects /> },
         { key: "clients", label: "Clients", icon: Users, content: <MarketingClients /> },
         { key: "invoices", label: "Devis & Factures", icon: FileText, content: <MarketingInvoices /> },
-        { key: "profile", label: "Profil", icon: UserCheck, content: <MarketingProfilePage /> },
       ]}
     />
   );

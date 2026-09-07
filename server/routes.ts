@@ -491,12 +491,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch('/api/auth/me/profile', requireAuth, async (req, res) => {
     try {
-      const { name, phone, isWhatsapp, profileImageUrl, password, currentPassword } = req.body;
-      const updates: { name?: string; phone?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; password?: string } = {};
+      const { name, phone, isWhatsapp, profileImageUrl, coverImageUrl, locationDetails, password, currentPassword } = req.body;
+      const updates: { name?: string; phone?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; coverImageUrl?: string | null; locationDetails?: import("@shared/schema").AddressDetails | null; password?: string } = {};
       if (name !== undefined) updates.name = name;
       if (phone !== undefined) updates.phone = phone;
       if (isWhatsapp !== undefined) updates.isWhatsapp = !!isWhatsapp;
       if (profileImageUrl !== undefined) updates.profileImageUrl = profileImageUrl?.trim() || null;
+      if (coverImageUrl !== undefined) updates.coverImageUrl = coverImageUrl?.trim() || null;
+      // Owner-editable address DETAILS only (street/building/postal code/…) — never
+      // lat/lng/the geocoded address string, which stay exclusively Admin-authoritative
+      // via the existing map-based LocationPickerModal (PATCH /api/auth/me/location,
+      // untouched by this route). See account-address-card.tsx.
+      if (locationDetails !== undefined) updates.locationDetails = locationDetails ?? null;
       if (password) {
         if (!currentPassword) return res.status(400).json({ message: "Current password required" });
         const existing = await storage.getUser(req.session.userId!);
@@ -1552,10 +1558,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
     try {
+      const dayHoursSchema = z.object({ open: z.string(), close: z.string(), closed: z.boolean() });
       const body = z.object({
         description: z.string().max(2000).optional(),
         websiteUrl: z.union([z.string().trim().url(), z.literal("")]).optional().transform((v) => (v === "" ? null : v)),
         marketplaceVisible: z.boolean().optional(),
+        isOnVacation: z.boolean().optional(),
+        weeklyHours: z.object({
+          monday: dayHoursSchema, tuesday: dayHoursSchema, wednesday: dayHoursSchema,
+          thursday: dayHoursSchema, friday: dayHoursSchema, saturday: dayHoursSchema, sunday: dayHoursSchema,
+        }).optional(),
       }).parse(req.body);
       const profile = await storage.upsertPrinterProfile(user.id, body);
       broadcast("print_profile_updated", { printerId: user.id, kind: "profile" });
@@ -2941,9 +2953,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "BARISTA_ACADEMY") return res.status(403).json({ message: "Barista Academy access required" });
     try {
+      const dayHoursSchema = z.object({ open: z.string(), close: z.string(), closed: z.boolean() });
       const body = z.object({
         description: z.string().max(2000).optional(),
         marketplaceVisible: z.boolean().optional(),
+        isOnVacation: z.boolean().optional(),
+        weeklyHours: z.object({
+          monday: dayHoursSchema, tuesday: dayHoursSchema, wednesday: dayHoursSchema,
+          thursday: dayHoursSchema, friday: dayHoursSchema, saturday: dayHoursSchema, sunday: dayHoursSchema,
+        }).optional(),
       }).parse(req.body);
       const profile = await storage.upsertAcademyProfile(user.id, body);
       broadcast("academy_profile_updated", { userId: user.id, kind: "profile" });

@@ -4,20 +4,24 @@ import { useToast } from "@/hooks/use-toast";
 import { useMyAcademyProfile, useUpdateAcademyProfile, useMyAcademyCourses } from "@/hooks/use-barista-academy";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
+import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
+import { AccountAvailabilityCard } from "@/components/settings/account-availability-card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GraduationCap, BookOpen, Eye } from "lucide-react";
+import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
+import type { OpeningHoursMap } from "@shared/schema";
 
-// Business → Profil — the Academy's real public profile (description +
-// marketplace visibility, the only two fields academyProfiles actually has;
-// name/photo/contact/location stay on the shared users table, edited via
-// Account, same convention as settings.tsx). Same query/mutation as
-// settings.tsx's own "Identité publique"/"Visibilité" cards — not a second
-// profile system, just also reachable from here per the new Business
-// structure, with the Eye preview added.
+const ACCENT = "bg-indigo-600 hover:bg-indigo-700 text-white";
+
+// Business → Profil — the Academy's complete public/business profile
+// (identity summary/description/formations summary/visibility/availability).
+// Single source of truth for this information (Settings/Business-Profil
+// separation task) — Settings no longer duplicates any of it, only account
+// management (Compte/Localisation/Notifications/Sécurité) stays there.
 export default function AcademyProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -27,6 +31,8 @@ export default function AcademyProfilePage() {
 
   const [description, setDescription] = useState("");
   const [visible, setVisible] = useState(true);
+  const [isOnVacation, setIsOnVacation] = useState(false);
+  const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([], "09:00", "18:00"));
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCourseId, setPreviewCourseId] = useState<number | null>(null);
 
@@ -34,8 +40,23 @@ export default function AcademyProfilePage() {
     if (data?.profile) {
       setDescription(data.profile.description ?? "");
       setVisible(data.profile.marketplaceVisible);
+      setIsOnVacation(data.profile.isOnVacation ?? false);
+      setWeeklyHours(data.profile.weeklyHours ?? buildWeeklyHoursFallback([], "09:00", "18:00"));
     }
   }, [data?.profile?.updatedAt]);
+
+  const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
+    setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+  };
+  const saveAvailability = () => {
+    updateProfile.mutate(
+      { isOnVacation, weeklyHours },
+      {
+        onSuccess: () => toast({ title: "Disponibilités sauvegardées" }),
+        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+      },
+    );
+  };
 
   const saveDescription = () => {
     updateProfile.mutate(
@@ -79,6 +100,8 @@ export default function AcademyProfilePage() {
         </Button>
       </div>
 
+      <BusinessProfileIdentityCard nameLabel="Nom de l'académie" settingsPath="/barista-academy/settings" testIdPrefix="academy" />
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><GraduationCap className="w-4 h-4 text-indigo-500" />Description</CardTitle>
@@ -116,6 +139,18 @@ export default function AcademyProfilePage() {
           </div>
         </CardContent>
       </Card>
+
+      <AccountAvailabilityCard
+        weeklyHours={weeklyHours}
+        onChangeDay={updateDayHours}
+        isOnVacation={isOnVacation}
+        onChangeVacation={setIsOnVacation}
+        onSave={saveAvailability}
+        saving={updateProfile.isPending}
+        vacationDescription="Masque votre académie et stoppe les nouvelles inscriptions."
+        accentClassName={ACCENT}
+        testIdPrefix="academy"
+      />
 
       <AcademyProfileModal
         academyUserId={user?.id ?? null}

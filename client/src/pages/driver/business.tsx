@@ -18,11 +18,11 @@ export default function DriverBusiness() {
       testIdPrefix="driver-business"
       activeTextClass="text-blue-600 dark:text-blue-400"
       tabs={[
+        { key: "profile", label: "Profil", icon: UserCheck, content: <DriverProfilePage /> },
         { key: "planning", label: "Planification", icon: CalendarClock, content: <DriverPlanningPage /> },
         { key: "deliveries", label: "Livraisons", icon: Truck, content: <DriverDeliveriesPage /> },
         { key: "payments", label: "Paiements", icon: Receipt, content: <DriverPaymentsPage /> },
         { key: "rewards", label: "Récompenses", icon: Award, content: <DriverRewardsPage /> },
-        { key: "profile", label: "Profil", icon: UserCheck, content: <DriverProfilePage /> },
       ]}
     />
   );

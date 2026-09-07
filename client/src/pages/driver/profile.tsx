@@ -11,8 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getAvatarUrl } from "@/lib/avatar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import { User as UserIcon, Award, XCircle, Calendar, Zap, Truck, Eye, AlertCircle } from "lucide-react";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -114,27 +113,14 @@ export default function DriverProfilePage() {
         </Button>
       </div>
 
+      <BusinessProfileIdentityCard nameLabel="Nom complet" settingsPath="/driver/settings" testIdPrefix="driver" />
+
       <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2"><UserIcon className="w-4 h-4 text-blue-500" />Informations</CardTitle>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><UserIcon className="w-4 h-4 text-blue-500" />Biographie</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Avatar className="w-16 h-16">
-              <AvatarImage src={getAvatarUrl(user)} alt={user?.name ?? "Chauffeur"} />
-              <AvatarFallback className="bg-blue-100 text-blue-700 font-bold text-xl">{(user?.name ?? "C").charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="font-semibold text-foreground truncate">{user?.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.phone || "Téléphone non renseigné"}</p>
-              <p className="text-[11px] text-muted-foreground mt-1">Nom, email, téléphone et photo se modifient depuis Paramètres.</p>
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs text-gray-500">Biographie</Label>
-            <Textarea value={bio} onChange={(e) => setBio(e.target.value)} className="rounded-xl mt-0.5 resize-none" rows={3} data-testid="input-bio" />
-          </div>
+        <CardContent>
+          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} className="rounded-xl resize-none" rows={3} data-testid="input-bio" />
         </CardContent>
       </Card>
 

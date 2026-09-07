@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Briefcase, Pencil, Trash2, Calendar, Zap } from "lucide-react";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
+import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<BaristaLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -161,6 +162,8 @@ export default function BaristaProfilePage() {
           <Eye className="w-3.5 h-3.5" /> Aperçu
         </Button>
       </div>
+
+      <BusinessProfileIdentityCard settingsPath="/barista-marketplace/settings" testIdPrefix="barista" />
 
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between">

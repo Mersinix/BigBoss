@@ -13,6 +13,7 @@ import {
 } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
+import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
@@ -109,6 +110,8 @@ export default function MarketingProfilePage() {
           <Eye className="w-3.5 h-3.5" /> Aperçu
         </Button>
       </div>
+
+      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'agence" settingsPath="/marketing-panel/settings" testIdPrefix="marketing" />
 
       <SectionCard title={`Services proposés (${services.length})`} icon={Megaphone}>
         {services.length === 0 ? (

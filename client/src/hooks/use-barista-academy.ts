@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { OpeningHoursMap } from "@shared/schema";
 
 // Mirrors use-barista-marketplace.ts exactly, adapted to Academy semantics:
 // a public course ("formation") catalog each academy manages itself, sessions
@@ -259,8 +260,9 @@ export function useMyAcademyProfile(userId: number | null) {
 }
 
 export type AcademyProfileCard = {
-  userId: number; name: string; profileImageUrl: string | null; location: string; phone: string | null;
-  description: string; marketplaceVisible: boolean; rating: number; reviewCount: number;
+  userId: number; name: string; profileImageUrl: string | null; coverImageUrl?: string | null; location: string; phone: string | null;
+  description: string; marketplaceVisible: boolean; weeklyHours: OpeningHoursMap | null; isOnVacation: boolean;
+  rating: number; reviewCount: number;
   courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
 };
 
@@ -278,7 +280,7 @@ export function useAcademyProfileDetail(userId: number | null) {
 export function useUpdateAcademyProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { description?: string; marketplaceVisible?: boolean }) =>
+    mutationFn: (data: { description?: string; marketplaceVisible?: boolean; isOnVacation?: boolean; weeklyHours?: OpeningHoursMap }) =>
       mutate("PATCH", "/api/academy/profile", data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/academy/profile"] });

@@ -229,12 +229,26 @@ export function DeliveryCompanyDetailModal({
           <div className="flex flex-col">
             {/* Header — large real photo/logo, same treatment as the Barista modal. */}
             <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-              <Avatar className="w-full h-full rounded-none">
-                <AvatarImage src={getAvatarUrl(card as any)} alt={card.name} className="object-cover" />
-                <AvatarFallback className="rounded-none bg-gradient-to-br from-teal-600 to-cyan-700">
-                  <span className="text-white font-bold text-6xl">{card.initials}</span>
-                </AvatarFallback>
-              </Avatar>
+              {/* Cover (Part 4) — banner background when set, logo demoted to a small
+                  corner badge; falls back to the existing full-banner avatar otherwise. */}
+              {card.coverImageUrl ? (
+                <img src={card.coverImageUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Avatar className="w-full h-full rounded-none">
+                  <AvatarImage src={getAvatarUrl(card as any)} alt={card.name} className="object-cover" />
+                  <AvatarFallback className="rounded-none bg-gradient-to-br from-teal-600 to-cyan-700">
+                    <span className="text-white font-bold text-6xl">{card.initials}</span>
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              {card.coverImageUrl && (
+                <Avatar className="absolute top-3 left-3 w-11 h-11 rounded-xl border-2 border-white/80 shadow-md">
+                  <AvatarImage src={getAvatarUrl(card as any)} alt={card.name} className="object-cover" />
+                  <AvatarFallback className="rounded-xl bg-gradient-to-br from-teal-600 to-cyan-700 text-white text-sm font-bold">
+                    {card.initials}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div className="absolute top-3 right-3 flex gap-2">
                 <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} data-testid="button-close-delivery-company-modal">
                   <X className="w-4 h-4 text-white" />

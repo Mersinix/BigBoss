@@ -28,6 +28,7 @@ export type BaristaMarketplaceCard = {
   name: string;
   phone: string | null;
   profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   level: BaristaLevel;
   bio: string;
   skills: string[];

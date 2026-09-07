@@ -18,11 +18,11 @@ export default function DeliveryCompanyBusiness() {
       testIdPrefix="delivery-business"
       activeTextClass="text-teal-600 dark:text-teal-400"
       tabs={[
+        { key: "profile", label: "Profil", icon: UserCheck, content: <DeliveryCompanyProfilePage /> },
         { key: "available", label: "Livraisons disponibles", icon: Package, content: <AvailableDeliveriesPage /> },
         { key: "my-deliveries", label: "Mes livraisons", icon: Truck, content: <MyDeliveriesPage /> },
         { key: "drivers", label: "Chauffeurs", icon: Users, content: <DeliveryCompanyDriversPage /> },
         { key: "vehicles", label: "Véhicules", icon: Truck, content: <DeliveryVehiclesPage /> },
-        { key: "profile", label: "Profil", icon: UserCheck, content: <DeliveryCompanyProfilePage /> },
       ]}
     />
   );

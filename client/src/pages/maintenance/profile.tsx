@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAvatarUrl } from "@/lib/avatar";
+import { Switch } from "@/components/ui/switch";
 import { useThemeStore } from "@/store/theme-store";
 import {
   Select,
@@ -19,10 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { User, Award, Wrench, MapPin, XCircle, X, Eye } from "lucide-react";
+import { Award, Wrench, MapPin, XCircle, X, Eye, Briefcase, Settings as SettingsIcon } from "lucide-react";
 import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import Availability from "@/pages/maintenance/availability";
+import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 
 // ── Profile tab ────────────────────────────────────────────────────────────────
 
@@ -49,14 +49,14 @@ export default function Profile() {
   const maintenanceSpecialties = taxonomy?.competencies.map((item) => item.name) ?? [];
   const coverageAreas = taxonomy?.zones.map((item) => item.name) ?? [];
 
-  // Profile state
-  const [profileName, setProfileName] = useState(user?.name ?? "");
+  // Profile state — business fields only; name/phone/email/photo/cover are
+  // read-only here (see BusinessProfileIdentityCard below), edited exclusively
+  // from Settings → Compte.
   const [jobTitle, setJobTitle] = useState("Technicien de maintenance");
   const [bio, setBio] = useState("");
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [agentType, setAgentType] = useState("Freelance");
-  const [phone, setPhone] = useState(user?.phone ?? "");
   const [dailyRate, setDailyRate] = useState("0");
   const [responseTime, setResponseTime] = useState("< 2h");
   const [certifications, setCertifications] = useState<string[]>([]);
@@ -64,12 +64,11 @@ export default function Profile() {
   const [yearsExperience, setYearsExperience] = useState("0");
   const [certificationDraft, setCertificationDraft] = useState("");
   const [portfolioDraft, setPortfolioDraft] = useState("");
+  const [marketplaceVisible, setMarketplaceVisible] = useState(true);
 
   useEffect(() => {
     if (!profileData) return;
     const p = profileData.profile;
-    setProfileName(profileData.user?.name ?? user?.name ?? "");
-    setPhone(profileData.user?.phone ?? user?.phone ?? "");
     setJobTitle(p.jobTitle);
     setBio(p.description);
     setSelectedSpecialties(p.skills ?? []);
@@ -80,7 +79,22 @@ export default function Profile() {
     setCertifications(p.certifications ?? []);
     setPortfolioImages(p.portfolioImages ?? []);
     setYearsExperience(String(p.yearsExperience ?? 0));
-  }, [profileData, user?.name, user?.phone]);
+    setMarketplaceVisible(p.marketplaceVisible);
+  }, [profileData]);
+
+  const toggleVisible = useMutation({
+    mutationFn: (value: boolean) => apiRequest("PATCH", "/api/maintenance/profile", { marketplaceVisible: value }),
+    onSuccess: (_data, value) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profiles"] });
+      toast({ title: value ? "Profil visible sur la marketplace" : "Profil masqué de la marketplace" });
+    },
+    onError: (error: Error, value) => { setMarketplaceVisible(!value); toast({ title: "Erreur", description: error.message, variant: "destructive" }); },
+  });
+  const handleToggleVisible = (value: boolean) => {
+    setMarketplaceVisible(value);
+    toggleVisible.mutate(value);
+  };
 
   const saveProfile = useMutation({
     mutationFn: () => apiRequest("PATCH", "/api/maintenance/profile", {
@@ -91,10 +105,7 @@ export default function Profile() {
       certifications, portfolioImages,
       yearsExperience: Math.max(0, parseInt(yearsExperience, 10) || 0),
     }),
-    onSuccess: async () => {
-      if (profileName !== user?.name || phone !== user?.phone) {
-        await apiRequest("PATCH", "/api/auth/me/profile", { name: profileName, phone });
-      }
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] });
       toast({ title: "Profil sauvegardé" });
     },
@@ -120,46 +131,29 @@ export default function Profile() {
         </Button>
       </div>
 
-      {/* Basic info */}
+      <BusinessProfileIdentityCard nameLabel="Nom / Structure" settingsPath="/maintenance-panel/settings" testIdPrefix="maintenance" />
+
+      {/* Business/professional details — distinct from the read-only identity
+          card above (Part 10: no duplicate "Informations personnelles"). */}
       <Card className="rounded-2xl border-gray-100 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2"><User className="w-4 h-4 text-orange-500" />Informations personnelles</CardTitle>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><Briefcase className="w-4 h-4 text-orange-500" />Détails professionnels</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center gap-4">
-            <Avatar className="w-16 h-16">
-              <AvatarImage src={getAvatarUrl(user)} alt={profileName || "Maintenance"} />
-              <AvatarFallback className="bg-orange-100 text-orange-700 font-bold text-xl">
-                {profileName.charAt(0)?.toUpperCase() ?? "M"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 space-y-2">
-              <div>
-                <Label className="text-xs text-gray-500">Nom / Structure</Label>
-                <Input value={profileName} onChange={(e) => setProfileName(e.target.value)} className="h-9 rounded-xl mt-0.5" />
-              </div>
-              <div>
-                <Label className="text-xs text-gray-500">Titre du poste</Label>
-                <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="h-9 rounded-xl mt-0.5" />
-              </div>
-            </div>
+          <div>
+            <Label className="text-xs text-gray-500">Titre du poste</Label>
+            <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="h-9 rounded-xl mt-0.5" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-gray-500">Téléphone</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="h-9 rounded-xl mt-0.5" placeholder="+216..." />
-            </div>
-            <div>
-              <Label className="text-xs text-gray-500">Type</Label>
-              <Select value={agentType} onValueChange={setAgentType}>
-                <SelectTrigger className="h-9 rounded-xl mt-0.5"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Freelance">Freelance</SelectItem>
-                  <SelectItem value="Company">Entreprise</SelectItem>
-                  <SelectItem value="Agency">Agence</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="max-w-[220px]">
+            <Label className="text-xs text-gray-500">Type</Label>
+            <Select value={agentType} onValueChange={setAgentType}>
+              <SelectTrigger className="h-9 rounded-xl mt-0.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Freelance">Freelance</SelectItem>
+                <SelectItem value="Company">Entreprise</SelectItem>
+                <SelectItem value="Agency">Agence</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -307,6 +301,21 @@ export default function Profile() {
                 {a}
               </button>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-gray-100 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><SettingsIcon className="w-4 h-4 text-orange-500" />Visibilité</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Afficher mon profil sur la marketplace</p>
+              <p className="text-xs text-gray-500 mt-0.5">Lorsque désactivé, les cafés ne peuvent plus vous trouver ni réserver.</p>
+            </div>
+            <Switch checked={marketplaceVisible} onCheckedChange={handleToggleVisible} disabled={toggleVisible.isPending} data-testid="switch-profile-visible" />
           </div>
         </CardContent>
       </Card>

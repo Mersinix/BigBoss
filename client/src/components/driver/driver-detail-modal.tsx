@@ -153,12 +153,27 @@ export function DriverDetailModal({
         ) : (
           <div className="flex flex-col">
             <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-              <Avatar className="w-full h-full rounded-none">
-                <AvatarImage src={getAvatarUrl(driver as any)} alt={driver.name} className="object-cover" />
-                <AvatarFallback className="rounded-none bg-gradient-to-br from-blue-600 to-indigo-700">
-                  <span className="text-white font-bold text-6xl">{driver.name.charAt(0).toUpperCase()}</span>
-                </AvatarFallback>
-              </Avatar>
+              {/* Cover (Part 4) — banner background when set, logo demoted to a small
+                  corner badge; falls back to the existing full-banner avatar otherwise.
+                  driver is the raw User row, so driver.coverImageUrl is already live. */}
+              {(driver as any).coverImageUrl ? (
+                <img src={(driver as any).coverImageUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Avatar className="w-full h-full rounded-none">
+                  <AvatarImage src={getAvatarUrl(driver as any)} alt={driver.name} className="object-cover" />
+                  <AvatarFallback className="rounded-none bg-gradient-to-br from-blue-600 to-indigo-700">
+                    <span className="text-white font-bold text-6xl">{driver.name.charAt(0).toUpperCase()}</span>
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              {(driver as any).coverImageUrl && (
+                <Avatar className="absolute top-3 left-3 w-11 h-11 rounded-xl border-2 border-white/80 shadow-md">
+                  <AvatarImage src={getAvatarUrl(driver as any)} alt={driver.name} className="object-cover" />
+                  <AvatarFallback className="rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white text-sm font-bold">
+                    {driver.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div className="absolute top-3 right-3 flex gap-2">
                 <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={onClose} data-testid="button-close-driver-modal">
                   <X className="w-4 h-4 text-white" />

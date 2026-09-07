@@ -61,7 +61,7 @@ import {
   type CreatePackOrderItem, type ResolvedPackOrderItem,
   type InventoryItem, type InventoryVariantItem, type InventoryListResult, type InventoryStats, type InventoryFilters, type InventorySort, type InventoryAdjustmentWithVariant,
   type InventoryAdjustment, type StockStatus,
-  type MaintenanceProfile, type InsertMaintenanceProfile, type MaintenanceMarketplaceCard,
+  type MaintenanceProfile, type InsertMaintenanceProfile, type MaintenanceMarketplaceCard, type OpeningHoursMap,
   type MaintenanceReservation, type InsertMaintenanceReservation,
   type MaintenanceCompetency, type MaintenanceZone,
   type PrintCatalogItem, type InsertPrintCatalogItem, type PrintCatalogCard,
@@ -554,7 +554,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async updateUserProfile(id: number, updates: { name?: string; phone?: string; email?: string; password?: string; isWhatsapp?: boolean; profileImageUrl?: string | null }) {
+  async updateUserProfile(id: number, updates: { name?: string; phone?: string; email?: string; password?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; coverImageUrl?: string | null; locationDetails?: import("@shared/schema").AddressDetails | null }) {
     const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
     return updated;
   }
@@ -3290,6 +3290,7 @@ export class DatabaseStorage implements IStorage {
       name: row.user.name,
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
+      coverImageUrl: row.user.coverImageUrl ?? null,
       location: row.user.locationAddress ?? row.profile.coverageArea ?? "",
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       available: row.profile.isAvailable && !row.profile.isOnVacation,
@@ -3852,6 +3853,7 @@ export class DatabaseStorage implements IStorage {
       name: row.user.name,
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
+      coverImageUrl: row.user.coverImageUrl ?? null,
       location: row.user.locationAddress ?? row.profile.deliveryZones ?? "",
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       available: !row.profile.isOnVacation,
@@ -4079,6 +4081,7 @@ export class DatabaseStorage implements IStorage {
       name: row.user.name,
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
+      coverImageUrl: row.user.coverImageUrl ?? null,
       location: row.user.locationAddress ?? "",
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       distanceKm,
@@ -5197,11 +5200,14 @@ export class DatabaseStorage implements IStorage {
       userId: user.id,
       name: user.name,
       profileImageUrl: user.profileImageUrl ?? null,
+      coverImageUrl: user.coverImageUrl ?? null,
       location: user.locationAddress ?? '',
       phone: user.phone ?? null,
       description: profile.description,
       websiteUrl: profile.websiteUrl ?? null,
       marketplaceVisible: profile.marketplaceVisible,
+      weeklyHours: profile.weeklyHours ?? null,
+      isOnVacation: profile.isOnVacation,
       rating: stats.get(userId)?.rating ?? 0,
       reviewCount: stats.get(userId)?.reviewCount ?? 0,
       categories: mapping.categories,
@@ -5571,6 +5577,7 @@ export class DatabaseStorage implements IStorage {
       name: row.user.name,
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
+      coverImageUrl: row.user.coverImageUrl ?? null,
       initials: row.user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
       location: row.user.locationAddress ?? row.profile.city ?? "",
       available: row.profile.isAvailable && !row.profile.isOnVacation,
@@ -6297,8 +6304,9 @@ export class DatabaseStorage implements IStorage {
    *  duplicate profile: built from the exact same academyProfiles/users/academyCourses/
    *  academyCourseSessions/supplierProductReviews rows every other Academy surface reads. */
   async getAcademyProfileCard(userId: number): Promise<{
-    userId: number; name: string; profileImageUrl: string | null; location: string; phone: string | null;
-    description: string; marketplaceVisible: boolean; rating: number; reviewCount: number;
+    userId: number; name: string; profileImageUrl: string | null; coverImageUrl: string | null; location: string; phone: string | null;
+    description: string; marketplaceVisible: boolean; weeklyHours: OpeningHoursMap | null; isOnVacation: boolean;
+    rating: number; reviewCount: number;
     courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
   } | undefined> {
     const user = await this.getUser(userId);
@@ -6327,10 +6335,13 @@ export class DatabaseStorage implements IStorage {
       userId: user.id,
       name: user.name,
       profileImageUrl: user.profileImageUrl ?? null,
+      coverImageUrl: user.coverImageUrl ?? null,
       location: user.locationAddress ?? '',
       phone: user.phone ?? null,
       description: profile.description,
       marketplaceVisible: profile.marketplaceVisible,
+      weeklyHours: profile.weeklyHours ?? null,
+      isOnVacation: profile.isOnVacation,
       rating: stats.get(userId)?.rating ?? 0,
       reviewCount: stats.get(userId)?.reviewCount ?? 0,
       courses,

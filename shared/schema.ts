@@ -53,6 +53,11 @@ export const users = pgTable("users", {
   phone: text("phone"),
   isWhatsapp: boolean("is_whatsapp").default(false),
   profileImageUrl: text("profile_image_url"),
+  // Cover/banner image — distinct from profileImageUrl (the logo/avatar). Lives on
+  // `users` (not duplicated per profile table) so every professional account's
+  // Settings → Compte section and every Details Modal read/write the exact same
+  // generic PATCH /api/auth/me/profile field, same convention as profileImageUrl.
+  coverImageUrl: text("cover_image_url"),
   billingInfo: jsonb("billing_info"),
   governorates: text("governorates").array(),
   categories: text("categories").array(),
@@ -955,6 +960,7 @@ export type BaristaMarketplaceCard = BaristaMarketplaceProfile & {
   name: string;
   phone: string | null;
   profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   initials: string;
   location: string;
   available: boolean;
@@ -1002,6 +1008,14 @@ export const academyProfiles = pgTable("academy_profiles", {
   userId: integer("user_id").notNull().unique(),
   description: text("description").notNull().default(""),
   marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  // Institution-level weekly opening hours — same { monday: {open, close, closed}, ... }
+  // shape as maintenanceProfiles.weeklyHours/marketingProfiles.weeklyHours (see
+  // OpeningHoursMap below), reused rather than inventing a parallel type. Distinct from
+  // academyCourseSessions (which schedule real course RUNS) — this is the academy's own
+  // general "open for business" hours, same concept every other synchronized service
+  // account already exposes in Settings → Disponibilité. Nullable: no schedule set yet.
+  weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
+  isOnVacation: boolean("is_on_vacation").notNull().default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1504,6 +1518,7 @@ export type MarketingMarketplaceCard = MarketingProfile & {
   name: string;
   phone: string | null;
   profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   location: string;
   initials: string;
   distanceKm?: number | null;
@@ -1578,6 +1593,12 @@ export const printerProfiles = pgTable("printer_profiles", {
   description: text("description").notNull().default(""),
   websiteUrl: text("website_url"),
   marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
+  // Company-level weekly opening hours — same { monday: {open, close, closed}, ... }
+  // shape as maintenanceProfiles.weeklyHours/marketingProfiles.weeklyHours (see
+  // OpeningHoursMap below), reused rather than inventing a parallel type. Nullable: no
+  // schedule set yet.
+  weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
+  isOnVacation: boolean("is_on_vacation").notNull().default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -2090,6 +2111,7 @@ export type MaintenanceMarketplaceCard = MaintenanceProfile & {
   name: string;
   phone: string | null;
   profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   location: string;
   initials: string;
   available: boolean;
@@ -2145,6 +2167,7 @@ export type DeliveryCompanyMarketplaceCard = DeliveryCompanyProfile & {
   name: string;
   phone: string | null;
   profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   location: string;
   initials: string;
   available: boolean;
@@ -2216,11 +2239,14 @@ export type PrintCompanyCard = {
   userId: number;
   name: string;
   profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   location: string;
   phone: string | null;
   description: string;
   websiteUrl: string | null;
   marketplaceVisible: boolean;
+  weeklyHours: OpeningHoursMap | null;
+  isOnVacation: boolean;
   rating: number;
   reviewCount: number;
   categories: string[];

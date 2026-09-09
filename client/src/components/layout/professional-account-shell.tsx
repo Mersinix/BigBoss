@@ -75,10 +75,13 @@ export function ProfessionalAccountShell({
   useRealtime(user?.id);
 
   const { settings: darkModeSettings } = useAccountDarkModeSettings();
-  const darkModeAllowed = darkModeSettings[accountKey] ?? true;
+  const themeMode = darkModeSettings[accountKey] ?? "BOTH";
+  const toggleAllowed = themeMode === "BOTH";
   const isDark = useAccountThemeStore((s) => s.isDark);
   const toggleDark = useAccountThemeStore((s) => s.toggle);
-  const effectiveDark = darkModeAllowed && isDark;
+  // Admin's forced mode always wins; the owner's own stored preference only
+  // applies under BOTH (see useEffectiveAccountDarkMode's identical rule).
+  const effectiveDark = themeMode === "DARK_ONLY" ? true : themeMode === "LIGHT_ONLY" ? false : isDark;
   const setCoffeeOwnerThemeIsDark = useThemeStore((s) => s.setIsDark);
 
   // Activates every dark: Tailwind utility already present in this shell and
@@ -146,7 +149,7 @@ export function ProfessionalAccountShell({
               notificationViewAllPath={`${communicationPath}?tab=notifications`}
               accentLinkTextClass={activeTextClass}
             />
-            {darkModeAllowed && (
+            {toggleAllowed && (
               <button
                 onClick={() => toggleDark()}
                 aria-label="Changer de thème"

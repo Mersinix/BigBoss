@@ -4,9 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
-import { FileText, DollarSign, Clock, Search } from "lucide-react";
+import { FileText, DollarSign, Clock, Search, Briefcase } from "lucide-react";
 import { useMarketingProjects } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
 
@@ -93,35 +92,30 @@ export default function MarketingInvoices() {
       ) : rows.length === 0 ? (
         <EmptyState message="Aucun élément pour cette vue." icon={FileText} />
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Montant</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((p) => {
-                  const meta = MARKETING_PROJECT_STATUS_META[p.status];
-                  return (
-                    <TableRow key={p.id} data-testid={`row-invoice-${p.id}`}>
-                      <TableCell className="font-medium text-sm">{p.cafeOwner}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{p.service}</TableCell>
-                      <TableCell className="font-semibold text-sm">{fmt(p.finalAmountInCents ?? p.quoteAmountInCents ?? 0)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{new Date(p.updatedAt).toLocaleDateString("fr-FR")}</TableCell>
-                      <TableCell><Badge variant="secondary" className={meta.className}>{meta.label}</Badge></TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <div className="space-y-3">
+          {rows.map((p) => {
+            const meta = MARKETING_PROJECT_STATUS_META[p.status];
+            return (
+              <Card key={p.id} data-testid={`card-invoice-${p.id}`}>
+                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm truncate">{p.cafeOwner}</span>
+                      <Badge variant="secondary" className={meta.className}>{meta.label}</Badge>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Briefcase className="w-3.5 h-3.5 shrink-0" /> {p.service}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{new Date(p.updatedAt).toLocaleDateString("fr-FR")}</p>
+                  </div>
+                  <div className="shrink-0">
+                    <span className="font-semibold text-base">{fmt(p.finalAmountInCents ?? p.quoteAmountInCents ?? 0)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
     </div>
   );

@@ -4,8 +4,9 @@ import { useBaristaRequests, useBaristaMissions, useBaristaReviews, type Barista
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Briefcase, Star, Clock, TrendingUp } from "lucide-react";
+import { Users, Briefcase, Star, Clock, TrendingUp, Coffee } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_LABELS: Record<BaristaRequestStatus, string> = {
   PENDING: "En attente",
@@ -64,10 +65,16 @@ export default function BaristaMarketplaceDashboard() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Tableau de bord Marketplace Barista</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Bienvenue, {user?.name}. Gérez vos offres et demandes.</p>
-      </div>
+      <DashboardHero
+        title="Tableau de bord Marketplace Barista"
+        subtitle={`Bienvenue, ${user?.name}. Gérez vos offres et demandes.`}
+        stat={reviews.length > 0 ? avgRating : undefined}
+        statLabel="Note moyenne"
+        icon={Coffee}
+        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+        iconBgClass="bg-green-500/15"
+        iconTextClass="text-green-600 dark:text-green-400"
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

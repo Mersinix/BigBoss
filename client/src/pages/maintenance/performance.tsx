@@ -1,14 +1,14 @@
 import { LayoutDashboard, BarChart2, DollarSign } from "lucide-react";
 import { SubTabSwitcher } from "@/components/account/sub-tab-switcher";
-import { PerformanceEmptyState } from "@/components/account/performance-empty-state";
 import MaintenanceDashboardOverview from "@/pages/maintenance/dashboard-overview";
+import MaintenanceAnalyticsPage from "@/pages/maintenance/analytics";
+import MaintenanceRevenuePage from "@/pages/maintenance/revenue";
 
-// Performance tab — Dashboard / Analytics / Revenue. Dashboard is now a real,
-// dedicated overview (reservation KPIs, next intervention, recent activity —
-// all from the same live endpoints Planning/Profil already use), separate
-// from Planning (which stays its own unchanged tab, never reused as a stand-in
-// dashboard). Maintenance has no separate Analytics/Revenue data source yet,
-// so those sub-tabs show a real empty state rather than fabricated numbers.
+// Performance tab — Dashboard / Analytics / Revenue. All 3 are now real,
+// dedicated pages built from the same live endpoints Planning/Profil/Avis
+// already use (GET /api/maintenance/reservations, /api/maintenance/reviews/:userId,
+// /api/maintenance/revenue) — no mock data. Planning stays its own
+// unchanged tab, never reused as a stand-in dashboard.
 export default function MaintenancePerformance() {
   return (
     <SubTabSwitcher
@@ -16,14 +16,8 @@ export default function MaintenancePerformance() {
       activeTextClass="text-orange-600 dark:text-orange-400"
       tabs={[
         { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <MaintenanceDashboardOverview /> },
-        {
-          key: "analytics", label: "Analyses", icon: BarChart2,
-          content: <PerformanceEmptyState message="Les statistiques détaillées ne sont pas encore disponibles pour ce compte." />,
-        },
-        {
-          key: "revenue", label: "Revenus", icon: DollarSign,
-          content: <PerformanceEmptyState icon={DollarSign} message="Le suivi des revenus n'est pas encore disponible pour ce compte." />,
-        },
+        { key: "analytics", label: "Analyses", icon: BarChart2, content: <MaintenanceAnalyticsPage /> },
+        { key: "revenue", label: "Revenus", icon: DollarSign, content: <MaintenanceRevenuePage /> },
       ]}
     />
   );

@@ -1,21 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAccountThemeStore } from "@/store/account-theme-store";
 
-// Admin-controlled visibility of the dark/light mode toggle inside each of
-// the 7 non-Coffee-Owner service accounts' navbar — mirrors use-hero-actions.ts
-// exactly (same query/default pattern). Defaults to enabled for every account
-// so a load failure never hides a toggle that should be there.
+// Admin-controlled theme POLICY for each of the 7 non-Coffee-Owner service
+// accounts' navbar — mirrors use-hero-actions.ts exactly (same query/default
+// pattern). Three states, not a boolean: BOTH (owner picks, toggle visible),
+// DARK_ONLY (forced dark, no toggle), LIGHT_ONLY (forced light, no toggle).
+// Defaults to BOTH for every account so a load failure never restricts a
+// mode that should be available.
 export type DarkModeAccount = "BARISTA_ACADEMY" | "BARISTA_MARKETPLACE" | "DELIVERY_COMPANY" | "DRIVER" | "PRINTER" | "MAINTENANCE" | "MARKETING";
-export type AccountDarkModeSettingsMap = Record<DarkModeAccount, boolean>;
+export type AccountThemeMode = "BOTH" | "DARK_ONLY" | "LIGHT_ONLY";
+export type AccountDarkModeSettingsMap = Record<DarkModeAccount, AccountThemeMode>;
 
 const DEFAULT_ACCOUNT_DARK_MODE: AccountDarkModeSettingsMap = {
-  BARISTA_ACADEMY: true,
-  BARISTA_MARKETPLACE: true,
-  DELIVERY_COMPANY: true,
-  DRIVER: true,
-  PRINTER: true,
-  MAINTENANCE: true,
-  MARKETING: true,
+  BARISTA_ACADEMY: "BOTH",
+  BARISTA_MARKETPLACE: "BOTH",
+  DELIVERY_COMPANY: "BOTH",
+  DRIVER: "BOTH",
+  PRINTER: "BOTH",
+  MAINTENANCE: "BOTH",
+  MARKETING: "BOTH",
 };
 
 export function useAccountDarkModeSettings() {
@@ -25,15 +28,19 @@ export function useAccountDarkModeSettings() {
   return { settings: data ?? DEFAULT_ACCOUNT_DARK_MODE, isLoading };
 }
 
-// Convenience for any component below ProfessionalAccountShell that needs
-// the account's actual current dark/light state (e.g. to pass isDark into
-// AddressDetailsFields, which uses literal Tailwind colors rather than the
-// dark: variant): same "admin allowed AND user toggled on" gate the shell
-// itself uses for the "dark" class, so a component never renders dark when
-// admin has hidden the toggle for this account (even if the store's raw
-// isDark happens to be true).
+// Resolves an account's actual current rendering theme: the admin policy
+// wins whenever it forces a single mode (DARK_ONLY/LIGHT_ONLY); only under
+// BOTH does the owner's own stored preference (useAccountThemeStore, default
+// dark) apply. Any component below ProfessionalAccountShell that needs the
+// effective isDark (e.g. to pass into AddressDetailsFields, which uses
+// literal Tailwind colors rather than the dark: variant) should use this
+// instead of reading useAccountThemeStore directly, so it can never render
+// out of step with an admin-forced mode.
 export function useEffectiveAccountDarkMode(accountKey: DarkModeAccount): boolean {
   const { settings } = useAccountDarkModeSettings();
   const isDark = useAccountThemeStore((s) => s.isDark);
-  return (settings[accountKey] ?? true) && isDark;
+  const mode = settings[accountKey] ?? "BOTH";
+  if (mode === "DARK_ONLY") return true;
+  if (mode === "LIGHT_ONLY") return false;
+  return isDark;
 }

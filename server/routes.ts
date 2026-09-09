@@ -394,8 +394,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const account = req.params.account as string;
       const VALID_ACCOUNTS = ['BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING'];
       if (!VALID_ACCOUNTS.includes(account)) return res.status(400).json({ message: "Invalid account" });
-      const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
-      const settings = await storage.setAccountDarkModeSetting(account as any, enabled);
+      const { mode } = z.object({ mode: z.enum(['BOTH', 'DARK_ONLY', 'LIGHT_ONLY']) }).parse(req.body);
+      const settings = await storage.setAccountDarkModeSetting(account as any, mode);
       broadcast("account_dark_mode_settings_updated", settings);
       res.json(settings);
     } catch (err) {
@@ -675,6 +675,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (user.role === "MAINTENANCE") return res.json(await storage.getMaintenanceReservationsForProvider(user.id));
     if (user.role === "CAFE_OWNER") return res.json(await storage.getMaintenanceReservationsForOwner(user.id));
     return res.status(403).json({ message: "Forbidden" });
+  });
+
+  app.get("/api/maintenance/revenue", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    try { res.json(await storage.getMaintenanceRevenueSummary(user.id)); }
+    catch { res.status(500).json({ message: "Failed to load revenue" }); }
   });
 
   app.post("/api/maintenance/reservations", requireAuth, async (req: any, res) => {

@@ -88,6 +88,9 @@ export default function MarketingDashboard() {
         stat={fmt(revenue?.currentMonthCents ?? 0)}
         statLabel="CA ce mois-ci"
         icon={Megaphone}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -7,8 +7,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BookOpen, Users, Clock, Star, TrendingUp, CalendarDays } from "lucide-react";
+import { BookOpen, Users, Clock, Star, TrendingUp, CalendarDays, GraduationCap } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_LABELS: Record<AcademyRegistrationStatus, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", CANCELLED: "Annulée", COMPLETED: "Terminée",
@@ -64,10 +65,16 @@ export default function BaristaAcademyDashboard() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Tableau de bord Barista Academy</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Bienvenue, {user?.name}. Gérez vos formations et étudiants.</p>
-      </div>
+      <DashboardHero
+        title="Tableau de bord Barista Academy"
+        subtitle={`Bienvenue, ${user?.name}. Gérez vos formations et étudiants.`}
+        stat={reviews.length > 0 ? avgRating : undefined}
+        statLabel="Note moyenne"
+        icon={GraduationCap}
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        iconBgClass="bg-indigo-500/15"
+        iconTextClass="text-indigo-600 dark:text-indigo-400"
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

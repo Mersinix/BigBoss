@@ -23,15 +23,27 @@ import { TrendingUp, TrendingDown, Inbox } from "lucide-react";
 
 export function DashboardHero({
   title, subtitle, stat, statLabel, icon: Icon,
+  gradientClass = "bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20",
+  iconBgClass = "bg-primary/15",
+  iconTextClass = "text-primary",
 }: {
   title: string;
   subtitle: string;
   stat?: string;
   statLabel?: string;
   icon?: ComponentType<{ className?: string }>;
+  // Full Tailwind class strings (never interpolated, so Tailwind's JIT scanner
+  // sees the literal classes) — let each of the 7 service accounts show its
+  // own established accent color (e.g. orange for Maintenance, fuchsia for
+  // Marketing) instead of the single global --primary (blue), while every
+  // OTHER caller (Admin/Supplier dashboards) keeps the exact same default
+  // look by simply omitting these props.
+  gradientClass?: string;
+  iconBgClass?: string;
+  iconTextClass?: string;
 }) {
   return (
-    <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20">
+    <Card className={`rounded-2xl border-border/50 shadow-sm overflow-hidden ${gradientClass}`}>
       <CardContent className="p-6 flex flex-wrap items-center justify-between gap-5">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-tight text-foreground">{title}</h1>
@@ -40,8 +52,8 @@ export function DashboardHero({
         {stat && (
           <div className="flex items-center gap-3 shrink-0 bg-card/70 border border-border/60 rounded-2xl px-5 py-3">
             {Icon && (
-              <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-                <Icon className="w-5 h-5 text-primary" />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBgClass}`}>
+                <Icon className={`w-5 h-5 ${iconTextClass}`} />
               </div>
             )}
             <div>

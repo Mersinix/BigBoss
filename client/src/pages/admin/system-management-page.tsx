@@ -9,14 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Car } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Sun, SunMoon, Car } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
 import { useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
 import { useHeroActionSettings, type HeroService, type HeroActionSettingsMap } from "@/hooks/use-hero-actions";
-import { useAccountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap } from "@/hooks/use-account-dark-mode";
+import { useAccountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode } from "@/hooks/use-account-dark-mode";
 import type { LandingConfig, HeroSlide } from "@shared/schema";
 
 // ── Service visibility ────────────────────────────────────────────────────────
@@ -262,6 +262,12 @@ const DARK_MODE_ACCOUNTS: { key: DarkModeAccount; label: string; icon: any }[] =
   { key: "MARKETING",           label: "Marketing",           icon: Megaphone },
 ];
 
+const THEME_MODE_OPTIONS: { value: AccountThemeMode; label: string; icon: any }[] = [
+  { value: "BOTH",       label: "Sombre + Clair",     icon: SunMoon },
+  { value: "DARK_ONLY",  label: "Sombre uniquement",  icon: Moon },
+  { value: "LIGHT_ONLY", label: "Clair uniquement",   icon: Sun },
+];
+
 function AccountDarkModeSection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -273,8 +279,8 @@ function AccountDarkModeSection() {
   }, [settings]);
 
   const updateMutation = useMutation({
-    mutationFn: ({ account, enabled }: { account: DarkModeAccount; enabled: boolean }) =>
-      apiRequest("PATCH", `/api/admin/account-dark-mode-settings/${account}`, { enabled }),
+    mutationFn: ({ account, mode }: { account: DarkModeAccount; mode: AccountThemeMode }) =>
+      apiRequest("PATCH", `/api/admin/account-dark-mode-settings/${account}`, { mode }),
     onSuccess: async (response) => {
       const saved = await response.json();
       setLocal(saved);
@@ -285,9 +291,9 @@ function AccountDarkModeSection() {
   });
 
   const value = local ?? settings;
-  const update = (account: DarkModeAccount, enabled: boolean) => {
-    setLocal({ ...value, [account]: enabled });
-    updateMutation.mutate({ account, enabled });
+  const update = (account: DarkModeAccount, mode: AccountThemeMode) => {
+    setLocal({ ...value, [account]: mode });
+    updateMutation.mutate({ account, mode });
   };
 
   return (
@@ -297,29 +303,39 @@ function AccountDarkModeSection() {
           <div className="bg-slate-500/10 rounded-xl p-3"><Moon className="w-5 h-5 text-slate-600" /></div>
           <div>
             <CardTitle className="text-base">Mode sombre</CardTitle>
-            <CardDescription className="pt-1">Afficher ou masquer le bouton de bascule clair/sombre dans la navbar de chaque compte de service.</CardDescription>
+            <CardDescription className="pt-1">Choisir le(s) mode(s) de thème autorisé(s) dans la navbar de chaque compte de service — les deux, sombre uniquement, ou clair uniquement. Quand les deux sont autorisés, le compte s'ouvre en mode sombre par défaut.</CardDescription>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {DARK_MODE_ACCOUNTS.map(({ key, label, icon: Icon }) => (
-          <div key={key} className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
-            <div className="flex items-center gap-2">
-              <Icon className="w-4 h-4 text-muted-foreground" />
-              <p className="text-sm font-medium">{label}</p>
+        {DARK_MODE_ACCOUNTS.map(({ key, label, icon: Icon }) => {
+          const currentMode = value[key] ?? "BOTH";
+          const isPending = updateMutation.isPending && updateMutation.variables?.account === key;
+          return (
+            <div key={key} className="rounded-xl border border-border/50 p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <Icon className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm font-medium">{label}</p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-1.5">
+                {THEME_MODE_OPTIONS.map((opt) => (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    size="sm"
+                    variant={currentMode === opt.value ? "default" : "outline"}
+                    disabled={isPending}
+                    onClick={() => update(key, opt.value)}
+                    className={`justify-start gap-1.5 flex-1 text-xs ${currentMode === opt.value ? "bg-slate-700 hover:bg-slate-800 text-white" : ""}`}
+                    data-testid={`button-theme-mode-${key.toLowerCase()}-${opt.value.toLowerCase()}`}
+                  >
+                    <opt.icon className="w-3.5 h-3.5" />{opt.label}
+                  </Button>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{value[key] ?? true ? "Visible" : "Masqué"}</span>
-              <Switch
-                checked={value[key] ?? true}
-                onCheckedChange={(checked) => update(key, checked)}
-                disabled={updateMutation.isPending}
-                aria-label={`Mode sombre — ${label}`}
-                data-testid={`switch-dark-mode-${key.toLowerCase()}`}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );

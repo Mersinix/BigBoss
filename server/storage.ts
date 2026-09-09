@@ -16,7 +16,7 @@ import {
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport, printFavorites,
   printerProfiles, type PrinterProfile, type InsertPrinterProfile, type PrintCompanyCard,
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
-  accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap,
+  accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   baristaWorkHistory, baristaReports,
   academyProfiles, academyCourses, academyCourseSessions, academyRegistrations,
@@ -298,6 +298,11 @@ export interface IStorage {
   upsertMaintenanceProfile(userId: number, updates: Partial<InsertMaintenanceProfile>): Promise<MaintenanceProfile>;
   getMaintenanceReservationsForProvider(userId: number): Promise<(MaintenanceReservation & { cafeOwner: string; ownerPhone: string | null })[]>;
   getMaintenanceReservationsForOwner(userId: number): Promise<(MaintenanceReservation & { maintenanceName: string })[]>;
+  getMaintenanceRevenueSummary(maintenanceUserId: number): Promise<{
+    totalEarnedCents: number; completedReservations: number; currentMonthCents: number; currentMonthReservations: number;
+    pendingCents: number; pendingReservations: number; dailyRateInCents: number;
+    history: { month: string; totalCents: number; reservations: number }[];
+  }>;
   createMaintenanceReservation(data: InsertMaintenanceReservation): Promise<MaintenanceReservation>;
   updateMaintenanceReservationStatus(id: number, providerId: number, status: string, schedule?: { date?: string; time?: string | null }): Promise<MaintenanceReservation | undefined>;
   requestMaintenanceReschedule(id: number, providerId: number, proposedDate: string, proposedTime: string | null): Promise<MaintenanceReservation | undefined>;
@@ -3377,6 +3382,64 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  // Mirrors getAcademyRevenueSummary exactly (same COMPLETED-only "Total
+  // gagné" / CONFIRMED-only "En attente" split, same 6-month history
+  // bucketing). One real difference: maintenanceReservations has no
+  // priceInCents captured per-booking (unlike academyRegistrations), so each
+  // completed/pending reservation is valued at the provider's CURRENT
+  // maintenanceProfiles.dailyRateInCents — a real, synchronized figure (the
+  // same rate shown on Business → Profil), not a fabricated number. Because
+  // the rate can change over time, this is presented to the client as an
+  // estimate, not authoritative billing history — no completedAt column
+  // exists on this table either, so updatedAt (set on every status change,
+  // i.e. the COMPLETED/CONFIRMED transition itself) is used as the
+  // completion-month proxy, same fallback chain shape as Academy's.
+  async getMaintenanceRevenueSummary(maintenanceUserId: number): Promise<{
+    totalEarnedCents: number; completedReservations: number; currentMonthCents: number; currentMonthReservations: number;
+    pendingCents: number; pendingReservations: number; dailyRateInCents: number;
+    history: { month: string; totalCents: number; reservations: number }[];
+  }> {
+    const [profile] = await db.select().from(maintenanceProfiles).where(eq(maintenanceProfiles.userId, maintenanceUserId));
+    const rate = profile?.dailyRateInCents ?? 0;
+    const rows = await db.select().from(maintenanceReservations).where(eq(maintenanceReservations.maintenanceUserId, maintenanceUserId));
+    const completed = rows.filter((r) => r.status === "COMPLETED");
+    const pending = rows.filter((r) => r.status === "CONFIRMED");
+    const now = new Date();
+    const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonthKey = monthKey(now);
+
+    const byMonth = new Map<string, { totalCents: number; reservations: number }>();
+    let currentMonthCents = 0;
+    let currentMonthReservations = 0;
+    for (const r of completed) {
+      const completedAt = r.updatedAt ?? r.createdAt ?? now;
+      const key = monthKey(new Date(completedAt));
+      const bucket = byMonth.get(key) ?? { totalCents: 0, reservations: 0 };
+      bucket.totalCents += rate;
+      bucket.reservations += 1;
+      byMonth.set(key, bucket);
+      if (key === currentMonthKey) { currentMonthCents += rate; currentMonthReservations += 1; }
+    }
+
+    const history: { month: string; totalCents: number; reservations: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = monthKey(d);
+      const bucket = byMonth.get(key);
+      history.push({ month: key, totalCents: bucket?.totalCents ?? 0, reservations: bucket?.reservations ?? 0 });
+    }
+
+    return {
+      totalEarnedCents: completed.length * rate,
+      completedReservations: completed.length,
+      currentMonthCents, currentMonthReservations,
+      pendingCents: pending.length * rate,
+      pendingReservations: pending.length,
+      dailyRateInCents: rate,
+      history,
+    };
+  }
+
   async createMaintenanceReservation(data: InsertMaintenanceReservation): Promise<MaintenanceReservation> {
     const [created] = await db.insert(maintenanceReservations).values(data as any).returning();
     return created;
@@ -5126,17 +5189,17 @@ export class DatabaseStorage implements IStorage {
     return this.getHeroActionSettings();
   }
 
-  // Admin-controlled per-account dark-mode-toggle visibility for the 7
-  // non-Coffee-Owner service accounts — mirrors getHeroActionSettings/
-  // setHeroActionSettings exactly (auto-seeds missing rows, default true so
-  // introducing this control doesn't hide the dark mode capability the
-  // accounts are getting in the same change).
+  // Admin-controlled theme POLICY for the 7 non-Coffee-Owner service
+  // accounts — mirrors getHeroActionSettings/setHeroActionSettings exactly
+  // (auto-seeds missing rows, default BOTH so introducing this control
+  // doesn't restrict the dark mode capability the accounts are getting in
+  // the same change).
   async getAccountDarkModeSettings(): Promise<AccountDarkModeSettingsMap> {
     const ALL_ACCOUNTS: DarkModeAccount[] = ['BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING'];
     const rows = await db.select().from(accountDarkModeSettings);
     const map = {} as AccountDarkModeSettingsMap;
-    for (const account of ALL_ACCOUNTS) map[account] = true;
-    for (const row of rows) map[row.account as DarkModeAccount] = row.enabled;
+    for (const account of ALL_ACCOUNTS) map[account] = 'BOTH';
+    for (const row of rows) map[row.account as DarkModeAccount] = row.mode;
     const missing = ALL_ACCOUNTS.filter((a) => !rows.some((r) => r.account === a));
     if (missing.length) {
       for (const account of missing) {
@@ -5146,12 +5209,12 @@ export class DatabaseStorage implements IStorage {
     return map;
   }
 
-  async setAccountDarkModeSetting(account: DarkModeAccount, enabled: boolean): Promise<AccountDarkModeSettingsMap> {
+  async setAccountDarkModeSetting(account: DarkModeAccount, mode: AccountThemeMode): Promise<AccountDarkModeSettingsMap> {
     const existing = await db.select().from(accountDarkModeSettings).where(eq(accountDarkModeSettings.account, account));
     if (existing.length) {
-      await db.update(accountDarkModeSettings).set({ enabled, updatedAt: new Date() }).where(eq(accountDarkModeSettings.account, account));
+      await db.update(accountDarkModeSettings).set({ mode, updatedAt: new Date() }).where(eq(accountDarkModeSettings.account, account));
     } else {
-      await db.insert(accountDarkModeSettings).values({ account, enabled });
+      await db.insert(accountDarkModeSettings).values({ account, mode });
     }
     return this.getAccountDarkModeSettings();
   }

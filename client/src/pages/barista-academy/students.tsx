@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Search } from "lucide-react";
+import { Users, Search, GraduationCap, CalendarDays, Clock } from "lucide-react";
 
 const STATUS_LABELS: Record<AcademyRegistrationStatus, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", CANCELLED: "Annulée", COMPLETED: "Terminée",
@@ -58,38 +58,33 @@ export default function AcademyStudentsPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-3">Inscrit par</th>
-                  <th className="p-3">Type</th>
-                  <th className="p-3">Participants</th>
-                  <th className="p-3">Formation</th>
-                  <th className="p-3">Session</th>
-                  <th className="p-3">Inscrit le</th>
-                  <th className="p-3">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0" data-testid={`row-student-${r.id}`}>
-                    <td className="p-3 font-medium">{r.cafeOwnerName}</td>
-                    <td className="p-3"><Badge variant="outline" className="text-[10px] font-normal">{r.participantType === "BARISTA_MARKETPLACE" ? "Barista" : "Coffee Owner"}</Badge></td>
-                    <td className="p-3">
-                      {r.participants.length > 0 ? r.participants.join(", ") : `${r.participantCount} participant${r.participantCount > 1 ? "s" : ""}`}
-                    </td>
-                    <td className="p-3">{r.courseTitle}</td>
-                    <td className="p-3 text-muted-foreground">{r.sessionStartDate ?? "—"}</td>
-                    <td className="p-3 text-muted-foreground">{new Date(r.createdAt).toLocaleDateString("fr-FR")}</td>
-                    <td className="p-3"><Badge variant="secondary" className={STATUS_COLORS[r.status]}>{STATUS_LABELS[r.status]}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+        <div className="space-y-3">
+          {rows.map((r) => (
+            <Card key={r.id} data-testid={`card-student-${r.id}`}>
+              <CardContent className="p-4 flex flex-col gap-2.5">
+                <div className="flex items-center gap-2 flex-wrap justify-between">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="font-semibold text-sm truncate">{r.cafeOwnerName}</span>
+                    <Badge variant="outline" className="text-[10px] font-normal shrink-0">{r.participantType === "BARISTA_MARKETPLACE" ? "Barista" : "Coffee Owner"}</Badge>
+                  </div>
+                  <Badge variant="secondary" className={`shrink-0 ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge>
+                </div>
+                <div className="flex items-center gap-1.5 text-sm">
+                  <GraduationCap className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <span className="font-medium truncate">{r.courseTitle}</span>
+                </div>
+                <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Users className="w-3 h-3 shrink-0" />
+                    {r.participants.length > 0 ? r.participants.join(", ") : `${r.participantCount} participant${r.participantCount > 1 ? "s" : ""}`}
+                  </span>
+                  <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3 shrink-0" />Session : {r.sessionStartDate ?? "—"}</span>
+                  <span className="flex items-center gap-1"><Clock className="w-3 h-3 shrink-0" />Inscrit le {new Date(r.createdAt).toLocaleDateString("fr-FR")}</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );

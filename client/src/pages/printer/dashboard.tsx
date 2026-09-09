@@ -118,6 +118,9 @@ export default function PrinterDashboard() {
         stat={fmt(revenue?.currentMonthCents ?? 0)}
         statLabel="CA ce mois-ci"
         icon={Printer}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

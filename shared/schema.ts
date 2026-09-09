@@ -657,28 +657,34 @@ export type HeroService = 'SHOP' | 'BARISTA' | 'ACADEMY' | 'MAINTENANCE' | 'PRIN
 export type HeroActionSetting = typeof heroActionSettings.$inferSelect;
 export type HeroActionSettingsMap = Record<HeroService, { fastSearchEnabled: boolean; reportEnabled: boolean }>;
 
-// Admin-controlled visibility of the dark/light mode toggle inside each of
-// the 7 non-Coffee-Owner service accounts' own navbar. Separate table/key set
-// again (same reasoning as heroActionSettings above): this is a per-PROVIDER-
-// ACCOUNT UI control, unrelated to marketplace visibility (platformServices)
-// or the Coffee Owner hero icons (heroActionSettings). Uses the same role
-// literals as userRoleEnum for these 7 accounts so the mapping is unambiguous.
-// Defaults to enabled=true: dark mode is being introduced as a new capability
-// for all 7 accounts, admin can hide it per account afterwards if desired.
+// Admin-controlled theme POLICY for each of the 7 non-Coffee-Owner service
+// accounts' own navbar. Separate table/key set again (same reasoning as
+// heroActionSettings above): this is a per-PROVIDER-ACCOUNT UI control,
+// unrelated to marketplace visibility (platformServices) or the Coffee Owner
+// hero icons (heroActionSettings). Uses the same role literals as
+// userRoleEnum for these 7 accounts so the mapping is unambiguous.
+// Three states, not a boolean: BOTH (toggle visible, account owner picks —
+// defaults to dark until they choose light), DARK_ONLY (always dark, no
+// toggle), LIGHT_ONLY (always light, no toggle). Defaults to BOTH: dark mode
+// is being introduced as a new capability for all 7 accounts, admin can
+// restrict it per account afterwards if desired.
 export const darkModeAccountEnum = pgEnum('dark_mode_account', [
   'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING',
 ]);
 
+export const accountThemeModeEnum = pgEnum('account_theme_mode', ['BOTH', 'DARK_ONLY', 'LIGHT_ONLY']);
+
 export const accountDarkModeSettings = pgTable("account_dark_mode_settings", {
   id: serial("id").primaryKey(),
   account: darkModeAccountEnum("account").notNull().unique(),
-  enabled: boolean("enabled").notNull().default(true),
+  mode: accountThemeModeEnum("mode").notNull().default('BOTH'),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export type DarkModeAccount = 'BARISTA_ACADEMY' | 'BARISTA_MARKETPLACE' | 'DELIVERY_COMPANY' | 'DRIVER' | 'PRINTER' | 'MAINTENANCE' | 'MARKETING';
+export type AccountThemeMode = 'BOTH' | 'DARK_ONLY' | 'LIGHT_ONLY';
 export type AccountDarkModeSetting = typeof accountDarkModeSettings.$inferSelect;
-export type AccountDarkModeSettingsMap = Record<DarkModeAccount, boolean>;
+export type AccountDarkModeSettingsMap = Record<DarkModeAccount, AccountThemeMode>;
 
 // Admin-controlled messaging behavior. This is intentionally separate from
 // marketplace service visibility: hiding Messages must never delete data and

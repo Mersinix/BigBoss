@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mail, Phone, MapPin, Truck, CheckCircle2, Clock, Star, Building2 } from "lucide-react";
 import { formatDate } from "@/lib/format";
-import { StatCard } from "@/components/dashboard/dashboard-kit";
+import { StatCard, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { getAvatarUrl } from "@/lib/avatar";
 
 // "Mon Compte" — the Driver account's landing page. Profile fields come straight from
@@ -44,6 +44,17 @@ export default function DriverAccountPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <DashboardHero
+        title={`Bienvenue, ${user?.name}`}
+        subtitle="Vue d'ensemble de votre activité de livraison."
+        stat={String(stats.active)}
+        statLabel="Livraisons actives"
+        icon={Truck}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
+
       {/* Profile card */}
       <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20">
         <CardContent className="p-6 flex flex-wrap items-center gap-5">

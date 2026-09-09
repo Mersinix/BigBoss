@@ -1,14 +1,20 @@
 import { useMemo, useState } from "react";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Receipt } from "lucide-react";
+import { Receipt, Package } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { SectionCard, EmptyState } from "@/components/dashboard/dashboard-kit";
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
+
+const PAYMENT_STATUS_META: Record<string, { label: string; cls: string }> = {
+  DELIVERED: { label: "Livrée", cls: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300" },
+  CANCELLED: { label: "Annulée", cls: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" },
+};
 
 // "Paiements" — a real history of completed (DELIVERED) deliveries and their real
 // deliveries.deliveryFee amount, which is honestly 0 for every delivery today (no fee
@@ -61,30 +67,32 @@ export default function DriverPaymentsPage() {
         <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
       </div>
 
-      <SectionCard title="Historique" icon={Receipt} contentClassName="overflow-x-auto">
+      <SectionCard title="Historique" icon={Receipt}>
         {rows.length === 0 ? <EmptyState message="Aucun paiement pour cette période." /> : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Commande</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Montant</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">#{d.orderId}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{formatDate((d.deliveredAt ?? d.cancelledAt ?? d.createdAt) as any)}</TableCell>
-                  <TableCell className="text-xs">Frais de livraison</TableCell>
-                  <TableCell className="text-xs">{d.status === "DELIVERED" ? "Livrée" : "Annulée"}</TableCell>
-                  <TableCell className="text-right font-semibold">{fmt(d.deliveryFee ?? 0)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="space-y-3">
+            {rows.map((d) => {
+              const meta = PAYMENT_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
+              return (
+                <Card key={d.id} data-testid={`card-payment-${d.id}`}>
+                  <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs text-muted-foreground">Commande #{d.orderId}</span>
+                        <Badge variant="secondary" className={meta.cls}>{meta.label}</Badge>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> Frais de livraison
+                      </div>
+                      <p className="text-xs text-muted-foreground">{formatDate((d.deliveredAt ?? d.cancelledAt ?? d.createdAt) as any)}</p>
+                    </div>
+                    <div className="shrink-0">
+                      <span className="font-semibold text-base">{fmt(d.deliveryFee ?? 0)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         )}
       </SectionCard>
     </div>

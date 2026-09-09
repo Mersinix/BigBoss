@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Package, Truck, CheckCircle2, Clock, Users } from "lucide-react";
 import { Link } from "wouter";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   AVAILABLE: { label: "Disponible", cls: "bg-amber-100 text-amber-700" },
@@ -35,12 +36,16 @@ export default function DeliveryDashboard() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Bienvenue, {user?.name}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {isCompany ? "Aperçu de vos livraisons et de votre flotte." : "Aperçu de vos livraisons assignées."}
-        </p>
-      </div>
+      <DashboardHero
+        title={`Bienvenue, ${user?.name}`}
+        subtitle={isCompany ? "Aperçu de vos livraisons et de votre flotte." : "Aperçu de vos livraisons assignées."}
+        stat={String(active.length)}
+        statLabel="Livraisons actives"
+        icon={Truck}
+        gradientClass="bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent border-teal-500/20"
+        iconBgClass="bg-teal-500/15"
+        iconTextClass="text-teal-600 dark:text-teal-400"
+      />
 
       <div className={`grid grid-cols-2 ${isCompany ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-4`}>
         {isCompany && (

@@ -17,10 +17,16 @@ import { AddressDetailsFields } from "@/components/settings/address-details-fiel
 // Admin-set locationAddress/lat/lng exactly as before — nothing here can
 // change those. Coffee Owner uses the same AddressDetailsFields body, just
 // Dialog-wrapped instead of SectionCard-wrapped — see AddressDetailsModal.
-export function AccountAddressCard({ accentClassName = "" }: { accentClassName?: string }) {
+// SectionCard itself needs no isDark prop — it's built purely on shadcn's
+// CSS-variable tokens (bg-card/text-foreground/etc.), which already adapt
+// automatically once the "dark" class is active on <html> (see
+// ProfessionalAccountShell). AddressDetailsFields is the one exception: its
+// inputs use literal Tailwind colors (not CSS-variable tokens), so it still
+// needs the explicit isDark prop.
+export function AccountAddressCard({ accentClassName = "", isDark = false }: { accentClassName?: string; isDark?: boolean }) {
   return (
     <SectionCard title="Localisation" icon={MapPin}>
-      <AddressDetailsFields accentClassName={accentClassName} />
+      <AddressDetailsFields accentClassName={accentClassName} isDark={isDark} />
     </SectionCard>
   );
 }

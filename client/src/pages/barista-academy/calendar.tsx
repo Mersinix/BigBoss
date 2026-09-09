@@ -15,8 +15,8 @@ import { CalendarDays, Plus, Users, Trash2 } from "lucide-react";
 
 const STATUS_LABELS: Record<AcademySessionStatus, string> = { UPCOMING: "À venir", ACTIVE: "En cours", COMPLETED: "Terminée", CANCELLED: "Annulée" };
 const STATUS_COLORS: Record<AcademySessionStatus, string> = {
-  UPCOMING: "bg-blue-100 text-blue-700", ACTIVE: "bg-amber-100 text-amber-700",
-  COMPLETED: "bg-green-100 text-green-700", CANCELLED: "bg-gray-100 text-gray-600",
+  UPCOMING: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300", ACTIVE: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+  COMPLETED: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300", CANCELLED: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
 };
 
 function NewSessionDialog({ open, onClose }: { open: boolean; onClose: () => void }) {

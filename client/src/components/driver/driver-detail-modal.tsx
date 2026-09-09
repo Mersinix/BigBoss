@@ -79,10 +79,10 @@ function DriverAvailabilityModal({
                     <div key={key} className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}>
                       <div className="flex items-center gap-2">
                         <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-blue-400" : "text-blue-600") : textPrimary}`}>{label}</span>
-                        {isToday && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-blue-500/30 text-blue-300" : "bg-blue-100 text-blue-700"}`}>Today</span>}
+                        {isToday && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-blue-500/30 text-blue-300" : "bg-blue-100 text-blue-700"}`}>Aujourd'hui</span>}
                       </div>
                       {day?.closed ? (
-                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
+                        <span className={`text-[12px] font-semibold ${closedColor}`}>Fermé</span>
                       ) : day ? (
                         <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-blue-300" : "text-blue-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
                       ) : (
@@ -210,7 +210,7 @@ export function DriverDetailModal({
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className={`flex gap-2 p-3 rounded-xl ${t.sectionBg}`}>
                   <Mail className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                  <div className="min-w-0"><p className={`text-[11px] ${t.textSubtle}`}>Email</p><p className={`font-medium truncate ${t.textPrimary}`}>{driver.email}</p></div>
+                  <div className="min-w-0"><p className={`text-[11px] ${t.textSubtle}`}>E-mail</p><p className={`font-medium truncate ${t.textPrimary}`}>{driver.email}</p></div>
                 </div>
                 <div className={`flex gap-2 p-3 rounded-xl ${t.sectionBg}`}>
                   <Phone className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />

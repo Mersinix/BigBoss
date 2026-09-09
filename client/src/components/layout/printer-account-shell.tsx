@@ -45,6 +45,7 @@ export function PrinterAccountShell({ children }: { children: React.ReactNode })
       settingsPath="/printer/settings"
       communicationPath="/printer/communication"
       testIdPrefix="printer"
+      accountKey="PRINTER"
     >
       {children}
     </ProfessionalAccountShell>

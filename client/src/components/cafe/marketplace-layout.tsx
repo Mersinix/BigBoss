@@ -66,6 +66,7 @@ import { useAcademyRegistrations, useUpdateAcademyRegistrationStatus, type Acade
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { EnrollDialog as AcademyEnrollDialog } from "@/pages/cafe/barista/barista-academy-page";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
+import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
 
 const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
@@ -1558,6 +1559,9 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   // modal used on /academy — no separate favorites-only Academy view.
   const [detailAcademyCourseId, setDetailAcademyCourseId] = useState<number | null>(null);
   const [enrollAcademyTarget, setEnrollAcademyTarget] = useState<AcademyCourseCard | null>(null);
+  // Clicking a favorite Print card opens the same comprehensive detail modal
+  // used on /print — no separate favorites-only Print view.
+  const [detailPrintId, setDetailPrintId] = useState<number | null>(null);
 
   const {
     shop, print, academy, baristaMarket, marketing, maintenance, pack,
@@ -1973,7 +1977,11 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
               {printItems.map((item) => (
                 <div
                   key={item.id}
-                  className={`group flex items-stretch border rounded-2xl overflow-hidden h-28 ${cardBg}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailPrintId(Number(item.id))}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailPrintId(Number(item.id)); } }}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden cursor-pointer h-28 ${cardBg}`}
                   data-testid={`row-fav-print-${item.id}`}
                 >
                   <div className="w-2/5 shrink-0 relative">
@@ -2008,7 +2016,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                       {fmt(item.price)}<span className={`text-[10px] font-normal ${textMuted}`}>/{item.priceUnit}</span>
                     </p>
                   </div>
-                  <div className="flex items-start p-2 shrink-0">
+                  <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
                       onClick={() => removePrint(item.id)}
@@ -2294,6 +2302,12 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         onEnroll={(c) => { setDetailAcademyCourseId(null); setEnrollAcademyTarget(c); }}
       />
       <AcademyEnrollDialog course={enrollAcademyTarget} open={!!enrollAcademyTarget} onClose={() => setEnrollAcademyTarget(null)} isDark={dk} />
+
+      <PrintServiceDetailModal
+        serviceId={detailPrintId}
+        open={detailPrintId != null}
+        onClose={() => setDetailPrintId(null)}
+      />
     </div>
   );
 }

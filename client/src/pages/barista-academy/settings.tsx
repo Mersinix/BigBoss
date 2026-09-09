@@ -2,6 +2,7 @@ import { NotificationPreferencesCard } from "@/components/settings/notification-
 import { AccountIdentityCard } from "@/components/settings/account-identity-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
 import { AccountSecurityCard } from "@/components/settings/account-security-card";
+import { useEffectiveAccountDarkMode } from "@/hooks/use-account-dark-mode";
 
 const ACCENT = "bg-indigo-600 hover:bg-indigo-700 text-white";
 
@@ -12,6 +13,7 @@ const ACCENT = "bg-indigo-600 hover:bg-indigo-700 text-white";
 // (barista-academy/profile.tsx) — the single source of truth for that data,
 // no longer duplicated here.
 export default function AcademySettingsPage() {
+  const isDark = useEffectiveAccountDarkMode("BARISTA_ACADEMY");
   return (
     <div className="flex flex-col gap-5 p-6 max-w-2xl">
       <div>
@@ -21,7 +23,7 @@ export default function AcademySettingsPage() {
 
       <AccountIdentityCard nameLabel="Nom de l'académie" accentClassName={ACCENT} testIdPrefix="academy" />
 
-      <AccountAddressCard accentClassName={ACCENT} />
+      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} />
 
       <NotificationPreferencesCard role="BARISTA_ACADEMY" />
 

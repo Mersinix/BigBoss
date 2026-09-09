@@ -15,13 +15,13 @@ export default function MaintenancePerformance() {
       testIdPrefix="maintenance-performance"
       activeTextClass="text-orange-600 dark:text-orange-400"
       tabs={[
-        { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, content: <MaintenanceDashboardOverview /> },
+        { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <MaintenanceDashboardOverview /> },
         {
-          key: "analytics", label: "Analytics", icon: BarChart2,
+          key: "analytics", label: "Analyses", icon: BarChart2,
           content: <PerformanceEmptyState message="Les statistiques détaillées ne sont pas encore disponibles pour ce compte." />,
         },
         {
-          key: "revenue", label: "Revenue", icon: DollarSign,
+          key: "revenue", label: "Revenus", icon: DollarSign,
           content: <PerformanceEmptyState icon={DollarSign} message="Le suivi des revenus n'est pas encore disponible pour ce compte." />,
         },
       ]}

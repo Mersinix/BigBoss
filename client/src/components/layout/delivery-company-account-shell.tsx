@@ -46,6 +46,7 @@ export function DeliveryCompanyAccountShell({ children }: { children: React.Reac
       settingsPath="/delivery/settings"
       communicationPath="/delivery/communication"
       testIdPrefix="delivery-company"
+      accountKey="DELIVERY_COMPANY"
     >
       {children}
     </ProfessionalAccountShell>

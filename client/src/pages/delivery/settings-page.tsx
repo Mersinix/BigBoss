@@ -2,6 +2,7 @@ import { NotificationPreferencesCard } from "@/components/settings/notification-
 import { AccountIdentityCard } from "@/components/settings/account-identity-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
 import { AccountSecurityCard } from "@/components/settings/account-security-card";
+import { useEffectiveAccountDarkMode } from "@/hooks/use-account-dark-mode";
 
 const ACCENT = "bg-teal-600 hover:bg-teal-700 text-white";
 
@@ -11,6 +12,7 @@ const ACCENT = "bg-teal-600 hover:bg-teal-700 text-white";
 // now lives exclusively in Business → Profil (delivery/profile.tsx) — the
 // single source of truth for that data, no longer duplicated here.
 export default function DeliveryCompanySettingsPage() {
+  const isDark = useEffectiveAccountDarkMode("DELIVERY_COMPANY");
   return (
     <div className="flex flex-col gap-6 p-6 max-w-2xl">
       <div>
@@ -20,7 +22,7 @@ export default function DeliveryCompanySettingsPage() {
 
       <AccountIdentityCard nameLabel="Nom de l'entreprise" accentClassName={ACCENT} testIdPrefix="delivery-company" />
 
-      <AccountAddressCard accentClassName={ACCENT} />
+      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} />
 
       <NotificationPreferencesCard role="DELIVERY_COMPANY" />
 

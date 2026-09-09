@@ -87,11 +87,11 @@ function PrintCompanyAvailabilityModal({
                       <div className="flex items-center gap-2">
                         <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-blue-400" : "text-blue-600") : textPrimary}`}>{label}</span>
                         {isToday && (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-blue-500/30 text-blue-300" : "bg-blue-100 text-blue-700"}`}>Today</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-blue-500/30 text-blue-300" : "bg-blue-100 text-blue-700"}`}>Aujourd'hui</span>
                         )}
                       </div>
                       {day?.closed ? (
-                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
+                        <span className={`text-[12px] font-semibold ${closedColor}`}>Fermé</span>
                       ) : day ? (
                         <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-blue-300" : "text-blue-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
                       ) : (

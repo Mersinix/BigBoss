@@ -19,7 +19,7 @@ export function AddressDetailsModal({ open, onClose }: { open: boolean; onClose:
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${dk ? "text-white" : ""}`}><MapPin className="w-4 h-4 text-amber-500" /> Localisation</DialogTitle>
         </DialogHeader>
-        <AddressDetailsFields onSaved={onClose} />
+        <AddressDetailsFields onSaved={onClose} isDark={dk} />
       </DialogContent>
     </Dialog>
   );

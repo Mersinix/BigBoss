@@ -2,6 +2,7 @@ import { NotificationPreferencesCard } from "@/components/settings/notification-
 import { AccountIdentityCard } from "@/components/settings/account-identity-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
 import { AccountSecurityCard } from "@/components/settings/account-security-card";
+import { useEffectiveAccountDarkMode } from "@/hooks/use-account-dark-mode";
 
 const ACCENT = "bg-blue-600 hover:bg-blue-700 text-white";
 
@@ -11,6 +12,7 @@ const ACCENT = "bg-blue-600 hover:bg-blue-700 text-white";
 // (driver/profile.tsx) — the single source of truth for that data, no longer
 // duplicated here.
 export default function DriverSettingsPage() {
+  const isDark = useEffectiveAccountDarkMode("DRIVER");
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -20,7 +22,7 @@ export default function DriverSettingsPage() {
 
       <AccountIdentityCard accentClassName={ACCENT} testIdPrefix="driver" />
 
-      <AccountAddressCard accentClassName={ACCENT} />
+      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} />
 
       <NotificationPreferencesCard role="DRIVER" />
 

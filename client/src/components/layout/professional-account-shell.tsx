@@ -1,10 +1,14 @@
+import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtime } from "@/hooks/use-realtime";
 import { Button } from "@/components/ui/button";
-import { LogOut, type LucideIcon } from "lucide-react";
+import { LogOut, Sun, Moon, type LucideIcon } from "lucide-react";
 import { AccountHeaderActions } from "@/components/account/account-header-actions";
+import { useAccountThemeStore } from "@/store/account-theme-store";
+import { useThemeStore } from "@/store/theme-store";
+import { useAccountDarkModeSettings, type DarkModeAccount } from "@/hooks/use-account-dark-mode";
 import type { NotificationService } from "@shared/schema";
 
 export interface ProfessionalAccountTab {
@@ -43,6 +47,7 @@ export function ProfessionalAccountShell({
   settingsPath,
   communicationPath,
   testIdPrefix,
+  accountKey,
 }: {
   children: React.ReactNode;
   title: string;
@@ -59,10 +64,49 @@ export function ProfessionalAccountShell({
   settingsPath: string;
   communicationPath: string; // Communication tab's own path, e.g. "/marketing-panel/communication"
   testIdPrefix: string;
+  // Which admin-configurable dark-mode-visibility row this account maps to
+  // (System Management → Mode sombre). Deliberately a separate store/toggle
+  // from Coffee Owner's own useThemeStore (client/src/store/theme-store.ts) —
+  // these 7 accounts default to light, Coffee Owner's stays untouched.
+  accountKey: DarkModeAccount;
 }) {
   const { user, logout, isLoggingOut } = useAuth();
   const [location] = useLocation();
   useRealtime(user?.id);
+
+  const { settings: darkModeSettings } = useAccountDarkModeSettings();
+  const darkModeAllowed = darkModeSettings[accountKey] ?? true;
+  const isDark = useAccountThemeStore((s) => s.isDark);
+  const toggleDark = useAccountThemeStore((s) => s.toggle);
+  const effectiveDark = darkModeAllowed && isDark;
+  const setCoffeeOwnerThemeIsDark = useThemeStore((s) => s.setIsDark);
+
+  // Activates every dark: Tailwind utility already present in this shell and
+  // in shared components built on shadcn's CSS-variable tokens (SectionCard,
+  // StatCard, Card, Button, Input, Dialog, etc. — see dashboard-kit.tsx's own
+  // note on this). Scoped to only be set while one of these 7 account shells
+  // is mounted; always removed on unmount so it never leaks into Coffee
+  // Owner/Admin/Supplier, which don't use this mechanism.
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", effectiveDark);
+    return () => { document.documentElement.classList.remove("dark"); };
+  }, [effectiveDark]);
+
+  // Several "self-preview" modals reused inside these accounts' own Business →
+  // Profil "Eye" icon (BaristaDetailModal, MarketingDetailModal,
+  // PrintCompanyDetailModal, DeliveryCompanyDetailModal, DriverDetailModal,
+  // AcademyProfileModal) read the Coffee-Owner-global useThemeStore directly
+  // (their primary, much more common call site), rather than taking an isDark
+  // prop — refactoring their public API to thread a prop through every
+  // Coffee-Owner/Admin call site as well is out of scope and far riskier than
+  // this task needs. Since a browser tab only ever has ONE of Coffee
+  // Owner/these 7 accounts mounted at a time (never both), mirroring this
+  // account's effective theme into that same global store here is safe and
+  // gives those shared self-preview modals the correct look for free, with
+  // no changes to their own files.
+  useEffect(() => {
+    setCoffeeOwnerThemeIsDark(effectiveDark);
+  }, [effectiveDark, setCoffeeOwnerThemeIsDark]);
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/messages/unread-count"],
@@ -102,6 +146,17 @@ export function ProfessionalAccountShell({
               notificationViewAllPath={`${communicationPath}?tab=notifications`}
               accentLinkTextClass={activeTextClass}
             />
+            {darkModeAllowed && (
+              <button
+                onClick={() => toggleDark()}
+                aria-label="Changer de thème"
+                title={effectiveDark ? "Mode clair" : "Mode sombre"}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors shrink-0"
+                data-testid={`button-${testIdPrefix}-theme-toggle`}
+              >
+                {effectiveDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            )}
             <Button
               variant="ghost"
               onClick={() => logout()}

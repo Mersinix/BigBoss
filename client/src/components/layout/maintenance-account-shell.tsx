@@ -46,6 +46,7 @@ export function MaintenanceAccountShell({ children }: { children: React.ReactNod
       settingsPath="/maintenance-panel/settings"
       communicationPath="/maintenance-panel/communication"
       testIdPrefix="maintenance"
+      accountKey="MAINTENANCE"
     >
       {children}
     </ProfessionalAccountShell>

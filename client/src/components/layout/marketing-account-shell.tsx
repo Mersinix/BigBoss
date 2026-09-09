@@ -46,6 +46,7 @@ export function MarketingAccountShell({ children }: { children: React.ReactNode 
       settingsPath="/marketing-panel/settings"
       communicationPath="/marketing-panel/communication"
       testIdPrefix="marketing"
+      accountKey="MARKETING"
     >
       {children}
     </ProfessionalAccountShell>

@@ -15,6 +15,7 @@ const CATALOG_EVENTS = [
 const TAXONOMY_EVENTS = ["taxonomy_updated"];
 const SYSTEM_SERVICES_EVENTS = ["system_services_updated"];
 const HERO_ACTIONS_EVENTS = ["hero_actions_updated"];
+const ACCOUNT_DARK_MODE_EVENTS = ["account_dark_mode_settings_updated"];
 const LANDING_CONFIG_EVENTS = ["landing_config_updated"];
 const CURRENCY_EVENTS = ["currency_updated"];
 const STORE_EVENTS = ["store_updated", "store_approval_changed"];
@@ -172,6 +173,9 @@ export function useRealtime(userId?: number) {
           }
           if (HERO_ACTIONS_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/hero-actions"] });
+          }
+          if (ACCOUNT_DARK_MODE_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/account-dark-mode-settings"] });
           }
           if (SYSTEM_SERVICES_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/system-services"] });

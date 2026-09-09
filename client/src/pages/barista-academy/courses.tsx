@@ -90,7 +90,7 @@ function CourseFormDialog({ course, onClose }: { course: AcademyCourse | null | 
         <div className="space-y-3">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Titre</label>
-            <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Espresso Fundamentals" data-testid="input-course-title" />
+            <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Fondamentaux de l'espresso" data-testid="input-course-title" />
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Description</label>

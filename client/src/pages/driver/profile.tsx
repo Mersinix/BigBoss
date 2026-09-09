@@ -130,11 +130,11 @@ export default function DriverProfilePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label className="text-xs text-gray-500">Expérience (ans)</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Expérience (ans)</Label>
             <Input type="number" min="0" value={experienceYears} onChange={(e) => setExperienceYears(e.target.value)} className="h-9 rounded-xl mt-1 max-w-[180px]" data-testid="input-experience-years" />
           </div>
           <div>
-            <Label className="text-xs text-gray-500">Certifications</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Certifications</Label>
             <div className="flex gap-2 mt-1">
               <Input value={certificationDraft} onChange={(e) => setCertificationDraft(e.target.value)} placeholder="Ex. Permis moto" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCertification())} className="h-9 rounded-xl" data-testid="input-new-certification" />
               <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!certificationDraft.trim()} onClick={addCertification} data-testid="button-add-certification">Ajouter</Button>
@@ -161,7 +161,7 @@ export default function DriverProfilePage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-gray-500">Type</Label>
+              <Label className="text-xs text-gray-500 dark:text-gray-400">Type</Label>
               <Select value={vehicleType} onValueChange={(v) => setVehicleType(v as DeliveryVehicleType)}>
                 <SelectTrigger className="h-9 rounded-xl mt-0.5" data-testid="select-vehicle-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -170,17 +170,17 @@ export default function DriverProfilePage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-gray-500">Plaque</Label>
+              <Label className="text-xs text-gray-500 dark:text-gray-400">Plaque</Label>
               <Input value={vehiclePlate} onChange={(e) => setVehiclePlate(e.target.value)} className="h-9 rounded-xl mt-0.5" data-testid="input-vehicle-plate" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-gray-500">Marque</Label>
+              <Label className="text-xs text-gray-500 dark:text-gray-400">Marque</Label>
               <Input value={vehicleBrand} onChange={(e) => setVehicleBrand(e.target.value)} className="h-9 rounded-xl mt-0.5" data-testid="input-vehicle-brand" />
             </div>
             <div>
-              <Label className="text-xs text-gray-500">Modèle</Label>
+              <Label className="text-xs text-gray-500 dark:text-gray-400">Modèle</Label>
               <Input value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} className="h-9 rounded-xl mt-0.5" data-testid="input-vehicle-model" />
             </div>
           </div>
@@ -196,7 +196,7 @@ export default function DriverProfilePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label className="text-xs text-gray-500 mb-2 block">Jours et horaires disponibles</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Jours et horaires disponibles</Label>
             <div className="space-y-2">
               {WEEKLY_DAY_DEFS.map((d) => {
                 const day = weeklyHours[d.key];

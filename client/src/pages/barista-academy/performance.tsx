@@ -12,9 +12,9 @@ export default function AcademyPerformance() {
       testIdPrefix="academy-performance"
       activeTextClass="text-indigo-600 dark:text-indigo-400"
       tabs={[
-        { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, content: <BaristaAcademyDashboard /> },
-        { key: "analytics", label: "Analytics", icon: BarChart2, content: <BaristaAcademyAnalyticsPage /> },
-        { key: "revenue", label: "Revenue", icon: DollarSign, content: <BaristaAcademyRevenuePage /> },
+        { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <BaristaAcademyDashboard /> },
+        { key: "analytics", label: "Analyses", icon: BarChart2, content: <BaristaAcademyAnalyticsPage /> },
+        { key: "revenue", label: "Revenus", icon: DollarSign, content: <BaristaAcademyRevenuePage /> },
       ]}
     />
   );

@@ -12,14 +12,14 @@ export default function DeliveryPerformance() {
       testIdPrefix="delivery-performance"
       activeTextClass="text-teal-600 dark:text-teal-400"
       tabs={[
-        { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, content: <DeliveryDashboard /> },
+        { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <DeliveryDashboard /> },
         {
-          key: "analytics", label: "Analytics", icon: BarChart2,
-          content: <PerformanceEmptyState message="Vos statistiques sont affichées sur l'onglet Dashboard ci-dessus." />,
+          key: "analytics", label: "Analyses", icon: BarChart2,
+          content: <PerformanceEmptyState message="Vos statistiques sont affichées sur l'onglet Tableau de bord ci-dessus." />,
         },
         {
-          key: "revenue", label: "Revenue", icon: DollarSign,
-          content: <PerformanceEmptyState icon={DollarSign} message="Vos frais générés sont affichés sur l'onglet Dashboard ci-dessus." />,
+          key: "revenue", label: "Revenus", icon: DollarSign,
+          content: <PerformanceEmptyState icon={DollarSign} message="Vos frais générés sont affichés sur l'onglet Tableau de bord ci-dessus." />,
         },
       ]}
     />

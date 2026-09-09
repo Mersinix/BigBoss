@@ -2,6 +2,7 @@ import { NotificationPreferencesCard } from "@/components/settings/notification-
 import { AccountIdentityCard } from "@/components/settings/account-identity-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
 import { AccountSecurityCard } from "@/components/settings/account-security-card";
+import { useEffectiveAccountDarkMode } from "@/hooks/use-account-dark-mode";
 
 const ACCENT = "bg-orange-600 hover:bg-orange-700 text-white";
 
@@ -12,11 +13,12 @@ const ACCENT = "bg-orange-600 hover:bg-orange-700 text-white";
 // (maintenance/profile.tsx) — the single source of truth for that data, no
 // longer duplicated here.
 export default function Settings() {
+  const isDark = useEffectiveAccountDarkMode("MAINTENANCE");
   return (
     <div className="space-y-4">
       <AccountIdentityCard nameLabel="Nom / Structure" accentClassName={ACCENT} testIdPrefix="maintenance" />
 
-      <AccountAddressCard accentClassName={ACCENT} />
+      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} />
 
       <NotificationPreferencesCard role="MAINTENANCE" />
 

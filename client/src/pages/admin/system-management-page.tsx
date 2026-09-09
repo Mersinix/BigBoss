@@ -9,13 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Car } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
 import { useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
 import { useHeroActionSettings, type HeroService, type HeroActionSettingsMap } from "@/hooks/use-hero-actions";
+import { useAccountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap } from "@/hooks/use-account-dark-mode";
 import type { LandingConfig, HeroSlide } from "@shared/schema";
 
 // ── Service visibility ────────────────────────────────────────────────────────
@@ -234,6 +235,87 @@ function HeroActionsSection() {
                 disabled={updateMutation.isPending}
                 aria-label={`Signaler — ${label}`}
                 data-testid={`switch-hero-report-${key.toLowerCase()}`}
+              />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Dark Mode (per service account navbar toggle visibility) ──────────────────
+
+// Independent of both SERVICES (marketplace visibility) and HERO_SERVICES
+// (Coffee Owner hero icons) above — this controls whether the dark/light
+// toggle appears in each of the 7 non-Coffee-Owner service accounts' own
+// navbar. Deliberately does NOT include Coffee Owner (its dark mode already
+// exists independently of this control, per the task's own instruction not
+// to touch it).
+const DARK_MODE_ACCOUNTS: { key: DarkModeAccount; label: string; icon: any }[] = [
+  { key: "BARISTA_ACADEMY",     label: "Barista Academy",     icon: GraduationCap },
+  { key: "BARISTA_MARKETPLACE", label: "Barista Marketplace", icon: Users },
+  { key: "DELIVERY_COMPANY",    label: "Livraison",           icon: Truck },
+  { key: "DRIVER",              label: "Chauffeur",           icon: Car },
+  { key: "PRINTER",             label: "Imprimerie",          icon: Printer },
+  { key: "MAINTENANCE",         label: "Maintenance",         icon: Wrench },
+  { key: "MARKETING",           label: "Marketing",           icon: Megaphone },
+];
+
+function AccountDarkModeSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { settings } = useAccountDarkModeSettings();
+  const [local, setLocal] = useState<AccountDarkModeSettingsMap | null>(null);
+
+  useEffect(() => {
+    setLocal(settings);
+  }, [settings]);
+
+  const updateMutation = useMutation({
+    mutationFn: ({ account, enabled }: { account: DarkModeAccount; enabled: boolean }) =>
+      apiRequest("PATCH", `/api/admin/account-dark-mode-settings/${account}`, { enabled }),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      queryClient.setQueryData(["/api/account-dark-mode-settings"], saved);
+      toast({ title: "Mode sombre mis à jour" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message }),
+  });
+
+  const value = local ?? settings;
+  const update = (account: DarkModeAccount, enabled: boolean) => {
+    setLocal({ ...value, [account]: enabled });
+    updateMutation.mutate({ account, enabled });
+  };
+
+  return (
+    <Card data-testid="card-account-dark-mode">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-slate-500/10 rounded-xl p-3"><Moon className="w-5 h-5 text-slate-600" /></div>
+          <div>
+            <CardTitle className="text-base">Mode sombre</CardTitle>
+            <CardDescription className="pt-1">Afficher ou masquer le bouton de bascule clair/sombre dans la navbar de chaque compte de service.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {DARK_MODE_ACCOUNTS.map(({ key, label, icon: Icon }) => (
+          <div key={key} className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+            <div className="flex items-center gap-2">
+              <Icon className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm font-medium">{label}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{value[key] ?? true ? "Visible" : "Masqué"}</span>
+              <Switch
+                checked={value[key] ?? true}
+                onCheckedChange={(checked) => update(key, checked)}
+                disabled={updateMutation.isPending}
+                aria-label={`Mode sombre — ${label}`}
+                data-testid={`switch-dark-mode-${key.toLowerCase()}`}
               />
             </div>
           </div>
@@ -810,6 +892,9 @@ export default function SystemManagementPage() {
 
       {/* ── Hero Actions (Fast Search / Report per service) ── */}
       <HeroActionsSection />
+
+      {/* ── Dark Mode (per service account) ── */}
+      <AccountDarkModeSection />
 
       {/* ── Delivery Pricing ── */}
       <DeliveryPricingSection />

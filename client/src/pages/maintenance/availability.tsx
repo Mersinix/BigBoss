@@ -72,21 +72,21 @@ export default function Availability() {
   return (
     <div className="space-y-4">
       {/* Vacation mode */}
-      <Card className="rounded-2xl border-gray-100 shadow-sm">
+      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardContent className="pt-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="font-semibold text-sm">Mode Congé / Absence</p>
-              <p className="text-xs text-gray-500 mt-0.5">Masque votre profil et stoppe les nouvelles réservations</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Masque votre profil et stoppe les nouvelles réservations</p>
             </div>
             <button
               onClick={() => setIsOnVacation((v) => !v)}
-              className={`w-12 h-6 rounded-full transition-colors relative ${isOnVacation ? "bg-orange-500" : "bg-gray-200"}`}>
+              className={`w-12 h-6 rounded-full transition-colors relative ${isOnVacation ? "bg-orange-500" : "bg-gray-200 dark:bg-gray-700"}`}>
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isOnVacation ? "left-6" : "left-0.5"}`} />
             </button>
           </div>
           {isOnVacation && (
-            <div className="mt-3 bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-700 flex items-center gap-2">
+            <div className="mt-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 rounded-xl p-3 text-xs text-orange-700 dark:text-orange-400 flex items-center gap-2">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
               Votre profil est masqué. Désactivez le mode congé pour réapparaître dans les résultats.
             </div>
@@ -98,7 +98,7 @@ export default function Availability() {
           independently instead of one global toggle + one global time
           range. Same card/typography/spacing language as the rest of
           this page, just extended. */}
-      <Card className="rounded-2xl border-gray-100 shadow-sm">
+      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" />Jours et horaires de travail</CardTitle>
         </CardHeader>
@@ -106,11 +106,11 @@ export default function Availability() {
           {WEEKLY_DAY_DEFS.map((d) => {
             const day = weeklyHours[d.key];
             return (
-              <div key={d.key} className="flex items-center gap-3 rounded-xl border border-gray-100 p-2.5">
+              <div key={d.key} className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-gray-700/60 p-2.5">
                 <button
                   onClick={() => updateDayHours(d.key, { closed: !day.closed })}
                   className={`w-16 shrink-0 h-9 rounded-xl text-xs font-semibold transition-all ${
-                    !day.closed ? "bg-orange-600 text-white shadow-md" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    !day.closed ? "bg-orange-600 text-white shadow-md" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                   data-testid={`button-toggle-day-${d.key}`}
                 >
@@ -133,10 +133,10 @@ export default function Availability() {
       </Card>
 
       {/* Summary — dynamic, reflects the actual saved per-day schedule (Part 5) */}
-      <Card className="rounded-2xl border-gray-100 shadow-sm bg-gradient-to-br from-orange-50 to-amber-50">
+      <Card className="rounded-2xl border-gray-100 dark:border-orange-500/20 shadow-sm bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-500/10 dark:to-amber-500/10">
         <CardContent className="pt-4">
-          <p className="font-semibold text-sm mb-2 text-orange-700 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" />Résumé de disponibilité</p>
-          <div className="text-xs text-gray-600 space-y-0.5">
+          <p className="font-semibold text-sm mb-2 text-orange-700 dark:text-orange-400 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" />Résumé de disponibilité</p>
+          <div className="text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
             {WEEKLY_DAY_DEFS.map((d) => {
               const day = weeklyHours[d.key];
               return (

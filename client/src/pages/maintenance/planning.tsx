@@ -37,13 +37,13 @@ export type MaintenanceReservationRow = {
 };
 
 const STATUS_META: Record<string, { label: string; color: string; icon: any }> = {
-  PENDING:   { label: "En attente",  color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Clock },
-  CONFIRMED: { label: "Confirmée",   color: "bg-blue-100 text-blue-800 border-blue-200",       icon: CheckCircle },
-  COMPLETED: { label: "Terminée",    color: "bg-green-100 text-green-800 border-green-200",    icon: CheckCircle },
-  CANCELLED: { label: "Annulée",     color: "bg-red-100 text-red-800 border-red-200",          icon: XCircle },
-  RESCHEDULED: { label: "Reprogrammée", color: "bg-purple-100 text-purple-800 border-purple-200", icon: RotateCcw },
-  RESCHEDULE_PENDING: { label: "Modification à confirmer", color: "bg-purple-100 text-purple-800 border-purple-200", icon: RotateCcw },
-  RESCHEDULE_REJECTED: { label: "Modification refusée", color: "bg-gray-100 text-gray-700 border-gray-200", icon: XCircle },
+  PENDING:   { label: "En attente",  color: "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700/40", icon: Clock },
+  CONFIRMED: { label: "Confirmée",   color: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700/40",       icon: CheckCircle },
+  COMPLETED: { label: "Terminée",    color: "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700/40",    icon: CheckCircle },
+  CANCELLED: { label: "Annulée",     color: "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700/40",          icon: XCircle },
+  RESCHEDULED: { label: "Reprogrammée", color: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-700/40", icon: RotateCcw },
+  RESCHEDULE_PENDING: { label: "Modification à confirmer", color: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-700/40", icon: RotateCcw },
+  RESCHEDULE_REJECTED: { label: "Modification refusée", color: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600", icon: XCircle },
 };
 
 // ── Today's date helpers ──────────────────────────────────────────────────────
@@ -82,17 +82,17 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule, onComplete, f
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(fromAddress!)}&destination=${encodeURIComponent(res.location)}`
     : null;
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 shadow-sm p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-bold text-sm">{res.cafeOwner}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{res.service}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{res.service}</p>
         </div>
         <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>
           <Icon className="w-3 h-3" />{meta.label}
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-orange-500" />{res.date} à {res.time}</span>
         <span className="flex items-center gap-1"><MapPin className="w-3 h-3 text-orange-500" />{res.location}</span>
         <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-orange-500" />{res.contactPhone || res.ownerPhone || "—"}</span>
@@ -104,9 +104,9 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule, onComplete, f
           </a>
         )}
       </div>
-      <p className="text-xs text-gray-600 bg-gray-50 rounded-xl px-3 py-2 leading-relaxed">{res.description}</p>
-      <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-200 bg-orange-50">{res.category}</Badge>
-      {res.urgency && <Badge variant="outline" className={`text-[10px] ml-1 ${res.urgency === "URGENT" ? "text-red-600 border-red-200 bg-red-50" : "text-gray-600"}`}>Urgence: {res.urgency}</Badge>}
+      <p className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/60 rounded-xl px-3 py-2 leading-relaxed">{res.description}</p>
+      <Badge variant="outline" className="text-[10px] text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-700/40 bg-orange-50 dark:bg-orange-900/30">{res.category}</Badge>
+      {res.urgency && <Badge variant="outline" className={`text-[10px] ml-1 ${res.urgency === "URGENT" ? "text-red-600 dark:text-red-400 border-red-200 dark:border-red-700/40 bg-red-50 dark:bg-red-900/30" : "text-gray-600 dark:text-gray-400"}`}>Urgence: {res.urgency}</Badge>}
       {res.status === "RESCHEDULE_PENDING" && res.proposedDate && (
         <div className="rounded-xl bg-purple-50 border border-purple-100 px-3 py-2 text-xs text-purple-700">
           Proposition envoyée : <strong>{res.proposedDate}{res.proposedTime ? ` à ${res.proposedTime}` : ""}</strong>. En attente de confirmation du Coffee Owner.
@@ -195,16 +195,16 @@ export default function Planning() {
   return (
     <>
       {/* Sub-tabs */}
-      <div className="flex gap-2 bg-gray-100 rounded-2xl p-1">
+      <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 rounded-2xl p-1">
         {(["today", "upcoming", "past"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setPlanTab(tab)}
             className={`flex-1 py-2 text-xs font-semibold rounded-xl transition-all ${
-              planTab === tab ? "bg-white text-orange-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              planTab === tab ? "bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             }`}>
             {tab === "today" ? "Aujourd'hui" : tab === "upcoming" ? "À venir" : "Passées"}
-            <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${planTab === tab ? "bg-orange-100 text-orange-600" : "bg-gray-200 text-gray-500"}`}>
+            <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${planTab === tab ? "bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-300" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}>
               {reservations.filter((r) => getTab(r.date) === tab).length}
             </span>
           </button>
@@ -214,7 +214,7 @@ export default function Planning() {
       {filtered.length === 0 ? (
         <div className="text-center py-12">
           <Calendar className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-          <p className="font-medium text-gray-600">Aucune réservation</p>
+          <p className="font-medium text-gray-600 dark:text-gray-400">Aucune réservation</p>
           <p className="text-sm text-gray-400 mt-1">Pas de réservation pour cette période.</p>
         </div>
       ) : (
@@ -238,7 +238,7 @@ export default function Planning() {
           <DialogHeader>
             <DialogTitle>Proposer une nouvelle date</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Le Coffee Owner devra confirmer cette modification. La date actuelle reste inchangée jusque-là.
           </p>
           <div className="grid grid-cols-2 gap-3">

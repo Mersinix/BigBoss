@@ -47,6 +47,7 @@ export function DriverAccountShell({ children }: { children: React.ReactNode }) 
       settingsPath="/driver/settings"
       communicationPath="/driver/communication"
       testIdPrefix="driver"
+      accountKey="DRIVER"
     >
       {children}
     </ProfessionalAccountShell>

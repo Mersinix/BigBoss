@@ -2,6 +2,7 @@ import { NotificationPreferencesCard } from "@/components/settings/notification-
 import { AccountIdentityCard } from "@/components/settings/account-identity-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
 import { AccountSecurityCard } from "@/components/settings/account-security-card";
+import { useEffectiveAccountDarkMode } from "@/hooks/use-account-dark-mode";
 
 const ACCENT = "bg-green-600 hover:bg-green-700 text-white";
 
@@ -12,6 +13,7 @@ const ACCENT = "bg-green-600 hover:bg-green-700 text-white";
 // (barista-marketplace/profile.tsx) — the single source of truth for that
 // data, no longer duplicated here.
 export default function BaristaSettingsPage() {
+  const isDark = useEffectiveAccountDarkMode("BARISTA_MARKETPLACE");
   return (
     <div className="flex flex-col gap-5 p-6 max-w-3xl">
       <div>
@@ -21,7 +23,7 @@ export default function BaristaSettingsPage() {
 
       <AccountIdentityCard accentClassName={ACCENT} testIdPrefix="barista" />
 
-      <AccountAddressCard accentClassName={ACCENT} />
+      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} />
 
       <NotificationPreferencesCard role="BARISTA_MARKETPLACE" />
 

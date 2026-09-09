@@ -17,7 +17,7 @@ import { ProfessionalAccountShell, type ProfessionalAccountTab } from "@/compone
 const TABS: ProfessionalAccountTab[] = [
   { path: "/barista-marketplace", label: "Performance", icon: TrendingUp, exact: true },
   { path: "/barista-marketplace/business", label: "Business", icon: Briefcase },
-  { path: "/barista-marketplace/academy", label: "Academy", icon: GraduationCap },
+  { path: "/barista-marketplace/academy", label: "Académie", icon: GraduationCap },
   { path: "/barista-marketplace/communication", label: "Communication", icon: MessageSquare, messageBadge: true },
   { path: "/barista-marketplace/settings", label: "Paramètres", icon: Settings },
 ];
@@ -46,6 +46,7 @@ export function BaristaAccountShell({ children }: { children: React.ReactNode })
       settingsPath="/barista-marketplace/settings"
       communicationPath="/barista-marketplace/communication"
       testIdPrefix="barista"
+      accountKey="BARISTA_MARKETPLACE"
     >
       {children}
     </ProfessionalAccountShell>

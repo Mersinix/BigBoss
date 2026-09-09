@@ -125,7 +125,7 @@ export default function DeliveryCompanyProfilePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="max-w-[220px]">
-            <Label className="text-xs text-gray-500">Type</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Type</Label>
             <Select value={companyType} onValueChange={setCompanyType}>
               <SelectTrigger className="h-9 rounded-xl mt-0.5" data-testid="select-company-type"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -137,11 +137,11 @@ export default function DeliveryCompanyProfilePage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-gray-500">Tarif par livraison ({currency})</Label>
+              <Label className="text-xs text-gray-500 dark:text-gray-400">Tarif par livraison ({currency})</Label>
               <Input value={dailyRate} onChange={(e) => setDailyRate(e.target.value)} type="number" className="h-9 rounded-xl mt-0.5" data-testid="input-daily-rate" />
             </div>
             <div>
-              <Label className="text-xs text-gray-500">Temps de réponse</Label>
+              <Label className="text-xs text-gray-500 dark:text-gray-400">Temps de réponse</Label>
               <Select value={responseTime} onValueChange={setResponseTime}>
                 <SelectTrigger className="h-9 rounded-xl mt-0.5" data-testid="select-response-time"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -154,7 +154,7 @@ export default function DeliveryCompanyProfilePage() {
             </div>
           </div>
           <div>
-            <Label className="text-xs text-gray-500">Description</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Description</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-xl mt-0.5 resize-none" rows={3} data-testid="input-description" />
           </div>
           <div className="flex items-center justify-between pt-2 border-t border-border/50">
@@ -173,11 +173,11 @@ export default function DeliveryCompanyProfilePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label className="text-xs text-gray-500">Expérience (ans)</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Expérience (ans)</Label>
             <Input type="number" min="0" value={experienceYears} onChange={(e) => setExperienceYears(e.target.value)} className="h-9 rounded-xl mt-1 max-w-[180px]" data-testid="input-experience-years" />
           </div>
           <div>
-            <Label className="text-xs text-gray-500">Certifications</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Certifications</Label>
             <div className="flex gap-2 mt-1">
               <Input value={certificationDraft} onChange={(e) => setCertificationDraft(e.target.value)} placeholder="Ex. ISO 9001" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCertification())} className="h-9 rounded-xl" data-testid="input-new-certification" />
               <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!certificationDraft.trim()} onClick={addCertification} data-testid="button-add-certification">Ajouter</Button>
@@ -192,7 +192,7 @@ export default function DeliveryCompanyProfilePage() {
             </div>
           </div>
           <div>
-            <Label className="text-xs text-gray-500">Portfolio (URL des images)</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Portfolio (URL des images)</Label>
             <div className="flex gap-2 mt-1">
               <Input value={portfolioDraft} onChange={(e) => setPortfolioDraft(e.target.value)} placeholder="https://…" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioUrl())} className="h-9 rounded-xl" data-testid="input-new-portfolio-url" />
               <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!portfolioDraft.trim()} onClick={addPortfolioUrl} data-testid="button-add-portfolio-url"><Plus className="w-4 h-4" /></Button>
@@ -216,7 +216,7 @@ export default function DeliveryCompanyProfilePage() {
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><MapPin className="w-4 h-4 text-teal-500" />Zone d'intervention</CardTitle>
         </CardHeader>
         <CardContent>
-          <Label className="text-xs text-gray-500">Villes/zones desservies (séparées par des virgules)</Label>
+          <Label className="text-xs text-gray-500 dark:text-gray-400">Villes/zones desservies (séparées par des virgules)</Label>
           <Input value={deliveryZones} onChange={(e) => setDeliveryZones(e.target.value)} placeholder="Ex: Grand Tunis, Sfax, Sousse" className="h-9 rounded-xl mt-1" data-testid="input-delivery-zones" />
         </CardContent>
       </Card>
@@ -227,7 +227,7 @@ export default function DeliveryCompanyProfilePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label className="text-xs text-gray-500 mb-2 block">Jours et horaires disponibles</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Jours et horaires disponibles</Label>
             <div className="space-y-2">
               {WEEKLY_DAY_DEFS.map((d) => {
                 const day = weeklyHours[d.key];

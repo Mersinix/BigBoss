@@ -39,7 +39,7 @@ export default function Reviews() {
   });
 
   return (
-    <Card className="rounded-2xl border-gray-100 shadow-sm">
+    <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <Star className="w-4 h-4 text-orange-500" />Avis clients
@@ -47,11 +47,11 @@ export default function Reviews() {
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? <p className="text-sm text-gray-400">Chargement…</p> : reviews.length === 0 ? (
-          <p className="text-sm text-gray-500">Aucun avis reçu pour le moment.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Aucun avis reçu pour le moment.</p>
         ) : reviews.map((review) => {
           const reported = !!review.reportedAt;
           return (
-            <div key={review.id} className="rounded-xl bg-gray-50 p-3">
+            <div key={review.id} className="rounded-xl bg-gray-50 dark:bg-gray-700/60 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold">{review.cafeOwnerName || review.cafeName || "Coffee Owner"}</p>
@@ -62,7 +62,7 @@ export default function Reviews() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-gray-500 hover:text-red-600"
+                  className="h-7 px-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
                   disabled={reported}
                   onClick={() => setReportId(review.id)}
                   title={reported ? "Avis déjà signalé" : "Signaler cet avis"}
@@ -70,7 +70,7 @@ export default function Reviews() {
                   <Flag className="w-3.5 h-3.5" />
                 </Button>
               </div>
-              {review.comment && <p className="text-xs text-gray-600 mt-2 leading-relaxed">{review.comment}</p>}
+              {review.comment && <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">{review.comment}</p>}
               {reported && <Badge variant="outline" className="mt-2 text-[10px] text-orange-600 border-orange-200">Signalé</Badge>}
             </div>
           );

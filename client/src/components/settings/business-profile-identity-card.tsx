@@ -64,7 +64,7 @@ export function BusinessProfileIdentityCard({
               <p className="text-sm font-medium text-foreground truncate">{user?.phone || "—"}</p>
             </div>
             <div className="sm:col-span-2">
-              <p className="text-[11px] text-muted-foreground">Email</p>
+              <p className="text-[11px] text-muted-foreground">E-mail</p>
               <p className="text-sm font-medium text-foreground truncate">{user?.email || "—"}</p>
             </div>
           </div>

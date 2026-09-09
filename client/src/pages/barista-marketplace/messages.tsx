@@ -138,7 +138,7 @@ export default function BaristaMarketplaceMessagesPage() {
                   {activeConversation.title ?? (activeConversation.otherParticipants.map((participant) => participant.name).join(", ") || "Café")}
                 </p>
                 <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded ${activeConversation.service === "ACADEMY" ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"}`}>
-                  {activeConversation.service === "ACADEMY" ? "ACADEMY" : "BARISTA"}
+                  {activeConversation.service === "ACADEMY" ? "ACADÉMIE" : "BARISTA"}
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2.5">

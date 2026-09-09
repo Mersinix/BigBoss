@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { useThemeStore } from "@/store/theme-store";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
 import { Input } from "@/components/ui/input";
@@ -32,10 +31,10 @@ export const ADDRESS_DETAIL_FIELDS: { key: keyof AddressDetails; label: string; 
 // PATCH /api/auth/me/profile { locationDetails } — never the lat/lng-requiring
 // PATCH /api/auth/me/location route, so this can never override the official
 // coordinates Admin controls via the map modal.
-export function AddressDetailsFields({ onSaved, accentClassName = "" }: { onSaved?: () => void; accentClassName?: string }) {
+export function AddressDetailsFields({ onSaved, accentClassName = "", isDark = false }: { onSaved?: () => void; accentClassName?: string; isDark?: boolean }) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const dk = useThemeStore((s) => s.isDark);
+  const dk = isDark;
   const textPrimary = dk ? "text-white" : "text-gray-900";
   const textMuted = dk ? "text-gray-400" : "text-gray-500";
   const inputCls = dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "";

@@ -135,17 +135,17 @@ export default function Profile() {
 
       {/* Business/professional details — distinct from the read-only identity
           card above (Part 10: no duplicate "Informations personnelles"). */}
-      <Card className="rounded-2xl border-gray-100 shadow-sm">
+      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Briefcase className="w-4 h-4 text-orange-500" />Détails professionnels</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <Label className="text-xs text-gray-500">Titre du poste</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Titre du poste</Label>
             <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="h-9 rounded-xl mt-0.5" />
           </div>
           <div className="max-w-[220px]">
-            <Label className="text-xs text-gray-500">Type</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Type</Label>
             <Select value={agentType} onValueChange={setAgentType}>
               <SelectTrigger className="h-9 rounded-xl mt-0.5"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -157,11 +157,11 @@ export default function Profile() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-gray-500">Tarif journalier ({currency})</Label>
+              <Label className="text-xs text-gray-500 dark:text-gray-400">Tarif journalier ({currency})</Label>
               <Input value={dailyRate} onChange={(e) => setDailyRate(e.target.value)} type="number" className="h-9 rounded-xl mt-0.5" />
             </div>
             <div>
-              <Label className="text-xs text-gray-500">Temps de réponse</Label>
+              <Label className="text-xs text-gray-500 dark:text-gray-400">Temps de réponse</Label>
               <Select value={responseTime} onValueChange={setResponseTime}>
                 <SelectTrigger className="h-9 rounded-xl mt-0.5"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -174,20 +174,20 @@ export default function Profile() {
             </div>
           </div>
           <div>
-            <Label className="text-xs text-gray-500">Biographie</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Biographie</Label>
             <Textarea value={bio} onChange={(e) => setBio(e.target.value)} className="rounded-xl mt-0.5 resize-none" rows={3} />
           </div>
         </CardContent>
       </Card>
 
       {/* Certifications, portfolio and experience use the shared marketplace profile. */}
-      <Card className="rounded-2xl border-gray-100 shadow-sm">
+      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Award className="w-4 h-4 text-orange-500" />Certifications & expérience</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label className="text-xs text-gray-500">Certifications</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Certifications</Label>
             <div className="flex gap-2 mt-1">
               <Input
                 value={certificationDraft}
@@ -209,7 +209,7 @@ export default function Profile() {
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {certifications.map((certification, index) => (
-                <span key={`${certification}-${index}`} className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 text-xs">
+                <span key={`${certification}-${index}`} className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700/40 px-2.5 py-1 text-xs">
                   {certification}
                   <button type="button" aria-label={`Supprimer ${certification}`} onClick={() => setCertifications((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
                     <XCircle className="w-3 h-3" />
@@ -219,11 +219,11 @@ export default function Profile() {
             </div>
           </div>
           <div>
-            <Label className="text-xs text-gray-500">Expérience (ans)</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Expérience (ans)</Label>
             <Input type="number" min="0" value={yearsExperience} onChange={(event) => setYearsExperience(event.target.value)} className="h-9 rounded-xl mt-1 max-w-[180px]" />
           </div>
           <div>
-            <Label className="text-xs text-gray-500">Portfolio (URL des images)</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Portfolio (URL des images)</Label>
             <div className="flex gap-2 mt-1">
               <Input
                 value={portfolioDraft}
@@ -247,7 +247,7 @@ export default function Profile() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                 {portfolioImages.map((image, index) => (
                   <div key={`${image}-${index}`} className="relative group">
-                    <img src={image} alt={`Portfolio ${index + 1}`} className="h-24 w-full rounded-xl object-cover bg-gray-100" />
+                    <img src={image} alt={`Portfolio ${index + 1}`} className="h-24 w-full rounded-xl object-cover bg-gray-100 dark:bg-gray-800" />
                     <button type="button" aria-label={`Supprimer l'image ${index + 1}`} onClick={() => setPortfolioImages((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <X className="w-3 h-3" />
                     </button>
@@ -260,7 +260,7 @@ export default function Profile() {
       </Card>
 
       {/* Specialties */}
-      <Card className="rounded-2xl border-gray-100 shadow-sm">
+      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Wrench className="w-4 h-4 text-orange-500" />Spécialités & Compétences</CardTitle>
         </CardHeader>
@@ -273,7 +273,7 @@ export default function Profile() {
                 className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
                   selectedSpecialties.includes(s)
                     ? "bg-orange-600 text-white border-orange-600"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-orange-300"
+                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600"
                 }`}>
                 {s}
               </button>
@@ -283,7 +283,7 @@ export default function Profile() {
       </Card>
 
       {/* Coverage area */}
-      <Card className="rounded-2xl border-gray-100 shadow-sm">
+      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" />Zone d'intervention</CardTitle>
         </CardHeader>
@@ -296,7 +296,7 @@ export default function Profile() {
                 className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
                   selectedAreas.includes(a)
                     ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
+                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600"
                 }`}>
                 {a}
               </button>
@@ -305,7 +305,7 @@ export default function Profile() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 shadow-sm">
+      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><SettingsIcon className="w-4 h-4 text-orange-500" />Visibilité</CardTitle>
         </CardHeader>
@@ -313,7 +313,7 @@ export default function Profile() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Afficher mon profil sur la marketplace</p>
-              <p className="text-xs text-gray-500 mt-0.5">Lorsque désactivé, les cafés ne peuvent plus vous trouver ni réserver.</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Lorsque désactivé, les cafés ne peuvent plus vous trouver ni réserver.</p>
             </div>
             <Switch checked={marketplaceVisible} onCheckedChange={handleToggleVisible} disabled={toggleVisible.isPending} data-testid="switch-profile-visible" />
           </div>

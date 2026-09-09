@@ -16,6 +16,7 @@ import {
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport, printFavorites,
   printerProfiles, type PrinterProfile, type InsertPrinterProfile, type PrintCompanyCard,
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
+  accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   baristaWorkHistory, baristaReports,
   academyProfiles, academyCourses, academyCourseSessions, academyRegistrations,
@@ -5123,6 +5124,36 @@ export class DatabaseStorage implements IStorage {
       await db.insert(heroActionSettings).values({ service, ...updates });
     }
     return this.getHeroActionSettings();
+  }
+
+  // Admin-controlled per-account dark-mode-toggle visibility for the 7
+  // non-Coffee-Owner service accounts — mirrors getHeroActionSettings/
+  // setHeroActionSettings exactly (auto-seeds missing rows, default true so
+  // introducing this control doesn't hide the dark mode capability the
+  // accounts are getting in the same change).
+  async getAccountDarkModeSettings(): Promise<AccountDarkModeSettingsMap> {
+    const ALL_ACCOUNTS: DarkModeAccount[] = ['BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING'];
+    const rows = await db.select().from(accountDarkModeSettings);
+    const map = {} as AccountDarkModeSettingsMap;
+    for (const account of ALL_ACCOUNTS) map[account] = true;
+    for (const row of rows) map[row.account as DarkModeAccount] = row.enabled;
+    const missing = ALL_ACCOUNTS.filter((a) => !rows.some((r) => r.account === a));
+    if (missing.length) {
+      for (const account of missing) {
+        await db.insert(accountDarkModeSettings).values({ account }).onConflictDoNothing();
+      }
+    }
+    return map;
+  }
+
+  async setAccountDarkModeSetting(account: DarkModeAccount, enabled: boolean): Promise<AccountDarkModeSettingsMap> {
+    const existing = await db.select().from(accountDarkModeSettings).where(eq(accountDarkModeSettings.account, account));
+    if (existing.length) {
+      await db.update(accountDarkModeSettings).set({ enabled, updatedAt: new Date() }).where(eq(accountDarkModeSettings.account, account));
+    } else {
+      await db.insert(accountDarkModeSettings).values({ account, enabled });
+    }
+    return this.getAccountDarkModeSettings();
   }
 
   /** The Printer's own account (users.printCategories/printSubCategories) is

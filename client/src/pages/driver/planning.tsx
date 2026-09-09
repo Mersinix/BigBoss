@@ -16,9 +16,9 @@ import { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 const PRIORITY_META: Record<string, { label: string; cls: string }> = {
-  URGENT: { label: "Urgent", cls: "bg-red-100 text-red-700" },
-  HIGH: { label: "Haute priorité", cls: "bg-orange-100 text-orange-700" },
-  NORMAL: { label: "Normal", cls: "bg-gray-100 text-gray-600" },
+  URGENT: { label: "Urgent", cls: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" },
+  HIGH: { label: "Haute priorité", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300" },
+  NORMAL: { label: "Normal", cls: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300" },
 };
 
 function isSameDay(a: Date, b: Date) {
@@ -126,7 +126,7 @@ export default function DriverPlanningPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((d) => {
-            const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700" };
+            const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
             const priority = PRIORITY_META[d.order.priority] ?? PRIORITY_META.NORMAL;
             const canGo = !["DELIVERED", "CANCELLED"].includes(d.status);
             return (

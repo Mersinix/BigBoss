@@ -193,12 +193,12 @@ export default function BaristaProfilePage() {
               {user?.locationAddress ? (
                 <>
                   <Input value={user.locationAddress} disabled data-testid="input-profile-city" />
-                  <p className="text-[11px] text-muted-foreground mt-1">Dérivée de votre adresse (Settings → Localisation).</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">Dérivée de votre adresse (Paramètres → Localisation).</p>
                 </>
               ) : (
                 <>
                   <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Tunis" data-testid="input-profile-city" />
-                  <p className="text-[11px] text-muted-foreground mt-1">Ajoutez une adresse dans Settings pour une localisation précise.</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">Ajoutez une adresse dans Paramètres pour une localisation précise.</p>
                 </>
               )}
             </div>

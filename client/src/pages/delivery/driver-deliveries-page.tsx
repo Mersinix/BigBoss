@@ -176,7 +176,7 @@ export default function DriverDeliveriesPage() {
             {(listTab === "active" ? active : completed).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">Aucune livraison ici.</p>
             ) : (listTab === "active" ? active : completed).map((d) => {
-              const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700" };
+              const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
               const dStep = NEXT_STEP[d.status];
               return (
                 <Card key={d.id} className={d.id === current?.id ? "border-primary" : ""} data-testid={`card-delivery-list-${d.id}`}>

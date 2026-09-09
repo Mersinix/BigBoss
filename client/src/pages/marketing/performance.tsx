@@ -14,11 +14,11 @@ export default function MarketingPerformance() {
       testIdPrefix="marketing-performance"
       activeTextClass="text-fuchsia-600 dark:text-fuchsia-400"
       tabs={[
-        { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, content: <MarketingDashboard /> },
-        { key: "analytics", label: "Analytics", icon: BarChart2, content: <MarketingAnalytics /> },
+        { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <MarketingDashboard /> },
+        { key: "analytics", label: "Analyses", icon: BarChart2, content: <MarketingAnalytics /> },
         {
-          key: "revenue", label: "Revenue", icon: DollarSign,
-          content: <PerformanceEmptyState message="Vos revenus Marketing sont détaillés dans l'onglet Analytics ci-dessus." />,
+          key: "revenue", label: "Revenus", icon: DollarSign,
+          content: <PerformanceEmptyState message="Vos revenus Marketing sont détaillés dans l'onglet Analyses ci-dessus." />,
         },
       ]}
     />

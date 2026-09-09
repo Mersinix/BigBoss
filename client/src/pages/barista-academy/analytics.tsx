@@ -77,7 +77,7 @@ export default function AcademyAnalyticsPage() {
   return (
     <div className="flex flex-col gap-5 p-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+        <h1 className="text-2xl font-bold text-foreground">Analyses</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Vue d'ensemble de la performance de vos formations.</p>
       </div>
 

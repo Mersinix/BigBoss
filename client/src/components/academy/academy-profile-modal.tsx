@@ -81,11 +81,11 @@ function AcademyProfileAvailabilityModal({
                       <div className="flex items-center gap-2">
                         <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-indigo-400" : "text-indigo-600") : textPrimary}`}>{label}</span>
                         {isToday && (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-indigo-500/30 text-indigo-300" : "bg-indigo-100 text-indigo-700"}`}>Today</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-indigo-500/30 text-indigo-300" : "bg-indigo-100 text-indigo-700"}`}>Aujourd'hui</span>
                         )}
                       </div>
                       {day?.closed ? (
-                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
+                        <span className={`text-[12px] font-semibold ${closedColor}`}>Fermé</span>
                       ) : day ? (
                         <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-indigo-300" : "text-indigo-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
                       ) : (

@@ -13,12 +13,12 @@ export default function BaristaMarketplacePerformance() {
       testIdPrefix="barista-performance"
       activeTextClass="text-green-600 dark:text-green-400"
       tabs={[
-        { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, content: <BaristaMarketplaceDashboard /> },
+        { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <BaristaMarketplaceDashboard /> },
         {
-          key: "analytics", label: "Analytics", icon: BarChart2,
-          content: <PerformanceEmptyState message="Vos statistiques détaillées sont affichées sur l'onglet Dashboard ci-dessus." />,
+          key: "analytics", label: "Analyses", icon: BarChart2,
+          content: <PerformanceEmptyState message="Vos statistiques détaillées sont affichées sur l'onglet Tableau de bord ci-dessus." />,
         },
-        { key: "revenue", label: "Revenue", icon: DollarSign, content: <BaristaMarketplaceRevenuePage /> },
+        { key: "revenue", label: "Revenus", icon: DollarSign, content: <BaristaMarketplaceRevenuePage /> },
       ]}
     />
   );

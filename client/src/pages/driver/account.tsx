@@ -36,11 +36,11 @@ export default function DriverAccountPage() {
   }, [deliveries]);
 
   const statusLabel: Record<string, { label: string; cls: string }> = {
-    approved: { label: "Compte approuvé", cls: "bg-green-100 text-green-700" },
-    pending: { label: "En attente d'approbation", cls: "bg-amber-100 text-amber-700" },
-    rejected: { label: "Compte refusé", cls: "bg-red-100 text-red-700" },
+    approved: { label: "Compte approuvé", cls: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300" },
+    pending: { label: "En attente d'approbation", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" },
+    rejected: { label: "Compte refusé", cls: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" },
   };
-  const accountStatus = statusLabel[user?.status ?? "approved"] ?? { label: user?.status ?? "—", cls: "bg-gray-100 text-gray-700" };
+  const accountStatus = statusLabel[user?.status ?? "approved"] ?? { label: user?.status ?? "—", cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,7 +73,7 @@ export default function DriverAccountPage() {
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"><Mail className="w-4 h-4 text-primary" /></div>
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="text-xs text-muted-foreground">E-mail</p>
               <p className="text-sm font-medium truncate">{user?.email}</p>
             </div>
           </div>

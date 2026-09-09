@@ -42,8 +42,8 @@ const REGISTRATION_STATUS_LABELS: Record<AcademyRegistrationStatus, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", CANCELLED: "Annulée", COMPLETED: "Terminée",
 };
 const REGISTRATION_STATUS_COLORS: Record<AcademyRegistrationStatus, string> = {
-  PENDING: "bg-amber-100 text-amber-700", CONFIRMED: "bg-indigo-100 text-indigo-700",
-  CANCELLED: "bg-gray-100 text-gray-600", COMPLETED: "bg-green-100 text-green-700",
+  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300", CONFIRMED: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300",
+  CANCELLED: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300", COMPLETED: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
 };
 
 function StatusBadge({ status }: { status: AcademyRegistrationStatus }) {
@@ -425,7 +425,7 @@ export default function BaristaAcademyMarketplacePage() {
   return (
     <div className="flex flex-col gap-5 p-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Academy</h1>
+        <h1 className="text-2xl font-bold text-foreground">Académie</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Formez-vous auprès des académies BigBoss et suivez vos inscriptions.</p>
       </div>
 

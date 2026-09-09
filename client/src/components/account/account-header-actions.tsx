@@ -25,7 +25,7 @@ export function AccountHeaderActions({
       <Link href={messagesPath}>
         <a
           aria-label="Messages"
-          title="Messages"
+          title="Messagerie"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors"
           data-testid="button-header-messages"
         >

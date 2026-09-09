@@ -85,7 +85,7 @@ export function AccountIdentityCard({
           <Input value={phone} onChange={(e) => setPhone(e.target.value)} data-testid={`input-${testIdPrefix}-phone`} />
         </div>
         <div className="space-y-1.5 sm:col-span-2">
-          <Label>Email</Label>
+          <Label>E-mail</Label>
           <Input value={user?.email ?? ""} disabled />
         </div>
         <div className="space-y-1.5">

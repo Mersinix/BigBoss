@@ -46,6 +46,7 @@ export function AcademyAccountShell({ children }: { children: React.ReactNode })
       settingsPath="/barista-academy/settings"
       communicationPath="/barista-academy/communication"
       testIdPrefix="academy"
+      accountKey="BARISTA_ACADEMY"
     >
       {children}
     </ProfessionalAccountShell>

@@ -44,11 +44,11 @@ export default function PrinterDashboard() {
   const isLoading = ordersLoading || catalogLoading || revenueLoading;
 
   const statusMeta: Record<string, { label: string; cls: string }> = {
-    approved: { label: "Compte approuvé", cls: "bg-green-100 text-green-700" },
-    pending: { label: "En attente d'approbation", cls: "bg-amber-100 text-amber-700" },
-    rejected: { label: "Compte refusé", cls: "bg-red-100 text-red-700" },
+    approved: { label: "Compte approuvé", cls: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300" },
+    pending: { label: "En attente d'approbation", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" },
+    rejected: { label: "Compte refusé", cls: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" },
   };
-  const accountStatus = statusMeta[(user as any)?.status ?? "approved"] ?? { label: (user as any)?.status ?? "—", cls: "bg-gray-100 text-gray-700" };
+  const accountStatus = statusMeta[(user as any)?.status ?? "approved"] ?? { label: (user as any)?.status ?? "—", cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
 
   const now = new Date();
   const ordersThisMonth = useMemo(
@@ -113,7 +113,7 @@ export default function PrinterDashboard() {
       </Card>
 
       <DashboardHero
-        title="Dashboard Imprimerie"
+        title="Tableau de bord Imprimerie"
         subtitle={`Bienvenue, ${user?.name}. Voici un aperçu de votre activité.`}
         stat={fmt(revenue?.currentMonthCents ?? 0)}
         statLabel="CA ce mois-ci"

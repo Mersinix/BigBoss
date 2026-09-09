@@ -19,12 +19,12 @@ const STATUS_LABELS: Record<BaristaRequestStatus, string> = {
 };
 
 const STATUS_COLORS: Record<BaristaRequestStatus, string> = {
-  PENDING: "bg-amber-100 text-amber-700",
-  DISCUSSION: "bg-blue-100 text-blue-700",
-  ACCEPTED: "bg-green-100 text-green-700",
-  REJECTED: "bg-red-100 text-red-700",
-  CANCELLED: "bg-gray-100 text-gray-600",
-  COMPLETED: "bg-purple-100 text-purple-700",
+  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+  DISCUSSION: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+  ACCEPTED: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+  REJECTED: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
+  CANCELLED: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+  COMPLETED: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
 };
 
 function RequestCard({ request }: { request: BaristaRequest }) {

@@ -14,11 +14,11 @@ export default function PrinterPerformance() {
       testIdPrefix="printer-performance"
       activeTextClass="text-blue-600 dark:text-blue-400"
       tabs={[
-        { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, content: <PrinterDashboard /> },
-        { key: "analytics", label: "Analytics", icon: BarChart2, content: <PrinterAnalytics /> },
+        { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <PrinterDashboard /> },
+        { key: "analytics", label: "Analyses", icon: BarChart2, content: <PrinterAnalytics /> },
         {
-          key: "revenue", label: "Revenue", icon: DollarSign,
-          content: <PerformanceEmptyState message="Vos revenus PRINT sont détaillés dans les onglets Dashboard, Analytics et Facturation." />,
+          key: "revenue", label: "Revenus", icon: DollarSign,
+          content: <PerformanceEmptyState message="Vos revenus PRINT sont détaillés dans les onglets Tableau de bord, Analyses et Facturation." />,
         },
       ]}
     />

@@ -109,7 +109,7 @@ export default function DeliveryDashboard() {
           ) : (
             <div className="space-y-2">
               {active.slice(0, 6).map((d) => {
-                const meta = STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700" };
+                const meta = STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
                 return (
                   <div key={d.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/40">
                     <div className="min-w-0">

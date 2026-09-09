@@ -82,7 +82,7 @@ export default function MyDeliveriesPage() {
       ) : (
         <div className="space-y-3">
           {list.map((d) => {
-            const meta = STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700" };
+            const meta = STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
             return (
               <Card key={d.id}>
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">

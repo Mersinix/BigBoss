@@ -13,9 +13,9 @@ export default function DriverPerformance() {
       testIdPrefix="driver-performance"
       activeTextClass="text-blue-600 dark:text-blue-400"
       tabs={[
-        { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, content: <DriverAccountPage /> },
-        { key: "analytics", label: "Analytics", icon: Activity, content: <DriverActivityPage /> },
-        { key: "revenue", label: "Revenue", icon: Wallet, content: <DriverWalletPage /> },
+        { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <DriverAccountPage /> },
+        { key: "analytics", label: "Analyses", icon: Activity, content: <DriverActivityPage /> },
+        { key: "revenue", label: "Revenus", icon: Wallet, content: <DriverWalletPage /> },
       ]}
     />
   );

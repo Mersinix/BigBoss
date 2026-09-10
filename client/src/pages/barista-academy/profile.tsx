@@ -87,7 +87,7 @@ export default function AcademyProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-5 p-6 max-w-2xl">
+    <div className="flex flex-col gap-5 max-w-2xl">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Profil</h1>
@@ -152,6 +152,8 @@ export default function AcademyProfilePage() {
         accentClassName={ACCENT}
         testIdPrefix="academy"
         className={CARD_CLASS}
+        summaryClassName="border-transparent bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-500/10 dark:to-violet-500/10"
+        summaryTextClassName="text-indigo-700 dark:text-indigo-400"
       />
 
       <AcademyProfileModal

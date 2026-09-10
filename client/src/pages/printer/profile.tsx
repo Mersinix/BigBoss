@@ -177,6 +177,8 @@ export default function PrinterProfilePage() {
         accentClassName={ACCENT}
         testIdPrefix="printer"
         className={CARD_CLASS}
+        summaryClassName="border-transparent bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-500/10 dark:to-sky-500/10"
+        summaryTextClassName="text-blue-700 dark:text-blue-400"
       />
 
       <PrintCompanyDetailModal

@@ -103,7 +103,7 @@ export default function DeliveryCompanyProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-5 p-6 max-w-3xl">
+    <div className="flex flex-col gap-5 max-w-3xl">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Profil de l'entreprise</h1>
@@ -258,17 +258,6 @@ export default function DeliveryCompanyProfilePage() {
             </div>
           </div>
 
-          <div className="rounded-xl bg-muted/40 p-3">
-            <p className="font-semibold text-xs mb-2 text-teal-700 dark:text-teal-400 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" />Résumé de disponibilité</p>
-            <div className="text-xs text-muted-foreground space-y-0.5">
-              {WEEKLY_DAY_DEFS.map((d) => {
-                const day = weeklyHours[d.key];
-                return <p key={d.key}><strong className="text-foreground">{d.label} :</strong> {day.closed ? "Fermé" : `${day.open} – ${day.close}`}</p>;
-              })}
-              <p className="pt-1"><strong className="text-foreground">Statut :</strong> {isOnVacation ? "🔴 En congé" : "🟢 Disponible"}</p>
-            </div>
-          </div>
-
           <div className="flex items-center justify-between pt-2 border-t border-border/50">
             <div>
               <p className="text-sm font-medium">En congé / indisponible</p>
@@ -282,6 +271,22 @@ export default function DeliveryCompanyProfilePage() {
               Votre entreprise est masquée. Désactivez le mode congé pour réapparaître.
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Résumé de disponibilité — its own separated Card (own background/border), matching
+          the Maintenance reference's visual separation instead of being nested inside the
+          editor's card. */}
+      <Card className="rounded-2xl shadow-sm border-transparent bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-500/10 dark:to-cyan-500/10">
+        <CardContent className="pt-4">
+          <p className="font-semibold text-xs mb-2 text-teal-700 dark:text-teal-400 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" />Résumé de disponibilité</p>
+          <div className="text-xs text-muted-foreground space-y-0.5">
+            {WEEKLY_DAY_DEFS.map((d) => {
+              const day = weeklyHours[d.key];
+              return <p key={d.key}><strong className="text-foreground">{d.label} :</strong> {day.closed ? "Fermé" : `${day.open} – ${day.close}`}</p>;
+            })}
+            <p className="pt-1"><strong className="text-foreground">Statut :</strong> {isOnVacation ? "🔴 En congé" : "🟢 Disponible"}</p>
+          </div>
         </CardContent>
       </Card>
 

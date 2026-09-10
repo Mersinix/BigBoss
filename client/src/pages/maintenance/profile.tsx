@@ -24,6 +24,10 @@ import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import Availability from "@/pages/maintenance/availability";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 
+// Portfolio cap — shared across every professional account's Profile → Portfolio
+// (Maintenance/Marketing/Delivery Company/Barista Marketplace/Academy/Printer/Driver).
+const MAX_PORTFOLIO_IMAGES = 4;
+
 // ── Profile tab ────────────────────────────────────────────────────────────────
 
 export default function Profile() {
@@ -228,13 +232,14 @@ export default function Profile() {
             <Input type="number" min="0" value={yearsExperience} onChange={(event) => setYearsExperience(event.target.value)} className="h-9 rounded-xl mt-1 max-w-[180px]" />
           </div>
           <div>
-            <Label className="text-xs text-gray-500 dark:text-gray-400">Portfolio (URL des images)</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Portfolio — URL des images ({portfolioImages.length}/{MAX_PORTFOLIO_IMAGES})</Label>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Ajoutez jusqu'à {MAX_PORTFOLIO_IMAGES} photos de votre activité.</p>
             <div className="flex gap-2 mt-1">
               <Input
                 value={portfolioDraft}
                 onChange={(event) => setPortfolioDraft(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && portfolioDraft.trim()) {
+                  if (event.key === "Enter" && portfolioDraft.trim() && portfolioImages.length < MAX_PORTFOLIO_IMAGES) {
                     event.preventDefault();
                     setPortfolioImages((current) => [...current, portfolioDraft.trim()]);
                     setPortfolioDraft("");
@@ -242,8 +247,9 @@ export default function Profile() {
                 }}
                 placeholder="https://…"
                 className="h-9 rounded-xl"
+                disabled={portfolioImages.length >= MAX_PORTFOLIO_IMAGES}
               />
-              <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!portfolioDraft.trim()} onClick={() => {
+              <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!portfolioDraft.trim() || portfolioImages.length >= MAX_PORTFOLIO_IMAGES} onClick={() => {
                 setPortfolioImages((current) => [...current, portfolioDraft.trim()]);
                 setPortfolioDraft("");
               }}>Ajouter</Button>

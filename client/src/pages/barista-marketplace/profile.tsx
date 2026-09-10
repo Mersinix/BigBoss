@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+const MAX_PORTFOLIO_IMAGES = 4;
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -94,7 +95,7 @@ export default function BaristaProfilePage() {
   };
   const addPortfolioUrl = () => {
     const v = newPortfolioUrl.trim();
-    if (!v || portfolioUrls.includes(v)) return;
+    if (!v || portfolioUrls.includes(v) || portfolioUrls.length >= MAX_PORTFOLIO_IMAGES) return;
     setPortfolioUrls((prev) => [...prev, v]);
     setNewPortfolioUrl("");
   };
@@ -279,7 +280,8 @@ export default function BaristaProfilePage() {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1"><ImageIcon className="w-3.5 h-3.5" /> Portfolio (images)</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1"><ImageIcon className="w-3.5 h-3.5" /> Portfolio — images ({portfolioUrls.length}/{MAX_PORTFOLIO_IMAGES})</label>
+            <p className="text-xs text-muted-foreground mb-2">Ajoutez jusqu'à {MAX_PORTFOLIO_IMAGES} photos de votre activité.</p>
             {portfolioUrls.length > 0 && (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
                 {portfolioUrls.map((url) => (
@@ -298,8 +300,8 @@ export default function BaristaProfilePage() {
               </div>
             )}
             <div className="flex gap-2">
-              <Input value={newPortfolioUrl} onChange={(e) => setNewPortfolioUrl(e.target.value)} placeholder="https://…" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioUrl())} data-testid="input-new-portfolio-url" />
-              <Button type="button" variant="outline" size="icon" onClick={addPortfolioUrl} data-testid="button-add-portfolio-url"><Plus className="w-4 h-4" /></Button>
+              <Input value={newPortfolioUrl} onChange={(e) => setNewPortfolioUrl(e.target.value)} placeholder="https://…" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioUrl())} data-testid="input-new-portfolio-url" disabled={portfolioUrls.length >= MAX_PORTFOLIO_IMAGES} />
+              <Button type="button" variant="outline" size="icon" disabled={!newPortfolioUrl.trim() || portfolioUrls.length >= MAX_PORTFOLIO_IMAGES} onClick={addPortfolioUrl} data-testid="button-add-portfolio-url"><Plus className="w-4 h-4" /></Button>
             </div>
           </div>
         </CardContent>

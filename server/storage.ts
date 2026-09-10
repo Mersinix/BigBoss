@@ -5377,6 +5377,7 @@ export class DatabaseStorage implements IStorage {
       isOnVacation: profile.isOnVacation,
       rating: stats.get(userId)?.rating ?? 0,
       reviewCount: stats.get(userId)?.reviewCount ?? 0,
+      portfolioImages: profile.portfolioImages ?? [],
       categories: mapping.categories,
       services,
     };
@@ -6481,7 +6482,7 @@ export class DatabaseStorage implements IStorage {
   async getAcademyProfileCard(userId: number): Promise<{
     userId: number; name: string; profileImageUrl: string | null; coverImageUrl: string | null; location: string; phone: string | null;
     description: string; marketplaceVisible: boolean; weeklyHours: OpeningHoursMap | null; isOnVacation: boolean;
-    rating: number; reviewCount: number;
+    rating: number; reviewCount: number; portfolioImages: string[];
     courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
   } | undefined> {
     const user = await this.getUser(userId);
@@ -6519,6 +6520,7 @@ export class DatabaseStorage implements IStorage {
       isOnVacation: profile.isOnVacation,
       rating: stats.get(userId)?.rating ?? 0,
       reviewCount: stats.get(userId)?.reviewCount ?? 0,
+      portfolioImages: profile.portfolioImages ?? [],
       courses,
       upcomingSessions,
     };

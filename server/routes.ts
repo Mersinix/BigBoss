@@ -651,7 +651,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       responseTime: z.string().optional(),
       dailyRateInCents: z.number().int().min(0).optional(),
       description: z.string().optional(),
-      portfolioImages: z.array(z.string()).optional(),
+      portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
       coverageArea: z.string().optional(),
       marketplaceVisible: z.boolean().optional(),
     }).parse(req.body);
@@ -997,7 +997,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       responseTime: z.string().optional(),
       startingPriceInCents: z.number().int().min(0).optional(),
       description: z.string().optional(),
-      portfolioImages: z.array(z.string()).max(10, "10 photos maximum").optional(),
+      portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
       websiteUrl: z.union([z.string().trim().url(), z.literal("")]).optional().transform((v) => (v === "" ? null : v)),
       marketplaceVisible: z.boolean().optional(),
     }).parse(req.body);
@@ -1620,6 +1620,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         websiteUrl: z.union([z.string().trim().url(), z.literal("")]).optional().transform((v) => (v === "" ? null : v)),
         marketplaceVisible: z.boolean().optional(),
         isOnVacation: z.boolean().optional(),
+        portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
         weeklyHours: z.object({
           monday: dayHoursSchema, tuesday: dayHoursSchema, wednesday: dayHoursSchema,
           thursday: dayHoursSchema, friday: dayHoursSchema, saturday: dayHoursSchema, sunday: dayHoursSchema,
@@ -2498,7 +2499,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // "Certifications & expérience" (Part 18) — real, Barista-entered values only.
         certifications: z.array(z.string().max(120)).optional(),
         experienceYears: z.number().int().min(0).max(80).nullable().optional(),
-        portfolioUrls: z.array(z.string().max(2000)).optional(),
+        portfolioUrls: z.array(z.string().max(2000)).max(4, "4 photos maximum").optional(),
       }).parse(req.body);
       const profile = await storage.upsertBaristaMarketplaceProfile(user.id, body);
       broadcast("barista_profile_updated", { userId: user.id, kind: "profile" });
@@ -3044,6 +3045,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         description: z.string().max(2000).optional(),
         marketplaceVisible: z.boolean().optional(),
         isOnVacation: z.boolean().optional(),
+        portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
         weeklyHours: z.object({
           monday: dayHoursSchema, tuesday: dayHoursSchema, wednesday: dayHoursSchema,
           thursday: dayHoursSchema, friday: dayHoursSchema, saturday: dayHoursSchema, sunday: dayHoursSchema,
@@ -4544,6 +4546,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         experienceYears: z.number().int().min(0).optional(),
         certifications: z.array(z.string()).optional(),
         isOnVacation: z.boolean().optional(),
+        portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
         weeklyHours: z.object({
           monday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
           tuesday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
@@ -4649,7 +4652,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       responseTime: z.string().optional(),
       experienceYears: z.number().int().min(0).optional(),
       certifications: z.array(z.string()).optional(),
-      portfolioImages: z.array(z.string()).optional(),
+      portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
       marketplaceVisible: z.boolean().optional(),
       isOnVacation: z.boolean().optional(),
       weeklyHours: z.object({

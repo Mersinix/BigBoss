@@ -445,6 +445,9 @@ export const driverProfiles = pgTable("driver_profiles", {
   certifications: text("certifications").array().notNull().default([]),
   weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  // Profile → Portfolio (max 4 enforced at the API layer) — same shape/convention as
+  // maintenanceProfiles/marketingProfiles/deliveryCompanyProfiles.portfolioImages.
+  portfolioImages: text("portfolio_images").array().notNull().default([]),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export type DriverProfile = typeof driverProfiles.$inferSelect;
@@ -1045,6 +1048,9 @@ export const academyProfiles = pgTable("academy_profiles", {
   // account already exposes in Settings → Disponibilité. Nullable: no schedule set yet.
   weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  // Profile → Portfolio (max 4 enforced at the API layer) — same shape/convention as
+  // maintenanceProfiles/marketingProfiles/deliveryCompanyProfiles.portfolioImages.
+  portfolioImages: text("portfolio_images").array().notNull().default([]),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1640,6 +1646,9 @@ export const printerProfiles = pgTable("printer_profiles", {
   // schedule set yet.
   weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  // Profile → Portfolio (max 4 enforced at the API layer) — same shape/convention as
+  // maintenanceProfiles/marketingProfiles/deliveryCompanyProfiles.portfolioImages.
+  portfolioImages: text("portfolio_images").array().notNull().default([]),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -2294,6 +2303,7 @@ export type PrintCompanyCard = {
   isOnVacation: boolean;
   rating: number;
   reviewCount: number;
+  portfolioImages: string[];
   categories: string[];
   services: PrintCatalogCard[];
 };

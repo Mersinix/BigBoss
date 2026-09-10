@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
-import { Printer, Globe, Eye, Package, Tag } from "lucide-react";
+import { Printer, Globe, Eye, Package, Tag, Image as ImageIcon, X } from "lucide-react";
 import { usePrintCompanyDetail, useUpdatePrinterProfile } from "@/hooks/use-print-marketplace";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
@@ -20,6 +20,7 @@ import type { PrintCatalogItem, OpeningHoursMap } from "@shared/schema";
 
 const ACCENT = "bg-blue-600 hover:bg-blue-700 text-white";
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+const MAX_PORTFOLIO_IMAGES = 4;
 
 // Business → Profil — the printing COMPANY's complete public/business profile
 // (identity summary/description/website/categories/services summary/
@@ -40,6 +41,8 @@ export default function PrinterProfilePage() {
 
   const [description, setDescription] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
+  const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
+  const [portfolioDraft, setPortfolioDraft] = useState("");
   const [marketplaceVisible, setMarketplaceVisible] = useState(true);
   const [isOnVacation, setIsOnVacation] = useState(false);
   const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([], "08:00", "18:00"));
@@ -50,6 +53,7 @@ export default function PrinterProfilePage() {
     if (!data?.profile) return;
     setDescription(data.profile.description ?? "");
     setWebsiteUrl(data.profile.websiteUrl ?? "");
+    setPortfolioImages(data.profile.portfolioImages ?? []);
     setMarketplaceVisible(data.profile.marketplaceVisible);
     setIsOnVacation(data.profile.isOnVacation ?? false);
     setWeeklyHours(data.profile.weeklyHours ?? buildWeeklyHoursFallback([], "08:00", "18:00"));
@@ -67,6 +71,22 @@ export default function PrinterProfilePage() {
       { description, websiteUrl: url ?? "", marketplaceVisible },
       {
         onSuccess: () => toast({ title: "Profil mis à jour" }),
+        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  const addPortfolioImage = () => {
+    const v = portfolioDraft.trim();
+    if (!v || portfolioImages.includes(v) || portfolioImages.length >= MAX_PORTFOLIO_IMAGES) return;
+    setPortfolioImages((prev) => [...prev, v]);
+    setPortfolioDraft("");
+  };
+  const savePortfolio = () => {
+    updateProfile.mutate(
+      { portfolioImages },
+      {
+        onSuccess: () => toast({ title: "Portfolio mis à jour" }),
         onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
       },
     );
@@ -143,6 +163,40 @@ export default function PrinterProfilePage() {
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Lien vers votre site (facultatif)</Label>
           <Input type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://votre-site.com" data-testid="input-website-url" />
+        </div>
+      </SectionCard>
+
+      <SectionCard title={`Portfolio (${portfolioImages.length}/${MAX_PORTFOLIO_IMAGES})`} icon={ImageIcon} className={CARD_CLASS}>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground -mt-1">Ajoutez jusqu'à {MAX_PORTFOLIO_IMAGES} photos de votre activité.</p>
+          <div className="flex gap-2">
+            <Input
+              value={portfolioDraft}
+              onChange={(e) => setPortfolioDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioImage())}
+              placeholder="https://…"
+              disabled={portfolioImages.length >= MAX_PORTFOLIO_IMAGES}
+              data-testid="input-new-portfolio-url"
+            />
+            <Button type="button" variant="outline" className="shrink-0" disabled={!portfolioDraft.trim() || portfolioImages.length >= MAX_PORTFOLIO_IMAGES} onClick={addPortfolioImage} data-testid="button-add-portfolio-url">Ajouter</Button>
+          </div>
+          {portfolioImages.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {portfolioImages.map((image, index) => (
+                <div key={`${image}-${index}`} className="relative group">
+                  <img src={image} alt={`Portfolio ${index + 1}`} className="h-24 w-full rounded-xl object-cover bg-muted" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />
+                  <button type="button" aria-label={`Supprimer l'image ${index + 1}`} onClick={() => setPortfolioImages((cur) => cur.filter((_, i) => i !== index))} className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={savePortfolio} disabled={updateProfile.isPending} variant="outline" data-testid="button-save-portfolio">
+              {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+          </div>
         </div>
       </SectionCard>
 

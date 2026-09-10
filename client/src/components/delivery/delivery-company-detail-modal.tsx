@@ -20,9 +20,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Truck, Users as UsersIcon,
-  Flag, Navigation, X, CheckCircle2,
+  Flag, Navigation, X, CheckCircle2, Image as ImageIcon,
 } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
+import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import type { DeliveryCompanyMarketplaceCard } from "@shared/schema";
 
 // Same theming mechanism as barista-detail-modal.tsx / maintenance-page.tsx's
@@ -169,6 +170,8 @@ export function DeliveryCompanyDetailModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  const [albumOpen, setAlbumOpen] = useState(false);
+  const [albumIndex, setAlbumIndex] = useState(0);
 
   // Review eligibility mirrors the existing server rule exactly (POST
   // /api/delivery-company/reviews): one review per DELIVERED delivery between
@@ -305,6 +308,25 @@ export function DeliveryCompanyDetailModal({
                   <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Certifications</p>
                   <div className="flex flex-wrap gap-1.5">
                     {card.certifications.map((c) => <Badge key={c} variant="outline" className={isDark ? "border-gray-700 text-gray-200" : ""}>{c}</Badge>)}
+                  </div>
+                </div>
+              )}
+
+              {card.portfolioImages.length > 0 && (
+                <div>
+                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {card.portfolioImages.map((url, i) => (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => { setAlbumIndex(i); setAlbumOpen(true); }}
+                        className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`}
+                        data-testid={`button-portfolio-thumb-${i}`}
+                      >
+                        <img src={url} alt="Portfolio" className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -454,6 +476,14 @@ export function DeliveryCompanyDetailModal({
       companyName={card?.name ?? ""}
       weeklyHours={card?.weeklyHours ?? null}
       isDark={isDark}
+    />
+
+    <MarketingPortfolioAlbumModal
+      open={albumOpen}
+      onClose={() => setAlbumOpen(false)}
+      images={card?.portfolioImages ?? []}
+      initialIndex={albumIndex}
+      providerName={card?.name ?? ""}
     />
     </>
   );

@@ -17,7 +17,7 @@ import { BusinessProfileIdentityCard } from "@/components/settings/business-prof
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
-const MAX_PORTFOLIO_IMAGES = 10;
+const MAX_PORTFOLIO_IMAGES = 4;
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Business → Profil — Agency → Multiple Services split: this page now owns ONLY

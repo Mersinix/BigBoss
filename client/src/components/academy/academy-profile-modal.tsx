@@ -19,8 +19,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen,
+  Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen, Image as ImageIcon,
 } from "lucide-react";
+import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
@@ -148,6 +149,8 @@ export function AcademyProfileModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  const [albumOpen, setAlbumOpen] = useState(false);
+  const [albumIndex, setAlbumIndex] = useState(0);
   const [messaging, setMessaging] = useState(false);
 
   const handleClose = () => {
@@ -252,6 +255,25 @@ export function AcademyProfileModal({
 
               {/* Formations — real published courses, clicking one opens the existing
                   per-formation AcademyDetailModal (Part 16). */}
+              {card.portfolioImages.length > 0 && (
+                <div>
+                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {card.portfolioImages.map((url, i) => (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => { setAlbumIndex(i); setAlbumOpen(true); }}
+                        className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`}
+                        data-testid={`button-portfolio-thumb-${i}`}
+                      >
+                        <img src={url} alt="Portfolio" className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><BookOpen className="w-3.5 h-3.5" /> Formations ({card.courses.length})</p>
                 {card.courses.length === 0 ? (
@@ -330,6 +352,14 @@ export function AcademyProfileModal({
       academyName={card?.name ?? ""}
       weeklyHours={card?.weeklyHours ?? null}
       isDark={isDark}
+    />
+
+    <MarketingPortfolioAlbumModal
+      open={albumOpen}
+      onClose={() => setAlbumOpen(false)}
+      images={card?.portfolioImages ?? []}
+      initialIndex={albumIndex}
+      providerName={card?.name ?? ""}
     />
     </>
   );

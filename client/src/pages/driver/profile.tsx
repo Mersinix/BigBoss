@@ -12,9 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
-import { User as UserIcon, Award, XCircle, Calendar, Zap, Truck, Eye, AlertCircle } from "lucide-react";
+import { User as UserIcon, Award, XCircle, Calendar, Zap, Truck, Eye, AlertCircle, Image as ImageIcon, X } from "lucide-react";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
+
+const MAX_PORTFOLIO_IMAGES = 4;
 
 // Business → Profil — the Driver's editable profile. Brand-new page (no
 // pre-existing profile editor to preserve): mirrors the Delivery Company
@@ -39,6 +41,8 @@ export default function DriverProfilePage() {
   const [experienceYears, setExperienceYears] = useState("0");
   const [certifications, setCertifications] = useState<string[]>([]);
   const [certificationDraft, setCertificationDraft] = useState("");
+  const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
+  const [portfolioDraft, setPortfolioDraft] = useState("");
   const [isOnVacation, setIsOnVacation] = useState(false);
   const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([], "08:00", "18:00"));
 
@@ -53,6 +57,7 @@ export default function DriverProfilePage() {
     setBio(p.bio);
     setExperienceYears(String(p.experienceYears ?? 0));
     setCertifications(p.certifications ?? []);
+    setPortfolioImages(p.portfolioImages ?? []);
     setIsOnVacation(p.isOnVacation);
     setWeeklyHours(p.weeklyHours ?? buildWeeklyHoursFallback([], "08:00", "18:00"));
   }, [data?.profile?.updatedAt]);
@@ -74,10 +79,16 @@ export default function DriverProfilePage() {
     setCertifications((prev) => [...prev, v]);
     setCertificationDraft("");
   };
+  const addPortfolioImage = () => {
+    const v = portfolioDraft.trim();
+    if (!v || portfolioImages.includes(v) || portfolioImages.length >= MAX_PORTFOLIO_IMAGES) return;
+    setPortfolioImages((prev) => [...prev, v]);
+    setPortfolioDraft("");
+  };
 
   const saveProfile = () => {
     updateProfile.mutate(
-      { bio, experienceYears: Math.max(0, parseInt(experienceYears, 10) || 0), certifications, isOnVacation, weeklyHours },
+      { bio, experienceYears: Math.max(0, parseInt(experienceYears, 10) || 0), certifications, portfolioImages, isOnVacation, weeklyHours },
       {
         onSuccess: () => toast({ title: "Profil enregistré" }),
         onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
@@ -150,6 +161,42 @@ export default function DriverProfilePage() {
           </div>
           <Button onClick={saveProfile} disabled={updateProfile.isPending} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl" data-testid="button-save-profile">
             {updateProfile.isPending ? "Enregistrement…" : "Enregistrer le profil"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><ImageIcon className="w-4 h-4 text-blue-500" />Portfolio ({portfolioImages.length}/{MAX_PORTFOLIO_IMAGES})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-gray-400 dark:text-gray-500 -mt-1">Ajoutez jusqu'à {MAX_PORTFOLIO_IMAGES} photos de votre activité.</p>
+          <div className="flex gap-2">
+            <Input
+              value={portfolioDraft}
+              onChange={(e) => setPortfolioDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioImage())}
+              placeholder="https://…"
+              className="h-9 rounded-xl"
+              disabled={portfolioImages.length >= MAX_PORTFOLIO_IMAGES}
+              data-testid="input-new-portfolio-url"
+            />
+            <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!portfolioDraft.trim() || portfolioImages.length >= MAX_PORTFOLIO_IMAGES} onClick={addPortfolioImage} data-testid="button-add-portfolio-url">Ajouter</Button>
+          </div>
+          {portfolioImages.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {portfolioImages.map((image, index) => (
+                <div key={`${image}-${index}`} className="relative group">
+                  <img src={image} alt={`Portfolio ${index + 1}`} className="h-24 w-full rounded-xl object-cover bg-gray-100 dark:bg-gray-800" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />
+                  <button type="button" aria-label={`Supprimer l'image ${index + 1}`} onClick={() => setPortfolioImages((cur) => cur.filter((_, i) => i !== index))} className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button onClick={saveProfile} disabled={updateProfile.isPending} variant="outline" className="rounded-xl" data-testid="button-save-portfolio">
+            {updateProfile.isPending ? "Enregistrement…" : "Enregistrer le portfolio"}
           </Button>
         </CardContent>
       </Card>

@@ -7,16 +7,18 @@ import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import { AccountAvailabilityCard } from "@/components/settings/account-availability-card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GraduationCap, BookOpen, Eye } from "lucide-react";
+import { GraduationCap, BookOpen, Eye, Image as ImageIcon, X } from "lucide-react";
 import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const ACCENT = "bg-indigo-600 hover:bg-indigo-700 text-white";
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+const MAX_PORTFOLIO_IMAGES = 4;
 
 // Business → Profil — the Academy's complete public/business profile
 // (identity summary/description/formations summary/visibility/availability).
@@ -31,6 +33,8 @@ export default function AcademyProfilePage() {
   const updateProfile = useUpdateAcademyProfile();
 
   const [description, setDescription] = useState("");
+  const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
+  const [portfolioDraft, setPortfolioDraft] = useState("");
   const [visible, setVisible] = useState(true);
   const [isOnVacation, setIsOnVacation] = useState(false);
   const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([], "09:00", "18:00"));
@@ -40,6 +44,7 @@ export default function AcademyProfilePage() {
   useEffect(() => {
     if (data?.profile) {
       setDescription(data.profile.description ?? "");
+      setPortfolioImages(data.profile.portfolioImages ?? []);
       setVisible(data.profile.marketplaceVisible);
       setIsOnVacation(data.profile.isOnVacation ?? false);
       setWeeklyHours(data.profile.weeklyHours ?? buildWeeklyHoursFallback([], "09:00", "18:00"));
@@ -64,6 +69,22 @@ export default function AcademyProfilePage() {
       { description },
       {
         onSuccess: () => toast({ title: "Description mise à jour" }),
+        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  const addPortfolioImage = () => {
+    const v = portfolioDraft.trim();
+    if (!v || portfolioImages.includes(v) || portfolioImages.length >= MAX_PORTFOLIO_IMAGES) return;
+    setPortfolioImages((prev) => [...prev, v]);
+    setPortfolioDraft("");
+  };
+  const savePortfolio = () => {
+    updateProfile.mutate(
+      { portfolioImages },
+      {
+        onSuccess: () => toast({ title: "Portfolio mis à jour" }),
         onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
       },
     );
@@ -111,6 +132,43 @@ export default function AcademyProfilePage() {
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Présentez votre académie, votre expérience, vos spécialités…" data-testid="input-academy-description" />
           <div className="flex justify-end">
             <Button onClick={saveDescription} disabled={updateProfile.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-save-description">
+              {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className={CARD_CLASS}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2"><ImageIcon className="w-4 h-4 text-indigo-500" />Portfolio ({portfolioImages.length}/{MAX_PORTFOLIO_IMAGES})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground -mt-1">Ajoutez jusqu'à {MAX_PORTFOLIO_IMAGES} photos de votre activité.</p>
+          <div className="flex gap-2">
+            <Input
+              value={portfolioDraft}
+              onChange={(e) => setPortfolioDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioImage())}
+              placeholder="https://…"
+              disabled={portfolioImages.length >= MAX_PORTFOLIO_IMAGES}
+              data-testid="input-new-portfolio-url"
+            />
+            <Button type="button" variant="outline" className="shrink-0" disabled={!portfolioDraft.trim() || portfolioImages.length >= MAX_PORTFOLIO_IMAGES} onClick={addPortfolioImage} data-testid="button-add-portfolio-url">Ajouter</Button>
+          </div>
+          {portfolioImages.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {portfolioImages.map((image, index) => (
+                <div key={`${image}-${index}`} className="relative group">
+                  <img src={image} alt={`Portfolio ${index + 1}`} className="h-24 w-full rounded-xl object-cover bg-muted" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />
+                  <button type="button" aria-label={`Supprimer l'image ${index + 1}`} onClick={() => setPortfolioImages((cur) => cur.filter((_, i) => i !== index))} className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={savePortfolio} disabled={updateProfile.isPending} variant="outline" data-testid="button-save-portfolio">
               {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
             </Button>
           </div>

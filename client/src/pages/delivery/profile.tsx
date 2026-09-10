@@ -20,6 +20,7 @@ import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+const MAX_PORTFOLIO_IMAGES = 4;
 
 // Business → Profil — the Delivery Company's editable marketplace profile.
 // Brand-new page (no pre-existing profile UI to preserve): mirrors the
@@ -77,7 +78,7 @@ export default function DeliveryCompanyProfilePage() {
   };
   const addPortfolioUrl = () => {
     const v = portfolioDraft.trim();
-    if (!v || portfolioImages.includes(v)) return;
+    if (!v || portfolioImages.includes(v) || portfolioImages.length >= MAX_PORTFOLIO_IMAGES) return;
     setPortfolioImages((prev) => [...prev, v]);
     setPortfolioDraft("");
   };
@@ -194,10 +195,11 @@ export default function DeliveryCompanyProfilePage() {
             </div>
           </div>
           <div>
-            <Label className="text-xs text-gray-500 dark:text-gray-400">Portfolio (URL des images)</Label>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Portfolio — URL des images ({portfolioImages.length}/{MAX_PORTFOLIO_IMAGES})</Label>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Ajoutez jusqu'à {MAX_PORTFOLIO_IMAGES} photos de votre activité.</p>
             <div className="flex gap-2 mt-1">
-              <Input value={portfolioDraft} onChange={(e) => setPortfolioDraft(e.target.value)} placeholder="https://…" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioUrl())} className="h-9 rounded-xl" data-testid="input-new-portfolio-url" />
-              <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!portfolioDraft.trim()} onClick={addPortfolioUrl} data-testid="button-add-portfolio-url"><Plus className="w-4 h-4" /></Button>
+              <Input value={portfolioDraft} onChange={(e) => setPortfolioDraft(e.target.value)} placeholder="https://…" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPortfolioUrl())} className="h-9 rounded-xl" data-testid="input-new-portfolio-url" disabled={portfolioImages.length >= MAX_PORTFOLIO_IMAGES} />
+              <Button type="button" variant="outline" className="h-9 rounded-xl shrink-0" disabled={!portfolioDraft.trim() || portfolioImages.length >= MAX_PORTFOLIO_IMAGES} onClick={addPortfolioUrl} data-testid="button-add-portfolio-url"><Plus className="w-4 h-4" /></Button>
             </div>
             {portfolioImages.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">

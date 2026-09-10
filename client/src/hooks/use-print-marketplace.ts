@@ -72,7 +72,7 @@ export function usePrintCompanyDetail(userId: number | null) {
 export function useUpdatePrinterProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { description?: string; websiteUrl?: string | null; marketplaceVisible?: boolean; isOnVacation?: boolean; weeklyHours?: OpeningHoursMap }) =>
+    mutationFn: (data: { description?: string; websiteUrl?: string | null; marketplaceVisible?: boolean; isOnVacation?: boolean; weeklyHours?: OpeningHoursMap; portfolioImages?: string[] }) =>
       mutate("PATCH", "/api/print/profile", data),
     onSuccess: () => {
       qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/print/company" });

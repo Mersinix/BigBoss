@@ -8,23 +8,192 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Truck, Clock, CheckCircle, XCircle, Search, Building2, Store } from "lucide-react";
+import {
+  Truck, Clock, CheckCircle, XCircle, Search, Building2, Store,
+  Package, User as UserIcon, Receipt, Calendar, Coffee,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
 import { DriverDetailModal } from "@/components/driver/driver-detail-modal";
 import { DeliveryCompanyDetailModal } from "@/components/delivery/delivery-company-detail-modal";
 import { SupplierDriverFleetModal } from "@/components/delivery/supplier-driver-fleet-modal";
-import type { DeliveryWithDetails, User } from "@shared/schema";
+import { VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
+import { DateRangeFilter } from "@/components/analytics/date-range-filter";
+import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
+import type { DeliveryWithDetails, User, DeliveryStatus, DeliveryMode } from "@shared/schema";
+
+// ── Livraisons tab — mapped cards (replaces the previous raw <Table>) ────────────────────
+// A compact summary of the same real per-delivery data DeliveryDetails (the "Détails" modal)
+// already shows in full — same fields, same statuses, same real API data, no invented values.
+
+function InfoTile({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 min-w-0">
+      <Icon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-[11px] text-muted-foreground">{label}</p>
+        <p className="text-sm font-medium truncate">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function DeliveryCard({ delivery, onViewDetails, onCancel, cancelling }: {
+  delivery: DeliveryWithDetails;
+  onViewDetails: () => void;
+  onCancel: () => void;
+  cancelling: boolean;
+}) {
+  const fmt = useFormatCurrency();
+  const meta = STATUS_META[delivery.status] ?? { label: delivery.status, cls: "bg-gray-100 text-gray-700" };
+  const canCancel = !["DELIVERED", "CANCELLED"].includes(delivery.status) && !["PICKED_UP", "IN_TRANSIT"].includes(delivery.status);
+
+  return (
+    <Card data-testid={`card-admin-delivery-${delivery.id}`}>
+      <CardContent className="p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-sm font-semibold">#{delivery.orderId}</span>
+          <Badge variant="secondary" className={meta.cls}>{meta.label}</Badge>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+          <InfoTile icon={Coffee} label="Café" value={delivery.cafe.name} />
+          <InfoTile icon={Store} label="Fournisseur" value={delivery.supplier.name} />
+          <InfoTile icon={Truck} label="Transport" value={delivery.deliveryMode ? DELIVERY_MODE_LABEL[delivery.deliveryMode] : "—"} />
+          <InfoTile icon={UserIcon} label="Chauffeur" value={delivery.driver?.name ?? "—"} />
+          <InfoTile icon={Building2} label="Transporteur" value={delivery.deliveryCompany?.name ?? "—"} />
+          <InfoTile icon={Package} label="Véhicule" value={delivery.vehicleType ? (VEHICLE_TYPE_LABELS[delivery.vehicleType as DeliveryVehicleType] ?? delivery.vehicleType) : "—"} />
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-border/50">
+          <InfoTile icon={Receipt} label="Frais" value={fmt(delivery.deliveryFee ?? 0)} />
+          <InfoTile icon={Calendar} label="Créée le" value={formatDate(delivery.createdAt as any)} />
+        </div>
+
+        <div className="flex items-center gap-2 justify-end">
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onViewDetails} data-testid={`button-admin-delivery-details-${delivery.id}`}>Détails</Button>
+          {canCancel && (
+            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={onCancel} disabled={cancelling} data-testid={`button-admin-delivery-cancel-${delivery.id}`}>
+              <XCircle className="w-3.5 h-3.5 mr-1" /> Annuler
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const DELIVERY_STATUS_OPTIONS: DeliveryStatus[] = ["PENDING", "AVAILABLE", "ACCEPTED", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "CANCELLED"];
+const DELIVERY_MODE_OPTIONS: DeliveryMode[] = ["DELIVERY_COMPANY", "SUPPLIER"];
+
+function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancelling }: {
+  deliveries: DeliveryWithDetails[];
+  isLoading: boolean;
+  onViewDetails: (d: DeliveryWithDetails) => void;
+  onCancel: (id: number) => void;
+  cancelling: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<DeliveryStatus | "ALL">("ALL");
+  const [vehicleType, setVehicleType] = useState<DeliveryVehicleType | "ALL">("ALL");
+  const [mode, setMode] = useState<DeliveryMode | "ALL">("ALL");
+  const [datePreset, setDatePreset] = useState<DateRangePreset>("all");
+  const [dateCustom, setDateCustom] = useState({ from: "", to: "" });
+
+  // Only offer vehicle types that actually appear on at least one real delivery — never a
+  // hardcoded/unsupported mode.
+  const availableVehicleTypes = useMemo(
+    () => Array.from(new Set(deliveries.map((d) => d.vehicleType).filter(Boolean))) as DeliveryVehicleType[],
+    [deliveries],
+  );
+
+  const range = useMemo(() => resolveDateRange(datePreset, dateCustom), [datePreset, dateCustom]);
+
+  const filtered = useMemo(() => deliveries.filter((d) => {
+    if (status !== "ALL" && d.status !== status) return false;
+    if (vehicleType !== "ALL" && d.vehicleType !== vehicleType) return false;
+    if (mode !== "ALL" && d.deliveryMode !== mode) return false;
+    if (range.from || range.to) {
+      const created = d.createdAt ? new Date(d.createdAt as any) : null;
+      if (!created) return false;
+      if (range.from && created < range.from) return false;
+      if (range.to && created > range.to) return false;
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const haystack = [
+        String(d.orderId), d.cafe.name, d.supplier.name,
+        d.deliveryCompany?.name ?? "", d.driver?.name ?? "",
+      ].join(" ").toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  }), [deliveries, search, status, vehicleType, mode, range]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="N° commande, café, fournisseur, transporteur, chauffeur…" data-testid="input-search-deliveries" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Select value={status} onValueChange={(v) => setStatus(v as DeliveryStatus | "ALL")}>
+            <SelectTrigger className="w-40" data-testid="select-delivery-status"><SelectValue placeholder="Statut" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tous les statuts</SelectItem>
+              {DELIVERY_STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{STATUS_META[s]?.label ?? s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {availableVehicleTypes.length > 0 && (
+            <Select value={vehicleType} onValueChange={(v) => setVehicleType(v as DeliveryVehicleType | "ALL")}>
+              <SelectTrigger className="w-36" data-testid="select-delivery-vehicle"><SelectValue placeholder="Transport" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tous véhicules</SelectItem>
+                {availableVehicleTypes.map((v) => <SelectItem key={v} value={v}>{VEHICLE_TYPE_LABELS[v] ?? v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={mode} onValueChange={(v) => setMode(v as DeliveryMode | "ALL")}>
+            <SelectTrigger className="w-44" data-testid="select-delivery-transporter-type"><SelectValue placeholder="Transporteur" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tous transporteurs</SelectItem>
+              {DELIVERY_MODE_OPTIONS.map((m) => <SelectItem key={m} value={m}>{DELIVERY_MODE_LABEL[m]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <DateRangeFilter preset={datePreset} onPresetChange={setDatePreset} custom={dateCustom} onCustomChange={setDateCustom} />
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}</div>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune livraison ne correspond à ces filtres.</CardContent></Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((d) => (
+            <DeliveryCard key={d.id} delivery={d} onViewDetails={() => onViewDetails(d)} onCancel={() => onCancel(d.id)} cancelling={cancelling} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Entreprises + Chauffeurs / Chauffeurs fournisseurs tabs (task Part 37/39/40) — built
 // entirely from the same real /api/admin/users + /api/deliveries data the rest of Admin
 // already reads. No duplicate driver/company dataset. ──────────────────────────────────
 
+const APPROVAL_STATUS_OPTIONS = ["approved", "pending", "rejected"] as const;
+
 function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: DeliveryWithDetails[] }) {
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [activityFilter, setActivityFilter] = useState<"ALL" | "ACTIVE" | "IDLE">("ALL");
+  const [driverFilter, setDriverFilter] = useState<"ALL" | "WITH" | "WITHOUT">("ALL");
   const [detail, setDetail] = useState<User | null>(null);
   const [companyDetailId, setCompanyDetailId] = useState<number | null>(null);
   const companies = users.filter((u) => u.role === "DELIVERY_COMPANY");
@@ -40,13 +209,43 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
       return { company: c, ownDrivers, active, completed, total: ownDeliveries.length };
     })
     .filter((r) => !search || r.company.name.toLowerCase().includes(search.toLowerCase()))
-  , [companies, drivers, deliveries, search]);
+    .filter((r) => statusFilter === "ALL" || r.company.status === statusFilter)
+    .filter((r) => activityFilter === "ALL" || (activityFilter === "ACTIVE" ? r.active > 0 : r.active === 0))
+    .filter((r) => driverFilter === "ALL" || (driverFilter === "WITH" ? r.ownDrivers.length > 0 : r.ownDrivers.length === 0))
+  , [companies, drivers, deliveries, search, statusFilter, activityFilter, driverFilter]);
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher une entreprise…" data-testid="input-search-companies" />
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher une entreprise…" data-testid="input-search-companies" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-36" data-testid="select-company-status"><SelectValue placeholder="Statut" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tous statuts</SelectItem>
+              {APPROVAL_STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
+            <SelectTrigger className="w-52" data-testid="select-company-activity"><SelectValue placeholder="Activité" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Toute activité</SelectItem>
+              <SelectItem value="ACTIVE">Avec livraisons en cours</SelectItem>
+              <SelectItem value="IDLE">Sans livraison en cours</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={driverFilter} onValueChange={(v) => setDriverFilter(v as typeof driverFilter)}>
+            <SelectTrigger className="w-44" data-testid="select-company-drivers"><SelectValue placeholder="Chauffeurs" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tous</SelectItem>
+              <SelectItem value="WITH">Avec chauffeurs</SelectItem>
+              <SelectItem value="WITHOUT">Sans chauffeurs</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       {rows.length === 0 ? (
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune entreprise de livraison.</CardContent></Card>
@@ -99,6 +298,9 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
                     })}
                   </div>
                 )}
+                <div className="flex justify-end mt-3">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setCompanyDetailId(company.id)} data-testid={`button-company-details-${company.id}`}>Voir les détails</Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -122,6 +324,8 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
 
 function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: DeliveryWithDetails[] }) {
   const [search, setSearch] = useState("");
+  const [activityFilter, setActivityFilter] = useState<"ALL" | "ACTIVE" | "IDLE">("ALL");
+  const [supplierFilter, setSupplierFilter] = useState<string>("ALL");
   const [detail, setDetail] = useState<User | null>(null);
   const [supplierDetailId, setSupplierDetailId] = useState<number | null>(null);
   const suppliers = users.filter((u) => u.role === "SUPPLIER");
@@ -138,17 +342,48 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
       return { supplier: s, ownDrivers, active, completed, total: ownDeliveries.length };
     })
     .filter((r) => r.ownDrivers.length > 0)
-    .filter((r) => !search || `${r.supplier.name} ${r.ownDrivers.map((d) => d.name).join(" ")}`.toLowerCase().includes(search.toLowerCase()))
-  , [suppliers, drivers, deliveries, search]);
+    .filter((r) => !search || `${r.supplier.name} ${r.ownDrivers.map((d) => `${d.name} ${d.phone ?? ""}`).join(" ")}`.toLowerCase().includes(search.toLowerCase()))
+    .filter((r) => activityFilter === "ALL" || (activityFilter === "ACTIVE" ? r.active > 0 : r.active === 0))
+    .filter((r) => supplierFilter === "ALL" || String(r.supplier.id) === supplierFilter)
+  , [suppliers, drivers, deliveries, search, activityFilter, supplierFilter]);
+
+  // Only offered when there's genuinely more than one supplier with drivers to
+  // choose between — otherwise it's a no-op dropdown (task's "do not create a
+  // supplier filter if the current dataset does not provide the relationship").
+  const supplierOptions = useMemo(
+    () => suppliers.filter((s) => drivers.some((d) => d.supplierId === s.id)),
+    [suppliers, drivers],
+  );
 
   const selectedSupplier = rows.find((r) => r.supplier.id === supplierDetailId)?.supplier ?? null;
   const selectedSupplierDrivers = rows.find((r) => r.supplier.id === supplierDetailId)?.ownDrivers ?? [];
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un chauffeur, un fournisseur…" data-testid="input-search-supplier-drivers" />
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un chauffeur, un fournisseur…" data-testid="input-search-supplier-drivers" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
+            <SelectTrigger className="w-52" data-testid="select-supplier-driver-activity"><SelectValue placeholder="Activité" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Toute activité</SelectItem>
+              <SelectItem value="ACTIVE">En cours</SelectItem>
+              <SelectItem value="IDLE">Disponible / inactif</SelectItem>
+            </SelectContent>
+          </Select>
+          {supplierOptions.length > 1 && (
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="w-48" data-testid="select-supplier-filter"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tous fournisseurs</SelectItem>
+                {supplierOptions.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </div>
       {rows.length === 0 ? (
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun fournisseur avec des chauffeurs.</CardContent></Card>
@@ -197,6 +432,9 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
                     );
                   })}
                 </div>
+                <div className="flex justify-end mt-3">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSupplierDetailId(supplier.id)} data-testid={`button-supplier-details-${supplier.id}`}>Voir les détails</Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -226,7 +464,6 @@ export default function DeliveryPage() {
   const { data: deliveries = [], isLoading } = useDeliveries();
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
   const updateStatus = useUpdateDeliveryStatus();
-  const fmt = useFormatCurrency();
   const { toast } = useToast();
   const [viewTarget, setViewTarget] = useState<DeliveryWithDetails | null>(null);
   const [tab, setTab] = useState("deliveries");
@@ -278,71 +515,15 @@ export default function DeliveryPage() {
         </TabsList>
 
         {tab === "deliveries" && (
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Toutes les livraisons</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Commande</TableHead>
-                        <TableHead>Café</TableHead>
-                        <TableHead>Fournisseur</TableHead>
-                        <TableHead>Mode</TableHead>
-                        <TableHead>Transporteur</TableHead>
-                        <TableHead>Chauffeur</TableHead>
-                        <TableHead>Véhicule</TableHead>
-                        <TableHead>Frais</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Créée le</TableHead>
-                        <TableHead>Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {deliveries.map((d) => (
-                        <TableRow key={d.id}>
-                          <TableCell className="font-medium">#{d.orderId}</TableCell>
-                          <TableCell>{d.cafe.name}</TableCell>
-                          <TableCell>{d.supplier.name}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{d.deliveryMode ? DELIVERY_MODE_LABEL[d.deliveryMode] : "—"}</TableCell>
-                          <TableCell>{d.deliveryCompany?.name ?? "—"}</TableCell>
-                          <TableCell>{d.driver?.name ?? "—"}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{d.vehicleType ?? "—"}</TableCell>
-                          <TableCell>{fmt(d.deliveryFee ?? 0)}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className={STATUS_META[d.status]?.cls ?? ""}>
-                              {STATUS_META[d.status]?.label ?? d.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{formatDate(d.createdAt as any)}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setViewTarget(d)}>Détails</Button>
-                              {!["DELIVERED", "CANCELLED"].includes(d.status) && d.status !== "PICKED_UP" && d.status !== "IN_TRANSIT" && (
-                                <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => handleCancel(d.id)}>
-                                  <XCircle className="w-3.5 h-3.5 mr-1" /> Annuler
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {deliveries.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={11} className="text-center text-muted-foreground py-10">Aucune livraison</TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <div className="mt-4">
+            <DeliveriesTab
+              deliveries={deliveries}
+              isLoading={isLoading}
+              onViewDetails={setViewTarget}
+              onCancel={handleCancel}
+              cancelling={updateStatus.isPending}
+            />
+          </div>
         )}
 
         {tab === "companies" && <div className="mt-4"><CompanyDriversTab users={users} deliveries={deliveries} /></div>}

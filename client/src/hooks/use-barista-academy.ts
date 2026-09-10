@@ -263,7 +263,7 @@ export function useMyAcademyProfile(userId: number | null) {
 export type AcademyProfileCard = {
   userId: number; name: string; profileImageUrl: string | null; coverImageUrl?: string | null; location: string; phone: string | null;
   description: string; marketplaceVisible: boolean; weeklyHours: OpeningHoursMap | null; isOnVacation: boolean;
-  rating: number; reviewCount: number;
+  rating: number; reviewCount: number; portfolioImages: string[];
   courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
 };
 
@@ -281,7 +281,7 @@ export function useAcademyProfileDetail(userId: number | null) {
 export function useUpdateAcademyProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { description?: string; marketplaceVisible?: boolean; isOnVacation?: boolean; weeklyHours?: OpeningHoursMap }) =>
+    mutationFn: (data: { description?: string; marketplaceVisible?: boolean; isOnVacation?: boolean; weeklyHours?: OpeningHoursMap; portfolioImages?: string[] }) =>
       mutate("PATCH", "/api/academy/profile", data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/academy/profile"] });

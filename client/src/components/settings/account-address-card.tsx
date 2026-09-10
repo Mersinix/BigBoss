@@ -23,9 +23,9 @@ import { AddressDetailsFields } from "@/components/settings/address-details-fiel
 // ProfessionalAccountShell). AddressDetailsFields is the one exception: its
 // inputs use literal Tailwind colors (not CSS-variable tokens), so it still
 // needs the explicit isDark prop.
-export function AccountAddressCard({ accentClassName = "", isDark = false }: { accentClassName?: string; isDark?: boolean }) {
+export function AccountAddressCard({ accentClassName = "", isDark = false, className }: { accentClassName?: string; isDark?: boolean; className?: string }) {
   return (
-    <SectionCard title="Localisation" icon={MapPin}>
+    <SectionCard title="Localisation" icon={MapPin} className={className}>
       <AddressDetailsFields accentClassName={accentClassName} isDark={isDark} />
     </SectionCard>
   );

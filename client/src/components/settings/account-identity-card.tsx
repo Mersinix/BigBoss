@@ -24,12 +24,17 @@ export function AccountIdentityCard({
   nameLabel = "Nom complet",
   accentClassName = "",
   testIdPrefix = "settings",
+  className,
 }: {
   nameLabel?: string;
   // Full Tailwind class string for the save button, e.g. "bg-orange-600 hover:bg-orange-700
   // text-white" — passed whole so Tailwind's JIT scanner sees the literal classes.
   accentClassName?: string;
   testIdPrefix?: string;
+  // Optional visual override for the outer SectionCard — omitted by every
+  // caller except Maintenance's own account-wide card styling unification,
+  // so every other account keeps its exact current look.
+  className?: string;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -67,7 +72,7 @@ export function AccountIdentityCard({
   };
 
   return (
-    <SectionCard title="Compte" icon={User}>
+    <SectionCard title="Compte" icon={User} className={className}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>{nameLabel}</Label>

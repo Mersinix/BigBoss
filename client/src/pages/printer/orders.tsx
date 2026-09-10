@@ -155,7 +155,7 @@ export default function PrinterOrders() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((o) => (
-            <Card key={o.id} data-testid={`card-order-${o.id}`}>
+            <Card key={o.id} data-testid={`card-order-${o.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-4 flex flex-col gap-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">

@@ -9,6 +9,7 @@ import { useMarketingProjects, useMarketingRevenue } from "@/hooks/use-marketing
 
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
 const PIE_COLORS = ["hsl(var(--primary))", "#f59e0b", "#3b82f6", "#8b5cf6", "#06b6d4", "#22c55e", "#ef4444"];
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Real Marketing analytics — every number computed client-side from the live
 // /api/marketing/projects and /api/marketing/revenue endpoints, mirroring
@@ -80,15 +81,15 @@ export default function MarketingAnalytics() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard label="Revenu total" value={fmt(revenue?.totalEarnedCents ?? 0)} icon={TrendingUp} tone="green" />
-        <StatCard label="Projets" value={projects.length} icon={Briefcase} tone="primary" subtext={`Valeur moyenne ${fmt(averageProjectValue)}`} />
-        <StatCard label="Terminés" value={completedProjects.length} icon={CheckCircle2} tone="green" />
-        <StatCard label="Annulés / refusés" value={cancelledProjects.length} icon={XCircle} tone="red" />
-        <StatCard label="Clients" value={clientCount} icon={Users} tone="amber" />
+        <StatCard label="Revenu total" value={fmt(revenue?.totalEarnedCents ?? 0)} icon={TrendingUp} tone="green" className={CARD_CLASS} />
+        <StatCard label="Projets" value={projects.length} icon={Briefcase} tone="primary" subtext={`Valeur moyenne ${fmt(averageProjectValue)}`} className={CARD_CLASS} />
+        <StatCard label="Terminés" value={completedProjects.length} icon={CheckCircle2} tone="green" className={CARD_CLASS} />
+        <StatCard label="Annulés / refusés" value={cancelledProjects.length} icon={XCircle} tone="red" className={CARD_CLASS} />
+        <StatCard label="Clients" value={clientCount} icon={Users} tone="amber" className={CARD_CLASS} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="Chiffre d'affaires par mois" icon={TrendingUp}>
+        <SectionCard title="Chiffre d'affaires par mois" icon={TrendingUp} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {revenueChart.every((d) => d.revenue === 0) ? <EmptyState message="Aucune donnée pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={revenueChart} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
@@ -102,7 +103,7 @@ export default function MarketingAnalytics() {
           )}
         </SectionCard>
 
-        <SectionCard title="Projets par statut" icon={Layers}>
+        <SectionCard title="Projets par statut" icon={Layers} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {statusChart.length === 0 ? <EmptyState message="Aucun projet pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={statusChart} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
@@ -118,7 +119,7 @@ export default function MarketingAnalytics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="Meilleurs clients" icon={Users}>
+        <SectionCard title="Meilleurs clients" icon={Users} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {topClients.length === 0 ? <EmptyState message="Aucune donnée pour le moment." /> : (
             <div className="divide-y divide-border/40">
               {topClients.map((c, i) => (
@@ -128,7 +129,7 @@ export default function MarketingAnalytics() {
           )}
         </SectionCard>
 
-        <SectionCard title="Répartition par service" icon={Layers}>
+        <SectionCard title="Répartition par service" icon={Layers} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {serviceBreakdown.length === 0 ? <EmptyState message="Aucun projet pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>

@@ -29,7 +29,7 @@ export default function DriverRewardsPage() {
         </p>
       </div>
 
-      <SectionCard title="Paliers de livraisons" icon={Award}>
+      <SectionCard title="Paliers de livraisons" icon={Award} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {MILESTONES.map((m) => {
             const achieved = completed >= m;

@@ -5,6 +5,7 @@ import { AccountSecurityCard } from "@/components/settings/account-security-card
 import { useEffectiveAccountDarkMode } from "@/hooks/use-account-dark-mode";
 
 const ACCENT = "bg-teal-600 hover:bg-teal-700 text-white";
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Settings = account management ONLY (Settings/Business-Profil separation
 // task): Compte / Localisation / Notifications / Sécurité. Every
@@ -20,13 +21,13 @@ export default function DeliveryCompanySettingsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">Gérez votre compte et vos préférences de notification.</p>
       </div>
 
-      <AccountIdentityCard nameLabel="Nom de l'entreprise" accentClassName={ACCENT} testIdPrefix="delivery-company" />
+      <AccountIdentityCard nameLabel="Nom de l'entreprise" accentClassName={ACCENT} testIdPrefix="delivery-company" className={CARD_CLASS} />
 
-      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} />
+      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} className={CARD_CLASS} />
 
-      <NotificationPreferencesCard role="DELIVERY_COMPANY" />
+      <NotificationPreferencesCard role="DELIVERY_COMPANY" className={CARD_CLASS} />
 
-      <AccountSecurityCard testIdPrefix="delivery-company" />
+      <AccountSecurityCard testIdPrefix="delivery-company" className={CARD_CLASS} />
     </div>
   );
 }

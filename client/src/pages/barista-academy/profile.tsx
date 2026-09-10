@@ -16,6 +16,7 @@ import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const ACCENT = "bg-indigo-600 hover:bg-indigo-700 text-white";
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Business → Profil — the Academy's complete public/business profile
 // (identity summary/description/formations summary/visibility/availability).
@@ -100,9 +101,9 @@ export default function AcademyProfilePage() {
         </Button>
       </div>
 
-      <BusinessProfileIdentityCard nameLabel="Nom de l'académie" settingsPath="/barista-academy/settings" testIdPrefix="academy" />
+      <BusinessProfileIdentityCard nameLabel="Nom de l'académie" settingsPath="/barista-academy/settings" testIdPrefix="academy" className={CARD_CLASS} />
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><GraduationCap className="w-4 h-4 text-indigo-500" />Description</CardTitle>
         </CardHeader>
@@ -116,7 +117,7 @@ export default function AcademyProfilePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><BookOpen className="w-4 h-4 text-indigo-500" />Formations</CardTitle>
         </CardHeader>
@@ -125,7 +126,7 @@ export default function AcademyProfilePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">Visibilité</CardTitle>
         </CardHeader>
@@ -150,6 +151,7 @@ export default function AcademyProfilePage() {
         vacationDescription="Masque votre académie et stoppe les nouvelles inscriptions."
         accentClassName={ACCENT}
         testIdPrefix="academy"
+        className={CARD_CLASS}
       />
 
       <AcademyProfileModal

@@ -58,7 +58,7 @@ export default function MarketingMessages() {
   };
 
   return (
-    <Card className="rounded-2xl border-border/50 shadow-sm overflow-hidden">
+    <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-sm overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-fuchsia-500" />Messages Coffee Owners

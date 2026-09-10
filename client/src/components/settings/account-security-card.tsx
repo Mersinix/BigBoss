@@ -13,7 +13,7 @@ import { Lock, LogOut } from "lucide-react";
 // already (password change + logout), just extracted into one shared
 // component instead of seven copies. Same generic PATCH /api/auth/me/profile
 // (password/currentPassword) and useAuth().logout() every account already used.
-export function AccountSecurityCard({ testIdPrefix = "settings" }: { testIdPrefix?: string }) {
+export function AccountSecurityCard({ testIdPrefix = "settings", className }: { testIdPrefix?: string; className?: string }) {
   const { logout, isLoggingOut } = useAuth();
   const { toast } = useToast();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -36,7 +36,7 @@ export function AccountSecurityCard({ testIdPrefix = "settings" }: { testIdPrefi
   };
 
   return (
-    <SectionCard title="Sécurité" icon={Lock}>
+    <SectionCard title="Sécurité" icon={Lock} className={className}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Mot de passe actuel</Label>

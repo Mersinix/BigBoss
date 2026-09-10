@@ -49,7 +49,7 @@ export default function MarketingClients() {
           {clients.map((c) => {
             const meta = c.latestStatus ? MARKETING_PROJECT_STATUS_META[c.latestStatus as keyof typeof MARKETING_PROJECT_STATUS_META] : null;
             return (
-              <div key={c.cafeOwnerId} className="bg-card rounded-2xl border border-border/60 shadow-sm p-4 space-y-3" data-testid={`card-client-${c.cafeOwnerId}`}>
+              <div key={c.cafeOwnerId} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-sm p-4 space-y-3" data-testid={`card-client-${c.cafeOwnerId}`}>
                 <div className="flex items-center gap-3">
                   <Avatar className="w-10 h-10">
                     <AvatarFallback className="bg-fuchsia-100 text-fuchsia-700 font-bold text-sm">{c.name.charAt(0).toUpperCase()}</AvatarFallback>

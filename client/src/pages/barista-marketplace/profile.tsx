@@ -14,6 +14,8 @@ import {
   type BaristaWorkHistory,
 } from "@/hooks/use-barista-marketplace";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -163,9 +165,9 @@ export default function BaristaProfilePage() {
         </Button>
       </div>
 
-      <BusinessProfileIdentityCard settingsPath="/barista-marketplace/settings" testIdPrefix="barista" />
+      <BusinessProfileIdentityCard settingsPath="/barista-marketplace/settings" testIdPrefix="barista" className={CARD_CLASS} />
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <UserCheck className="w-4 h-4 text-green-600" /> Informations
@@ -245,7 +247,7 @@ export default function BaristaProfilePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Award className="w-4 h-4 text-green-600" /> Certifications &amp; expérience
@@ -303,7 +305,7 @@ export default function BaristaProfilePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Briefcase className="w-4 h-4 text-green-600" /> Cafés précédents
@@ -351,7 +353,7 @@ export default function BaristaProfilePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-green-600" />Disponibilité</CardTitle>
         </CardHeader>

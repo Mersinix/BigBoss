@@ -12,6 +12,10 @@ type MaintenanceRevenueSummary = {
   history: { month: string; totalCents: number; reservations: number }[];
 };
 
+// Same background/border/radius as the Maintenance Dashboard reference
+// (dashboard-overview.tsx's StatTile/"Prochaine intervention" cards).
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+
 // Mirrors barista-academy/revenue.tsx exactly (same real-data-only,
 // COMPLETED-vs-CONFIRMED split). No payment processor exists in this
 // project, and maintenanceReservations captures no per-booking price at
@@ -58,7 +62,7 @@ export default function MaintenanceRevenuePage() {
           { label: "Ce mois-ci", value: fmt(data.currentMonthCents), icon: TrendingUp, color: "text-orange-500" },
           { label: "Terminées ce mois-ci", value: String(data.currentMonthReservations), icon: CalendarCheck, color: "text-amber-500" },
         ].map((kpi) => (
-          <Card key={kpi.label}>
+          <Card key={kpi.label} className={CARD_CLASS}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-muted-foreground">{kpi.label}</p>
@@ -82,7 +86,7 @@ export default function MaintenanceRevenuePage() {
         </Card>
       )}
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-orange-500" /> Revenus estimés (6 mois)

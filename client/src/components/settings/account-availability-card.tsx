@@ -27,6 +27,7 @@ export function AccountAvailabilityCard({
   vacationDescription,
   accentClassName = "",
   testIdPrefix = "settings",
+  className,
 }: {
   weeklyHours: OpeningHoursMap;
   onChangeDay: (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => void;
@@ -38,9 +39,13 @@ export function AccountAvailabilityCard({
   vacationDescription: string;
   accentClassName?: string;
   testIdPrefix?: string;
+  // Optional visual override for the outer SectionCard — omitted by every
+  // caller except each account's own card-styling unification pass, so
+  // other accounts keep their exact current look.
+  className?: string;
 }) {
   return (
-    <SectionCard title="Disponibilité" icon={Calendar}>
+    <SectionCard title="Disponibilité" icon={Calendar} className={className}>
       <div className="space-y-4">
         <div className="flex items-center justify-between pt-0.5">
           <div>

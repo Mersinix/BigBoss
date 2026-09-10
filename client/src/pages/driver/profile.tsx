@@ -113,9 +113,9 @@ export default function DriverProfilePage() {
         </Button>
       </div>
 
-      <BusinessProfileIdentityCard nameLabel="Nom complet" settingsPath="/driver/settings" testIdPrefix="driver" />
+      <BusinessProfileIdentityCard nameLabel="Nom complet" settingsPath="/driver/settings" testIdPrefix="driver" className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" />
 
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><UserIcon className="w-4 h-4 text-blue-500" />Biographie</CardTitle>
         </CardHeader>
@@ -124,7 +124,7 @@ export default function DriverProfilePage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Award className="w-4 h-4 text-blue-500" />Expérience & certifications</CardTitle>
         </CardHeader>
@@ -154,7 +154,7 @@ export default function DriverProfilePage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Truck className="w-4 h-4 text-blue-500" />Véhicule</CardTitle>
         </CardHeader>
@@ -190,7 +190,7 @@ export default function DriverProfilePage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-500" />Disponibilité</CardTitle>
         </CardHeader>

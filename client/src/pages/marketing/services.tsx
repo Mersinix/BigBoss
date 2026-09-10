@@ -157,7 +157,7 @@ export default function MarketingServicesPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
       ) : services.length === 0 ? (
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
             <Megaphone className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
             <p className="font-semibold">Aucun service pour le moment</p>
@@ -167,7 +167,7 @@ export default function MarketingServicesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {services.map((service) => (
-            <Card key={service.id} data-testid={`card-service-${service.id}`}>
+            <Card key={service.id} data-testid={`card-service-${service.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-5 flex flex-col gap-3">
                 <button type="button" onClick={() => setPreviewServiceId(service.id)} className="text-left" data-testid={`button-preview-service-${service.id}`}>
                   <div className="flex items-start justify-between gap-2">

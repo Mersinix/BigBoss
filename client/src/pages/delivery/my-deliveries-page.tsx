@@ -78,13 +78,13 @@ export default function MyDeliveriesPage() {
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}</div>
       ) : list.length === 0 ? (
-        <Card><CardContent className="py-16 text-center text-muted-foreground">Aucune livraison ici.</CardContent></Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl"><CardContent className="py-16 text-center text-muted-foreground">Aucune livraison ici.</CardContent></Card>
       ) : (
         <div className="space-y-3">
           {list.map((d) => {
             const meta = STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
             return (
-              <Card key={d.id}>
+              <Card key={d.id} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
                   <div className="min-w-0 flex-1 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">

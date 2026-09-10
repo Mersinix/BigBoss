@@ -93,7 +93,7 @@ export default function PrinterCategoriesPage() {
         </Button>
       </div>
 
-      <Card className="rounded-2xl">
+      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Layers className="w-4 h-4 text-blue-600" />Catégories disponibles (gérées par l'administrateur)

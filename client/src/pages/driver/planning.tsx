@@ -130,7 +130,7 @@ export default function DriverPlanningPage() {
             const priority = PRIORITY_META[d.order.priority] ?? PRIORITY_META.NORMAL;
             const canGo = !["DELIVERED", "CANCELLED"].includes(d.status);
             return (
-              <Card key={d.id} className="rounded-2xl border-border/50" data-testid={`card-planning-${d.id}`}>
+              <Card key={d.id} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" data-testid={`card-planning-${d.id}`}>
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-xs text-muted-foreground">#{d.orderId}</span>

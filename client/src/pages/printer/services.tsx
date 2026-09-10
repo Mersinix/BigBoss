@@ -332,7 +332,7 @@ export default function PrinterServices() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {catalog.map((item) => (
-            <Card key={item.id} data-testid={`card-service-${item.id}`}>
+            <Card key={item.id} data-testid={`card-service-${item.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-0 flex flex-col">
                 <button type="button" className="text-left" onClick={() => setPreviewServiceId(item.id)} data-testid={`button-preview-service-${item.id}`}>
                   <div className="w-full aspect-[16/9] rounded-t-2xl overflow-hidden bg-secondary flex items-center justify-center">

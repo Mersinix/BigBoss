@@ -13,6 +13,9 @@ type MaintenanceRevenueSummary = { history: { month: string; totalCents: number;
 
 const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
+// Same background/border/radius as the Maintenance Dashboard reference
+// (dashboard-overview.tsx's StatTile/"Prochaine intervention" cards).
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Mirrors barista-academy/analytics.tsx exactly — every metric computed
 // client-side from the same real endpoints Planning/Profil/Avis already use
@@ -91,14 +94,14 @@ export default function MaintenanceAnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux de complétion</p><p className="text-xl font-bold text-green-600">{completionRate}%</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Note moyenne</p><p className="text-xl font-bold">{reviews.length > 0 ? avgRating.toFixed(1) : "—"}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Interventions totales</p><p className="text-xl font-bold">{reservations.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Catégories utilisées</p><p className="text-xl font-bold text-orange-600">{categoriesUsed}</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux de complétion</p><p className="text-xl font-bold text-green-600">{completionRate}%</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Note moyenne</p><p className="text-xl font-bold">{reviews.length > 0 ? avgRating.toFixed(1) : "—"}</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Interventions totales</p><p className="text-xl font-bold">{reservations.length}</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Catégories utilisées</p><p className="text-xl font-bold text-orange-600">{categoriesUsed}</p></CardContent></Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="Réservations par mois" icon={TrendingUp}>
+        <SectionCard title="Réservations par mois" icon={TrendingUp} className={CARD_CLASS}>
           {reservationsByMonth.every((h) => h.reservations === 0) ? <EmptyState message="Aucune donnée pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={reservationsByMonth} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
@@ -111,7 +114,7 @@ export default function MaintenanceAnalyticsPage() {
             </ResponsiveContainer>
           )}
         </SectionCard>
-        <SectionCard title="Revenu estimé par mois" icon={TrendingUp}>
+        <SectionCard title="Revenu estimé par mois" icon={TrendingUp} className={CARD_CLASS}>
           {revenueByMonth.every((h) => h.revenue === 0) ? <EmptyState message="Aucune donnée pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={revenueByMonth} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
@@ -126,7 +129,7 @@ export default function MaintenanceAnalyticsPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="Meilleurs clients" icon={Users}>
+      <SectionCard title="Meilleurs clients" icon={Users} className={CARD_CLASS}>
         {topClients.length === 0 ? <EmptyState message="Aucune réservation pour le moment." /> : (
           <div className="divide-y divide-border/40">
             {topClients.map((c, i) => <RankRow key={c.cafeOwner} rank={i + 1} title={c.cafeOwner} subtitle={`${c.count} réservation${c.count > 1 ? "s" : ""}`} value={String(c.count)} />)}

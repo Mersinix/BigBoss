@@ -1,13 +1,12 @@
 import { LayoutDashboard, BarChart2, DollarSign } from "lucide-react";
 import { SubTabSwitcher } from "@/components/account/sub-tab-switcher";
-import { PerformanceEmptyState } from "@/components/account/performance-empty-state";
 import PrinterDashboard from "@/pages/printer/dashboard";
 import PrinterAnalytics from "@/pages/printer/analytics";
+import PrinterRevenuePage from "@/pages/printer/revenue";
 
-// Performance tab — Dashboard / Analytics / Revenue. Printer has no separate
-// Revenue page: revenue figures already live on Dashboard/Analytics and
-// invoicing lives under Facturation, so Revenue points there rather than
-// duplicating that data into a new page.
+// Performance tab — Dashboard / Analytics / Revenue. Revenue reuses the exact same
+// GET /api/print/revenue data already fetched by Dashboard/Analytics (same query key,
+// no second data source) — see revenue.tsx.
 export default function PrinterPerformance() {
   return (
     <SubTabSwitcher
@@ -16,10 +15,7 @@ export default function PrinterPerformance() {
       tabs={[
         { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <PrinterDashboard /> },
         { key: "analytics", label: "Analyses", icon: BarChart2, content: <PrinterAnalytics /> },
-        {
-          key: "revenue", label: "Revenus", icon: DollarSign,
-          content: <PerformanceEmptyState message="Vos revenus PRINT sont détaillés dans les onglets Tableau de bord, Analyses et Facturation." />,
-        },
+        { key: "revenue", label: "Revenus", icon: DollarSign, content: <PrinterRevenuePage /> },
       ]}
     />
   );

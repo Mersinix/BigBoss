@@ -41,7 +41,7 @@ export default function AvailableDeliveriesPage() {
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-2xl" />)}</div>
       ) : available.length === 0 ? (
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
             <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
             <p className="font-semibold">Aucune livraison disponible</p>
@@ -51,7 +51,7 @@ export default function AvailableDeliveriesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {available.map((d) => (
-            <Card key={d.id} className="border-amber-200/60">
+            <Card key={d.id} className="bg-white dark:bg-gray-800 rounded-2xl border-amber-200/60 dark:border-amber-800/40">
               <CardContent className="p-5 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs text-muted-foreground">Commande #{d.orderId}</span>

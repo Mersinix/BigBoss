@@ -83,7 +83,7 @@ export function TrendBadge({ value }: { value: number }) {
 }
 
 export function StatCard({
-  label, value, icon: Icon, tone = "primary", subtext, trend,
+  label, value, icon: Icon, tone = "primary", subtext, trend, className,
 }: {
   label: string;
   value: string | number;
@@ -91,6 +91,10 @@ export function StatCard({
   tone?: "primary" | "amber" | "green" | "red" | "blue";
   subtext?: ReactNode;
   trend?: number;
+  // Optional visual override for the outer Card — omitted by every caller except each
+  // account's own card-styling unification pass, so other callers (Admin/Supplier) keep
+  // their exact current look.
+  className?: string;
 }) {
   const toneCls: Record<string, string> = {
     primary: "bg-primary/10 text-primary",
@@ -100,7 +104,7 @@ export function StatCard({
     blue: "bg-blue-500/10 text-blue-500",
   };
   return (
-    <Card className="rounded-2xl border-border/50 shadow-sm hover:shadow-md transition-shadow">
+    <Card className={cn("rounded-2xl border-border/50 shadow-sm hover:shadow-md transition-shadow", className)}>
       <CardContent className="p-5">
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-medium text-muted-foreground">{label}</p>

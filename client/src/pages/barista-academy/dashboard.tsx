@@ -21,6 +21,10 @@ const STATUS_COLORS: Record<AcademyRegistrationStatus, string> = {
 
 const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 
+// Same background/border/radius as the Espace Maintenance reference
+// (maintenance/dashboard-overview.tsx's StatTile/"Prochaine intervention" cards).
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+
 // Real Academy dashboard — every KPI below is computed from actual courses/
 // registrations/sessions/reviews, mirroring barista-marketplace/dashboard.tsx's
 // own "compute from real hooks, no stored aggregates" approach. No fake values.
@@ -88,7 +92,7 @@ export default function BaristaAcademyDashboard() {
             { label: "Inscriptions en attente", value: String(pendingRegistrations), icon: Clock, color: "text-amber-500" },
             { label: "Note moyenne", value: avgRating, icon: Star, color: "text-yellow-500" },
           ].map((kpi) => (
-            <Card key={kpi.label}>
+            <Card key={kpi.label} className={CARD_CLASS}>
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs text-muted-foreground">{kpi.label}</p>
@@ -102,7 +106,7 @@ export default function BaristaAcademyDashboard() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card>
+        <Card className={CARD_CLASS}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-indigo-500" /> Inscriptions (6 mois)
@@ -127,7 +131,7 @@ export default function BaristaAcademyDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={CARD_CLASS}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Inscriptions récentes</CardTitle>
           </CardHeader>
@@ -152,7 +156,7 @@ export default function BaristaAcademyDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card>
+        <Card className={CARD_CLASS}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-indigo-500" /> Prochaines sessions
@@ -177,7 +181,7 @@ export default function BaristaAcademyDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={CARD_CLASS}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Star className="w-4 h-4 text-amber-500" /> Avis récents

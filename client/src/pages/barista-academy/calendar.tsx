@@ -122,7 +122,7 @@ export default function AcademyCalendarPage() {
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-2xl" />)}</div>
       ) : sessions.length === 0 ? (
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
             <CalendarDays className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
             <p className="font-semibold">Aucune session planifiée</p>
@@ -135,7 +135,7 @@ export default function AcademyCalendarPage() {
             <div className="space-y-2">
               <h2 className="text-sm font-semibold text-muted-foreground">À venir</h2>
               {grouped.upcoming.map((s) => (
-                <Card key={s.id} data-testid={`card-session-${s.id}`}>
+                <Card key={s.id} data-testid={`card-session-${s.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
                   <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
                     <div>
                       <p className="font-medium text-sm">{s.courseTitle}</p>
@@ -163,7 +163,7 @@ export default function AcademyCalendarPage() {
             <div className="space-y-2">
               <h2 className="text-sm font-semibold text-muted-foreground">Passées</h2>
               {grouped.past.map((s) => (
-                <Card key={s.id} className="opacity-75" data-testid={`card-session-${s.id}`}>
+                <Card key={s.id} className="opacity-75 bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" data-testid={`card-session-${s.id}`}>
                   <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
                     <div>
                       <p className="font-medium text-sm">{s.courseTitle}</p>

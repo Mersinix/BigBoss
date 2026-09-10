@@ -7,6 +7,8 @@ import { Package, Truck, CheckCircle2, Clock, Users } from "lucide-react";
 import { Link } from "wouter";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   AVAILABLE: { label: "Disponible", cls: "bg-amber-100 text-amber-700" },
   ACCEPTED: { label: "Acceptée", cls: "bg-blue-100 text-blue-700" },
@@ -49,7 +51,7 @@ export default function DeliveryDashboard() {
 
       <div className={`grid grid-cols-2 ${isCompany ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-4`}>
         {isCompany && (
-          <Card>
+          <Card className={CARD_CLASS}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-muted-foreground">Disponibles</p>
@@ -59,7 +61,7 @@ export default function DeliveryDashboard() {
             </CardContent>
           </Card>
         )}
-        <Card>
+        <Card className={CARD_CLASS}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted-foreground">En cours</p>
@@ -68,7 +70,7 @@ export default function DeliveryDashboard() {
             <p className="text-2xl font-bold text-indigo-500">{active.length}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={CARD_CLASS}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted-foreground">Livrées</p>
@@ -78,7 +80,7 @@ export default function DeliveryDashboard() {
           </CardContent>
         </Card>
         {isCompany && (
-          <Card>
+          <Card className={CARD_CLASS}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-muted-foreground">Chauffeurs</p>
@@ -88,7 +90,7 @@ export default function DeliveryDashboard() {
             </CardContent>
           </Card>
         )}
-        <Card className="bg-gradient-to-br from-primary/5 to-transparent border-primary/20">
+        <Card className={`${CARD_CLASS} bg-gradient-to-br from-primary/5 to-transparent`}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted-foreground">Frais générés</p>
@@ -99,7 +101,7 @@ export default function DeliveryDashboard() {
         </Card>
       </div>
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold">
             {isCompany ? "Livraisons actives" : "Mes livraisons en cours"}

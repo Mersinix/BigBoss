@@ -5,6 +5,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign, TrendingUp, CalendarCheck, ClipboardList } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
+// Same background/border/radius as the Espace Maintenance reference
+// (maintenance/dashboard-overview.tsx's StatTile/"Prochaine intervention" cards).
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+
 // No payment processor exists in this project (mirrors barista-marketplace/
 // revenue.tsx's own note) — "Total gagné" only ever counts COMPLETED
 // registrations (training actually delivered), and is kept visually distinct
@@ -42,7 +46,7 @@ export default function AcademyRevenuePage() {
           { label: "Ce mois-ci", value: fmt(data.currentMonthCents), icon: TrendingUp, color: "text-indigo-500" },
           { label: "Terminées ce mois-ci", value: String(data.currentMonthRegistrations), icon: CalendarCheck, color: "text-amber-500" },
         ].map((kpi) => (
-          <Card key={kpi.label}>
+          <Card key={kpi.label} className={CARD_CLASS}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-muted-foreground">{kpi.label}</p>
@@ -66,7 +70,7 @@ export default function AcademyRevenuePage() {
         </Card>
       )}
 
-      <Card>
+      <Card className={CARD_CLASS}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-indigo-500" /> Revenus (6 mois)

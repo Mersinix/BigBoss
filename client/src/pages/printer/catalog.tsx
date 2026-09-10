@@ -59,7 +59,7 @@ export default function PrinterCatalog() {
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {items.map((item) => (
-                  <Card key={item.id} className="rounded-2xl border-border/50 shadow-sm overflow-hidden">
+                  <Card key={item.id} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-sm overflow-hidden">
                     <div className="h-32 bg-secondary/40 flex items-center justify-center overflow-hidden">
                       {item.imageUrl ? (
                         <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />

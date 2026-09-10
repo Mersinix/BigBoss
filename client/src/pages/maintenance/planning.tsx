@@ -108,7 +108,7 @@ function ReservationCard({ res, onConfirm, onCancel, onReschedule, onComplete, f
       <Badge variant="outline" className="text-[10px] text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-700/40 bg-orange-50 dark:bg-orange-900/30">{res.category}</Badge>
       {res.urgency && <Badge variant="outline" className={`text-[10px] ml-1 ${res.urgency === "URGENT" ? "text-red-600 dark:text-red-400 border-red-200 dark:border-red-700/40 bg-red-50 dark:bg-red-900/30" : "text-gray-600 dark:text-gray-400"}`}>Urgence: {res.urgency}</Badge>}
       {res.status === "RESCHEDULE_PENDING" && res.proposedDate && (
-        <div className="rounded-xl bg-purple-50 border border-purple-100 px-3 py-2 text-xs text-purple-700">
+        <div className="rounded-xl bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 px-3 py-2 text-xs text-purple-700 dark:text-purple-400">
           Proposition envoyée : <strong>{res.proposedDate}{res.proposedTime ? ` à ${res.proposedTime}` : ""}</strong>. En attente de confirmation du Coffee Owner.
         </div>
       )}

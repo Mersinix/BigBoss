@@ -27,6 +27,7 @@ const STATUS_COLORS: Record<BaristaRequestStatus, string> = {
 };
 
 const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 export default function BaristaMarketplaceDashboard() {
   const { user } = useAuth();
@@ -88,7 +89,7 @@ export default function BaristaMarketplaceDashboard() {
             { label: "En attente", value: String(pendingRequests), icon: Clock, color: "text-amber-500" },
             { label: "Note", value: avgRating, icon: Star, color: "text-yellow-500" },
           ].map((kpi) => (
-            <Card key={kpi.label}>
+            <Card key={kpi.label} className={CARD_CLASS}>
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs text-muted-foreground">{kpi.label}</p>
@@ -102,7 +103,7 @@ export default function BaristaMarketplaceDashboard() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card>
+        <Card className={CARD_CLASS}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-indigo-500" /> Demandes (6 mois)
@@ -127,7 +128,7 @@ export default function BaristaMarketplaceDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={CARD_CLASS}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Demandes récentes</CardTitle>
           </CardHeader>

@@ -17,11 +17,16 @@ export function MessagesPanel({
   showRoleIndicator = true,
   service,
   initialConversationId = null,
+  className,
 }: {
   currentUserId: number;
   showRoleIndicator?: boolean;
   service?: string;
   initialConversationId?: number | null;
+  // Optional visual override for the outer Card — omitted by every caller except
+  // Delivery/Driver's own card-styling unification pass, so Supplier/Admin/Academy
+  // keep their exact current look.
+  className?: string;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -77,7 +82,7 @@ export function MessagesPanel({
       qc.invalidateQueries({ queryKey: ["/api/messages/conversations", activeConvId, "messages"] });
       qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
     },
-    onError: (err: any) => toast({ title: "Failed to send", description: err?.message, variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Échec de l'envoi", description: err?.message, variant: "destructive" }),
   });
 
   const markReadMutation = useMutation({
@@ -97,7 +102,7 @@ export function MessagesPanel({
       // Refetch immediately so the new conversation appears in the list
        qc.invalidateQueries({ queryKey: ["/api/messages/conversations"] });
     },
-    onError: (err: any) => toast({ title: "Cannot start conversation", description: err?.message, variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Impossible de démarrer la conversation", description: err?.message, variant: "destructive" }),
   });
 
   const handleSelectConversation = (id: number) => {
@@ -107,7 +112,7 @@ export function MessagesPanel({
   };
 
   return (
-    <Card className="overflow-hidden flex flex-col" style={{ height: 560 }}>
+    <Card className={`overflow-hidden flex flex-col ${className ?? ""}`} style={{ height: 560 }}>
       {/* Mobile: show list or chat; Desktop: side-by-side */}
       <div className="flex flex-1 overflow-hidden">
         {/* Conversation list — always visible on desktop, hidden on mobile when chat open */}
@@ -139,7 +144,7 @@ export function MessagesPanel({
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-              <p className="text-muted-foreground text-sm">Select a conversation to start chatting</p>
+              <p className="text-muted-foreground text-sm">Sélectionnez une conversation pour commencer.</p>
             </div>
           )}
         </div>

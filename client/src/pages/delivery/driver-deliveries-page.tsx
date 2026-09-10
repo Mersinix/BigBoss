@@ -110,7 +110,7 @@ export default function DriverDeliveriesPage() {
         <div className="p-6"><Skeleton className="h-[70vh] w-full rounded-2xl" /></div>
       ) : !current ? (
         <div className="p-6">
-          <Card><CardContent className="py-16 text-center">
+          <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl"><CardContent className="py-16 text-center">
             <Package2 className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
             <p className="font-semibold">Aucune livraison active</p>
             <p className="text-sm text-muted-foreground mt-1">Vos livraisons assignées apparaîtront ici.</p>
@@ -179,7 +179,7 @@ export default function DriverDeliveriesPage() {
               const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
               const dStep = NEXT_STEP[d.status];
               return (
-                <Card key={d.id} className={d.id === current?.id ? "border-primary" : ""} data-testid={`card-delivery-list-${d.id}`}>
+                <Card key={d.id} className={`bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl ${d.id === current?.id ? "border-primary" : ""}`} data-testid={`card-delivery-list-${d.id}`}>
                   <CardContent className="p-4 flex items-center justify-between gap-3 cursor-pointer" onClick={() => selectDelivery(d.id)}>
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">

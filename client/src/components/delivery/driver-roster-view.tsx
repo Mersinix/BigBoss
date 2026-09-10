@@ -25,6 +25,9 @@ type Props = {
   /** Only the Delivery Company roster manages its own fleet's vehicle assignment inline —
    *  Supplier drivers just display whichever vehicle they already have (if any). */
   ownerType?: "DELIVERY_COMPANY" | "SUPPLIER";
+  /** Optional visual override for this view's Cards — omitted by the Supplier caller so
+   *  its look stays exactly as-is; only the Delivery Company drivers page passes it. */
+  cardClassName?: string;
 };
 
 /**
@@ -34,7 +37,7 @@ type Props = {
  * pages for what is, underneath, the same Driver model. Professional mapped cards (not a
  * table) with real vehicle/rating/activity information — see task Parts 14/15/34.
  */
-export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gérez vos chauffeurs.", useDrivers, useCreateDriver, ownerType }: Props) {
+export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gérez vos chauffeurs.", useDrivers, useCreateDriver, ownerType, cardClassName }: Props) {
   const { data: drivers = [], isLoading } = useDrivers();
   const { data: deliveries = [] } = useDeliveries();
   // Hooks called unconditionally (Rules of Hooks) — the vehicles query is simply disabled
@@ -107,13 +110,13 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
+        <Card className={cardClassName}>
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-primary/10 rounded-xl p-3"><Truck className="w-5 h-5 text-primary" /></div>
             <div><p className="text-xs text-muted-foreground">Chauffeurs</p><p className="text-2xl font-bold">{drivers.length}</p></div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={cardClassName}>
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-indigo-500/10 rounded-xl p-3"><Truck className="w-5 h-5 text-indigo-600" /></div>
             <div><p className="text-xs text-muted-foreground">En livraison actuellement</p><p className="text-2xl font-bold">{activeDeliveriesByDriver.size}</p></div>
@@ -139,7 +142,7 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{[...Array(3)].map((_, i) => <div key={i} className="h-48 bg-muted animate-pulse rounded-2xl" />)}</div>
       ) : filteredDrivers.length === 0 ? (
-        <Card><CardContent className="py-16 text-center text-muted-foreground">
+        <Card className={cardClassName}><CardContent className="py-16 text-center text-muted-foreground">
           {drivers.length === 0 ? "Aucun chauffeur pour le moment. Ajoutez-en un pour commencer à assigner des livraisons." : "Aucun chauffeur ne correspond à ces filtres."}
         </CardContent></Card>
       ) : (
@@ -148,7 +151,7 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
             const busy = (activeDeliveriesByDriver.get(d.id) ?? 0) > 0;
             const vehicle = vehicleByDriver.get(d.id);
             return (
-              <Card key={d.id} className="hover:shadow-md transition-shadow" data-testid={`card-driver-${d.id}`}>
+              <Card key={d.id} className={`hover:shadow-md transition-shadow ${cardClassName ?? ""}`} data-testid={`card-driver-${d.id}`}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start gap-3 cursor-pointer" onClick={() => setDetail(d)}>
                     <Avatar className="w-10 h-10 shrink-0">

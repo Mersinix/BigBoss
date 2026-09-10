@@ -19,7 +19,7 @@ import type { User } from "@shared/schema";
  * shared/notification-preferences.ts) — never a fixed list — so an
  * irrelevant category never shows up for a role it doesn't concern.
  */
-export function NotificationPreferencesCard({ role }: { role: User["role"] }) {
+export function NotificationPreferencesCard({ role, className }: { role: User["role"]; className?: string }) {
   const keys = ROLE_NOTIFICATION_PREF_KEYS[role] ?? [];
   const { isEnabled } = useNotificationPreferences();
   const update = useUpdateNotificationPreferences();
@@ -43,6 +43,7 @@ export function NotificationPreferencesCard({ role }: { role: User["role"] }) {
     <SectionCard
       title="Notifications"
       icon={Bell}
+      className={className}
       right={
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => setAll(true)} data-testid="button-notif-prefs-enable-all">

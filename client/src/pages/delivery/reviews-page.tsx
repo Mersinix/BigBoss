@@ -1,27 +1,24 @@
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { Star } from "lucide-react";
-import type { SupplierProductReview } from "@shared/schema";
+import { useDeliveryCompanyReviews } from "@/hooks/use-delivery-company-marketplace";
 
-// Real PRINT reviews only — GET /api/print/reviews/:printerId reads the same
-// shared supplierProductReviews table (reviewType='PRINT') that the Coffee
-// Owner's "leave a review" flow writes to and that the marketplace card
-// rating / Admin PRINT overview both already compute live from. Single
-// source of truth: nothing here is denormalized or duplicated.
-export default function PrinterReviewsPage() {
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+
+// Real Delivery Company reviews — GET /api/delivery-company/reviews/:userId reads the
+// same shared supplierProductReviews table (reviewType='DELIVERY_COMPANY') that the
+// marketplace card rating / Admin Delivery overview already compute live from. A
+// Delivery Company IS reviewed — by the Supplier who dispatched through it (see
+// shared/schema.ts: cafeId/cafeName/cafeOwnerName are reused to hold the reviewing
+// Supplier's identity for this review type) — so this replaces the previous
+// PerformanceEmptyState placeholder that incorrectly claimed no review system exists.
+// Single source of truth: nothing here is denormalized or duplicated, mirroring
+// pages/printer/reviews.tsx and pages/marketing/reviews.tsx.
+export default function DeliveryCompanyReviewsPage() {
   const { user } = useAuth();
-  const { data: reviews = [], isLoading } = useQuery<SupplierProductReview[]>({
-    queryKey: ["/api/print/reviews", user?.id],
-    queryFn: async () => {
-      const r = await fetch(`/api/print/reviews/${user?.id}`, { credentials: "include" });
-      if (!r.ok) throw new Error("Impossible de charger les avis");
-      return r.json();
-    },
-    enabled: !!user?.id,
-  });
+  const { data: reviews = [], isLoading } = useDeliveryCompanyReviews(user?.id ?? null);
 
   const stats = useMemo(() => {
     if (reviews.length === 0) return { average: 0, count: 0 };
@@ -33,10 +30,10 @@ export default function PrinterReviewsPage() {
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Avis</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Avis laissés par les cafés sur vos services PRINT.</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Avis laissés par les fournisseurs sur vos livraisons.</p>
       </div>
 
-      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
+      <Card className={CARD_CLASS}>
         <CardContent className="p-5 flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center shrink-0">
             <Star className="w-6 h-6 text-amber-500 fill-amber-500" />
@@ -48,17 +45,17 @@ export default function PrinterReviewsPage() {
         </CardContent>
       </Card>
 
-      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
+      <Card className={CARD_CLASS}>
         <CardContent className="p-0 divide-y divide-border/40">
           {isLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Chargement…</p>
           ) : reviews.length === 0 ? (
-            <EmptyState message="Aucun avis pour le moment" icon={Star} />
+            <EmptyState icon={Star} message="Aucun avis pour le moment" />
           ) : (
             reviews.map((review) => (
               <div key={review.id} className="p-4" data-testid={`row-review-${review.id}`}>
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-foreground">{review.cafeName || "Café"}</p>
+                  <p className="text-sm font-semibold text-foreground">{review.cafeName || "Fournisseur"}</p>
                   <div className="flex items-center gap-1 text-amber-500 shrink-0">
                     {Array.from({ length: 5 }, (_, i) => (
                       <Star key={i} className={`w-3.5 h-3.5 ${i < review.rating ? "fill-amber-500" : "fill-none text-gray-300"}`} />
@@ -67,7 +64,7 @@ export default function PrinterReviewsPage() {
                 </div>
                 {review.comment && <p className="text-sm text-muted-foreground mt-1.5">{review.comment}</p>}
                 <p className="text-xs text-muted-foreground/70 mt-1.5">
-                  {review.printOrderId ? `Commande #${review.printOrderId} · ` : ""}
+                  {review.deliveryId ? `Livraison #${review.deliveryId} · ` : ""}
                   {review.createdAt ? new Date(review.createdAt).toLocaleDateString("fr-FR") : ""}
                 </p>
               </div>

@@ -131,11 +131,16 @@ export default function Profile() {
         </Button>
       </div>
 
-      <BusinessProfileIdentityCard nameLabel="Nom / Structure" settingsPath="/maintenance-panel/settings" testIdPrefix="maintenance" />
+      <BusinessProfileIdentityCard
+        nameLabel="Nom / Structure"
+        settingsPath="/maintenance-panel/settings"
+        testIdPrefix="maintenance"
+        className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl"
+      />
 
       {/* Business/professional details — distinct from the read-only identity
           card above (Part 10: no duplicate "Informations personnelles"). */}
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Briefcase className="w-4 h-4 text-orange-500" />Détails professionnels</CardTitle>
         </CardHeader>
@@ -181,7 +186,7 @@ export default function Profile() {
       </Card>
 
       {/* Certifications, portfolio and experience use the shared marketplace profile. */}
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Award className="w-4 h-4 text-orange-500" />Certifications & expérience</CardTitle>
         </CardHeader>
@@ -260,7 +265,7 @@ export default function Profile() {
       </Card>
 
       {/* Specialties */}
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Wrench className="w-4 h-4 text-orange-500" />Spécialités & Compétences</CardTitle>
         </CardHeader>
@@ -283,7 +288,7 @@ export default function Profile() {
       </Card>
 
       {/* Coverage area */}
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" />Zone d'intervention</CardTitle>
         </CardHeader>
@@ -305,7 +310,7 @@ export default function Profile() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><SettingsIcon className="w-4 h-4 text-orange-500" />Visibilité</CardTitle>
         </CardHeader>

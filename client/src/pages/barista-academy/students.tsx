@@ -50,7 +50,7 @@ export default function AcademyStudentsPage() {
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-2xl" />)}</div>
       ) : rows.length === 0 ? (
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
             <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
             <p className="font-semibold">Aucun étudiant pour le moment</p>
@@ -60,7 +60,7 @@ export default function AcademyStudentsPage() {
       ) : (
         <div className="space-y-3">
           {rows.map((r) => (
-            <Card key={r.id} data-testid={`card-student-${r.id}`}>
+            <Card key={r.id} data-testid={`card-student-${r.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-4 flex flex-col gap-2.5">
                 <div className="flex items-center gap-2 flex-wrap justify-between">
                   <div className="flex items-center gap-2 flex-wrap min-w-0">

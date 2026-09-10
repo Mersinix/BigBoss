@@ -5,6 +5,7 @@ import { AccountSecurityCard } from "@/components/settings/account-security-card
 import { useEffectiveAccountDarkMode } from "@/hooks/use-account-dark-mode";
 
 const ACCENT = "bg-blue-600 hover:bg-blue-700 text-white";
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Settings = account management ONLY (Settings/Business-Profil separation
 // task): Compte / Localisation / Notifications / Sécurité. Vehicle and
@@ -20,13 +21,13 @@ export default function DriverSettingsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">Gérez votre compte et vos préférences.</p>
       </div>
 
-      <AccountIdentityCard accentClassName={ACCENT} testIdPrefix="driver" />
+      <AccountIdentityCard accentClassName={ACCENT} testIdPrefix="driver" className={CARD_CLASS} />
 
-      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} />
+      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} className={CARD_CLASS} />
 
-      <NotificationPreferencesCard role="DRIVER" />
+      <NotificationPreferencesCard role="DRIVER" className={CARD_CLASS} />
 
-      <AccountSecurityCard testIdPrefix="driver" />
+      <AccountSecurityCard testIdPrefix="driver" className={CARD_CLASS} />
     </div>
   );
 }

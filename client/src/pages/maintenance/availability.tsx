@@ -72,7 +72,7 @@ export default function Availability() {
   return (
     <div className="space-y-4">
       {/* Vacation mode */}
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardContent className="pt-4">
           <div className="flex items-center justify-between">
             <div>
@@ -98,7 +98,7 @@ export default function Availability() {
           independently instead of one global toggle + one global time
           range. Same card/typography/spacing language as the rest of
           this page, just extended. */}
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" />Jours et horaires de travail</CardTitle>
         </CardHeader>

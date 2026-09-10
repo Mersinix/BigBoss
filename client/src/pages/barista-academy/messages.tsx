@@ -66,7 +66,7 @@ export default function AcademyMessagesPage() {
         <p className="text-sm text-muted-foreground mt-0.5">Vos conversations avec les Coffee Owners.</p>
       </div>
 
-      <Card className="rounded-2xl overflow-hidden">
+      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl overflow-hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <MessageCircle className="w-4 h-4 text-indigo-600" />Conversations

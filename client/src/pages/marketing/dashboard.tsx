@@ -9,8 +9,10 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Megaphone, Users, Briefcase, CheckCircle2, TrendingUp, Star, Mail, Phone, MapPin } from "lucide-react";
 import { DashboardHero, StatCard, SectionCard, EmptyState } from "@/components/dashboard/dashboard-kit";
-import { useMarketingProjects, useMarketingRevenue } from "@/hooks/use-marketing";
+import { useMarketingProjects, useMarketingRevenue, useMarketingReviews } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META, formatMonthKey } from "@/lib/marketing-project-status";
+
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Real Marketing dashboard — every number here is computed client-side from the
 // live /api/marketing/projects and /api/marketing/revenue endpoints (no mock
@@ -21,6 +23,9 @@ export default function MarketingDashboard() {
 
   const { data: projects = [], isLoading: projectsLoading } = useMarketingProjects();
   const { data: revenue, isLoading: revenueLoading } = useMarketingRevenue();
+  // Same review source and average-rating formula as reviews.tsx (Communication → Avis) —
+  // never a second, independently-computed rating, so Dashboard and Avis always agree.
+  const { data: reviews = [] } = useMarketingReviews(user?.id ?? null);
   const isLoading = projectsLoading || revenueLoading;
 
   const statusMeta: Record<string, { label: string; cls: string }> = {
@@ -37,6 +42,10 @@ export default function MarketingDashboard() {
     () => [...projects].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6),
     [projects],
   );
+  const reviewStats = useMemo(() => {
+    if (reviews.length === 0) return { average: 0, count: 0 };
+    return { average: reviews.reduce((s, r) => s + r.rating, 0) / reviews.length, count: reviews.length };
+  }, [reviews]);
 
   const chartData = useMemo(
     () => (revenue?.history ?? []).map((h) => ({ month: formatMonthKey(h.month), revenue: h.totalCents / 100 })),
@@ -94,14 +103,21 @@ export default function MarketingDashboard() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Clients actifs" value={activeClients} icon={Users} tone="primary" />
-        <StatCard label="Projets en cours" value={activeProjects} icon={Briefcase} tone="blue" />
-        <StatCard label="Projets terminés" value={completedProjects} icon={CheckCircle2} tone="green" />
-        <StatCard label="Note moyenne" value={"—"} icon={Star} tone="amber" subtext="Voir l'onglet Avis" />
+        <StatCard label="Clients actifs" value={activeClients} icon={Users} tone="primary" className={CARD_CLASS} />
+        <StatCard label="Projets en cours" value={activeProjects} icon={Briefcase} tone="blue" className={CARD_CLASS} />
+        <StatCard label="Projets terminés" value={completedProjects} icon={CheckCircle2} tone="green" className={CARD_CLASS} />
+        <StatCard
+          label="Note moyenne"
+          value={reviewStats.count > 0 ? reviewStats.average.toFixed(1) : "—"}
+          icon={Star}
+          tone="amber"
+          subtext={reviewStats.count > 0 ? `${reviewStats.count} avis` : "Voir l'onglet Avis"}
+          className={CARD_CLASS}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <SectionCard title="Chiffre d'affaires (6 mois)" icon={TrendingUp}>
+        <SectionCard title="Chiffre d'affaires (6 mois)" icon={TrendingUp} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {chartData.every((d) => d.revenue === 0) ? (
             <EmptyState message="Pas encore de revenus." />
           ) : (
@@ -123,7 +139,7 @@ export default function MarketingDashboard() {
           )}
         </SectionCard>
 
-        <SectionCard title="Projets récents" icon={Briefcase}>
+        <SectionCard title="Projets récents" icon={Briefcase} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {recentProjects.length === 0 ? (
             <EmptyState message="Aucun projet pour le moment." icon={Briefcase} />
           ) : (

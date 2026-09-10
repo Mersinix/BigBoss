@@ -19,6 +19,7 @@ import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { PrintCatalogItem, OpeningHoursMap } from "@shared/schema";
 
 const ACCENT = "bg-blue-600 hover:bg-blue-700 text-white";
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Business → Profil — the printing COMPANY's complete public/business profile
 // (identity summary/description/website/categories/services summary/
@@ -102,9 +103,9 @@ export default function PrinterProfilePage() {
         </Button>
       </div>
 
-      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'imprimerie" settingsPath="/printer/settings" testIdPrefix="printer" />
+      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'imprimerie" settingsPath="/printer/settings" testIdPrefix="printer" className={CARD_CLASS} />
 
-      <SectionCard title={`Services proposés (${catalog.length})`} icon={Package}>
+      <SectionCard title={`Services proposés (${catalog.length})`} icon={Package} className={CARD_CLASS}>
         {catalog.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun service créé pour le moment — ajoutez-en depuis Business → Services.</p>
         ) : (
@@ -126,7 +127,7 @@ export default function PrinterProfilePage() {
       </SectionCard>
 
       {user?.printCategories && user.printCategories.length > 0 && (
-        <SectionCard title="Catégories approuvées" icon={Tag}>
+        <SectionCard title="Catégories approuvées" icon={Tag} className={CARD_CLASS}>
           <div className="flex flex-wrap gap-1.5">
             {user.printCategories.map((c) => <Badge key={c} variant="secondary">{c}</Badge>)}
           </div>
@@ -134,18 +135,18 @@ export default function PrinterProfilePage() {
         </SectionCard>
       )}
 
-      <SectionCard title="Description de l'imprimerie" icon={Printer}>
+      <SectionCard title="Description de l'imprimerie" icon={Printer} className={CARD_CLASS}>
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Décrivez votre imprimerie, votre équipement, votre expérience…" data-testid="input-company-description" />
       </SectionCard>
 
-      <SectionCard title="Site web" icon={Globe}>
+      <SectionCard title="Site web" icon={Globe} className={CARD_CLASS}>
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Lien vers votre site (facultatif)</Label>
           <Input type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://votre-site.com" data-testid="input-website-url" />
         </div>
       </SectionCard>
 
-      <SectionCard title="Visibilité" icon={Eye}>
+      <SectionCard title="Visibilité" icon={Eye} className={CARD_CLASS}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Afficher mon imprimerie sur /print</p>
@@ -175,6 +176,7 @@ export default function PrinterProfilePage() {
         vacationDescription="Masque votre imprimerie et stoppe les nouvelles commandes."
         accentClassName={ACCENT}
         testIdPrefix="printer"
+        className={CARD_CLASS}
       />
 
       <PrintCompanyDetailModal

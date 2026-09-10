@@ -19,6 +19,8 @@ import { Building2, Award, MapPin, XCircle, X, Plus, Calendar, Zap, Eye, AlertCi
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+
 // Business → Profil — the Delivery Company's editable marketplace profile.
 // Brand-new page (no pre-existing profile UI to preserve): mirrors the
 // Maintenance profile+availability editor exactly (same fields/sections/save
@@ -115,11 +117,11 @@ export default function DeliveryCompanyProfilePage() {
         </Button>
       </div>
 
-      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'entreprise" settingsPath="/delivery/settings" testIdPrefix="delivery-company" />
+      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'entreprise" settingsPath="/delivery/settings" testIdPrefix="delivery-company" className={CARD_CLASS} />
 
       {/* Business/operational details — distinct from the read-only identity
           card above (Part 10: no duplicate "Informations de l'entreprise"). */}
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Building2 className="w-4 h-4 text-teal-500" />Détails de l'entreprise</CardTitle>
         </CardHeader>
@@ -167,7 +169,7 @@ export default function DeliveryCompanyProfilePage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Award className="w-4 h-4 text-teal-500" />Certifications & expérience</CardTitle>
         </CardHeader>
@@ -211,7 +213,7 @@ export default function DeliveryCompanyProfilePage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><MapPin className="w-4 h-4 text-teal-500" />Zone d'intervention</CardTitle>
         </CardHeader>
@@ -221,7 +223,7 @@ export default function DeliveryCompanyProfilePage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 rounded-2xl border-gray-100 dark:border-gray-700/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2"><Calendar className="w-4 h-4 text-teal-500" />Disponibilité</CardTitle>
         </CardHeader>

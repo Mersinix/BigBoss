@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { MessagesPanel } from "@/components/messages/messages-panel";
 
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+
 // Shared by Delivery Company (/delivery/messages) and Driver (/driver/messages) — same
 // underlying conversations/messages system. The Driver Livraisons map's Message button
 // (task Part 4) deep-links here with ?conversationId=&returnTo=deliveries so the Driver can
@@ -23,7 +25,7 @@ export default function DeliveryMessagesPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Messages</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Chat with café owners and admin about deliveries.</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Discutez avec les cafés et l'administration au sujet des livraisons.</p>
         </div>
         {returnTo === "deliveries" && (
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/driver/deliveries")} data-testid="button-return-to-delivery">
@@ -31,7 +33,7 @@ export default function DeliveryMessagesPage() {
           </Button>
         )}
       </div>
-      {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service="SHOP" initialConversationId={conversationId ? Number(conversationId) : null} />}
+      {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service="SHOP" initialConversationId={conversationId ? Number(conversationId) : null} className={CARD_CLASS} />}
     </div>
   );
 }

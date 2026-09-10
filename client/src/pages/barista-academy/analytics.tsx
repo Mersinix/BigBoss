@@ -10,6 +10,7 @@ import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboa
 
 const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Every metric below is computed client-side from the same real hooks the
 // rest of the account already uses — no duplicate analytics storage, mirrors
@@ -82,14 +83,14 @@ export default function AcademyAnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux de complétion</p><p className="text-xl font-bold text-green-600">{completionRate}%</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Note moyenne</p><p className="text-xl font-bold">{reviews.length > 0 ? avgRating.toFixed(1) : "—"}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Formations publiées</p><p className="text-xl font-bold">{courses.filter((c) => c.isPublished).length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux d'occupation</p><p className="text-xl font-bold text-indigo-600">{occupancyRate != null ? `${occupancyRate}%` : "—"}</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux de complétion</p><p className="text-xl font-bold text-green-600">{completionRate}%</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Note moyenne</p><p className="text-xl font-bold">{reviews.length > 0 ? avgRating.toFixed(1) : "—"}</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Formations publiées</p><p className="text-xl font-bold">{courses.filter((c) => c.isPublished).length}</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux d'occupation</p><p className="text-xl font-bold text-indigo-600">{occupancyRate != null ? `${occupancyRate}%` : "—"}</p></CardContent></Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="Inscriptions par mois" icon={TrendingUp}>
+        <SectionCard title="Inscriptions par mois" icon={TrendingUp} className={CARD_CLASS}>
           {registrationsByMonth.every((h) => h.registrations === 0) ? <EmptyState message="Aucune donnée pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={registrationsByMonth} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
@@ -102,7 +103,7 @@ export default function AcademyAnalyticsPage() {
             </ResponsiveContainer>
           )}
         </SectionCard>
-        <SectionCard title="Revenu par mois" icon={TrendingUp}>
+        <SectionCard title="Revenu par mois" icon={TrendingUp} className={CARD_CLASS}>
           {revenueByMonth.every((h) => h.revenue === 0) ? <EmptyState message="Aucune donnée pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={revenueByMonth} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
@@ -117,7 +118,7 @@ export default function AcademyAnalyticsPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="Formations les plus demandées" icon={Award}>
+      <SectionCard title="Formations les plus demandées" icon={Award} className={CARD_CLASS}>
         {topCourses.length === 0 ? <EmptyState message="Aucune inscription pour le moment." /> : (
           <div className="divide-y divide-border/40">
             {topCourses.map((c, i) => <RankRow key={c.course.id} rank={i + 1} title={c.course.title} subtitle={`${c.registered} participant${c.registered > 1 ? "s" : ""}`} value={String(c.registered)} />)}

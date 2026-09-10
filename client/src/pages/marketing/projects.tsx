@@ -27,7 +27,7 @@ function ProjectCard({ project, onQuote, onAction, onProgress }: {
   const actions = MARKETING_PROJECT_NEXT_ACTIONS[project.status] ?? [];
 
   return (
-    <div className="bg-card rounded-2xl border border-border/60 shadow-sm p-4 space-y-3">
+    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-sm p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-bold text-sm">{project.cafeOwner ?? "Client"}</p>

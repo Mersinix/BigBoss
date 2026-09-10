@@ -202,7 +202,7 @@ export default function AcademyCoursesPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
       ) : courses.length === 0 ? (
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
             <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
             <p className="font-semibold">Aucune formation pour le moment</p>
@@ -212,7 +212,7 @@ export default function AcademyCoursesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {courses.map((course) => (
-            <Card key={course.id} data-testid={`card-course-${course.id}`}>
+            <Card key={course.id} data-testid={`card-course-${course.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-5 flex flex-col gap-3">
                 {/* Clicking the formation itself opens the same Formation details modal
                     Coffee Owners see (Part 12) — read-only here, since the Academy is

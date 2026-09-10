@@ -21,6 +21,8 @@ type PrintRevenueSummary = {
   history: { month: string; totalCents: number; orders: number }[];
 };
 
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
+
 // Real Printer dashboard — every number here is computed client-side from the live
 // /api/print/orders, /api/print/catalog and /api/print/revenue endpoints (no mock data).
 // "Note moyenne" is deliberately omitted: there is no printer-level aggregate rating
@@ -124,14 +126,14 @@ export default function PrinterDashboard() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Commandes ce mois" value={ordersThisMonth.length} icon={ShoppingBag} tone="primary" />
-        <StatCard label="En attente" value={pendingCount} icon={Clock} tone="amber" />
-        <StatCard label="En production" value={preparingCount} icon={Factory} tone="blue" />
-        <StatCard label="Produits actifs" value={activeCatalogCount} icon={Package} tone="green" />
+        <StatCard label="Commandes ce mois" value={ordersThisMonth.length} icon={ShoppingBag} tone="primary" className={CARD_CLASS} />
+        <StatCard label="En attente" value={pendingCount} icon={Clock} tone="amber" className={CARD_CLASS} />
+        <StatCard label="En production" value={preparingCount} icon={Factory} tone="blue" className={CARD_CLASS} />
+        <StatCard label="Produits actifs" value={activeCatalogCount} icon={Package} tone="green" className={CARD_CLASS} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <SectionCard title="Chiffre d'affaires (6 mois)" icon={TrendingUp}>
+        <SectionCard title="Chiffre d'affaires (6 mois)" icon={TrendingUp} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {chartData.every((d) => d.revenue === 0) && chartData.length === 0 ? (
             <EmptyState message="Pas encore de revenus." />
           ) : (
@@ -153,7 +155,7 @@ export default function PrinterDashboard() {
           )}
         </SectionCard>
 
-        <SectionCard title="Commandes récentes" icon={ClipboardList}>
+        <SectionCard title="Commandes récentes" icon={ClipboardList} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {recentOrders.length === 0 ? (
             <EmptyState message="Aucune commande pour le moment." icon={ClipboardList} />
           ) : (

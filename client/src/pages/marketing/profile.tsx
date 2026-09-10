@@ -18,6 +18,7 @@ import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const MAX_PORTFOLIO_IMAGES = 10;
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Business → Profil — Agency → Multiple Services split: this page now owns ONLY
 // agency-level information (description/website/portfolio/availability/visibility).
@@ -111,9 +112,9 @@ export default function MarketingProfilePage() {
         </Button>
       </div>
 
-      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'agence" settingsPath="/marketing-panel/settings" testIdPrefix="marketing" />
+      <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'agence" settingsPath="/marketing-panel/settings" testIdPrefix="marketing" className={CARD_CLASS} />
 
-      <SectionCard title={`Services proposés (${services.length})`} icon={Megaphone}>
+      <SectionCard title={`Services proposés (${services.length})`} icon={Megaphone} className={CARD_CLASS}>
         {services.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun service créé pour le moment — ajoutez-en depuis Business → Services.</p>
         ) : (
@@ -134,18 +135,18 @@ export default function MarketingProfilePage() {
         <p className="text-xs text-muted-foreground mt-2">Créer, modifier ou publier un service se fait depuis Business → Services.</p>
       </SectionCard>
 
-      <SectionCard title="Description de l'agence" icon={Megaphone}>
+      <SectionCard title="Description de l'agence" icon={Megaphone} className={CARD_CLASS}>
         <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Décrivez votre agence, votre expérience, votre approche…" data-testid="input-agency-description" />
       </SectionCard>
 
-      <SectionCard title="Site web" icon={Globe}>
+      <SectionCard title="Site web" icon={Globe} className={CARD_CLASS}>
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Lien vers votre site (facultatif)</Label>
           <Input type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://votre-site.com" data-testid="input-website-url" />
         </div>
       </SectionCard>
 
-      <SectionCard title={`Portfolio (${portfolioImages.length}/${MAX_PORTFOLIO_IMAGES})`} icon={ImageIcon}>
+      <SectionCard title={`Portfolio (${portfolioImages.length}/${MAX_PORTFOLIO_IMAGES})`} icon={ImageIcon} className={CARD_CLASS}>
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Ajouter une image (URL)</Label>
           <div className="flex gap-2">
@@ -176,7 +177,7 @@ export default function MarketingProfilePage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Visibilité" icon={Eye}>
+      <SectionCard title="Visibilité" icon={Eye} className={CARD_CLASS}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Afficher mon agence sur /marketing</p>
@@ -196,7 +197,7 @@ export default function MarketingProfilePage() {
         {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
       </Button>
 
-      <SectionCard title="Disponibilité" icon={Calendar}>
+      <SectionCard title="Disponibilité" icon={Calendar} className={CARD_CLASS}>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>

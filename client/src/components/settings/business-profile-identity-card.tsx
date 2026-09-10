@@ -20,6 +20,7 @@ export function BusinessProfileIdentityCard({
   nameLabel = "Nom",
   settingsPath,
   testIdPrefix = "business-profile",
+  className,
 }: {
   // "Informations personnelles" for individual professionals (Barista, Maintenance,
   // Driver, Academy), "Informations de l'entreprise" for companies/agencies
@@ -28,6 +29,10 @@ export function BusinessProfileIdentityCard({
   nameLabel?: string;
   settingsPath: string;
   testIdPrefix?: string;
+  // Optional visual override for the outer SectionCard — omitted by every
+  // caller except Maintenance's own account-wide card styling unification,
+  // so every other account keeps its exact current look.
+  className?: string;
 }) {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -37,6 +42,7 @@ export function BusinessProfileIdentityCard({
     <SectionCard
       title={title}
       icon={User}
+      className={className}
       right={
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(settingsPath)} data-testid={`button-${testIdPrefix}-modifier`}>
           <Pencil className="w-3.5 h-3.5" /> Modifier

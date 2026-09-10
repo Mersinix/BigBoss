@@ -18,6 +18,7 @@ type PrintRevenueSummary = {
 
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
 const PIE_COLORS = ["hsl(var(--primary))", "#f59e0b", "#3b82f6", "#8b5cf6", "#06b6d4", "#22c55e", "#ef4444"];
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 export default function PrinterAnalytics() {
   const fmt = useFormatCurrency();
@@ -91,15 +92,15 @@ export default function PrinterAnalytics() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard label="Revenu total" value={fmt(revenue?.totalEarnedCents ?? 0)} icon={TrendingUp} tone="green" />
-        <StatCard label="Commandes" value={orders.length} icon={ShoppingBag} tone="primary" subtext={`Panier moyen ${fmt(averageOrderValue)}`} />
-        <StatCard label="Livrées" value={deliveredOrders.length} icon={CheckCircle2} tone="green" />
-        <StatCard label="Annulées" value={cancelledOrders.length} icon={XCircle} tone="red" />
-        <StatCard label="Produits au catalogue" value={catalog.length} icon={Package} tone="amber" />
+        <StatCard label="Revenu total" value={fmt(revenue?.totalEarnedCents ?? 0)} icon={TrendingUp} tone="green" className={CARD_CLASS} />
+        <StatCard label="Commandes" value={orders.length} icon={ShoppingBag} tone="primary" subtext={`Panier moyen ${fmt(averageOrderValue)}`} className={CARD_CLASS} />
+        <StatCard label="Livrées" value={deliveredOrders.length} icon={CheckCircle2} tone="green" className={CARD_CLASS} />
+        <StatCard label="Annulées" value={cancelledOrders.length} icon={XCircle} tone="red" className={CARD_CLASS} />
+        <StatCard label="Produits au catalogue" value={catalog.length} icon={Package} tone="amber" className={CARD_CLASS} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="Chiffre d'affaires par mois" icon={TrendingUp}>
+        <SectionCard title="Chiffre d'affaires par mois" icon={TrendingUp} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {revenueChart.length === 0 ? <EmptyState message="Aucune donnée pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={revenueChart} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
@@ -113,7 +114,7 @@ export default function PrinterAnalytics() {
           )}
         </SectionCard>
 
-        <SectionCard title="Commandes par statut" icon={Layers}>
+        <SectionCard title="Commandes par statut" icon={Layers} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {statusChart.length === 0 ? <EmptyState message="Aucune commande pour le moment." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={statusChart} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
@@ -129,7 +130,7 @@ export default function PrinterAnalytics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SectionCard title="Produits les plus commandés" icon={Package}>
+        <SectionCard title="Produits les plus commandés" icon={Package} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {topItems.length === 0 ? <EmptyState message="Aucune donnée pour le moment." /> : (
             <div className="divide-y divide-border/40">
               {topItems.map((item, i) => (
@@ -139,7 +140,7 @@ export default function PrinterAnalytics() {
           )}
         </SectionCard>
 
-        <SectionCard title="Répartition du catalogue par catégorie" icon={Layers}>
+        <SectionCard title="Répartition du catalogue par catégorie" icon={Layers} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           {categoryBreakdown.length === 0 ? <EmptyState message="Aucun produit au catalogue." /> : (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>

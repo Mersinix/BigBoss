@@ -5,6 +5,7 @@ import { AccountSecurityCard } from "@/components/settings/account-security-card
 import { useEffectiveAccountDarkMode } from "@/hooks/use-account-dark-mode";
 
 const ACCENT = "bg-indigo-600 hover:bg-indigo-700 text-white";
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // Settings = account management ONLY (Settings/Business-Profil separation
 // task): Compte / Localisation / Notifications / Sécurité. Every
@@ -21,13 +22,13 @@ export default function AcademySettingsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">Gérez votre compte et vos préférences.</p>
       </div>
 
-      <AccountIdentityCard nameLabel="Nom de l'académie" accentClassName={ACCENT} testIdPrefix="academy" />
+      <AccountIdentityCard nameLabel="Nom de l'académie" accentClassName={ACCENT} testIdPrefix="academy" className={CARD_CLASS} />
 
-      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} />
+      <AccountAddressCard accentClassName={ACCENT} isDark={isDark} className={CARD_CLASS} />
 
-      <NotificationPreferencesCard role="BARISTA_ACADEMY" />
+      <NotificationPreferencesCard role="BARISTA_ACADEMY" className={CARD_CLASS} />
 
-      <AccountSecurityCard testIdPrefix="academy" />
+      <AccountSecurityCard testIdPrefix="academy" className={CARD_CLASS} />
     </div>
   );
 }

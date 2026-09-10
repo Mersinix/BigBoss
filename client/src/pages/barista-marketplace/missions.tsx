@@ -39,7 +39,7 @@ function MissionCard({ mission }: { mission: BaristaMission }) {
   };
 
   return (
-    <Card data-testid={`card-mission-${mission.id}`}>
+    <Card data-testid={`card-mission-${mission.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
       <CardContent className="p-5 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -109,7 +109,7 @@ export default function BaristaMissionsPage() {
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}</div>
       ) : list.length === 0 ? (
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
             <ClipboardList className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
             <p className="font-semibold">Aucune mission pour le moment</p>

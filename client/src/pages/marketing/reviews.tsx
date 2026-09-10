@@ -28,7 +28,7 @@ export default function MarketingReviewsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">Avis laissés par les cafés sur vos services Marketing.</p>
       </div>
 
-      <Card className="rounded-2xl">
+      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <CardContent className="p-5 flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center shrink-0">
             <Star className="w-6 h-6 text-amber-500 fill-amber-500" />
@@ -40,7 +40,7 @@ export default function MarketingReviewsPage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl">
+      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <CardContent className="p-0 divide-y divide-border/40">
           {isLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Chargement…</p>

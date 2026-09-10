@@ -47,19 +47,19 @@ export default function MarketingInvoices() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-primary/10 rounded-xl p-3"><FileText className="w-5 h-5 text-primary" /></div>
             <div><p className="text-xs text-muted-foreground">Devis envoyés</p><p className="text-2xl font-bold">{devis.length}</p></div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-green-500/10 rounded-xl p-3"><DollarSign className="w-5 h-5 text-green-600" /></div>
             <div><p className="text-xs text-muted-foreground">Facturé</p><p className="text-2xl font-bold text-green-600">{fmt(totalFactureCents)}</p></div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="p-5 flex items-center gap-4">
             <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
             <div><p className="text-xs text-muted-foreground">Devis en attente</p><p className="text-2xl font-bold text-amber-600">{fmt(pendingDevisCents)}</p></div>
@@ -96,7 +96,7 @@ export default function MarketingInvoices() {
           {rows.map((p) => {
             const meta = MARKETING_PROJECT_STATUS_META[p.status];
             return (
-              <Card key={p.id} data-testid={`card-invoice-${p.id}`}>
+              <Card key={p.id} data-testid={`card-invoice-${p.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
                   <div className="min-w-0 flex-1 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">

@@ -6,6 +6,7 @@ import { Truck, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { StatCard, SectionCard } from "@/components/dashboard/dashboard-kit";
 
 const MONTH_NAMES = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // "Informations sur les activités" — real activity counts and a real monthly completed-
 // deliveries trend, both derived from GET /api/deliveries (this driver's own rows only).
@@ -49,13 +50,13 @@ export default function DriverActivityPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total livraisons" value={stats.total} icon={Truck} tone="primary" />
-        <StatCard label="Terminées" value={stats.completed} icon={CheckCircle2} tone="green" />
-        <StatCard label="En cours" value={stats.active} icon={Clock} tone="amber" />
-        <StatCard label="Annulées" value={stats.cancelled} icon={XCircle} tone="red" />
+        <StatCard label="Total livraisons" value={stats.total} icon={Truck} tone="primary" className={CARD_CLASS} />
+        <StatCard label="Terminées" value={stats.completed} icon={CheckCircle2} tone="green" className={CARD_CLASS} />
+        <StatCard label="En cours" value={stats.active} icon={Clock} tone="amber" className={CARD_CLASS} />
+        <StatCard label="Annulées" value={stats.cancelled} icon={XCircle} tone="red" className={CARD_CLASS} />
       </div>
 
-      <SectionCard title="Livraisons terminées par mois" icon={CheckCircle2} right={<span className="text-xs text-muted-foreground">12 derniers mois</span>}>
+      <SectionCard title="Livraisons terminées par mois" icon={CheckCircle2} right={<span className="text-xs text-muted-foreground">12 derniers mois</span>} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={series} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />

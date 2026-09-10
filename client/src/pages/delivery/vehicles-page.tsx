@@ -118,7 +118,7 @@ export default function DeliveryVehiclesPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
       ) : vehicles.length === 0 ? (
-        <Card><CardContent className="py-16 text-center">
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl"><CardContent className="py-16 text-center">
           <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
           <p className="font-semibold">Aucun véhicule pour le moment</p>
           <p className="text-sm text-muted-foreground mt-1">Ajoutez un véhicule pour l'assigner à un chauffeur.</p>
@@ -126,7 +126,7 @@ export default function DeliveryVehiclesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {vehicles.map((v) => (
-            <Card key={v.id} data-testid={`card-vehicle-${v.id}`}>
+            <Card key={v.id} data-testid={`card-vehicle-${v.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-5 flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">

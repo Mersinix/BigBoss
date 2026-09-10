@@ -225,7 +225,7 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
       ) : courses.length === 0 ? (
-        <Card>
+        <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
             <GraduationCap className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
             <p className="font-semibold">{hasFilters ? "Aucune formation trouvée" : "Aucune formation disponible"}</p>
@@ -237,7 +237,7 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
           {courses.map((course) => {
             const registered = registeredCourseIds.has(course.id);
             return (
-              <Card key={course.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setTarget(course)} data-testid={`card-formation-${course.id}`}>
+              <Card key={course.id} className="hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" onClick={() => setTarget(course)} data-testid={`card-formation-${course.id}`}>
                 <CardContent className="p-5 flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -374,7 +374,7 @@ function MesFormationsTab({ registrations, isLoading, onGoToFormations }: { regi
 
   if (sorted.length === 0) {
     return (
-      <Card>
+      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <CardContent className="py-16 text-center">
           <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
           <p className="font-semibold">Aucune formation pour le moment</p>
@@ -391,7 +391,7 @@ function MesFormationsTab({ registrations, isLoading, onGoToFormations }: { regi
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {sorted.map((r) => (
-          <Card key={r.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setDetail(r)} data-testid={`card-my-formation-${r.id}`}>
+          <Card key={r.id} className="hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" onClick={() => setDetail(r)} data-testid={`card-my-formation-${r.id}`}>
             <CardContent className="p-5 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">

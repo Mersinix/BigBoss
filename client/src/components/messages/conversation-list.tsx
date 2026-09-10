@@ -16,9 +16,9 @@ import {
 const ROLE_INDICATOR: Record<string, { border: string; dot: string; label: string }> = {
   ADMIN:             { border: "border-l-red-500",   dot: "bg-red-500",   label: "Admin" },
   SUPER_ADMIN:       { border: "border-l-red-500",   dot: "bg-red-500",   label: "Admin" },
-  SUPPLIER:          { border: "border-l-amber-500", dot: "bg-amber-500", label: "Supplier" },
-  DELIVERY_COMPANY:  { border: "border-l-green-500", dot: "bg-green-500", label: "Delivery" },
-  DRIVER:            { border: "border-l-green-500", dot: "bg-green-500", label: "Delivery" },
+  SUPPLIER:          { border: "border-l-amber-500", dot: "bg-amber-500", label: "Fournisseur" },
+  DELIVERY_COMPANY:  { border: "border-l-green-500", dot: "bg-green-500", label: "Livraison" },
+  DRIVER:            { border: "border-l-green-500", dot: "bg-green-500", label: "Livraison" },
   CAFE_OWNER:        { border: "border-l-blue-400",  dot: "bg-blue-400",  label: "Café" },
 };
 
@@ -29,13 +29,13 @@ function getRoleStyle(role: string) {
 function formatRelativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return "À l'instant";
+  if (mins < 60) return `il y a ${mins} min`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return `il y a ${hrs} h`;
   const days = Math.floor(hrs / 24);
-  if (days < 7) return days === 1 ? "Yesterday" : `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+  if (days < 7) return days === 1 ? "Hier" : `il y a ${days} j`;
+  return new Date(iso).toLocaleDateString("fr-FR");
 }
 
 export function ConversationList({
@@ -46,7 +46,7 @@ export function ConversationList({
   showRoleIndicator = false,
   eligibleContacts,
   onNewConversation,
-  emptyText = "No conversations yet",
+  emptyText = "Aucune conversation pour le moment",
 }: {
   conversations: ConversationSummary[];
   activeId?: number | null;
@@ -77,7 +77,7 @@ export function ConversationList({
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input
             className="pl-8 h-8 text-sm"
-            placeholder="Search conversations…"
+            placeholder="Rechercher une conversation…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             data-testid="input-search-conversations"
@@ -106,7 +106,7 @@ export function ConversationList({
             const style = getRoleStyle(otherRole);
             const displayName = conv.type === "BROADCAST" && conv.title
               ? conv.title
-              : conv.otherParticipants.map(p => p.name).join(", ") || "Unknown";
+              : conv.otherParticipants.map(p => p.name).join(", ") || "Inconnu";
             const isActive = conv.id === activeId;
             return (
               <button
@@ -136,7 +136,7 @@ export function ConversationList({
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    {conv.lastMessage?.content ?? "No messages yet"}
+                    {conv.lastMessage?.content ?? "Aucun message"}
                   </p>
                 </div>
                 {conv.unreadCount > 0 && (
@@ -155,18 +155,18 @@ export function ConversationList({
         <Dialog open={newConvOpen} onOpenChange={setNewConvOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>New Conversation</DialogTitle>
+              <DialogTitle>Nouvelle conversation</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <Input
-                placeholder="Search contacts…"
+                placeholder="Rechercher un contact…"
                 value={contactSearch}
                 onChange={e => setContactSearch(e.target.value)}
                 data-testid="input-search-contacts"
               />
               <div className="max-h-64 overflow-y-auto space-y-1">
                 {filteredContacts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No contacts available</p>
+                  <p className="text-sm text-muted-foreground py-4 text-center">Aucun contact disponible</p>
                 ) : (
                   filteredContacts.map(c => {
                     const s = getRoleStyle(c.role);

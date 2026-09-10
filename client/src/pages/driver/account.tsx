@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeliveries } from "@/hooks/use-deliveries";
+import { useDriverReviews } from "@/hooks/use-delivery-ecosystem";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -9,6 +10,8 @@ import { Mail, Phone, MapPin, Truck, CheckCircle2, Clock, Star, Building2 } from
 import { formatDate } from "@/lib/format";
 import { StatCard, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { getAvatarUrl } from "@/lib/avatar";
+
+const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
 // "Mon Compte" — the Driver account's landing page. Profile fields come straight from
 // useAuth() (the users row — see shared/schema.ts; a DRIVER account has no dedicated
@@ -19,6 +22,9 @@ import { getAvatarUrl } from "@/lib/avatar";
 export default function DriverAccountPage() {
   const { user } = useAuth();
   const { data: deliveries = [], isLoading } = useDeliveries();
+  // Same review source and average-rating formula as reviews.tsx (Communication → Avis) —
+  // never a second, independently-computed rating, so Dashboard and Avis always agree.
+  const { data: reviews = [] } = useDriverReviews(user?.id ?? null);
 
   const stats = useMemo(() => {
     const completed = deliveries.filter((d) => d.status === "DELIVERED");
@@ -26,6 +32,11 @@ export default function DriverAccountPage() {
     const active = deliveries.filter((d) => !["DELIVERED", "CANCELLED"].includes(d.status));
     return { total: deliveries.length, completed: completed.length, cancelled: cancelled.length, active: active.length };
   }, [deliveries]);
+
+  const reviewStats = useMemo(() => {
+    if (reviews.length === 0) return { average: 0, count: 0 };
+    return { average: reviews.reduce((s, r) => s + r.rating, 0) / reviews.length, count: reviews.length };
+  }, [reviews]);
 
   // The operator's name (delivery company or supplier fleet) isn't stored directly on the
   // driver's own user row — it's only known once a delivery has been assigned. Real data,
@@ -79,7 +90,7 @@ export default function DriverAccountPage() {
       </Card>
 
       {/* Contact info */}
-      <Card className="rounded-2xl border-border/50 shadow-sm">
+      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-sm">
         <CardContent className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"><Mail className="w-4 h-4 text-primary" /></div>
@@ -115,10 +126,17 @@ export default function DriverAccountPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Livraisons" value={stats.total} icon={Truck} tone="primary" subtext="au total" />
-          <StatCard label="Terminées" value={stats.completed} icon={CheckCircle2} tone="green" />
-          <StatCard label="En cours" value={stats.active} icon={Clock} tone="amber" />
-          <StatCard label="Note moyenne" value="—" icon={Star} tone="blue" subtext="Aucun avis pour le moment" />
+          <StatCard label="Livraisons" value={stats.total} icon={Truck} tone="primary" subtext="au total" className={CARD_CLASS} />
+          <StatCard label="Terminées" value={stats.completed} icon={CheckCircle2} tone="green" className={CARD_CLASS} />
+          <StatCard label="En cours" value={stats.active} icon={Clock} tone="amber" className={CARD_CLASS} />
+          <StatCard
+            label="Note moyenne"
+            value={reviewStats.count > 0 ? reviewStats.average.toFixed(1) : "—"}
+            icon={Star}
+            tone="blue"
+            subtext={reviewStats.count > 0 ? `${reviewStats.count} avis` : "Aucun avis pour le moment"}
+            className={CARD_CLASS}
+          />
         </div>
       )}
     </div>

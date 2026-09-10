@@ -16,11 +16,9 @@ const PAYMENT_STATUS_META: Record<string, { label: string; cls: string }> = {
   CANCELLED: { label: "Annulée", cls: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" },
 };
 
-// "Paiements" — a real history of completed (DELIVERED) deliveries and their real
-// deliveries.deliveryFee amount, which is honestly 0 for every delivery today (no fee
-// algorithm exists yet — see wallet.tsx). This is a real, filterable payment-history
-// structure, not a fabricated ledger — it is designed to display real transfer records
-// cleanly the moment a real payout mechanism is introduced for drivers.
+// "Paiements" — a real history of completed/cancelled deliveries and their real
+// deliveries.deliveryFee amount, computed by the platform's delivery pricing engine (see
+// wallet.tsx). A real, filterable payment-history structure — not a fabricated ledger.
 export default function DriverPaymentsPage() {
   const { data: deliveries = [], isLoading } = useDeliveries();
   const fmt = useFormatCurrency();
@@ -67,13 +65,13 @@ export default function DriverPaymentsPage() {
         <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
       </div>
 
-      <SectionCard title="Historique" icon={Receipt}>
+      <SectionCard title="Historique" icon={Receipt} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         {rows.length === 0 ? <EmptyState message="Aucun paiement pour cette période." /> : (
           <div className="space-y-3">
             {rows.map((d) => {
               const meta = PAYMENT_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
               return (
-                <Card key={d.id} data-testid={`card-payment-${d.id}`}>
+                <Card key={d.id} data-testid={`card-payment-${d.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
                   <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
                     <div className="min-w-0 flex-1 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">

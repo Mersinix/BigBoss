@@ -49,7 +49,7 @@ export default function AcademyReviewsPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl">
+          <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <Star className="w-4 h-4 text-amber-500" />Avis des Coffee Owners

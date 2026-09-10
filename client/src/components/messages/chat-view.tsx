@@ -18,8 +18,17 @@ const ROLE_BADGE: Record<string, string> = {
 
 function formatTime(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
+
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Admin",
+  SUPER_ADMIN: "Admin",
+  SUPPLIER: "Fournisseur",
+  DELIVERY_COMPANY: "Livraison",
+  DRIVER: "Livraison",
+  CAFE_OWNER: "Café",
+};
 
 export function ChatView({
   conversation,
@@ -52,7 +61,7 @@ export function ChatView({
   const badgeClass = ROLE_BADGE[otherRole] ?? "bg-gray-100 text-gray-600";
   const displayName = conversation.type === "BROADCAST" && conversation.title
     ? conversation.title
-    : conversation.otherParticipants.map(p => p.name).join(", ") || "Unknown";
+    : conversation.otherParticipants.map(p => p.name).join(", ") || "Inconnu";
 
   return (
     <>
@@ -65,7 +74,7 @@ export function ChatView({
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span className="text-xs">Back</span>
+            <span className="text-xs">Retour</span>
           </button>
         )}
         <Avatar className="w-8 h-8">
@@ -77,7 +86,7 @@ export function ChatView({
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="font-semibold text-sm text-foreground truncate">{displayName}</span>
           <Badge className={`text-[10px] border-0 px-1.5 py-0.5 shrink-0 ${badgeClass}`}>
-            {conversation.type === "BROADCAST" ? "Broadcast" : (otherRole.replace(/_/g, " ").toLowerCase().replace(/^\w/, c => c.toUpperCase()))}
+            {conversation.type === "BROADCAST" ? "Diffusion" : (ROLE_LABEL[otherRole] ?? otherRole)}
           </Badge>
         </div>
       </div>
@@ -88,7 +97,7 @@ export function ChatView({
           <div className="flex justify-center pt-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">No messages yet. Say hello!</p>
+            <p className="text-sm text-muted-foreground">Aucun message pour le moment. Dites bonjour !</p>
           </div>
         ) : (
           messages.map((m) => {
@@ -122,7 +131,7 @@ export function ChatView({
         <Input
           data-testid="input-message"
           className="flex-1"
-          placeholder="Type a message..."
+          placeholder="Écrivez un message…"
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); } }}

@@ -149,6 +149,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     printCategories: z.array(z.string()).optional().nullable(),
     marketingCategories: z.array(z.string()).optional().nullable(),
     maintenanceCategories: z.array(z.string()).optional().nullable(),
+    maintenanceJobTitle: z.string().trim().min(2).optional(),
+    maintenanceProfileType: z.enum(["Freelance", "Company", "Agency"]).optional(),
+    maintenanceSkills: z.array(z.string()).optional(),
+    maintenanceDescription: z.string().trim().max(2000).optional(),
+    maintenanceExperienceYears: z.number().int().min(0).max(80).optional(),
     categories: z.array(z.string()).optional().nullable(),
     locationAddress: z.string().optional().nullable(),
     locationLat: z.number().optional().nullable(),
@@ -214,6 +219,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
 
       const user = await storage.createUser(userData);
+      if (role === "MAINTENANCE") {
+        await storage.upsertMaintenanceProfile(user.id, {
+          jobTitle: body.maintenanceJobTitle,
+          profileType: body.maintenanceProfileType,
+          categories: body.maintenanceCategories ?? [],
+          skills: body.maintenanceSkills ?? [],
+          description: body.maintenanceDescription ?? "",
+          yearsExperience: body.maintenanceExperienceYears ?? 0,
+          coverageArea: body.locationAddress ?? "",
+        });
+      }
       req.session.userId = user.id;
       broadcast("admin_user_directory_changed");
       if (status === 'pending') {

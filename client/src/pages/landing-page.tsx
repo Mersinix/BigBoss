@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -245,6 +246,21 @@ const MARKETING_SERVICES = [
   { id: "photo",    icon: "📸", label: "Photographie" },
 ];
 
+const MAINTENANCE_CATEGORIES = [
+  "Machines à café",
+  "Machines espresso",
+  "Moulins à café",
+  "Machines à glace",
+  "Réfrigération",
+  "Plomberie",
+  "Électricité",
+  "Climatisation",
+  "Réseaux & Wi-Fi",
+  "Systèmes POS",
+  "Mobilier & décoration",
+  "Peinture & signalétique",
+];
+
 // ── Role config ───────────────────────────────────────────────────────────────
 
 const ROLES = [
@@ -281,7 +297,17 @@ const deliverySchema = z.object({ ...baseFields, firstName: z.string().min(2), l
 const printerSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 const marketingSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 const baristaSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
-const maintenanceSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
+const maintenanceSchema = z.object({
+  ...baseFields,
+  companyName: z.string().min(2),
+  contactName: z.string().min(2),
+  maintenanceJobTitle: z.string().min(2, "Intitulé requis"),
+  maintenanceProfileType: z.enum(["Freelance", "Company", "Agency"]),
+  maintenanceCategories: z.array(z.string()).min(1, "Sélectionnez au moins une catégorie"),
+  maintenanceSkills: z.string().optional(),
+  maintenanceDescription: z.string().min(20, "Décrivez votre activité en quelques mots"),
+  maintenanceExperienceYears: z.coerce.number().int().min(0).max(80),
+}).refine(pw, pwErrMsg);
 
 // ── Reusable form components ──────────────────────────────────────────────────
 
@@ -499,12 +525,65 @@ function BaristaMarketplaceForm({ onSubmit, isLoading }: { onSubmit: (data: any)
 }
 
 function MaintenanceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(maintenanceSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(maintenanceSchema),
+    defaultValues: {
+      companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false,
+      profileImageUrl: "", maintenanceJobTitle: "Technicien de maintenance",
+      maintenanceProfileType: "Freelance", maintenanceCategories: [],
+      maintenanceSkills: "", maintenanceDescription: "", maintenanceExperienceYears: 0,
+      password: "", confirmPassword: "",
+    },
+  });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="companyName" label="Nom / Structure" placeholder="Ex: TechPro Maintenance" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField id="maintenanceJobTitle" label="Intitulé professionnel" placeholder="Ex: Technicien machines espresso" register={register("maintenanceJobTitle")} error={errors.maintenanceJobTitle?.message} />
+        <div className="space-y-1.5">
+          <Label htmlFor="maintenanceProfileType">Type d'activité</Label>
+          <select
+            id="maintenanceProfileType"
+            data-testid="select-maintenance-profile-type"
+            className="w-full h-10 rounded-xl px-3 bg-secondary/30 border border-border/50 text-sm"
+            {...register("maintenanceProfileType")}
+          >
+            <option value="Freelance">Indépendant</option>
+            <option value="Company">Entreprise</option>
+            <option value="Agency">Agence</option>
+          </select>
+          {errors.maintenanceProfileType && <p className="text-xs text-destructive">{errors.maintenanceProfileType.message}</p>}
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Catégories de service</Label>
+        <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/50 bg-secondary/20 p-3">
+          {MAINTENANCE_CATEGORIES.map((category) => (
+            <label key={category} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                value={category}
+                data-testid={`checkbox-maintenance-category-${category}`}
+                className="w-3.5 h-3.5 rounded border-border/50 accent-primary"
+                {...register("maintenanceCategories")}
+              />
+              {category}
+            </label>
+          ))}
+        </div>
+        {errors.maintenanceCategories && <p className="text-xs text-destructive">{errors.maintenanceCategories.message}</p>}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField id="maintenanceExperienceYears" label="Années d'expérience" type="number" placeholder="0" register={register("maintenanceExperienceYears", { valueAsNumber: true })} error={errors.maintenanceExperienceYears?.message} />
+        <FormField id="maintenanceSkills" label="Compétences (séparées par des virgules)" placeholder="Diagnostic, installation, SAV" register={register("maintenanceSkills")} error={errors.maintenanceSkills?.message} />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="maintenanceDescription">Présentation professionnelle</Label>
+        <Textarea id="maintenanceDescription" placeholder="Présentez votre expérience et les services que vous proposez aux cafés." className="min-h-20 rounded-xl bg-secondary/30 border-border/50" {...register("maintenanceDescription")} />
+        {errors.maintenanceDescription && <p className="text-xs text-destructive">{errors.maintenanceDescription.message}</p>}
       </div>
       <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@maintenance.com" register={register("email")} error={errors.email?.message} />
@@ -784,6 +863,16 @@ export default function LandingPage() {
       case "SUPPLIER": case "PRINTER": case "MARKETING": case "BARISTA_ACADEMY": case "BARISTA_MARKETPLACE": case "MAINTENANCE":
         base.name = data.companyName; break;
       case "DELIVERY_COMPANY": base.name = `${data.firstName} ${data.lastName}`; break;
+    }
+    if (role === "MAINTENANCE") {
+      base.maintenanceJobTitle = data.maintenanceJobTitle;
+      base.maintenanceProfileType = data.maintenanceProfileType;
+      base.maintenanceCategories = data.maintenanceCategories;
+      base.maintenanceSkills = data.maintenanceSkills
+        ? data.maintenanceSkills.split(",").map((skill: string) => skill.trim()).filter(Boolean)
+        : [];
+      base.maintenanceDescription = data.maintenanceDescription;
+      base.maintenanceExperienceYears = data.maintenanceExperienceYears;
     }
     return base;
   };

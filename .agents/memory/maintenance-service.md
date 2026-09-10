@@ -24,9 +24,11 @@ Added as the 4th marketplace service (SHOP/PRINT/BARISTA/MARKETING → +MAINTENA
 - `client/src/pages/maintenance/dashboard.tsx` — Agent dashboard (Planning/Profile/Availability tabs)
 
 ## DB migration
-Run once: ALTER TYPE service_key ADD VALUE 'MAINTENANCE'; ALTER TYPE user_role ADD VALUE 'MAINTENANCE'; ALTER TABLE users ADD COLUMN maintenance_categories text[]; INSERT INTO platform_services (service, state) VALUES ('MAINTENANCE','VISIBLE').
+Maintenance enum/column/service-row provisioning is kept in numbered migrations rather than only direct SQL. PostgreSQL enum additions are isolated from the service-row seed because a newly-added enum value cannot be used until the adding transaction commits.
 
-**Why:** PostgreSQL enums must be altered with DDL before Drizzle can use the new value — cannot just add to schema.ts.
+**Why:** PostgreSQL enums must be altered with DDL before Drizzle can use the new value — cannot just add to schema.ts. Existing Replit databases may also have drifted dark-mode columns.
+
+**How to apply:** If `account_dark_mode_settings.mode` is the legacy boolean, preserve `true` as `DARK_ONLY` and `false` as `LIGHT_ONLY`, then set the enum default to `BOTH`; never reset existing rows.
 
 ## Color scheme
 Orange/amber: `text-orange-600`, `bg-orange-500`, `bg-orange-100 text-orange-700`. Distinguishes from green (Barista), purple (Marketing), blue/orange (Print).

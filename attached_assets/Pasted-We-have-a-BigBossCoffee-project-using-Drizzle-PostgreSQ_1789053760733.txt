@@ -1,0 +1,322 @@
+We have a BigBossCoffee project using Drizzle + PostgreSQL.
+
+IMPORTANT CONTEXT:
+
+`pnpm db:push` works perfectly on my LOCAL Windows environment:
+
+```text
+> rest-express@1.0.0 db:push
+> drizzle-kit push
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '.../BigBossCoffee/drizzle.config.ts'
+Using 'pg' driver for database querying
+[✓] Pulling schema from database...
+[✓] Changes applied
+```
+
+BUT the same command fails in REPLIT:
+
+```text
+~/workspace$ pnpm db:push
+
+> rest-express@1.0.0 db:push /home/runner/workspace
+> drizzle-kit push
+
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/home/runner/workspace/drizzle.config.ts'
+Using 'pg' driver for database querying
+[✓] Pulling schema from database...
+
+error: column "mode" is of type boolean but default expression is of type account_theme_mode
+code: 42804
+hint: You will need to rewrite or cast the expression.
+```
+
+The important conclusion is:
+
+**LOCAL DATABASE = correct**
+**REPLIT DATABASE = inconsistent**
+
+The current application schema in:
+
+`shared/schema.ts`
+
+intentionally uses:
+
+```ts
+export const accountThemeModeEnum = pgEnum(
+  'account_theme_mode',
+  ['BOTH', 'DARK_ONLY', 'LIGHT_ONLY']
+);
+
+export const accountDarkModeSettings = pgTable("account_dark_mode_settings", {
+  id: serial("id").primaryKey(),
+  account: darkModeAccountEnum("account").notNull().unique(),
+  mode: accountThemeModeEnum("mode").notNull().default('BOTH'),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+```
+
+DO NOT change this application schema back to boolean.
+
+The application intentionally supports:
+
+* BOTH
+* DARK_ONLY
+* LIGHT_ONLY
+
+and this behavior is already used by:
+
+* `client/src/store/account-theme-store.ts`
+* `client/src/hooks/use-account-dark-mode.ts`
+* `client/src/pages/admin/system-management-page.tsx`
+* `client/src/components/layout/professional-account-shell.tsx`
+* `server/routes.ts`
+* `server/storage.ts`
+
+The PostgreSQL enum is:
+
+```text
+account_theme_mode
+BOTH
+DARK_ONLY
+LIGHT_ONLY
+```
+
+We need to repair ONLY the Replit database so it matches the existing working Drizzle schema.
+
+==================================================
+STEP 1 — INSPECT BEFORE CHANGING ANYTHING
+=========================================
+
+Use the Replit DATABASE_URL that `drizzle.config.ts` actually uses.
+
+First inspect:
+
+```bash
+echo "$DATABASE_URL"
+```
+
+Do NOT expose credentials in the final report.
+
+Then inspect the actual Replit database:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT current_database(), current_user, inet_server_addr(), inet_server_port();"
+```
+
+Then inspect the table:
+
+```bash
+psql "$DATABASE_URL" -c "\d+ public.account_dark_mode_settings"
+```
+
+Then inspect the column directly:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT table_schema, table_name, column_name, data_type, udt_name, column_default, is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='account_dark_mode_settings' AND column_name='mode';"
+```
+
+Then inspect the enum:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT n.nspname AS schema_name, t.typname AS enum_name, e.enumlabel AS enum_value FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace JOIN pg_enum e ON e.enumtypid=t.oid WHERE t.typname='account_theme_mode' ORDER BY e.enumsortorder;"
+```
+
+Then inspect existing rows:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT id, account, mode FROM public.account_dark_mode_settings ORDER BY id;"
+```
+
+Also inspect whether there are multiple schemas/databases or duplicate tables involved:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT table_schema, table_name, column_name, data_type, udt_name, column_default FROM information_schema.columns WHERE column_name='mode' ORDER BY table_schema, table_name;"
+```
+
+==================================================
+STEP 2 — DO NOT ASSUME
+======================
+
+The error indicates that during Drizzle's push operation PostgreSQL encounters:
+
+```text
+mode = BOOLEAN
+default = account_theme_mode
+```
+
+However, the local database is already correct.
+
+Therefore, determine exactly what is different between:
+
+LOCAL DATABASE
+and
+REPLIT DATABASE
+
+Do NOT modify `shared/schema.ts`.
+
+Do NOT create a new enum.
+
+Do NOT drop the database.
+
+Do NOT run `drizzle-kit drop`.
+
+Do NOT reset the database.
+
+Do NOT delete existing application data.
+
+Do NOT blindly execute an ALTER TABLE.
+
+==================================================
+STEP 3 — REPAIR THE REPLIT DATABASE
+===================================
+
+If the inspection confirms that Replit's:
+
+```text
+public.account_dark_mode_settings.mode
+```
+
+is BOOLEAN while the intended Drizzle schema is:
+
+```text
+account_theme_mode NOT NULL DEFAULT 'BOTH'
+```
+
+then safely migrate the Replit column to the enum.
+
+Before changing it, inspect the existing values and determine their actual type.
+
+If the existing values are boolean, preserve them deterministically:
+
+```text
+true  → DARK_ONLY
+false → LIGHT_ONLY
+```
+
+Do NOT invent BOTH for existing boolean data.
+
+If the existing values are already enum values or another valid representation, preserve their semantic meaning instead.
+
+The final column must be:
+
+```text
+mode account_theme_mode NOT NULL DEFAULT 'BOTH'
+```
+
+The enum must remain:
+
+```text
+account_theme_mode
+BOTH
+DARK_ONLY
+LIGHT_ONLY
+```
+
+Do not drop/recreate the table.
+
+Do not lose rows.
+
+==================================================
+STEP 4 — VERY IMPORTANT: CHECK FOR A STALE/INVALID DEFAULT
+==========================================================
+
+Because the error specifically says:
+
+```text
+column "mode" is of type boolean
+but default expression is of type account_theme_mode
+```
+
+inspect PostgreSQL's actual catalog/default definitions before and after the repair.
+
+Use:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name, pg_get_expr(d.adbin,d.adrelid) AS default_expression, format_type(a.atttypid,a.atttypmod) AS column_type FROM pg_attrdef d JOIN pg_attribute a ON a.attrelid=d.adrelid AND a.attnum=d.adnum JOIN pg_class c ON c.oid=d.adrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relname='account_dark_mode_settings';"
+```
+
+Verify that there is no invalid boolean + enum default combination remaining.
+
+==================================================
+STEP 5 — RUN DRIZZLE
+====================
+
+After the database is corrected:
+
+```bash
+pnpm db:push
+```
+
+The expected result is:
+
+```text
+[✓] Pulling schema from database...
+[✓] Changes applied
+```
+
+or an equivalent successful result without the `42804` error.
+
+Run it again if necessary to confirm idempotency:
+
+```bash
+pnpm db:push
+```
+
+The second run should also complete successfully.
+
+==================================================
+STEP 6 — VERIFY APPLICATION
+===========================
+
+After fixing the database:
+
+1. Confirm `shared/schema.ts` was NOT changed unnecessarily.
+2. Confirm `account_dark_mode_settings` still contains all existing rows.
+3. Confirm the 7 account types are intact if those are the current rows.
+4. Confirm their modes are valid enum values.
+5. Confirm the default is `BOTH`.
+6. Confirm the application starts normally.
+7. Do not modify unrelated features.
+
+==================================================
+CRITICAL SAFETY RULES
+=====================
+
+This is a database synchronization problem, NOT a request for a refactor.
+
+DO NOT:
+
+* change enum to boolean
+* remove BOTH/DARK_ONLY/LIGHT_ONLY
+* delete the table
+* delete rows
+* reset PostgreSQL
+* run a database reset
+* drop the enum
+* recreate the whole schema
+* modify unrelated files
+* change business logic
+* change the dark-mode UI
+* change API behavior
+
+The LOCAL database already proves that the current Drizzle schema is valid.
+
+The goal is simply:
+
+```text
+CURRENT LOCAL/WORKING SCHEMA
+        ↓
+account_theme_mode
+BOTH / DARK_ONLY / LIGHT_ONLY
+        ↓
+        MATCH
+        ↓
+REPLIT DATABASE
+```
+
+Start by inspecting the Replit database and show the findings before performing any destructive or irreversible operation.
+
+If the Replit database is already actually correct, do NOT change it. Instead investigate why `drizzle-kit push` is resolving a different database/schema during its operation and fix the connection/schema-resolution issue.

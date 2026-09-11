@@ -870,6 +870,9 @@ export const baristaMarketplaceProfiles = pgTable("barista_marketplace_profiles"
   certifications: text("certifications").array().notNull().default([]),
   experienceYears: integer("experience_years"), // nullable — no fabricated default
   portfolioUrls: text("portfolio_urls").array().notNull().default([]),
+  // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
+  // admin-only account freeze, distinct from the Barista's own isOnVacation toggle.
+  isFrozen: boolean("is_frozen").notNull().default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1051,6 +1054,9 @@ export const academyProfiles = pgTable("academy_profiles", {
   // Profile → Portfolio (max 4 enforced at the API layer) — same shape/convention as
   // maintenanceProfiles/marketingProfiles/deliveryCompanyProfiles.portfolioImages.
   portfolioImages: text("portfolio_images").array().notNull().default([]),
+  // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
+  // admin-only account freeze, distinct from the Academy's own isOnVacation toggle.
+  isFrozen: boolean("is_frozen").notNull().default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1649,6 +1655,9 @@ export const printerProfiles = pgTable("printer_profiles", {
   // Profile → Portfolio (max 4 enforced at the API layer) — same shape/convention as
   // maintenanceProfiles/marketingProfiles/deliveryCompanyProfiles.portfolioImages.
   portfolioImages: text("portfolio_images").array().notNull().default([]),
+  // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
+  // admin-only account freeze, distinct from the Printer's own isOnVacation toggle.
+  isFrozen: boolean("is_frozen").notNull().default(false),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

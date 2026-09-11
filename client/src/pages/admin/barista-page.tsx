@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Coffee, Users, CheckCircle, XCircle, Star, Plus, Pencil, Trash2, Snowflake, Search,
-  MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, Briefcase, Award,
+  MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, Briefcase, Award, Eye,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
 import { AlertTriangle } from "lucide-react";
 import { useAdminBaristaReports, useResolveBaristaReport } from "@/hooks/use-barista-marketplace";
+import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 
 // Mirrors admin/print-page.tsx's architecture exactly: one aggregate overview
 // endpoint (/api/admin/barista), client-side tabs/filters over it, no
@@ -39,7 +40,7 @@ type SkillItem = { id: number; name: string; isActive: boolean; isFrozen: boolea
 type AdminBarista = {
   userId: number; name: string; email: string; phone: string | null; profileImageUrl: string | null;
   status: string; level: string; city: string; location: string; bio: string; skills: string[];
-  availableDays: string[]; isAvailable: boolean; isOnVacation: boolean; marketplaceVisible: boolean;
+  availableDays: string[]; isAvailable: boolean; isOnVacation: boolean; marketplaceVisible: boolean; isFrozen: boolean;
   available: boolean; dailyRateInCents: number; rating: number; reviewCount: number;
   requestCount: number; missionCount: number; completedMissionCount: number; revenueCents: number;
   createdAt: string | null; initials: string;
@@ -158,16 +159,51 @@ function SkillsTaxonomy({ items, onRefresh }: { items: SkillItem[]; onRefresh: (
 
 // ── Barista detail dialog ──────────────────────────────────────────────────────
 
-function BaristaDetail({ barista, onClose }: { barista: AdminBarista | null; onClose: () => void }) {
+function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista | null; onClose: () => void; onRefresh: () => void }) {
   const fmt = useFormatCurrency();
+  const { toast } = useToast();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const startEdit = () => {
+    setForm({
+      name: barista!.name, phone: barista!.phone ?? "", bio: barista!.bio ?? "",
+      dailyRateInCents: String((barista!.dailyRateInCents ?? 0) / 100),
+    });
+    setEditing(true);
+  };
+  const editMutation = useMutation({
+    mutationFn: () => apiRequest("PATCH", `/api/admin/barista/accounts/${barista!.userId}`, {
+      name: form.name, phone: form.phone, bio: form.bio,
+      dailyRateInCents: Math.round(parseFloat(form.dailyRateInCents || "0") * 100),
+    }),
+    onSuccess: () => { setEditing(false); onRefresh(); toast({ title: "Compte mis à jour" }); },
+    onError: (e: any) => toast({ title: "Mise à jour impossible", description: e.message, variant: "destructive" }),
+  });
+  const freezeMutation = useMutation({
+    mutationFn: (isFrozen: boolean) => apiRequest("PATCH", `/api/admin/barista/accounts/${barista!.userId}/freeze`, { isFrozen }),
+    onSuccess: () => { onRefresh(); toast({ title: barista!.isFrozen ? "Compte dégelé" : "Compte gelé" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/admin/users/${barista!.userId}`),
+    onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
+    onError: (e: any) => toast({ title: "Suppression impossible", description: e.message, variant: "destructive" }),
+  });
+
   if (!barista) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold">{barista.initials}</AvatarFallback></Avatar>
-            <span>{barista.name}</span>
+            <span className="flex-1">{barista.name}</span>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setPreviewOpen(true)} data-testid="button-preview-barista-marketplace">
+              <Eye className="w-3.5 h-3.5" />Aperçu marketplace
+            </Button>
           </DialogTitle>
         </DialogHeader>
         <div className="grid sm:grid-cols-2 gap-4 text-sm">
@@ -176,31 +212,75 @@ function BaristaDetail({ barista, onClose }: { barista: AdminBarista | null; onC
             <Badge className={LEVEL_COLORS[barista.level] ?? ""} variant="outline">{LEVEL_LABELS[barista.level] ?? barista.level}</Badge>
             <Badge variant={barista.available ? "default" : "secondary"}>{barista.available ? "Disponible" : "Indisponible"}</Badge>
             {!barista.marketplaceVisible && <Badge variant="secondary">Masqué du marketplace</Badge>}
+            {barista.isFrozen && <Badge className="bg-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé par l'Admin</Badge>}
           </div>
-          <div className="flex gap-2"><Mail className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Email</p><p>{barista.email}</p></div></div>
-          <div className="flex gap-2"><Phone className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Téléphone</p><p>{barista.phone || "—"}</p></div></div>
-          <div className="flex gap-2"><MapPin className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Localisation</p><p>{barista.location || "—"}</p></div></div>
-          <div className="flex gap-2"><Calendar className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscription</p><p>{barista.createdAt ? new Date(barista.createdAt).toLocaleDateString("fr-FR") : "—"}</p></div></div>
-          <div className="flex gap-2"><Wallet className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Tarif journalier</p><p>{fmt(barista.dailyRateInCents)}</p></div></div>
-          <div className="flex gap-2"><Briefcase className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Missions</p><p>{barista.completedMissionCount} terminée(s) / {barista.missionCount} au total</p></div></div>
-          <div className="flex gap-2"><ClipboardList className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Demandes reçues</p><p>{barista.requestCount}</p></div></div>
-          <div className="flex gap-2"><Wallet className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Revenu (missions terminées)</p><p>{fmt(barista.revenueCents)}</p></div></div>
-          <div className="flex gap-2"><Star className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{barista.reviewCount > 0 ? `${(barista.rating / 10).toFixed(1)} (${barista.reviewCount} avis)` : "Aucun avis"}</p></div></div>
-          {barista.bio && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Bio</p><p className="whitespace-pre-wrap">{barista.bio}</p></div>}
-          {barista.skills.length > 0 && (
-            <div className="sm:col-span-2">
-              <p className="text-xs text-muted-foreground mb-1">Compétences</p>
-              <div className="flex flex-wrap gap-1">{barista.skills.map((s) => <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>)}</div>
+
+          {editing ? (
+            <div className="sm:col-span-2 space-y-2 rounded-lg border p-3">
+              <div className="grid sm:grid-cols-2 gap-2">
+                <div><label className="text-xs text-muted-foreground">Nom</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                <div><label className="text-xs text-muted-foreground">Téléphone</label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+                <div><label className="text-xs text-muted-foreground">Tarif journalier (DT)</label><Input type="number" min={0} value={form.dailyRateInCents} onChange={(e) => setForm({ ...form, dailyRateInCents: e.target.value })} /></div>
+              </div>
+              <div><label className="text-xs text-muted-foreground">Bio</label><Input value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} /></div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Annuler</Button>
+                <Button size="sm" disabled={editMutation.isPending} onClick={() => editMutation.mutate()}>{editMutation.isPending ? "Enregistrement…" : "Enregistrer"}</Button>
+              </div>
             </div>
-          )}
-          {barista.availableDays.length > 0 && (
-            <div className="sm:col-span-2">
-              <p className="text-xs text-muted-foreground mb-1">Disponibilité hebdomadaire</p>
-              <div className="flex flex-wrap gap-1">{barista.availableDays.map((d) => <Badge key={d} variant="outline" className="text-xs">{d}</Badge>)}</div>
-            </div>
-          )}
+          ) : <>
+            <div className="flex gap-2"><Mail className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Email</p><p>{barista.email}</p></div></div>
+            <div className="flex gap-2"><Phone className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Téléphone</p><p>{barista.phone || "—"}</p></div></div>
+            <div className="flex gap-2"><MapPin className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Localisation</p><p>{barista.location || "—"}</p></div></div>
+            <div className="flex gap-2"><Calendar className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscription</p><p>{barista.createdAt ? new Date(barista.createdAt).toLocaleDateString("fr-FR") : "—"}</p></div></div>
+            <div className="flex gap-2"><Wallet className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Tarif journalier</p><p>{fmt(barista.dailyRateInCents)}</p></div></div>
+            <div className="flex gap-2"><Briefcase className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Missions</p><p>{barista.completedMissionCount} terminée(s) / {barista.missionCount} au total</p></div></div>
+            <div className="flex gap-2"><ClipboardList className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Demandes reçues</p><p>{barista.requestCount}</p></div></div>
+            <div className="flex gap-2"><Wallet className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Revenu (missions terminées)</p><p>{fmt(barista.revenueCents)}</p></div></div>
+            <div className="flex gap-2"><Star className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{barista.reviewCount > 0 ? `${(barista.rating / 10).toFixed(1)} (${barista.reviewCount} avis)` : "Aucun avis"}</p></div></div>
+            {barista.bio && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Bio</p><p className="whitespace-pre-wrap">{barista.bio}</p></div>}
+            {barista.skills.length > 0 && (
+              <div className="sm:col-span-2">
+                <p className="text-xs text-muted-foreground mb-1">Compétences</p>
+                <div className="flex flex-wrap gap-1">{barista.skills.map((s) => <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>)}</div>
+              </div>
+            )}
+            {barista.availableDays.length > 0 && (
+              <div className="sm:col-span-2">
+                <p className="text-xs text-muted-foreground mb-1">Disponibilité hebdomadaire</p>
+                <div className="flex flex-wrap gap-1">{barista.availableDays.map((d) => <Badge key={d} variant="outline" className="text-xs">{d}</Badge>)}</div>
+              </div>
+            )}
+          </>}
+
+          <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
+            {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-barista-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}
+            <Button size="sm" variant="outline" disabled={freezeMutation.isPending} onClick={() => freezeMutation.mutate(!barista.isFrozen)} data-testid="button-freeze-barista-account">
+              <Snowflake className={`h-3.5 w-3.5 mr-1.5 ${barista.isFrozen ? "text-blue-600" : ""}`} />{barista.isFrozen ? "Dégeler" : "Freeze"}
+            </Button>
+            {!confirmDelete ? (
+              <Button size="sm" variant="outline" className="text-destructive border-destructive/40" onClick={() => setConfirmDelete(true)} data-testid="button-delete-barista-account">
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />Delete
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/40 p-2">
+                <span className="text-xs text-destructive">Confirmer la suppression définitive ?</span>
+                <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Annuler</Button>
+                <Button size="sm" variant="destructive" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate()} data-testid="button-confirm-delete-barista-account">
+                  {deleteMutation.isPending ? "Suppression…" : "Confirmer"}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
+      <BaristaDetailModal
+        baristaUserId={barista.userId}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        onRecruit={() => {}}
+        readOnly
+      />
     </Dialog>
   );
 }
@@ -594,7 +674,7 @@ export default function AdminBaristaPage() {
         </TabsContent>
       </Tabs>
 
-      <BaristaDetail barista={selectedBarista} onClose={() => setSelectedBarista(null)} />
+      <BaristaDetail barista={selectedBarista} onClose={() => setSelectedBarista(null)} onRefresh={() => qc.invalidateQueries({ queryKey: ["/api/admin/barista"] })} />
     </div>
   );
 }

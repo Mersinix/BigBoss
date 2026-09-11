@@ -11,11 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Wrench, Users, Calendar, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
-  Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image, Zap,
+  Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image, Zap, Eye,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
+import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
+import { useThemeStore } from "@/store/theme-store";
 
 type TaxonomyItem = { id: number; name: string; icon?: string | null; isActive: boolean; isFrozen: boolean };
 type Overview = {
@@ -109,9 +111,22 @@ function TaxonomyList({ title, items, kind, onRefresh }: {
 
 function AccountDetail({ account, onClose, onRefresh }: { account: any | null; onClose: () => void; onRefresh: () => void }) {
   const { toast } = useToast();
+  const isDark = useThemeStore((s) => s.isDark);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // "Aperçu marketplace" — reuses the exact same card + modal a Coffee Owner sees
+  // (see maintenance/profile.tsx's own self-preview), never a separate Admin-only view.
+  const { data: previewData } = useQuery<{ card: any }>({
+    queryKey: ["/api/maintenance/profile", account?.userId],
+    queryFn: async () => {
+      const response = await fetch(`/api/maintenance/profile/${account.userId}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to load profile");
+      return response.json();
+    },
+    enabled: previewOpen && !!account?.userId,
+  });
 
   const startEdit = () => {
     setForm({
@@ -146,7 +161,10 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader><DialogTitle className="flex items-center gap-3">
         <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-orange-100 text-orange-700 font-bold">{account.initials}</AvatarFallback></Avatar>
-        <span>{account.name}</span>
+        <span className="flex-1">{account.name}</span>
+        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setPreviewOpen(true)} data-testid="button-preview-maintenance-marketplace">
+          <Eye className="w-3.5 h-3.5" />Aperçu marketplace
+        </Button>
       </DialogTitle></DialogHeader>
       <div className="grid sm:grid-cols-2 gap-4 text-sm">
         <div className="sm:col-span-2 flex flex-wrap gap-2">
@@ -213,6 +231,15 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
           )}
         </div>
       </div>
+      <AgentDetailModal
+        agent={previewData?.card ?? null}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        onContact={() => {}}
+        onReserve={() => {}}
+        isDark={isDark}
+        readOnly
+      />
     </DialogContent>
   </Dialog>;
 }

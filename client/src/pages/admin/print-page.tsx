@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Printer, Users, ShoppingBag, Package, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
-  Trash2, Snowflake, Search, MapPin, Phone, Mail, Calendar, TrendingUp, Layers, Percent, Wallet,
+  Trash2, Snowflake, Search, MapPin, Phone, Mail, Calendar, TrendingUp, Layers, Percent, Wallet, Eye,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
@@ -243,6 +243,117 @@ function OrderDetail({ order, onClose }: { order: PrintOrderWithParties | null; 
   );
 }
 
+// ── Printer account detail dialog (same Edit/Freeze/Delete/Aperçu pattern as
+// admin/maintenance-page.tsx's AccountDetail) ───────────────────────────────────
+
+function PrinterAccountDetail({ account, onClose, onRefresh, onOpenService }: {
+  account: any | null; onClose: () => void; onRefresh: () => void; onOpenService: (serviceId: number) => void;
+}) {
+  const fmt = useFormatCurrency();
+  const { toast } = useToast();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const startEdit = () => {
+    setForm({ name: account.name, phone: account.phone ?? "", description: account.description ?? "", websiteUrl: account.websiteUrl ?? "" });
+    setEditing(true);
+  };
+  const editMutation = useMutation({
+    mutationFn: () => apiRequest("PATCH", `/api/admin/print/accounts/${account.userId}`, form),
+    onSuccess: () => { setEditing(false); onRefresh(); toast({ title: "Compte mis à jour" }); },
+    onError: (e: any) => toast({ title: "Mise à jour impossible", description: e.message, variant: "destructive" }),
+  });
+  const freezeMutation = useMutation({
+    mutationFn: (isFrozen: boolean) => apiRequest("PATCH", `/api/admin/print/accounts/${account.userId}/freeze`, { isFrozen }),
+    onSuccess: () => { onRefresh(); toast({ title: account.isFrozen ? "Compte dégelé" : "Compte gelé" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/admin/users/${account.userId}`),
+    onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
+    onError: (e: any) => toast({ title: "Suppression impossible", description: e.message, variant: "destructive" }),
+  });
+
+  if (!account) return null;
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-blue-100 text-blue-700 font-bold">{account.initials}</AvatarFallback></Avatar>
+            <span className="flex-1">{account.name}</span>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setPreviewOpen(true)} data-testid="button-preview-print-marketplace">
+              <Eye className="w-3.5 h-3.5" />Aperçu marketplace
+            </Button>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+          <div className="sm:col-span-2 flex flex-wrap gap-2">
+            <Badge variant="outline">{account.status}</Badge>
+            <Badge className={account.marketplaceVisible ? "bg-green-600" : ""}>{account.marketplaceVisible ? "Visible marketplace" : "Masqué"}</Badge>
+            <Badge variant="secondary">{account.activeServiceCount} service(s) actif(s)</Badge>
+            {account.isFrozen && <Badge className="bg-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé par l'Admin</Badge>}
+          </div>
+
+          {editing ? (
+            <div className="sm:col-span-2 space-y-2 rounded-lg border p-3">
+              <div className="grid sm:grid-cols-2 gap-2">
+                <div><label className="text-xs text-muted-foreground">Nom</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                <div><label className="text-xs text-muted-foreground">Téléphone</label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+                <div><label className="text-xs text-muted-foreground">Site web</label><Input value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} /></div>
+              </div>
+              <div><label className="text-xs text-muted-foreground">Description</label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Annuler</Button>
+                <Button size="sm" disabled={editMutation.isPending} onClick={() => editMutation.mutate()}>{editMutation.isPending ? "Enregistrement…" : "Enregistrer"}</Button>
+              </div>
+            </div>
+          ) : <>
+            <div className="flex gap-2"><Mail className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Email</p><p>{account.email}</p></div></div>
+            <div className="flex gap-2"><Phone className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Téléphone</p><p>{account.phone || "—"}</p></div></div>
+            <div className="flex gap-2"><MapPin className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Localisation</p><p>{account.location || "—"}</p></div></div>
+            <div className="flex gap-2"><Calendar className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscription</p><p>{account.createdAt ? new Date(account.createdAt).toLocaleDateString("fr-FR") : "—"}</p></div></div>
+            <div className="flex gap-2"><Layers className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Services</p><p>{account.activeServiceCount} actif(s) / {account.totalServiceCount} au total</p></div></div>
+            <div className="flex gap-2"><Package className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Commandes</p><p>{account.totalOrders}</p></div></div>
+            <div className="flex gap-2"><Wallet className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Revenu (commandes livrées)</p><p>{fmt(account.revenueCents)}</p></div></div>
+            <div className="flex gap-2"><Star className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{account.reviewCount > 0 ? `${(account.rating / 10).toFixed(1)} (${account.reviewCount} avis)` : "Aucun avis"}</p></div></div>
+            {account.description && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{account.description}</p></div>}
+          </>}
+
+          <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
+            {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-print-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}
+            <Button size="sm" variant="outline" disabled={freezeMutation.isPending} onClick={() => freezeMutation.mutate(!account.isFrozen)} data-testid="button-freeze-print-account">
+              <Snowflake className={`h-3.5 w-3.5 mr-1.5 ${account.isFrozen ? "text-blue-600" : ""}`} />{account.isFrozen ? "Dégeler" : "Freeze"}
+            </Button>
+            {!confirmDelete ? (
+              <Button size="sm" variant="outline" className="text-destructive border-destructive/40" onClick={() => setConfirmDelete(true)} data-testid="button-delete-print-account">
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />Delete
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/40 p-2">
+                <span className="text-xs text-destructive">Confirmer la suppression définitive ?</span>
+                <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Annuler</Button>
+                <Button size="sm" variant="destructive" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate()} data-testid="button-confirm-delete-print-account">
+                  {deleteMutation.isPending ? "Suppression…" : "Confirmer"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+      <PrintCompanyDetailModal
+        printerUserId={account.userId}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        onOpenService={(serviceId) => { setPreviewOpen(false); onOpenService(serviceId); }}
+        readOnly
+      />
+    </Dialog>
+  );
+}
+
 // ── Main page ───────────────────────────────────────────────────────────────────
 
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
@@ -256,6 +367,7 @@ export default function AdminPrintPage() {
   const [section, setSection] = useState("overview");
   const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
+  const [selectedPrinterAccount, setSelectedPrinterAccount] = useState<any | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<PrintOrderWithParties | null>(null);
 
   const [printerSearch, setPrinterSearch] = useState("");
@@ -475,7 +587,7 @@ export default function AdminPrintPage() {
               {printers.map((printer) => (
                 <Card key={printer.userId} className="hover:shadow-md transition-shadow" data-testid={`card-printer-${printer.userId}`}>
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedPrinterId(printer.userId)}>
+                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedPrinterAccount(printer)}>
                       <Avatar><AvatarImage src={getAvatarUrl(printer)} alt={printer.name} /><AvatarFallback className="bg-blue-100 text-blue-700 font-bold">{printer.initials}</AvatarFallback></Avatar>
                       <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{printer.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{printer.location || "—"}</p></div>
                       <span className={`h-2.5 w-2.5 rounded-full mt-1 ${printer.activeServiceCount > 0 ? "bg-green-500" : "bg-gray-300"}`} />
@@ -733,6 +845,12 @@ export default function AdminPrintPage() {
         readOnly
       />
       <OrderDetail order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+      <PrinterAccountDetail
+        account={selectedPrinterAccount}
+        onClose={() => setSelectedPrinterAccount(null)}
+        onRefresh={refresh}
+        onOpenService={(serviceId) => { setSelectedPrinterAccount(null); setSelectedServiceId(serviceId); }}
+      />
     </div>
   );
 }

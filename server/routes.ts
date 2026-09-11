@@ -1878,6 +1878,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Admin Print account actions — same edit/freeze pattern as
+  // /api/admin/maintenance/accounts above (Marketing/Maintenance reference). ──
+  app.patch("/api/admin/print/accounts/:userId", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "PRINTER") return res.status(404).json({ message: "Printer account not found" });
+      const { name, email, phone, profileImageUrl, ...profileFields } = z.object({
+        name: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        profileImageUrl: z.string().optional().nullable(),
+        description: z.string().optional(),
+        websiteUrl: z.string().optional().nullable(),
+      }).parse(req.body);
+      const userUpdates: any = {};
+      if (name !== undefined) userUpdates.name = name;
+      if (email !== undefined) userUpdates.email = email;
+      if (phone !== undefined) userUpdates.phone = phone;
+      if (profileImageUrl !== undefined) userUpdates.profileImageUrl = profileImageUrl?.trim() || null;
+      if (Object.keys(userUpdates).length) await storage.updateUser(userId, userUpdates);
+      const profile = Object.keys(profileFields).length ? await storage.upsertPrinterProfile(userId, profileFields) : await storage.getPrinterProfile(userId);
+      broadcastToUsers([userId], "user_profile_updated");
+      broadcast("print_profile_updated", { printerId: userId, kind: "admin_edit" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid account data" });
+    }
+  });
+
+  app.patch("/api/admin/print/accounts/:userId/freeze", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "PRINTER") return res.status(404).json({ message: "Printer account not found" });
+      const { isFrozen } = z.object({ isFrozen: z.boolean() }).parse(req.body);
+      const profile = await storage.upsertPrinterProfile(userId, { isFrozen });
+      broadcast("print_profile_updated", { printerId: userId, kind: "freeze" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
   app.get("/api/admin/maintenance", requireAdmin, async (_req, res) => {
     try { res.json(await storage.getMaintenanceAdminOverview()); }
     catch { res.status(500).json({ message: "Failed to load Maintenance overview" }); }
@@ -2902,6 +2948,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Failed to delete skill" }); }
   });
 
+  // ── Admin Barista Marketplace account actions — same edit/freeze pattern as
+  // /api/admin/maintenance/accounts (Marketing/Maintenance reference). ──────────
+  app.patch("/api/admin/barista/accounts/:userId", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Barista account not found" });
+      const { name, email, phone, profileImageUrl, ...profileFields } = z.object({
+        name: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        profileImageUrl: z.string().optional().nullable(),
+        bio: z.string().optional(),
+        level: z.string().optional(),
+        skills: z.array(z.string()).optional(),
+        dailyRateInCents: z.number().int().min(0).optional(),
+      }).parse(req.body);
+      const userUpdates: any = {};
+      if (name !== undefined) userUpdates.name = name;
+      if (email !== undefined) userUpdates.email = email;
+      if (phone !== undefined) userUpdates.phone = phone;
+      if (profileImageUrl !== undefined) userUpdates.profileImageUrl = profileImageUrl?.trim() || null;
+      if (Object.keys(userUpdates).length) await storage.updateUser(userId, userUpdates);
+      const profile = Object.keys(profileFields).length ? await storage.upsertBaristaMarketplaceProfile(userId, profileFields as any) : await storage.getBaristaMarketplaceProfile(userId);
+      broadcastToUsers([userId], "user_profile_updated");
+      broadcast("barista_profile_updated", { userId, kind: "admin_edit" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid account data" });
+    }
+  });
+
+  app.patch("/api/admin/barista/accounts/:userId/freeze", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Barista account not found" });
+      const { isFrozen } = z.object({ isFrozen: z.boolean() }).parse(req.body);
+      const profile = await storage.upsertBaristaMarketplaceProfile(userId, { isFrozen });
+      broadcast("barista_profile_updated", { userId, kind: "freeze" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
   // ── Barista Academy ──────────────────────────────────────────────────────────
   // Mirrors the Barista Marketplace route section above endpoint-for-endpoint,
   // adapted to Academy semantics (courses/formations, sessions, registrations
@@ -3332,6 +3426,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/admin/academy", requireAdmin, async (_req, res) => {
     try { res.json(await storage.getAcademyAdminOverview()); }
     catch (err) { console.error(err); res.status(500).json({ message: "Failed to load Academy overview" }); }
+  });
+
+  // ── Admin Academy account actions — same edit/freeze pattern as
+  // /api/admin/maintenance/accounts (Marketing/Maintenance reference). ──────────
+  app.patch("/api/admin/academy/accounts/:userId", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "BARISTA_ACADEMY") return res.status(404).json({ message: "Academy account not found" });
+      const { name, email, phone, profileImageUrl, ...profileFields } = z.object({
+        name: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        profileImageUrl: z.string().optional().nullable(),
+        description: z.string().optional(),
+      }).parse(req.body);
+      const userUpdates: any = {};
+      if (name !== undefined) userUpdates.name = name;
+      if (email !== undefined) userUpdates.email = email;
+      if (phone !== undefined) userUpdates.phone = phone;
+      if (profileImageUrl !== undefined) userUpdates.profileImageUrl = profileImageUrl?.trim() || null;
+      if (Object.keys(userUpdates).length) await storage.updateUser(userId, userUpdates);
+      const profile = Object.keys(profileFields).length ? await storage.upsertAcademyProfile(userId, profileFields) : await storage.getAcademyProfile(userId);
+      broadcastToUsers([userId], "user_profile_updated");
+      broadcast("academy_profile_updated", { userId, kind: "admin_edit" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid account data" });
+    }
+  });
+
+  app.patch("/api/admin/academy/accounts/:userId/freeze", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "BARISTA_ACADEMY") return res.status(404).json({ message: "Academy account not found" });
+      const { isFrozen } = z.object({ isFrozen: z.boolean() }).parse(req.body);
+      const profile = await storage.upsertAcademyProfile(userId, { isFrozen });
+      broadcast("academy_profile_updated", { userId, kind: "freeze" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
   });
 
   // ── Favorites (shop/product favorites, persisted per-user) ─────────────────

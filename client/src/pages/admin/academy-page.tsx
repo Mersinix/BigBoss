@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   GraduationCap, Users, CheckCircle, XCircle, Star, Search,
   MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, BookOpen, Award, CalendarDays, Eye,
+  Pencil, Trash2, Snowflake,
 } from "lucide-react";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
@@ -35,7 +36,7 @@ import { MessagesPanel } from "@/components/messages/messages-panel";
 
 type AdminAcademy = {
   userId: number; name: string; email: string; phone: string | null; profileImageUrl: string | null;
-  status: string; description: string; location: string; marketplaceVisible: boolean;
+  status: string; description: string; location: string; marketplaceVisible: boolean; isFrozen: boolean;
   rating: number; reviewCount: number; courseCount: number; publishedCourseCount: number;
   registrationCount: number; completedRegistrationCount: number; revenueCents: number;
   createdAt: string | null; initials: string;
@@ -102,9 +103,34 @@ function SessionStatusBadge({ status }: { status: string }) {
 
 // ── Academy detail dialog ──────────────────────────────────────────────────────
 
-function AcademyDetail({ academy, onClose, onOpenCourse }: { academy: AdminAcademy | null; onClose: () => void; onOpenCourse: (courseId: number) => void }) {
+function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy: AdminAcademy | null; onClose: () => void; onOpenCourse: (courseId: number) => void; onRefresh: () => void }) {
   const fmt = useFormatCurrency();
+  const { toast } = useToast();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const startEdit = () => {
+    setForm({ name: academy!.name, phone: academy!.phone ?? "", description: academy!.description ?? "" });
+    setEditing(true);
+  };
+  const editMutation = useMutation({
+    mutationFn: () => apiRequest("PATCH", `/api/admin/academy/accounts/${academy!.userId}`, form),
+    onSuccess: () => { setEditing(false); onRefresh(); toast({ title: "Compte mis à jour" }); },
+    onError: (e: any) => toast({ title: "Mise à jour impossible", description: e.message, variant: "destructive" }),
+  });
+  const freezeMutation = useMutation({
+    mutationFn: (isFrozen: boolean) => apiRequest("PATCH", `/api/admin/academy/accounts/${academy!.userId}/freeze`, { isFrozen }),
+    onSuccess: () => { onRefresh(); toast({ title: academy!.isFrozen ? "Compte dégelé" : "Compte gelé" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/admin/users/${academy!.userId}`),
+    onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
+    onError: (e: any) => toast({ title: "Suppression impossible", description: e.message, variant: "destructive" }),
+  });
+
   if (!academy) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -126,16 +152,52 @@ function AcademyDetail({ academy, onClose, onOpenCourse }: { academy: AdminAcade
             <Badge variant="outline">{academy.status}</Badge>
             <Badge variant={academy.publishedCourseCount > 0 ? "default" : "secondary"}>{academy.publishedCourseCount > 0 ? "Formations actives" : "Aucune formation publiée"}</Badge>
             {!academy.marketplaceVisible && <Badge variant="secondary">Masquée du marketplace</Badge>}
+            {academy.isFrozen && <Badge className="bg-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé par l'Admin</Badge>}
           </div>
-          <div className="flex gap-2"><Mail className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Email</p><p>{academy.email}</p></div></div>
-          <div className="flex gap-2"><Phone className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Téléphone</p><p>{academy.phone || "—"}</p></div></div>
-          <div className="flex gap-2"><MapPin className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Localisation</p><p>{academy.location || "—"}</p></div></div>
-          <div className="flex gap-2"><Calendar className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscription</p><p>{academy.createdAt ? new Date(academy.createdAt).toLocaleDateString("fr-FR") : "—"}</p></div></div>
-          <div className="flex gap-2"><BookOpen className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Formations</p><p>{academy.publishedCourseCount} publiée(s) / {academy.courseCount} au total</p></div></div>
-          <div className="flex gap-2"><ClipboardList className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscriptions</p><p>{academy.completedRegistrationCount} terminée(s) / {academy.registrationCount} au total</p></div></div>
-          <div className="flex gap-2"><Wallet className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Revenu (formations terminées)</p><p>{fmt(academy.revenueCents)}</p></div></div>
-          <div className="flex gap-2"><Star className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{academy.reviewCount > 0 ? `${(academy.rating / 10).toFixed(1)} (${academy.reviewCount} avis)` : "Aucun avis"}</p></div></div>
-          {academy.description && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{academy.description}</p></div>}
+
+          {editing ? (
+            <div className="sm:col-span-2 space-y-2 rounded-lg border p-3">
+              <div className="grid sm:grid-cols-2 gap-2">
+                <div><label className="text-xs text-muted-foreground">Nom</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                <div><label className="text-xs text-muted-foreground">Téléphone</label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+              </div>
+              <div><label className="text-xs text-muted-foreground">Description</label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Annuler</Button>
+                <Button size="sm" disabled={editMutation.isPending} onClick={() => editMutation.mutate()}>{editMutation.isPending ? "Enregistrement…" : "Enregistrer"}</Button>
+              </div>
+            </div>
+          ) : <>
+            <div className="flex gap-2"><Mail className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Email</p><p>{academy.email}</p></div></div>
+            <div className="flex gap-2"><Phone className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Téléphone</p><p>{academy.phone || "—"}</p></div></div>
+            <div className="flex gap-2"><MapPin className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Localisation</p><p>{academy.location || "—"}</p></div></div>
+            <div className="flex gap-2"><Calendar className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscription</p><p>{academy.createdAt ? new Date(academy.createdAt).toLocaleDateString("fr-FR") : "—"}</p></div></div>
+            <div className="flex gap-2"><BookOpen className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Formations</p><p>{academy.publishedCourseCount} publiée(s) / {academy.courseCount} au total</p></div></div>
+            <div className="flex gap-2"><ClipboardList className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Inscriptions</p><p>{academy.completedRegistrationCount} terminée(s) / {academy.registrationCount} au total</p></div></div>
+            <div className="flex gap-2"><Wallet className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Revenu (formations terminées)</p><p>{fmt(academy.revenueCents)}</p></div></div>
+            <div className="flex gap-2"><Star className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{academy.reviewCount > 0 ? `${(academy.rating / 10).toFixed(1)} (${academy.reviewCount} avis)` : "Aucun avis"}</p></div></div>
+            {academy.description && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{academy.description}</p></div>}
+          </>}
+
+          <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
+            {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-academy-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}
+            <Button size="sm" variant="outline" disabled={freezeMutation.isPending} onClick={() => freezeMutation.mutate(!academy.isFrozen)} data-testid="button-freeze-academy-account">
+              <Snowflake className={`h-3.5 w-3.5 mr-1.5 ${academy.isFrozen ? "text-blue-600" : ""}`} />{academy.isFrozen ? "Dégeler" : "Freeze"}
+            </Button>
+            {!confirmDelete ? (
+              <Button size="sm" variant="outline" className="text-destructive border-destructive/40" onClick={() => setConfirmDelete(true)} data-testid="button-delete-academy-account">
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />Delete
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/40 p-2">
+                <span className="text-xs text-destructive">Confirmer la suppression définitive ?</span>
+                <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Annuler</Button>
+                <Button size="sm" variant="destructive" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate()} data-testid="button-confirm-delete-academy-account">
+                  {deleteMutation.isPending ? "Suppression…" : "Confirmer"}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
       <AcademyProfileModal
@@ -601,7 +663,7 @@ export default function AdminAcademyPage() {
         </TabsContent>
       </Tabs>
 
-      <AcademyDetail academy={selectedAcademy} onClose={() => setSelectedAcademy(null)} onOpenCourse={(courseId) => setSelectedCourseId(courseId)} />
+      <AcademyDetail academy={selectedAcademy} onClose={() => setSelectedAcademy(null)} onOpenCourse={(courseId) => setSelectedCourseId(courseId)} onRefresh={() => qc.invalidateQueries({ queryKey: ["/api/admin/academy"] })} />
       {/* Same synchronized Formation details modal used everywhere a formation is shown
           (Part 40) — read-only for Admin, moderation stays via the table's own controls. */}
       <AcademyDetailModal courseId={selectedCourseId} open={selectedCourseId != null} onClose={() => setSelectedCourseId(null)} onEnroll={() => {}} readOnly />

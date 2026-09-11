@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -778,107 +777,88 @@ export default function UsersPage() {
         <CardContent>
           {isLoading ? (
             <div className="space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : filtered.length === 0 ? (
+            <p className="text-center py-10 text-muted-foreground">Aucun utilisateur ne correspond aux filtres.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Rôle</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Inscription</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map(u => {
-                  const userStatus = (u as any).status ?? "approved";
-                  const sc = statusConfig[userStatus] ?? statusConfig.approved;
-                  const Icon = sc.icon;
-                  const canApprove = APPROVABLE_ROLES.includes(u.role);
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map(u => {
+                const userStatus = (u as any).status ?? "approved";
+                const sc = statusConfig[userStatus] ?? statusConfig.approved;
+                const Icon = sc.icon;
+                const canApprove = APPROVABLE_ROLES.includes(u.role);
 
-                  return (
-                    <TableRow key={u.id} data-testid={`row-user-${u.id}`}>
-                      <TableCell>
-                        <button
-                          className="font-medium hover:text-primary transition-colors text-left flex items-center gap-2"
-                          onClick={() => setSelectedUserId(u.id)}
-                          data-testid={`button-user-detail-${u.id}`}
-                        >
-                          <Avatar className="w-6 h-6">
-                            <AvatarImage src={getAvatarUrl(u as any)} alt={u.name} />
-                            <AvatarFallback className="text-[10px]">{u.name?.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          {u.name}
-                        </button>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{u.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={roleColors[u.role] || ""}>
+                return (
+                  <Card key={u.id} className="hover:shadow-md transition-shadow" data-testid={`card-user-${u.id}`}>
+                    <CardContent className="p-4 space-y-3">
+                      <div
+                        className="flex items-start gap-3 cursor-pointer"
+                        onClick={() => setSelectedUserId(u.id)}
+                        data-testid={`button-user-detail-${u.id}`}
+                      >
+                        <Avatar className="w-9 h-9">
+                          <AvatarImage src={getAvatarUrl(u as any)} alt={u.name} />
+                          <AvatarFallback>{u.name?.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold truncate hover:text-primary transition-colors">{u.name}</h3>
+                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="secondary" className={`text-xs ${roleColors[u.role] || ""}`}>
                           {u.role.replace(/_/g, " ")}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
                         <Badge variant="outline" className={`${sc.className} border text-xs gap-1`}>
                           <Icon className="w-3 h-3" />{sc.label}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString("fr-FR") : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {canApprove && (
-                            <>
-                              {userStatus !== "approved" && (
-                                <Button size="sm" variant="outline"
-                                  className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50 hover:border-green-400 gap-1"
-                                  onClick={() => statusMutation.mutate({ id: u.id, status: "approved" })}
-                                  disabled={statusMutation.isPending}
-                                  data-testid={`button-approve-${u.id}`}>
-                                  <CheckCircle className="w-3 h-3" /> Approuver
-                                </Button>
-                              )}
-                              {userStatus !== "rejected" && (
-                                <Button size="sm" variant="outline"
-                                  className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400 gap-1"
-                                  onClick={() => statusMutation.mutate({ id: u.id, status: "rejected" })}
-                                  disabled={statusMutation.isPending}
-                                  data-testid={`button-reject-${u.id}`}>
-                                  <XCircle className="w-3 h-3" /> Rejeter
-                                </Button>
-                              )}
-                              {userStatus !== "pending" && (
-                                <Button size="sm" variant="outline"
-                                  className="h-7 text-xs gap-1"
-                                  onClick={() => statusMutation.mutate({ id: u.id, status: "pending" })}
-                                  disabled={statusMutation.isPending}
-                                  data-testid={`button-pending-${u.id}`}>
-                                  <Clock className="w-3 h-3" /> En attente
-                                </Button>
-                              )}
-                            </>
-                          )}
-                          <Button size="sm" variant="ghost"
-                            className="h-7 w-7 p-0 text-destructive hover:bg-red-50 hover:text-destructive"
-                            onClick={() => setDeletingUser(u)}
-                            data-testid={`button-delete-${u.id}`}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                      Aucun utilisateur ne correspond aux filtres.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {u.createdAt ? `Inscrit le ${new Date(u.createdAt).toLocaleDateString("fr-FR")}` : "—"}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t">
+                        {canApprove && (
+                          <>
+                            {userStatus !== "approved" && (
+                              <Button size="sm" variant="outline"
+                                className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50 hover:border-green-400 gap-1"
+                                onClick={() => statusMutation.mutate({ id: u.id, status: "approved" })}
+                                disabled={statusMutation.isPending}
+                                data-testid={`button-approve-${u.id}`}>
+                                <CheckCircle className="w-3 h-3" /> Approuver
+                              </Button>
+                            )}
+                            {userStatus !== "rejected" && (
+                              <Button size="sm" variant="outline"
+                                className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400 gap-1"
+                                onClick={() => statusMutation.mutate({ id: u.id, status: "rejected" })}
+                                disabled={statusMutation.isPending}
+                                data-testid={`button-reject-${u.id}`}>
+                                <XCircle className="w-3 h-3" /> Rejeter
+                              </Button>
+                            )}
+                            {userStatus !== "pending" && (
+                              <Button size="sm" variant="outline"
+                                className="h-7 text-xs gap-1"
+                                onClick={() => statusMutation.mutate({ id: u.id, status: "pending" })}
+                                disabled={statusMutation.isPending}
+                                data-testid={`button-pending-${u.id}`}>
+                                <Clock className="w-3 h-3" /> En attente
+                              </Button>
+                            )}
+                          </>
+                        )}
+                        <Button size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-destructive hover:bg-red-50 hover:text-destructive ml-auto"
+                          onClick={() => setDeletingUser(u)}
+                          data-testid={`button-delete-${u.id}`}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

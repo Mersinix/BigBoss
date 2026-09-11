@@ -514,14 +514,14 @@ export default function AdminPrintPage() {
       </div>
 
       <Tabs value={section} onValueChange={setSection}>
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="categories">Catégories</TabsTrigger>
-          <TabsTrigger value="printers">Imprimeurs</TabsTrigger>
-          <TabsTrigger value="services">Services</TabsTrigger>
-          <TabsTrigger value="orders">Commandes</TabsTrigger>
-          <TabsTrigger value="customers">Clients</TabsTrigger>
-          <TabsTrigger value="finance">Finance</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
+          <TabsTrigger value="categories" className="shrink-0">Catégories</TabsTrigger>
+          <TabsTrigger value="printers" className="shrink-0">Imprimeurs</TabsTrigger>
+          <TabsTrigger value="services" className="shrink-0">Services</TabsTrigger>
+          <TabsTrigger value="orders" className="shrink-0">Commandes</TabsTrigger>
+          <TabsTrigger value="customers" className="shrink-0">Clients</TabsTrigger>
+          <TabsTrigger value="finance" className="shrink-0">Finance</TabsTrigger>
+          <TabsTrigger value="analytics" className="shrink-0">Analytics</TabsTrigger>
         </TabsList>
 
         {/* ── Categories ── */}

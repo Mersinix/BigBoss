@@ -357,14 +357,14 @@ export default function AdminAcademyPage() {
       </div>
 
       <Tabs value={section} onValueChange={setSection}>
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="academies">Académies</TabsTrigger>
-          <TabsTrigger value="courses">Formations</TabsTrigger>
-          <TabsTrigger value="registrations">Inscriptions</TabsTrigger>
-          <TabsTrigger value="students">Étudiants</TabsTrigger>
-          <TabsTrigger value="calendar">Calendrier</TabsTrigger>
-          <TabsTrigger value="finance">Finance</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
+          <TabsTrigger value="academies" className="shrink-0">Académies</TabsTrigger>
+          <TabsTrigger value="courses" className="shrink-0">Formations</TabsTrigger>
+          <TabsTrigger value="registrations" className="shrink-0">Inscriptions</TabsTrigger>
+          <TabsTrigger value="students" className="shrink-0">Étudiants</TabsTrigger>
+          <TabsTrigger value="calendar" className="shrink-0">Calendrier</TabsTrigger>
+          <TabsTrigger value="finance" className="shrink-0">Finance</TabsTrigger>
+          <TabsTrigger value="analytics" className="shrink-0">Analytics</TabsTrigger>
         </TabsList>
 
         {/* ── Académies ── */}

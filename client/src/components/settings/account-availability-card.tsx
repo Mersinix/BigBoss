@@ -8,6 +8,14 @@ import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { cn } from "@/lib/utils";
 import type { OpeningHoursMap } from "@shared/schema";
 
+// weeklyHours is stored as nullable/free-form jsonb (see shared/schema.ts) — every caller
+// already falls back to a full 7-day object when the column itself is null, but a saved
+// value can still legitimately be missing an individual day (e.g. a row written before a
+// day was added, or edited outside the app). Reading `weeklyHours[d.key]` and immediately
+// dereferencing `.closed`/`.open`/`.close` without this fallback throws and crashes the
+// whole Business tab (via the app's top-level ErrorBoundary) for exactly that account.
+const DEFAULT_DAY: OpeningHoursMap[keyof OpeningHoursMap] = { open: "09:00", close: "18:00", closed: true };
+
 // Unified "Disponibilité" section (Part 10) — controlled component, same
 // weekly-hours + vacation-mode editor/summary already built independently on
 // Barista Marketplace/Maintenance/Delivery Company/Driver's own Business →
@@ -74,7 +82,7 @@ export function AccountAvailabilityCard({
 
           <div className="space-y-2">
             {WEEKLY_DAY_DEFS.map((d) => {
-              const day = weeklyHours[d.key];
+              const day = weeklyHours?.[d.key] ?? DEFAULT_DAY;
               return (
                 <div key={d.key} className="flex items-center gap-3 rounded-xl border border-border/50 p-2.5">
                   <button
@@ -109,7 +117,7 @@ export function AccountAvailabilityCard({
           <p className={cn("font-semibold text-xs mb-2 flex items-center gap-1.5", summaryTextClassName)}><Zap className="w-3.5 h-3.5" />Résumé de disponibilité</p>
           <div className="text-xs text-muted-foreground space-y-0.5">
             {WEEKLY_DAY_DEFS.map((d) => {
-              const day = weeklyHours[d.key];
+              const day = weeklyHours?.[d.key] ?? DEFAULT_DAY;
               return <p key={d.key}><strong className="text-foreground">{d.label} :</strong> {day.closed ? "Fermé" : `${day.open} – ${day.close}`}</p>;
             })}
             <p className="pt-1"><strong className="text-foreground">Statut :</strong> {isOnVacation ? "🔴 En congé" : "🟢 Disponible"}</p>

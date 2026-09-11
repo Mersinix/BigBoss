@@ -74,6 +74,16 @@ function useTheme(isDark: boolean) {
     border: isDark ? "border-gray-700/60" : "border-gray-100",
     mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    // Coffee Owner marketplace UI-consistency pass — category strip / filter
+    // bar chrome copied verbatim from Shop's reference implementation
+    // (browse-products.tsx's stripBg/switcherBg/switcherActive/switcherInactive
+    // and the Select trigger's selectTrigger), so the two pieces of chrome
+    // stay pixel-identical across services while each keeps its own data.
+    stripBg: isDark ? "bg-gray-900/95 border-gray-800" : "bg-white border-gray-100",
+    switcherBg: isDark ? "bg-gray-800" : "bg-gray-100",
+    switcherActive: isDark ? "bg-gray-700 text-white shadow-sm" : "bg-white text-blue-600 shadow-sm",
+    switcherInactive: isDark ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700",
+    selectTrigger: isDark ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
     // Part 15 fix — SelectContent (the dropdown popup) previously had no
     // className override at all and relied on the shadcn base's inert
     // bg-popover CSS-var token (this app's dark mode never adds a `.dark`
@@ -696,9 +706,41 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
       </section>
       {comingSoon ? <div className="max-w-3xl mx-auto px-4 py-20 text-center"><Clock className="w-8 h-8 text-orange-600 mx-auto mb-5" /><h2 className={`text-xl font-bold mb-2 ${t.textPrimary}`}>Bientôt disponible</h2><p className={`text-sm ${t.textMuted}`}>Ce service est en cours de préparation. Revenez bientôt pour le découvrir.</p></div> : (
         <>
-          <div className={`border-b sticky top-0 z-20 ${t.cardBg}`}><div className="max-w-7xl mx-auto px-4 py-3 flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}><button onClick={() => setFilterCategory("")} className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 border ${!filterCategory ? "bg-orange-600 text-white border-orange-600" : `${t.mutedBg} ${t.textMuted} ${t.border}`}`}>Tous</button>{categories.map((category) => <button key={category} onClick={() => setFilterCategory(filterCategory === category ? "" : category)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 border ${filterCategory === category ? "bg-orange-600 text-white border-orange-600" : `${t.mutedBg} ${t.textMuted} ${t.border}`}`}><span>{categoryIcons.get(category) ?? DEFAULT_CATEGORY_ICON}</span>{category}</button>)}</div></div>
-           <div className="max-w-7xl mx-auto px-4 py-8">
-             <div className={`border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}><div className="flex items-center gap-2 flex-wrap"><SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle}`} /><div className="relative flex-1 min-w-[180px] max-w-xs"><Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom, compétence, service..." className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`} /></div><Select value={filterType || "__all__"} onValueChange={(value) => setFilterType(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`}><SelectValue placeholder="Type" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Tous types</SelectItem><SelectItem value="Freelance">Freelance</SelectItem><SelectItem value="Company">Entreprise</SelectItem><SelectItem value="Agency">Agence</SelectItem></SelectContent></Select><Select value={filterAvailability || "__all__"} onValueChange={(value) => setFilterAvailability(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`}><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes disponibilités</SelectItem><SelectItem value="available">Disponible</SelectItem><SelectItem value="unavailable">Indisponible</SelectItem></SelectContent></Select><Select value={filterLocation || "__all__"} onValueChange={(value) => setFilterLocation(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`}><SelectValue placeholder="Ville" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes villes</SelectItem>{allLocations.map((location) => <SelectItem key={location} value={location}>{location}</SelectItem>)}</SelectContent></Select>{hasFilters && <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterType(""); setFilterAvailability(""); setFilterLocation(""); }} className="flex items-center gap-1 text-xs text-destructive"><RotateCcw className="w-3 h-3" />Reset</button>}</div></div>
+          <div className="sticky top-14 z-30">
+            <div className={`border-b ${t.stripBg}`}>
+              <div className="max-w-7xl mx-auto px-4">
+                <div className="flex gap-1.5 overflow-x-auto py-3" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+                  <div className={`flex gap-1 rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+                    <button onClick={() => setFilterCategory("")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${!filterCategory ? t.switcherActive : t.switcherInactive}`} data-testid="button-maintenance-cat-all">
+                      <span className="text-base leading-none">🧰</span><span>Tous</span>
+                    </button>
+                  </div>
+                  {categories.map((category) => (
+                    <div key={category} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+                      <button onClick={() => setFilterCategory(filterCategory === category ? "" : category)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${filterCategory === category ? t.switcherActive : t.switcherInactive}`} data-testid={`button-maintenance-cat-${category}`}>
+                        <span className="text-base leading-none">{categoryIcons.get(category) ?? DEFAULT_CATEGORY_ICON}</span>
+                        <span className="max-w-[72px] truncate">{category}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className={`border-b py-2 px-4 ${t.stripBg}`}>
+              <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
+                <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textSubtle}`} />
+                <div className="relative flex-1 min-w-[180px] max-w-xs">
+                  <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} />
+                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom, compétence, service..." className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`} />
+                </div>
+                <Select value={filterType || "__all__"} onValueChange={(value) => setFilterType(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}><SelectValue placeholder="Type" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Tous types</SelectItem><SelectItem value="Freelance">Freelance</SelectItem><SelectItem value="Company">Entreprise</SelectItem><SelectItem value="Agency">Agence</SelectItem></SelectContent></Select>
+                <Select value={filterAvailability || "__all__"} onValueChange={(value) => setFilterAvailability(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.selectTrigger}`}><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes disponibilités</SelectItem><SelectItem value="available">Disponible</SelectItem><SelectItem value="unavailable">Indisponible</SelectItem></SelectContent></Select>
+                <Select value={filterLocation || "__all__"} onValueChange={(value) => setFilterLocation(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.selectTrigger}`}><SelectValue placeholder="Ville" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes villes</SelectItem>{allLocations.map((location) => <SelectItem key={location} value={location}>{location}</SelectItem>)}</SelectContent></Select>
+                {hasFilters && <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterType(""); setFilterAvailability(""); setFilterLocation(""); }} className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}><RotateCcw className="w-3 h-3" />Reset</button>}
+              </div>
+            </div>
+          </div>
+          <div className="max-w-7xl mx-auto px-4 py-8">
              {filtered.length === 0 ? <div className="flex flex-col items-center justify-center py-16 gap-3 text-center"><Wrench className={`w-12 h-12 ${t.textSubtle}`} /><p className={`font-semibold ${t.textPrimary}`}>Aucun technicien trouvé</p><p className={`text-sm ${t.textMuted}`}>{profiles.length === 0 ? "Aucun profil Maintenance publié pour le moment." : "Essayez d'ajuster vos filtres."}</p></div> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((agent) => <AgentCard key={agent.userId} agent={agent} onOpenDetail={openDetail} onContact={contact} isDark={isDark} />)}</div>}
           </div>
            <AgentDetailModal agent={selectedAgent} open={detailOpen} onClose={() => setDetailOpen(false)} onContact={contact} onReserve={(agent, data) => reserve.mutate({ agent, data })} isDark={isDark} />

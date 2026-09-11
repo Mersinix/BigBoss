@@ -364,7 +364,7 @@ export default function AdminPrintPage() {
   const fmt = useFormatCurrency();
   useRealtime();
 
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = useState("categories");
   const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
   const [selectedPrinterAccount, setSelectedPrinterAccount] = useState<any | null>(null);
@@ -515,7 +515,6 @@ export default function AdminPrintPage() {
 
       <Tabs value={section} onValueChange={setSection}>
         <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
           <TabsTrigger value="categories">Catégories</TabsTrigger>
           <TabsTrigger value="printers">Imprimeurs</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
@@ -523,49 +522,7 @@ export default function AdminPrintPage() {
           <TabsTrigger value="customers">Clients</TabsTrigger>
           <TabsTrigger value="finance">Finance</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="reviews">Avis</TabsTrigger>
         </TabsList>
-
-        {/* ── Overview ── */}
-        <TabsContent value="overview" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Répartition par catégorie</CardTitle></CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {(data?.categories ?? []).length === 0
-                ? <p className="text-sm text-muted-foreground">Aucun service au catalogue.</p>
-                : (data?.categories ?? []).map((row) => {
-                    const taxonomyMatch = (data?.taxonomy ?? []).find((t) => t.name === row.category);
-                    return (
-                      <Badge key={row.category} variant="secondary">
-                        {printCategoryIcon(row.category, taxonomyMatch?.icon)} {row.category} · {row.count}
-                      </Badge>
-                    );
-                  })}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-base">Commandes récentes</CardTitle></CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.orders ?? []).length === 0 ? <p className="p-6 text-center text-muted-foreground text-sm">Aucune commande pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Service</th><th className="p-3">Imprimeur</th><th className="p-3">Coffee Owner</th><th className="p-3">Montant</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {(data?.orders ?? []).slice(0, 10).map((o) => (
-                      <tr key={o.id} className="border-b last:border-0 cursor-pointer hover:bg-secondary/30" onClick={() => setSelectedOrder(o)} data-testid={`row-recent-order-${o.id}`}>
-                        <td className="p-3 font-medium">#{o.id}</td>
-                        <td className="p-3">{o.itemName} <span className="text-xs text-muted-foreground">×{o.quantity}</span></td>
-                        <td className="p-3">{o.printerName}</td>
-                        <td className="p-3">{o.cafeOwnerName}</td>
-                        <td className="p-3">{fmt(o.totalInCents)}</td>
-                        <td className="p-3"><StatusBadge status={o.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* ── Categories ── */}
         <TabsContent value="categories" className="mt-4 grid lg:grid-cols-2 gap-6">
@@ -620,35 +577,37 @@ export default function AdminPrintPage() {
               <SelectContent><SelectItem value="all">Tous statuts</SelectItem><SelectItem value="active">Actif</SelectItem><SelectItem value="inactive">Inactif</SelectItem></SelectContent>
             </Select>
           </div>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {services.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucun service correspondant.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Service</th><th className="p-3">Imprimeur</th><th className="p-3">Catégorie</th><th className="p-3">Prix</th><th className="p-3">Minimum</th><th className="p-3">Statut</th><th className="p-3 text-right">Action</th></tr></thead>
-                  <tbody>
-                    {services.map((item) => (
-                      <tr key={item.id} className="border-b last:border-0 cursor-pointer hover:bg-secondary/30" onClick={() => setSelectedServiceId(item.id)} data-testid={`row-service-${item.id}`}>
-                        <td className="p-3 font-medium">{item.name}</td>
-                        <td className="p-3">{item.printerName}</td>
-                        <td className="p-3">{item.category || "—"}</td>
-                        <td className="p-3">{fmt(item.priceInCents)} / {item.unit}</td>
-                        <td className="p-3">{item.minQuantity}</td>
-                        <td className="p-3"><Badge variant={item.isActive ? "default" : "secondary"}>{item.isActive ? "Actif" : "Inactif"}</Badge></td>
-                        <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
-                          <Switch
-                            checked={item.isActive}
-                            disabled={catalogModeration.isPending}
-                            onCheckedChange={(checked) => catalogModeration.mutate({ id: item.id, isActive: checked })}
-                            data-testid={`switch-service-active-${item.id}`}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {services.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun service correspondant.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {services.map((item) => (
+                <Card key={item.id} className="hover:shadow-md transition-shadow" data-testid={`card-service-${item.id}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedServiceId(item.id)}>
+                      <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
+                        <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{item.name}</h3><p className="text-xs text-muted-foreground truncate">{item.printerName}</p></div>
+                      <Badge variant={item.isActive ? "default" : "secondary"} className="text-xs shrink-0">{item.isActive ? "Actif" : "Inactif"}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="outline" className="text-xs">{item.category || "—"}</Badge>
+                      <Badge variant="secondary" className="text-xs">Min. {item.minQuantity}</Badge>
+                    </div>
+                    <p className="text-sm font-semibold">{fmt(item.priceInCents)} <span className="text-xs font-normal text-muted-foreground">/ {item.unit}</span></p>
+                    <div className="flex items-center justify-between pt-1 border-t" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-xs text-muted-foreground">Actif sur le marketplace</span>
+                      <Switch
+                        checked={item.isActive}
+                        disabled={catalogModeration.isPending}
+                        onCheckedChange={(checked) => catalogModeration.mutate({ id: item.id, isActive: checked })}
+                        data-testid={`switch-service-active-${item.id}`}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Orders ── */}
@@ -664,52 +623,47 @@ export default function AdminPrintPage() {
               <SelectContent><SelectItem value="all">Tous les imprimeurs</SelectItem>{orderFilterOptions.printers.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {orders.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucune commande correspondante.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Service</th><th className="p-3">Imprimeur</th><th className="p-3">Coffee Owner</th><th className="p-3">Qté</th><th className="p-3">Montant</th><th className="p-3">Statut</th><th className="p-3">Date</th></tr></thead>
-                  <tbody>
-                    {orders.slice(0, 100).map((o) => (
-                      <tr key={o.id} className="border-b last:border-0 cursor-pointer hover:bg-secondary/30" onClick={() => setSelectedOrder(o)} data-testid={`row-order-${o.id}`}>
-                        <td className="p-3 font-medium">#{o.id}</td>
-                        <td className="p-3">{o.itemName}</td>
-                        <td className="p-3">{o.printerName}</td>
-                        <td className="p-3">{o.cafeOwnerName}</td>
-                        <td className="p-3">{o.quantity}</td>
-                        <td className="p-3">{fmt(o.totalInCents)}</td>
-                        <td className="p-3"><StatusBadge status={o.status} /></td>
-                        <td className="p-3 text-muted-foreground">{o.createdAt ? new Date(o.createdAt).toLocaleDateString("fr-FR") : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {orders.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune commande correspondante.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {orders.slice(0, 100).map((o) => (
+                <Card key={o.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedOrder(o)} data-testid={`card-order-${o.id}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="font-semibold truncate">#{o.id} · {o.itemName}</h3><p className="text-xs text-muted-foreground truncate">{o.printerName} → {o.cafeOwnerName}</p></div>
+                      <StatusBadge status={o.status} />
+                    </div>
+                    <div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">×{o.quantity}</Badge></div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="text-sm font-semibold text-foreground">{fmt(o.totalInCents)}</span>
+                      <span>{o.createdAt ? new Date(o.createdAt).toLocaleDateString("fr-FR") : "—"}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Customers ── */}
         <TabsContent value="customers" className="mt-4">
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {customers.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucun client PRINT pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Coffee Owner</th><th className="p-3">Commandes</th><th className="p-3">Total dépensé</th><th className="p-3">Dernière commande</th></tr></thead>
-                  <tbody>
-                    {customers.map((c) => (
-                      <tr key={c.name} className="border-b last:border-0" data-testid={`row-customer-${c.name}`}>
-                        <td className="p-3 font-medium">{c.name}</td>
-                        <td className="p-3">{c.orders}</td>
-                        <td className="p-3">{fmt(c.totalCents)}</td>
-                        <td className="p-3 text-muted-foreground">{c.lastOrder ? c.lastOrder.toLocaleDateString("fr-FR") : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {customers.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun client PRINT pour le moment.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {customers.map((c) => (
+                <Card key={c.name} className="hover:shadow-md transition-shadow" data-testid={`card-customer-${c.name}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Avatar><AvatarFallback className="bg-blue-100 text-blue-700 font-bold">{c.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                      <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{c.name}</h3><p className="text-xs text-muted-foreground">{c.orders} commande(s)</p></div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="text-sm font-semibold text-foreground">{fmt(c.totalCents)}</span>
+                      <span>{c.lastOrder ? c.lastOrder.toLocaleDateString("fr-FR") : "—"}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Finance ── */}
@@ -720,27 +674,24 @@ export default function AdminPrintPage() {
             <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">En attente</p><p className="text-xl font-bold text-amber-600">{fmt(financeSummary.pending)}</p></CardContent></Card>
           </div>
           <p className="text-xs text-muted-foreground">PRINT est une transaction directe Imprimeur ↔ Coffee Owner, sans commission plateforme — les montants ci-dessus correspondent donc intégralement au revenu de l'imprimeur, comme sur sa propre page Facturation.</p>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {invoiceRows.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucune facture pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Facture</th><th className="p-3">Client</th><th className="p-3">Service</th><th className="p-3">Montant</th><th className="p-3">Statut</th><th className="p-3">Date</th></tr></thead>
-                  <tbody>
-                    {invoiceRows.slice(0, 100).map((r) => (
-                      <tr key={r.orderId} className="border-b last:border-0" data-testid={`row-invoice-${r.orderId}`}>
-                        <td className="p-3 font-mono text-xs">{r.invoiceNumber}</td>
-                        <td className="p-3">{r.cafeOwnerName}</td>
-                        <td className="p-3">{r.itemName}</td>
-                        <td className="p-3">{fmt(r.amount)}</td>
-                        <td className="p-3"><Badge variant="outline" className={PRINT_INVOICE_STATUS_META[r.invoiceStatus].className}>{PRINT_INVOICE_STATUS_META[r.invoiceStatus].label}</Badge></td>
-                        <td className="p-3 text-muted-foreground">{r.createdAt ? new Date(r.createdAt).toLocaleDateString("fr-FR") : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {invoiceRows.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune facture pour le moment.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {invoiceRows.slice(0, 100).map((r) => (
+                <Card key={r.orderId} className="hover:shadow-md transition-shadow" data-testid={`card-invoice-${r.orderId}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="font-mono text-xs font-semibold truncate">{r.invoiceNumber}</h3><p className="text-xs text-muted-foreground truncate">{r.cafeOwnerName} · {r.itemName}</p></div>
+                      <Badge variant="outline" className={PRINT_INVOICE_STATUS_META[r.invoiceStatus].className}>{PRINT_INVOICE_STATUS_META[r.invoiceStatus].label}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="text-sm font-semibold text-foreground">{fmt(r.amount)}</span>
+                      <span>{r.createdAt ? new Date(r.createdAt).toLocaleDateString("fr-FR") : "—"}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Analytics ── */}
@@ -800,30 +751,6 @@ export default function AdminPrintPage() {
               )}
             </SectionCard>
           </div>
-        </TabsContent>
-
-        {/* ── Reviews ── */}
-        <TabsContent value="reviews" className="mt-4">
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.reviews ?? []).length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucun avis PRINT pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Imprimeur</th><th className="p-3">Client</th><th className="p-3">Note</th><th className="p-3">Commentaire</th><th className="p-3">Date</th></tr></thead>
-                  <tbody>
-                    {(data?.reviews ?? []).map((r) => (
-                      <tr key={r.id} className="border-b last:border-0">
-                        <td className="p-3">{r.printerName}</td>
-                        <td className="p-3">{r.cafeOwnerName || r.cafeName}</td>
-                        <td className="p-3 flex items-center gap-1 text-amber-500"><Star className="h-3.5 w-3.5 fill-current" />{r.rating}</td>
-                        <td className="p-3 max-w-[280px] truncate">{r.comment || "—"}</td>
-                        <td className="p-3 text-muted-foreground">{r.createdAt ? new Date(r.createdAt).toLocaleDateString("fr-FR") : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
 

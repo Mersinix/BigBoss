@@ -73,6 +73,16 @@ function useTheme(isDark: boolean) {
     border: isDark ? "border-gray-700/60" : "border-gray-100",
     mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    // Coffee Owner marketplace UI-consistency pass — category strip / filter
+    // bar chrome copied verbatim from Shop's reference implementation
+    // (browse-products.tsx's stripBg/switcherBg/switcherActive/switcherInactive
+    // and the Select trigger's selectTrigger), so the two pieces of chrome
+    // stay pixel-identical across services while each keeps its own data.
+    stripBg: isDark ? "bg-gray-900/95 border-gray-800" : "bg-white border-gray-100",
+    switcherBg: isDark ? "bg-gray-800" : "bg-gray-100",
+    switcherActive: isDark ? "bg-gray-700 text-white shadow-sm" : "bg-white text-blue-600 shadow-sm",
+    switcherInactive: isDark ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700",
+    selectTrigger: isDark ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
     selectContent: isDark
       ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
       : "bg-white border-gray-200 text-gray-900",
@@ -90,32 +100,35 @@ function PrintCategoryStrip({ categories, loading, selected, onSelect, isDark }:
 }) {
   const t = useTheme(isDark);
   return (
-    <div className={`${t.cardBg} border-b`}>
+    <div className={`border-b ${t.stripBg}`}>
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex gap-1 overflow-x-auto py-3" style={{ scrollbarWidth: "none" }}>
-          <button
-            onClick={() => onSelect("")}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === "" ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
-            data-testid="button-print-cat-all"
-          >
-            <span className="text-lg"><Printer className="w-5 h-5" /></span>
-            <span className="text-[11px] font-semibold leading-tight">Tout</span>
-          </button>
+        <div className="flex gap-1.5 overflow-x-auto py-3" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+          <div className={`flex gap-1 rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+            <button
+              onClick={() => onSelect("")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${selected === "" ? t.switcherActive : t.switcherInactive}`}
+              data-testid="button-print-cat-all"
+            >
+              <span className="text-base leading-none"><Printer className="w-4 h-4" /></span>
+              <span>Tout</span>
+            </button>
+          </div>
           {loading ? (
             Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-[54px] w-[64px] rounded-xl shrink-0" />
+              <Skeleton key={i} className="h-[30px] w-[76px] rounded-2xl shrink-0" />
             ))
           ) : (
             categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => onSelect(selected === cat ? "" : cat)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selected === cat ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
-                data-testid={`button-print-cat-${cat}`}
-              >
-                <span className="text-lg">{printCategoryIcon(cat)}</span>
-                <span className="text-[11px] font-semibold leading-tight line-clamp-2 max-w-[64px]">{cat}</span>
-              </button>
+              <div key={cat} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+                <button
+                  onClick={() => onSelect(selected === cat ? "" : cat)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selected === cat ? t.switcherActive : t.switcherInactive}`}
+                  data-testid={`button-print-cat-${cat}`}
+                >
+                  <span className="text-base leading-none">{printCategoryIcon(cat)}</span>
+                  <span className="max-w-[72px] truncate">{cat}</span>
+                </button>
+              </div>
             ))
           )}
         </div>
@@ -294,12 +307,12 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
   if (!subCategories.length && !printers.length && !materials.length) return null;
 
   return (
-    <div className={`${t.cardBg} border-b py-2 px-4`}>
+    <div className={`border-b py-2 px-4 ${t.stripBg}`}>
       <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
             <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
         {subCategories.length > 0 && (
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.selectTrigger}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sous-catégories</SelectItem>
               {subCategories.map((sc) => <SelectItem key={sc} value={sc}>{sc}</SelectItem>)}
@@ -308,7 +321,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
         )}
         {printers.length > 0 && (
           <Select value={filters.brandId || "__all__"} onValueChange={(v) => onChange("brandId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`}><SelectValue placeholder="Société d'impression" /></SelectTrigger>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}><SelectValue placeholder="Société d'impression" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sociétés</SelectItem>
               {printers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -317,7 +330,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
         )}
         {materials.length > 0 && (
           <Select value={filters.material || "__all__"} onValueChange={(v) => onChange("material", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`}><SelectValue placeholder="Matière" /></SelectTrigger>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.selectTrigger}`}><SelectValue placeholder="Matière" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes matières</SelectItem>
               {materials.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
@@ -326,7 +339,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
         )}
         {deliveryBuckets.length > 0 && (
           <Select value={filters.deliveryTime || "__all__"} onValueChange={(v) => onChange("deliveryTime", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`}><SelectValue placeholder="Livraison" /></SelectTrigger>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.selectTrigger}`}><SelectValue placeholder="Livraison" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes livraisons</SelectItem>
               {deliveryBuckets.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -334,7 +347,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
           </Select>
         )}
         {hasActive && (
-          <button onClick={onReset} className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors ml-1">
+          <button onClick={onReset} className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}>
             <RotateCcw className="w-3 h-3" /> Reset
           </button>
         )}

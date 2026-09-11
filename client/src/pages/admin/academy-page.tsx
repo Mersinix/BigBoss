@@ -21,9 +21,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { useAuth } from "@/hooks/use-auth";
 import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
-import { MessagesPanel } from "@/components/messages/messages-panel";
 
 // Mirrors admin/barista-page.tsx's architecture exactly: one aggregate overview
 // endpoint (/api/admin/academy), client-side tabs/filters over it, no
@@ -217,12 +215,11 @@ const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "
 
 export default function AdminAcademyPage() {
   const { toast } = useToast();
-  const { user } = useAuth();
   const qc = useQueryClient();
   const fmt = useFormatCurrency();
   useRealtime();
 
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = useState("academies");
   const [selectedAcademy, setSelectedAcademy] = useState<AdminAcademy | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
 
@@ -345,7 +342,7 @@ export default function AdminAcademyPage() {
     <div className="flex flex-col gap-6 p-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><GraduationCap className="w-6 h-6 text-indigo-600" />ACADEMY</h1>
-        <p className="text-muted-foreground text-sm mt-1">Contrôle centralisé du service Academy : académies, formations, inscriptions, étudiants, calendrier, messages, avis, finance et analytics.</p>
+        <p className="text-muted-foreground text-sm mt-1">Contrôle centralisé du service Academy : académies, formations, inscriptions, étudiants, calendrier, finance et analytics.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -361,62 +358,14 @@ export default function AdminAcademyPage() {
 
       <Tabs value={section} onValueChange={setSection}>
         <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
           <TabsTrigger value="academies">Académies</TabsTrigger>
           <TabsTrigger value="courses">Formations</TabsTrigger>
           <TabsTrigger value="registrations">Inscriptions</TabsTrigger>
           <TabsTrigger value="students">Étudiants</TabsTrigger>
           <TabsTrigger value="calendar">Calendrier</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="reviews">Avis</TabsTrigger>
           <TabsTrigger value="finance">Finance</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
-
-        {/* ── Overview ── */}
-        <TabsContent value="overview" className="mt-4 space-y-6">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Inscriptions récentes</CardTitle></CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.registrations ?? []).length === 0 ? <p className="p-6 text-center text-muted-foreground text-sm">Aucune inscription pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Académie</th><th className="p-3">Coffee Owner</th><th className="p-3">Formation</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {(data?.registrations ?? []).slice(0, 10).map((r) => (
-                      <tr key={r.id} className="border-b last:border-0" data-testid={`row-recent-registration-${r.id}`}>
-                        <td className="p-3 font-medium">#{r.id}</td>
-                        <td className="p-3">{r.academyName}</td>
-                        <td className="p-3">{r.cafeOwnerName}</td>
-                        <td className="p-3">{r.courseTitle}</td>
-                        <td className="p-3"><RegistrationStatusBadge status={r.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-base">Sessions à venir</CardTitle></CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.sessions ?? []).filter((s) => s.status === "UPCOMING").length === 0 ? <p className="p-6 text-center text-muted-foreground text-sm">Aucune session à venir.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Formation</th><th className="p-3">Académie</th><th className="p-3">Date</th><th className="p-3">Participants</th></tr></thead>
-                  <tbody>
-                    {(data?.sessions ?? []).filter((s) => s.status === "UPCOMING").slice(0, 10).map((s) => (
-                      <tr key={s.id} className="border-b last:border-0" data-testid={`row-upcoming-session-${s.id}`}>
-                        <td className="p-3 font-medium">{s.courseTitle}</td>
-                        <td className="p-3">{s.academyName}</td>
-                        <td className="p-3 text-muted-foreground">{s.startDate}{s.endDate ? ` → ${s.endDate}` : ""}</td>
-                        <td className="p-3">{s.registeredCount}{s.capacity ? `/${s.capacity}` : ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* ── Académies ── */}
         <TabsContent value="academies" className="mt-4 space-y-4">
@@ -461,27 +410,25 @@ export default function AdminAcademyPage() {
               <SelectContent><SelectItem value="all">Toutes</SelectItem><SelectItem value="published">Publiées</SelectItem><SelectItem value="draft">Brouillons</SelectItem></SelectContent>
             </Select>
           </div>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {courses.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucune formation correspondante.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Formation</th><th className="p-3">Académie</th><th className="p-3">Niveau</th><th className="p-3">Prix</th><th className="p-3">Certification</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {courses.map((c) => (
-                      <tr key={c.id} className="border-b last:border-0 cursor-pointer hover:bg-muted/50" onClick={() => setSelectedCourseId(c.id)} data-testid={`row-course-${c.id}`}>
-                        <td className="p-3 font-medium">{c.title}</td>
-                        <td className="p-3">{c.academyName}</td>
-                        <td className="p-3"><Badge variant="outline" className={LEVEL_COLORS[c.level] ?? ""}>{LEVEL_LABELS[c.level] ?? c.level}</Badge></td>
-                        <td className="p-3">{fmt(c.priceInCents)}</td>
-                        <td className="p-3">{c.hasCertification ? <span className="flex items-center gap-1 text-amber-600"><Award className="h-3.5 w-3.5" />Certifiante</span> : "—"}</td>
-                        <td className="p-3"><Badge variant={c.isPublished ? "default" : "secondary"}>{c.isPublished ? "Publiée" : "Brouillon"}</Badge></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {courses.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune formation correspondante.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {courses.map((c) => (
+                <Card key={c.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedCourseId(c.id)} data-testid={`card-course-${c.id}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="font-semibold truncate">{c.title}</h3><p className="text-xs text-muted-foreground truncate">{c.academyName}</p></div>
+                      <Badge variant={c.isPublished ? "default" : "secondary"} className="text-xs shrink-0">{c.isPublished ? "Publiée" : "Brouillon"}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="outline" className={`text-xs ${LEVEL_COLORS[c.level] ?? ""}`}>{LEVEL_LABELS[c.level] ?? c.level}</Badge>
+                      {c.hasCertification && <Badge variant="secondary" className="text-xs flex items-center gap-1"><Award className="h-3 w-3" />Certifiante</Badge>}
+                    </div>
+                    <p className="text-sm font-semibold">{fmt(c.priceInCents)}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Inscriptions ── */}
@@ -493,112 +440,68 @@ export default function AdminAcademyPage() {
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(REGISTRATION_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {registrations.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucune inscription correspondante.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Académie</th><th className="p-3">Inscrit par</th><th className="p-3">Type</th><th className="p-3">Formation</th><th className="p-3">Participants</th><th className="p-3">Montant</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {registrations.slice(0, 100).map((r) => (
-                      <tr key={r.id} className="border-b last:border-0" data-testid={`row-registration-${r.id}`}>
-                        <td className="p-3 font-medium">#{r.id}</td>
-                        <td className="p-3">{r.academyName}</td>
-                        <td className="p-3">{r.cafeOwnerName}</td>
-                        <td className="p-3"><Badge variant="outline" className="text-[10px] font-normal">{r.participantType === "BARISTA_MARKETPLACE" ? "Barista" : "Coffee Owner"}</Badge></td>
-                        <td className="p-3">{r.courseTitle}</td>
-                        <td className="p-3">{r.participantCount}</td>
-                        <td className="p-3">{fmt(r.priceInCents)}</td>
-                        <td className="p-3"><RegistrationStatusBadge status={r.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {registrations.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune inscription correspondante.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {registrations.slice(0, 100).map((r) => (
+                <Card key={r.id} className="hover:shadow-md transition-shadow" data-testid={`card-registration-${r.id}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="font-semibold truncate">#{r.id} · {r.courseTitle}</h3><p className="text-xs text-muted-foreground truncate">{r.cafeOwnerName} · {r.academyName}</p></div>
+                      <RegistrationStatusBadge status={r.status} />
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="outline" className="text-[10px] font-normal">{r.participantType === "BARISTA_MARKETPLACE" ? "Barista" : "Coffee Owner"}</Badge>
+                      <Badge variant="secondary" className="text-xs">{r.participantCount} participant(s)</Badge>
+                    </div>
+                    <p className="text-sm font-semibold">{fmt(r.priceInCents)}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Étudiants ── */}
         <TabsContent value="students" className="mt-4 space-y-4">
           <div className="relative max-w-sm"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} placeholder="Rechercher un étudiant…" data-testid="input-search-students" /></div>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {students.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucun étudiant pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Inscrit par</th><th className="p-3">Type</th><th className="p-3">Participants</th><th className="p-3">Formation</th><th className="p-3">Académie</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {students.slice(0, 200).map((r) => (
-                      <tr key={r.id} className="border-b last:border-0" data-testid={`row-student-${r.id}`}>
-                        <td className="p-3 font-medium">{r.cafeOwnerName}</td>
-                        <td className="p-3"><Badge variant="outline" className="text-[10px] font-normal">{r.participantType === "BARISTA_MARKETPLACE" ? "Barista" : "Coffee Owner"}</Badge></td>
-                        <td className="p-3">{r.participants.length > 0 ? r.participants.join(", ") : `${r.participantCount} participant(s)`}</td>
-                        <td className="p-3">{r.courseTitle}</td>
-                        <td className="p-3">{r.academyName}</td>
-                        <td className="p-3"><RegistrationStatusBadge status={r.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {students.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun étudiant pour le moment.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {students.slice(0, 200).map((r) => (
+                <Card key={r.id} className="hover:shadow-md transition-shadow" data-testid={`card-student-${r.id}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="font-semibold truncate">{r.cafeOwnerName}</h3><p className="text-xs text-muted-foreground truncate">{r.courseTitle} · {r.academyName}</p></div>
+                      <RegistrationStatusBadge status={r.status} />
+                    </div>
+                    <div className="flex flex-wrap gap-1"><Badge variant="outline" className="text-[10px] font-normal">{r.participantType === "BARISTA_MARKETPLACE" ? "Barista" : "Coffee Owner"}</Badge></div>
+                    <p className="text-xs text-muted-foreground truncate">{r.participants.length > 0 ? r.participants.join(", ") : `${r.participantCount} participant(s)`}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Calendrier ── */}
         <TabsContent value="calendar" className="mt-4">
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.sessions ?? []).length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucune session pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Formation</th><th className="p-3">Académie</th><th className="p-3">Date</th><th className="p-3">Participants</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {(data?.sessions ?? []).map((s) => (
-                      <tr key={s.id} className="border-b last:border-0" data-testid={`row-session-${s.id}`}>
-                        <td className="p-3 font-medium">{s.courseTitle}</td>
-                        <td className="p-3">{s.academyName}</td>
-                        <td className="p-3 text-muted-foreground">{s.startDate}{s.endDate ? ` → ${s.endDate}` : ""}</td>
-                        <td className="p-3">{s.registeredCount}{s.capacity ? `/${s.capacity}` : ""}</td>
-                        <td className="p-3"><SessionStatusBadge status={s.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Messages — reuses the exact same MessagesPanel + central Messages System
-        as Admin Messages and Admin Barista, scoped to service="ACADEMY". ── */}
-        <TabsContent value="messages" className="mt-4">
-          <Card className="overflow-hidden">
-            {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service="ACADEMY" />}
-          </Card>
-          <p className="text-xs text-muted-foreground mt-2">Pour la modération avancée (masquer/supprimer des conversations, export, broadcast), utilisez Admin → Messages → ACADEMY.</p>
-        </TabsContent>
-
-        {/* ── Avis ── */}
-        <TabsContent value="reviews" className="mt-4">
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.reviews ?? []).length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucun avis Academy pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Académie</th><th className="p-3">Client</th><th className="p-3">Note</th><th className="p-3">Commentaire</th><th className="p-3">Date</th></tr></thead>
-                  <tbody>
-                    {(data?.reviews ?? []).map((r) => (
-                      <tr key={r.id} className="border-b last:border-0">
-                        <td className="p-3">{r.academyName}</td>
-                        <td className="p-3">{r.cafeOwnerName || r.cafeName}</td>
-                        <td className="p-3 flex items-center gap-1 text-amber-500"><Star className="h-3.5 w-3.5 fill-current" />{r.rating}</td>
-                        <td className="p-3 max-w-[280px] truncate">{r.comment || "—"}</td>
-                        <td className="p-3 text-muted-foreground">{r.createdAt ? new Date(r.createdAt).toLocaleDateString("fr-FR") : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {(data?.sessions ?? []).length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune session pour le moment.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {(data?.sessions ?? []).map((s) => (
+                <Card key={s.id} className="hover:shadow-md transition-shadow" data-testid={`card-session-${s.id}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="font-semibold truncate">{s.courseTitle}</h3><p className="text-xs text-muted-foreground truncate">{s.academyName}</p></div>
+                      <SessionStatusBadge status={s.status} />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{s.startDate}{s.endDate ? ` → ${s.endDate}` : ""}</span>
+                      <span>{s.registeredCount}{s.capacity ? `/${s.capacity}` : ""} participant(s)</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Finance — derived entirely from registration.priceInCents, exactly like

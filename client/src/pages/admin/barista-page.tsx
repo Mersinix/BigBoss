@@ -296,7 +296,7 @@ export default function AdminBaristaPage() {
   const fmt = useFormatCurrency();
   useRealtime();
 
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = useState("baristas");
   const [selectedBarista, setSelectedBarista] = useState<AdminBarista | null>(null);
 
   const [baristaSearch, setBaristaSearch] = useState("");
@@ -411,7 +411,6 @@ export default function AdminBaristaPage() {
         {/* Horizontally scrollable rather than wrapping — keeps every tab reachable and on
             one line down to small/mobile screens instead of growing the header's height. */}
         <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
-          <TabsTrigger value="overview" className="shrink-0">Vue d'ensemble</TabsTrigger>
           <TabsTrigger value="baristas" className="shrink-0">Baristas</TabsTrigger>
           <TabsTrigger value="requests" className="shrink-0">Demandes</TabsTrigger>
           <TabsTrigger value="missions" className="shrink-0">Missions</TabsTrigger>
@@ -420,12 +419,12 @@ export default function AdminBaristaPage() {
           <TabsTrigger value="skills" className="shrink-0">Compétences</TabsTrigger>
         </TabsList>
 
-        {/* ── Overview ── */}
-        <TabsContent value="overview" className="mt-4 space-y-6">
+        {/* ── Baristas ── */}
+        <TabsContent value="baristas" className="mt-4 space-y-4">
           {/* Entity-level reports — a Coffee Owner flagging a Barista account
               (distinct from review-reporting, which stays under Admin → Reviews →
-              Barista). Kept inside the existing "Vue d'ensemble" tab rather than a
-              new switcher entry, per the requested final tab structure. */}
+              Barista). Relocated here (account-level moderation) now that the
+              "Vue d'ensemble" tab that used to host it has been removed. */}
           {pendingReports.length > 0 && (
             <Card className="border-amber-300 dark:border-amber-700">
               <CardHeader>
@@ -455,52 +454,6 @@ export default function AdminBaristaPage() {
               </CardContent>
             </Card>
           )}
-          <Card>
-            <CardHeader><CardTitle className="text-base">Demandes récentes</CardTitle></CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.requests ?? []).length === 0 ? <p className="p-6 text-center text-muted-foreground text-sm">Aucune demande pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Barista</th><th className="p-3">Coffee Owner</th><th className="p-3">Mission</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {(data?.requests ?? []).slice(0, 10).map((r) => (
-                      <tr key={r.id} className="border-b last:border-0" data-testid={`row-recent-request-${r.id}`}>
-                        <td className="p-3 font-medium">#{r.id}</td>
-                        <td className="p-3">{r.baristaName}</td>
-                        <td className="p-3">{r.cafeOwnerName}</td>
-                        <td className="p-3">{r.missionType || "—"}</td>
-                        <td className="p-3"><RequestStatusBadge status={r.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-base">Missions récentes</CardTitle></CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              {(data?.missions ?? []).length === 0 ? <p className="p-6 text-center text-muted-foreground text-sm">Aucune mission pour le moment.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Barista</th><th className="p-3">Coffee Owner</th><th className="p-3">Montant</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {(data?.missions ?? []).slice(0, 10).map((m) => (
-                      <tr key={m.id} className="border-b last:border-0" data-testid={`row-recent-mission-${m.id}`}>
-                        <td className="p-3 font-medium">#{m.id}</td>
-                        <td className="p-3">{m.baristaName}</td>
-                        <td className="p-3">{m.cafeOwnerName}</td>
-                        <td className="p-3">{fmt(m.rateInCents)}</td>
-                        <td className="p-3"><MissionStatusBadge status={m.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Baristas ── */}
-        <TabsContent value="baristas" className="mt-4 space-y-4">
           <div className="flex flex-wrap gap-2">
             <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={baristaSearch} onChange={(e) => setBaristaSearch(e.target.value)} placeholder="Rechercher un barista…" data-testid="input-search-baristas" /></div>
             <Select value={baristaStatus} onValueChange={setBaristaStatus}>
@@ -551,28 +504,24 @@ export default function AdminBaristaPage() {
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(REQUEST_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {requests.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucune demande correspondante.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Coffee Owner</th><th className="p-3">Barista</th><th className="p-3">Mission</th><th className="p-3">Tarif proposé</th><th className="p-3">Dates</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {requests.slice(0, 100).map((r) => (
-                      <tr key={r.id} className="border-b last:border-0" data-testid={`row-request-${r.id}`}>
-                        <td className="p-3 font-medium">#{r.id}</td>
-                        <td className="p-3">{r.cafeOwnerName}</td>
-                        <td className="p-3">{r.baristaName}</td>
-                        <td className="p-3">{r.missionType || "—"}</td>
-                        <td className="p-3">{r.proposedRateInCents != null ? fmt(r.proposedRateInCents) : "—"}</td>
-                        <td className="p-3 text-muted-foreground">{r.startDate}{r.endDate ? ` → ${r.endDate}` : ""}</td>
-                        <td className="p-3"><RequestStatusBadge status={r.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {requests.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune demande correspondante.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {requests.slice(0, 100).map((r) => (
+                <Card key={r.id} className="hover:shadow-md transition-shadow" data-testid={`card-request-${r.id}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="font-semibold truncate">#{r.id} · {r.missionType || "Mission"}</h3><p className="text-xs text-muted-foreground truncate">{r.cafeOwnerName} → {r.baristaName}</p></div>
+                      <RequestStatusBadge status={r.status} />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="text-sm font-semibold text-foreground">{r.proposedRateInCents != null ? fmt(r.proposedRateInCents) : "—"}</span>
+                      <span>{r.startDate}{r.endDate ? ` → ${r.endDate}` : ""}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* ── Missions ── */}
@@ -584,28 +533,24 @@ export default function AdminBaristaPage() {
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(MISSION_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto">
-              {missions.length === 0 ? <p className="p-12 text-center text-muted-foreground">Aucune mission correspondante.</p> : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">ID</th><th className="p-3">Coffee Owner</th><th className="p-3">Barista</th><th className="p-3">Mission</th><th className="p-3">Montant</th><th className="p-3">Dates</th><th className="p-3">Statut</th></tr></thead>
-                  <tbody>
-                    {missions.slice(0, 100).map((m) => (
-                      <tr key={m.id} className="border-b last:border-0" data-testid={`row-mission-${m.id}`}>
-                        <td className="p-3 font-medium">#{m.id}</td>
-                        <td className="p-3">{m.cafeOwnerName}</td>
-                        <td className="p-3">{m.baristaName}</td>
-                        <td className="p-3">{m.missionType || "—"}</td>
-                        <td className="p-3">{fmt(m.rateInCents)}</td>
-                        <td className="p-3 text-muted-foreground">{m.startDate}{m.endDate ? ` → ${m.endDate}` : ""}</td>
-                        <td className="p-3"><MissionStatusBadge status={m.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+          {missions.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune mission correspondante.</CardContent></Card> : (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {missions.slice(0, 100).map((m) => (
+                <Card key={m.id} className="hover:shadow-md transition-shadow" data-testid={`card-mission-${m.id}`}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="font-semibold truncate">#{m.id} · {m.missionType || "Mission"}</h3><p className="text-xs text-muted-foreground truncate">{m.cafeOwnerName} → {m.baristaName}</p></div>
+                      <MissionStatusBadge status={m.status} />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="text-sm font-semibold text-foreground">{fmt(m.rateInCents)}</span>
+                      <span>{m.startDate}{m.endDate ? ` → ${m.endDate}` : ""}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* Messages and Avis (Reviews) tabs intentionally removed — Barista conversations

@@ -79,6 +79,16 @@ function useTheme(isDark: boolean) {
     border: isDark ? "border-gray-700/60" : "border-gray-100",
     mutedBg: isDark ? "bg-gray-800" : "bg-gray-100",
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    // Coffee Owner marketplace UI-consistency pass — category strip / filter
+    // bar chrome copied verbatim from Shop's reference implementation
+    // (browse-products.tsx's stripBg/switcherBg/switcherActive/switcherInactive
+    // and the Select trigger's selectTrigger), so the two pieces of chrome
+    // stay pixel-identical across services while each keeps its own data.
+    stripBg: isDark ? "bg-gray-900/95 border-gray-800" : "bg-white border-gray-100",
+    switcherBg: isDark ? "bg-gray-800" : "bg-gray-100",
+    switcherActive: isDark ? "bg-gray-700 text-white shadow-sm" : "bg-white text-blue-600 shadow-sm",
+    switcherInactive: isDark ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700",
+    selectTrigger: isDark ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
     selectContent: isDark
       ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
       : "bg-white border-gray-200 text-gray-900",
@@ -402,41 +412,44 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
       )}
 
       {/* ── Service strip + filters — sticky block ─────────────────── */}
-      <div className={`${t.cardBg} sticky top-14 z-30 shadow-sm`}>
-        <div className="border-b">
+      <div className="sticky top-14 z-30">
+        <div className={`border-b ${t.stripBg}`}>
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex gap-1 overflow-x-auto py-3" style={{ scrollbarWidth: "none" }}>
-              <button
-                onClick={() => setSelectedService("")}
-                data-testid="button-service-all"
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === "" ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
-              >
-                <span className="text-lg">📢</span>
-                <span className="text-[11px] font-semibold leading-tight">All</span>
-              </button>
-              {taxonomy.filter((c) => c.isActive && !c.isFrozen).map((cat) => (
+            <div className="flex gap-1.5 overflow-x-auto py-3" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+              <div className={`flex gap-1 rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                 <button
-                  key={cat.id}
-                  onClick={() => setSelectedService(selectedService === cat.name ? "" : cat.name)}
-                  data-testid={`button-service-cat-${cat.name}`}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 transition-all text-center min-w-[64px] ${selectedService === cat.name ? "bg-blue-600 text-white shadow-sm" : `${t.mutedBg} ${t.textMuted} hover:opacity-80`}`}
+                  onClick={() => setSelectedService("")}
+                  data-testid="button-service-all"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${selectedService === "" ? t.switcherActive : t.switcherInactive}`}
                 >
-                  <span className="text-lg">{cat.icon || CATEGORY_ICON_FALLBACK[cat.name] || "📢"}</span>
-                  <span className="text-[11px] font-semibold leading-tight line-clamp-1 max-w-[60px]">{cat.name}</span>
+                  <span className="text-base leading-none">📢</span>
+                  <span>All</span>
                 </button>
+              </div>
+              {taxonomy.filter((c) => c.isActive && !c.isFrozen).map((cat) => (
+                <div key={cat.id} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+                  <button
+                    onClick={() => setSelectedService(selectedService === cat.name ? "" : cat.name)}
+                    data-testid={`button-service-cat-${cat.name}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selectedService === cat.name ? t.switcherActive : t.switcherInactive}`}
+                  >
+                    <span className="text-base leading-none">{cat.icon || CATEGORY_ICON_FALLBACK[cat.name] || "📢"}</span>
+                    <span className="max-w-[72px] truncate">{cat.name}</span>
+                  </button>
+                </div>
               ))}
             </div>
           </div>
         </div>
-        <div className="border-b py-2 px-4">
+        <div className={`border-b py-2 px-4 ${t.stripBg}`}>
           <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
             <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
             <div className="relative flex-1 min-w-[180px] max-w-xs">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <SearchIcon className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} />
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un prestataire..." className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`} data-testid="input-provider-search" />
             </div>
             <Select value={filterType || "__all__"} onValueChange={(v) => setFilterType(v === "__all__" ? "" : v)}>
-              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-provider-type">
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.selectTrigger}`} data-testid="select-provider-type">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
@@ -447,7 +460,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </SelectContent>
             </Select>
             <Select value={filterRating || "__all__"} onValueChange={(v) => setFilterRating(v === "__all__" ? "" : v)}>
-              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-provider-rating">
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`} data-testid="select-provider-rating">
                 <SelectValue placeholder="Note min." />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
@@ -458,7 +471,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </SelectContent>
             </Select>
             <Select value={filterLocation || "__all__"} onValueChange={(v) => setFilterLocation(v === "__all__" ? "" : v)}>
-              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`} data-testid="select-provider-location">
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.selectTrigger}`} data-testid="select-provider-location">
                 <SelectValue placeholder="Ville" />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
@@ -467,7 +480,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </SelectContent>
             </Select>
             {hasFilters && (
-              <button onClick={resetFilters} className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors" data-testid="button-reset-marketing-filters">
+              <button onClick={resetFilters} className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`} data-testid="button-reset-marketing-filters">
                 <RotateCcw className="w-3 h-3" /> Reset
               </button>
             )}

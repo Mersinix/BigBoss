@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { EmptyState } from "@/components/dashboard/dashboard-kit";
+import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Briefcase, Calendar, Phone, DollarSign } from "lucide-react";
 import { useMarketingProjects, useUpdateMarketingProjectStatus, type MarketingProjectWithParties } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META, MARKETING_PROJECT_NEXT_ACTIONS } from "@/lib/marketing-project-status";
@@ -121,10 +121,14 @@ export default function MarketingProjects() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">Projets</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Gérez vos demandes et projets clients.</p>
-      </div>
+      <DashboardHero
+        title="Projets"
+        subtitle="Gérez vos demandes et projets clients."
+        icon={Briefcase}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
+      />
 
       <div className="flex gap-2 bg-secondary/40 rounded-2xl p-1 w-fit">
         {FILTERS.map((f) => (

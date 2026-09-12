@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
 import { Printer, Globe, Eye, Package, Tag, Image as ImageIcon, X } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { usePrintCompanyDetail, useUpdatePrinterProfile } from "@/hooks/use-print-marketplace";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
@@ -111,17 +112,21 @@ export default function PrinterProfilePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Profil</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gérez la présentation publique de votre imprimerie.</p>
-        </div>
-        {/* Aperçu — opens the same PRINT Company Details Modal a Coffee Owner sees
-            (readOnly here: Message/Signaler/Avis stay inert, only real saved data is shown). */}
-        <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-company">
-          <Eye className="w-3.5 h-3.5" /> Aperçu
-        </Button>
-      </div>
+      {/* Aperçu — opens the same PRINT Company Details Modal a Coffee Owner sees
+          (readOnly here: Message/Signaler/Avis stay inert, only real saved data is shown). */}
+      <DashboardHero
+        title="Profil"
+        subtitle="Gérez la présentation publique de votre imprimerie."
+        icon={Printer}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+        action={
+          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-company">
+            <Eye className="w-3.5 h-3.5" /> Aperçu
+          </Button>
+        }
+      />
 
       <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'imprimerie" settingsPath="/printer/settings" testIdPrefix="printer" className={CARD_CLASS} />
 

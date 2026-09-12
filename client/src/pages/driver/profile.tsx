@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import { User as UserIcon, Award, XCircle, Calendar, Zap, Truck, Eye, AlertCircle, Image as ImageIcon, X } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
@@ -111,18 +112,22 @@ export default function DriverProfilePage() {
 
   return (
     <div className="flex flex-col gap-5 max-w-3xl">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Mon profil</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Vos informations telles qu'elles apparaissent auprès de votre fournisseur/entreprise et de l'Admin.</p>
-        </div>
-        {/* Preview — opens the exact same modal used everywhere a driver is shown (Supplier →
-            Drivers, Espace Livraison → Chauffeurs, Admin → Chauffeurs). Purely informational,
-            so nothing here can act against the driver's own account. */}
-        <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-          <Eye className="w-3.5 h-3.5" /> Aperçu
-        </Button>
-      </div>
+      {/* Preview — opens the exact same modal used everywhere a driver is shown (Supplier →
+          Drivers, Espace Livraison → Chauffeurs, Admin → Chauffeurs). Purely informational,
+          so nothing here can act against the driver's own account. */}
+      <DashboardHero
+        title="Mon profil"
+        subtitle="Vos informations telles qu'elles apparaissent auprès de votre fournisseur/entreprise et de l'Admin."
+        icon={UserIcon}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+        action={
+          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+            <Eye className="w-3.5 h-3.5" /> Aperçu
+          </Button>
+        }
+      />
 
       <BusinessProfileIdentityCard nameLabel="Nom complet" settingsPath="/driver/settings" testIdPrefix="driver" className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" />
 

@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAvatarUrl } from "@/lib/avatar";
 import { MessageCircle, Send, ChevronLeft } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Messages tab ───────────────────────────────────────────────────────────────
 
@@ -57,7 +58,16 @@ export default function Messages() {
   };
 
   return (
-    <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm overflow-hidden">
+    <div className="flex flex-col gap-5">
+      <DashboardHero
+        title="Messages"
+        subtitle="Vos conversations avec les Coffee Owners."
+        icon={MessageCircle}
+        gradientClass="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20"
+        iconBgClass="bg-orange-500/15"
+        iconTextClass="text-orange-600 dark:text-orange-400"
+      />
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-orange-500" />Messages Coffee Owners
@@ -145,6 +155,7 @@ export default function Messages() {
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

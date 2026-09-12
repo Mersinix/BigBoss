@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { EmptyState } from "@/components/dashboard/dashboard-kit";
+import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Users, Phone } from "lucide-react";
 import { useMarketingProjects } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
@@ -37,10 +37,14 @@ export default function MarketingClients() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">Clients</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Coffee Owners avec lesquels vous avez une relation Marketing.</p>
-      </div>
+      <DashboardHero
+        title="Clients"
+        subtitle="Coffee Owners avec lesquels vous avez une relation Marketing."
+        icon={Users}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
+      />
 
       {isLoading ? null : clients.length === 0 ? (
         <EmptyState message="Aucun client pour le moment." icon={Users} />

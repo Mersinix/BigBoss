@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { Layers, Save } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { PrintCategoryTaxonomy, PrintSubCategoryTaxonomy } from "@shared/schema";
 import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-icons";
 
@@ -81,17 +82,19 @@ export default function PrinterCategoriesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Catégories</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Sélectionnez les catégories PRINT gérées par l'administrateur qui correspondent à votre activité.
-          </p>
-        </div>
-        <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending} data-testid="button-save-print-categories">
-          <Save className="w-4 h-4 mr-1.5" />{save.isPending ? "Enregistrement…" : "Enregistrer"}
-        </Button>
-      </div>
+      <DashboardHero
+        title="Catégories"
+        subtitle="Sélectionnez les catégories PRINT gérées par l'administrateur qui correspondent à votre activité."
+        icon={Layers}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+        action={
+          <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending} data-testid="button-save-print-categories">
+            <Save className="w-4 h-4 mr-1.5" />{save.isPending ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        }
+      />
 
       <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <CardHeader className="pb-3">

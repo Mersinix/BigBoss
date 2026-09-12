@@ -22,7 +22,7 @@ import { TrendingUp, TrendingDown, Inbox } from "lucide-react";
 // ── Hero / welcome banner ────────────────────────────────────────────────────
 
 export function DashboardHero({
-  title, subtitle, stat, statLabel, icon: Icon,
+  title, subtitle, stat, statLabel, icon: Icon, action,
   gradientClass = "bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20",
   iconBgClass = "bg-primary/15",
   iconTextClass = "text-primary",
@@ -32,6 +32,11 @@ export function DashboardHero({
   stat?: string;
   statLabel?: string;
   icon?: ComponentType<{ className?: string }>;
+  // Optional page-level action (e.g. an "Aperçu"/"Ajouter" Button) rendered
+  // alongside the stat pill — purely additive, so every existing caller that
+  // omits it (e.g. the Barista Academy Dashboard reference) renders byte-for-
+  // byte identically to before this prop existed.
+  action?: ReactNode;
   // Full Tailwind class strings (never interpolated, so Tailwind's JIT scanner
   // sees the literal classes) — let each of the 7 service accounts show its
   // own established accent color (e.g. orange for Maintenance, fuchsia for
@@ -62,6 +67,7 @@ export function DashboardHero({
             </div>
           </div>
         )}
+        {action && <div className="shrink-0 flex items-center gap-2">{action}</div>}
       </CardContent>
     </Card>
   );

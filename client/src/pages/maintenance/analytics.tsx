@@ -5,6 +5,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, Users } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
 import type { MaintenanceReservationRow } from "@/pages/maintenance/planning";
@@ -88,10 +89,16 @@ export default function MaintenanceAnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Analyses</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Vue d'ensemble de la performance de votre activité Maintenance.</p>
-      </div>
+      <DashboardHero
+        title="Analyses"
+        subtitle="Vue d'ensemble de la performance de votre activité Maintenance."
+        stat={reviews.length > 0 ? avgRating.toFixed(1) : undefined}
+        statLabel="Note moyenne"
+        icon={TrendingUp}
+        gradientClass="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20"
+        iconBgClass="bg-orange-500/15"
+        iconTextClass="text-orange-600 dark:text-orange-400"
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux de complétion</p><p className="text-xl font-bold text-green-600">{completionRate}%</p></CardContent></Card>

@@ -4,6 +4,7 @@ import { useBaristaReviews } from "@/hooks/use-barista-marketplace";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
@@ -20,10 +21,16 @@ export default function BaristaMarketplaceReviewsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Avis</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Les avis laissés par les cafés après une mission terminée.</p>
-      </div>
+      <DashboardHero
+        title="Avis"
+        subtitle="Les avis laissés par les cafés après une mission terminée."
+        stat={reviews.length > 0 ? avgRating.toFixed(1) : undefined}
+        statLabel="Note moyenne"
+        icon={Star}
+        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+        iconBgClass="bg-green-500/15"
+        iconTextClass="text-green-600 dark:text-green-400"
+      />
 
       {isLoading ? (
         <div className="space-y-3">

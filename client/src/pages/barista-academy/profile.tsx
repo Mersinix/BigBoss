@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GraduationCap, BookOpen, Eye, Image as ImageIcon, X } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
@@ -109,18 +110,22 @@ export default function AcademyProfilePage() {
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Profil</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gérez la présentation publique de votre académie.</p>
-        </div>
-        {/* Preview — opens the Academy Profile details modal (same design reference as the
-            Barista modal), read-only here: Report/Message are inert, only Disponibilité
-            and browsing related formations stay functional. */}
-        <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-          <Eye className="w-3.5 h-3.5" /> Aperçu
-        </Button>
-      </div>
+      {/* Preview — opens the Academy Profile details modal (same design reference as the
+          Barista modal), read-only here: Report/Message are inert, only Disponibilité
+          and browsing related formations stay functional. */}
+      <DashboardHero
+        title="Profil"
+        subtitle="Gérez la présentation publique de votre académie."
+        icon={GraduationCap}
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        iconBgClass="bg-indigo-500/15"
+        iconTextClass="text-indigo-600 dark:text-indigo-400"
+        action={
+          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+            <Eye className="w-3.5 h-3.5" /> Aperçu
+          </Button>
+        }
+      />
 
       <BusinessProfileIdentityCard nameLabel="Nom de l'académie" settingsPath="/barista-academy/settings" testIdPrefix="academy" className={CARD_CLASS} />
 

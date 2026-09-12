@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MapPin, Store, ArrowRight, Truck } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META } from "@/components/delivery/delivery-details";
@@ -58,10 +59,14 @@ export default function MyDeliveriesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Mes livraisons</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Livraisons acceptées par votre entreprise.</p>
-      </div>
+      <DashboardHero
+        title="Mes livraisons"
+        subtitle="Livraisons acceptées par votre entreprise."
+        icon={Truck}
+        gradientClass="bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent border-teal-500/20"
+        iconBgClass="bg-teal-500/15"
+        iconTextClass="text-teal-600 dark:text-teal-400"
+      />
 
       <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-fit">
         {(["active", "completed"] as const).map((v) => (

@@ -6,6 +6,7 @@ const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-7
 import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign, TrendingUp, CalendarCheck, Briefcase } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 export default function BaristaRevenuePage() {
   const { data, isLoading } = useBaristaRevenue();
@@ -27,10 +28,16 @@ export default function BaristaRevenuePage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Revenus</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Revenus générés par vos missions terminées.</p>
-      </div>
+      <DashboardHero
+        title="Revenus"
+        subtitle="Revenus générés par vos missions terminées."
+        stat={fmt(data.totalEarnedCents)}
+        statLabel="Total gagné"
+        icon={DollarSign}
+        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+        iconBgClass="bg-green-500/15"
+        iconTextClass="text-green-600 dark:text-green-400"
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[

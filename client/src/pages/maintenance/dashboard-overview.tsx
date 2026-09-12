@@ -7,6 +7,7 @@ import {
   ClipboardList, Clock, CheckCircle2, XCircle, CalendarClock, Star, Wrench, MapPin,
 } from "lucide-react";
 import type { MaintenanceReservationRow } from "@/pages/maintenance/planning";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // Real Maintenance Performance > Dashboard — a genuine dashboard, not a reuse
 // of Planning's appointment list (Planning stays a separate, unchanged tab).
@@ -106,25 +107,16 @@ export default function MaintenanceDashboardOverview() {
     <div className="flex flex-col gap-5">
       {/* Welcome / identity strip — same real account fields (name, rating,
           review count) the Profil/Avis tabs already show. */}
-      <div className="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border border-orange-500/20 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Bienvenue, {user?.name}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Vue d'ensemble de votre activité Maintenance.</p>
-        </div>
-        {card && (
-          <div className="flex items-center gap-3 bg-white/70 dark:bg-gray-800/70 border border-orange-500/20 rounded-2xl px-4 py-2.5">
-            <div className="w-9 h-9 rounded-xl bg-orange-500/15 flex items-center justify-center shrink-0">
-              <Star className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Note</p>
-              <p className="text-base font-bold text-gray-900 dark:text-white">
-                {card.reviewCount > 0 ? `${(card.rating / 10).toFixed(1)} (${card.reviewCount} avis)` : "Aucun avis"}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+      <DashboardHero
+        title={`Bienvenue, ${user?.name}`}
+        subtitle="Vue d'ensemble de votre activité Maintenance."
+        stat={card ? (card.reviewCount > 0 ? `${(card.rating / 10).toFixed(1)} (${card.reviewCount} avis)` : "Aucun avis") : undefined}
+        statLabel="Note"
+        icon={Star}
+        gradientClass="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20"
+        iconBgClass="bg-orange-500/15"
+        iconTextClass="text-orange-600 dark:text-orange-400"
+      />
 
       {/* KPI tiles — real reservation counts from the same query Planning uses */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">

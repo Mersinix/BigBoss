@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Award, CheckCircle2, Lock } from "lucide-react";
-import { SectionCard } from "@/components/dashboard/dashboard-kit";
+import { SectionCard, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { cn } from "@/lib/utils";
 
 const MILESTONES = [10, 25, 50, 100, 250, 500];
@@ -20,14 +20,18 @@ export default function DriverRewardsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-display font-bold text-foreground">Récompenses</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {nextMilestone
-            ? `Encore ${nextMilestone - completed} livraison(s) avant le prochain palier.`
-            : "Vous avez atteint tous les paliers actuels — bravo !"}
-        </p>
-      </div>
+      <DashboardHero
+        title="Récompenses"
+        subtitle={nextMilestone
+          ? `Encore ${nextMilestone - completed} livraison(s) avant le prochain palier.`
+          : "Vous avez atteint tous les paliers actuels — bravo !"}
+        stat={String(completed)}
+        statLabel="Livraisons terminées"
+        icon={Award}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <SectionCard title="Paliers de livraisons" icon={Award} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClipboardList, Calendar, Users, User } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_LABELS: Record<AcademyRegistrationStatus, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", CANCELLED: "Annulée", COMPLETED: "Terminée",
@@ -103,10 +104,14 @@ export default function AcademyRegistrationsPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Inscriptions</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Gérez les inscriptions des Coffee Owners à vos formations.</p>
-      </div>
+      <DashboardHero
+        title="Inscriptions"
+        subtitle="Gérez les inscriptions des Coffee Owners à vos formations."
+        icon={ClipboardList}
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        iconBgClass="bg-indigo-500/15"
+        iconTextClass="text-indigo-600 dark:text-indigo-400"
+      />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "all")}>
         <TabsList>

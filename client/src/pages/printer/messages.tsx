@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageCircle, Send, ChevronLeft } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { getAvatarUrl } from "@/lib/avatar";
 
 // Reuses the exact same conversations/messages API as every other service
@@ -64,10 +65,14 @@ export default function PrinterMessagesPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Messages</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Vos conversations avec les cafés.</p>
-      </div>
+      <DashboardHero
+        title="Messages"
+        subtitle="Vos conversations avec les cafés."
+        icon={MessageCircle}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl overflow-hidden">
         <CardHeader className="pb-3">

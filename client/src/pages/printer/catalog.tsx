@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/dashboard/dashboard-kit";
+import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Package, Clock, Layers, Settings, Printer } from "lucide-react";
 
 // Read-oriented, image-forward presentation of the same /api/print/catalog data as
@@ -31,17 +31,21 @@ export default function PrinterCatalog() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Catalogue</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Aperçu visuel de votre catalogue tel qu'il apparaît aux Coffee Owners.</p>
-        </div>
-        <Link href="/printer/services">
-          <Button variant="outline" className="gap-2" data-testid="button-manage-catalog">
-            <Settings className="w-4 h-4" /> Gérer
-          </Button>
-        </Link>
-      </div>
+      <DashboardHero
+        title="Catalogue"
+        subtitle="Aperçu visuel de votre catalogue tel qu'il apparaît aux Coffee Owners."
+        icon={Package}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+        action={
+          <Link href="/printer/services">
+            <Button variant="outline" className="gap-2" data-testid="button-manage-catalog">
+              <Settings className="w-4 h-4" /> Gérer
+            </Button>
+          </Link>
+        }
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

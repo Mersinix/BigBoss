@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import { Building2, Award, MapPin, XCircle, X, Plus, Calendar, Zap, Eye, AlertCircle } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
@@ -105,18 +106,22 @@ export default function DeliveryCompanyProfilePage() {
 
   return (
     <div className="flex flex-col gap-5 max-w-3xl">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Profil de l'entreprise</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Ce profil est visible par les fournisseurs lors du dispatch de leurs livraisons.</p>
-        </div>
-        {/* Preview — opens the same modal a Supplier sees when dispatching an order
-            (read-only here: Avis/Report/sélection are inert, only Disponibilité stays
-            functional), fed by this same real profile data. */}
-        <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-          <Eye className="w-3.5 h-3.5" /> Aperçu
-        </Button>
-      </div>
+      {/* Preview — opens the same modal a Supplier sees when dispatching an order
+          (read-only here: Avis/Report/sélection are inert, only Disponibilité stays
+          functional), fed by this same real profile data. */}
+      <DashboardHero
+        title="Profil de l'entreprise"
+        subtitle="Ce profil est visible par les fournisseurs lors du dispatch de leurs livraisons."
+        icon={Building2}
+        gradientClass="bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent border-teal-500/20"
+        iconBgClass="bg-teal-500/15"
+        iconTextClass="text-teal-600 dark:text-teal-400"
+        action={
+          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+            <Eye className="w-3.5 h-3.5" /> Aperçu
+          </Button>
+        }
+      />
 
       <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'entreprise" settingsPath="/delivery/settings" testIdPrefix="delivery-company" className={CARD_CLASS} />
 

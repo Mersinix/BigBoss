@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClipboardList, Calendar, User } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_LABELS: Record<BaristaMissionStatus, string> = {
   UPCOMING: "À venir",
@@ -93,10 +94,14 @@ export default function BaristaMissionsPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Mes missions</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Missions créées à partir de demandes acceptées.</p>
-      </div>
+      <DashboardHero
+        title="Mes missions"
+        subtitle="Missions créées à partir de demandes acceptées."
+        icon={ClipboardList}
+        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+        iconBgClass="bg-green-500/15"
+        iconTextClass="text-green-600 dark:text-green-400"
+      />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as BaristaMissionStatus | "all")}>
         <TabsList className="flex-wrap h-auto">

@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BookOpen, Plus, Pencil, Trash2, Award, Clock, MapPin, Eye, EyeOff } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 
 const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -189,15 +190,19 @@ export default function AcademyCoursesPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Formations</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gérez les formations affichées sur la marketplace Academy.</p>
-        </div>
-        <Button onClick={() => setEditing("new")} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-new-course">
-          <Plus className="w-4 h-4 mr-1.5" />Nouvelle formation
-        </Button>
-      </div>
+      <DashboardHero
+        title="Formations"
+        subtitle="Gérez les formations affichées sur la marketplace Academy."
+        icon={BookOpen}
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        iconBgClass="bg-indigo-500/15"
+        iconTextClass="text-indigo-600 dark:text-indigo-400"
+        action={
+          <Button onClick={() => setEditing("new")} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-new-course">
+            <Plus className="w-4 h-4 mr-1.5" />Nouvelle formation
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>

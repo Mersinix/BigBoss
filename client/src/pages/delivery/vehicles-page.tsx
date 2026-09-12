@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Truck, Plus, Pencil, Trash2, User as UserIcon, Snowflake } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const VEHICLE_ICONS: Record<DeliveryVehicleType, string> = {
   BICYCLE: "🚲", MOTO: "🏍️", CAR: "🚗", VAN: "🚐", TRUCK: "🚚", OTHER: "🚙",
@@ -107,13 +108,15 @@ export default function DeliveryVehiclesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Véhicules</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gérez la flotte de votre entreprise et assignez un véhicule à chaque chauffeur.</p>
-        </div>
-        <Button onClick={() => setEditing("new")} className="gap-1.5" data-testid="button-new-vehicle"><Plus className="w-4 h-4" />Ajouter un véhicule</Button>
-      </div>
+      <DashboardHero
+        title="Véhicules"
+        subtitle="Gérez la flotte de votre entreprise et assignez un véhicule à chaque chauffeur."
+        icon={Truck}
+        gradientClass="bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent border-teal-500/20"
+        iconBgClass="bg-teal-500/15"
+        iconTextClass="text-teal-600 dark:text-teal-400"
+        action={<Button onClick={() => setEditing("new")} className="gap-1.5" data-testid="button-new-vehicle"><Plus className="w-4 h-4" />Ajouter un véhicule</Button>}
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>

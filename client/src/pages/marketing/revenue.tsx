@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign, TrendingUp, CalendarCheck, ClipboardList } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { formatMonthKey } from "@/lib/marketing-project-status";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
@@ -31,10 +32,16 @@ export default function MarketingRevenuePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Revenus</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Revenus générés par vos projets terminés.</p>
-      </div>
+      <DashboardHero
+        title="Revenus"
+        subtitle="Revenus générés par vos projets terminés."
+        stat={fmt(data.totalEarnedCents)}
+        statLabel="Total gagné"
+        icon={DollarSign}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[

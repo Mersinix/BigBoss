@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Receipt, Package } from "lucide-react";
 import { formatDate } from "@/lib/format";
-import { SectionCard, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { SectionCard, EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
 
@@ -48,10 +48,14 @@ export default function DriverPaymentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-display font-bold text-foreground">Paiements</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Historique des livraisons et de leurs frais associés.</p>
-      </div>
+      <DashboardHero
+        title="Paiements"
+        subtitle="Historique des livraisons et de leurs frais associés."
+        icon={Receipt}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <Select value={statusFilter} onValueChange={setStatusFilter}>

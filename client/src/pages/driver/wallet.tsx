@@ -44,7 +44,16 @@ export default function DriverWalletPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <DashboardHero title="Portefeuille" subtitle="Vos gains liés aux livraisons." stat={fmt(stats.total)} statLabel="Solde cumulé" icon={Wallet} />
+      <DashboardHero
+        title="Portefeuille"
+        subtitle="Vos gains liés aux livraisons."
+        stat={fmt(stats.total)}
+        statLabel="Solde cumulé"
+        icon={Wallet}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard label="Aujourd'hui" value={fmt(stats.today)} icon={Clock} tone="amber" className={CARD_CLASS} />

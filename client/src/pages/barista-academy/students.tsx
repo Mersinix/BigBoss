@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Search, GraduationCap, CalendarDays, Clock } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_LABELS: Record<AcademyRegistrationStatus, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", CANCELLED: "Annulée", COMPLETED: "Terminée",
@@ -37,10 +38,14 @@ export default function AcademyStudentsPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Étudiants</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Les participants inscrits à vos formations, par inscription.</p>
-      </div>
+      <DashboardHero
+        title="Étudiants"
+        subtitle="Les participants inscrits à vos formations, par inscription."
+        icon={Users}
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        iconBgClass="bg-indigo-500/15"
+        iconTextClass="text-indigo-600 dark:text-indigo-400"
+      />
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />

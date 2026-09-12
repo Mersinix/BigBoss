@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
-import { EmptyState } from "@/components/dashboard/dashboard-kit";
+import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Star } from "lucide-react";
 import type { SupplierProductReview } from "@shared/schema";
 
@@ -31,22 +31,16 @@ export default function PrinterReviewsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Avis</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Avis laissés par les cafés sur vos services PRINT.</p>
-      </div>
-
-      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
-        <CardContent className="p-5 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center shrink-0">
-            <Star className="w-6 h-6 text-amber-500 fill-amber-500" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-foreground">{stats.count > 0 ? stats.average.toFixed(1) : "—"}</p>
-            <p className="text-xs text-muted-foreground">{stats.count} avis</p>
-          </div>
-        </CardContent>
-      </Card>
+      <DashboardHero
+        title="Avis"
+        subtitle="Avis laissés par les cafés sur vos services PRINT."
+        stat={stats.count > 0 ? stats.average.toFixed(1) : undefined}
+        statLabel={`${stats.count} avis`}
+        icon={Star}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <CardContent className="p-0 divide-y divide-border/40">

@@ -18,6 +18,7 @@ import {
   Phone,
   Navigation,
 } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 export type MaintenanceReservationRow = {
   id: number;
@@ -193,7 +194,15 @@ export default function Planning() {
   const handleComplete = (id: number) => updateStatus.mutate({ id, status: "COMPLETED" });
 
   return (
-    <>
+    <div className="flex flex-col gap-5">
+      <DashboardHero
+        title="Planning"
+        subtitle="Vos réservations organisées par date."
+        icon={Calendar}
+        gradientClass="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20"
+        iconBgClass="bg-orange-500/15"
+        iconTextClass="text-orange-600 dark:text-orange-400"
+      />
       {/* Sub-tabs */}
       <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 rounded-2xl p-1">
         {(["today", "upcoming", "past"] as const).map((tab) => (
@@ -259,6 +268,6 @@ export default function Planning() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

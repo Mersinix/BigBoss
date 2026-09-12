@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Star, Flag } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Reviews ("Avis") tab ──────────────────────────────────────────────────────
 
@@ -38,8 +39,24 @@ export default function Reviews() {
     onError: (error: Error) => toast({ title: "Signalement impossible", description: error.message, variant: "destructive" }),
   });
 
+  const avgRating = useMemo(
+    () => (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0),
+    [reviews],
+  );
+
   return (
-    <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
+    <div className="flex flex-col gap-5">
+      <DashboardHero
+        title="Avis"
+        subtitle="Avis laissés par les clients sur vos interventions."
+        stat={reviews.length > 0 ? avgRating.toFixed(1) : undefined}
+        statLabel={`${reviews.length} avis`}
+        icon={Star}
+        gradientClass="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20"
+        iconBgClass="bg-orange-500/15"
+        iconTextClass="text-orange-600 dark:text-orange-400"
+      />
+      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <Star className="w-4 h-4 text-orange-500" />Avis clients
@@ -86,6 +103,7 @@ export default function Reviews() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+      </Card>
+    </div>
   );
 }

@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { formatDate } from "@/lib/format";
 import { PRINT_ORDER_STATUS_META, PRINT_ORDER_NEXT_ACTIONS, PRINT_ORDER_STATUSES } from "@/lib/print-order-status";
 import { Search, ClipboardList, Eye, MapPin, Phone, Calendar, User, Package } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 function StatusBadge({ status }: { status: string }) {
   const meta = PRINT_ORDER_STATUS_META[status as PrintOrderStatus] ?? PRINT_ORDER_STATUS_META.PENDING;
@@ -127,10 +128,14 @@ export default function PrinterOrders() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Commandes</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Suivez et gérez les commandes de vos clients Coffee Owners.</p>
-      </div>
+      <DashboardHero
+        title="Commandes"
+        subtitle="Suivez et gérez les commandes de vos clients Coffee Owners."
+        icon={ClipboardList}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">

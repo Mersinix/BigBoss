@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/dashboard/dashboard-kit";
+import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { FileText, DollarSign, Clock, Search, Briefcase } from "lucide-react";
 import { useMarketingProjects } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
@@ -41,10 +41,16 @@ export default function MarketingInvoices() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Devis & Factures</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Vos devis envoyés et factures générées à partir de vos projets.</p>
-      </div>
+      <DashboardHero
+        title="Devis & Factures"
+        subtitle="Vos devis envoyés et factures générées à partir de vos projets."
+        stat={fmt(totalFactureCents)}
+        statLabel="Facturé"
+        icon={FileText}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">

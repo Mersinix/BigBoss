@@ -4,9 +4,9 @@ import { useAcademyRegistrations, useMyAcademyCourses, useMyAcademySessions, use
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Award } from "lucide-react";
+import { TrendingUp, Award, BarChart2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { SectionCard, RankRow, EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
@@ -77,10 +77,16 @@ export default function AcademyAnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Analyses</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Vue d'ensemble de la performance de vos formations.</p>
-      </div>
+      <DashboardHero
+        title="Analyses"
+        subtitle="Vue d'ensemble de la performance de vos formations."
+        stat={reviews.length > 0 ? avgRating.toFixed(1) : undefined}
+        statLabel="Note moyenne"
+        icon={BarChart2}
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        iconBgClass="bg-indigo-500/15"
+        iconTextClass="text-indigo-600 dark:text-indigo-400"
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux de complétion</p><p className="text-xl font-bold text-green-600">{completionRate}%</p></CardContent></Card>

@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Megaphone, Plus, Pencil, Trash2, Clock, Eye, EyeOff } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 type ServiceFormState = {
   category: string; startingPrice: string; responseTime: string; description: string; imageUrl: string;
@@ -144,15 +145,19 @@ export default function MarketingServicesPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Services</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gérez les services individuels affichés sur la marketplace /marketing.</p>
-        </div>
-        <Button onClick={() => setEditing("new")} className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white" data-testid="button-new-service">
-          <Plus className="w-4 h-4 mr-1.5" />Nouveau service
-        </Button>
-      </div>
+      <DashboardHero
+        title="Services"
+        subtitle="Gérez les services individuels affichés sur la marketplace /marketing."
+        icon={Megaphone}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
+        action={
+          <Button onClick={() => setEditing("new")} className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white" data-testid="button-new-service">
+            <Plus className="w-4 h-4 mr-1.5" />Nouveau service
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>

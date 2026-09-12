@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAvatarUrl } from "@/lib/avatar";
 import { MessageCircle, Send, ChevronLeft } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Messages tab — reuses the existing generic messaging system (conversations
 // scoped to service='MARKETING'), exactly like pages/maintenance/messages.tsx
@@ -58,7 +59,16 @@ export default function MarketingMessages() {
   };
 
   return (
-    <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-sm overflow-hidden">
+    <div className="flex flex-col gap-5">
+      <DashboardHero
+        title="Messages"
+        subtitle="Vos conversations avec les Coffee Owners."
+        icon={MessageCircle}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
+      />
+      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-sm overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <MessageCircle className="w-4 h-4 text-fuchsia-500" />Messages Coffee Owners
@@ -146,6 +156,7 @@ export default function MarketingMessages() {
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }

@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MapPin, Calendar, Zap, Package2, Search, ArrowRight } from "lucide-react";
 import { formatDate } from "@/lib/format";
-import { EmptyState } from "@/components/dashboard/dashboard-kit";
+import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
 import type { DeliveryWithDetails } from "@shared/schema";
 
@@ -85,10 +85,14 @@ export default function DriverPlanningPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-display font-bold text-foreground">Planification</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Vos livraisons organisées par date.</p>
-      </div>
+      <DashboardHero
+        title="Planification"
+        subtitle="Vos livraisons organisées par date."
+        icon={Calendar}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v as any); setStatusFilter("ALL"); }}>
         <TabsList>

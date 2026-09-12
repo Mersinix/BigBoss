@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
 import { Megaphone, Image as ImageIcon, X, Globe, Calendar, AlertCircle, Eye } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import {
   useMyMarketingProfile, useUpdateMarketingProfile, useUpdateMarketingAvailability, useMyMarketingServices,
 } from "@/hooks/use-marketing";
@@ -99,18 +100,22 @@ export default function MarketingProfilePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Profil</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gérez la présentation publique de votre agence.</p>
-        </div>
-        {/* Preview — opens the same modal a Coffee Owner sees on /marketing (read-only here:
-            Favorite/Report/Message/Avis/Devis are inert, only Disponibilité, the Portfolio
-            album and browsing real services stay functional). */}
-        <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-agency">
-          <Eye className="w-3.5 h-3.5" /> Aperçu
-        </Button>
-      </div>
+      {/* Preview — opens the same modal a Coffee Owner sees on /marketing (read-only here:
+          Favorite/Report/Message/Avis/Devis are inert, only Disponibilité, the Portfolio
+          album and browsing real services stay functional). */}
+      <DashboardHero
+        title="Profil"
+        subtitle="Gérez la présentation publique de votre agence."
+        icon={Megaphone}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
+        action={
+          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-agency">
+            <Eye className="w-3.5 h-3.5" /> Aperçu
+          </Button>
+        }
+      />
 
       <BusinessProfileIdentityCard title="Informations de l'entreprise" nameLabel="Nom de l'agence" settingsPath="/marketing-panel/settings" testIdPrefix="marketing" className={CARD_CLASS} />
 

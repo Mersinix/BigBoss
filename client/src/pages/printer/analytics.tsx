@@ -4,7 +4,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { TrendingUp, ShoppingBag, Package, Percent, Layers, CheckCircle2, XCircle } from "lucide-react";
 import type { PrintCatalogItem, PrintOrderWithParties } from "@shared/schema";
-import { StatCard, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { StatCard, SectionCard, RankRow, EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { PRINT_ORDER_STATUS_META, formatMonthKey } from "@/lib/print-order-status";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -86,10 +86,16 @@ export default function PrinterAnalytics() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Analyses</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Performance de votre activité d'impression.</p>
-      </div>
+      <DashboardHero
+        title="Analyses"
+        subtitle="Performance de votre activité d'impression."
+        stat={fmt(revenue?.totalEarnedCents ?? 0)}
+        statLabel="Revenu total"
+        icon={TrendingUp}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard label="Revenu total" value={fmt(revenue?.totalEarnedCents ?? 0)} icon={TrendingUp} tone="green" className={CARD_CLASS} />

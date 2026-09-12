@@ -3,6 +3,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign, TrendingUp, CalendarCheck, ClipboardList } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 // Same background/border/radius as the Espace Maintenance reference
@@ -34,10 +35,16 @@ export default function AcademyRevenuePage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Revenus</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Revenus générés par vos formations terminées.</p>
-      </div>
+      <DashboardHero
+        title="Revenus"
+        subtitle="Revenus générés par vos formations terminées."
+        stat={fmt(data.totalEarnedCents)}
+        statLabel="Total gagné"
+        icon={DollarSign}
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        iconBgClass="bg-indigo-500/15"
+        iconTextClass="text-indigo-600 dark:text-indigo-400"
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[

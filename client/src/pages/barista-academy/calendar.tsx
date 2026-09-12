@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays, Plus, Users, Trash2 } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_LABELS: Record<AcademySessionStatus, string> = { UPCOMING: "À venir", ACTIVE: "En cours", COMPLETED: "Terminée", CANCELLED: "Annulée" };
 const STATUS_COLORS: Record<AcademySessionStatus, string> = {
@@ -109,15 +110,19 @@ export default function AcademyCalendarPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Calendrier</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Sessions planifiées pour vos formations.</p>
-        </div>
-        <Button onClick={() => setNewOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-new-session">
-          <Plus className="w-4 h-4 mr-1.5" />Nouvelle session
-        </Button>
-      </div>
+      <DashboardHero
+        title="Calendrier"
+        subtitle="Sessions planifiées pour vos formations."
+        icon={CalendarDays}
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        iconBgClass="bg-indigo-500/15"
+        iconTextClass="text-indigo-600 dark:text-indigo-400"
+        action={
+          <Button onClick={() => setNewOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-new-session">
+            <Plus className="w-4 h-4 mr-1.5" />Nouvelle session
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-2xl" />)}</div>

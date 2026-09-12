@@ -3,7 +3,7 @@ import { useDeliveries } from "@/hooks/use-deliveries";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Truck, CheckCircle2, XCircle, Clock } from "lucide-react";
-import { StatCard, SectionCard } from "@/components/dashboard/dashboard-kit";
+import { StatCard, SectionCard, DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const MONTH_NAMES = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
@@ -44,10 +44,16 @@ export default function DriverActivityPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-display font-bold text-foreground">Informations sur les activités</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Votre activité de livraison en un coup d'œil.</p>
-      </div>
+      <DashboardHero
+        title="Informations sur les activités"
+        subtitle="Votre activité de livraison en un coup d'œil."
+        stat={String(stats.total)}
+        statLabel="Total livraisons"
+        icon={Truck}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total livraisons" value={stats.total} icon={Truck} tone="primary" className={CARD_CLASS} />

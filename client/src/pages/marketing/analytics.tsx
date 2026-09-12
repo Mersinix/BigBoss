@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { TrendingUp, Briefcase, Users, Percent, Layers, CheckCircle2, XCircle } from "lucide-react";
-import { StatCard, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { StatCard, SectionCard, RankRow, EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { MARKETING_PROJECT_STATUS_META, formatMonthKey } from "@/lib/marketing-project-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMarketingProjects, useMarketingRevenue } from "@/hooks/use-marketing";
@@ -75,10 +75,16 @@ export default function MarketingAnalytics() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Analyses</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Performance de votre activité Marketing.</p>
-      </div>
+      <DashboardHero
+        title="Analyses"
+        subtitle="Performance de votre activité Marketing."
+        stat={fmt(revenue?.totalEarnedCents ?? 0)}
+        statLabel="Revenu total"
+        icon={TrendingUp}
+        gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+        iconBgClass="bg-fuchsia-500/15"
+        iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard label="Revenu total" value={fmt(revenue?.totalEarnedCents ?? 0)} icon={TrendingUp} tone="green" className={CARD_CLASS} />

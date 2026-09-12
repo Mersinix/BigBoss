@@ -11,6 +11,7 @@ import {
   type AcademyCourseCard, type AcademyCourseLevel, type AcademyRegistrationWithParties, type AcademyRegistrationStatus,
 } from "@/hooks/use-barista-academy";
 import { Card, CardContent } from "@/components/ui/card";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -424,10 +425,14 @@ export default function BaristaAcademyMarketplacePage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Académie</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Formez-vous auprès des académies BigBoss et suivez vos inscriptions.</p>
-      </div>
+      <DashboardHero
+        title="Académie"
+        subtitle="Formez-vous auprès des académies BigBoss et suivez vos inscriptions."
+        icon={GraduationCap}
+        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+        iconBgClass="bg-green-500/15"
+        iconTextClass="text-green-600 dark:text-green-400"
+      />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "formations" | "mine")}>
         <TabsList>

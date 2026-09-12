@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { MapPin, Store, ArrowRight, Package } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails from "@/components/delivery/delivery-details";
 import type { DeliveryWithDetails } from "@shared/schema";
@@ -31,12 +32,14 @@ export default function AvailableDeliveriesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Livraisons disponibles</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Livraisons prêtes à être prises en charge. Première entreprise à accepter obtient la livraison.
-        </p>
-      </div>
+      <DashboardHero
+        title="Livraisons disponibles"
+        subtitle="Livraisons prêtes à être prises en charge. Première entreprise à accepter obtient la livraison."
+        icon={Package}
+        gradientClass="bg-gradient-to-br from-teal-500/10 via-teal-500/5 to-transparent border-teal-500/20"
+        iconBgClass="bg-teal-500/15"
+        iconTextClass="text-teal-600 dark:text-teal-400"
+      />
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-2xl" />)}</div>

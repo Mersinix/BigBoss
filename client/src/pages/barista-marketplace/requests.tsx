@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Briefcase, Calendar, MessageSquare, User } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_LABELS: Record<BaristaRequestStatus, string> = {
   PENDING: "En attente",
@@ -97,10 +98,14 @@ export default function BaristaRequestsPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Demandes reçues</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Répondez aux demandes des cafés pour créer une mission.</p>
-      </div>
+      <DashboardHero
+        title="Demandes reçues"
+        subtitle="Répondez aux demandes des cafés pour créer une mission."
+        icon={Briefcase}
+        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+        iconBgClass="bg-green-500/15"
+        iconTextClass="text-green-600 dark:text-green-400"
+      />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "all")}>
         <TabsList>

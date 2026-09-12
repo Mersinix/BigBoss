@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Award, Wrench, MapPin, XCircle, X, Eye, Briefcase, Settings as SettingsIcon } from "lucide-react";
 import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import Availability from "@/pages/maintenance/availability";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
@@ -129,11 +130,19 @@ export default function Profile() {
           /maintenance (read-only there: Favorite/Report/Contacter/Réserver/Avis
           are inert, only Disponibilité stays functional), fed by this same real
           profile data (profileData.card), never a separate/fake preview dataset. */}
-      <div className="flex justify-end">
-        <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-          <Eye className="w-3.5 h-3.5" /> Aperçu
-        </Button>
-      </div>
+      <DashboardHero
+        title="Profil"
+        subtitle="Gérez la présentation publique de votre profil Maintenance."
+        icon={Wrench}
+        gradientClass="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20"
+        iconBgClass="bg-orange-500/15"
+        iconTextClass="text-orange-600 dark:text-orange-400"
+        action={
+          <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+            <Eye className="w-3.5 h-3.5" /> Aperçu
+          </Button>
+        }
+      />
 
       <BusinessProfileIdentityCard
         nameLabel="Nom / Structure"

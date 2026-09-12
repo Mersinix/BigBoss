@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { Plus, Pencil, Trash2, Printer, X, Layers, Eye, Clock, Package } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Link } from "wouter";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
@@ -315,15 +316,19 @@ export default function PrinterServices() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Services</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gérez vos prix, quantités minimums, délais et catégories.</p>
-        </div>
-        <Button data-testid="button-add-service" className="gap-2" onClick={openCreate}>
-          <Plus className="w-4 h-4" /> Ajouter un service
-        </Button>
-      </div>
+      <DashboardHero
+        title="Services"
+        subtitle="Gérez vos prix, quantités minimums, délais et catégories."
+        icon={Printer}
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+        iconBgClass="bg-blue-500/15"
+        iconTextClass="text-blue-600 dark:text-blue-400"
+        action={
+          <Button data-testid="button-add-service" className="gap-2" onClick={openCreate}>
+            <Plus className="w-4 h-4" /> Ajouter un service
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-52 w-full rounded-2xl" />)}</div>

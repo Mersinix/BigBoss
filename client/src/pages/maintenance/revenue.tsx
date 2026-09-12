@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign, TrendingUp, CalendarCheck, ClipboardList } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 type MaintenanceRevenueSummary = {
   totalEarnedCents: number; completedReservations: number; currentMonthCents: number; currentMonthReservations: number;
@@ -48,12 +49,16 @@ export default function MaintenanceRevenuePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Revenus</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-          Estimation basée sur votre tarif journalier actuel ({fmt(data.dailyRateInCents)}) et vos interventions terminées.
-        </p>
-      </div>
+      <DashboardHero
+        title="Revenus"
+        subtitle={`Estimation basée sur votre tarif journalier actuel (${fmt(data.dailyRateInCents)}) et vos interventions terminées.`}
+        stat={fmt(data.totalEarnedCents)}
+        statLabel="Total gagné"
+        icon={DollarSign}
+        gradientClass="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20"
+        iconBgClass="bg-orange-500/15"
+        iconTextClass="text-orange-600 dark:text-orange-400"
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[

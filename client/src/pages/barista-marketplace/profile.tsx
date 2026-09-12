@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Briefcase, Pencil, Trash2, Calendar, Zap } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
@@ -152,19 +153,23 @@ export default function BaristaProfilePage() {
 
   return (
     <div className="flex flex-col gap-5 max-w-3xl">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Mon profil public</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Ce profil est visible par les cafés sur la marketplace Barista.</p>
-        </div>
-        {/* Preview — opens the exact same modal a Coffee Owner sees on /barista
-            (read-only there: Favorite/Report/Message/Avis/Recruter are inert,
-            only Disponibilité stays functional), fed by this same real profile
-            data, never a separate/fake preview dataset. */}
-        <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-          <Eye className="w-3.5 h-3.5" /> Aperçu
-        </Button>
-      </div>
+      {/* Preview — opens the exact same modal a Coffee Owner sees on /barista
+          (read-only there: Favorite/Report/Message/Avis/Recruter are inert,
+          only Disponibilité stays functional), fed by this same real profile
+          data, never a separate/fake preview dataset. */}
+      <DashboardHero
+        title="Mon profil public"
+        subtitle="Ce profil est visible par les cafés sur la marketplace Barista."
+        icon={UserCheck}
+        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+        iconBgClass="bg-green-500/15"
+        iconTextClass="text-green-600 dark:text-green-400"
+        action={
+          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+            <Eye className="w-3.5 h-3.5" /> Aperçu
+          </Button>
+        }
+      />
 
       <BusinessProfileIdentityCard settingsPath="/barista-marketplace/settings" testIdPrefix="barista" className={CARD_CLASS} />
 

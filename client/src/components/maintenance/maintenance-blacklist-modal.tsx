@@ -121,7 +121,7 @@ export function MaintenanceBlacklistModal({ open, onClose, isDark }: { open: boo
         </DialogContent>
       </Dialog>
 
-      <AgentDetailModal agent={detailAgent} open={!!detailAgent} onClose={() => setDetailAgent(null)} onContact={contact} onReserve={(agent, data) => reserve.mutate({ agent, data })} isDark={isDark} />
+      <AgentDetailModal agent={detailAgent} open={!!detailAgent} onClose={() => setDetailAgent(null)} onContact={contact} onReserve={(agent, data) => reserve.mutateAsync({ agent, data })} isDark={isDark} />
     </>
   );
 }

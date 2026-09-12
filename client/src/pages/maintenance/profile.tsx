@@ -346,7 +346,7 @@ export default function Profile() {
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         onContact={() => {}}
-        onReserve={() => {}}
+        onReserve={() => Promise.resolve()}
         isDark={isDark}
         readOnly
       />

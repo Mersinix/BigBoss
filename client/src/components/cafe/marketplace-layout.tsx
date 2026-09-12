@@ -2270,7 +2270,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           setSelectedMaintenanceAgent(null);
         }}
         onContact={contactMaintenance}
-        onReserve={(agent, data) => reserveMaintenance.mutate({ agent, data })}
+        onReserve={(agent, data) => reserveMaintenance.mutateAsync({ agent, data })}
         isDark={dk}
       />
 

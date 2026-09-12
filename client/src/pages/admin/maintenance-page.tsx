@@ -236,7 +236,7 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         onContact={() => {}}
-        onReserve={() => {}}
+        onReserve={() => Promise.resolve()}
         isDark={isDark}
         readOnly
       />

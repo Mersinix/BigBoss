@@ -17,6 +17,10 @@ type Props = {
    *  mobile only, so every other caller (Admin/Delivery Company/Supplier delivery detail
    *  views) keeps its exact existing size. */
   mapHeightClassName?: string;
+  /** Shown as a "Partager ma position" action next to the existing "position not set"
+   *  notice (Stage 1 only) — omitted by every caller that doesn't need the driver to
+   *  provide their own live position (the message stays plain text, exactly as before). */
+  onShareLocation?: () => void;
 };
 
 function toLatLng(v?: { lat: string; lng: string } | GeoLocation | null): { lat: number; lng: number } | null {
@@ -31,20 +35,27 @@ function toLatLng(v?: { lat: string; lng: string } | GeoLocation | null): { lat:
  * Two-stage delivery navigation map. Reuses the same raw Google Maps JS loader already used
  * by location-picker-modal.tsx (loadGoogleMapsScript) — no new map technology introduced.
  *
- * Stage 1 (TO_PICKUP): driver → supplier. Stage 2 (TO_DESTINATION): driver → coffee/cafe.
+ * Stage 1 (TO_PICKUP): driver's own live position → supplier. Stage 2 (TO_DESTINATION): once
+ * collected, the route no longer depends on the driver's live position — it becomes the fixed
+ * supplier → coffee/cafe leg.
  * Uses a straight-line connector rather than the Directions API — a real turn-by-turn route
  * isn't part of the existing map infrastructure, and this project explicitly avoids adding a
  * routing API just for this. The "Open in Google Maps" button hands off to the driver's own
  * phone map app for actual turn-by-turn navigation, which is the pragmatic v1 answer.
  */
-export default function DeliveryRouteMap({ stage, pickup, destination, driverLocation, mapHeightClassName = "h-56" }: Props) {
+export default function DeliveryRouteMap({ stage, pickup, destination, driverLocation, mapHeightClassName = "h-56", onShareLocation }: Props) {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const [ready, setReady] = useState(false);
 
   const activeTarget = stage === "TO_PICKUP" ? pickup : destination;
-  const current = toLatLng(driverLocation) ?? toLatLng(pickup); // fall back to pickup as a stand-in center when the driver has no known location yet
+  // Stage 1 (TO_PICKUP): route starts at the driver's own live position (falling back to the
+  // supplier as a stand-in center when it isn't known yet). Stage 2 (TO_DESTINATION): the
+  // collection already happened, so the route is the fixed Supplier → Coffee Owner leg — the
+  // driver's ever-changing live position must never replace the supplier's address here.
+  const current = stage === "TO_PICKUP" ? (toLatLng(driverLocation) ?? toLatLng(pickup)) : toLatLng(pickup);
   const target = toLatLng(activeTarget);
+  const showMissingDriverPosition = stage === "TO_PICKUP" && !toLatLng(driverLocation);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +83,7 @@ export default function DeliveryRouteMap({ stage, pickup, destination, driverLoc
       new window.google.maps.Marker({
         position: current,
         map,
-        title: "Votre position",
+        title: stage === "TO_PICKUP" ? "Votre position" : "Fournisseur (collecte)",
         icon: {
           url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(
             `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="10" fill="#3b82f6" stroke="white" stroke-width="3"/></svg>`,
@@ -140,10 +151,17 @@ export default function DeliveryRouteMap({ stage, pickup, destination, driverLoc
           </a>
         )}
       </div>
-      {!current && (
-        <p className="px-4 pb-3 text-[11px] text-muted-foreground">
-          Votre position n'est pas encore renseignée sur votre compte — la carte affiche uniquement la destination.
-        </p>
+      {showMissingDriverPosition && (
+        <div className="px-4 pb-3 flex items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            Votre position n'est pas encore renseignée sur votre compte — la carte affiche uniquement la destination.
+          </p>
+          {onShareLocation && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={onShareLocation} data-testid="button-share-driver-location">
+              <Navigation className="w-3 h-3" /> Partager ma position
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

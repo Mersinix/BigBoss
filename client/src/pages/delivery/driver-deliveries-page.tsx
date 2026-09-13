@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeliveries, useUpdateDeliveryStatus } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { api } from "@shared/routes";
 import { formatDate } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { Menu, Info, MessageCircle, Package2, MapPin, Navigation } from "lucide-
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails, { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
 import DeliveryRouteMap from "@/components/delivery/delivery-route-map";
+import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import type { DeliveryStatus, DeliveryWithDetails } from "@shared/schema";
 
 // PICKED_UP and DELIVERED are the two physical handoffs (supplier -> driver,
@@ -50,6 +52,8 @@ export default function DriverDeliveriesPage() {
   const [messaging, setMessaging] = useState(false);
   const [codePrompt, setCodePrompt] = useState<{ deliveryId: number; next: DeliveryStatus; label: string } | null>(null);
   const [codeInput, setCodeInput] = useState("");
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const promptedForDeliveryId = useRef<number | null>(null);
 
   const active = deliveries.filter((d) => !["DELIVERED", "CANCELLED"].includes(d.status));
   const completed = deliveries.filter((d) => ["DELIVERED", "CANCELLED"].includes(d.status));
@@ -69,6 +73,32 @@ export default function DriverDeliveriesPage() {
 
   const driverLocation = user?.locationLat && user?.locationLng ? { lat: user.locationLat, lng: user.locationLng } : null;
   const stage = current && (current.status === "PICKED_UP" || current.status === "IN_TRANSIT") ? "TO_DESTINATION" : "TO_PICKUP";
+
+  // The driver's position is only needed for the Étape 1 (Driver → Supplier) leg — once
+  // collected, the route becomes the fixed Supplier → Coffee Owner leg regardless of where the
+  // driver actually is. Ask once per delivery that reaches this state; if the driver already
+  // has a stored position, this never fires (existing data is respected, never re-asked).
+  useEffect(() => {
+    if (!current || stage !== "TO_PICKUP" || driverLocation) return;
+    if (promptedForDeliveryId.current === current.id) return;
+    promptedForDeliveryId.current = current.id;
+    setLocationModalOpen(true);
+  }, [current?.id, stage, driverLocation]);
+
+  const handleShareLocation = () => setLocationModalOpen(true);
+
+  const handleLocationConfirm = async (loc: PickedLocation) => {
+    if (!loc.lat || !loc.lng) { setLocationModalOpen(false); return; }
+    try {
+      await apiRequest("PATCH", "/api/auth/me/location", {
+        address: loc.address, lat: loc.lat, lng: loc.lng, placeId: loc.placeId, details: loc.details,
+      });
+      await queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+      setLocationModalOpen(false);
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message ?? "Impossible d'enregistrer votre position.", variant: "destructive" });
+    }
+  };
 
   const handleAdvance = (deliveryId: number, next: DeliveryStatus, code?: string) => {
     updateStatus.mutate({ deliveryId, status: next, code }, {
@@ -125,7 +155,14 @@ export default function DriverDeliveriesPage() {
         <div className="relative">
           {/* ── Map workspace ── */}
           <div className="relative">
-            <DeliveryRouteMap stage={stage} pickup={current.pickupAddress} destination={current.destinationAddress} driverLocation={driverLocation} mapHeightClassName="h-[70vh] sm:h-56" />
+            <DeliveryRouteMap
+              stage={stage}
+              pickup={current.pickupAddress}
+              destination={current.destinationAddress}
+              driverLocation={driverLocation}
+              mapHeightClassName="h-[70vh] sm:h-56"
+              onShareLocation={handleShareLocation}
+            />
 
             {/* ── Floating overlay controls ── */}
             <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
@@ -260,6 +297,21 @@ export default function DriverDeliveriesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Driver's own live position (Étape 1 — Direction : Fournisseur) — reuses the exact same
+          map-based location picker every other account uses to set its address, seeded from
+          whatever position is already on file so the driver never has to redo this needlessly. */}
+      <LocationPickerModal
+        open={locationModalOpen}
+        mode="account"
+        title="Votre position actuelle"
+        onClose={() => setLocationModalOpen(false)}
+        onConfirm={handleLocationConfirm}
+        initialAddress={user?.locationAddress ?? undefined}
+        initialLat={user?.locationLat}
+        initialLng={user?.locationLng}
+        initialDetails={(user as any)?.locationDetails ?? undefined}
+      />
     </div>
   );
 }

@@ -12,6 +12,11 @@ type Props = {
   destination: GeoLocation | null | undefined;
   /** Driver's latest known location (users.locationLat/Lng). Null/undefined if never set. */
   driverLocation?: { lat: string; lng: string } | null;
+  /** Map div height classes — defaults to the original fixed h-56 everywhere. The Driver's
+   *  own full-screen "Livraisons" map workspace overrides this to be viewport-relative on
+   *  mobile only, so every other caller (Admin/Delivery Company/Supplier delivery detail
+   *  views) keeps its exact existing size. */
+  mapHeightClassName?: string;
 };
 
 function toLatLng(v?: { lat: string; lng: string } | GeoLocation | null): { lat: number; lng: number } | null {
@@ -32,7 +37,7 @@ function toLatLng(v?: { lat: string; lng: string } | GeoLocation | null): { lat:
  * routing API just for this. The "Open in Google Maps" button hands off to the driver's own
  * phone map app for actual turn-by-turn navigation, which is the pragmatic v1 answer.
  */
-export default function DeliveryRouteMap({ stage, pickup, destination, driverLocation }: Props) {
+export default function DeliveryRouteMap({ stage, pickup, destination, driverLocation, mapHeightClassName = "h-56" }: Props) {
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -121,7 +126,7 @@ export default function DeliveryRouteMap({ stage, pickup, destination, driverLoc
         <Navigation className="w-4 h-4" />
         {stage === "TO_PICKUP" ? "Étape 1 — Direction : Fournisseur (collecte)" : "Étape 2 — Direction : Café (livraison)"}
       </div>
-      <div ref={mapDivRef} className="w-full h-56 bg-muted" />
+      <div ref={mapDivRef} className={`w-full bg-muted ${mapHeightClassName}`} />
       <div className="px-4 py-3 flex items-center justify-between gap-3 bg-secondary/30">
         <div className="min-w-0 flex items-start gap-1.5 text-xs text-muted-foreground">
           <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />

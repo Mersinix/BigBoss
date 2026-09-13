@@ -125,7 +125,7 @@ export default function DriverDeliveriesPage() {
         <div className="relative">
           {/* ── Map workspace ── */}
           <div className="relative">
-            <DeliveryRouteMap stage={stage} pickup={current.pickupAddress} destination={current.destinationAddress} driverLocation={driverLocation} />
+            <DeliveryRouteMap stage={stage} pickup={current.pickupAddress} destination={current.destinationAddress} driverLocation={driverLocation} mapHeightClassName="h-[70vh] sm:h-56" />
 
             {/* ── Floating overlay controls ── */}
             <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">

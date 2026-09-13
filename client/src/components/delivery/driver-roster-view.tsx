@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Truck, Plus, Loader2, Search, Phone, User as UserIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getAvatarUrl } from "@/lib/avatar";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { User } from "@shared/schema";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 
@@ -28,6 +29,12 @@ type Props = {
   /** Optional visual override for this view's Cards — omitted by the Supplier caller so
    *  its look stays exactly as-is; only the Delivery Company drivers page passes it. */
   cardClassName?: string;
+  /** Optional DashboardHero accent — when provided (Delivery Company caller only, to match
+   *  its own Véhicules page), the header renders as a DashboardHero instead of the plain
+   *  title/subtitle block. Omitted by the Supplier caller, whose header stays exactly as-is. */
+  heroGradientClass?: string;
+  heroIconBgClass?: string;
+  heroIconTextClass?: string;
 };
 
 /**
@@ -37,7 +44,7 @@ type Props = {
  * pages for what is, underneath, the same Driver model. Professional mapped cards (not a
  * table) with real vehicle/rating/activity information — see task Parts 14/15/34.
  */
-export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gérez vos chauffeurs.", useDrivers, useCreateDriver, ownerType, cardClassName }: Props) {
+export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gérez vos chauffeurs.", useDrivers, useCreateDriver, ownerType, cardClassName, heroGradientClass, heroIconBgClass, heroIconTextClass }: Props) {
   const { data: drivers = [], isLoading } = useDrivers();
   const { data: deliveries = [] } = useDeliveries();
   // Hooks called unconditionally (Rules of Hooks) — the vehicles query is simply disabled
@@ -101,13 +108,25 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+      {heroGradientClass ? (
+        <DashboardHero
+          title={title}
+          subtitle={subtitle}
+          icon={Truck}
+          gradientClass={heroGradientClass}
+          iconBgClass={heroIconBgClass}
+          iconTextClass={heroIconTextClass}
+          action={<Button onClick={() => setOpen(true)} className="gap-1.5" data-testid="button-add-driver"><Plus className="w-4 h-4" /> Ajouter un chauffeur</Button>}
+        />
+      ) : (
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+          </div>
+          <Button onClick={() => setOpen(true)} className="gap-1.5" data-testid="button-add-driver"><Plus className="w-4 h-4" /> Ajouter un chauffeur</Button>
         </div>
-        <Button onClick={() => setOpen(true)} className="gap-1.5" data-testid="button-add-driver"><Plus className="w-4 h-4" /> Ajouter un chauffeur</Button>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className={cardClassName}>

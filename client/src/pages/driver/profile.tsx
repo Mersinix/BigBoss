@@ -107,11 +107,11 @@ export default function DriverProfilePage() {
   };
 
   if (isLoading) {
-    return <div className="flex flex-col gap-5 p-6"><div className="h-8 w-64 bg-muted rounded animate-pulse" /><div className="h-72 w-full rounded-2xl bg-muted animate-pulse" /></div>;
+    return <div className="flex flex-col gap-5"><div className="h-8 w-64 bg-muted rounded animate-pulse" /><div className="h-72 w-full rounded-2xl bg-muted animate-pulse" /></div>;
   }
 
   return (
-    <div className="flex flex-col gap-5 max-w-3xl">
+    <div className="flex flex-col gap-5">
       {/* Preview — opens the exact same modal used everywhere a driver is shown (Supplier →
           Drivers, Espace Livraison → Chauffeurs, Admin → Chauffeurs). Purely informational,
           so nothing here can act against the driver's own account. */}

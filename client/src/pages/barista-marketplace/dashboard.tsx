@@ -65,7 +65,7 @@ export default function BaristaMarketplaceDashboard() {
   );
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Tableau de bord Marketplace Barista"
         subtitle={`Bienvenue, ${user?.name}. Gérez vos offres et demandes.`}

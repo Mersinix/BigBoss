@@ -5,7 +5,7 @@ const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-7
 
 export default function DeliveryCompanyDriversPage() {
   return (
-    <div className="p-6">
+    <div>
       <DriverRosterView
         title="Chauffeurs"
         subtitle="Gérez les chauffeurs de votre entreprise."

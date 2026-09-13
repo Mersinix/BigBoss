@@ -20,7 +20,7 @@ export default function AcademyReviewsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Avis"
         subtitle="Les avis laissés par les Coffee Owners après une formation terminée."

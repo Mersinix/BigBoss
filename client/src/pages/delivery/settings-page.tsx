@@ -17,7 +17,7 @@ const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-7
 export default function DeliveryCompanySettingsPage() {
   const isDark = useEffectiveAccountDarkMode("DELIVERY_COMPANY");
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-2xl">
+    <div className="flex flex-col gap-6">
       <DashboardHero
         title="Paramètres"
         subtitle="Gérez votre compte et vos préférences de notification."

@@ -424,7 +424,7 @@ export default function BaristaAcademyMarketplacePage() {
   const { data: registrations = [], isLoading: registrationsLoading } = useAcademyRegistrations();
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Académie"
         subtitle="Formez-vous auprès des académies BigBoss et suivez vos inscriptions."

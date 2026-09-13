@@ -105,11 +105,11 @@ export default function AcademyProfilePage() {
   const publishedCount = courses.filter((c) => c.isPublished).length;
 
   if (isLoading) {
-    return <div className="flex flex-col gap-5 p-6"><Skeleton className="h-8 w-64" /><Skeleton className="h-40 w-full rounded-2xl" /></div>;
+    return <div className="flex flex-col gap-5"><Skeleton className="h-8 w-64" /><Skeleton className="h-40 w-full rounded-2xl" /></div>;
   }
 
   return (
-    <div className="flex flex-col gap-5 max-w-2xl">
+    <div className="flex flex-col gap-5">
       {/* Preview — opens the Academy Profile details modal (same design reference as the
           Barista modal), read-only here: Report/Message are inert, only Disponibilité
           and browsing related formations stay functional. */}

@@ -109,7 +109,7 @@ export default function AcademyCalendarPage() {
   };
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Calendrier"
         subtitle="Sessions planifiées pour vos formations."

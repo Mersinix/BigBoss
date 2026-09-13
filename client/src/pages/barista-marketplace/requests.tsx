@@ -97,7 +97,7 @@ export default function BaristaRequestsPage() {
   const list = tab === "active" ? active : sorted;
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Demandes reçues"
         subtitle="Répondez aux demandes des cafés pour créer une mission."

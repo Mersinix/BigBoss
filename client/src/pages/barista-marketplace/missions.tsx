@@ -93,7 +93,7 @@ export default function BaristaMissionsPage() {
   const list = tab === "all" ? sorted : sorted.filter((m) => m.status === tab);
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Mes missions"
         subtitle="Missions créées à partir de demandes acceptées."

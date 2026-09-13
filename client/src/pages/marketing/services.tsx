@@ -144,7 +144,7 @@ export default function MarketingServicesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Services"
         subtitle="Gérez les services individuels affichés sur la marketplace /marketing."

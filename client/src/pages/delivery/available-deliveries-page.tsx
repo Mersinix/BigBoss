@@ -31,7 +31,7 @@ export default function AvailableDeliveriesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <DashboardHero
         title="Livraisons disponibles"
         subtitle="Livraisons prêtes à être prises en charge. Première entreprise à accepter obtient la livraison."

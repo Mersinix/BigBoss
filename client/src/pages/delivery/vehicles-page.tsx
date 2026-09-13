@@ -107,7 +107,7 @@ export default function DeliveryVehiclesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <DashboardHero
         title="Véhicules"
         subtitle="Gérez la flotte de votre entreprise et assignez un véhicule à chaque chauffeur."

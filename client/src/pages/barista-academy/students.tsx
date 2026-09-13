@@ -37,7 +37,7 @@ export default function AcademyStudentsPage() {
   }, [registrations, search]);
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Étudiants"
         subtitle="Les participants inscrits à vos formations, par inscription."

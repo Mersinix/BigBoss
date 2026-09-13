@@ -58,7 +58,7 @@ export default function MyDeliveriesPage() {
   const list = view === "active" ? active : completed;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <DashboardHero
         title="Mes livraisons"
         subtitle="Livraisons acceptées par votre entreprise."

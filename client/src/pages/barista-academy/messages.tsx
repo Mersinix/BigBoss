@@ -61,7 +61,7 @@ export default function AcademyMessagesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Messages"
         subtitle="Vos conversations avec les Coffee Owners."

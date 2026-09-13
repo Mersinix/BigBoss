@@ -68,7 +68,7 @@ export default function BaristaAcademyDashboard() {
   const recentReviews = useMemo(() => [...reviews].sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1)).slice(0, 5), [reviews]);
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Tableau de bord Barista Academy"
         subtitle={`Bienvenue, ${user?.name}. Gérez vos formations et étudiants.`}

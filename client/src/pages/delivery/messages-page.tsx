@@ -22,7 +22,7 @@ export default function DeliveryMessagesPage() {
   const returnTo = params.get("returnTo");
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <DashboardHero
         title="Messages"
         subtitle="Discutez avec les cafés et l'administration au sujet des livraisons."

@@ -101,11 +101,11 @@ export default function DeliveryCompanyProfilePage() {
   };
 
   if (isLoading) {
-    return <div className="flex flex-col gap-5 p-6"><div className="h-8 w-64 bg-muted rounded animate-pulse" /><div className="h-72 w-full rounded-2xl bg-muted animate-pulse" /></div>;
+    return <div className="flex flex-col gap-5"><div className="h-8 w-64 bg-muted rounded animate-pulse" /><div className="h-72 w-full rounded-2xl bg-muted animate-pulse" /></div>;
   }
 
   return (
-    <div className="flex flex-col gap-5 max-w-3xl">
+    <div className="flex flex-col gap-5">
       {/* Preview — opens the same modal a Supplier sees when dispatching an order
           (read-only here: Avis/Report/sélection are inert, only Disponibilité stays
           functional), fed by this same real profile data. */}

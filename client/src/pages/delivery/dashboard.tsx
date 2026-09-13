@@ -37,7 +37,7 @@ export default function DeliveryDashboard() {
   const totalFees = completedToday.reduce((s, d) => s + (d.deliveryFee ?? 0), 0);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       <DashboardHero
         title={`Bienvenue, ${user?.name}`}
         subtitle={isCompany ? "Aperçu de vos livraisons et de votre flotte." : "Aperçu de vos livraisons assignées."}

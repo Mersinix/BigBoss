@@ -189,7 +189,7 @@ export default function AcademyCoursesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Formations"
         subtitle="Gérez les formations affichées sur la marketplace Academy."

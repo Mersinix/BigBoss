@@ -21,7 +21,7 @@ export default function AcademyRevenuePage() {
 
   if (isLoading || !data) {
     return (
-      <div className="flex flex-col gap-5 p-6">
+      <div className="flex flex-col gap-5">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
@@ -34,7 +34,7 @@ export default function AcademyRevenuePage() {
   const chartData = data.history.map((h) => ({ month: h.month.slice(5), total: h.totalCents / 100 }));
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Revenus"
         subtitle="Revenus générés par vos formations terminées."

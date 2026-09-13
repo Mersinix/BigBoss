@@ -103,7 +103,7 @@ export default function AcademyRegistrationsPage() {
   const list = tab === "active" ? active : sorted;
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5">
       <DashboardHero
         title="Inscriptions"
         subtitle="Gérez les inscriptions des Coffee Owners à vos formations."

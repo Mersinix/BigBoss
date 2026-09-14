@@ -21,6 +21,7 @@ import {
   baristaWorkHistory, baristaReports,
   academyProfiles, academyCourses, academyCourseSessions, academyRegistrations,
   promotions, promotionUsage,
+  discountCodes, discountCodeUsage,
   conversations, conversationParticipants, messages,
   notifications,
   orderReturns,
@@ -466,6 +467,17 @@ export interface IStorage {
   evaluateCartPromotions(itemsBySupplier: Map<number, import("./promotions-engine").PromoCartItem[]>, cafeId: number): Promise<import("@shared/schema").CartPromotionEvaluation>;
   // Record usage after an order is created
   recordPromotionUsage(promotionId: number, cafeId: number, orderId: number, discountAmount: number): Promise<void>;
+
+  // Discount Codes — separate mechanism from Promotions (see shared/schema.ts note)
+  getDiscountCodes(supplierId: number): Promise<import("@shared/schema").DiscountCode[]>;
+  getDiscountCode(id: number, supplierId?: number): Promise<import("@shared/schema").DiscountCode | undefined>;
+  getDiscountCodeByCode(code: string): Promise<import("@shared/schema").DiscountCode | undefined>;
+  createDiscountCode(data: import("@shared/schema").InsertDiscountCode): Promise<import("@shared/schema").DiscountCode>;
+  updateDiscountCode(id: number, supplierId: number, updates: Partial<import("@shared/schema").InsertDiscountCode>): Promise<import("@shared/schema").DiscountCode | undefined>;
+  getDiscountCodeStats(supplierId: number): Promise<{ active: number; inactive: number; expired: number; usageLimitReached: number; totalRedemptions: number; totalDiscount: number }>;
+  getDiscountCodeUsageHistory(discountCodeId: number): Promise<import("@shared/schema").DiscountCodeUsage[]>;
+  validateDiscountCode(code: string, supplierId: number, subtotal: number): Promise<import("@shared/schema").DiscountCodeValidationResult>;
+  recordDiscountCodeUsage(discountCodeId: number, cafeId: number, orderId: number, subOrderId: number, discountAmount: number): Promise<void>;
   // Get order count for a cafe from a supplier (for first-order promos)
   getCafeOrderCountForSupplier(cafeId: number, supplierId: number): Promise<number>;
 }
@@ -2362,6 +2374,9 @@ export class DatabaseStorage implements IStorage {
       courierInstructions?: string;
       packItems?: ResolvedPackOrderItem[];
       promotionResults?: import("@shared/schema").SupplierPromotionResult[];
+      // At most one applied Discount Code — it belongs to exactly one supplier (see
+      // shared/schema.ts note), so it only ever affects that supplier's own sub-order.
+      discountCodeResult?: import("@shared/schema").DiscountCodeValidationResult & { supplierId: number };
       priority?: string;
       scheduledAt?: Date;
     },
@@ -2371,10 +2386,11 @@ export class DatabaseStorage implements IStorage {
     // Build a discount map by supplierId for fast lookup
     const discountBySupplierId = new Map<number, import("@shared/schema").SupplierPromotionResult>();
     for (const r of promoResults) discountBySupplierId.set(r.supplierId, r);
+    const discountCodeResult = opts?.discountCodeResult?.valid ? opts.discountCodeResult : undefined;
 
     const rawTotal = cartItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
       + packOrderItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-    const totalDiscount = promoResults.reduce((s, r) => s + r.discountAmount, 0);
+    const totalDiscount = promoResults.reduce((s, r) => s + r.discountAmount, 0) + (discountCodeResult?.discountAmount ?? 0);
     const totalAmount = Math.max(0, rawTotal - totalDiscount);
     const supplierIds = Array.from(new Set([...cartItems.map((i) => i.supplierId), ...packOrderItems.map((i) => i.supplierId)]));
     const primarySupplierId = supplierIds.length === 1 ? supplierIds[0] : null;
@@ -2453,7 +2469,11 @@ export class DatabaseStorage implements IStorage {
             + supplierPackItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
           const promoResult = discountBySupplierId.get(sid);
           const discountAmount = promoResult?.discountAmount ?? 0;
-          const subtotal = Math.max(0, rawSubtotal - discountAmount);
+          // A Discount Code only ever targets one supplier — apply it exclusively to that
+          // supplier's own sub-order, on top of any promotion discount already computed above.
+          const codeForThisSupplier = discountCodeResult?.supplierId === sid ? discountCodeResult : undefined;
+          const discountCodeAmount = codeForThisSupplier?.discountAmount ?? 0;
+          const subtotal = Math.max(0, rawSubtotal - discountAmount - discountCodeAmount);
           const supplierName = supplierItems[0]?.supplierName ?? supplierPackItems[0]?.supplierName ?? 'Unknown';
           const subOrderData: any = {
             orderId: order.id,
@@ -2463,14 +2483,33 @@ export class DatabaseStorage implements IStorage {
             discountAmount,
             freeShipping: promoResult?.freeShipping ?? false,
             giftInfo: promoResult?.giftInfo ?? null,
+            discountCodeAmount,
           };
           if (promoResult?.promotionId) {
             subOrderData.promotionId = promoResult.promotionId;
             subOrderData.promotionName = promoResult.promotionName;
             subOrderData.promotionType = promoResult.promotionType;
+          }
+          if (codeForThisSupplier?.discountCodeId) {
+            subOrderData.discountCodeId = codeForThisSupplier.discountCodeId;
+            subOrderData.discountCodeSnapshot = codeForThisSupplier.code;
+          }
+          if (promoResult?.promotionId || codeForThisSupplier?.discountCodeId) {
             subOrderData.originalSubtotal = rawSubtotal;
           }
           const [so] = await tx.insert(subOrders).values(subOrderData).returning();
+          if (codeForThisSupplier?.discountCodeId && discountCodeAmount > 0) {
+            await tx.insert(discountCodeUsage).values({
+              discountCodeId: codeForThisSupplier.discountCodeId,
+              cafeId,
+              orderId: order.id,
+              subOrderId: so.id,
+              discountAmount: discountCodeAmount,
+            });
+            await tx.update(discountCodes)
+              .set({ usageCount: sql`${discountCodes.usageCount} + 1` })
+              .where(eq(discountCodes.id, codeForThisSupplier.discountCodeId));
+          }
           for (const item of supplierItems) {
             await tx.insert(orderItems).values({
               orderId: order.id,
@@ -9048,6 +9087,99 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(promotionUsage)
       .where(eq(promotionUsage.promotionId, promotionId))
       .orderBy(desc(promotionUsage.createdAt));
+  }
+
+  // ── Discount Codes ───────────────────────────────────────────────────────────
+
+  async getDiscountCodes(supplierId: number): Promise<import("@shared/schema").DiscountCode[]> {
+    return db.select().from(discountCodes)
+      .where(eq(discountCodes.supplierId, supplierId))
+      .orderBy(desc(discountCodes.createdAt));
+  }
+
+  async getDiscountCode(id: number, supplierId?: number): Promise<import("@shared/schema").DiscountCode | undefined> {
+    const conds = [eq(discountCodes.id, id)];
+    if (supplierId != null) conds.push(eq(discountCodes.supplierId, supplierId));
+    const [row] = await db.select().from(discountCodes).where(and(...conds));
+    return row;
+  }
+
+  async getDiscountCodeByCode(code: string): Promise<import("@shared/schema").DiscountCode | undefined> {
+    const [row] = await db.select().from(discountCodes).where(eq(discountCodes.code, code.trim().toUpperCase()));
+    return row;
+  }
+
+  async createDiscountCode(data: import("@shared/schema").InsertDiscountCode): Promise<import("@shared/schema").DiscountCode> {
+    const [row] = await db.insert(discountCodes).values({ ...data, code: data.code.trim().toUpperCase() } as any).returning();
+    return row;
+  }
+
+  async updateDiscountCode(id: number, supplierId: number, updates: Partial<import("@shared/schema").InsertDiscountCode>): Promise<import("@shared/schema").DiscountCode | undefined> {
+    const safeUpdates: any = { ...updates, updatedAt: new Date() };
+    if (typeof safeUpdates.code === 'string') safeUpdates.code = safeUpdates.code.trim().toUpperCase();
+    const [row] = await db.update(discountCodes)
+      .set(safeUpdates)
+      .where(and(eq(discountCodes.id, id), eq(discountCodes.supplierId, supplierId)))
+      .returning();
+    return row;
+  }
+
+  async getDiscountCodeStats(supplierId: number): Promise<{ active: number; inactive: number; expired: number; usageLimitReached: number; totalRedemptions: number; totalDiscount: number }> {
+    const all = await db.select().from(discountCodes).where(eq(discountCodes.supplierId, supplierId));
+    const now = new Date();
+    let active = 0, inactive = 0, expired = 0, usageLimitReached = 0, totalRedemptions = 0;
+    for (const c of all) {
+      totalRedemptions += c.usageCount;
+      if (!c.isActive) { inactive++; continue; }
+      if (c.expiresAt && new Date(c.expiresAt) < now) { expired++; continue; }
+      if (c.maxUses != null && c.usageCount >= c.maxUses) { usageLimitReached++; continue; }
+      active++;
+    }
+    const usageRows = all.length
+      ? await db.select().from(discountCodeUsage).where(inArray(discountCodeUsage.discountCodeId, all.map(c => c.id)))
+      : [];
+    const totalDiscount = usageRows.reduce((s, r) => s + r.discountAmount, 0);
+    return { active, inactive, expired, usageLimitReached, totalRedemptions, totalDiscount };
+  }
+
+  async getDiscountCodeUsageHistory(discountCodeId: number): Promise<import("@shared/schema").DiscountCodeUsage[]> {
+    return db.select().from(discountCodeUsage)
+      .where(eq(discountCodeUsage.discountCodeId, discountCodeId))
+      .orderBy(desc(discountCodeUsage.createdAt));
+  }
+
+  // Validates a code against ONE supplier's subtotal — a code always belongs to exactly one
+  // supplier, so it can never discount another supplier's items in a multi-supplier cart.
+  async validateDiscountCode(code: string, supplierId: number, subtotal: number): Promise<import("@shared/schema").DiscountCodeValidationResult> {
+    const trimmed = code.trim();
+    if (!trimmed) return { valid: false, message: "Veuillez entrer un code." };
+    const found = await this.getDiscountCodeByCode(trimmed);
+    if (!found) return { valid: false, message: "Ce code n'existe pas." };
+    if (found.supplierId !== supplierId) {
+      return { valid: false, message: "Ce code n'est pas applicable aux articles de ce fournisseur dans votre panier." };
+    }
+    if (!found.isActive) return { valid: false, message: "Ce code n'est plus actif." };
+    if (found.expiresAt && new Date(found.expiresAt) < new Date()) {
+      return { valid: false, message: "Ce code a expiré." };
+    }
+    if (found.maxUses != null && found.usageCount >= found.maxUses) {
+      return { valid: false, message: "Ce code a atteint sa limite d'utilisation." };
+    }
+    if (found.minimumOrderAmount != null && subtotal < found.minimumOrderAmount) {
+      return { valid: false, message: "Le montant minimum requis pour ce code n'est pas atteint." };
+    }
+    const raw = found.discountType === 'PERCENTAGE'
+      ? Math.round(subtotal * found.discountValue / 10000)
+      : found.discountValue;
+    const discountAmount = Math.min(raw, subtotal);
+    return { valid: true, discountCodeId: found.id, code: found.code, supplierId: found.supplierId, discountAmount };
+  }
+
+  async recordDiscountCodeUsage(discountCodeId: number, cafeId: number, orderId: number, subOrderId: number, discountAmount: number): Promise<void> {
+    await db.insert(discountCodeUsage).values({ discountCodeId, cafeId, orderId, subOrderId, discountAmount });
+    await db.update(discountCodes)
+      .set({ usageCount: sql`${discountCodes.usageCount} + 1` })
+      .where(eq(discountCodes.id, discountCodeId));
   }
 
   async getActivePromotionsForSupplier(supplierId: number, cafeId?: number): Promise<import("@shared/schema").Promotion[]> {

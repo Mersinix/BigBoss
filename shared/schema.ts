@@ -249,6 +249,12 @@ export const subOrders = pgTable("sub_orders", {
   discountAmount: integer("discount_amount").notNull().default(0),
   freeShipping: boolean("free_shipping").notNull().default(false),
   giftInfo: jsonb("gift_info"),
+  // Discount Code snapshot — kept fully separate from the promotion fields above so a
+  // historical order preserves exactly which code was used even if it's later edited/
+  // deactivated/deleted. Snapshotted at order time, same principle as promotionName/Type.
+  discountCodeId: integer("discount_code_id"),
+  discountCodeSnapshot: text("discount_code_snapshot"),
+  discountCodeAmount: integer("discount_code_amount").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1817,6 +1823,46 @@ export const promotionUsage = pgTable("promotion_usage", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ── Discount Codes ─────────────────────────────────────────────────────────────
+// A completely separate mechanism from Promotions above: Promotions apply
+// automatically based on eligibility rules, Discount Codes are entered by the
+// Coffee Owner at checkout. Never merge/mix the two — see promotions-engine.ts
+// and discount-codes-engine.ts, each the single source of truth for its own
+// system, both feeding independent columns on subOrders so a historical order
+// always preserves exactly which promotion AND/OR which code applied to it.
+
+export const discountCodeTypeEnum = pgEnum('discount_code_type', ['PERCENTAGE', 'FIXED_AMOUNT']);
+
+export const discountCodes = pgTable("discount_codes", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").notNull(),
+  // Unique platform-wide (not just per-supplier) — a Coffee Owner enters one code with no
+  // other context, so two suppliers issuing the same string would be unresolvable ambiguity.
+  code: text("code").notNull().unique(),
+  discountType: discountCodeTypeEnum("discount_type").notNull(),
+  // Same unit convention as promotions.discountValue: basis points*100 for PERCENTAGE
+  // (2000 = 20%), millimes (currency's smallest unit) for FIXED_AMOUNT.
+  discountValue: integer("discount_value").notNull().default(0),
+  maxUses: integer("max_uses"),               // null = unlimited
+  usageCount: integer("usage_count").notNull().default(0),
+  minimumOrderAmount: integer("minimum_order_amount"), // millimes; null = no minimum
+  expiresAt: timestamp("expires_at"),         // null = never expires
+  isActive: boolean("is_active").notNull().default(true), // supplier's own on/off switch
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Per-order usage tracking for discount codes (enforces maxUses, and preserves history)
+export const discountCodeUsage = pgTable("discount_code_usage", {
+  id: serial("id").primaryKey(),
+  discountCodeId: integer("discount_code_id").notNull(),
+  cafeId: integer("cafe_id").notNull(),
+  orderId: integer("order_id").notNull(),
+  subOrderId: integer("sub_order_id").notNull(),
+  discountAmount: integer("discount_amount").notNull().default(0), // millimes
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ── Relations ────────────────────────────────────────────────────────────────
 
 // ── Messaging ────────────────────────────────────────────────────────────────
@@ -2018,6 +2064,16 @@ export const promotionUsageRelations = relations(promotionUsage, ({ one }) => ({
   cafe: one(users, { fields: [promotionUsage.cafeId], references: [users.id] }),
 }));
 
+export const discountCodesRelations = relations(discountCodes, ({ one, many }) => ({
+  supplier: one(users, { fields: [discountCodes.supplierId], references: [users.id] }),
+  usage: many(discountCodeUsage),
+}));
+
+export const discountCodeUsageRelations = relations(discountCodeUsage, ({ one }) => ({
+  discountCode: one(discountCodes, { fields: [discountCodeUsage.discountCodeId], references: [discountCodes.id] }),
+  cafe: one(users, { fields: [discountCodeUsage.cafeId], references: [users.id] }),
+}));
+
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   createdBy: one(users, { fields: [conversations.createdByUserId], references: [users.id] }),
   participants: many(conversationParticipants),
@@ -2085,6 +2141,9 @@ export const insertDeliveryOpportunitySchema = createInsertSchema(deliveryOpport
 
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });
+
+export const insertDiscountCodeSchema = createInsertSchema(discountCodes).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
+export const insertDiscountCodeUsageSchema = createInsertSchema(discountCodeUsage).omit({ id: true, createdAt: true });
 
 export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, lastMessageAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
@@ -2325,6 +2384,28 @@ export type InsertPromotionUsage = z.infer<typeof insertPromotionUsageSchema>;
 export type PromotionType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'BUY_X_GET_Y' | 'QUANTITY_TIER' | 'CATEGORY_DISCOUNT' | 'FREE_SHIPPING' | 'GIFT' | 'MIN_ORDER_AMOUNT' | 'MIN_QUANTITY' | 'FIRST_ORDER';
 export type PromotionStatus = 'ACTIVE' | 'PAUSED' | 'SCHEDULED' | 'EXPIRED';
 export type PromotionTargetType = 'ALL' | 'PRODUCTS' | 'CATEGORIES';
+
+export type DiscountCode = typeof discountCodes.$inferSelect;
+export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
+export type DiscountCodeUsage = typeof discountCodeUsage.$inferSelect;
+export type InsertDiscountCodeUsage = z.infer<typeof insertDiscountCodeUsageSchema>;
+export type DiscountCodeType = 'PERCENTAGE' | 'FIXED_AMOUNT';
+
+// Effective status is always computed (never stored) — same principle as Promotions'
+// getEffectiveStatus: a code can be ACTIVE, manually deactivated (INACTIVE), EXPIRED
+// (past expiresAt), or USAGE_LIMIT_REACHED (usageCount >= maxUses).
+export type DiscountCodeEffectiveStatus = 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'USAGE_LIMIT_REACHED';
+
+// Result of server-side discount code validation, returned by both the cart-preview
+// endpoint and used internally at order-creation time.
+export type DiscountCodeValidationResult = {
+  valid: boolean;
+  message?: string;
+  discountCodeId?: number;
+  code?: string;
+  supplierId?: number;
+  discountAmount?: number; // millimes
+};
 
 export type QuantityTier = { minQty: number; maxQty?: number; pricePerUnit: number };
 export type GiftInfo = { description: string; quantity: number };
@@ -2828,6 +2909,9 @@ export type CreateOrderRequest = {
   courierInstructions?: string;
   priority?: OrderPriority;
   scheduledAt?: string; // ISO datetime string; undefined / null = immediate
+  // A single Discount Code entered by the Coffee Owner at checkout — belongs to exactly
+  // one Supplier, so it is only ever applied to that supplier's own sub-order.
+  discountCode?: string;
 };
 
 export type UpdateOrderStatusRequest = { status: typeof orders.$inferSelect.status; deliveryId?: number };

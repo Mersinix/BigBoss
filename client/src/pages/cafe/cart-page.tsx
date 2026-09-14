@@ -8,8 +8,10 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { usePromotionEvaluation } from "@/hooks/use-promotion-evaluation";
+import { useValidateDiscountCode } from "@/hooks/use-discount-codes";
 import { usePackAvailability, isPackFrozen, PACK_AVAILABILITY_KEY } from "@/hooks/use-pack-availability";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -18,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
   Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck, Sun, Moon,
-  CreditCard, Banknote, Smartphone, Landmark, Pencil, AlertTriangle
+  CreditCard, Banknote, Smartphone, Landmark, Pencil, AlertTriangle, X, Ticket
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
@@ -140,6 +142,14 @@ export default function CartPage() {
   const [isPreparingOrder, setIsPreparingOrder] = useState(false);
   const fmt = useFormatCurrency();
 
+  // Discount Codes — a single code the Coffee Owner types in, completely separate from the
+  // Promotions above. Resolves to whichever one supplier issued it (see /validate route);
+  // never mixed with Promotion state, and only ever discounts that one supplier's own group.
+  const [discountCodeInput, setDiscountCodeInput] = useState("");
+  const [appliedDiscountCode, setAppliedDiscountCode] = useState<{ code: string; supplierId: number; discountAmount: number } | null>(null);
+  const [discountCodeError, setDiscountCodeError] = useState<string | null>(null);
+  const validateDiscountCode = useValidateDiscountCode();
+
   // ── Theme tokens ─────────────────────────────────────────────────────────────
   const dk          = isDark;
   const pageBg      = dk ? "bg-gray-900"                    : "bg-gray-50";
@@ -191,12 +201,41 @@ export default function CartPage() {
   // content" (must stay visible), but there is nothing left to actually order.
   const hasOrderableShop = orderableItems.length > 0 || orderablePackItems.length > 0;
   const hasPrint = printItems.length > 0;
-  const grandTotal = totalShop + totalPack + totalPrint - promoEval.totalDiscount;
+  const discountCodeAmount = appliedDiscountCode?.discountAmount ?? 0;
+  const grandTotal = totalShop + totalPack + totalPrint - promoEval.totalDiscount - discountCodeAmount;
 
   const handleDeliveryConfirm = (loc: PickedLocation) => {
     setCustomDeliveryAddress(pickedToGeoLocation(loc));
     setUseSavedAddress(false);
     setDeliveryPickerOpen(false);
+  };
+
+  const handleApplyDiscountCode = () => {
+    const code = discountCodeInput.trim();
+    if (!code) return;
+    setDiscountCodeError(null);
+    validateDiscountCode.mutate(
+      { code, items: orderableItems.map(i => ({ supplierId: i.supplierId, quantity: i.quantity, unitPrice: i.unitPrice })) },
+      {
+        onSuccess: (result) => {
+          if (result.valid && result.discountCodeId != null && result.supplierId != null) {
+            setAppliedDiscountCode({ code: result.code ?? code.toUpperCase(), supplierId: result.supplierId, discountAmount: result.discountAmount ?? 0 });
+            setDiscountCodeError(null);
+            toast({ title: "Code appliqué", description: `−${fmt(result.discountAmount ?? 0)}` });
+          } else {
+            setAppliedDiscountCode(null);
+            setDiscountCodeError(result.message ?? "Code invalide.");
+          }
+        },
+        onError: (err: any) => { setAppliedDiscountCode(null); setDiscountCodeError(err?.message ?? "Erreur lors de la validation du code."); },
+      }
+    );
+  };
+
+  const handleRemoveDiscountCode = () => {
+    setAppliedDiscountCode(null);
+    setDiscountCodeInput("");
+    setDiscountCodeError(null);
   };
 
   // Open the confirmation modal (with address validation)
@@ -357,6 +396,13 @@ export default function CartPage() {
       courierInstructions: courierInstructions.trim() || undefined,
       priority: opts.priority,
       scheduledAt: opts.scheduledAt,
+      // Only forward the applied code if its supplier's items are actually part of this
+      // specific submission (opts.modifiedItems may be a narrower draft than the full cart —
+      // see OrderConfirmationModal) — otherwise the server would correctly reject it as
+      // "not applicable," failing the whole order for something the Coffee Owner didn't ask for.
+      discountCode: appliedDiscountCode && opts.modifiedItems.some(i => i.supplierId === appliedDiscountCode.supplierId)
+        ? appliedDiscountCode.code
+        : undefined,
     };
     createOrder.mutate(request, {
       onSuccess: (newOrder: any) => {
@@ -377,6 +423,8 @@ export default function CartPage() {
         }
         setCourierInstructions("");
         setCustomDeliveryAddress(null);
+        setAppliedDiscountCode(null);
+        setDiscountCodeInput("");
         setConfirmOpen(false);
         // Open My Account → Orders tab and auto-show the new order
         if (newOrder?.id) {
@@ -824,6 +872,54 @@ export default function CartPage() {
                     <p className={`text-xs ${textMuted}`}>Ces instructions s'appliquent uniquement à cette commande.</p>
                   </div>
 
+                  {/* Discount Code — separate mechanism from Promotions above, entered by the
+                      Coffee Owner. Resolves to whichever one supplier issued it, so it only
+                      ever discounts that supplier's own group below. */}
+                  <div className={`space-y-2 border-t pt-4 ${borderClr}`}>
+                    <label htmlFor="discount-code-input" className={`${labelCls} flex items-center gap-2`}>
+                      <Ticket className="w-4 h-4 text-amber-500" /> Code promo
+                    </label>
+                    {appliedDiscountCode ? (
+                      <div className={`flex items-center justify-between gap-2 rounded-2xl border p-3 ${dk ? "bg-green-500/10 border-green-500/25" : "bg-green-50 border-green-100"}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                          <div className="min-w-0">
+                            <p className={`text-sm font-semibold truncate ${textPrimary}`}>{appliedDiscountCode.code}</p>
+                            <p className="text-xs text-green-500">−{fmt(appliedDiscountCode.discountAmount)}</p>
+                          </div>
+                        </div>
+                        <button type="button" onClick={handleRemoveDiscountCode} className={textMuted} data-testid="button-remove-discount-code">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          id="discount-code-input"
+                          value={discountCodeInput}
+                          onChange={(e) => { setDiscountCodeInput(e.target.value.toUpperCase()); setDiscountCodeError(null); }}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleApplyDiscountCode(); } }}
+                          placeholder="Ex: SPRING15"
+                          className={`font-mono ${inputCls}`}
+                          data-testid="input-discount-code"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleApplyDiscountCode}
+                          disabled={!discountCodeInput.trim() || validateDiscountCode.isPending}
+                          className="shrink-0"
+                          data-testid="button-apply-discount-code"
+                        >
+                          {validateDiscountCode.isPending ? "…" : "Appliquer"}
+                        </Button>
+                      </div>
+                    )}
+                    {discountCodeError && (
+                      <p className="text-xs text-destructive flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" />{discountCodeError}</p>
+                    )}
+                  </div>
+
                   <div className={`space-y-2 text-sm border-t pt-4 ${borderClr}`}>
                     {orderableSupplierEntries.map(([sid, group]) => {
                       const supTotal = group.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
@@ -850,6 +946,12 @@ export default function CartPage() {
                               <Gift className="w-3 h-3" /> {(promoResult.giftInfo as any).description ?? 'Free gift'} included
                             </div>
                           )}
+                          {appliedDiscountCode && appliedDiscountCode.supplierId === Number(sid) && (
+                            <div className="flex justify-between text-green-500 text-xs mt-0.5">
+                              <span className="flex items-center gap-1"><Ticket className="w-3 h-3" />{appliedDiscountCode.code}</span>
+                              <span>−{fmt(appliedDiscountCode.discountAmount)}</span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -865,9 +967,15 @@ export default function CartPage() {
                         <span>−{fmt(promoEval.totalDiscount)}</span>
                       </div>
                     )}
+                    {discountCodeAmount > 0 && (
+                      <div className={`flex justify-between text-green-500 font-medium ${promoEval.totalDiscount > 0 ? "" : `border-t pt-2 ${dk ? "border-green-500/20" : "border-green-100"}`}`}>
+                        <span>Code promo savings</span>
+                        <span>−{fmt(discountCodeAmount)}</span>
+                      </div>
+                    )}
                     <div className={`border-t pt-3 flex justify-between items-center font-bold ${borderClr}`}>
                       <span className={textPrimary}>Total SHOP</span>
-                      <span className="text-xl text-amber-500">{fmt(Math.max(0, totalShop + totalPack - promoEval.totalDiscount))}</span>
+                      <span className="text-xl text-amber-500">{fmt(Math.max(0, totalShop + totalPack - promoEval.totalDiscount - discountCodeAmount))}</span>
                     </div>
                   </div>
 
@@ -968,6 +1076,8 @@ export default function CartPage() {
         deliveryAddress={activeDeliveryAddress}
         courierInstructions={courierInstructions}
         promoEval={promoEval}
+        discountCodeAmount={discountCodeAmount}
+        discountCodeLabel={appliedDiscountCode?.code}
         isSubmitting={createOrder.isPending || isPreparingOrder}
         onConfirm={handleConfirmOrder}
       />

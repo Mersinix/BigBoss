@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Printer, X, Box, Layers, Store, User } from "lucide-react";
+import { FileText, Printer, X, Box, Layers, Store, User, Ticket } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -193,6 +193,12 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
                   <div className="px-4 pb-2.5 flex justify-between text-xs text-green-500 font-medium">
                     <span>Réduction ({sub.promotionName ?? "Promotion"})</span>
                     <span>−{fmt(sub.discountAmount)}</span>
+                  </div>
+                )}
+                {(sub as any).discountCodeAmount > 0 && (
+                  <div className="px-4 pb-2.5 flex justify-between text-xs text-green-500 font-medium">
+                    <span className="flex items-center gap-1"><Ticket className="w-3 h-3" />Code {(sub as any).discountCodeSnapshot ?? "promo"}</span>
+                    <span>−{fmt((sub as any).discountCodeAmount)}</span>
                   </div>
                 )}
               </div>

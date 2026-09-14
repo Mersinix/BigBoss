@@ -23,6 +23,7 @@ const PACK_EVENTS = ["pack_updated"];
 const PRODUCT_EVENTS = ["product_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
 const PROMOTION_EVENTS = ["promotion_updated"];
+const DISCOUNT_CODE_EVENTS = ["discount_code_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "suborder_items_cancelled", "order_deleted"];
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 const DELIVERY_ECOSYSTEM_EVENTS = ["vehicle_updated", "delivery_pricing_updated", "driver_review_created", "delivery_opportunity_updated"];
@@ -205,6 +206,10 @@ export function useRealtime(userId?: number) {
             invalidateMarketplace(qc);
             qc.invalidateQueries({ queryKey: ["/api/marketplace/promotions"] });
             qc.invalidateQueries({ queryKey: ["/api/stores"] });
+          }
+          if (DISCOUNT_CODE_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/discount-codes"] });
+            qc.invalidateQueries({ queryKey: ["/api/discount-codes/stats"] });
           }
           if (event === 'suborder_rejected') {
             // Restore rejected items directly into the cafe owner's cart, tagged with

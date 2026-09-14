@@ -3784,7 +3784,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }).optional(),
       }).optional();
 
-      const { items, packItems, deliveryAddress, deliveryMethod, paymentMethod, courierInstructions, priority, scheduledAt } = z.object({
+      const { items, packItems, deliveryAddress, deliveryMethod, paymentMethod, courierInstructions, priority, scheduledAt, discountCode } = z.object({
         items: z.array(z.object({
           listingId: z.number(),
           productId: z.number(),
@@ -3819,6 +3819,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         courierInstructions: z.string().max(500).optional(),
         priority: z.enum(['NORMAL', 'HIGH', 'URGENT']).optional(),
         scheduledAt: z.string().datetime().optional(),
+        discountCode: z.string().trim().min(1).max(40).optional(),
       }).parse(req.body);
 
       if (paymentMethod !== "CASH_ON_DELIVERY") {
@@ -3856,6 +3857,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ? await storage.evaluateCartPromotions(itemsBySupplier, cafeId)
         : { bySupplier: [], totalOriginal: 0, totalDiscount: 0, totalFinal: 0 };
 
+      // ── Discount Code validation (separate mechanism from Promotions) ─────
+      // Always re-validated here server-side (never trusted from an earlier /validate
+      // preview call) so a code that expired/got deactivated/hit its limit between the
+      // preview and checkout can never slip through.
+      let discountCodeResult: (import("@shared/schema").DiscountCodeValidationResult & { supplierId: number }) | undefined;
+      if (discountCode) {
+        const found = await storage.getDiscountCodeByCode(discountCode);
+        const supplierItems = found ? itemsBySupplier.get(found.supplierId) : undefined;
+        if (!found || !supplierItems) {
+          return res.status(400).json({ message: "Ce code n'est pas applicable aux articles de votre panier." });
+        }
+        const supplierSubtotal = supplierItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+        const validation = await storage.validateDiscountCode(discountCode, found.supplierId, supplierSubtotal);
+        if (!validation.valid) {
+          return res.status(400).json({ message: validation.message ?? "Code promo invalide." });
+        }
+        discountCodeResult = { ...validation, supplierId: found.supplierId };
+      }
+
       const order = await storage.createOrder(cafeId, validatedItems, {
         deliveryAddress: normalizedDelivery,
         deliveryMethod,
@@ -3863,6 +3883,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         courierInstructions,
         packItems: validatedPackItems,
         promotionResults: promoEval.bySupplier,
+        discountCodeResult,
         priority: priority ?? 'NORMAL',
         scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
       });
@@ -3872,6 +3893,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (result.promotionId && result.discountAmount > 0) {
           await storage.recordPromotionUsage(result.promotionId, cafeId, order.id, result.discountAmount);
         }
+      }
+
+      // Discount code usage was already recorded inside storage.createOrder's own
+      // transaction — just let the owning supplier's Discount Codes page know to refresh.
+      if (discountCodeResult?.discountCodeId) {
+        broadcast('discount_code_updated', { supplierId: discountCodeResult.supplierId, discountCodeId: discountCodeResult.discountCodeId });
       }
 
       // Notify all involved suppliers about the new order
@@ -7568,6 +7595,131 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         endDate: p.endDate, targetType: p.targetType,
       })));
     } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Discount Codes (Supplier) ──────────────────────────────────────────────
+  // Completely separate mechanism from Promotions above — a code the Coffee Owner types
+  // in at checkout, rather than an automatically-applied eligibility rule. See the note
+  // on shared/schema.ts's discountCodes table.
+
+  // GET /api/discount-codes — supplier's own codes list
+  app.get('/api/discount-codes', requireSupplier, async (req: any, res) => {
+    try {
+      const codes = await storage.getDiscountCodes(req.supplier.id);
+      res.json(codes);
+    } catch { res.status(500).json({ message: 'Error fetching discount codes' }); }
+  });
+
+  // GET /api/discount-codes/stats — supplier dashboard stats
+  app.get('/api/discount-codes/stats', requireSupplier, async (req: any, res) => {
+    try {
+      const stats = await storage.getDiscountCodeStats(req.supplier.id);
+      res.json(stats);
+    } catch { res.status(500).json({ message: 'Error fetching discount code stats' }); }
+  });
+
+  // GET /api/discount-codes/:id/usage — redemption history for one code
+  app.get('/api/discount-codes/:id/usage', requireSupplier, async (req: any, res) => {
+    try {
+      const code = await storage.getDiscountCode(parseInt(req.params.id), req.supplier.id);
+      if (!code) return res.status(404).json({ message: 'Not found' });
+      const usage = await storage.getDiscountCodeUsageHistory(code.id);
+      res.json(usage);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // POST /api/discount-codes — create
+  app.post('/api/discount-codes', requireSupplier, async (req: any, res) => {
+    try {
+      const body = z.object({
+        code: z.string().trim().min(3).max(40),
+        discountType: z.enum(['PERCENTAGE', 'FIXED_AMOUNT']),
+        discountValue: z.number().min(0),
+        maxUses: z.number().int().min(1).nullable().optional(),
+        minimumOrderAmount: z.number().min(0).nullable().optional(),
+        expiresAt: z.string().datetime().nullable().optional(),
+        isActive: z.boolean().optional(),
+      }).parse(req.body);
+      const code = await storage.createDiscountCode({
+        ...body,
+        supplierId: req.supplier.id,
+        maxUses: body.maxUses ?? null,
+        minimumOrderAmount: body.minimumOrderAmount ?? null,
+        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        isActive: body.isActive ?? true,
+      } as any);
+      broadcast('discount_code_updated', { supplierId: req.supplier.id, discountCodeId: code.id });
+      res.status(201).json(code);
+    } catch (err: any) {
+      // Unique constraint violation on `code` surfaces as a Postgres error — give a clear message.
+      const message = /unique/i.test(err?.message ?? '') ? 'Ce code est déjà utilisé.' : (err?.message ?? 'Error creating discount code');
+      res.status(400).json({ message });
+    }
+  });
+
+  // PUT /api/discount-codes/:id — update
+  app.put('/api/discount-codes/:id', requireSupplier, async (req: any, res) => {
+    try {
+      const body = z.object({
+        code: z.string().trim().min(3).max(40).optional(),
+        discountType: z.enum(['PERCENTAGE', 'FIXED_AMOUNT']).optional(),
+        discountValue: z.number().min(0).optional(),
+        maxUses: z.number().int().min(1).nullable().optional(),
+        minimumOrderAmount: z.number().min(0).nullable().optional(),
+        expiresAt: z.string().datetime().nullable().optional(),
+        isActive: z.boolean().optional(),
+      }).parse(req.body);
+      const updated = await storage.updateDiscountCode(parseInt(req.params.id), req.supplier.id, {
+        ...body,
+        expiresAt: body.expiresAt !== undefined ? (body.expiresAt ? new Date(body.expiresAt) : null) : undefined,
+      } as any);
+      if (!updated) return res.status(404).json({ message: 'Not found' });
+      broadcast('discount_code_updated', { supplierId: req.supplier.id, discountCodeId: updated.id });
+      res.json(updated);
+    } catch (err: any) {
+      const message = /unique/i.test(err?.message ?? '') ? 'Ce code est déjà utilisé.' : (err?.message ?? 'Error updating discount code');
+      res.status(400).json({ message });
+    }
+  });
+
+  // PATCH /api/discount-codes/:id/status — quick activate/deactivate
+  app.patch('/api/discount-codes/:id/status', requireSupplier, async (req: any, res) => {
+    try {
+      const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
+      const updated = await storage.updateDiscountCode(parseInt(req.params.id), req.supplier.id, { isActive } as any);
+      if (!updated) return res.status(404).json({ message: 'Not found' });
+      broadcast('discount_code_updated', { supplierId: req.supplier.id, discountCodeId: updated.id });
+      res.json(updated);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // ── Discount Codes (Cafe / Checkout) ────────────────────────────────────────
+
+  // POST /api/discount-codes/validate — preview validation for the cart page. The Coffee
+  // Owner enters a single code with no supplier context, so this resolves which supplier
+  // it belongs to itself, then validates only against that supplier's items in the cart —
+  // never against another supplier's subtotal, matching the same multi-supplier separation
+  // the order-creation route enforces.
+  app.post('/api/discount-codes/validate', requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== 'CAFE_OWNER') return res.status(403).json({ message: 'Forbidden' });
+      const { code, items } = z.object({
+        code: z.string().trim().min(1),
+        items: z.array(z.object({ supplierId: z.number(), quantity: z.number().min(1), unitPrice: z.number().min(0) })),
+      }).parse(req.body);
+      const found = await storage.getDiscountCodeByCode(code);
+      if (!found) return res.json({ valid: false, message: "Ce code n'existe pas." });
+      const supplierItems = items.filter(i => i.supplierId === found.supplierId);
+      if (supplierItems.length === 0) {
+        return res.json({ valid: false, message: "Ce code n'est pas applicable aux articles de votre panier." });
+      }
+      const subtotal = supplierItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+      const result = await storage.validateDiscountCode(code, found.supplierId, subtotal);
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ valid: false, message: err?.message ?? 'Error validating code' });
+    }
   });
 
   app.post('/api/admin/prospecting/bulk', requireAdmin, async (req: any, res) => {

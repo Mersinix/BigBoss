@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
-  Sun, Moon, X, User, FileText, Wallet, Star,
+  Sun, Moon, X, User, FileText, Wallet, Star, Ticket,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useDriverReviewForDelivery, useCreateDriverReview } from "@/hooks/use-delivery-ecosystem";
@@ -784,6 +784,16 @@ export default function OrderDetailsModal({
                         <div className={`px-4 pb-2.5 flex justify-between text-xs text-green-500 font-medium`}>
                           <span>Réduction ({sub.promotionName ?? "Promotion"})</span>
                           <span>−{fmt(sub.discountAmount)}</span>
+                        </div>
+                      )}
+
+                      {/* Discount code row — separate from the promotion row above; both can
+                          apply to the same sub-order (see promotions-engine.ts / discount code
+                          note on shared/schema.ts's subOrders table). */}
+                      {(sub as any).discountCodeAmount > 0 && (
+                        <div className={`px-4 pb-2.5 flex justify-between text-xs text-green-500 font-medium`}>
+                          <span className="flex items-center gap-1"><Ticket className="w-3 h-3" />Code {(sub as any).discountCodeSnapshot ?? "promo"}</span>
+                          <span>−{fmt((sub as any).discountCodeAmount)}</span>
                         </div>
                       )}
 

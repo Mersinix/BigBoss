@@ -33,6 +33,11 @@ type Props = {
   deliveryAddress: GeoLocation | null;
   courierInstructions: string;
   promoEval: CartPromotionEvaluation;
+  // Discount Code amount, if the Coffee Owner applied one — a separate mechanism from
+  // Promotions (see shared/schema.ts's discountCodes note), shown as its own line here so
+  // the confirmation total the Coffee Owner sees always matches what checkout will charge.
+  discountCodeAmount?: number;
+  discountCodeLabel?: string;
   isSubmitting: boolean;
   onConfirm: (opts: ConfirmOrderOpts) => void;
 };
@@ -92,7 +97,7 @@ function useTheme(isDark: boolean) {
 
 export default function OrderConfirmationModal({
   open, onClose, items, packItems, deliveryAddress, courierInstructions,
-  promoEval, isSubmitting, onConfirm,
+  promoEval, discountCodeAmount = 0, discountCodeLabel, isSubmitting, onConfirm,
 }: Props) {
   const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
@@ -172,7 +177,7 @@ export default function OrderConfirmationModal({
   const itemsTotal = localItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
   const packsTotal = localPackItems.reduce((s, p) => s + p.unitPrice * p.quantity, 0);
   const discount   = promoEval.totalDiscount;
-  const grandTotal = Math.max(0, itemsTotal + packsTotal - discount);
+  const grandTotal = Math.max(0, itemsTotal + packsTotal - discount - discountCodeAmount);
   const isEmpty    = localItems.length === 0 && localPackItems.length === 0;
 
   // Group items by supplier
@@ -590,6 +595,12 @@ export default function OrderConfirmationModal({
                 <div className="flex justify-between text-sm text-green-500 font-medium">
                   <span>Réduction</span>
                   <span>−{fmt(discount)}</span>
+                </div>
+              )}
+              {discountCodeAmount > 0 && (
+                <div className="flex justify-between text-sm text-green-500 font-medium">
+                  <span>Code promo{discountCodeLabel ? ` (${discountCodeLabel})` : ""}</span>
+                  <span>−{fmt(discountCodeAmount)}</span>
                 </div>
               )}
               <div className={`flex justify-between font-bold text-base pt-2 border-t ${t.dk ? "border-gray-800" : "border-gray-100"}`}>

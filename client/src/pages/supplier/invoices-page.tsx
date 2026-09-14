@@ -1,18 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "@/hooks/use-orders";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, DollarSign, Eye } from "lucide-react";
-import { formatDate } from "@/lib/format";
-import { buildFinancialRows, PAYMENT_COLLECTION_META, invoiceNumber, type FinancialRow } from "@/lib/financial-rows";
+import { FileText, DollarSign } from "lucide-react";
+import { buildFinancialRows } from "@/lib/financial-rows";
 import {
   FinancialFilterBar, applyFinancialFilters, DEFAULT_FINANCIAL_FILTERS,
 } from "@/components/financial/financial-filter-bar";
 import OrderInvoiceModal from "@/components/financial/order-invoice-modal";
+import { InvoiceCard } from "@/components/financial/financial-cards";
+import { DataPagination, usePagination } from "@/components/financial/data-pagination";
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "Tous les statuts" },
@@ -46,6 +44,10 @@ export default function InvoicesPage() {
   const totalOutstanding = nonCancelled.filter((r) => r.paymentCollectionStatus === "PENDING").reduce((s, r) => s + r.subtotal, 0);
 
   const viewingOrder = orders.find((o) => o.id === viewing?.orderId) ?? null;
+
+  const pagination = usePagination(rows.length);
+  useEffect(() => { pagination.resetPage(); }, [filters]);
+  const pageRows = rows.slice(pagination.start, pagination.end);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -84,55 +86,37 @@ export default function InvoicesPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-base font-semibold">Invoice List</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {isLoading ? (
-            <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="text-center text-muted-foreground py-10">No invoices yet</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Invoice</TableHead>
-                  <TableHead>Cafe</TableHead>
-                  <TableHead>Commande</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Statut commande</TableHead>
-                  <TableHead>Paiement</TableHead>
-                  <TableHead>Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((inv) => (
-                  <TableRow key={inv.subOrderId} data-testid={`row-invoice-${inv.subOrderId}`}>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{invoiceNumber(inv.subOrderId)}</TableCell>
-                    <TableCell className="font-medium">{inv.cafeName}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">#{String(inv.orderId).padStart(6, "0")}</TableCell>
-                    <TableCell className="font-semibold">{fmt(inv.subtotal)}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{inv.createdAt ? formatDate(inv.createdAt as any) : "—"}</TableCell>
-                    <TableCell><Badge variant="secondary">{inv.subOrderStatus}</Badge></TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={PAYMENT_COLLECTION_META[inv.paymentCollectionStatus].className}>
-                        {PAYMENT_COLLECTION_META[inv.paymentCollectionStatus].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="icon" variant="ghost" className="h-7 w-7"
-                        onClick={() => setViewing({ orderId: inv.orderId, subOrderId: inv.subOrderId })}
-                        data-testid={`button-view-${inv.subOrderId}`}
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pageRows.map((inv) => (
+                  <InvoiceCard
+                    key={inv.subOrderId}
+                    row={inv}
+                    showSupplier={false}
+                    onView={() => setViewing({ orderId: inv.orderId, subOrderId: inv.subOrderId })}
+                  />
                 ))}
-                {rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">No invoices yet</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+              </div>
+              <DataPagination
+                page={pagination.page}
+                pageSize={pagination.pageSize}
+                totalItems={rows.length}
+                totalPages={pagination.totalPages}
+                start={pagination.start}
+                end={pagination.end}
+                onPageChange={pagination.setPage}
+                onPageSizeChange={pagination.setPageSize}
+                itemLabel="factures"
+              />
+            </>
           )}
         </CardContent>
       </Card>

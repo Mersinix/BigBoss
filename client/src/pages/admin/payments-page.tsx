@@ -1,19 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DollarSign, CreditCard, TrendingUp } from "lucide-react";
-import { formatDate } from "@/lib/format";
 import type { OrderWithDetails } from "@shared/schema";
-import {
-  buildFinancialRows, PAYOUT_STATUS_META, PAYMENT_COLLECTION_META, payoutReference,
-} from "@/lib/financial-rows";
+import { buildFinancialRows, type FinancialRow } from "@/lib/financial-rows";
 import {
   FinancialFilterBar, applyFinancialFilters, DEFAULT_FINANCIAL_FILTERS,
 } from "@/components/financial/financial-filter-bar";
+import { PaymentCard } from "@/components/financial/financial-cards";
+import { DataPagination, usePagination } from "@/components/financial/data-pagination";
+import PaymentDetailsModal from "@/components/financial/payment-details-modal";
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "Tous les statuts" },
@@ -47,6 +45,13 @@ export default function PaymentsPage() {
   const totalRevenue = allRows.filter((r) => r.payoutStatus === "DUE").reduce((s, r) => s + r.subtotal, 0);
   const pendingAmount = allRows.filter((r) => r.payoutStatus === "UPCOMING").reduce((s, r) => s + r.subtotal, 0);
   const commission = allRows.filter((r) => r.payoutStatus !== "CANCELLED").reduce((s, r) => s + r.commission, 0);
+
+  const [viewing, setViewing] = useState<FinancialRow | null>(null);
+  const viewingOrder = orders.find((o) => o.id === viewing?.orderId) ?? null;
+
+  const pagination = usePagination(rows.length);
+  useEffect(() => { pagination.resetPage(); }, [filters]);
+  const pageRows = rows.slice(pagination.start, pagination.end);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -103,60 +108,37 @@ export default function PaymentsPage() {
         <CardHeader>
           <CardTitle className="text-base font-semibold">Payment Transactions</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
             </div>
+          ) : rows.length === 0 ? (
+            <p className="text-center text-muted-foreground py-10">No payment records</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Order #</TableHead>
-                  <TableHead>Cafe</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Commission (5%)</TableHead>
-                  <TableHead>Net</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Paiement</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.subOrderId} data-testid={`row-payment-${r.subOrderId}`}>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{payoutReference(r.subOrderId)}</TableCell>
-                    <TableCell className="font-medium">#{String(r.orderId).padStart(6, "0")}</TableCell>
-                    <TableCell>{r.cafeName}</TableCell>
-                    <TableCell>{r.supplierName}</TableCell>
-                    <TableCell>{fmt(r.subtotal)}</TableCell>
-                    <TableCell className="text-muted-foreground">{fmt(r.commission)}</TableCell>
-                    <TableCell className="font-semibold">{fmt(r.netAmount)}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{r.createdAt ? formatDate(r.createdAt as any) : "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={PAYMENT_COLLECTION_META[r.paymentCollectionStatus].className}>
-                        {PAYMENT_COLLECTION_META[r.paymentCollectionStatus].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={PAYOUT_STATUS_META[r.payoutStatus].className}>
-                        {PAYOUT_STATUS_META[r.payoutStatus].label}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pageRows.map((r) => (
+                  <PaymentCard key={r.subOrderId} row={r} onView={() => setViewing(r)} />
                 ))}
-                {rows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-10">No payment records</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+              </div>
+              <DataPagination
+                page={pagination.page}
+                pageSize={pagination.pageSize}
+                totalItems={rows.length}
+                totalPages={pagination.totalPages}
+                start={pagination.start}
+                end={pagination.end}
+                onPageChange={pagination.setPage}
+                onPageSizeChange={pagination.setPageSize}
+                itemLabel="paiements"
+              />
+            </>
           )}
         </CardContent>
       </Card>
+
+      <PaymentDetailsModal open={!!viewing} onClose={() => setViewing(null)} row={viewing} order={viewingOrder} />
     </div>
   );
 }

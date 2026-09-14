@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // Mirrors admin/barista-page.tsx's architecture exactly: one aggregate overview
 // endpoint (/api/admin/academy), client-side tabs/filters over it, no
@@ -264,6 +265,9 @@ export default function AdminAcademyPage() {
     return (!academySearch || haystack.includes(academySearch.toLowerCase()))
       && (academyStatus === "all" || a.status === academyStatus);
   }), [data?.academies, academySearch, academyStatus]);
+  const academiesPagination = usePagination(academies.length);
+  useEffect(() => { academiesPagination.resetPage(); }, [academySearch, academyStatus]);
+  const pageAcademies = academies.slice(academiesPagination.start, academiesPagination.end);
 
   // ── Formations tab ──
   const courses = useMemo(() => (data?.courses ?? []).filter((c) => {
@@ -271,6 +275,9 @@ export default function AdminAcademyPage() {
     return (!courseSearch || haystack.includes(courseSearch.toLowerCase()))
       && (courseStatus === "all" || (courseStatus === "published" ? c.isPublished : !c.isPublished));
   }), [data?.courses, courseSearch, courseStatus]);
+  const coursesPagination = usePagination(courses.length);
+  useEffect(() => { coursesPagination.resetPage(); }, [courseSearch, courseStatus]);
+  const pageCourses = courses.slice(coursesPagination.start, coursesPagination.end);
 
   // ── Inscriptions tab ──
   const registrations = useMemo(() => (data?.registrations ?? []).filter((r) => {
@@ -278,6 +285,9 @@ export default function AdminAcademyPage() {
     return (!registrationSearch || haystack.includes(registrationSearch.toLowerCase()))
       && (registrationStatus === "all" || r.status === registrationStatus);
   }), [data?.registrations, registrationSearch, registrationStatus]);
+  const registrationsPagination = usePagination(registrations.length);
+  useEffect(() => { registrationsPagination.resetPage(); }, [registrationSearch, registrationStatus]);
+  const pageRegistrations = registrations.slice(registrationsPagination.start, registrationsPagination.end);
 
   // ── Étudiants tab — derived from registrations, no duplicate student system ──
   const students = useMemo(() => {
@@ -286,6 +296,9 @@ export default function AdminAcademyPage() {
       .filter((r) => r.status !== "CANCELLED")
       .filter((r) => !query || [r.cafeOwnerName, r.courseTitle, r.academyName, ...r.participants].join(" ").toLowerCase().includes(query));
   }, [data?.registrations, studentSearch]);
+  const studentsPagination = usePagination(students.length);
+  useEffect(() => { studentsPagination.resetPage(); }, [studentSearch]);
+  const pageStudents = students.slice(studentsPagination.start, studentsPagination.end);
 
   // ── Finance tab ──
   const financeSummary = useMemo(() => ({
@@ -377,8 +390,9 @@ export default function AdminAcademyPage() {
             </Select>
           </div>
           {academies.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune académie correspondante.</CardContent></Card> : (
+            <>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {academies.map((academy) => (
+              {pageAcademies.map((academy) => (
                 <Card key={academy.userId} className="hover:shadow-md transition-shadow" data-testid={`card-academy-${academy.userId}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedAcademy(academy)}>
@@ -398,6 +412,18 @@ export default function AdminAcademyPage() {
                 </Card>
               ))}
             </div>
+            <DataPagination
+              page={academiesPagination.page}
+              pageSize={academiesPagination.pageSize}
+              totalItems={academies.length}
+              totalPages={academiesPagination.totalPages}
+              start={academiesPagination.start}
+              end={academiesPagination.end}
+              onPageChange={academiesPagination.setPage}
+              onPageSizeChange={academiesPagination.setPageSize}
+              itemLabel="académies"
+            />
+            </>
           )}
         </TabsContent>
 
@@ -411,8 +437,9 @@ export default function AdminAcademyPage() {
             </Select>
           </div>
           {courses.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune formation correspondante.</CardContent></Card> : (
+            <>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {courses.map((c) => (
+              {pageCourses.map((c) => (
                 <Card key={c.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedCourseId(c.id)} data-testid={`card-course-${c.id}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -428,6 +455,18 @@ export default function AdminAcademyPage() {
                 </Card>
               ))}
             </div>
+            <DataPagination
+              page={coursesPagination.page}
+              pageSize={coursesPagination.pageSize}
+              totalItems={courses.length}
+              totalPages={coursesPagination.totalPages}
+              start={coursesPagination.start}
+              end={coursesPagination.end}
+              onPageChange={coursesPagination.setPage}
+              onPageSizeChange={coursesPagination.setPageSize}
+              itemLabel="formations"
+            />
+            </>
           )}
         </TabsContent>
 
@@ -441,8 +480,9 @@ export default function AdminAcademyPage() {
             </Select>
           </div>
           {registrations.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune inscription correspondante.</CardContent></Card> : (
+            <>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {registrations.slice(0, 100).map((r) => (
+              {pageRegistrations.map((r) => (
                 <Card key={r.id} className="hover:shadow-md transition-shadow" data-testid={`card-registration-${r.id}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -458,6 +498,18 @@ export default function AdminAcademyPage() {
                 </Card>
               ))}
             </div>
+            <DataPagination
+              page={registrationsPagination.page}
+              pageSize={registrationsPagination.pageSize}
+              totalItems={registrations.length}
+              totalPages={registrationsPagination.totalPages}
+              start={registrationsPagination.start}
+              end={registrationsPagination.end}
+              onPageChange={registrationsPagination.setPage}
+              onPageSizeChange={registrationsPagination.setPageSize}
+              itemLabel="inscriptions"
+            />
+            </>
           )}
         </TabsContent>
 
@@ -465,8 +517,9 @@ export default function AdminAcademyPage() {
         <TabsContent value="students" className="mt-4 space-y-4">
           <div className="relative max-w-sm"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} placeholder="Rechercher un étudiant…" data-testid="input-search-students" /></div>
           {students.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun étudiant pour le moment.</CardContent></Card> : (
+            <>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {students.slice(0, 200).map((r) => (
+              {pageStudents.map((r) => (
                 <Card key={r.id} className="hover:shadow-md transition-shadow" data-testid={`card-student-${r.id}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -479,6 +532,18 @@ export default function AdminAcademyPage() {
                 </Card>
               ))}
             </div>
+            <DataPagination
+              page={studentsPagination.page}
+              pageSize={studentsPagination.pageSize}
+              totalItems={students.length}
+              totalPages={studentsPagination.totalPages}
+              start={studentsPagination.start}
+              end={studentsPagination.end}
+              onPageChange={studentsPagination.setPage}
+              onPageSizeChange={studentsPagination.setPageSize}
+              itemLabel="étudiants"
+            />
+            </>
           )}
         </TabsContent>
 

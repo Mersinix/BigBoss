@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { StoreAdminRow, StoreDetail } from "@shared/schema";
 
 // ── Approval badge ─────────────────────────────────────────────────────────────
@@ -364,6 +365,10 @@ export default function AdminStoresPage() {
     return true;
   });
 
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [search, statusFilter, visibilityFilter]);
+  const pageStores = filtered.slice(pagination.start, pagination.end);
+
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, id: number) => {
     dragIdRef.current = id;
@@ -482,7 +487,7 @@ export default function AdminStoresPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((store) => (
+          {pageStores.map((store) => (
             <StoreCard
               key={store.id}
               store={store}
@@ -493,6 +498,20 @@ export default function AdminStoresPage() {
             />
           ))}
         </div>
+      )}
+
+      {!isLoading && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="boutiques"
+        />
       )}
 
       {/* Detail dialog */}

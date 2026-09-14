@@ -10,7 +10,7 @@ import {
 } from "@/components/financial/financial-filter-bar";
 import OrderInvoiceModal from "@/components/financial/order-invoice-modal";
 import { InvoiceCard } from "@/components/financial/financial-cards";
-import { DataPagination, usePagination } from "@/components/financial/data-pagination";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "Tous les statuts" },

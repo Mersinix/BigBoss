@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import {
   Wrench, Users, Calendar, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
   Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image, Zap, Eye,
@@ -453,6 +454,12 @@ export default function MaintenanceAdminPage() {
       && (location === "all" || zones.includes(location))
       && (rating === "all" || (rating === "rated" ? accountRating > 0 : accountRating >= Number(rating)));
   }), [data?.accounts, search, status, availability, visibility, profileType, category, location, rating]);
+  const accountsPagination = usePagination(accounts.length);
+  useEffect(() => { accountsPagination.resetPage(); }, [search, status, availability, visibility, profileType, category, location, rating]);
+  const pageAccounts = accounts.slice(accountsPagination.start, accountsPagination.end);
+  const reservations = data?.reservations ?? [];
+  const reservationsPagination = usePagination(reservations.length);
+  const pageReservations = reservations.slice(reservationsPagination.start, reservationsPagination.end);
   const kpis = [
     ["Comptes Maintenance", stats?.totalAccounts ?? 0, Users], ["Actifs / approuvés", stats?.activeAccounts ?? 0, CheckCircle],
     ["Disponibles", stats?.availableAccounts ?? 0, Wrench], ["Réservations", stats?.totalReservations ?? 0, Calendar],
@@ -487,14 +494,36 @@ export default function MaintenanceAdminPage() {
           <Select value={location} onValueChange={setLocation}><SelectTrigger className="w-[160px]"><SelectValue placeholder="Zone" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les zones</SelectItem>{filterOptions.locations.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
           <Select value={rating} onValueChange={setRating}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Note" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les notes</SelectItem><SelectItem value="rated">Avec avis</SelectItem><SelectItem value="4">4+ étoiles</SelectItem><SelectItem value="3">3+ étoiles</SelectItem></SelectContent></Select>
         </div>
-        {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{accounts.map((account) => <Card key={account.userId} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedAccount(account)}><CardContent className="p-4 space-y-3"><div className="flex items-start gap-3"><Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-orange-100 text-orange-700 font-bold">{account.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.jobTitle}</p></div><span className={`h-2.5 w-2.5 rounded-full mt-1 ${account.available ? "bg-green-500" : "bg-gray-300"}`} /></div><div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">{account.profileType}</Badge><Badge variant="outline" className="text-xs">{account.status}</Badge><span className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{account.location || "—"}</span></div><div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis · {account.yearsExperience} ans exp.</span></div><div className="flex flex-wrap gap-1">{(account.skills ?? []).slice(0, 4).map((x: string) => <span key={x} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{x}</span>)}</div></CardContent></Card>)}</div>}
+        {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{pageAccounts.map((account) => <Card key={account.userId} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedAccount(account)}><CardContent className="p-4 space-y-3"><div className="flex items-start gap-3"><Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-orange-100 text-orange-700 font-bold">{account.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.jobTitle}</p></div><span className={`h-2.5 w-2.5 rounded-full mt-1 ${account.available ? "bg-green-500" : "bg-gray-300"}`} /></div><div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">{account.profileType}</Badge><Badge variant="outline" className="text-xs">{account.status}</Badge><span className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{account.location || "—"}</span></div><div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis · {account.yearsExperience} ans exp.</span></div><div className="flex flex-wrap gap-1">{(account.skills ?? []).slice(0, 4).map((x: string) => <span key={x} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{x}</span>)}</div></CardContent></Card>)}</div>}
+        <DataPagination
+          page={accountsPagination.page}
+          pageSize={accountsPagination.pageSize}
+          totalItems={accounts.length}
+          totalPages={accountsPagination.totalPages}
+          start={accountsPagination.start}
+          end={accountsPagination.end}
+          onPageChange={accountsPagination.setPage}
+          onPageSizeChange={accountsPagination.setPageSize}
+          itemLabel="comptes"
+        />
       </TabsContent>
       <TabsContent value="reservations" className="mt-4">
-        {!data?.reservations?.length ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune réservation.</CardContent></Card> : (
+        {reservations.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune réservation.</CardContent></Card> : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {(data?.reservations ?? []).slice(0, 50).map((row: any) => <ReservationCard key={row.id} row={row} onClick={() => setSelectedReservation(row)} />)}
+            {pageReservations.map((row: any) => <ReservationCard key={row.id} row={row} onClick={() => setSelectedReservation(row)} />)}
           </div>
         )}
+        <DataPagination
+          page={reservationsPagination.page}
+          pageSize={reservationsPagination.pageSize}
+          totalItems={reservations.length}
+          totalPages={reservationsPagination.totalPages}
+          start={reservationsPagination.start}
+          end={reservationsPagination.end}
+          onPageChange={reservationsPagination.setPage}
+          onPageSizeChange={reservationsPagination.setPageSize}
+          itemLabel="réservations"
+        />
       </TabsContent>
     </Tabs>
     <AccountDetail account={selectedAccount} onClose={() => setSelectedAccount(null)} onRefresh={refresh} />

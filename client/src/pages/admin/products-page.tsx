@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { useFormatCurrency } from "@/hooks/use-currency";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { ProductWithTaxonomy, CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount } from "@shared/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -935,6 +936,10 @@ function SupplierProductsSection({
     return list;
   }, [supplierProducts, spFilters]);
 
+  const spPagination = usePagination(displayed.length);
+  useEffect(() => { spPagination.resetPage(); }, [spFilters]);
+  const pageDisplayed = displayed.slice(spPagination.start, spPagination.end);
+
   const pendingCount = supplierProducts.filter(p => (p as any).status === 'PENDING').length;
   const rejectedCount = supplierProducts.filter(p => (p as any).status === 'REJECTED').length;
 
@@ -1051,7 +1056,7 @@ function SupplierProductsSection({
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {displayed.map(p => (
+          {pageDisplayed.map(p => (
             <div
               key={p.id}
               className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer"
@@ -1096,7 +1101,7 @@ function SupplierProductsSection({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayed.map(p => (
+              {pageDisplayed.map(p => (
                 <TableRow key={p.id} data-testid={`row-supplier-product-${p.id}`} className="hover:bg-secondary/20 cursor-pointer" onClick={() => setSelectedProduct(p)}>
                   <TableCell className="p-3">
                     {p.imageUrl ? (
@@ -1130,6 +1135,18 @@ function SupplierProductsSection({
           </Table>
         </div>
       )}
+
+      <DataPagination
+        page={spPagination.page}
+        pageSize={spPagination.pageSize}
+        totalItems={displayed.length}
+        totalPages={spPagination.totalPages}
+        start={spPagination.start}
+        end={spPagination.end}
+        onPageChange={spPagination.setPage}
+        onPageSizeChange={spPagination.setPageSize}
+        itemLabel="produits"
+      />
 
       {/* Product Detail / Edit Modal */}
       {selectedProduct && (
@@ -1546,6 +1563,10 @@ function AdminPacksSection({
     return list;
   }, [packs, packFilters]);
 
+  const packPagination = usePagination(displayed.length);
+  useEffect(() => { packPagination.resetPage(); }, [packFilters]);
+  const pageDisplayed = displayed.slice(packPagination.start, packPagination.end);
+
   const toggleVisibility = (pack: any) => {
     const newVisibility = pack.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE";
     patchMutation.mutate({ id: pack.id, data: { visibility: newVisibility } });
@@ -1713,7 +1734,7 @@ function AdminPacksSection({
       ) : viewMode === 'grid' ? (
         /* ── Grid ──────────────────────────────────────────────────────────── */
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {displayed.map((pack: any) => (
+          {pageDisplayed.map((pack: any) => (
             <div
               key={pack.id}
               className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer"
@@ -1790,7 +1811,7 @@ function AdminPacksSection({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayed.map((pack: any) => (
+              {pageDisplayed.map((pack: any) => (
                 <TableRow
                   key={pack.id}
                   data-testid={`row-pack-${pack.id}`}
@@ -1857,6 +1878,18 @@ function AdminPacksSection({
           </Table>
         </div>
       )}
+
+      <DataPagination
+        page={packPagination.page}
+        pageSize={packPagination.pageSize}
+        totalItems={displayed.length}
+        totalPages={packPagination.totalPages}
+        start={packPagination.start}
+        end={packPagination.end}
+        onPageChange={packPagination.setPage}
+        onPageSizeChange={packPagination.setPageSize}
+        itemLabel="packs"
+      />
 
       {/* Pack Preview Modal */}
       {previewPack && (
@@ -1957,6 +1990,10 @@ export default function AdminProductsPage() {
     const q = filters.search.toLowerCase();
     return products.filter(p => p.name.toLowerCase().includes(q));
   }, [products, filters.search]);
+
+  const catalogPagination = usePagination(displayed.length);
+  useEffect(() => { catalogPagination.resetPage(); }, [filters]);
+  const pageDisplayed = displayed.slice(catalogPagination.start, catalogPagination.end);
 
   const setFilter = (key: keyof Filters, value: string) => {
     setFilters(prev => {
@@ -2170,7 +2207,7 @@ export default function AdminProductsPage() {
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {displayed.map(p => (
+          {pageDisplayed.map(p => (
             <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow" data-testid={`card-product-${p.id}`}>
               <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
                 {p.imageUrl ? (
@@ -2208,7 +2245,7 @@ export default function AdminProductsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayed.map(p => (
+              {pageDisplayed.map(p => (
                 <TableRow key={p.id} data-testid={`row-product-${p.id}`} className="hover:bg-secondary/20">
                   <TableCell className="p-3">
                     {p.imageUrl ? (
@@ -2237,6 +2274,18 @@ export default function AdminProductsPage() {
           </Table>
         </div>
       )}
+
+      <DataPagination
+        page={catalogPagination.page}
+        pageSize={catalogPagination.pageSize}
+        totalItems={displayed.length}
+        totalPages={catalogPagination.totalPages}
+        start={catalogPagination.start}
+        end={catalogPagination.end}
+        onPageChange={catalogPagination.setPage}
+        onPageSizeChange={catalogPagination.setPageSize}
+        itemLabel="produits"
+      />
 
       {/* Modal */}
       {modalOpen && (

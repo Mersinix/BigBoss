@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ import { printCategoryIcon } from "@/lib/print-category-icons";
 import { buildPrintInvoiceRows, PRINT_INVOICE_STATUS_META } from "@/lib/print-financial-rows";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { PrintOrderWithParties } from "@shared/schema";
 
 // Mirrors admin/maintenance-page.tsx's architecture exactly: one aggregate
@@ -418,6 +419,9 @@ export default function AdminPrintPage() {
     return (!printerSearch || haystack.includes(printerSearch.toLowerCase()))
       && (printerStatus === "all" || p.status === printerStatus);
   }), [data?.printers, printerSearch, printerStatus]);
+  const printersPagination = usePagination(printers.length);
+  useEffect(() => { printersPagination.resetPage(); }, [printerSearch, printerStatus]);
+  const pagePrinters = printers.slice(printersPagination.start, printersPagination.end);
 
   // ── Services (catalog) tab — every catalog item across every printer,
   // including inactive ones (Admin needs to see/moderate those too, unlike the
@@ -431,6 +435,9 @@ export default function AdminPrintPage() {
       && (serviceCategory === "all" || i.category === serviceCategory)
       && (serviceStatus === "all" || (serviceStatus === "active" ? i.isActive : !i.isActive));
   }), [data?.catalogItems, serviceSearch, serviceCategory, serviceStatus]);
+  const servicesPagination = usePagination(services.length);
+  useEffect(() => { servicesPagination.resetPage(); }, [serviceSearch, serviceCategory, serviceStatus]);
+  const pageServices = services.slice(servicesPagination.start, servicesPagination.end);
 
   // ── Orders tab ──
   const orderFilterOptions = useMemo(() => ({
@@ -442,6 +449,9 @@ export default function AdminPrintPage() {
       && (orderStatus === "all" || o.status === orderStatus)
       && (orderPrinter === "all" || o.printerName === orderPrinter);
   }), [data?.orders, orderSearch, orderStatus, orderPrinter]);
+  const ordersPagination = usePagination(orders.length);
+  useEffect(() => { ordersPagination.resetPage(); }, [orderSearch, orderStatus, orderPrinter]);
+  const pageOrders = orders.slice(ordersPagination.start, ordersPagination.end);
 
   // ── Customers tab — derived from orders, no duplicate customer system ──
   const customers = useMemo(() => {
@@ -456,10 +466,16 @@ export default function AdminPrintPage() {
     }
     return Array.from(map.values()).sort((a, b) => b.totalCents - a.totalCents);
   }, [data?.orders]);
+  const customersPagination = usePagination(customers.length);
+  useEffect(() => { customersPagination.resetPage(); }, [data?.orders]);
+  const pageCustomers = customers.slice(customersPagination.start, customersPagination.end);
 
   // ── Finance tab — reuses the exact PRINT invoice derivation the Printer's own
   // Facturation page uses, computed here across every printer instead of one. ──
   const invoiceRows = useMemo(() => buildPrintInvoiceRows(data?.orders ?? []), [data?.orders]);
+  const financePagination = usePagination(invoiceRows.length);
+  useEffect(() => { financePagination.resetPage(); }, [data?.orders]);
+  const pageInvoiceRows = invoiceRows.slice(financePagination.start, financePagination.end);
   const financeSummary = useMemo(() => ({
     total: invoiceRows.reduce((s, r) => s + r.amount, 0),
     paid: invoiceRows.filter((r) => r.invoiceStatus === "PAID").reduce((s, r) => s + r.amount, 0),
@@ -541,7 +557,7 @@ export default function AdminPrintPage() {
           </div>
           {printers.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun imprimeur correspondant.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {printers.map((printer) => (
+              {pagePrinters.map((printer) => (
                 <Card key={printer.userId} className="hover:shadow-md transition-shadow" data-testid={`card-printer-${printer.userId}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedPrinterAccount(printer)}>
@@ -562,6 +578,17 @@ export default function AdminPrintPage() {
               ))}
             </div>
           )}
+          <DataPagination
+            page={printersPagination.page}
+            pageSize={printersPagination.pageSize}
+            totalItems={printers.length}
+            totalPages={printersPagination.totalPages}
+            start={printersPagination.start}
+            end={printersPagination.end}
+            onPageChange={printersPagination.setPage}
+            onPageSizeChange={printersPagination.setPageSize}
+            itemLabel="imprimeurs"
+          />
         </TabsContent>
 
         {/* ── Services (global catalog, cross-printer) ── */}
@@ -579,7 +606,7 @@ export default function AdminPrintPage() {
           </div>
           {services.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun service correspondant.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {services.map((item) => (
+              {pageServices.map((item) => (
                 <Card key={item.id} className="hover:shadow-md transition-shadow" data-testid={`card-service-${item.id}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedServiceId(item.id)}>
@@ -608,6 +635,17 @@ export default function AdminPrintPage() {
               ))}
             </div>
           )}
+          <DataPagination
+            page={servicesPagination.page}
+            pageSize={servicesPagination.pageSize}
+            totalItems={services.length}
+            totalPages={servicesPagination.totalPages}
+            start={servicesPagination.start}
+            end={servicesPagination.end}
+            onPageChange={servicesPagination.setPage}
+            onPageSizeChange={servicesPagination.setPageSize}
+            itemLabel="services"
+          />
         </TabsContent>
 
         {/* ── Orders ── */}
@@ -625,7 +663,7 @@ export default function AdminPrintPage() {
           </div>
           {orders.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune commande correspondante.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {orders.slice(0, 100).map((o) => (
+              {pageOrders.map((o) => (
                 <Card key={o.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedOrder(o)} data-testid={`card-order-${o.id}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -642,13 +680,24 @@ export default function AdminPrintPage() {
               ))}
             </div>
           )}
+          <DataPagination
+            page={ordersPagination.page}
+            pageSize={ordersPagination.pageSize}
+            totalItems={orders.length}
+            totalPages={ordersPagination.totalPages}
+            start={ordersPagination.start}
+            end={ordersPagination.end}
+            onPageChange={ordersPagination.setPage}
+            onPageSizeChange={ordersPagination.setPageSize}
+            itemLabel="commandes"
+          />
         </TabsContent>
 
         {/* ── Customers ── */}
         <TabsContent value="customers" className="mt-4">
           {customers.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun client PRINT pour le moment.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {customers.map((c) => (
+              {pageCustomers.map((c) => (
                 <Card key={c.name} className="hover:shadow-md transition-shadow" data-testid={`card-customer-${c.name}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3">
@@ -664,6 +713,17 @@ export default function AdminPrintPage() {
               ))}
             </div>
           )}
+          <DataPagination
+            page={customersPagination.page}
+            pageSize={customersPagination.pageSize}
+            totalItems={customers.length}
+            totalPages={customersPagination.totalPages}
+            start={customersPagination.start}
+            end={customersPagination.end}
+            onPageChange={customersPagination.setPage}
+            onPageSizeChange={customersPagination.setPageSize}
+            itemLabel="clients"
+          />
         </TabsContent>
 
         {/* ── Finance ── */}
@@ -676,7 +736,7 @@ export default function AdminPrintPage() {
           <p className="text-xs text-muted-foreground">PRINT est une transaction directe Imprimeur ↔ Coffee Owner, sans commission plateforme — les montants ci-dessus correspondent donc intégralement au revenu de l'imprimeur, comme sur sa propre page Facturation.</p>
           {invoiceRows.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune facture pour le moment.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {invoiceRows.slice(0, 100).map((r) => (
+              {pageInvoiceRows.map((r) => (
                 <Card key={r.orderId} className="hover:shadow-md transition-shadow" data-testid={`card-invoice-${r.orderId}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -692,6 +752,17 @@ export default function AdminPrintPage() {
               ))}
             </div>
           )}
+          <DataPagination
+            page={financePagination.page}
+            pageSize={financePagination.pageSize}
+            totalItems={invoiceRows.length}
+            totalPages={financePagination.totalPages}
+            start={financePagination.start}
+            end={financePagination.end}
+            onPageChange={financePagination.setPage}
+            onPageSizeChange={financePagination.setPageSize}
+            itemLabel="factures"
+          />
         </TabsContent>
 
         {/* ── Analytics ── */}

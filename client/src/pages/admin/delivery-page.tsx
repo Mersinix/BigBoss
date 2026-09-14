@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDeliveries, useUpdateDeliveryStatus } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -23,6 +23,7 @@ import { SupplierDriverFleetModal } from "@/components/delivery/supplier-driver-
 import { VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails, User, DeliveryStatus, DeliveryMode } from "@shared/schema";
 
 // ── Livraisons tab — mapped cards (replaces the previous raw <Table>) ────────────────────
@@ -133,6 +134,10 @@ function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancell
     return true;
   }), [deliveries, search, status, vehicleType, mode, range]);
 
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [search, status, vehicleType, mode, range]);
+  const pageDeliveries = filtered.slice(pagination.start, pagination.end);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -174,11 +179,22 @@ function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancell
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune livraison ne correspond à ces filtres.</CardContent></Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((d) => (
+          {pageDeliveries.map((d) => (
             <DeliveryCard key={d.id} delivery={d} onViewDetails={() => onViewDetails(d)} onCancel={() => onCancel(d.id)} cancelling={cancelling} />
           ))}
         </div>
       )}
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={filtered.length}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        itemLabel="livraisons"
+      />
     </div>
   );
 }
@@ -213,6 +229,10 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
     .filter((r) => activityFilter === "ALL" || (activityFilter === "ACTIVE" ? r.active > 0 : r.active === 0))
     .filter((r) => driverFilter === "ALL" || (driverFilter === "WITH" ? r.ownDrivers.length > 0 : r.ownDrivers.length === 0))
   , [companies, drivers, deliveries, search, statusFilter, activityFilter, driverFilter]);
+
+  const pagination = usePagination(rows.length);
+  useEffect(() => { pagination.resetPage(); }, [search, statusFilter, activityFilter, driverFilter]);
+  const pageRows = rows.slice(pagination.start, pagination.end);
 
   return (
     <div className="space-y-4">
@@ -251,7 +271,7 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune entreprise de livraison.</CardContent></Card>
       ) : (
         <div className="space-y-4">
-          {rows.map(({ company, ownDrivers, active, completed, total }) => (
+          {pageRows.map(({ company, ownDrivers, active, completed, total }) => (
             <Card key={company.id} data-testid={`card-admin-company-${company.id}`}>
               <CardHeader
                 className="pb-3 cursor-pointer hover:bg-muted/40 transition-colors rounded-t-xl"
@@ -306,6 +326,17 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
           ))}
         </div>
       )}
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={rows.length}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        itemLabel="entreprises"
+      />
       <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
       {/* Clicking the company card header above opens this — same synchronized
           Delivery Company details modal used everywhere a company is shown (Eye
@@ -346,6 +377,10 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
     .filter((r) => activityFilter === "ALL" || (activityFilter === "ACTIVE" ? r.active > 0 : r.active === 0))
     .filter((r) => supplierFilter === "ALL" || String(r.supplier.id) === supplierFilter)
   , [suppliers, drivers, deliveries, search, activityFilter, supplierFilter]);
+
+  const pagination = usePagination(rows.length);
+  useEffect(() => { pagination.resetPage(); }, [search, activityFilter, supplierFilter]);
+  const pageRows = rows.slice(pagination.start, pagination.end);
 
   // Only offered when there's genuinely more than one supplier with drivers to
   // choose between — otherwise it's a no-op dropdown (task's "do not create a
@@ -389,7 +424,7 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun fournisseur avec des chauffeurs.</CardContent></Card>
       ) : (
         <div className="space-y-4">
-          {rows.map(({ supplier, ownDrivers, active, completed, total }) => (
+          {pageRows.map(({ supplier, ownDrivers, active, completed, total }) => (
             <Card key={supplier.id} data-testid={`card-admin-supplier-${supplier.id}`}>
               <CardHeader
                 className="pb-3 cursor-pointer hover:bg-muted/40 transition-colors rounded-t-xl"
@@ -440,6 +475,17 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
           ))}
         </div>
       )}
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={rows.length}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        itemLabel="fournisseurs"
+      />
       <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
       <SupplierDriverFleetModal
         supplier={selectedSupplier}

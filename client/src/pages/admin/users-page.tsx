@@ -17,6 +17,7 @@ import LocationPickerModal, { type PickedLocation } from "@/components/location-
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { getAvatarUrl } from "@/lib/avatar";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { User, AddressDetails } from "@shared/schema";
 import { ADDRESS_DETAIL_FIELDS } from "@/components/settings/address-details-fields";
 
@@ -706,6 +707,10 @@ export default function UsersPage() {
     return matchStatus && matchRole;
   });
 
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [statusFilter, roleFilter]);
+  const pageUsers = filtered.slice(pagination.start, pagination.end);
+
   const pendingCount = users.filter(u => (u as any).status === "pending").length;
   const totalNonAdmin = users.filter(u => !["ADMIN", "SUPER_ADMIN"].includes(u.role)).length;
   const adminCount = users.filter(u => ["ADMIN", "SUPER_ADMIN"].includes(u.role)).length;
@@ -781,7 +786,7 @@ export default function UsersPage() {
             <p className="text-center py-10 text-muted-foreground">Aucun utilisateur ne correspond aux filtres.</p>
           ) : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filtered.map(u => {
+              {pageUsers.map(u => {
                 const userStatus = (u as any).status ?? "approved";
                 const sc = statusConfig[userStatus] ?? statusConfig.approved;
                 const Icon = sc.icon;
@@ -860,6 +865,17 @@ export default function UsersPage() {
               })}
             </div>
           )}
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={filtered.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="utilisateurs"
+          />
         </CardContent>
       </Card>
 

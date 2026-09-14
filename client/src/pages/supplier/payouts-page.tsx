@@ -9,7 +9,7 @@ import {
   FinancialFilterBar, applyFinancialFilters, DEFAULT_FINANCIAL_FILTERS,
 } from "@/components/financial/financial-filter-bar";
 import { PaymentCard } from "@/components/financial/financial-cards";
-import { DataPagination, usePagination } from "@/components/financial/data-pagination";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import PaymentDetailsModal from "@/components/financial/payment-details-modal";
 
 const STATUS_OPTIONS = [

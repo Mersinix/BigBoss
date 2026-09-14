@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboa
 import { AlertTriangle } from "lucide-react";
 import { useAdminBaristaReports, useResolveBaristaReport } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // Mirrors admin/print-page.tsx's architecture exactly: one aggregate overview
 // endpoint (/api/admin/barista), client-side tabs/filters over it, no
@@ -358,6 +359,18 @@ export default function AdminBaristaPage() {
       && (missionStatus === "all" || m.status === missionStatus);
   }), [data?.missions, missionSearch, missionStatus]);
 
+  const baristaPagination = usePagination(baristas.length);
+  useEffect(() => { baristaPagination.resetPage(); }, [baristaSearch, baristaStatus, baristaLevel]);
+  const baristaPageItems = baristas.slice(baristaPagination.start, baristaPagination.end);
+
+  const requestPagination = usePagination(requests.length);
+  useEffect(() => { requestPagination.resetPage(); }, [requestSearch, requestStatus]);
+  const requestPageItems = requests.slice(requestPagination.start, requestPagination.end);
+
+  const missionPagination = usePagination(missions.length);
+  useEffect(() => { missionPagination.resetPage(); }, [missionSearch, missionStatus]);
+  const missionPageItems = missions.slice(missionPagination.start, missionPagination.end);
+
   // ── Analytics tab — bucketed client-side from the full missions list, same
   // approach admin/print-page.tsx already uses for every other analytics chart. ──
   const revenueByMonth = useMemo(() => {
@@ -467,7 +480,7 @@ export default function AdminBaristaPage() {
           </div>
           {baristas.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun barista correspondant.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {baristas.map((barista) => (
+              {baristaPageItems.map((barista) => (
                 <Card key={barista.userId} className="hover:shadow-md transition-shadow" data-testid={`card-barista-${barista.userId}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedBarista(barista)}>
@@ -493,6 +506,17 @@ export default function AdminBaristaPage() {
               ))}
             </div>
           )}
+          <DataPagination
+            page={baristaPagination.page}
+            pageSize={baristaPagination.pageSize}
+            totalItems={baristas.length}
+            totalPages={baristaPagination.totalPages}
+            start={baristaPagination.start}
+            end={baristaPagination.end}
+            onPageChange={baristaPagination.setPage}
+            onPageSizeChange={baristaPagination.setPageSize}
+            itemLabel="baristas"
+          />
         </TabsContent>
 
         {/* ── Requests (Demandes) ── */}
@@ -506,7 +530,7 @@ export default function AdminBaristaPage() {
           </div>
           {requests.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune demande correspondante.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {requests.slice(0, 100).map((r) => (
+              {requestPageItems.map((r) => (
                 <Card key={r.id} className="hover:shadow-md transition-shadow" data-testid={`card-request-${r.id}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -522,6 +546,17 @@ export default function AdminBaristaPage() {
               ))}
             </div>
           )}
+          <DataPagination
+            page={requestPagination.page}
+            pageSize={requestPagination.pageSize}
+            totalItems={requests.length}
+            totalPages={requestPagination.totalPages}
+            start={requestPagination.start}
+            end={requestPagination.end}
+            onPageChange={requestPagination.setPage}
+            onPageSizeChange={requestPagination.setPageSize}
+            itemLabel="demandes"
+          />
         </TabsContent>
 
         {/* ── Missions ── */}
@@ -535,7 +570,7 @@ export default function AdminBaristaPage() {
           </div>
           {missions.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune mission correspondante.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {missions.slice(0, 100).map((m) => (
+              {missionPageItems.map((m) => (
                 <Card key={m.id} className="hover:shadow-md transition-shadow" data-testid={`card-mission-${m.id}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -551,6 +586,17 @@ export default function AdminBaristaPage() {
               ))}
             </div>
           )}
+          <DataPagination
+            page={missionPagination.page}
+            pageSize={missionPagination.pageSize}
+            totalItems={missions.length}
+            totalPages={missionPagination.totalPages}
+            start={missionPagination.start}
+            end={missionPagination.end}
+            onPageChange={missionPagination.setPage}
+            onPageSizeChange={missionPagination.setPageSize}
+            itemLabel="missions"
+          />
         </TabsContent>
 
         {/* Messages and Avis (Reviews) tabs intentionally removed — Barista conversations

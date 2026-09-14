@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useOrders, useDeleteOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/format";
@@ -16,6 +16,7 @@ import CafeOrdersPage from "@/pages/cafe/orders-page";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderWithDetails } from "@shared/schema";
 import { deriveOrderStatus, getSupplierStatusEntries, orderMatchesStatus } from "@/lib/order-status";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -116,6 +117,10 @@ export default function OrdersPage() {
       return true;
     });
   }, [filteredByView, statusFilter, cafeSearch, supplierSearch, productSearch, dateFilter]);
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [view, statusFilter, cafeSearch, supplierSearch, productSearch, dateFilter]);
+  const pageOrders = filtered.slice(pagination.start, pagination.end);
 
   const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setSupplierSearch(""); setProductSearch(""); setDateFilter(""); };
   const hasFilters = statusFilter !== "ALL" || cafeSearch || supplierSearch || productSearch || dateFilter;
@@ -220,7 +225,7 @@ export default function OrdersPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filtered.map(order => {
+          {pageOrders.map(order => {
             // Derive the display status from sub-orders so every card badge stays in sync
             // with what the Order Details modal shows — there is a single source of truth
             // (the sub-order rows) and no separate cached state on the cards.
@@ -319,6 +324,20 @@ export default function OrdersPage() {
             );
           })}
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="commandes"
+        />
       )}
 
       {/* Always resolve the modal's order from the live query data so it stays in sync

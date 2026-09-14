@@ -264,6 +264,9 @@ export function useRealtime(userId?: number) {
           if (ADMIN_USER_DIRECTORY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/admin/users"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/print"] });
+            // A newly-added café (Supplier → Cafes → "Add Café") is created through this
+            // same admin_user_directory_changed broadcast (see POST /api/supplier/cafes).
+            qc.invalidateQueries({ queryKey: ["/api/supplier/cafes"] });
             // Academy's public /academy marketplace is course-driven (AcademyCourseCard
             // embeds the academy's own location/identity at fetch time, no separate
             // "/api/academy/profiles" list) — invalidate it too so an Admin-changed
@@ -306,6 +309,9 @@ export function useRealtime(userId?: number) {
           if (ORDER_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/orders"] });
             qc.invalidateQueries({ queryKey: ["/api/returns"] });
+            // A café's order count/spend on the Supplier's Cafes page is derived live from
+            // orders/sub-orders (see storage.getSupplierCafes) — keep it in sync too.
+            qc.invalidateQueries({ queryKey: ["/api/supplier/cafes"] });
             invalidateMessagingQueries(qc);
           }
           if (DELIVERY_EVENTS.includes(event)) {

@@ -4576,6 +4576,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Cafés — Supplier → Cafes. Real café accounts, either derived from actual orders
+  // placed with this supplier or explicitly added via "Add Café" (see storage.getSupplierCafes
+  // / createCafeForSupplier). Not a separate café-user system — created accounts are ordinary
+  // CAFE_OWNER users, reachable everywhere a café account normally is. ──────────────────────
+
+  const cafeCreateSchema = z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+    password: z.string().min(6),
+    phone: z.string().optional().nullable(),
+    isWhatsapp: z.boolean().optional(),
+    profileImageUrl: z.string().optional().nullable(),
+  });
+
+  app.get('/api/supplier/cafes', requireApprovedSupplier, async (req, res) => {
+    try {
+      res.json(await storage.getSupplierCafes(req.session.userId!));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Error fetching cafes' });
+    }
+  });
+
+  app.post('/api/supplier/cafes', requireApprovedSupplier, async (req, res) => {
+    try {
+      const data = cafeCreateSchema.parse(req.body);
+      const cafe = await storage.createCafeForSupplier(req.session.userId!, data);
+      broadcast('admin_user_directory_changed');
+      res.status(201).json(cafe);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Error creating cafe' });
+    }
+  });
+
   // ── Vehicles — Delivery Company / Supplier fleet, and Driver self-service. One model,
   // reused by every owner kind (see shared/schema.ts vehicles). ──────────────────────────
 

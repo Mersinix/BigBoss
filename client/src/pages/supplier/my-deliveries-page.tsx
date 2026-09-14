@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDeliveries, useAssignDriver, useSupplierDrivers } from "@/hooks/use-deliveries";
 import { useReassignDriver } from "@/hooks/use-delivery-ecosystem";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -12,6 +12,7 @@ import { MapPin, Store, ArrowRight, Truck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
 import { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 function AssignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
@@ -88,6 +89,10 @@ export default function SupplierMyDeliveriesPage() {
   const completed = mine.filter((d) => ["DELIVERED", "CANCELLED"].includes(d.status));
   const list = view === "active" ? active : completed;
 
+  const pagination = usePagination(list.length);
+  useEffect(() => { pagination.resetPage(); }, [view]);
+  const pageList = list.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
@@ -121,7 +126,7 @@ export default function SupplierMyDeliveriesPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {list.map((d) => {
+          {pageList.map((d) => {
             const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700" };
             return (
               <Card key={d.id}>
@@ -165,6 +170,20 @@ export default function SupplierMyDeliveriesPage() {
             );
           })}
         </div>
+      )}
+
+      {!isLoading && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={list.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="livraisons"
+        />
       )}
     </div>
   );

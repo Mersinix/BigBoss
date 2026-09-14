@@ -77,6 +77,13 @@ export const users = pgTable("users", {
   // Set only on DRIVER accounts owned directly by a supplier's own delivery operation
   // (as opposed to a DELIVERY_COMPANY's fleet). References another users.id with role SUPPLIER.
   supplierId: integer("supplier_id"),
+  // Set only on CAFE_OWNER accounts created through a Supplier's "Add Café" action (see
+  // Supplier → Cafes). Same createdBy* convention already used for taxonomy rows (e.g.
+  // products.createdByUserId) — a café created this way is a completely normal CAFE_OWNER
+  // account everywhere else; this only records provenance so the Supplier's Cafes page can
+  // show it immediately, before any order has been placed. Never required: a café that
+  // simply ordered from a supplier (no referral) is still "associated" via its orders.
+  referredBySupplierId: integer("referred_by_supplier_id"),
   // Per-user notification opt-outs, keyed by a coarse NotificationPrefKey (see
   // shared/notification-preferences.ts) — e.g. { shop_orders: false }. Absence of a
   // key, or the whole column being null (every existing account today), means

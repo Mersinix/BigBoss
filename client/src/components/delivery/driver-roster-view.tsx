@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { useVehicles, useAssignVehicle, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { DriverDetailModal } from "@/components/driver/driver-detail-modal";
@@ -13,6 +13,7 @@ import { Truck, Plus, Loader2, Search, Phone, User as UserIcon } from "lucide-re
 import { useToast } from "@/hooks/use-toast";
 import { getAvatarUrl } from "@/lib/avatar";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { User } from "@shared/schema";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 
@@ -84,6 +85,10 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
     if (availabilityFilter === "BUSY" && !busy) return false;
     return true;
   });
+
+  const pagination = usePagination(filteredDrivers.length);
+  useEffect(() => { pagination.resetPage(); }, [search, availabilityFilter]);
+  const pageDrivers = filteredDrivers.slice(pagination.start, pagination.end);
 
   const handleCreate = () => {
     createDriver.mutate(
@@ -166,7 +171,7 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
         </CardContent></Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredDrivers.map((d) => {
+          {pageDrivers.map((d) => {
             const busy = (activeDeliveriesByDriver.get(d.id) ?? 0) > 0;
             const vehicle = vehicleByDriver.get(d.id);
             return (
@@ -209,6 +214,20 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
             );
           })}
         </div>
+      )}
+
+      {!isLoading && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filteredDrivers.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="chauffeurs"
+        />
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

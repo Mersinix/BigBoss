@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useOrders, useUpdateSubOrderStatus } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/format";
@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle, XCircle, Clock, Box, Store, Package, Eye, Search, X } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Box, Store, Layers, Eye, Search, X, Zap, Calendar, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { OrderWithDetails } from "@shared/schema";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -140,14 +140,16 @@ export default function OrderRequestsPage() {
     setModalReadOnly(readOnly);
   };
 
-  const priorityBadge = (priority: string) => {
-    if (priority === "URGENT") return <Badge variant="destructive" className="text-[10px]">Urgent</Badge>;
-    if (priority === "HIGH") return <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-200">Haute prio.</Badge>;
-    return <span className="text-xs text-muted-foreground">Normal</span>;
-  };
-
   const hasPendingFilters = pendingCafeSearch || pendingDateFilter || pendingPriorityFilter !== "ALL";
   const hasHistFilters = histStatusFilter !== "ALL" || histCafeSearch || histDateFilter || histPriorityFilter !== "ALL";
+
+  const pendingPagination = usePagination(pendingRequests.length);
+  useEffect(() => { pendingPagination.resetPage(); }, [pendingCafeSearch, pendingDateFilter, pendingPriorityFilter]);
+  const pagePendingRequests = pendingRequests.slice(pendingPagination.start, pendingPagination.end);
+
+  const histPagination = usePagination(historyRequests.length);
+  useEffect(() => { histPagination.resetPage(); }, [histStatusFilter, histCafeSearch, histDateFilter, histPriorityFilter]);
+  const pageHistoryRequests = historyRequests.slice(histPagination.start, histPagination.end);
 
   // ── Loading ────────────────────────────────────────────────────────────────
 
@@ -266,57 +268,51 @@ export default function OrderRequestsPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="p-0">
-                <div className="px-5 pt-5 pb-3 border-b border-border/50">
-                  <h2 className="font-semibold">Demandes en attente ({pendingRequests.length})</h2>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Commande</TableHead>
-                      <TableHead>Café</TableHead>
-                      <TableHead>Articles</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Priorité</TableHead>
-                      <TableHead>Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingRequests.map(so => (
-                      <TableRow key={so.id}>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          #{String(so.orderId).padStart(6, "0")}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-1.5">
-                            <Store className="w-3.5 h-3.5 text-muted-foreground" />
-                            {so.cafeName}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-0.5">
-                            {(so.items ?? []).slice(0, 3).map((item: any, idx: number) => (
-                              <div key={idx} className="flex items-center gap-1 text-xs text-muted-foreground">
-                                {item.packId
-                                  ? <Package className="w-3 h-3 shrink-0" />
-                                  : <Box className="w-3 h-3 shrink-0" />
-                                }
-                                <span className="truncate max-w-[140px]">
-                                  {item.quantity}× {item.packId ? item.packName : item.product?.name}
-                                </span>
-                              </div>
-                            ))}
-                            {(so.items ?? []).length > 3 && (
-                              <p className="text-xs text-muted-foreground">+{(so.items ?? []).length - 3} autre(s)</p>
+            <>
+              <div className="space-y-3">
+                {pagePendingRequests.map(so => (
+                  <Card key={so.id} className="border-border/50">
+                    <CardContent className="p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs text-muted-foreground">#{String(so.orderId).padStart(6, "0")}</span>
+                            {so.orderPriority && so.orderPriority !== "NORMAL" && (
+                              <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
+                                <Zap className="w-3 h-3 mr-0.5" />{so.orderPriority === "URGENT" ? "Urgent" : "Haute prio."}
+                              </Badge>
+                            )}
+                            {so.orderScheduledAt && (
+                              <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                <Calendar className="w-3 h-3" /> {formatDate(so.orderScheduledAt)}
+                              </span>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell className="font-semibold">{fmt(so.subtotal)}</TableCell>
-                        <TableCell className="text-muted-foreground text-xs">{formatDate(so.orderCreatedAt)}</TableCell>
-                        <TableCell>{priorityBadge(so.orderPriority)}</TableCell>
-                        <TableCell>
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <Store className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <span className="font-medium">{so.cafeName}</span>
+                            <span className="text-muted-foreground text-xs">· {formatDate(so.orderCreatedAt)}</span>
+                          </div>
+                          {so.deliveryAddress?.address && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{so.deliveryAddress.address}</span>
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {(so.items ?? []).slice(0, 4).map((item: any, idx: number) => (
+                              <span key={idx} className="inline-flex items-center gap-1 text-xs bg-secondary/60 px-2 py-0.5 rounded-full text-muted-foreground">
+                                {item.packId ? <Layers className="w-2.5 h-2.5" /> : <Box className="w-2.5 h-2.5" />}
+                                {item.quantity}× {item.packId ? item.packName : item.product?.name}
+                              </span>
+                            ))}
+                            {(so.items ?? []).length > 4 && (
+                              <span className="text-xs text-muted-foreground self-center">+{(so.items ?? []).length - 4}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
+                          <p className="font-bold text-amber-500">{fmt(so.subtotal)}</p>
                           <div className="flex gap-2">
                             <Button
                               size="sm"
@@ -347,13 +343,24 @@ export default function OrderRequestsPage() {
                               <Eye className="w-3.5 h-3.5" />
                             </Button>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              <DataPagination
+                page={pendingPagination.page}
+                pageSize={pendingPagination.pageSize}
+                totalItems={pendingRequests.length}
+                totalPages={pendingPagination.totalPages}
+                start={pendingPagination.start}
+                end={pendingPagination.end}
+                onPageChange={pendingPagination.setPage}
+                onPageSizeChange={pendingPagination.setPageSize}
+                itemLabel="demandes"
+              />
+            </>
           )}
         </>
       )}
@@ -418,55 +425,59 @@ export default function OrderRequestsPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="p-0">
-                <div className="px-5 pt-5 pb-3 border-b border-border/50">
-                  <h2 className="font-semibold">Historique des demandes ({historyRequests.length})</h2>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Commande</TableHead>
-                      <TableHead>Café</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Priorité</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Détails</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {historyRequests.map(so => {
-                      const s = HIST_STATUS_MAP[so.status] ?? { label: so.status, color: "bg-gray-100 text-gray-700" };
-                      return (
-                        <TableRow key={so.id}>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            #{String(so.orderId).padStart(6, "0")}
-                          </TableCell>
-                          <TableCell className="font-medium">{so.cafeName}</TableCell>
-                          <TableCell className="font-semibold">{fmt(so.subtotal)}</TableCell>
-                          <TableCell className="text-muted-foreground text-xs">{formatDate(so.orderCreatedAt)}</TableCell>
-                          <TableCell>{priorityBadge(so.orderPriority)}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className={`${s.color} text-xs`}>{s.label}</Badge>
-                          </TableCell>
-                          <TableCell>
+            <>
+              <div className="space-y-3">
+                {pageHistoryRequests.map(so => {
+                  const s = HIST_STATUS_MAP[so.status] ?? { label: so.status, color: "bg-gray-100 text-gray-700" };
+                  return (
+                    <Card key={so.id} className="border-border/50">
+                      <CardContent className="p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs text-muted-foreground">#{String(so.orderId).padStart(6, "0")}</span>
+                              <Badge variant="secondary" className={`${s.color} text-xs`}>{s.label}</Badge>
+                              {so.orderPriority && so.orderPriority !== "NORMAL" && (
+                                <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
+                                  <Zap className="w-3 h-3 mr-0.5" />{so.orderPriority === "URGENT" ? "Urgent" : "Haute prio."}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <Store className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <span className="font-medium">{so.cafeName}</span>
+                              <span className="text-muted-foreground text-xs">· {formatDate(so.orderCreatedAt)}</span>
+                            </div>
+                          </div>
+                          <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
+                            <p className="font-bold text-amber-500">{fmt(so.subtotal)}</p>
                             <Button
                               size="sm"
                               variant="ghost"
                               className="h-7 text-xs text-primary"
                               onClick={() => openModal((so as any)._order, true)}
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5 mr-1" />Détails
                             </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+              <DataPagination
+                page={histPagination.page}
+                pageSize={histPagination.pageSize}
+                totalItems={historyRequests.length}
+                totalPages={histPagination.totalPages}
+                start={histPagination.start}
+                end={histPagination.end}
+                onPageChange={histPagination.setPage}
+                onPageSizeChange={histPagination.setPageSize}
+                itemLabel="demandes"
+              />
+            </>
           )}
         </>
       )}

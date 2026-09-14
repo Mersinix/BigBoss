@@ -25,6 +25,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import type { SupplierListingWithProduct, PackDetail } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
 import { PackImageGallery } from "@/components/pack-image-gallery";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // ── Variant grouping helper ───────────────────────────────────────────────────
 // Groups individual flavor variants by size so the supplier works with
@@ -829,6 +830,10 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
     return result;
   }, [eligible, search, filterCategory, filterSubCategory, filterBrand, filterFlavor, filterSize]);
 
+  const packProdPagination = usePagination(filtered.length);
+  useEffect(() => { packProdPagination.resetPage(); }, [search, filterCategory, filterSubCategory, filterBrand, filterFlavor, filterSize]);
+  const pageFiltered = filtered.slice(packProdPagination.start, packProdPagination.end);
+
   const toggleVariant = (listingId: number, variantId: number | null) => {
     setSelected(prev => {
       const exists = prev.find(i => i.listingId === listingId && i.variantId === variantId);
@@ -952,7 +957,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
         <p className="text-sm text-muted-foreground">No products match your filters.</p>
       ) : (
         <div className="border rounded-lg divide-y">
-          {filtered.map(listing => {
+          {pageFiltered.map(listing => {
             const groups = getVariantGroups(listing);
             const anySelected = groups.some(g => selected.some(s => s.listingId === listing.id && s.variantId === g.representativeId));
 
@@ -1022,6 +1027,17 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           })}
         </div>
       )}
+      <DataPagination
+        page={packProdPagination.page}
+        pageSize={packProdPagination.pageSize}
+        totalItems={filtered.length}
+        totalPages={packProdPagination.totalPages}
+        start={packProdPagination.start}
+        end={packProdPagination.end}
+        onPageChange={packProdPagination.setPage}
+        onPageSizeChange={packProdPagination.setPageSize}
+        itemLabel="produits"
+      />
       <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1224,6 +1240,10 @@ export function PackTab() {
     return result;
   }, [activePacks, packsSearch, packsFilterCategory, packsFilterSubCategory, packsFilterBrand, packsFilterFlavor, packsFilterSize]);
 
+  const activePacksPagination = usePagination(filteredActivePacks.length);
+  useEffect(() => { activePacksPagination.resetPage(); }, [packsSearch, packsFilterCategory, packsFilterSubCategory, packsFilterBrand, packsFilterFlavor, packsFilterSize]);
+  const pageActivePacks = filteredActivePacks.slice(activePacksPagination.start, activePacksPagination.end);
+
   const packsHasActiveFilters = packsFilterCategory !== "__all__" || packsFilterSubCategory !== "__all__" || packsFilterBrand !== "__all__" || packsFilterFlavor !== "__all__" || packsFilterSize !== "__all__";
 
   // Always derive preview pack from live data to fix stale visibility/state
@@ -1237,6 +1257,10 @@ export function PackTab() {
     const q = archivedSearch.toLowerCase();
     return archivedPacks.filter(p => p.name.toLowerCase().includes(q));
   }, [archivedPacks, archivedSearch]);
+
+  const archivedPagination = usePagination(filteredArchived.length);
+  useEffect(() => { archivedPagination.resetPage(); }, [archivedSearch]);
+  const pageArchived = filteredArchived.slice(archivedPagination.start, archivedPagination.end);
 
   const toggleVisibility = useMutation({
     mutationFn: (p: PackDetail) => apiRequest("PATCH", `/api/supplier/packs/${p.id}`, { visibility: p.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE" }),
@@ -1408,15 +1432,28 @@ export function PackTab() {
           ) : filteredActivePacks.length === 0 ? (
             <p className="text-sm text-muted-foreground">No packs match your filters.</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {filteredActivePacks.map(pack => (
-                <ActivePackCard
-                  key={pack.id}
-                  pack={pack}
-                  onPreview={() => setPreviewPackId(pack.id)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {pageActivePacks.map(pack => (
+                  <ActivePackCard
+                    key={pack.id}
+                    pack={pack}
+                    onPreview={() => setPreviewPackId(pack.id)}
+                  />
+                ))}
+              </div>
+              <DataPagination
+                page={activePacksPagination.page}
+                pageSize={activePacksPagination.pageSize}
+                totalItems={filteredActivePacks.length}
+                totalPages={activePacksPagination.totalPages}
+                start={activePacksPagination.start}
+                end={activePacksPagination.end}
+                onPageChange={activePacksPagination.setPage}
+                onPageSizeChange={activePacksPagination.setPageSize}
+                itemLabel="packs"
+              />
+            </>
           )}
         </TabsContent>
 
@@ -1442,18 +1479,31 @@ export function PackTab() {
             ) : filteredArchived.length === 0 ? (
               <p className="text-sm text-muted-foreground">No packs match your search.</p>
             ) : (
-              <div className="space-y-2">
-                {filteredArchived.map(pack => (
-                  <ArchivedPackRow
-                    key={pack.id}
-                    pack={pack}
-                    onToggleVisibility={() => toggleVisibility.mutate(pack)}
-                    onUnarchive={() => archive.mutate(pack)}
-                    onDelete={() => remove.mutate(pack.id)}
-                    onEdit={() => openEdit(pack)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="space-y-2">
+                  {pageArchived.map(pack => (
+                    <ArchivedPackRow
+                      key={pack.id}
+                      pack={pack}
+                      onToggleVisibility={() => toggleVisibility.mutate(pack)}
+                      onUnarchive={() => archive.mutate(pack)}
+                      onDelete={() => remove.mutate(pack.id)}
+                      onEdit={() => openEdit(pack)}
+                    />
+                  ))}
+                </div>
+                <DataPagination
+                  page={archivedPagination.page}
+                  pageSize={archivedPagination.pageSize}
+                  totalItems={filteredArchived.length}
+                  totalPages={archivedPagination.totalPages}
+                  start={archivedPagination.start}
+                  end={archivedPagination.end}
+                  onPageChange={archivedPagination.setPage}
+                  onPageSizeChange={archivedPagination.setPageSize}
+                  itemLabel="packs"
+                />
+              </>
             )}
           </div>
         </TabsContent>

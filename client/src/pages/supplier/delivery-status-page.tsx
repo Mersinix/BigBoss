@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDeliveries, useDispatchDelivery, useSupplierDrivers } from "@/hooks/use-deliveries";
 import { useReassignDriver } from "@/hooks/use-delivery-ecosystem";
 import { useDeliveryCompanyProfiles } from "@/hooks/use-delivery-company-marketplace";
@@ -17,6 +17,7 @@ import { formatDate } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
 import DeliveryDetails, { DELIVERY_STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 const STATUS_FILTERS = ["ALL", "PENDING", "AVAILABLE", "ACCEPTED", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "CANCELLED"];
@@ -232,6 +233,10 @@ export default function SupplierDeliveryStatusPage() {
   const hasFilters = statusFilter !== "ALL" || dateFilter !== "ALL" || modeFilter !== "ALL" || !!search;
   const clearFilters = () => { setStatusFilter("ALL"); setDateFilter("ALL"); setModeFilter("ALL"); setSearch(""); };
 
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [statusFilter, dateFilter, modeFilter, search]);
+  const pageDeliveries = filtered.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
@@ -309,7 +314,7 @@ export default function SupplierDeliveryStatusPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filtered.map((d) => {
+          {pageDeliveries.map((d) => {
             const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-600" };
             return (
               <Card key={d.id}>
@@ -347,6 +352,20 @@ export default function SupplierDeliveryStatusPage() {
             );
           })}
         </div>
+      )}
+
+      {!isLoading && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="livraisons"
+        />
       )}
 
       {reassignTarget && <ReassignDialog delivery={reassignTarget} onClose={() => setReassignTarget(null)} />}

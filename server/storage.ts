@@ -147,6 +147,8 @@ export interface IStorage {
   redactDeliveryCodes(delivery: Delivery, viewerRole?: string): Delivery;
   getDriversForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number): Promise<User[]>;
   createDriverForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number, data: { name: string; email: string; password: string; phone?: string | null }): Promise<User>;
+  getSupplierCafes(supplierId: number): Promise<Array<User & { orderCount: number; totalSpent: number; lastOrderAt: Date | null; referred: boolean }>>;
+  createCafeForSupplier(supplierId: number, data: { name: string; email: string; password: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null }): Promise<User>;
   getApprovedDeliveryCompanyIds(): Promise<number[]>;
   getActiveDeliveryForSubOrder(subOrderId: number): Promise<Delivery | undefined>;
 
@@ -1895,6 +1897,66 @@ export class DatabaseStorage implements IStorage {
       profileImageUrl: data.profileImageUrl?.trim() || null,
       deliveryCompanyId: ownerType === 'DELIVERY_COMPANY' ? ownerId : null,
       supplierId: ownerType === 'SUPPLIER' ? ownerId : null,
+    } as any);
+  }
+
+  /** Cafés "associated" with a Supplier (Supplier → Cafes) — the union of every café that
+   *  has actually ordered from this supplier (derived from real sub_orders, same technique
+   *  as e.g. admin/print-page.tsx's Customers tab) and every café explicitly added through
+   *  this supplier's "Add Café" action (users.referredBySupplierId). A café never needs both
+   *  to appear; an added-but-not-yet-ordering café still shows up with zero stats. */
+  async getSupplierCafes(supplierId: number): Promise<Array<User & { orderCount: number; totalSpent: number; lastOrderAt: Date | null; referred: boolean }>> {
+    const rows = await db
+      .select({ order: orders, subOrder: subOrders })
+      .from(subOrders)
+      .innerJoin(orders, eq(subOrders.orderId, orders.id))
+      .where(eq(subOrders.supplierId, supplierId));
+
+    const statsByCafe = new Map<number, { orderIds: Set<number>; totalSpent: number; lastOrderAt: Date | null }>();
+    for (const { order, subOrder } of rows) {
+      let s = statsByCafe.get(order.cafeId);
+      if (!s) { s = { orderIds: new Set(), totalSpent: 0, lastOrderAt: null }; statsByCafe.set(order.cafeId, s); }
+      s.orderIds.add(order.id);
+      if (subOrder.status !== 'CANCELLED') s.totalSpent += subOrder.subtotal;
+      const createdAt = order.createdAt as Date | null;
+      if (createdAt && (!s.lastOrderAt || createdAt > s.lastOrderAt)) s.lastOrderAt = createdAt;
+    }
+
+    const referredRows = await db.select().from(users).where(eq(users.referredBySupplierId, supplierId));
+    const referredIds = new Set(referredRows.map((u) => u.id));
+
+    const cafeIds = Array.from(new Set([...Array.from(statsByCafe.keys()), ...Array.from(referredIds)]));
+    if (cafeIds.length === 0) return [];
+    const cafeUsers = await db.select().from(users).where(inArray(users.id, cafeIds));
+
+    return cafeUsers.map((u) => {
+      const s = statsByCafe.get(u.id);
+      return {
+        ...u,
+        orderCount: s ? s.orderIds.size : 0,
+        totalSpent: s ? s.totalSpent : 0,
+        lastOrderAt: s ? s.lastOrderAt : null,
+        referred: referredIds.has(u.id),
+      };
+    }).sort((a, b) => (b.lastOrderAt?.getTime() ?? 0) - (a.lastOrderAt?.getTime() ?? 0));
+  }
+
+  /** Creates a real CAFE_OWNER account, tagged with referredBySupplierId so it appears in
+   *  the Supplier's Cafes list immediately — same createUser() pathway Admin's Add User and
+   *  createDriverForOwner use, never a separate/isolated café-user system. */
+  async createCafeForSupplier(supplierId: number, data: { name: string; email: string; password: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null }): Promise<User> {
+    const existing = await this.getUserByEmail(data.email);
+    if (existing) throw new Error('Email already exists');
+    return this.createUser({
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      role: 'CAFE_OWNER',
+      status: 'approved', // vetted by the supplier who added it, not the platform admin
+      phone: data.phone ?? null,
+      isWhatsapp: !!data.isWhatsapp,
+      profileImageUrl: data.profileImageUrl?.trim() || null,
+      referredBySupplierId: supplierId,
     } as any);
   }
 

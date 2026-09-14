@@ -357,6 +357,7 @@ export default function OrdersPage() {
           onClose={() => setSelectedOrder(null)}
           order={orders.find((o) => o.id === selectedOrder?.id) ?? selectedOrder}
           showReorder={false}
+          isAdmin={isAdmin}
         />
       )}
 

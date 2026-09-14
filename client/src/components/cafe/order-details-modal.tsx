@@ -18,6 +18,7 @@ import { useReorderToCart, useCancelSubOrderItems } from "@/hooks/use-orders";
 import type { OrderWithDetails } from "@shared/schema";
 import { PackCompositionView } from "@/components/order/pack-composition-view";
 import { DeliveryProgress } from "@/components/order/delivery-progress";
+import { OrderProgress } from "@/components/order/order-progress";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 import { getSupplierStatusEntries } from "@/lib/order-status";
 import OrderInvoiceModal from "@/components/financial/order-invoice-modal";
@@ -62,15 +63,6 @@ const DELIVERY_STATUS_META: Record<string, { label: string; badgeDk: string; bad
   DELIVERED: { label: "Livrée",                  badgeDk: "bg-green-500/20 text-green-300", badgeLt: "bg-green-100 text-green-800" },
   CANCELLED: { label: "Livraison annulée",       badgeDk: "bg-red-500/20 text-red-300",     badgeLt: "bg-red-100 text-red-800" },
 };
-
-const ORDER_PROGRESS_STAGES = [
-  { status: "PENDING", label: "Order Placed", icon: Clock },
-  { status: "CONFIRMED", label: "Confirmed", icon: CheckCircle2 },
-  { status: "PREPARING", label: "Preparing", icon: Box },
-  { status: "READY", label: "Ready for Delivery", icon: Package },
-  { status: "IN_DELIVERY", label: "Out for Delivery", icon: Truck },
-  { status: "DELIVERED", label: "Delivered", icon: CheckCircle2 },
-] as const;
 
 // ── Driver review (task Part 31) — one review per completed delivery, reusing the
 // existing supplierProductReviews table (reviewType='DRIVER') exactly like every other
@@ -300,6 +292,10 @@ type Props = {
   showInvoice?: boolean;
   /** Show the "Payout Info" action. Default: true. */
   showPayoutInfo?: boolean;
+  /** Unlocks the full cross-party delivery-fee breakdown (café share + supplier share) in
+   *  each sub-order's delivery block. Default: false — the Coffee Owner must only ever see
+   *  their own delivery amount, never a supplier's internal contribution. */
+  isAdmin?: boolean;
 };
 
 export default function OrderDetailsModal({
@@ -308,6 +304,7 @@ export default function OrderDetailsModal({
   showCancel = false,
   showInvoice = true,
   showPayoutInfo = true,
+  isAdmin = false,
 }: Props) {
   const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
@@ -339,7 +336,6 @@ export default function OrderDetailsModal({
 
   const subOrders  = order.subOrders ?? [];
   const hasSubOrders = subOrders.length > 0;
-  const currentProgressIndex = ORDER_PROGRESS_STAGES.findIndex((stage) => stage.status === order.status);
   const deliveryMethod = (order as any).deliveryMethod ?? "DELIVERY_SERVICE";
   const paymentMethod = (order as any).paymentMethod ?? "CASH_ON_DELIVERY";
   const paymentStatus = (order as any).paymentStatus ?? "PENDING";
@@ -349,6 +345,10 @@ export default function OrderDetailsModal({
   // shared/schema.ts deliveries.deliveryFee comment) — the real value lives per-delivery.
   const deliveryFee = subOrders.reduce((sum, sub) => sum + (sub.delivery?.cafeOwnerFeeShareCents ?? 0), 0);
   const anyFreeDelivery = subOrders.some((sub) => sub.delivery?.freeDeliveryApplied);
+  // Admin-only aggregates — total delivery cost and what suppliers absorb across every
+  // sub-order, same real per-delivery figures summed the same way as deliveryFee above.
+  const totalDeliveryFee = subOrders.reduce((sum, sub) => sum + (sub.delivery?.deliveryFee ?? 0), 0);
+  const supplierDeliveryTotal = subOrders.reduce((sum, sub) => sum + (sub.delivery?.supplierFeeShareCents ?? 0), 0);
   const deliveryLabel = deliveryMethod === "SELF_PICKUP" ? "Self Pickup" : "Delivery Service";
   const paymentLabel = paymentMethod === "CASH_ON_DELIVERY"
     ? "Cash on Delivery"
@@ -517,39 +517,7 @@ export default function OrderDetailsModal({
                     {statusMeta.label}
                   </Badge>
                 </div>
-                {order.status === "CANCELLED" ? (
-                  <div className="flex items-center gap-2 text-sm text-red-400">
-                    <AlertCircle className="w-4 h-4" />
-                    This order was cancelled.
-                  </div>
-                ) : (
-                  <div className="flex items-start overflow-x-auto pb-1">
-                    {ORDER_PROGRESS_STAGES.map((stage, index) => {
-                      const StageIcon = stage.icon;
-                      const complete = currentProgressIndex >= index;
-                      const current = currentProgressIndex === index;
-                      return (
-                        <div key={stage.status} className="flex items-start min-w-[92px] flex-1">
-                          <div className="flex flex-col items-center min-w-[72px]">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
-                              complete
-                                ? (current ? "bg-amber-500 border-amber-400 text-white ring-2 ring-amber-500/25" : "bg-amber-500/20 border-amber-500 text-amber-400")
-                                : (t.dk ? "bg-gray-800 border-gray-700 text-gray-500" : "bg-gray-50 border-gray-200 text-gray-400")
-                            }`}>
-                              <StageIcon className="w-3.5 h-3.5" />
-                            </div>
-                            <span className={`text-[10px] text-center leading-tight mt-1.5 ${current ? "font-bold text-amber-500" : t.textMuted}`}>
-                              {stage.label}
-                            </span>
-                          </div>
-                          {index < ORDER_PROGRESS_STAGES.length - 1 && (
-                            <div className={`h-0.5 flex-1 mt-4 min-w-[14px] ${currentProgressIndex > index ? "bg-amber-500" : (t.dk ? "bg-gray-700" : "bg-gray-200")}`} />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <OrderProgress status={order.status} t={t} />
               </div>
             )}
 
@@ -575,6 +543,21 @@ export default function OrderDetailsModal({
                   )}
                   <p className={`text-xs mt-1 ${t.textMuted}`}>Delivery fee: {anyFreeDelivery && deliveryFee === 0 ? <span className="text-green-500 font-medium">Free</span> : fmt(deliveryFee)}</p>
                   {order.delivery?.name && <p className={`text-xs mt-1 ${t.textMuted}`}>Driver: {order.delivery.name}</p>}
+                  {/* Admin-only full cross-party breakdown across every sub-order's delivery —
+                      never shown to the Coffee Owner (see isAdmin prop). */}
+                  {isAdmin && hasSubOrders && (
+                    <div className={`mt-2 pt-2 border-t space-y-0.5 ${t.dk ? "border-gray-700/50" : "border-gray-200"}`}>
+                      <p className={`text-xs flex justify-between ${t.textMuted}`}>
+                        <span>Total livraison (tous fournisseurs)</span><span className={t.textPrimary}>{fmt(totalDeliveryFee)}</span>
+                      </p>
+                      <p className={`text-xs flex justify-between ${t.textMuted}`}>
+                        <span>Payé par le café</span><span className={t.textPrimary}>{fmt(deliveryFee)}</span>
+                      </p>
+                      <p className={`text-xs flex justify-between ${t.textMuted}`}>
+                        <span>Pris en charge par les fournisseurs</span><span className={t.textPrimary}>{fmt(supplierDeliveryTotal)}</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className={`rounded-xl border p-3 ${t.cardBg}`}>
                   <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Payment</p>
@@ -639,42 +622,7 @@ export default function OrderDetailsModal({
                             {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
                           </span>
                         </div>
-                        {sub.status === "CANCELLED" ? (
-                          <div className="flex items-center gap-2 text-xs text-red-400">
-                            <AlertCircle className="w-3.5 h-3.5" />
-                            This supplier order was cancelled.
-                          </div>
-                        ) : (
-                          <div className="flex items-start overflow-x-auto pb-1">
-                            {ORDER_PROGRESS_STAGES.map((stage, index) => {
-                              const StageIcon = stage.icon;
-                              const subProgressIndex = ORDER_PROGRESS_STAGES.findIndex(
-                                (progressStage) => progressStage.status === sub.status,
-                              );
-                              const complete = subProgressIndex >= index;
-                              const current = subProgressIndex === index;
-                              return (
-                                <div key={stage.status} className="flex items-start min-w-[92px] flex-1">
-                                  <div className="flex flex-col items-center min-w-[72px]">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
-                                      complete
-                                        ? (current ? "bg-amber-500 border-amber-400 text-white ring-2 ring-amber-500/25" : "bg-amber-500/20 border-amber-500 text-amber-400")
-                                        : (t.dk ? "bg-gray-800 border-gray-700 text-gray-500" : "bg-gray-50 border-gray-200 text-gray-400")
-                                    }`}>
-                                      <StageIcon className="w-3.5 h-3.5" />
-                                    </div>
-                                    <span className={`text-[10px] text-center leading-tight mt-1.5 ${current ? "font-bold text-amber-500" : t.textMuted}`}>
-                                      {stage.label}
-                                    </span>
-                                  </div>
-                                  {index < ORDER_PROGRESS_STAGES.length - 1 && (
-                                    <div className={`h-0.5 flex-1 mt-4 min-w-[14px] ${subProgressIndex > index ? "bg-amber-500" : (t.dk ? "bg-gray-700" : "bg-gray-200")}`} />
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                        <OrderProgress status={sub.status} t={t} />
                       </div>
 
                       {/* Item rows — regular products grouped by base product (one card,
@@ -815,6 +763,28 @@ export default function OrderDetailsModal({
                             {sub.delivery.driver && (
                               <p className={`text-xs mt-1 ${t.textPrimary}`}>Chauffeur: {sub.delivery.driver.name}</p>
                             )}
+                            {/* Admin-only cross-party breakdown — the Coffee Owner never sees a
+                                supplier's internal contribution (see isAdmin prop / task: Order
+                                Details synchronization). Real persisted figures only, from the
+                                same deliveries row every other surface reads — never recomputed. */}
+                            {isAdmin && (
+                              <div className={`mt-2 pt-2 border-t space-y-0.5 ${t.dk ? "border-gray-700/50" : "border-gray-200"}`}>
+                                <div className={`flex justify-between text-xs ${t.textMuted}`}>
+                                  <span>Frais de livraison total</span>
+                                  <span className={t.textPrimary}>{fmt(sub.delivery.deliveryFee)}</span>
+                                </div>
+                                <div className={`flex justify-between text-xs ${t.textMuted}`}>
+                                  <span>Part café</span>
+                                  <span className={t.textPrimary}>{sub.delivery.freeDeliveryApplied ? <span className="text-green-500 font-medium">Gratuit</span> : fmt(sub.delivery.cafeOwnerFeeShareCents)}</span>
+                                </div>
+                                {sub.delivery.supplierFeeShareCents != null && (
+                                  <div className={`flex justify-between text-xs ${t.textMuted}`}>
+                                    <span>Part fournisseur{sub.delivery.freeDeliveryApplied ? " (livraison offerte)" : ""}</span>
+                                    <span className={t.textPrimary}>{fmt(sub.delivery.supplierFeeShareCents)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             <DeliveryProgress
                               status={sub.delivery.status}
                               dropoffCode={["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(sub.delivery.status) ? sub.delivery.dropoffCode : null}
@@ -898,10 +868,16 @@ export default function OrderDetailsModal({
           {/* ── Sticky footer: total + actions ── */}
           <div className={`shrink-0 border-t px-6 py-4 space-y-4 ${t.stickyBg}`}>
 
-            {/* Grand total */}
+            {/* Grand total — order.totalAmount is always the sum of sub-order subtotals only
+                (products/packs, net of promotion + discount-code, see storage.createOrder /
+                cancelSubOrderItems); it never includes delivery, which is computed separately
+                per sub-order once a Delivery exists (see storage.computeDeliveryFee). The
+                amount the Coffee Owner actually owes is therefore totalAmount + their own
+                delivery share (deliveryFee above, already 0 under an active free-delivery
+                promotion) — never the supplier's contribution. */}
             <div className={`flex justify-between items-center font-bold border-b pb-3 ${t.dk ? "border-gray-800" : "border-gray-100"}`}>
               <span className={t.textPrimary}>Total commande</span>
-              <span className="text-amber-500 text-xl">{fmt(order.totalAmount)}</span>
+              <span className="text-amber-500 text-xl">{fmt(order.totalAmount + deliveryFee)}</span>
             </div>
 
             {/* Action buttons */}

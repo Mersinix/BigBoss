@@ -63,9 +63,11 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
   const linesTotal = isLegacyFlatOrder
     ? legacyItems.reduce((s: number, i: any) => s + (i.totalPrice ?? (i.unitPrice ?? 0) * (i.quantity ?? 0)), 0)
     : subOrders.reduce((s, so) => s + (so.subtotal ?? 0), 0);
-  // Delivery fee is charged once per order (not per supplier) — only attribute it to the
-  // grand total when this invoice covers the whole order, never to a single supplier's slice.
-  const deliveryFee = subOrderId == null ? Number((order as any).deliveryFee ?? 0) : 0;
+  // Real per-supplier delivery fee (see storage.computeDeliveryFee) — each sub-order has its
+  // own Delivery, so this sums exactly the sub-orders this invoice actually covers (the whole
+  // order, or just one supplier's slice when subOrderId is set). orders.deliveryFee is a
+  // legacy column that is never populated by checkout (always 0) — never read here.
+  const deliveryFee = subOrders.reduce((s, so: any) => s + (so.delivery?.cafeOwnerFeeShareCents ?? 0), 0);
   const grandTotal = linesTotal + deliveryFee;
   const paymentMethod = (order as any).paymentMethod ?? "CASH_ON_DELIVERY";
   const paymentLabel = paymentMethod === "CASH_ON_DELIVERY" ? "Cash on Delivery"

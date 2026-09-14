@@ -5,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
-  Store, Layers, Calendar, Zap, Package, X,
-  Sun, Moon, User, ListX,
+  Store, Layers, Calendar, Zap, X,
+  Sun, Moon, User, ListX, Ticket, Wallet,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -15,6 +15,7 @@ import { useUpdateSubOrderStatus } from "@/hooks/use-orders";
 import type { OrderWithDetails } from "@shared/schema";
 import { PackCompositionView } from "@/components/order/pack-composition-view";
 import { DeliveryProgress } from "@/components/order/delivery-progress";
+import { OrderProgress } from "@/components/order/order-progress";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 import SupplierCancelItemsModal from "@/components/supplier/supplier-cancel-items-modal";
 
@@ -238,6 +239,61 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
               )}
             </div>
 
+            {/* ── Order progress — same shared stepper/logic as the Admin and Coffee Owner
+                modals, driven by this supplier's own sub-order status (never the parent
+                order's aggregate status). ── */}
+            <div className={`border rounded-2xl p-4 ${t.innerCard}`}>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <p className={`text-sm font-semibold ${t.textPrimary}`}>Order progress</p>
+                <Badge variant="outline" className={`text-[10px] rounded-lg ${t.badge(subStatus, STATUS_META)}`}>
+                  {statusMeta.label}
+                </Badge>
+              </div>
+              <OrderProgress status={subStatus} t={t} />
+            </div>
+
+            {/* ── Delivery & payment — payment method/status, priority and planning belong
+                to the parent order (shared across every supplier); delivery specifics for
+                THIS supplier's own sub-order are shown further below, once its Delivery
+                exists. ── */}
+            <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
+              <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
+                <Wallet className="w-4 h-4 text-amber-500" />
+                Delivery & payment
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className={`rounded-xl border p-3 ${t.dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Delivery</p>
+                  <p className={`text-sm font-semibold mt-1 ${t.textPrimary}`}>
+                    {((order as any).deliveryMethod ?? "DELIVERY_SERVICE") === "SELF_PICKUP" ? "Self Pickup" : "Delivery Service"}
+                  </p>
+                  {((order as any).deliveryMethod ?? "DELIVERY_SERVICE") === "SELF_PICKUP" && (
+                    <p className={`text-xs mt-1 ${t.textMuted}`}>Collected directly from you.</p>
+                  )}
+                </div>
+                <div className={`rounded-xl border p-3 ${t.dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Payment</p>
+                  <p className={`text-sm font-semibold mt-1 ${t.textPrimary}`}>
+                    {(() => {
+                      const pm = (order as any).paymentMethod ?? "CASH_ON_DELIVERY";
+                      return pm === "CASH_ON_DELIVERY" ? "Cash on Delivery"
+                        : pm === "CREDIT_CARD" ? "Credit Card"
+                        : pm === "MOBILE_PAYMENT" ? "Mobile Payment" : "Bank Transfer";
+                    })()}
+                  </p>
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>Status: {(order as any).paymentStatus ?? "PENDING"}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className={`rounded-lg px-2.5 py-1 ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
+                  Priority: {priority === "URGENT" ? "Urgent" : priority === "HIGH" ? "Haute priorité" : "Normal"}
+                </span>
+                <span className={`rounded-lg px-2.5 py-1 ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
+                  Planning: {scheduledAt ? "Scheduled" : "Immediate"}
+                </span>
+              </div>
+            </div>
+
             {/* ── Items for this supplier ── */}
             {items.length > 0 && (
               <div className={`border rounded-2xl overflow-hidden ${t.cardBg}`}>
@@ -256,8 +312,10 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                   {groupOrderItemsByProduct(items).map((group) => (
                     <div key={`product-${group.productId}`} className="px-4 py-3">
                       <div className="flex items-start gap-2.5">
-                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isDark ? "bg-gray-700" : "bg-gray-100"}`}>
-                          <Box className={`w-3 h-3 ${t.textMuted}`} />
+                        <div className={`w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 mt-0.5 ${isDark ? "bg-gray-700" : "bg-gray-100"}`}>
+                          {group.productImageUrl
+                            ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
+                            : <Box className={`w-4 h-4 ${t.textMuted}`} />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`font-medium text-sm ${t.textPrimary}`}>{group.productName}</p>
@@ -298,12 +356,15 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                     const snapshot = item.snapshot as any;
                     const packSnapshot = snapshot?.kind === "PACK" ? snapshot : null;
                     const itemName = packSnapshot?.packName ?? item.packName;
+                    const itemImage = packSnapshot?.packImageUrl;
                     const cancelled = item.status === "CANCELLED";
                     return (
                       <div key={`pack-${item.id ?? idx}`} className="px-4 py-3">
                         <div className="flex items-start gap-2.5">
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${cancelled ? (isDark ? "bg-gray-700" : "bg-gray-100") : "bg-amber-500/15"}`}>
-                            <Layers className={`w-3 h-3 ${cancelled ? t.textSubtle : "text-amber-500"}`} />
+                          <div className={`w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 mt-0.5 ${cancelled ? (isDark ? "bg-gray-700" : "bg-gray-100") : "bg-amber-500/15"}`}>
+                            {itemImage
+                              ? <img src={itemImage} alt="" className={`w-full h-full object-cover ${cancelled ? "opacity-40 grayscale" : ""}`} />
+                              : <Layers className={`w-4 h-4 ${cancelled ? t.textSubtle : "text-amber-500"}`} />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -339,6 +400,21 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                   </div>
                 )}
 
+                {/* Discount / promotion — same persisted sub-order snapshot the Admin and
+                    Coffee Owner Order Details modals already read, never recomputed here. */}
+                {subOrder && (subOrder as any).discountAmount > 0 && (
+                  <div className="px-4 pb-2.5 flex justify-between text-xs text-green-500 font-medium">
+                    <span>Réduction ({(subOrder as any).promotionName ?? "Promotion"})</span>
+                    <span>−{fmt((subOrder as any).discountAmount)}</span>
+                  </div>
+                )}
+                {subOrder && (subOrder as any).discountCodeAmount > 0 && (
+                  <div className="px-4 pb-2.5 flex justify-between text-xs text-green-500 font-medium">
+                    <span className="flex items-center gap-1"><Ticket className="w-3 h-3" />Code {(subOrder as any).discountCodeSnapshot ?? "promo"}</span>
+                    <span>−{fmt((subOrder as any).discountCodeAmount)}</span>
+                  </div>
+                )}
+
                 {/* Delivery — read-only status of this sub-order's Delivery, once one exists
                     (created automatically when the sub-order reaches READY). The supplier
                     tracks it here but all actions (accept/assign/pickup/deliver) happen on
@@ -361,6 +437,19 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                       {(subOrder as any).delivery.driver && (
                         <p className={`text-xs ${t.textPrimary}`}>Chauffeur: {(subOrder as any).delivery.driver.name}</p>
                       )}
+                      {/* This supplier's own delivery-fee responsibility — real persisted
+                          figures from the same deliveries row every other surface reads
+                          (see storage.computeDeliveryFee); never a second calculation. */}
+                      <div className={`mt-2 pt-2 border-t space-y-0.5 ${isDark ? "border-gray-700/50" : "border-gray-200"}`}>
+                        <div className={`flex justify-between text-xs ${t.textMuted}`}>
+                          <span>Frais de livraison total</span>
+                          <span className={t.textPrimary}>{fmt((subOrder as any).delivery.deliveryFee)}</span>
+                        </div>
+                        <div className={`flex justify-between text-xs ${t.textMuted}`}>
+                          <span>Pris en charge par vous{(subOrder as any).delivery.freeDeliveryApplied ? " (livraison offerte)" : ""}</span>
+                          <span className={t.textPrimary}>{fmt((subOrder as any).delivery.supplierFeeShareCents ?? 0)}</span>
+                        </div>
+                      </div>
                       <DeliveryProgress
                         status={(subOrder as any).delivery.status}
                         pickupCode={(subOrder as any).delivery.status === "ASSIGNED" ? (subOrder as any).delivery.pickupCode : null}

@@ -847,6 +847,10 @@ export class DatabaseStorage implements IStorage {
             dropoffCode: filters?.viewerRole === 'CAFE_OWNER' || filters?.viewerRole === 'ADMIN' || filters?.viewerRole === 'SUPER_ADMIN' ? delivery.dropoffCode : null,
             deliveryFee: delivery.deliveryFee,
             cafeOwnerFeeShareCents: delivery.cafeOwnerFeeShareCents,
+            // Same redaction principle as pickupCode/dropoffCode just above: only Admin and
+            // the owning Supplier ever see what the Supplier itself absorbs for this
+            // delivery — never the Coffee Owner or any other role.
+            supplierFeeShareCents: ['ADMIN', 'SUPER_ADMIN', 'SUPPLIER'].includes(filters?.viewerRole ?? '') ? delivery.supplierFeeShareCents : null,
             freeDeliveryApplied: delivery.freeDeliveryApplied,
           } : null,
         };

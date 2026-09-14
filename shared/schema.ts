@@ -2808,6 +2808,11 @@ export type SubOrderDeliverySummary = {
   // and is not shown here (internal payout breakdown, task Part 30).
   deliveryFee: number;
   cafeOwnerFeeShareCents: number;
+  // What the Supplier absorbs for this delivery — redacted server-side (see storage.getOrders)
+  // to only Admin and the owning Supplier, exactly like pickupCode/dropoffCode above. Always
+  // null for the Coffee Owner and every other viewer: internal supplier information they
+  // must never see (Order Details synchronization task).
+  supplierFeeShareCents: number | null;
   freeDeliveryApplied: boolean;
 };
 

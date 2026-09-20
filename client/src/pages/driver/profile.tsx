@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
-import { User as UserIcon, Award, XCircle, Calendar, Zap, Truck, Eye, AlertCircle, Image as ImageIcon, X } from "lucide-react";
+import { User as UserIcon, Award, XCircle, Calendar, Zap, Truck, Eye, AlertCircle, Image as ImageIcon, X, Building2 } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -239,6 +239,20 @@ export default function DriverProfilePage() {
           <Button onClick={saveVehicle} disabled={createVehicle.isPending || updateVehicle.isPending} variant="outline" className="rounded-xl" data-testid="button-save-vehicle">
             {vehicle ? "Mettre à jour le véhicule" : "Enregistrer le véhicule"}
           </Button>
+          {/* Vehicle owner/provider — a driver's vehicle is always registered under the
+              driver's own operator account (Supplier or Delivery Company), never a separate
+              "driver-owned" concept, since no such data exists in the system today. */}
+          {vehicle && (
+            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 pt-1" data-testid="text-vehicle-owner">
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                Fourni par : <span className="font-medium text-gray-700 dark:text-gray-300">
+                  {vehicle.ownerType === "DELIVERY_COMPANY" ? "Entreprise de livraison" : "Fournisseur"}
+                  {vehicle.ownerName ? ` · ${vehicle.ownerName}` : ""}
+                </span>
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

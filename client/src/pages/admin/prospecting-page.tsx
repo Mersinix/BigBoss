@@ -245,10 +245,14 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
             {/* Min Rating */}
             <div>
               <Label>Min Rating</Label>
-              <Select value={minRating} onValueChange={setMinRating}>
+              {/* Radix forbids SelectItem value="" (reserved to mean "cleared") — mirrors
+                  FilterBar's own "all" sentinel pattern above: the Select only ever sees a
+                  non-empty value, translated back to "" (→ no rating filter) at the boundary,
+                  so minRating's own semantics (used by handleSearch below) are unchanged. */}
+              <Select value={minRating || "any"} onValueChange={v => setMinRating(v === "any" ? "" : v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any</SelectItem>
+                  <SelectItem value="any">Any</SelectItem>
                   {MIN_RATING_OPTIONS.filter(Boolean).map(r => <SelectItem key={r} value={r}>{r}+</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -268,10 +272,12 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
           {/* Prospect Type */}
           <div>
             <Label>Prospect Type</Label>
-            <Select value={prospectType} onValueChange={setProspectType}>
+            {/* Same Radix constraint as Min Rating above — "auto" sentinel translated back to
+                "" (→ auto-detect, unchanged handleSearch semantics: prospectType || null). */}
+            <Select value={prospectType || "auto"} onValueChange={v => setProspectType(v === "auto" ? "" : v)}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Auto Detect" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Auto Detect</SelectItem>
+                <SelectItem value="auto">Auto Detect</SelectItem>
                 {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -552,7 +558,9 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0">
+      {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+          scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-background border-b px-4 pt-4 pb-3">
           <div className="flex items-start gap-3">

@@ -2,8 +2,9 @@ import { useMemo } from "react";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Wallet, TrendingUp, Clock, CheckCircle2, Info } from "lucide-react";
+import { Wallet, TrendingUp, Clock, CheckCircle2, Info, Banknote } from "lucide-react";
 import { DashboardHero, StatCard, SectionCard } from "@/components/dashboard/dashboard-kit";
+import { useMyFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 
 function isSameDay(a: Date, b: Date) { return a.toDateString() === b.toDateString(); }
 function isSameWeek(a: Date, b: Date) {
@@ -14,21 +15,29 @@ function isSameMonth(a: Date, b: Date) { return a.getFullYear() === b.getFullYea
 
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
-// "Portefeuille" — every figure here is the real deliveries.deliveryFee column (see
-// shared/schema.ts), summed over this driver's own completed deliveries (GET /api/deliveries
-// is already scoped server-side). deliveryFee is computed by the real, centrally-configured
-// delivery pricing engine (storage.computeDeliveryFee / deliveryPricingSettings) — provisional
-// at creation, finalized once a driver+vehicle is assigned — so these are genuine recorded
-// amounts, not a placeholder. Today/Cette semaine/Ce mois filter that same real figure by
-// deliveredAt, so a balance with nothing "today" simply means no delivery was completed today.
+// "Portefeuille" — the driver's own EARNINGS, never the customer-facing deliveryFee (Delivery
+// System V2 Phase 3 separated the two — see server/storage.ts computeDeliveryPayout doc).
+// totalDriverPayoutCents (Phase 4: base % of fee + weather/peak incentive + any later waiting
+// compensation) is the correct figure; it falls back to driverPayoutCents (pre-Phase-4
+// deliveries, before waiting existed) and finally to deliveryFee only for deliveries created
+// before Phase 3 ever computed a real payout at all (driverPayoutCents null) — matching the
+// exact fallback already used in the shared DeliveryDetails component. Every one of these
+// remains an ECONOMIC EARNING, not a confirmed payment — see
+// docs/bigboss-delivery-financial-visibility.md.
 export default function DriverWalletPage() {
   const { data: deliveries = [], isLoading } = useDeliveries();
   const fmt = useFormatCurrency();
+  // Delivery System V2 Phase 5C.2 — SETTLEMENT/PAYMENT figures, deliberately kept SEPARATE
+  // from the economic-earnings stats above: "owed" reflects settlement obligations (grouped
+  // from the ledger), "paid" reflects actually-confirmed payments — never blended into the
+  // same number as the (economic) "Solde cumulé" hero stat.
+  const { data: financialSummary } = useMyFinancialSummary();
 
   const stats = useMemo(() => {
     const completed = deliveries.filter((d) => d.status === "DELIVERED" && d.deliveredAt);
     const now = new Date();
-    const sum = (rows: typeof completed) => rows.reduce((s, d) => s + (d.deliveryFee ?? 0), 0);
+    const earnings = (d: (typeof completed)[number]) => d.totalDriverPayoutCents ?? d.driverPayoutCents ?? d.deliveryFee ?? 0;
+    const sum = (rows: typeof completed) => rows.reduce((s, d) => s + earnings(d), 0);
     return {
       total: sum(completed),
       today: sum(completed.filter((d) => isSameDay(new Date(d.deliveredAt as any), now))),
@@ -68,10 +77,21 @@ export default function DriverWalletPage() {
         </div>
       </SectionCard>
 
+      {financialSummary && (
+        <SectionCard title="Règlement" icon={Banknote} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
+          <div className="grid grid-cols-2 gap-3 py-1 text-sm">
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Dû</span><span className="font-semibold">{fmt(financialSummary.owedCents)}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Approuvé</span><span className="font-semibold">{fmt(financialSummary.approvedCents)}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">Payé</span><span className="font-semibold text-emerald-600">{fmt(financialSummary.paidCents)}</span></div>
+            <div className="flex items-center justify-between"><span className="text-muted-foreground">En attente</span><span className="font-semibold text-amber-600">{fmt(financialSummary.outstandingCents)}</span></div>
+          </div>
+        </SectionCard>
+      )}
+
       <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500/30 px-4 py-3">
         <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
         <p className="text-xs text-blue-800 dark:text-blue-300">
-          Les frais de chaque livraison sont calculés automatiquement selon la grille tarifaire de la plateforme et finalisés dès qu'un chauffeur y est assigné — les montants ci-dessus reflètent ces frais réellement enregistrés.
+          Votre rémunération par livraison est calculée automatiquement (part du frais + primes météo/heures de pointe + compensation d'attente) et finalisée dès qu'un chauffeur y est assigné — ces montants représentent ce que vous avez économiquement gagné, pas nécessairement un virement déjà effectué.
         </p>
       </div>
     </div>

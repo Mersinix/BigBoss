@@ -262,6 +262,33 @@ export const subOrders = pgTable("sub_orders", {
   discountCodeId: integer("discount_code_id"),
   discountCodeSnapshot: text("discount_code_snapshot"),
   discountCodeAmount: integer("discount_code_amount").notNull().default(0),
+  // ── Transport requirements (Delivery System V2) — supplier-declared, per sub-order since
+  // each supplier's own slice of a multi-supplier order can have different physical
+  // requirements. All nullable/optional: existing sub-orders and suppliers who never set
+  // these keep working exactly as before (compatibility checks below simply no-op when
+  // requiredVehicleType is null). Never used to auto-derive a vehicle — see
+  // storage.isVehicleCompatible; weight/volume/fragility are informational only for now,
+  // exactly as requested ("do not hard-code thresholds").
+  requiredVehicleType: deliveryVehicleTypeEnum("required_vehicle_type"),
+  totalWeightKg: text("total_weight_kg"),   // decimal-as-text, same convention as deliveries.distanceKm
+  totalVolumeL: text("total_volume_l"),     // decimal-as-text, litres
+  numberOfPackages: integer("number_of_packages"),
+  numberOfItems: integer("number_of_items"),
+  isFragile: boolean("is_fragile").notNull().default(false),
+  specialHandling: text("special_handling"),
+  // ── Self Pickup confirmation (Delivery System V2) — only ever populated when the parent
+  // order's deliveryMethod is SELF_PICKUP (see storage.createOrder). Same 6-digit
+  // confirmation-code pattern as deliveries.pickupCode/dropoffCode, generated once at order
+  // creation and never regenerated. Redacted server-side (see storage.getOrders) to the
+  // owning Supplier and Admin only — the Coffee Owner receives it verbally/in person, never
+  // through the API, and must type it back to confirm.
+  selfPickupCode: text("self_pickup_code"),
+  selfPickupCodeConfirmedAt: timestamp("self_pickup_code_confirmed_at"),
+  selfPickupConfirmedByUserId: integer("self_pickup_confirmed_by_user_id"),
+  // Snapshot of the supplier's pickup address at order-creation time — same principle as
+  // deliveries.pickupAddress (a supplier changing their profile address later must never
+  // rewrite where an already-placed self-pickup order sends the Coffee Owner).
+  selfPickupAddress: jsonb("self_pickup_address").$type<GeoLocation>(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -368,6 +395,141 @@ export const deliveries = pgTable("deliveries", {
   vehicleType: deliveryVehicleTypeEnum("vehicle_type"),
   distanceKm: text("distance_km"), // decimal stored as text, matches this project's lat/lng text-column convention
   surgeMultiplierPermille: integer("surge_multiplier_permille"),
+  // Delivery System V2 Phase 2 — populated by storage.getRoute() (the RouteEngine provider
+  // abstraction). The only implementation today is the haversine fallback, so roadDistanceKm
+  // is currently ALWAYS numerically identical to distanceKm above (distanceSource='fallback')
+  // — no real routing provider is configured (would need API credentials this project does
+  // not have; see delivery-v2-proposal.md §3.13 and the Phase 2 final report). distanceKm
+  // remains the pricing pipeline's actual input either way — see runDeliveryPricingPipeline.
+  roadDistanceKm: text("road_distance_km"),
+  // Null in the fallback: an ETA requires an assumed average speed per vehicle (see the
+  // proposal's VehicleModel.speedFactor), which is a real business decision that does not
+  // exist in this codebase yet. Never invented here — populated only once a real provider or
+  // an Admin-configured speed model exists.
+  estimatedDurationMinutes: integer("estimated_duration_minutes"),
+  // 'fallback' (haversine, today's only path) or 'routing_provider' (once one is wired up).
+  // Nullable so pre-Phase-2 rows (which never computed a route at all) stay NULL forever.
+  distanceSource: text("distance_source"),
+  // ── Two-Leg Delivery Distance Model ──────────────────────────────────────────────────
+  // A delivery has two distinct movement legs: LEG 1 (driver's current position → supplier,
+  // the pickup/collection leg) and LEG 2 (supplier → coffee owner, the customer delivery
+  // leg — this is what distanceKm/roadDistanceKm/estimatedDurationMinutes/distanceSource
+  // above have always represented, and continue to represent unchanged). This block adds
+  // LEG 1 as its own separate, parallel snapshot — never merged into the fields above, so
+  // every existing reader of distanceKm/roadDistanceKm/deliveryFee/cafeOwnerFeeShareCents/
+  // supplierFeeShareCents keeps working unchanged (Leg 2 only, exactly as before this model
+  // existed). All nullable: pre-this-phase deliveries never computed a separate pickup leg
+  // and stay NULL forever (no backfill), and a delivery whose driver position wasn't yet
+  // known at pricing time (e.g. the provisional creation-time estimate, before a driver is
+  // assigned) also leaves these NULL rather than inventing a phantom minimum-fee pickup
+  // cost from an unknown position — see storage.computeDeliveryFee's driverPos guard.
+  pickupLegDistanceKm: text("pickup_leg_distance_km"),
+  pickupLegRoadDistanceKm: text("pickup_leg_road_distance_km"),
+  pickupLegEstimatedDurationMinutes: integer("pickup_leg_estimated_duration_minutes"),
+  pickupLegDistanceSource: text("pickup_leg_distance_source"),
+  // The Supplier's own responsibility for this leg (task: "The Supplier must also pay the
+  // cost associated with this driver → supplier distance") — computed via the EXACT SAME
+  // pricing pipeline/vehicle rate/multiplier settings as the Leg 2 fee above (no separate
+  // rate invented), applied to this leg's own distance. Recorded as its own ledger entry
+  // (LedgerEntryType 'SUPPLIER_PICKUP_LEG') — never merged into supplierFeeShareCents/
+  // deliveryFee, which must keep meaning exactly what they meant before (Leg 2 only), so the
+  // existing deliveryFee === cafeOwnerFeeShareCents + supplierFeeShareCents relationship
+  // every current UI display already relies on remains exactly true, unchanged.
+  pickupLegFeeCents: integer("pickup_leg_fee_cents"),
+  // Delivery System V2 Phase 3 — DriverPayoutEngine snapshot. Frozen at the SAME moment as
+  // the fee itself (feeFinalizedAt, set together at driver assignment) — no separate
+  // "payoutFinalizedAt" timestamp, since payout and fee are always computed and frozen
+  // together (see storage.assignDriver/reassignDriver and rule 6 of the Phase 3 spec: "do
+  // not create duplicate concepts if an equivalent already exists"). Nullable: pre-Phase-3
+  // deliveries never computed a payout at all and stay NULL forever, never backfilled.
+  // driverPayoutCents is what the assigned driver/operator earns; companyPayoutCents is the
+  // Delivery Company's own margin (always 0 in SUPPLIER mode — see computeDeliveryPayout).
+  // Neither is EVER derived from customer delivery fee at display time — both are computed
+  // once, frozen, and read back verbatim (see rule 2 of the Phase 3 spec).
+  driverPayoutSharePercentUsed: integer("driver_payout_share_percent_used"),
+  driverPayoutCents: integer("driver_payout_cents"),
+  companyPayoutCents: integer("company_payout_cents"),
+  // Delivery Pricing Factor Pipeline snapshot (Delivery System V2 Phase 1) — the missing
+  // historical INPUTS behind deliveryFee, so a delivery is fully self-explaining without
+  // reading (possibly since-changed) deliveryPricingSettings. All nullable: rows created
+  // before Phase 1 shipped simply never had these columns computed and stay NULL forever
+  // (no backfill, no migration) — see storage.runDeliveryPricingPipeline. Populated once, at
+  // the same moment as the other fee snapshot fields above, and — exactly like them — NEVER
+  // rewritten after feeFinalizedAt is set.
+  pricePerKmCentsUsed: integer("price_per_km_cents_used"),
+  minFeeCentsUsed: integer("min_fee_cents_used"),
+  baseFeeCents: integer("base_fee_cents"), // pure distanceKm × pricePerKmCentsUsed, no surge, no floor
+  adjustedFeeCents: integer("adjusted_fee_cents"), // = deliveryFee; kept as its own snapshot field for pipeline transparency
+  // Future pricing factors (Phase 2+) — always stored as their explicit no-op value today
+  // (permille 1000 = ×1.0, cents 0) by runDeliveryPricingPipeline, never left implicit. This
+  // is what distinguishes a Phase-1-or-later delivery (factor evaluated, found neutral) from
+  // a pre-Phase-1 delivery (factor didn't exist yet, column is NULL).
+  weatherMultiplierPermilleUsed: integer("weather_multiplier_permille_used"),
+  demandMultiplierPermilleUsed: integer("demand_multiplier_permille_used"),
+  peakHourMultiplierPermilleUsed: integer("peak_hour_multiplier_permille_used"),
+  zoneMultiplierPermilleUsed: integer("zone_multiplier_permille_used"),
+  waitingFeeCentsUsed: integer("waiting_fee_cents_used"),
+  urgencySurchargeCentsUsed: integer("urgency_surcharge_cents_used"),
+
+  // ── Delivery System V2 Phase 4 snapshot — frozen at the SAME moment as the fields above
+  // (assignment), except the four waiting* fields, which cannot be known until pickup
+  // actually happens — see storage.updateDeliveryStatus's PICKED_UP branch. All nullable;
+  // pre-Phase-4 deliveries stay NULL forever, never backfilled.
+
+  // Human-readable labels for what actually produced the multiplier values above — a
+  // delivery is fully self-explaining without re-reading (possibly since-changed) Admin
+  // config. Never used to recompute anything — display/audit only.
+  weatherConditionUsed: text("weather_condition_used"),
+  zoneNameUsed: text("zone_name_used"),
+  peakHourLabelUsed: text("peak_hour_label_used"),
+  // DeliverySafetyEngine decision in effect at assignment time (ALLOW/ALLOW_WITH_WARNING/
+  // RESTRICT/SUSPEND) — see storage.resolveWeatherPricing/assignDriver's safety gate.
+  safetyStateUsed: text("safety_state_used"),
+  // Weather/Peak driver incentives — additive, folded directly into the frozen
+  // driverPayoutCents at assignment (see storage.computeDeliveryPayout) — kept as their own
+  // snapshot fields too so the incentive portion stays individually visible/auditable,
+  // never silently blended into one opaque number.
+  weatherIncentiveCentsUsed: integer("weather_incentive_cents_used"),
+  peakIncentiveCentsUsed: integer("peak_incentive_cents_used"),
+  // SupplierSubsidyEngine / BigBoss subsidy (Contribution/Subsidy split) — explicit, never
+  // hidden inside cafeOwnerFeeShareCents/supplierFeeShareCents (see rule 11/13 of the Phase 4
+  // spec: "never hide it inside the delivery fee"). bigBossSubsidyCents is always 0 in Phase
+  // 4 (no campaign/budget engine exists yet — see the Phase 4 report's "not implemented"
+  // section) but the field exists so it is never an implicit, invisible zero.
+  supplierSubsidyCents: integer("supplier_subsidy_cents"),
+  bigBossSubsidyCents: integer("bigboss_subsidy_cents"),
+  // DeliveryBudgetEngine — analytical only, never blocks a delivery (see rule 14 of the
+  // Phase 4 spec). 'FUNDED' | 'BREAK_EVEN' | 'DEFICIT'.
+  budgetResultUsed: text("budget_result_used"),
+  budgetDeficitCentsUsed: integer("budget_deficit_cents_used"),
+  // WaitingTimePricingEngine — arrivedAtPickupAt is set by the assigned driver (new, minimal,
+  // additive capture endpoint — does NOT change deliveryStatusEnum or the ASSIGNED→PICKED_UP
+  // transition itself) while the delivery is still ASSIGNED. The three waiting* fields are
+  // computed ONCE, at the PICKED_UP transition, from (pickedUpAt − arrivedAtPickupAt) — a
+  // separate, later write that never touches feeFinalizedAt or the already-frozen
+  // deliveryFee/driverPayoutCents/companyPayoutCents above (see rule 18 of the Phase 4 spec:
+  // "historical deliveries must remain immutable"). Only today's one real scenario is
+  // modeled — a driver waiting at the SUPPLIER for pickup (see delivery-v2-proposal.md's own
+  // Example 9) — customer/dropoff-side waiting is not implemented (see the Phase 4 report).
+  arrivedAtPickupAt: timestamp("arrived_at_pickup_at"),
+  waitingMinutesBilled: integer("waiting_minutes_billed"),
+  waitingCustomerFeeCentsUsed: integer("waiting_customer_fee_cents_used"),
+  waitingDriverCompensationCentsUsed: integer("waiting_driver_compensation_cents_used"),
+
+  // Delivery System V2 Phase 5B (hardening) — a monotonic counter, incremented by exactly 1
+  // on every successful assignDriver (→ 1) and reassignDriver (→ 2, 3, ...) call that
+  // actually changes the assigned driver (a same-driver "reassignment" — see rule 3 of the
+  // Phase 5B hardening task's Case C — does NOT increment this). This is the "unique event
+  // identity that can distinguish assignment #1/#2/#3 even when the same driver appears more
+  // than once" the task asks for — used to build each ledger entry's sourceReference
+  // (`delivery:<id>:seq:<assignmentSequence>` — see storage.ts recordDeliveryFinancialEvents),
+  // so an A→B→A chain produces three DISTINCT idempotency keys instead of the second "A"
+  // colliding with the first "A"'s now-VOID entries. Extends the existing ledger/event
+  // identity architecture (rule 3: "prefer extending... do not create a new table") — no new
+  // table, one new column reused by the exact same recordDeliveryFinancialEvents function
+  // every assignment already calls.
+  assignmentSequence: integer("assignment_sequence").notNull().default(0),
+
   // Set once the fee is computed from a real driver+vehicle (at assignment) rather than the
   // creation-time estimate — the recompute-once-more guard.
   feeFinalizedAt: timestamp("fee_finalized_at"),
@@ -472,7 +634,16 @@ export const deliveryPricingSettings = pgTable("delivery_pricing_settings", {
   id: serial("id").primaryKey(),
   // Per vehicle type: { pricePerKmCents, minFeeCents }. jsonb keyed by DeliveryVehicleType
   // rather than one column per type per field, so adding a vehicle type later needs no migration.
-  vehiclePricing: jsonb("vehicle_pricing").$type<Record<DeliveryVehicleType, { pricePerKmCents: number; minFeeCents: number }>>().notNull().default(sql`'{}'::jsonb`),
+  // maxWeightKg/maxVolumeL/maxPackages (Delivery System V2 Phase 2) are OPTIONAL — undefined
+  // for every vehicle type until Admin explicitly configures one. Deliberately not seeded with
+  // a default value: a capacity limit is a real business decision (see
+  // delivery-v2-proposal.md §6/§28), and this project does not invent one. Undefined = no
+  // capacity constraint enforced for that vehicle/dimension (see
+  // storage.checkDeliveryVehicleCompatibility) — the neutral, backward-compatible default.
+  vehiclePricing: jsonb("vehicle_pricing").$type<Record<DeliveryVehicleType, {
+    pricePerKmCents: number; minFeeCents: number;
+    maxWeightKg?: number; maxVolumeL?: number; maxPackages?: number;
+  }>>().notNull().default(sql`'{}'::jsonb`),
   // Used as the estimate vehicle type before a real driver/vehicle is assigned (see
   // storage.computeDeliveryFee's two computation points).
   defaultVehicleType: deliveryVehicleTypeEnum("default_vehicle_type").notNull().default('MOTO'),
@@ -483,10 +654,418 @@ export const deliveryPricingSettings = pgTable("delivery_pricing_settings", {
   // Free-delivery promotions override this per-delivery (cafeOwner share becomes 0) — see
   // storage.computeDeliveryFee.
   cafeOwnerSharePercent: integer("cafe_owner_share_percent").notNull().default(50),
+  // Delivery System V2 Phase 3 — DriverPayoutEngine. What share of the customer delivery fee
+  // (deliveries.deliveryFee) the assigned driver/operator earns; the rest is the delivery
+  // company's own margin (0 in SUPPLIER mode, where there is no company). Defaults to 100 —
+  // this is NOT an invented business rule: it is the exact behavior every delivery already
+  // had before this phase (deliveryFee was always documented as "the full driver/operator
+  // compensation" — see storage.computeDeliveryFee's doc comment). See
+  // storage.computeDeliveryPayout.
+  driverPayoutSharePercent: integer("driver_payout_share_percent").notNull().default(100),
+
+  // ── Delivery System V2 Phase 4 — Controlled dynamic pricing & delivery economics ──────
+  // Every field below defaults to a mathematical/behavioral no-op, so a delivery computed
+  // the day Phase 4 ships is byte-identical to one computed the day before, exactly like
+  // every prior phase's defaults (see runDeliveryPricingPipeline/computeDeliveryFee).
+
+  // WeatherPricingEngine — Admin manually declares the current condition (no live weather
+  // API is integrated — see delivery-v2-proposal.md §19 and the Phase 4 report's "not
+  // implemented" section). 'NORMAL' is always hardcoded-neutral in code (never reads
+  // weatherConditionConfigs for it) — the other four conditions' multiplier/incentive/safety
+  // values are looked up from weatherConditionConfigs and default to neutral (×1.0, 0 DT,
+  // ALLOW) whenever a condition is active but not yet configured, per rule 30 ("no invented
+  // production values").
+  activeWeatherCondition: text("active_weather_condition").notNull().default('NORMAL'),
+  // Record<'RAIN'|'HEAVY_RAIN'|'STORM'|'EXTREME', { customerMultiplierPermille?: number;
+  // driverIncentiveCents?: number; safetyState?: 'ALLOW'|'ALLOW_WITH_WARNING'|'RESTRICT'|
+  // 'SUSPEND'; restrictedVehicleTypes?: DeliveryVehicleType[] }> — every key optional/absent
+  // until Admin configures it (see storage.resolveWeatherPricing).
+  weatherConditionConfigs: jsonb("weather_condition_configs").notNull().default(sql`'{}'::jsonb`),
+
+  // PeakHourEngine — Admin-defined named time windows, no hard-coded Tunisian business
+  // hours. Array of { id, label, daysOfWeek: number[] (0=Sunday..6=Saturday), startTime:
+  // "HH:MM", endTime: "HH:MM", customerMultiplierPermille, driverIncentiveCents, isActive }.
+  // Empty by default — the existing flat surgeMultiplierPermille remains the sole active
+  // multiplier until Admin adds a window (see storage.resolvePeakHourPricing).
+  peakHourWindows: jsonb("peak_hour_windows").notNull().default(sql`'[]'::jsonb`),
+
+  // ZonePricingEngine — kept as jsonb on this same singleton settings row (not a separate
+  // table) since the existing PATCH /api/admin/delivery-pricing + DeliveryPricingSection UI
+  // + delivery_pricing_updated realtime broadcast already provide everything a small,
+  // Admin-managed zone list needs — introducing a whole new table/CRUD surface for this
+  // would duplicate infrastructure that already exists for an equivalently-shaped list
+  // (compare peakHourWindows above). Array of { id, name, governorateMatch: string
+  // (case-insensitively matched against a delivery's destination governorate — see
+  // shared/schema.ts GeoLocation.details.governorate), multiplierPermille?: number,
+  // minFeeOverrideCents?: number (can only RAISE the vehicle's own minimum fee, never lower
+  // it — see storage.resolveZonePricing), isActive: boolean }. Empty by default.
+  zones: jsonb("zones").notNull().default(sql`'[]'::jsonb`),
+
+  // WaitingTimePricingEngine — a single global rate (not per-vehicle) since waiting cost is
+  // primarily about a driver's TIME, not their vehicle. Defaults to fully neutral (0 DT/min
+  // both sides) so waiting is always billed at 0 until Admin sets a real rate — see rule 2
+  // ("Waiting = 0" by default) and storage.computeWaitingFee.
+  waitingFreeMinutes: integer("waiting_free_minutes").notNull().default(0),
+  waitingPricePerMinuteCents: integer("waiting_price_per_minute_cents").notNull().default(0),
+  waitingDriverCompensationPerMinuteCents: integer("waiting_driver_compensation_per_minute_cents").notNull().default(0),
+  waitingMaxChargeCents: integer("waiting_max_charge_cents"), // null = no cap
+
+  // Multiplier Safety (rule 8) — the hard ceiling on weather × demand(still always ×1.0,
+  // out of Phase 4 scope) × peak × zone combined, enforced inside
+  // runDeliveryPricingPipeline. Defaults to 100000 permille (×100) — not a real production
+  // cap (that is an explicit BUSINESS DECISION REQUIRED, see the Phase 4 report), but a
+  // value so large it can never bind against any realistic Phase-4 configuration, making the
+  // cap mechanism itself provably inert by default while still being fully deterministic and
+  // fully configurable the moment Admin sets a real limit.
+  maxCombinedMultiplierPermille: integer("max_combined_multiplier_permille").notNull().default(100000),
+
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export type DeliveryPricingSettings = typeof deliveryPricingSettings.$inferSelect;
+
+// ── Delivery Financial Ledger (Delivery System V2 Phase 5A) ─────────────────────────────
+// See docs/bigboss-delivery-financial-ledger.md for the full design rationale. This table
+// records ECONOMIC EVENTS derived from the already-existing, already-frozen Phase 1-4
+// pricing/payout snapshot on `deliveries` — it never recomputes pricing, never changes
+// existing delivery/payout behavior, and is strictly APPEND-ONLY: an entry's amountCents/
+// direction/actorUserId/entryType are never updated or deleted once written. Only `status`
+// may progress forward via a dedicated, narrowly-scoped update (see storage.ts
+// updateLedgerEntriesStatus) — a status change is a lifecycle fact ("this became AUTHORIZED
+// because the delivery completed"), never a correction of the underlying economic fact.
+//
+// CRITICAL: an entry existing here means an economic event was CALCULATED — it does NOT mean
+// money was physically transferred, and does NOT mean BigBoss owes anyone anything (see
+// docs/bigboss-delivery-business-rules-money-flow.md §3/§23). BigBoss's own liability is
+// represented explicitly via `actorRole='BIGBOSS'` on the specific entries where it is
+// actually the responsible party (today: none — see the ledger doc's "current limitations").
+export const deliveryFinancialLedger = pgTable("delivery_financial_ledger", {
+  id: serial("id").primaryKey(),
+  // Denormalized from the delivery, matching this project's existing convention (e.g.
+  // deliveries.supplierId/cafeId are denormalized from the order) — avoids a join for every
+  // financial report query.
+  orderId: integer("order_id").notNull(),
+  subOrderId: integer("sub_order_id").notNull(),
+  deliveryId: integer("delivery_id").notNull(),
+  // Text, not a pg enum — this typology is expected to grow (future phases add BONUS,
+  // DEMAND_SURGE, SETTLEMENT) without needing a schema migration each time, matching the
+  // same text+TS-union pattern already used for deliveryPricingSettings.activeWeatherCondition
+  // (Phase 4). Validated against LedgerEntryType at the application layer (server/storage.ts).
+  entryType: text("entry_type").notNull(),
+  // Who this entry concerns, and (where the current system already makes it unambiguous) who
+  // the other side of the economic relationship is. Left null where the true counterparty
+  // depends on a still-undecided business model question (see
+  // docs/bigboss-delivery-business-rules-money-flow.md §5-6) — never guessed.
+  actorRole: text("actor_role").notNull(),
+  actorUserId: integer("actor_user_id"),
+  counterpartyRole: text("counterparty_role"),
+  counterpartyUserId: integer("counterparty_user_id"),
+  // Always a positive integer cents amount — direction (below) carries the sign/meaning, so a
+  // negative amountCents should never appear in this table.
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default('TND'),
+  // CREDIT = this actor is entitled to RECEIVE amountCents. DEBIT = this actor is responsible
+  // for / charged amountCents. Documented per-entry-type in server/storage.ts
+  // recordDeliveryFinancialEvents.
+  direction: text("direction").notNull(),
+  // CALCULATED (default, set at write time) → AUTHORIZED (set when the underlying delivery
+  // reaches DELIVERED) or VOID (set when the underlying delivery is CANCELLED) — see
+  // storage.updateLedgerEntriesStatus. OWED/PAID/REFUNDED/DISPUTED are reserved for a future
+  // settlement/refund phase and are never set by Phase 5A code.
+  status: text("status").notNull().default('CALCULATED'),
+  description: text("description"),
+  // What triggered this entry (e.g. 'ASSIGN_DRIVER', 'PICKUP_WAITING') and a reference scoping
+  // it (e.g. 'delivery:4821') — together with entryType, these form the idempotency key.
+  sourceEvent: text("source_event").notNull(),
+  sourceReference: text("source_reference").notNull(),
+  // `${sourceEvent}:${sourceReference}:${entryType}` — unique-constrained so the SAME
+  // real-world event can never produce two entries, even under retry/concurrency (see
+  // storage.createFinancialLedgerEntry).
+  idempotencyKey: text("idempotency_key").notNull(),
+  // Self-reference reserved for a future refund/adjustment phase (an entry that reverses this
+  // one would point back here) — never populated by Phase 5A code, since no refund/adjustment
+  // engine exists yet. Included now so that capability doesn't require a later migration.
+  reversedByEntryId: integer("reversed_by_entry_id"),
+  // When the amount was actually determined (copies the source delivery's feeFinalizedAt/
+  // pickedUpAt, etc.) — may differ from createdAt in a future backfill/adjustment scenario;
+  // identical to createdAt for every entry Phase 5A itself writes.
+  effectiveAt: timestamp("effective_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  deliveryIdx: index("ledger_delivery_idx").on(table.deliveryId),
+  orderIdx: index("ledger_order_idx").on(table.orderId),
+  subOrderIdx: index("ledger_sub_order_idx").on(table.subOrderId),
+  actorIdx: index("ledger_actor_idx").on(table.actorRole, table.actorUserId),
+  entryTypeIdx: index("ledger_entry_type_idx").on(table.entryType),
+  statusIdx: index("ledger_status_idx").on(table.status),
+  effectiveAtIdx: index("ledger_effective_at_idx").on(table.effectiveAt),
+  idempotencyUnique: uniqueIndex("ledger_idempotency_unique").on(table.idempotencyKey),
+}));
+export type FinancialLedgerEntry = typeof deliveryFinancialLedger.$inferSelect;
+
+// Application-layer types (validated in server/storage.ts, not DB-enforced — see entryType doc
+// above). BONUS/DEMAND_SURGE/SETTLEMENT are reserved for future phases; no Phase 5A code path
+// ever constructs an entry with one of these three.
+export type LedgerEntryType =
+  | 'DELIVERY_CHARGE' | 'SUPPLIER_CONTRIBUTION' | 'DRIVER_PAYOUT' | 'DELIVERY_COMPANY_PAYOUT'
+  | 'BIGBOSS_SUBSIDY' | 'WEATHER_INCENTIVE' | 'PEAK_INCENTIVE' | 'WAITING_COMPENSATION'
+  | 'CANCELLATION_COMPENSATION' | 'REFUND' | 'ADJUSTMENT'
+  // Two-Leg Delivery Distance Model — the Supplier's own responsibility for the driver →
+  // supplier pickup leg (see deliveries.pickupLegFeeCents doc). Kept as its own distinct
+  // entry type, never merged into SUPPLIER_CONTRIBUTION, so each leg's obligation remains
+  // independently auditable.
+  | 'SUPPLIER_PICKUP_LEG'
+  | 'BONUS' | 'DEMAND_SURGE' | 'SETTLEMENT';
+export type LedgerActorRole = 'CAFE_OWNER' | 'SUPPLIER' | 'DRIVER' | 'DELIVERY_COMPANY' | 'BIGBOSS';
+export type LedgerDirection = 'CREDIT' | 'DEBIT';
+export type LedgerStatus = 'CALCULATED' | 'AUTHORIZED' | 'OWED' | 'PAID' | 'REFUNDED' | 'VOID' | 'DISPUTED';
+
+// ── Settlement Foundation (Delivery System V2 Phase 5C.1) ───────────────────────────────
+// See docs/bigboss-delivery-settlement-architecture.md (design) and
+// docs/bigboss-delivery-settlement-foundation.md (as-built). A settlement GROUPS one
+// delivery's already-AUTHORIZED, already-frozen ledger CREDIT entries for ONE recipient
+// actor (a Driver or a Delivery Company — see settlements.actorRole doc below) into one
+// approvable obligation. It NEVER recomputes pricing/payout and NEVER touches the ledger
+// row it references beyond reading it — see settlementItems.ledgerEntryId. This is the
+// FINANCIAL LEDGER → SETTLEMENT step only; the SETTLEMENT → PAYMENT step (payments table,
+// actual money movement) is explicitly NOT part of this phase — see the architecture doc §4.
+//
+// Delivery System V2 Phase 5C.2 — PAID/PARTIALLY_PAID added now that a payment layer exists
+// (see `payments` below) to actually set them; derived purely from confirmed payment totals
+// against the frozen amountCents (storage.recomputeSettlementPaymentStatus) — never set
+// directly by any route. PENDING/APPROVED/VOID are unchanged from Phase 5C.1.
+export const settlementStatusEnum = pgEnum('settlement_status', ['PENDING', 'APPROVED', 'PARTIALLY_PAID', 'PAID', 'VOID']);
+
+export const settlements = pgTable("settlements", {
+  id: serial("id").primaryKey(),
+  // Denormalized from the delivery (same convention as deliveryFinancialLedger.orderId/
+  // subOrderId) — avoids a join for every settlement list/report query.
+  deliveryId: integer("delivery_id").notNull(),
+  orderId: integer("order_id").notNull(),
+  subOrderId: integer("sub_order_id").notNull(),
+  // WHO this settlement pays: always 'DRIVER' or 'DELIVERY_COMPANY' — the only two
+  // LedgerActorRole values that ever appear on a CREDIT ledger entry (see
+  // recordDeliveryFinancialEvents). CAFE_OWNER/SUPPLIER/BIGBOSS entries are always DEBIT
+  // (funding sources, not settlement recipients — architecture doc §13/§14: "do not confuse
+  // who funds with who receives") and therefore never produce a settlement row. Enforced in
+  // code (calculateDeliverySettlement), not a DB constraint, matching this project's existing
+  // text-role convention (deliveryFinancialLedger.actorRole is text too).
+  actorRole: text("actor_role").notNull(),
+  actorUserId: integer("actor_user_id").notNull(),
+  // WHO owes it — copied verbatim from the grouped ledger entries' own counterpartyRole/
+  // counterpartyUserId (always the operating Supplier or Delivery Company — never BigBoss,
+  // never null, for the entry types that ever reach this table). Kept denormalized so a
+  // settlement is self-explaining without joining back to the ledger.
+  counterpartyRole: text("counterparty_role"),
+  counterpartyUserId: integer("counterparty_user_id"),
+  // Sum of every settlementItems row's amountCents for this settlement — always exactly
+  // reconcilable back to the ledger (see storage.reconcileSettlement). Never independently
+  // edited; the only way this changes is voiding this settlement and nothing yet exists to
+  // create a corrected replacement (that is a future ADJUSTMENT-phase concern — architecture
+  // doc §10).
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default('TND'),
+  status: settlementStatusEnum("status").notNull().default('PENDING'),
+  // Snapshot of the delivery's own DeliveryBudgetEngine result AT THE MOMENT this settlement
+  // was calculated (architecture doc §21 freeze rule) — lets Admin see "this settlement was
+  // calculated against a DEFICIT delivery" without a join, and without ever silently
+  // resolving who absorbs the deficit (that remains an open business decision — architecture
+  // doc §25). Purely informational; never affects amountCents.
+  budgetResultAtCalculation: text("budget_result_at_calculation"),
+  budgetDeficitCentsAtCalculation: integer("budget_deficit_cents_at_calculation"),
+  // The shared sourceReference of the ledger entries this settlement groups (e.g.
+  // `delivery:44:seq:3`) — traceable back to the exact assignment that earned it (see
+  // deliveries.assignmentSequence doc). Since a delivery's ledger entries only ever reach
+  // AUTHORIZED once (at DELIVERED, from whichever assignment was active at that moment — see
+  // updateDeliveryStatus), this is always the single, final, correct assignment's reference.
+  sourceReference: text("source_reference").notNull(),
+  // `DELIVERY_SETTLEMENT:${sourceReference}:${actorRole}:${actorUserId}` — unique-constrained,
+  // same ON CONFLICT DO NOTHING + read-back idempotency pattern as
+  // deliveryFinancialLedger.idempotencyKey (see storage.calculateDeliverySettlement). Guards
+  // duplicate settlement calculation (double-click, retry, concurrent DELIVERED transitions —
+  // cannot actually happen twice since updateDeliveryStatus's compare-and-swap only lets ONE
+  // request win the DELIVERED transition, but this is defense in depth, not the only guard).
+  idempotencyKey: text("idempotency_key").notNull(),
+  calculatedAt: timestamp("calculated_at").notNull(),
+  approvedAt: timestamp("approved_at"),
+  approvedByUserId: integer("approved_by_user_id"),
+  voidedAt: timestamp("voided_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  deliveryIdx: index("settlements_delivery_idx").on(table.deliveryId),
+  orderIdx: index("settlements_order_idx").on(table.orderId),
+  actorIdx: index("settlements_actor_idx").on(table.actorRole, table.actorUserId),
+  counterpartyIdx: index("settlements_counterparty_idx").on(table.counterpartyRole, table.counterpartyUserId),
+  statusIdx: index("settlements_status_idx").on(table.status),
+  idempotencyUnique: uniqueIndex("settlements_idempotency_unique").on(table.idempotencyKey),
+}));
+export type Settlement = typeof settlements.$inferSelect;
+export type SettlementStatus = 'PENDING' | 'APPROVED' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';
+
+// The join that lets a settlement explain "WHY is this actor owed this amount" (architecture
+// doc §7) WITHOUT the ledger ever being mutated to point at a settlement (architecture doc
+// §4 — grouping lives here, not on the ledger row). ledgerEntryId carries a GLOBAL unique
+// constraint (not just unique-per-settlement): a single ledger entry may be claimed by AT
+// MOST ONE settlement, ever — the structural guarantee that the same economic fact can never
+// be double-settled, enforced by the database, not just application logic.
+export const settlementItems = pgTable("settlement_items", {
+  id: serial("id").primaryKey(),
+  settlementId: integer("settlement_id").notNull(),
+  ledgerEntryId: integer("ledger_entry_id").notNull(),
+  // Denormalized copy of the ledger entry's own amountCents/entryType at the moment it was
+  // claimed — so a settlement's total is self-contained/auditable even without a live join
+  // (architecture doc §23: "kept explicit rather than always re-joining").
+  amountCents: integer("amount_cents").notNull(),
+  entryType: text("entry_type").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  settlementIdx: index("settlement_items_settlement_idx").on(table.settlementId),
+  ledgerEntryUnique: uniqueIndex("settlement_items_ledger_entry_unique").on(table.ledgerEntryId),
+}));
+export type SettlementItem = typeof settlementItems.$inferSelect;
+
+// ── Payment Layer (Delivery System V2 Phase 5C.2) ────────────────────────────────────────
+// See docs/bigboss-delivery-financial-strategy.md (as-built) and
+// docs/bigboss-delivery-settlement-architecture.md §12/§13 (design). SETTLEMENT → PAYMENT
+// step only. An INTERNAL payment-record layer — no external payment provider is integrated;
+// every row here is a fact an Admin explicitly records (today: exclusively CASH, matching
+// the system's current COD-only reality — see cod_reconciliations below), never something a
+// provider webhook writes. A payment NEVER changes deliveryFinancialLedger or recalculates a
+// settlement's amountCents — it only records whether/how a settlement's already-frozen
+// amount was actually transferred, and its own status (see storage.confirmPayment/
+// failPayment/reversePayment) is the ONLY thing that ever changes after creation.
+export const paymentMethodEnum = pgEnum('payment_method', ['CASH', 'BANK_TRANSFER', 'CARD', 'WALLET', 'OTHER']);
+export const paymentStatusEnum = pgEnum('payment_status', ['INITIATED', 'PENDING', 'CONFIRMED', 'FAILED', 'REVERSED']);
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  settlementId: integer("settlement_id").notNull(),
+  // May differ from the settlement's own amountCents for a PARTIAL payment (multiple payment
+  // rows can together cover one settlement) — see storage.recomputeSettlementPaymentStatus,
+  // which sums only CONFIRMED payments and caps them at the settlement's amountCents
+  // (overpayment is rejected at confirmPayment, never silently allowed — architecture doc §9).
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default('TND'),
+  method: paymentMethodEnum("method").notNull(),
+  // Nullable — CASH (today's only real method) has no external provider. Reserved for a
+  // future real integration (CARD/BANK_TRANSFER/WALLET) without a schema change.
+  provider: text("provider"),
+  providerReference: text("provider_reference"),
+  status: paymentStatusEnum("status").notNull().default('INITIATED'),
+  initiatedAt: timestamp("initiated_at").notNull(),
+  completedAt: timestamp("completed_at"),
+  failedAt: timestamp("failed_at"),
+  createdByUserId: integer("created_by_user_id").notNull(),
+  // Client-supplied (or route-derived) idempotency key — guards an Admin double-click from
+  // ever producing two payment rows for what was meant to be one action, same ON CONFLICT DO
+  // NOTHING + read-back pattern as deliveryFinancialLedger.idempotencyKey.
+  idempotencyKey: text("idempotency_key").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  settlementIdx: index("payments_settlement_idx").on(table.settlementId),
+  statusIdx: index("payments_status_idx").on(table.status),
+  idempotencyUnique: uniqueIndex("payments_idempotency_unique").on(table.idempotencyKey),
+  // Partial unique index — providerReference is only meaningfully unique when present (CASH
+  // payments never have one); Drizzle's pgTable builder emits this via a raw SQL predicate.
+  providerReferenceUnique: uniqueIndex("payments_provider_reference_unique").on(table.providerReference).where(sql`${table.providerReference} IS NOT NULL`),
+}));
+export type Payment = typeof payments.$inferSelect;
+export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'WALLET' | 'OTHER';
+export type PaymentStatus = 'INITIATED' | 'PENDING' | 'CONFIRMED' | 'FAILED' | 'REVERSED';
+
+// ── COD Reconciliation (Delivery System V2 Phase 5C.2) ───────────────────────────────────
+// Deliberately SEPARATE from deliveryStatusEnum (rule: "Do NOT merge COD with delivery
+// status" — a delivery reaching DELIVERED is proof of drop-off, never proof cash was
+// physically collected, a distinct real-world event). One row per delivery, created
+// automatically (storage.createCodReconciliationIfApplicable, called from the SAME
+// transaction as the DELIVERED transition, mirroring calculateDeliverySettlement's own
+// trigger) ONLY when the order's paymentMethod is CASH_ON_DELIVERY — never for a
+// card/mobile/bank-transfer order, and never for a delivery that doesn't exist (Self Pickup
+// has no delivery row at all — structurally excluded, same as settlements).
+export const codReconciliationStatusEnum = pgEnum('cod_reconciliation_status', [
+  'EXPECTED', 'COLLECTED', 'REMITTED', 'RECONCILED', 'DISCREPANCY', 'CANCELLED',
+]);
+
+export const codReconciliations = pgTable("cod_reconciliations", {
+  id: serial("id").primaryKey(),
+  deliveryId: integer("delivery_id").notNull(),
+  orderId: integer("order_id").notNull(),
+  // = subOrder.subtotal + delivery.deliveryFee at the moment of DELIVERED — the real,
+  // already-existing amount the driver should collect for this delivery's own sub-order
+  // (never invented; see storage.createCodReconciliationIfApplicable's doc for the exact
+  // formula). Frozen at creation, exactly like every other Phase 1-5C snapshot value.
+  expectedAmountCents: integer("expected_amount_cents").notNull(),
+  collectedAmountCents: integer("collected_amount_cents"),
+  remittedAmountCents: integer("remitted_amount_cents"),
+  status: codReconciliationStatusEnum("status").notNull().default('EXPECTED'),
+  collectedAt: timestamp("collected_at"),
+  collectedByUserId: integer("collected_by_user_id"),
+  remittedAt: timestamp("remitted_at"),
+  remittedByUserId: integer("remitted_by_user_id"),
+  reconciledAt: timestamp("reconciled_at"),
+  reconciledByUserId: integer("reconciled_by_user_id"),
+  // remittedAmountCents - expectedAmountCents at reconciliation time — the figure Finance
+  // actually cares about (did the full expected amount make it all the way through). Never
+  // silently absorbed: a nonzero value sets status=DISCREPANCY instead of RECONCILED, and
+  // the field stays visible either way (see storage.reconcileCod).
+  discrepancyCents: integer("discrepancy_cents"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  deliveryUnique: uniqueIndex("cod_reconciliations_delivery_unique").on(table.deliveryId),
+  orderIdx: index("cod_reconciliations_order_idx").on(table.orderId),
+  statusIdx: index("cod_reconciliations_status_idx").on(table.status),
+}));
+export type CodReconciliation = typeof codReconciliations.$inferSelect;
+export type CodReconciliationStatus = 'EXPECTED' | 'COLLECTED' | 'REMITTED' | 'RECONCILED' | 'DISCREPANCY' | 'CANCELLED';
+
+// ── Refunds (Delivery System V2 Phase 5C.2) ──────────────────────────────────────────────
+// A refund is a NEW financial fact — it never edits the original ledger entry, settlement,
+// or payment it refunds (architecture doc §9). Exactly one of paymentId/settlementId is
+// normally set (a refund against a specific confirmed payment, or — before any payment
+// exists — against the settlement obligation itself); both nullable so either shape is
+// representable without two tables.
+export const refundStatusEnum = pgEnum('refund_status', ['REQUESTED', 'CONFIRMED', 'FAILED', 'CANCELLED']);
+
+export const refunds = pgTable("refunds", {
+  id: serial("id").primaryKey(),
+  paymentId: integer("payment_id"),
+  settlementId: integer("settlement_id"),
+  amountCents: integer("amount_cents").notNull(),
+  reason: text("reason").notNull(),
+  status: refundStatusEnum("status").notNull().default('REQUESTED'),
+  initiatedByUserId: integer("initiated_by_user_id").notNull(),
+  initiatedAt: timestamp("initiated_at").notNull(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  paymentIdx: index("refunds_payment_idx").on(table.paymentId),
+  settlementIdx: index("refunds_settlement_idx").on(table.settlementId),
+  statusIdx: index("refunds_status_idx").on(table.status),
+}));
+export type Refund = typeof refunds.$inferSelect;
+export type RefundStatus = 'REQUESTED' | 'CONFIRMED' | 'FAILED' | 'CANCELLED';
+
+// ── Adjustments (Delivery System V2 Phase 5C.2) ──────────────────────────────────────────
+// Additive-only correction, referencing the original fact it corrects — NEVER modifies it
+// (architecture doc §10). No lifecycle/status: a created adjustment is immediately and
+// permanently the fact it represents (unlike payments/refunds, there is no external process
+// to confirm/fail — an Admin recording an adjustment IS the event).
+export const adjustments = pgTable("adjustments", {
+  id: serial("id").primaryKey(),
+  ledgerEntryId: integer("ledger_entry_id"),
+  settlementId: integer("settlement_id"),
+  amountCents: integer("amount_cents").notNull(),
+  direction: text("direction").notNull(), // 'CREDIT' | 'DEBIT' — same convention as deliveryFinancialLedger.direction
+  reason: text("reason").notNull(),
+  createdByUserId: integer("created_by_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  ledgerEntryIdx: index("adjustments_ledger_entry_idx").on(table.ledgerEntryId),
+  settlementIdx: index("adjustments_settlement_idx").on(table.settlementId),
+}));
+export type Adjustment = typeof adjustments.$inferSelect;
 
 // Real-time Delivery-Company-published Driver opportunities (Part 17/18 — audited: nothing
 // like this existed before). A Driver applying/accepting fills it; no duplicate assignment
@@ -523,13 +1102,45 @@ export type DeliveryOpportunityStatus = 'OPEN' | 'FILLED' | 'CLOSED' | 'CANCELLE
 // map). Built from the existing orders/order_items/users relationships in storage.ts —
 // nothing here is duplicated/stored on the deliveries row itself beyond the pickup/
 // destination snapshots that already existed.
-export type DeliveryWithDetails = Delivery & {
+export type DeliveryWithDetails = Omit<Delivery, 'cafeOwnerFeeShareCents' | 'supplierFeeShareCents'> & {
+  // Delivery System V2 Phase 5B (hardening) — widened to nullable here ONLY: the DB column
+  // itself is genuinely never null (deliveries.cafeOwnerFeeShareCents/supplierFeeShareCents
+  // stay .notNull() — no schema/behavior change), but storage.redactDeliveryCodes now returns
+  // null for a viewer not authorized to see that specific share (e.g. a Driver never sees
+  // either split; a Coffee Owner never sees the Supplier's — see that method's doc). Every
+  // current consumer of these two fields already either checks `!= null` or falls back with
+  // `?? 0`, so this widening does not change any existing display's runtime behavior.
+  cafeOwnerFeeShareCents: number | null;
+  supplierFeeShareCents: number | null;
   order: { id: number; status: string; totalAmount: number; createdAt: Date | null; itemCount: number; priority: string; scheduledAt: Date | null };
-  subOrder: { id: number; status: string; supplierName: string; subtotal: number };
+  subOrder: {
+    id: number; status: string; supplierName: string; subtotal: number;
+    // Transport requirements (Delivery System V2) — supplier-declared, informational +
+    // vehicle-compatibility gating only (see storage.isVehicleCompatible).
+    requiredVehicleType: DeliveryVehicleType | null;
+    totalWeightKg: string | null;
+    totalVolumeL: string | null;
+    numberOfPackages: number | null;
+    numberOfItems: number | null;
+    isFragile: boolean;
+    specialHandling: string | null;
+  };
   cafe: { id: number; name: string; phone: string | null; locationAddress: string | null };
   supplier: { id: number; name: string; phone: string | null; locationAddress: string | null; locationLat: string | null; locationLng: string | null };
   deliveryCompany: { id: number; name: string } | null;
   driver: { id: number; name: string; phone: string | null; locationLat: string | null; locationLng: string | null } | null;
+  // Delivery System V2 Phase 3 — derived at read time from the delivery's CURRENT status,
+  // never persisted (the frozen driverPayoutCents/companyPayoutCents numbers themselves are
+  // never touched by this). EARNED only once actually DELIVERED; VOID once CANCELLED (a
+  // cancelled delivery's computed payout was never actually earned — see rule 24 of the
+  // Phase 3 spec); PENDING for every other in-flight state, including when no payout has
+  // been computed yet (still PENDING dispatch/assignment).
+  payoutStatus: 'PENDING' | 'EARNED' | 'VOID';
+  // Delivery System V2 Phase 4 — driverPayoutCents (frozen at assignment) plus any LATER
+  // waitingDriverCompensationCentsUsed (only known at pickup — see schema comment above).
+  // Derived at read time, never persisted; null whenever driverPayoutCents itself is null
+  // (not yet assigned, or redacted for this viewer — see storage.redactDeliveryCodes).
+  totalDriverPayoutCents: number | null;
   // Same shape as SubOrderWithItems.items — the raw, joined order items (snapshot, packId,
   // productId included) — so every delivery-detail surface can reuse the exact same
   // groupOrderItemsByProduct/PackCompositionView rendering the Coffee Owner order-details
@@ -1810,6 +2421,12 @@ export const promotions = pgTable("promotions", {
   tiers: jsonb("tiers"),                  // QUANTITY_TIER: [{minQty, maxQty?, pricePerUnit}]
   giftInfo: jsonb("gift_info"),           // GIFT: {description, quantity}
   freeShippingMinAmount: integer("free_shipping_min_amount"), // cents, 0 = always free
+  // Delivery System V2 Phase 4 — SupplierSubsidyEngine. Only meaningful on a FREE_SHIPPING
+  // promotion; null preserves the EXACT pre-Phase-4 behavior (100% supplier-funded delivery)
+  // — see storage.resolveSupplierSubsidy. A real percentage (1-99) generalizes today's
+  // binary free-shipping into a graduated subsidy without changing any existing promotion's
+  // effective behavior (every existing FREE_SHIPPING row has this column null).
+  deliverySubsidyPercent: integer("delivery_subsidy_percent"),
   // Targeting
   targetType: promotionTargetTypeEnum("target_type").notNull().default('ALL'),
   targetListingIds: integer("target_listing_ids").array(),
@@ -2794,6 +3411,7 @@ export type MarketplaceProduct = ProductWithTaxonomy & {
 export type SubOrderDeliverySummary = {
   id: number;
   status: DeliveryStatus;
+  deliveryMode: DeliveryMode | null;
   deliveryCompany: { id: number; name: string } | null;
   driver: { id: number; name: string; phone: string | null } | null;
   pickedUpAt: Date | null;
@@ -2814,6 +3432,13 @@ export type SubOrderDeliverySummary = {
   // must never see (Order Details synchronization task).
   supplierFeeShareCents: number | null;
   freeDeliveryApplied: boolean;
+  // Transport/routing snapshot for Driver/Delivery-Company/Admin views (Delivery System V2).
+  // roadDistanceKm/estimatedDurationMinutes are prep-only — always null until a real routing
+  // provider is wired up; distanceKm is the existing haversine value already used for pricing.
+  vehicleType: DeliveryVehicleType | null;
+  distanceKm: string | null;
+  roadDistanceKm: string | null;
+  estimatedDurationMinutes: number | null;
 };
 
 export type SubOrderWithItems = SubOrder & {

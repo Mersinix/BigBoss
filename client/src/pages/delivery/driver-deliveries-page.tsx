@@ -201,7 +201,9 @@ export default function DriverDeliveriesPage() {
 
       {/* ── Sandwich panel — En cours / Terminées, switch delivery without leaving the map ── */}
       <Dialog open={listOpen} onOpenChange={setListOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+            scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           <DialogHeader><DialogTitle>Mes livraisons</DialogTitle></DialogHeader>
           <Tabs value={listTab} onValueChange={(v) => setListTab(v as "active" | "completed")}>
             <TabsList>
@@ -245,7 +247,9 @@ export default function DriverDeliveriesPage() {
 
       {/* ── Details modal — reuses the existing full delivery-detail view as-is ── */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+            scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>
           {current && (
             <DeliveryDetails

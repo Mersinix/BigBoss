@@ -4084,6 +4084,107 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Self Pickup confirmation (Coffee Owner) — Delivery System V2 ────────────
+  // The Coffee Owner types back the 6-digit code the Supplier gave them in person. Every
+  // check (ownership, fulfillment type, sub-order status, code match, single-use) happens
+  // server-side in storage.confirmSelfPickup — the frontend value is never trusted alone.
+
+  app.patch('/api/suborders/:id/confirm-self-pickup', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      if (user.role !== 'CAFE_OWNER') return res.status(403).json({ message: 'Forbidden' });
+      const subOrderId = parseInt(req.params.id);
+      const { code } = z.object({ code: z.string().trim().min(1).max(20) }).parse(req.body);
+      const updated = await storage.confirmSelfPickup(subOrderId, user.id, code);
+      const order = await storage.getOrder(updated.orderId);
+      broadcastToUsers([user.id, updated.supplierId], 'suborder_status_changed', {
+        orderId: updated.orderId, subOrderId, status: updated.status,
+      });
+      broadcast('suborder_status_changed', { orderId: updated.orderId, subOrderId, status: updated.status });
+      if (order) {
+        await notify({
+          userId: updated.supplierId,
+          service: "SHOP", type: "self_pickup_confirmed", priority: "SUCCESS",
+          title: "Retrait confirmé",
+          message: `Le café a confirmé le retrait de la commande #${updated.orderId}.`,
+          entityType: "suborder", entityId: subOrderId,
+          prefKey: "shop_orders",
+          dedupeKey: `shop:self_pickup_confirmed:${subOrderId}`,
+        });
+      }
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Unable to confirm pickup' });
+    }
+  });
+
+  // ── Transport requirements (Supplier) — Delivery System V2 ──────────────────
+  // Purely informational + vehicle-compatibility-gating (see storage.isVehicleCompatible).
+  // Never touches pricing. Only the owning supplier may set these for their own sub-order.
+
+  app.patch('/api/suborders/:id/transport-requirements', requireApprovedSupplier, async (req, res) => {
+    try {
+      const subOrderId = parseInt(req.params.id);
+      const body = z.object({
+        requiredVehicleType: z.enum(['BICYCLE', 'MOTO', 'CAR', 'VAN', 'TRUCK', 'OTHER']).nullable().optional(),
+        totalWeightKg: z.string().max(20).nullable().optional(),
+        totalVolumeL: z.string().max(20).nullable().optional(),
+        numberOfPackages: z.number().int().min(0).nullable().optional(),
+        numberOfItems: z.number().int().min(0).nullable().optional(),
+        isFragile: z.boolean().optional(),
+        specialHandling: z.string().max(500).nullable().optional(),
+      }).parse(req.body);
+      const updated = await storage.updateSubOrderTransportRequirements(subOrderId, req.session.userId!, body);
+      broadcastToUsers([updated.supplierId], 'suborder_status_changed', { orderId: updated.orderId, subOrderId, status: updated.status });
+      broadcast('suborder_status_changed', { orderId: updated.orderId, subOrderId, status: updated.status });
+      // Delivery System V2 Phase 2 — advisory suggestion only, never overrides the supplier's
+      // own requiredVehicleType above. See storage.suggestRequiredVehicleType.
+      const suggestedVehicleType = await storage.suggestRequiredVehicleType(updated);
+      res.json({ ...updated, suggestedVehicleType });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Unable to update transport requirements' });
+    }
+  });
+
+  // ── Pre-checkout delivery estimate (Coffee Owner) — Delivery System V2 ──────
+  // Explicitly an ESTIMATE: reuses the exact same computeDeliveryFee engine, but the real,
+  // authoritative fee is still (re)computed fresh at READY / driver assignment — this never
+  // replaces or shortcuts that. Self Pickup carts should never call this (fee is always 0
+  // and there is no delivery to estimate) — the route refuses it defensively.
+
+  app.post('/api/orders/estimate-delivery', requireApprovedCafeOwner, async (req, res) => {
+    try {
+      const body = z.object({
+        deliveryMethod: z.enum(['SELF_PICKUP', 'DELIVERY_SERVICE']),
+        // Delivery System V2 Phase 4 — `details.governorate` (already present on the client's
+        // full GeoLocation object, previously silently stripped here) lets ZonePricingEngine
+        // resolve a real zone for the estimate instead of always falling back to neutral —
+        // see storage.resolveZonePricing. Everything else about this contract is unchanged.
+        deliveryAddress: z.object({ lat: z.string(), lng: z.string(), details: z.object({ governorate: z.string().optional() }).optional() }).optional(),
+        items: z.array(z.object({ supplierId: z.number(), subtotalCents: z.number().min(0) })),
+      }).parse(req.body);
+      if (body.deliveryMethod === 'SELF_PICKUP' || !body.deliveryAddress) {
+        return res.json({ bySupplier: [], totalEstimatedCafeOwnerCents: 0 });
+      }
+      const bySupplier = await Promise.all(body.items.map(async (item) => {
+        const est = await storage.estimateDeliveryFee({
+          supplierId: item.supplierId,
+          subtotalCents: item.subtotalCents,
+          cafeLocation: body.deliveryAddress!,
+        });
+        return { supplierId: item.supplierId, ...est };
+      }));
+      const totalEstimatedCafeOwnerCents = bySupplier.reduce((s, r) => s + r.estimatedCafeOwnerCents, 0);
+      res.json({ bySupplier, totalEstimatedCafeOwnerCents });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Unable to estimate delivery fee' });
+    }
+  });
+
   // ── Per-supplier-order item cancellation (Coffee Owner) ─────────────────────
   // Distinct from PATCH /api/orders/:id/status (whole-order cancel) and
   // PATCH /api/suborders/:id/status (Supplier/Admin lifecycle) — this lets a Coffee
@@ -4273,8 +4374,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Supplier's dispatch decision for a PENDING delivery — Delivery Company queue, or the
-  // supplier's own drivers. See storage.dispatchDelivery().
+  // Supplier's dispatch decision — a PENDING delivery's first-ever dispatch, OR (task:
+  // "Supplier redispatch before driver confirmation") an ASSIGNED-but-not-yet-picked-up
+  // delivery being redispatched to a different mode/company/own-drivers via the exact same
+  // "Comment livrer cette commande ?" choice. See storage.dispatchDelivery().
   app.patch('/api/deliveries/:id/dispatch', requireApprovedSupplier, async (req: any, res) => {
     try {
       const deliveryId = parseInt(req.params.id);
@@ -4291,6 +4394,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           return res.status(400).json({ message: 'Invalid delivery company' });
         }
       }
+      // Captured BEFORE the dispatch call so a redispatch can notify whoever was previously,
+      // unconfirmed-ly assigned — same "previous" pattern the existing /reassign route uses.
+      const previous = await storage.getDelivery(deliveryId);
       const updated = await storage.dispatchDelivery(deliveryId, supplier, mode, deliveryCompanyId);
       const delivery = await storage.getDelivery(deliveryId);
       if (mode === 'DELIVERY_COMPANY') {
@@ -4304,6 +4410,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
       }
       broadcast('delivery_status_changed', { deliveryId, status: updated.status });
+      // Redispatch — notify whoever was previously assigned (driver and/or delivery company)
+      // that this delivery is no longer theirs, mirroring the existing /reassign route's own
+      // "delivery_reassigned_away" notification exactly (same type, same dedupe convention).
+      if (previous?.status === 'ASSIGNED') {
+        if (previous.driver) {
+          broadcastToUsers([previous.driver.id], 'delivery_assigned', { deliveryId, status: updated.status });
+          await notify({
+            userId: previous.driver.id,
+            service: "SHOP", type: "delivery_reassigned_away", priority: "INFO",
+            title: "Livraison réattribuée",
+            message: `La livraison de la commande #${previous.orderId} a été réattribuée.`,
+            entityType: "delivery", entityId: deliveryId,
+            prefKey: "shop_delivery",
+            dedupeKey: `shop:delivery_redispatched_away:${deliveryId}:${previous.driver.id}`,
+          });
+        }
+        if (previous.deliveryCompany) {
+          broadcastToUsers([previous.deliveryCompany.id], 'delivery_status_changed', { deliveryId, status: updated.status });
+        }
+      }
       res.json(storage.redactDeliveryCodes(updated, 'SUPPLIER'));
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -4329,6 +4455,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(storage.redactDeliveryCodes(updated, 'DELIVERY_COMPANY'));
     } catch (err: any) {
       res.status(409).json({ message: err.message ?? 'Unable to accept delivery' });
+    }
+  });
+
+  // Delivery System V2 Phase 3 — Dispatch/Offer recommendation layer (rule 8-11): the owner's
+  // own driver roster, each annotated with vehicle compatibility and an expected (provisional,
+  // non-authoritative) payout preview, so the caller can make an informed choice BEFORE calling
+  // the existing /assign endpoint below — never a replacement for it. Ownership is re-verified
+  // server-side inside storage.getAssignableDriversForDelivery, exactly like /assign.
+  app.get('/api/deliveries/:id/assignable-drivers', requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const deliveryId = parseInt(req.params.id);
+      const result = await storage.getAssignableDriversForDelivery(deliveryId, { id: user.id, role: user.role });
+      res.json(result);
+    } catch (err: any) {
+      res.status(403).json({ message: err.message ?? 'Unable to list assignable drivers' });
     }
   });
 
@@ -4433,6 +4576,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(409).json({ message: err.message ?? 'Unable to reassign driver' });
+    }
+  });
+
+  // Delivery System V2 Phase 4 — WaitingTimePricingEngine capture. Minimal, additive: does
+  // NOT change the delivery's status (still ASSIGNED afterward) — see
+  // storage.recordArrivedAtPickup doc. The actual waiting fee is computed later, once, at the
+  // PICKED_UP transition above.
+  app.patch('/api/deliveries/:id/arrived-at-pickup', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const deliveryId = parseInt(req.params.id);
+      const updated = await storage.recordArrivedAtPickup(deliveryId, { id: user.id, role: user.role });
+      res.json(storage.redactDeliveryCodes(updated, user.role));
+    } catch (err: any) {
+      res.status(403).json({ message: err.message ?? 'Unable to record arrival' });
     }
   });
 
@@ -4684,10 +4843,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Driver self-service: read their own assigned vehicle, or self-register one under their
   // own operator if none is assigned yet (Espace Chauffeur → Paramètres — see task Part 11).
+  // Vehicle ownership/provider identification (task: "Driver Profile — Vehicle Owner
+  // Identification"). A driver's vehicle is ALWAYS created under the driver's own operator
+  // account (see POST /api/driver/vehicle below — ownerType is derived from
+  // user.deliveryCompanyId/supplierId, never a free choice), so "who provides this vehicle" is
+  // always correctly either the Supplier or the Delivery Company the driver belongs to —
+  // there is no existing data path for a driver-owned vehicle, so none is fabricated here.
+  async function withVehicleOwnerName(vehicle: any) {
+    if (!vehicle) return vehicle;
+    const owner = await storage.getUser(vehicle.ownerId);
+    return { ...vehicle, ownerName: owner?.name ?? null };
+  }
+
   app.get('/api/driver/vehicle', requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== 'DRIVER') return res.status(403).json({ message: 'Driver access required' });
-    try { res.json((await storage.getVehicleForDriver(user.id)) ?? null); }
+    try { res.json(await withVehicleOwnerName(await storage.getVehicleForDriver(user.id))); }
     catch { res.status(500).json({ message: 'Failed to load vehicle' }); }
   });
 
@@ -4704,7 +4875,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const vehicle = await storage.createVehicle(ownerType, ownerId, data as any);
       const assigned = await storage.assignVehicleToDriver(vehicle.id, ownerType, ownerId, user.id);
       broadcast('vehicle_updated', { ownerType, ownerId, vehicleId: vehicle.id, kind: 'created' });
-      res.status(201).json(assigned);
+      res.status(201).json(await withVehicleOwnerName(assigned));
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: err.message ?? 'Error registering vehicle' });
@@ -4720,7 +4891,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const data = vehicleInputSchema.parse(req.body);
       const vehicle = await storage.updateVehicle(existing.id, existing.ownerType, existing.ownerId, data as any);
       broadcast('vehicle_updated', { ownerType: existing.ownerType, ownerId: existing.ownerId, vehicleId: existing.id, kind: 'updated' });
-      res.json(vehicle);
+      res.json(await withVehicleOwnerName(vehicle));
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: err.message ?? 'Error updating vehicle' });
@@ -4969,11 +5140,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch('/api/admin/delivery-pricing', requireAdmin, async (req, res) => {
     try {
       const body = z.object({
-        vehiclePricing: z.record(z.string(), z.object({ pricePerKmCents: z.number().int().min(0), minFeeCents: z.number().int().min(0) })).optional(),
+        vehiclePricing: z.record(z.string(), z.object({
+          pricePerKmCents: z.number().int().min(0), minFeeCents: z.number().int().min(0),
+          // Delivery System V2 Phase 2 — optional per-vehicle capacity. Omitted/undefined =
+          // no capacity constraint enforced (see storage.checkDeliveryVehicleCompatibility).
+          maxWeightKg: z.number().min(0).optional(),
+          maxVolumeL: z.number().min(0).optional(),
+          maxPackages: z.number().int().min(0).optional(),
+        })).optional(),
         defaultVehicleType: z.enum(['BICYCLE', 'MOTO', 'CAR', 'VAN', 'TRUCK', 'OTHER']).optional(),
         surgeMultiplierPermille: z.number().int().min(0).max(10000).optional(),
         surgeLabel: z.string().max(200).optional(),
         cafeOwnerSharePercent: z.number().int().min(0).max(100).optional(),
+        // Delivery System V2 Phase 3 — DriverPayoutEngine config. Default 100 (see schema doc).
+        driverPayoutSharePercent: z.number().int().min(0).max(100).optional(),
+        // Delivery System V2 Phase 4 — WeatherPricingEngine + DeliverySafetyEngine.
+        activeWeatherCondition: z.enum(['NORMAL', 'RAIN', 'HEAVY_RAIN', 'STORM', 'EXTREME']).optional(),
+        weatherConditionConfigs: z.record(z.string(), z.object({
+          customerMultiplierPermille: z.number().int().min(0).optional(),
+          driverIncentiveCents: z.number().int().min(0).optional(),
+          safetyState: z.enum(['ALLOW', 'ALLOW_WITH_WARNING', 'RESTRICT', 'SUSPEND']).optional(),
+          restrictedVehicleTypes: z.array(z.enum(['BICYCLE', 'MOTO', 'CAR', 'VAN', 'TRUCK', 'OTHER'])).optional(),
+        })).optional(),
+        // PeakHourEngine — no hard-coded windows; Admin defines them.
+        peakHourWindows: z.array(z.object({
+          id: z.string(), label: z.string().max(100), daysOfWeek: z.array(z.number().int().min(0).max(6)),
+          startTime: z.string().max(5), endTime: z.string().max(5),
+          customerMultiplierPermille: z.number().int().min(0), driverIncentiveCents: z.number().int().min(0), isActive: z.boolean(),
+        })).optional(),
+        // ZonePricingEngine — governorate-match v1, matches destination.
+        zones: z.array(z.object({
+          id: z.string(), name: z.string().max(100), governorateMatch: z.string().max(100),
+          multiplierPermille: z.number().int().min(0).optional(), minFeeOverrideCents: z.number().int().min(0).optional(), isActive: z.boolean(),
+        })).optional(),
+        // WaitingTimePricingEngine — defaults to fully neutral (0 DT/min both sides).
+        waitingFreeMinutes: z.number().int().min(0).optional(),
+        waitingPricePerMinuteCents: z.number().int().min(0).optional(),
+        waitingDriverCompensationPerMinuteCents: z.number().int().min(0).optional(),
+        waitingMaxChargeCents: z.number().int().min(0).nullable().optional(),
+        // Multiplier Safety (rule 8) — the hard ceiling on the combined weather×peak×zone
+        // multiplier. Minimum 1000 (×1.0) enforced in storage.updateDeliveryPricingSettings.
+        maxCombinedMultiplierPermille: z.number().int().min(1000).optional(),
       }).parse(req.body);
       const settings = await storage.updateDeliveryPricingSettings(body as any);
       broadcast('delivery_pricing_updated', {});
@@ -4981,6 +5188,398 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: 'Failed to update delivery pricing settings' });
+    }
+  });
+
+  // ── Delivery System V2 Phase 5A — Financial Ledger (Admin-only auditability, not a
+  // dashboard — see docs/bigboss-delivery-financial-ledger.md). Every entry is a CALCULATED
+  // economic fact, never evidence that money physically moved — see the doc's "economic event
+  // vs obligation" section before reading amounts here as anything more than that.
+  app.get('/api/admin/delivery-financial-ledger', requireAdmin, async (req, res) => {
+    try {
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getFinancialLedgerEntries({
+        deliveryId: q.deliveryId ? parseInt(q.deliveryId) : undefined,
+        orderId: q.orderId ? parseInt(q.orderId) : undefined,
+        subOrderId: q.subOrderId ? parseInt(q.subOrderId) : undefined,
+        entryType: q.entryType || undefined,
+        actorRole: q.actorRole || undefined,
+        // Delivery System V2 Phase 5B — filter by any actor (Supplier/Driver/Company) the
+        // entry concerns, as either actor or counterparty (rule 14 filters: Supplier/Driver/
+        // Delivery Company). Admin-only route, so a raw user id is safe to accept directly.
+        actorUserId: q.actorUserId ? parseInt(q.actorUserId) : undefined,
+        status: q.status || undefined,
+        fromDate: q.fromDate ? new Date(q.fromDate) : undefined,
+        toDate: q.toDate ? new Date(q.toDate) : undefined,
+        page: q.page ? parseInt(q.page) : undefined,
+        limit: q.limit ? parseInt(q.limit) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load financial ledger' });
+    }
+  });
+
+  // Delivery System V2 Phase 5B — self-service financial views (rule 19). Every one of these
+  // derives its scope EXCLUSIVELY from the authenticated session — never from a client-
+  // supplied actor id (rule 20 TEST7/26: "changing IDs in API requests cannot bypass
+  // authorization").
+  app.get('/api/deliveries/:id/financial-summary', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const summary = await storage.getDeliveryFinancialSummary(parseInt(req.params.id), { id: user.id, role: user.role });
+      res.json(summary);
+    } catch (err: any) {
+      res.status(err.message === 'Forbidden' ? 403 : err.message === 'Delivery not found' ? 404 : 400).json({ message: err.message ?? 'Unable to load financial summary' });
+    }
+  });
+
+  app.get('/api/me/financial-history', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getActorFinancialHistory({ id: user.id, role: user.role }, {
+        entryType: q.entryType || undefined,
+        status: q.status || undefined,
+        fromDate: q.fromDate ? new Date(q.fromDate) : undefined,
+        toDate: q.toDate ? new Date(q.toDate) : undefined,
+        page: q.page ? parseInt(q.page) : undefined,
+        limit: q.limit ? parseInt(q.limit) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message ?? 'Unable to load financial history' });
+    }
+  });
+
+  // ── Delivery System V2 Phase 5C.1 — Settlement Foundation ───────────────────────────
+  // FINANCIAL LEDGER → SETTLEMENT only. No payment endpoint exists here or anywhere in this
+  // phase — see docs/bigboss-delivery-settlement-architecture.md §4/§29. Settlements are
+  // NEVER created via an API call — they are calculated automatically, server-side, the
+  // moment a delivery reaches DELIVERED (see storage.updateDeliveryStatus). Every read below
+  // derives its scope EXCLUSIVELY from the authenticated session, exactly like the Phase 5B
+  // financial-visibility endpoints above — no endpoint accepts a client-supplied actor id.
+
+  app.get('/api/deliveries/:id/settlements', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const result = await storage.getDeliverySettlements(parseInt(req.params.id), { id: user.id, role: user.role });
+      res.json(result);
+    } catch (err: any) {
+      res.status(err.message === 'Forbidden' ? 403 : 400).json({ message: err.message ?? 'Unable to load settlements' });
+    }
+  });
+
+  app.get('/api/me/settlement-history', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getActorSettlementHistory({ id: user.id, role: user.role }, {
+        status: q.status || undefined,
+        page: q.page ? parseInt(q.page) : undefined,
+        limit: q.limit ? parseInt(q.limit) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message ?? 'Unable to load settlement history' });
+    }
+  });
+
+  // Admin-only — inspection, not a payment dashboard (rule 26 of the Phase 5C.1 task).
+  app.get('/api/admin/settlements', requireAdmin, async (req, res) => {
+    try {
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getAllSettlements({
+        deliveryId: q.deliveryId ? parseInt(q.deliveryId) : undefined,
+        orderId: q.orderId ? parseInt(q.orderId) : undefined,
+        actorRole: q.actorRole || undefined,
+        actorUserId: q.actorUserId ? parseInt(q.actorUserId) : undefined,
+        status: q.status || undefined,
+        page: q.page ? parseInt(q.page) : undefined,
+        limit: q.limit ? parseInt(q.limit) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load settlements' });
+    }
+  });
+
+  app.get('/api/admin/settlements/:id/items', requireAdmin, async (req, res) => {
+    try {
+      res.json(await storage.getSettlementItems(parseInt(req.params.id)));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load settlement items' });
+    }
+  });
+
+  app.post('/api/admin/settlements/:id/approve', requireAdmin, async (req: any, res) => {
+    try {
+      const settlement = await storage.approveSettlement(parseInt(req.params.id), req.session.userId!);
+      res.json(settlement);
+    } catch (err: any) {
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to approve settlement' });
+    }
+  });
+
+  app.post('/api/admin/settlements/:id/void', requireAdmin, async (req, res) => {
+    try {
+      const settlement = await storage.voidSettlement(parseInt(req.params.id));
+      res.json(settlement);
+    } catch (err: any) {
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to void settlement' });
+    }
+  });
+
+  // ── Delivery System V2 Phase 5C.2 — Payment Layer, COD, Refunds, Adjustments ─────────
+  // SETTLEMENT → PAYMENT step + COD/REFUND/ADJUSTMENT satellites. No external payment
+  // provider anywhere — internal record-keeping only. Every mutation below except the two
+  // COD driver/supplier-company actions is Admin-only (rule: "Do NOT expand financial write
+  // authority to suppliers, drivers or coffee owners").
+
+  app.get('/api/admin/payments', requireAdmin, async (req, res) => {
+    try {
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getAllPayments({
+        settlementId: q.settlementId ? parseInt(q.settlementId) : undefined,
+        status: q.status || undefined, method: q.method || undefined,
+        page: q.page ? parseInt(q.page) : undefined, limit: q.limit ? parseInt(q.limit) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load payments' });
+    }
+  });
+
+  app.get('/api/admin/settlements/:id/payments', requireAdmin, async (req, res) => {
+    try {
+      res.json(await storage.getPaymentsForSettlement(parseInt(req.params.id)));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load payments' });
+    }
+  });
+
+  app.post('/api/admin/settlements/:id/payments', requireAdmin, async (req: any, res) => {
+    try {
+      const body = z.object({
+        amountCents: z.number().int().positive(),
+        method: z.enum(['CASH', 'BANK_TRANSFER', 'CARD', 'WALLET', 'OTHER']),
+        provider: z.string().optional().nullable(),
+        providerReference: z.string().optional().nullable(),
+        idempotencyKey: z.string().min(1),
+      }).parse(req.body);
+      const payment = await storage.createPayment(parseInt(req.params.id), body, req.session.userId!);
+      res.json(payment);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to record payment' });
+    }
+  });
+
+  app.post('/api/admin/payments/:id/confirm', requireAdmin, async (req: any, res) => {
+    try {
+      res.json(await storage.confirmPayment(parseInt(req.params.id), req.session.userId!));
+    } catch (err: any) {
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to confirm payment' });
+    }
+  });
+
+  app.post('/api/admin/payments/:id/fail', requireAdmin, async (req: any, res) => {
+    try {
+      res.json(await storage.failPayment(parseInt(req.params.id), req.session.userId!));
+    } catch (err: any) {
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to fail payment' });
+    }
+  });
+
+  app.post('/api/admin/payments/:id/reverse', requireAdmin, async (req: any, res) => {
+    try {
+      res.json(await storage.reversePayment(parseInt(req.params.id), req.session.userId!));
+    } catch (err: any) {
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to reverse payment' });
+    }
+  });
+
+  // ── COD Reconciliation ──────────────────────────────────────────────────────────────
+  // Driver records own collection; Supplier/Delivery Company records own remittance —
+  // authorization is enforced entirely server-side inside storage.recordCashCollected/
+  // recordCashRemitted (reusing canUserAccessDelivery — never a duplicated rule), never from
+  // a client-supplied role/id.
+
+  app.get('/api/deliveries/:id/cod', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const cod = await storage.getCodReconciliation(parseInt(req.params.id), { id: user.id, role: user.role });
+      if (!cod) return res.status(404).json({ message: 'No COD reconciliation for this delivery' });
+      res.json(cod);
+    } catch (err: any) {
+      res.status(err.message === 'Forbidden' ? 403 : 400).json({ message: err.message ?? 'Unable to load COD reconciliation' });
+    }
+  });
+
+  app.post('/api/deliveries/:id/cod/collect', requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const body = z.object({ collectedAmountCents: z.number().int().nonnegative() }).parse(req.body);
+      const cod = await storage.recordCashCollected(parseInt(req.params.id), { id: user.id, role: user.role }, body.collectedAmountCents);
+      res.json(cod);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(err.message === 'Forbidden' ? 403 : 400).json({ message: err.message ?? 'Unable to record cash collection' });
+    }
+  });
+
+  app.post('/api/deliveries/:id/cod/remit', requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      const body = z.object({ remittedAmountCents: z.number().int().nonnegative() }).parse(req.body);
+      const cod = await storage.recordCashRemitted(parseInt(req.params.id), { id: user.id, role: user.role }, body.remittedAmountCents);
+      res.json(cod);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(err.message === 'Forbidden' ? 403 : 400).json({ message: err.message ?? 'Unable to record cash remittance' });
+    }
+  });
+
+  app.post('/api/admin/deliveries/:id/cod/reconcile', requireAdmin, async (req: any, res) => {
+    try {
+      const body = z.object({ notes: z.string().optional() }).parse(req.body);
+      const cod = await storage.reconcileCod(parseInt(req.params.id), req.session.userId!, body.notes);
+      res.json(cod);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Unable to reconcile COD' });
+    }
+  });
+
+  app.get('/api/admin/cod-reconciliations', requireAdmin, async (req, res) => {
+    try {
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getAllCodReconciliations({
+        status: q.status || undefined, deliveryId: q.deliveryId ? parseInt(q.deliveryId) : undefined,
+        page: q.page ? parseInt(q.page) : undefined, limit: q.limit ? parseInt(q.limit) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load COD reconciliations' });
+    }
+  });
+
+  // ── Refunds (Admin-only) ─────────────────────────────────────────────────────────────
+
+  app.get('/api/admin/refunds', requireAdmin, async (req, res) => {
+    try {
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getAllRefunds({
+        paymentId: q.paymentId ? parseInt(q.paymentId) : undefined, settlementId: q.settlementId ? parseInt(q.settlementId) : undefined,
+        status: q.status || undefined, page: q.page ? parseInt(q.page) : undefined, limit: q.limit ? parseInt(q.limit) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load refunds' });
+    }
+  });
+
+  app.post('/api/admin/refunds', requireAdmin, async (req: any, res) => {
+    try {
+      const body = z.object({
+        paymentId: z.number().int().optional().nullable(),
+        settlementId: z.number().int().optional().nullable(),
+        amountCents: z.number().int().positive(),
+        reason: z.string().min(1),
+      }).parse(req.body);
+      const refund = await storage.requestRefund(body, req.session.userId!);
+      res.json(refund);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Unable to request refund' });
+    }
+  });
+
+  app.post('/api/admin/refunds/:id/confirm', requireAdmin, async (req: any, res) => {
+    try {
+      res.json(await storage.confirmRefund(parseInt(req.params.id), req.session.userId!));
+    } catch (err: any) {
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to confirm refund' });
+    }
+  });
+
+  app.post('/api/admin/refunds/:id/fail', requireAdmin, async (req: any, res) => {
+    try {
+      res.json(await storage.failRefund(parseInt(req.params.id), req.session.userId!));
+    } catch (err: any) {
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to fail refund' });
+    }
+  });
+
+  app.post('/api/admin/refunds/:id/cancel', requireAdmin, async (req: any, res) => {
+    try {
+      res.json(await storage.cancelRefund(parseInt(req.params.id), req.session.userId!));
+    } catch (err: any) {
+      res.status(err.message?.includes('not found') ? 404 : 400).json({ message: err.message ?? 'Unable to cancel refund' });
+    }
+  });
+
+  // ── Adjustments (Admin-only) ─────────────────────────────────────────────────────────
+
+  app.get('/api/admin/adjustments', requireAdmin, async (req, res) => {
+    try {
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getAllAdjustments({
+        ledgerEntryId: q.ledgerEntryId ? parseInt(q.ledgerEntryId) : undefined, settlementId: q.settlementId ? parseInt(q.settlementId) : undefined,
+        page: q.page ? parseInt(q.page) : undefined, limit: q.limit ? parseInt(q.limit) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load adjustments' });
+    }
+  });
+
+  app.post('/api/admin/adjustments', requireAdmin, async (req: any, res) => {
+    try {
+      const body = z.object({
+        ledgerEntryId: z.number().int().optional().nullable(),
+        settlementId: z.number().int().optional().nullable(),
+        amountCents: z.number().int().positive(),
+        direction: z.enum(['CREDIT', 'DEBIT']),
+        reason: z.string().min(1),
+      }).parse(req.body);
+      const adjustment = await storage.createAdjustment(body, req.session.userId!);
+      res.json(adjustment);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err.message ?? 'Unable to create adjustment' });
+    }
+  });
+
+  // ── Financial Summary (Admin full view + self-service actor summary) ────────────────
+
+  app.get('/api/admin/financial-summary', requireAdmin, async (req, res) => {
+    try {
+      const q = req.query as Record<string, string | undefined>;
+      const result = await storage.getAdminFinancialSummary({
+        fromDate: q.fromDate ? new Date(q.fromDate) : undefined, toDate: q.toDate ? new Date(q.toDate) : undefined,
+        actorUserId: q.actorUserId ? parseInt(q.actorUserId) : undefined,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message ?? 'Failed to load financial summary' });
+    }
+  });
+
+  app.get('/api/me/financial-summary', requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: 'Unauthorized' });
+      res.json(await storage.getActorFinancialSummary({ id: user.id, role: user.role }));
+    } catch (err: any) {
+      res.status(400).json({ message: err.message ?? 'Unable to load financial summary' });
     }
   });
 
@@ -7154,7 +7753,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!MAPS_KEY) return res.status(400).json({ message: 'Google Maps API key not configured' });
 
     try {
-      const { address, radiusKm = 5, keyword = 'coffee', prospectType, minRating, onlyWithPhone, onlyWithWebsite } = req.body;
+      const { address, radiusKm = 5, keyword = 'coffee', keytype = 'cafe', prospectType, minRating, onlyWithPhone, onlyWithWebsite } = req.body;
       if (!address) return res.status(400).json({ message: 'address is required' });
 
       const startMs = Date.now();
@@ -7180,7 +7779,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await withConcurrency(
         grid,
         async (point) => {
-          const { places, requestCount } = await fetchAllNearbyPages(point, keyword, MAPS_KEY);
+          const { places, requestCount } = await fetchAllNearbyPages(point, keyword, keytype, MAPS_KEY);
           nearbyRequests += requestCount;
           allPlaces.push(...places);
         },

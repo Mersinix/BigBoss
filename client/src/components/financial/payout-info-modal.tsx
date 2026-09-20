@@ -61,7 +61,18 @@ export default function PayoutInfoModal({
             <span className="w-8 h-8" />
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-3">
+          {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+              scroll container exactly (client/src/components/cafe/order-details-modal.tsx),
+              same thumb/track/hover classes, not a new scrollbar style. */}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-3
+              [&::-webkit-scrollbar]:w-1
+              [&::-webkit-scrollbar-track]:bg-transparent
+              [&::-webkit-scrollbar-thumb]:rounded-full
+              [&::-webkit-scrollbar-thumb]:bg-gray-700
+              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {rows.length === 0 && (
               <p className={`text-sm text-center py-8 ${t.textMuted}`}>Aucune information de paiement pour cette commande.</p>
             )}

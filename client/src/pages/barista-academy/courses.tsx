@@ -86,7 +86,9 @@ function CourseFormDialog({ course, onClose }: { course: AcademyCourse | null | 
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+          scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle>{isNew ? "Nouvelle formation" : "Modifier la formation"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>

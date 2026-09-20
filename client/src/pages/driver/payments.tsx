@@ -16,9 +16,14 @@ const PAYMENT_STATUS_META: Record<string, { label: string; cls: string }> = {
   CANCELLED: { label: "Annulée", cls: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" },
 };
 
-// "Paiements" — a real history of completed/cancelled deliveries and their real
-// deliveries.deliveryFee amount, computed by the platform's delivery pricing engine (see
-// wallet.tsx). A real, filterable payment-history structure — not a fabricated ledger.
+// "Paiements" — a real history of completed/cancelled deliveries and the driver's own
+// EARNINGS (never the customer-facing deliveryFee — see wallet.tsx). A cancelled delivery's
+// calculated payout never became real (payoutStatus=VOID — see server/storage.ts
+// computeDeliveryPayoutStatus), so it is shown as 0 here rather than the frozen-but-voided
+// figure, to avoid implying a cancelled trip was compensated. A real, filterable
+// payment-history structure — not a fabricated ledger; see
+// docs/bigboss-delivery-financial-visibility.md for what "economically earned" does and does
+// not mean.
 export default function DriverPaymentsPage() {
   const { data: deliveries = [], isLoading } = useDeliveries();
   const fmt = useFormatCurrency();
@@ -83,12 +88,22 @@ export default function DriverPaymentsPage() {
                         <Badge variant="secondary" className={meta.cls}>{meta.label}</Badge>
                       </div>
                       <div className="flex items-center gap-1.5 text-sm">
-                        <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> Frais de livraison
+                        <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> Rémunération
                       </div>
                       <p className="text-xs text-muted-foreground">{formatDate((d.deliveredAt ?? d.cancelledAt ?? d.createdAt) as any)}</p>
+                      {/* Delivery System V2 Phase 5B — incentive/waiting breakdown (rule 18:
+                          "Date/Delivery/Earnings/Incentives/Waiting/Status"), only shown when
+                          genuinely active for this delivery — never a fabricated line. */}
+                      {d.status !== "CANCELLED" && (!!d.weatherIncentiveCentsUsed || !!d.peakIncentiveCentsUsed || !!d.waitingDriverCompensationCentsUsed) && (
+                        <p className="text-[11px] text-muted-foreground">
+                          {!!d.weatherIncentiveCentsUsed && <>Prime météo {fmt(d.weatherIncentiveCentsUsed)} · </>}
+                          {!!d.peakIncentiveCentsUsed && <>Prime heure de pointe {fmt(d.peakIncentiveCentsUsed)} · </>}
+                          {!!d.waitingDriverCompensationCentsUsed && <>Attente {fmt(d.waitingDriverCompensationCentsUsed)}</>}
+                        </p>
+                      )}
                     </div>
                     <div className="shrink-0">
-                      <span className="font-semibold text-base">{fmt(d.deliveryFee ?? 0)}</span>
+                      <span className="font-semibold text-base">{fmt(d.status === "CANCELLED" ? 0 : (d.totalDriverPayoutCents ?? d.driverPayoutCents ?? d.deliveryFee ?? 0))}</span>
                     </div>
                   </CardContent>
                 </Card>

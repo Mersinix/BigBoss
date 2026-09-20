@@ -197,7 +197,9 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
   if (!barista) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+          scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold">{barista.initials}</AvatarFallback></Avatar>

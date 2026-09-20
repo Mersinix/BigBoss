@@ -150,7 +150,9 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
 
   if (!account) return null;
   return <Dialog open onOpenChange={(open) => !open && onClose()}>
-    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+        scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
       <DialogHeader><DialogTitle className="flex items-center gap-3">
         <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-fuchsia-100 text-fuchsia-700 font-bold">{account.initials}</AvatarFallback></Avatar>
         <span className="flex-1">{account.name}</span>
@@ -357,7 +359,9 @@ function ProjectDetail({ project, onClose, onRefresh }: { project: any | null; o
 
   if (!project) return null;
   return <Dialog open onOpenChange={(open) => !open && onClose()}>
-    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+    {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+        scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
       <DialogHeader><DialogTitle>Projet #{project.id}</DialogTitle></DialogHeader>
       {editing ? (
         <div className="space-y-2">

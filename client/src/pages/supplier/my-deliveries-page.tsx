@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useDeliveries, useAssignDriver, useSupplierDrivers } from "@/hooks/use-deliveries";
-import { useReassignDriver } from "@/hooks/use-delivery-ecosystem";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { formatDate } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
 import { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DispatchDialog } from "@/pages/supplier/delivery-status-page";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 function AssignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
@@ -45,36 +45,13 @@ function AssignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
   );
 }
 
-// Change the assigned driver before pickup (task Part 32/33) — reuses assignDriver's
-// ownership rules via storage.reassignDriver; refuses once PICKED_UP or later.
-function ReassignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
-  const { data: drivers = [] } = useSupplierDrivers();
-  const reassignDriver = useReassignDriver();
-  const { toast } = useToast();
-  const [selected, setSelected] = useState<string>("");
-
-  return (
-    <div className="flex items-center gap-2">
-      <Select value={selected} onValueChange={setSelected}>
-        <SelectTrigger className="h-8 w-40 text-xs" data-testid={`select-reassign-${delivery.id}`}><SelectValue placeholder="Changer de chauffeur" /></SelectTrigger>
-        <SelectContent>
-          {drivers.filter((d) => d.id !== delivery.driverId).map((d) => <SelectItem key={d.id} value={String(d.id)} className="text-xs">{d.name}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Button
-        size="sm" variant="outline" className="h-8 text-xs"
-        disabled={!selected || reassignDriver.isPending}
-        onClick={() => reassignDriver.mutate({ deliveryId: delivery.id, driverId: Number(selected) }, {
-          onSuccess: () => { toast({ title: "Chauffeur réassigné" }); setSelected(""); },
-          onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-        })}
-        data-testid={`button-reassign-${delivery.id}`}
-      >
-        Réassigner
-      </Button>
-    </div>
-  );
-}
+// Note: the previous driver-only "ReassignDriverControl" (Part 32/33) has been superseded by
+// opening the full DispatchDialog for this exact same ASSIGNED-but-not-yet-picked-up window
+// (task: "Réassigner" must become a gateway to the existing full dispatch choice — Entreprise
+// de livraison / Choisir une entreprise / Mes chauffeurs — not just a driver switch).
+// storage.reassignDriver itself is untouched and its own route/API still exists unchanged —
+// only this page's trigger for it was replaced. See supplier/delivery-status-page.tsx's
+// exported DispatchDialog, reused here rather than duplicated.
 
 // deliveryMode = SUPPLIER only — deliveries the supplier operates directly with its own
 // drivers. Delivery-Company-dispatched deliveries are visible (read-only) on the Delivery
@@ -83,6 +60,7 @@ export default function SupplierMyDeliveriesPage() {
   const { data: deliveries = [], isLoading } = useDeliveries();
   const fmt = useFormatCurrency();
   const [view, setView] = useState<"active" | "completed">("active");
+  const [dispatchTarget, setDispatchTarget] = useState<DeliveryWithDetails | null>(null);
 
   const mine = deliveries.filter((d) => d.deliveryMode === "SUPPLIER");
   const active = mine.filter((d) => !["DELIVERED", "CANCELLED"].includes(d.status));
@@ -156,7 +134,13 @@ export default function SupplierMyDeliveriesPage() {
                         <Badge variant="outline" className="flex items-center gap-1 text-xs">
                           <Truck className="w-3 h-3" /> {d.driver?.name ?? "—"}
                         </Badge>
-                        <ReassignDriverControl delivery={d} />
+                        {/* Redispatch (task: "Supplier redispatch before driver confirmation") —
+                            opens the same "Comment livrer cette commande ?" choice used for a
+                            first-ever dispatch; still-eligible since the driver has not yet
+                            progressed past ASSIGNED. */}
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setDispatchTarget(d)} data-testid={`button-reassign-${d.id}`}>
+                          Réassigner
+                        </Button>
                       </div>
                     )}
                     {["PICKED_UP", "IN_TRANSIT"].includes(d.status) && (
@@ -185,6 +169,8 @@ export default function SupplierMyDeliveriesPage() {
           itemLabel="livraisons"
         />
       )}
+
+      {dispatchTarget && <DispatchDialog delivery={dispatchTarget} onClose={() => setDispatchTarget(null)} />}
     </div>
   );
 }

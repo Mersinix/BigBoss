@@ -1,4 +1,4 @@
-import { AlertCircle, Box, CheckCircle2, Clock, Package, Truck } from "lucide-react";
+import { AlertCircle, Box, CheckCircle2, Clock, Package, Truck, ShoppingBag, PackageCheck } from "lucide-react";
 
 // Shared Shop order-progress stepper — identical stages/logic across Admin, Coffee Owner and
 // Supplier order-detail views (previously duplicated inline inside
@@ -14,13 +14,28 @@ export const ORDER_PROGRESS_STAGES = [
   { status: "DELIVERED", label: "Delivered", icon: CheckCircle2 },
 ] as const;
 
+// Self Pickup variant (Delivery System V2) — the exact same underlying status column/values
+// (PENDING/CONFIRMED/PREPARING/READY/IN_DELIVERY/DELIVERED) drive this, only the labels/icons
+// differ. No new database status was introduced: confirming the pickup code
+// (storage.confirmSelfPickup) writes the sub-order straight to DELIVERED, so "Picked Up" and
+// "Completed" are always reached together — there is no courier hand-off to track separately
+// for a self-pickup order.
+export const SELF_PICKUP_PROGRESS_STAGES = [
+  { status: "PENDING", label: "Order Placed", icon: Clock },
+  { status: "CONFIRMED", label: "Confirmed", icon: CheckCircle2 },
+  { status: "PREPARING", label: "Preparing", icon: Box },
+  { status: "READY", label: "Ready for Pickup", icon: ShoppingBag },
+  { status: "IN_DELIVERY", label: "Picked Up", icon: PackageCheck },
+  { status: "DELIVERED", label: "Completed", icon: CheckCircle2 },
+] as const;
+
 export type OrderProgressTheme = {
   dk: boolean;
   textPrimary: string;
   textMuted: string;
 };
 
-export function OrderProgress({ status, t }: { status: string; t: OrderProgressTheme }) {
+export function OrderProgress({ status, t, fulfillmentType }: { status: string; t: OrderProgressTheme; fulfillmentType?: "SELF_PICKUP" | "DELIVERY_SERVICE" }) {
   if (status === "CANCELLED") {
     return (
       <div className="flex items-center gap-2 text-sm text-red-400">
@@ -30,11 +45,12 @@ export function OrderProgress({ status, t }: { status: string; t: OrderProgressT
     );
   }
 
-  const currentIndex = ORDER_PROGRESS_STAGES.findIndex((stage) => stage.status === status);
+  const stages = fulfillmentType === "SELF_PICKUP" ? SELF_PICKUP_PROGRESS_STAGES : ORDER_PROGRESS_STAGES;
+  const currentIndex = stages.findIndex((stage) => stage.status === status);
 
   return (
     <div className="flex items-start overflow-x-auto pb-1">
-      {ORDER_PROGRESS_STAGES.map((stage, index) => {
+      {stages.map((stage, index) => {
         const StageIcon = stage.icon;
         const complete = currentIndex >= index;
         const current = currentIndex === index;
@@ -52,7 +68,7 @@ export function OrderProgress({ status, t }: { status: string; t: OrderProgressT
                 {stage.label}
               </span>
             </div>
-            {index < ORDER_PROGRESS_STAGES.length - 1 && (
+            {index < stages.length - 1 && (
               <div className={`h-0.5 flex-1 mt-4 min-w-[14px] ${currentIndex > index ? "bg-amber-500" : (t.dk ? "bg-gray-700" : "bg-gray-200")}`} />
             )}
           </div>

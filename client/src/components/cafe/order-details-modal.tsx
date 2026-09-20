@@ -9,7 +9,7 @@ import {
   Sun, Moon, X, User, FileText, Wallet, Star, Ticket,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { useDriverReviewForDelivery, useCreateDriverReview } from "@/hooks/use-delivery-ecosystem";
+import { useDriverReviewForDelivery, useCreateDriverReview, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { useThemeStore } from "@/store/theme-store";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -23,6 +23,7 @@ import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 import { getSupplierStatusEntries } from "@/lib/order-status";
 import OrderInvoiceModal from "@/components/financial/order-invoice-modal";
 import PayoutInfoModal from "@/components/financial/payout-info-modal";
+import SelfPickupModal from "@/components/order/self-pickup-modal";
 
 // ── Status helpers ──────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ function DriverReviewButton({ driverId, deliveryId, isDark }: { driverId: number
 
   return (
     <>
-      <Button size="sm" variant="outline" className="h-7 text-xs mt-1.5 gap-1" onClick={() => setOpen(true)} data-testid={`button-review-driver-${deliveryId}`}>
+      <Button size="sm" variant="outline" className={`h-7 text-xs mt-1.5 gap-1 ${isDark ? "text-white border-white" : ""}`} onClick={() => setOpen(true)} data-testid={`button-review-driver-${deliveryId}`}>
         <Star className="w-3 h-3" /> Donner un avis
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -316,6 +317,7 @@ export default function OrderDetailsModal({
   const [cancelTarget, setCancelTarget] = useState<any | null>(null);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [payoutInfoOpen, setPayoutInfoOpen] = useState(false);
+  const [selfPickupTarget, setSelfPickupTarget] = useState<any | null>(null);
 
   if (!order) return null;
 
@@ -517,7 +519,7 @@ export default function OrderDetailsModal({
                     {statusMeta.label}
                   </Badge>
                 </div>
-                <OrderProgress status={order.status} t={t} />
+                <OrderProgress status={order.status} t={t} fulfillmentType={deliveryMethod as "SELF_PICKUP" | "DELIVERY_SERVICE"} />
               </div>
             )}
 
@@ -622,7 +624,7 @@ export default function OrderDetailsModal({
                             {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
                           </span>
                         </div>
-                        <OrderProgress status={sub.status} t={t} />
+                        <OrderProgress status={sub.status} t={t} fulfillmentType={deliveryMethod as "SELF_PICKUP" | "DELIVERY_SERVICE"} />
                       </div>
 
                       {/* Item rows — regular products grouped by base product (one card,
@@ -783,6 +785,16 @@ export default function OrderDetailsModal({
                                     <span className={t.textPrimary}>{fmt(sub.delivery.supplierFeeShareCents)}</span>
                                   </div>
                                 )}
+                                {/* Two-Leg Delivery Distance Model — the Supplier's separate
+                                    pickup-leg (driver → supplier) obligation, never part of the
+                                    Coffee Owner's own delivery fee above. Admin-only, matching
+                                    the same gate as "Part fournisseur". */}
+                                {(sub.delivery as any).pickupLegFeeCents != null && (
+                                  <div className={`flex justify-between text-xs ${t.textMuted}`}>
+                                    <span>Frais de collecte fournisseur (trajet chauffeur → fournisseur)</span>
+                                    <span className={t.textPrimary}>{fmt((sub.delivery as any).pickupLegFeeCents)}</span>
+                                  </div>
+                                )}
                               </div>
                             )}
                             <DeliveryProgress
@@ -790,10 +802,74 @@ export default function OrderDetailsModal({
                               dropoffCode={["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(sub.delivery.status) ? sub.delivery.dropoffCode : null}
                               t={t}
                             />
-                            {sub.delivery.status === "DELIVERED" && sub.delivery.driver && (
+                            {/* Only the Coffee Owner can submit a driver review (server-enforced —
+                                see POST /api/driver/reviews). This modal is also reused for Admin
+                                (pages/shared/orders-page.tsx, isAdmin prop) — without this gate the
+                                button rendered for Admin too, even though submitting would always
+                                be rejected server-side; hiding it here matches actual eligibility. */}
+                            {!isAdmin && sub.delivery.status === "DELIVERED" && sub.delivery.driver && (
                               <DriverReviewButton driverId={sub.delivery.driver.id} deliveryId={sub.delivery.id} isDark={t.dk} />
                             )}
                           </div>
+                        </div>
+                      )}
+
+                      {/* Transport requirements — read-only information for Coffee Owner/Admin
+                          (Supplier-only editing lives in supplier-order-details-modal.tsx; the
+                          fields themselves are the SAME sub_orders row columns, never a second
+                          record — see storage.updateSubOrderTransportRequirements). Only shown
+                          once the Supplier has actually saved something. */}
+                      {sub.delivery && (
+                        (sub as any).requiredVehicleType || (sub as any).totalWeightKg || (sub as any).totalVolumeL ||
+                        (sub as any).numberOfPackages != null || (sub as any).specialHandling || (sub as any).isFragile
+                      ) && (
+                        <div className={`px-4 py-3 border-t space-y-1.5 ${t.dk ? "border-gray-700/50 bg-gray-800/40" : "border-gray-100 bg-gray-50/60"}`}>
+                          <div className="flex items-center gap-2">
+                            <Truck className={`w-3.5 h-3.5 ${t.textMuted}`} />
+                            <span className={`text-xs font-semibold ${t.textMuted}`}>Transport requirements</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                            {(sub as any).requiredVehicleType && (
+                              <div><span className={t.textMuted}>Véhicule : </span><span className={t.textPrimary}>{VEHICLE_TYPE_LABELS[(sub as any).requiredVehicleType as DeliveryVehicleType] ?? (sub as any).requiredVehicleType}</span></div>
+                            )}
+                            {(sub as any).totalWeightKg && (
+                              <div><span className={t.textMuted}>Poids : </span><span className={t.textPrimary}>{(sub as any).totalWeightKg} kg</span></div>
+                            )}
+                            {(sub as any).totalVolumeL && (
+                              <div><span className={t.textMuted}>Volume : </span><span className={t.textPrimary}>{(sub as any).totalVolumeL} L</span></div>
+                            )}
+                            {(sub as any).numberOfPackages != null && (
+                              <div><span className={t.textMuted}>Colis : </span><span className={t.textPrimary}>{(sub as any).numberOfPackages}</span></div>
+                            )}
+                          </div>
+                          {(sub as any).specialHandling && (
+                            <p className="text-xs"><span className={t.textMuted}>Manipulation spéciale : </span><span className={t.textPrimary}>{(sub as any).specialHandling}</span></p>
+                          )}
+                          {(sub as any).isFragile && (
+                            <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30">Fragile</Badge>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Self Pickup — no Delivery row ever exists for these sub-orders (see
+                          storage.createDeliveryForSubOrder), so this is a sibling of the
+                          normal-delivery block above, never both at once. */}
+                      {deliveryMethod === "SELF_PICKUP" && ["READY", "IN_DELIVERY", "DELIVERED"].includes(sub.status) && (
+                        <div className={`px-4 py-3 border-t flex items-center justify-between gap-3 ${t.dk ? "border-gray-700/50 bg-gray-800/40" : "border-gray-100 bg-gray-50/60"}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+                              <Store className="w-4 h-4 text-amber-500" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className={`text-xs font-semibold block ${t.textMuted}`}>Self Pickup</span>
+                              <span className={`text-xs ${t.textPrimary}`}>
+                                {["IN_DELIVERY", "DELIVERED"].includes(sub.status) ? "Retiré" : "Prêt pour retrait"}
+                              </span>
+                            </div>
+                          </div>
+                          <Button size="sm" onClick={() => setSelfPickupTarget(sub)} data-testid={`button-self-pickup-go-${sub.id}`}>
+                            {["IN_DELIVERY", "DELIVERED"].includes(sub.status) ? "Voir" : "Go"}
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -957,6 +1033,18 @@ export default function OrderDetailsModal({
     <CancelSubOrderModal subOrder={cancelTarget} onClose={() => setCancelTarget(null)} t={t} />
     <OrderInvoiceModal open={invoiceOpen} onClose={() => setInvoiceOpen(false)} order={order} />
     <PayoutInfoModal open={payoutInfoOpen} onClose={() => setPayoutInfoOpen(false)} order={order} />
+    {selfPickupTarget && (
+      <SelfPickupModal
+        open={!!selfPickupTarget}
+        onClose={() => setSelfPickupTarget(null)}
+        subOrderId={selfPickupTarget.id}
+        orderId={order.id}
+        supplierName={selfPickupTarget.supplierName}
+        pickupAddress={selfPickupTarget.selfPickupAddress}
+        cafeAddress={order.deliveryAddress as any}
+        status={selfPickupTarget.status}
+      />
+    )}
     </>
   );
 }

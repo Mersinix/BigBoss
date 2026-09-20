@@ -71,7 +71,17 @@ function AcademyProfileAvailabilityModal({
             </div>
             <div className={`h-px w-full ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6">
+          {/* Thin scrollbar treatment — matches the existing Admin detail-modal scroll
+              containers exactly (e.g. academy-detail-modal.tsx), not a new scrollbar style. */}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-5 pb-6
+              [&::-webkit-scrollbar]:w-1
+              [&::-webkit-scrollbar-track]:bg-transparent
+              [&::-webkit-scrollbar-thumb]:rounded-full
+              [&::-webkit-scrollbar-thumb]:bg-gray-700
+              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {weeklyHours ? (
               <div className="space-y-2 pb-2">
                 {WEEKLY_DAY_DEFS.map(({ key, label }) => {

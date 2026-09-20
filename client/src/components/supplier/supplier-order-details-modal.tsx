@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Box, Truck, CheckCircle2, AlertCircle, Clock, MapPin,
   Store, Layers, Calendar, Zap, X,
-  Sun, Moon, User, ListX, Ticket, Wallet,
+  Sun, Moon, User, ListX, Ticket, Wallet, KeyRound, Eye, EyeOff,
 } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
-import { useUpdateSubOrderStatus } from "@/hooks/use-orders";
+import { useUpdateSubOrderStatus, useUpdateTransportRequirements } from "@/hooks/use-orders";
+import { VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import type { OrderWithDetails } from "@shared/schema";
 import { PackCompositionView } from "@/components/order/pack-composition-view";
 import { DeliveryProgress } from "@/components/order/delivery-progress";
@@ -115,14 +117,62 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
   const { toast } = useToast();
   const fmt = useFormatCurrency();
   const updateSubOrderStatus = useUpdateSubOrderStatus();
+  const updateTransportRequirements = useUpdateTransportRequirements();
   const [cancelItemsTarget, setCancelItemsTarget] = useState<any | null>(null);
+  const [showPickupCode, setShowPickupCode] = useState(false);
+  // Transport requirements: once saved, shown as a read-only summary + "Modifier" button
+  // rather than an always-editable form — toggled explicitly by the Supplier, not derived from
+  // status. Reset to false whenever the sub-order changes (see the sync effect below) so
+  // switching between orders never leaves a stale edit session open.
+  const [isEditingTransport, setIsEditingTransport] = useState(false);
+  const [transport, setTransport] = useState({
+    requiredVehicleType: "" as string,
+    totalWeightKg: "",
+    totalVolumeL: "",
+    numberOfPackages: "",
+    numberOfItems: "",
+    isFragile: false,
+    specialHandling: "",
+  });
+
+  // Find the sub-order belonging to this supplier — computed before the early return below so
+  // the sync effect can run unconditionally (Rules of Hooks): every hook in this component
+  // must be called on every render, regardless of whether `order` is currently null.
+  const subOrder = (order?.subOrders ?? []).find((so: any) => so.supplierId === supplierId);
+
+  useEffect(() => {
+    if (!subOrder) return;
+    setTransport({
+      requiredVehicleType: (subOrder as any).requiredVehicleType ?? "",
+      totalWeightKg: (subOrder as any).totalWeightKg ?? "",
+      totalVolumeL: (subOrder as any).totalVolumeL ?? "",
+      numberOfPackages: (subOrder as any).numberOfPackages != null ? String((subOrder as any).numberOfPackages) : "",
+      numberOfItems: (subOrder as any).numberOfItems != null ? String((subOrder as any).numberOfItems) : "",
+      isFragile: !!(subOrder as any).isFragile,
+      specialHandling: (subOrder as any).specialHandling ?? "",
+    });
+    setIsEditingTransport(false);
+  }, [subOrder?.id, (subOrder as any)?.requiredVehicleType, (subOrder as any)?.totalWeightKg, (subOrder as any)?.totalVolumeL, (subOrder as any)?.numberOfPackages, (subOrder as any)?.numberOfItems, (subOrder as any)?.isFragile, (subOrder as any)?.specialHandling]);
 
   if (!order) return null;
 
-  // Find the sub-order belonging to this supplier
-  const subOrder = (order.subOrders ?? []).find((so: any) => so.supplierId === supplierId);
   const subStatus = subOrder?.status ?? "PENDING";
   const nextStatuses = SUPPLIER_NEXT_STATUSES[subStatus] ?? [];
+  const isSelfPickup = (order as any).deliveryMethod === "SELF_PICKUP";
+  // Locked once "Out for Delivery" (IN_DELIVERY) or later — same status value/threshold the
+  // backend now enforces (see storage.updateSubOrderTransportRequirements) and the same one
+  // already rendered as "Out for Delivery" by OrderProgress's ORDER_PROGRESS_STAGES.
+  const transportEditable = subOrder && !["IN_DELIVERY", "DELIVERED", "CANCELLED"].includes(subOrder.status);
+  // Any field actually saved on the sub-order row itself (never a second/duplicate record —
+  // see storage.updateSubOrderTransportRequirements, a plain UPDATE on this same row).
+  const hasSavedTransportRequirements = !!subOrder && (
+    !!(subOrder as any).requiredVehicleType || !!(subOrder as any).totalWeightKg || !!(subOrder as any).totalVolumeL ||
+    (subOrder as any).numberOfPackages != null || !!(subOrder as any).specialHandling || !!(subOrder as any).isFragile
+  );
+  // Read-only summary shows once something is saved and the Supplier isn't actively editing;
+  // the empty-state (always-editable form, "Aucune exigence" placeholder) is preserved exactly
+  // as before for a sub-order with nothing saved yet.
+  const showTransportSummary = hasSavedTransportRequirements && !isEditingTransport;
 
   const statusMeta = STATUS_META[subStatus] ?? STATUS_META.PENDING;
   const StatusIcon = statusMeta.icon;
@@ -139,6 +189,26 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
         if (status === "CANCELLED") onClose();
       },
       onError: () => toast({ title: "Erreur", description: "Impossible de mettre à jour le statut.", variant: "destructive" }),
+    });
+  };
+
+  const handleSaveTransport = () => {
+    if (!subOrder) return;
+    updateTransportRequirements.mutate({
+      subOrderId: subOrder.id,
+      requiredVehicleType: transport.requiredVehicleType || null,
+      totalWeightKg: transport.totalWeightKg.trim() || null,
+      totalVolumeL: transport.totalVolumeL.trim() || null,
+      numberOfPackages: transport.numberOfPackages.trim() ? parseInt(transport.numberOfPackages, 10) : null,
+      numberOfItems: transport.numberOfItems.trim() ? parseInt(transport.numberOfItems, 10) : null,
+      isFragile: transport.isFragile,
+      specialHandling: transport.specialHandling.trim() || null,
+    }, {
+      onSuccess: () => {
+        toast({ title: "Exigences de transport enregistrées" });
+        setIsEditingTransport(false);
+      },
+      onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
     });
   };
 
@@ -249,7 +319,7 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                   {statusMeta.label}
                 </Badge>
               </div>
-              <OrderProgress status={subStatus} t={t} />
+              <OrderProgress status={subStatus} t={t} fulfillmentType={(order as any).deliveryMethod === "SELF_PICKUP" ? "SELF_PICKUP" : "DELIVERY_SERVICE"} />
             </div>
 
             {/* ── Delivery & payment — payment method/status, priority and planning belong
@@ -293,6 +363,197 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                 </span>
               </div>
             </div>
+
+            {/* ── Self Pickup — reveal the code to give the Coffee Owner in person. Never
+                fetched pre-revealed: the raw code is included in this order's data (see
+                storage.getOrders redaction — Supplier is one of the two roles allowed to read
+                it), but stays masked client-side until the supplier explicitly asks to see
+                it, mirroring how the Coffee Owner never sees it at all. ── */}
+            {isSelfPickup && subOrder && (
+              <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
+                <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
+                  <KeyRound className="w-4 h-4 text-amber-500" />
+                  SELF PICKUP
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-semibold ${t.textMuted}`}>Pickup status</span>
+                  <Badge variant="outline" className={`text-xs ${["IN_DELIVERY", "DELIVERED"].includes(subStatus) ? "text-green-500 border-green-500/30" : "text-amber-500 border-amber-500/30"}`}>
+                    {["IN_DELIVERY", "DELIVERED"].includes(subStatus) ? "Retiré" : "Waiting for customer"}
+                  </Badge>
+                </div>
+                <div className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${t.dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100"}`}>
+                  <div>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Pickup confirmation code</p>
+                    <p className={`font-mono text-lg font-bold tracking-[0.3em] ${t.textPrimary}`}>
+                      {showPickupCode ? ((subOrder as any).selfPickupCode ?? "——————") : "••••••"}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" className={isDark ? "text-white border-white" : ""} onClick={() => setShowPickupCode((v) => !v)} data-testid="button-reveal-pickup-code">
+                    {showPickupCode ? <EyeOff className="w-3.5 h-3.5 mr-1" /> : <Eye className="w-3.5 h-3.5 mr-1" />}
+                    {showPickupCode ? "Masquer" : "Reveal / Show Code"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Transport requirements (Delivery System V2) — informational + vehicle
+                compatibility gating only (see storage.isVehicleCompatible); never affects
+                pricing. Normal-delivery orders only — a self-pickup order has no driver to
+                match a vehicle against. ── */}
+            {!isSelfPickup && subOrder && (
+              <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
+                    <Truck className="w-4 h-4 text-amber-500" />
+                    Transport requirements
+                  </p>
+                  {showTransportSummary && transportEditable && (
+                    <Button size="sm" variant="outline" className={isDark ? "text-white border-white" : ""} onClick={() => setIsEditingTransport(true)} data-testid="button-edit-transport-requirements">
+                      Modifier
+                    </Button>
+                  )}
+                </div>
+
+                {/* Read-only summary once something is saved and not actively editing —
+                    preserves the same fields (vehicle/weight/volume/packages/special handling)
+                    as plain text instead of an always-editable form. */}
+                {showTransportSummary ? (
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Required vehicle</p>
+                      <p className={t.textPrimary}>{transport.requiredVehicleType ? VEHICLE_TYPE_LABELS[transport.requiredVehicleType as DeliveryVehicleType] : "Aucune exigence"}</p>
+                    </div>
+                    <div>
+                      <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Poids total (kg)</p>
+                      <p className={t.textPrimary}>{transport.totalWeightKg || "—"}</p>
+                    </div>
+                    <div>
+                      <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Volume total (L)</p>
+                      <p className={t.textPrimary}>{transport.totalVolumeL || "—"}</p>
+                    </div>
+                    <div>
+                      <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Nb. colis</p>
+                      <p className={t.textPrimary}>{transport.numberOfPackages || "—"}</p>
+                    </div>
+                    {transport.specialHandling && (
+                      <div className="col-span-2">
+                        <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Manipulation spéciale</p>
+                        <p className={t.textPrimary}>{transport.specialHandling}</p>
+                      </div>
+                    )}
+                    {transport.isFragile && (
+                      <div className="col-span-2">
+                        <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30">Fragile — manipuler avec précaution</Badge>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Required vehicle</label>
+                        <Select
+                          value={transport.requiredVehicleType || "__none__"}
+                          onValueChange={(v) => setTransport((f) => ({ ...f, requiredVehicleType: v === "__none__" ? "" : v }))}
+                          disabled={!transportEditable}
+                        >
+                          <SelectTrigger className={`h-9 text-sm ${isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-200"}`} data-testid="select-required-vehicle">
+                            <SelectValue placeholder="Aucune exigence" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Aucune exigence</SelectItem>
+                            {(Object.keys(VEHICLE_TYPE_LABELS) as DeliveryVehicleType[]).map((v) => (
+                              <SelectItem key={v} value={v}>{VEHICLE_TYPE_LABELS[v]}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Poids total (kg)</label>
+                        <Input
+                          value={transport.totalWeightKg}
+                          onChange={(e) => setTransport((f) => ({ ...f, totalWeightKg: e.target.value }))}
+                          placeholder="0.0"
+                          disabled={!transportEditable}
+                          className={`h-9 text-sm ${isDark ? "bg-gray-800 border-gray-700 text-white" : ""}`}
+                          data-testid="input-total-weight"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Volume total (L)</label>
+                        <Input
+                          value={transport.totalVolumeL}
+                          onChange={(e) => setTransport((f) => ({ ...f, totalVolumeL: e.target.value }))}
+                          placeholder="0.0"
+                          disabled={!transportEditable}
+                          className={`h-9 text-sm ${isDark ? "bg-gray-800 border-gray-700 text-white" : ""}`}
+                          data-testid="input-total-volume"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Nb. colis</label>
+                        <Input
+                          type="number" min={0}
+                          value={transport.numberOfPackages}
+                          onChange={(e) => setTransport((f) => ({ ...f, numberOfPackages: e.target.value }))}
+                          placeholder="0"
+                          disabled={!transportEditable}
+                          className={`h-9 text-sm ${isDark ? "bg-gray-800 border-gray-700 text-white" : ""}`}
+                          data-testid="input-number-packages"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Manipulation spéciale (optionnel)</label>
+                      <Input
+                        value={transport.specialHandling}
+                        onChange={(e) => setTransport((f) => ({ ...f, specialHandling: e.target.value }))}
+                        placeholder="ex : garder au frais, ne pas empiler…"
+                        disabled={!transportEditable}
+                        className={`h-9 text-sm ${isDark ? "bg-gray-800 border-gray-700 text-white" : ""}`}
+                        data-testid="input-special-handling"
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={transport.isFragile}
+                        onChange={(e) => setTransport((f) => ({ ...f, isFragile: e.target.checked }))}
+                        disabled={!transportEditable}
+                        className="w-3.5 h-3.5 rounded accent-primary"
+                        data-testid="checkbox-is-fragile"
+                      />
+                      <span className={t.textMuted}>Fragile — manipuler avec précaution</span>
+                    </label>
+                    {transportEditable && (
+                      <div className="flex gap-2">
+                        <Button size="sm" className={isDark ? "text-white border-white" : ""} onClick={handleSaveTransport} disabled={updateTransportRequirements.isPending} data-testid="button-save-transport-requirements">
+                          {updateTransportRequirements.isPending ? "Enregistrement…" : "Enregistrer"}
+                        </Button>
+                        {hasSavedTransportRequirements && (
+                          <Button size="sm" variant="outline" className={isDark ? "text-white border-white" : ""}
+                            onClick={() => {
+                              setTransport({
+                                requiredVehicleType: (subOrder as any).requiredVehicleType ?? "",
+                                totalWeightKg: (subOrder as any).totalWeightKg ?? "",
+                                totalVolumeL: (subOrder as any).totalVolumeL ?? "",
+                                numberOfPackages: (subOrder as any).numberOfPackages != null ? String((subOrder as any).numberOfPackages) : "",
+                                numberOfItems: (subOrder as any).numberOfItems != null ? String((subOrder as any).numberOfItems) : "",
+                                isFragile: !!(subOrder as any).isFragile,
+                                specialHandling: (subOrder as any).specialHandling ?? "",
+                              });
+                              setIsEditingTransport(false);
+                            }}
+                            data-testid="button-cancel-edit-transport-requirements">
+                            Annuler
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* ── Items for this supplier ── */}
             {items.length > 0 && (
@@ -449,6 +710,15 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                           <span>Pris en charge par vous{(subOrder as any).delivery.freeDeliveryApplied ? " (livraison offerte)" : ""}</span>
                           <span className={t.textPrimary}>{fmt((subOrder as any).delivery.supplierFeeShareCents ?? 0)}</span>
                         </div>
+                        {/* Two-Leg Delivery Distance Model — the Supplier's own, separate
+                            pickup-leg obligation (driver → supplier collection distance) —
+                            never part of the Coffee Owner's delivery fee above. */}
+                        {(subOrder as any).delivery.pickupLegFeeCents != null && (
+                          <div className={`flex justify-between text-xs ${t.textMuted}`}>
+                            <span>Frais de collecte (trajet chauffeur → vous)</span>
+                            <span className={t.textPrimary}>{fmt((subOrder as any).delivery.pickupLegFeeCents)}</span>
+                          </div>
+                        )}
                       </div>
                       <DeliveryProgress
                         status={(subOrder as any).delivery.status}

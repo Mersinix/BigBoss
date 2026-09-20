@@ -14,6 +14,8 @@ import {
 import {
   DashboardHero, StatCard, SectionCard, RankRow, AlertRow, EmptyState,
 } from "@/components/dashboard/dashboard-kit";
+import { useMyFinancialSummary } from "@/hooks/use-delivery-ecosystem";
+import { Banknote } from "lucide-react";
 
 const STATUS_BADGE: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700",
@@ -37,6 +39,10 @@ export default function SupplierDashboard() {
   const fmt = useFormatCurrency();
   const { data: orders = [], isLoading } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
   const { data: listings = [] } = useQuery<any[]>({ queryKey: ["/api/supplier/listings"] });
+  // Delivery System V2 Phase 5C.2 — own SUPPLIER-mode deliveries' driver settlement
+  // obligations (as counterparty) — deliberately separate from the order revenue figures
+  // above (ledger/settlement obligations, not order/product sales).
+  const { data: deliveryFinancialSummary } = useMyFinancialSummary();
 
   const lines = useMemo(() => flattenOrders(orders), [orders]);
   const stats = useMemo(() => summarize(lines), [lines]);
@@ -89,6 +95,18 @@ export default function SupplierDashboard() {
         <StatCard label="Produits actifs" value={listings.length} icon={Package} tone="green" subtext="référencé(s)" />
         <StatCard label="Stock faible" value={lowStock.length} icon={AlertTriangle} tone={lowStock.length > 0 ? "red" : "blue"} subtext={lowStock.length > 0 ? "à réapprovisionner" : "tout est ok"} />
       </div>
+
+      {deliveryFinancialSummary && (
+        <SectionCard title="Règlement livraison (chauffeurs)" icon={Banknote}>
+          <p className="text-xs text-muted-foreground mb-2">Ce que vous devez à vos propres chauffeurs pour vos livraisons en mode "Fournisseur" — distinct de votre chiffre d'affaires.</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div><p className="text-xs text-muted-foreground">Dû</p><p className="font-semibold">{fmt(deliveryFinancialSummary.owedCents)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Approuvé</p><p className="font-semibold">{fmt(deliveryFinancialSummary.approvedCents)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Payé</p><p className="font-semibold text-emerald-600">{fmt(deliveryFinancialSummary.paidCents)}</p></div>
+            <div><p className="text-xs text-muted-foreground">En attente</p><p className="font-semibold text-amber-600">{fmt(deliveryFinancialSummary.outstandingCents)}</p></div>
+          </div>
+        </SectionCard>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <SectionCard title="Aperçu des ventes" icon={DollarSign} right={<span className="text-xs text-muted-foreground">12 derniers mois</span>}>

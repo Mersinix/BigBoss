@@ -67,7 +67,18 @@ export default function PaymentDetailsModal({
             <div className="w-8" />
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4">
+          {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+              scroll container exactly (client/src/components/cafe/order-details-modal.tsx),
+              same thumb/track/hover classes, not a new scrollbar style. */}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4
+              [&::-webkit-scrollbar]:w-1
+              [&::-webkit-scrollbar-track]:bg-transparent
+              [&::-webkit-scrollbar-thumb]:rounded-full
+              [&::-webkit-scrollbar-thumb]:bg-gray-700
+              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {/* Parties + order */}
             <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
               <div className="flex items-center justify-between flex-wrap gap-2">

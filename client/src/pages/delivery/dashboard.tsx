@@ -3,9 +3,10 @@ import { useDeliveries, useDeliveryCompanyDrivers } from "@/hooks/use-deliveries
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, Truck, CheckCircle2, Clock, Users } from "lucide-react";
+import { Package, Truck, CheckCircle2, Clock, Users, Banknote } from "lucide-react";
 import { Link } from "wouter";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { useMyFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
@@ -25,6 +26,10 @@ export default function DeliveryDashboard() {
   const { data: deliveries = [], isLoading } = useDeliveries();
   const { data: drivers = [] } = useDeliveryCompanyDrivers();
   const fmt = useFormatCurrency();
+  // Delivery System V2 Phase 5C.2 — settlement/payment-based, deliberately separate from the
+  // economic "Montant conservé" stat above (that's what the ledger says is owed; this is what
+  // has actually been grouped into a settlement and confirmed paid).
+  const { data: financialSummary } = useMyFinancialSummary();
 
   if (isLoading) {
     return <div className="h-full flex items-center justify-center p-10"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -34,7 +39,13 @@ export default function DeliveryDashboard() {
   const available = isCompany ? deliveries.filter((d) => d.status === "AVAILABLE") : [];
   const active = mine.filter((d) => !["DELIVERED", "CANCELLED"].includes(d.status));
   const completedToday = mine.filter((d) => d.status === "DELIVERED");
-  const totalFees = completedToday.reduce((s, d) => s + (d.deliveryFee ?? 0), 0);
+  // Delivery System V2 Phase 5B — a company's own retained amount (companyPayoutCents), never
+  // the customer-facing deliveryFee or the driver's own earnings; a driver viewing this same
+  // dashboard sees their own totalDriverPayoutCents instead — see
+  // docs/bigboss-delivery-financial-visibility.md. Falls back to deliveryFee only for
+  // deliveries that predate Phase 3's real payout split (companyPayoutCents/driverPayoutCents
+  // null).
+  const totalFees = completedToday.reduce((s, d) => s + (isCompany ? (d.companyPayoutCents ?? d.deliveryFee ?? 0) : (d.totalDriverPayoutCents ?? d.driverPayoutCents ?? d.deliveryFee ?? 0)), 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -93,13 +104,25 @@ export default function DeliveryDashboard() {
         <Card className={`${CARD_CLASS} bg-gradient-to-br from-primary/5 to-transparent`}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-muted-foreground">Frais générés</p>
+              <p className="text-xs text-muted-foreground">{isCompany ? "Montant conservé" : "Revenus"}</p>
               <Clock className="w-4 h-4 text-primary" />
             </div>
             <p className="text-2xl font-bold">{fmt(totalFees)}</p>
           </CardContent>
         </Card>
       </div>
+
+      {isCompany && financialSummary && (
+        <Card className={CARD_CLASS}>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-2"><Banknote className="w-4 h-4 text-primary" />Règlement</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm pt-0">
+            <div><p className="text-xs text-muted-foreground">Dû</p><p className="font-semibold">{fmt(financialSummary.owedCents)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Approuvé</p><p className="font-semibold">{fmt(financialSummary.approvedCents)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Payé</p><p className="font-semibold text-emerald-600">{fmt(financialSummary.paidCents)}</p></div>
+            <div><p className="text-xs text-muted-foreground">En attente</p><p className="font-semibold text-amber-600">{fmt(financialSummary.outstandingCents)}</p></div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className={CARD_CLASS}>
         <CardHeader className="flex flex-row items-center justify-between">

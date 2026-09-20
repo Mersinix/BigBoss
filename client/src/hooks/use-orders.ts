@@ -113,6 +113,60 @@ export function useUpdateSubOrderStatus() {
   });
 }
 
+// Self Pickup confirmation (Delivery System V2) — Coffee Owner types back the code the
+// Supplier gave them in person. All real validation happens server-side in
+// storage.confirmSelfPickup; this is just the transport.
+export function useConfirmSelfPickup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ subOrderId, code }: { subOrderId: number; code: string }) => {
+      const res = await fetch(`/api/suborders/${subOrderId}/confirm-self-pickup`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Failed to confirm pickup" }));
+        throw new Error(err.message ?? "Failed to confirm pickup");
+      }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.orders.list.path] }),
+  });
+}
+
+// Supplier-declared transport requirements (Delivery System V2) — informational +
+// vehicle-compatibility gating only, never touches pricing (see storage.isVehicleCompatible).
+export function useUpdateTransportRequirements() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ subOrderId, ...updates }: {
+      subOrderId: number;
+      requiredVehicleType?: string | null;
+      totalWeightKg?: string | null;
+      totalVolumeL?: string | null;
+      numberOfPackages?: number | null;
+      numberOfItems?: number | null;
+      isFragile?: boolean;
+      specialHandling?: string | null;
+    }) => {
+      const res = await fetch(`/api/suborders/${subOrderId}/transport-requirements`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Failed to update transport requirements" }));
+        throw new Error(err.message ?? "Failed to update transport requirements");
+      }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.orders.list.path] }),
+  });
+}
+
 export function useReorder(orderId: number | null) {
   return useQuery<ReorderData>({
     queryKey: ["/api/orders/reorder", orderId],

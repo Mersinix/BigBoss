@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -187,6 +188,31 @@ export default function OrderConfirmationModal({
       bySupplier.set(item.supplierId, { supplierName: item.supplierName, items: [] });
     bySupplier.get(item.supplierId)!.items.push(item);
   }
+
+  // ── Pre-checkout delivery estimate (Delivery System V2) — explicitly an ESTIMATE, never
+  // the final price: the server recomputes/freezes the real fee later (sub-order READY, then
+  // driver assignment), exactly as before. Self Pickup never estimates (always 0, no request
+  // needed). Reuses the same computeDeliveryFee engine server-side — no client-side pricing
+  // math is introduced here. ──
+  const subtotalBySupplier = new Map<number, number>();
+  for (const item of localItems) subtotalBySupplier.set(item.supplierId, (subtotalBySupplier.get(item.supplierId) ?? 0) + item.unitPrice * item.quantity);
+  for (const item of localPackItems) subtotalBySupplier.set(item.supplierId, (subtotalBySupplier.get(item.supplierId) ?? 0) + item.unitPrice * item.quantity);
+  const estimateItems = Array.from(subtotalBySupplier.entries()).map(([supplierId, subtotalCents]) => ({ supplierId, subtotalCents }));
+  const { data: deliveryEstimate } = useQuery({
+    queryKey: ["/api/orders/estimate-delivery", deliveryMethod, deliveryAddress?.lat, deliveryAddress?.lng, estimateItems],
+    queryFn: async () => {
+      const res = await fetch("/api/orders/estimate-delivery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ deliveryMethod, deliveryAddress: deliveryAddress ?? undefined, items: estimateItems }),
+      });
+      if (!res.ok) throw new Error("Failed to estimate delivery");
+      return res.json() as Promise<{ totalEstimatedCafeOwnerCents: number }>;
+    },
+    enabled: deliveryMethod === "DELIVERY_SERVICE" && !!deliveryAddress && estimateItems.length > 0,
+    staleTime: 30_000,
+  });
 
   // ── Confirm ──────────────────────────────────────────────────────────────────
 
@@ -455,10 +481,16 @@ export default function OrderConfirmationModal({
                 deliveryAddress ? (
                   <div className={`flex items-start gap-3 rounded-xl border p-3 ${t.cardBg}`}>
                     <MapPin className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className={`text-[11px] font-semibold ${t.textMuted}`}>Adresse de livraison</p>
                       <p className={`text-sm font-medium ${t.textPrimary}`}>{deliveryAddress.address}</p>
                       {courierInstructions && <p className={`text-xs mt-1 ${t.textMuted}`}>Instructions : {courierInstructions}</p>}
+                      {deliveryEstimate && (
+                        <p className={`text-xs mt-1.5 ${t.textMuted}`}>
+                          Estimation livraison : <span className="font-semibold text-amber-500">{fmt(deliveryEstimate.totalEstimatedCafeOwnerCents)}</span>
+                          <span className="italic"> (finalisée après confirmation)</span>
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : (

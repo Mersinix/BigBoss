@@ -197,6 +197,7 @@ export async function nearbySearch(
 export async function fetchAllNearbyPages(
   point: GridPoint,
   keyword: string,
+  keytype: string,
   apiKey: string,
 ): Promise<{ places: NearbyPlace[]; requestCount: number }> {
   const all: NearbyPlace[] = [];
@@ -205,7 +206,7 @@ export async function fetchAllNearbyPages(
 
   for (let page = 0; page < 3; page++) {
     const result = await retryGoogleRequest(() =>
-      nearbySearch(point.lat, point.lng, point.cellRadiusM, keyword, apiKey, pageToken)
+      nearbySearch(point.lat, point.lng, point.cellRadiusM, keyword, keytype, apiKey, pageToken)
     );
 
     requestCount++;

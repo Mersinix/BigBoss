@@ -408,7 +408,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/account-dark-mode-settings/:account", requireAdmin, async (req, res) => {
     try {
       const account = req.params.account as string;
-      const VALID_ACCOUNTS = ['BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING'];
+      const VALID_ACCOUNTS = ['BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING', 'SUPPLIER', 'ADMIN'];
       if (!VALID_ACCOUNTS.includes(account)) return res.status(400).json({ message: "Invalid account" });
       const { mode } = z.object({ mode: z.enum(['BOTH', 'DARK_ONLY', 'LIGHT_ONLY']) }).parse(req.body);
       const settings = await storage.setAccountDarkModeSetting(account as any, mode);

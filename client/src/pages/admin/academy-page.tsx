@@ -78,19 +78,19 @@ type Overview = {
 
 const LEVEL_LABELS: Record<string, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 const LEVEL_COLORS: Record<string, string> = {
-  BEGINNER: "bg-green-100 text-green-700", ADVANCED: "bg-blue-100 text-blue-700", EXPERT: "bg-purple-100 text-purple-700",
+  BEGINNER: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400", ADVANCED: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400", EXPERT: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400",
 };
 const REGISTRATION_STATUS_LABELS: Record<string, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", CANCELLED: "Annulée", COMPLETED: "Terminée",
 };
 const REGISTRATION_STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-700", CONFIRMED: "bg-indigo-100 text-indigo-700",
-  CANCELLED: "bg-gray-100 text-gray-600", COMPLETED: "bg-green-100 text-green-700",
+  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400", CONFIRMED: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400",
+  CANCELLED: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400", COMPLETED: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
 };
 const SESSION_STATUS_LABELS: Record<string, string> = { UPCOMING: "À venir", ACTIVE: "En cours", COMPLETED: "Terminée", CANCELLED: "Annulée" };
 const SESSION_STATUS_COLORS: Record<string, string> = {
-  UPCOMING: "bg-blue-100 text-blue-700", ACTIVE: "bg-amber-100 text-amber-700",
-  COMPLETED: "bg-green-100 text-green-700", CANCELLED: "bg-gray-100 text-gray-600",
+  UPCOMING: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400", ACTIVE: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  COMPLETED: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400", CANCELLED: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400",
 };
 
 function RegistrationStatusBadge({ status }: { status: string }) {
@@ -136,7 +136,7 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <Avatar><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold">{academy.initials}</AvatarFallback></Avatar>
+            <Avatar><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{academy.initials}</AvatarFallback></Avatar>
             <span className="flex-1">{academy.name}</span>
             {/* Same synchronized Academy Profile Details modal reused by the Academy's own
                 Eye preview and the Coffee Owner "click Académie" flow (Part 38-39) — read-only
@@ -396,7 +396,7 @@ export default function AdminAcademyPage() {
                 <Card key={academy.userId} className="hover:shadow-md transition-shadow" data-testid={`card-academy-${academy.userId}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedAcademy(academy)}>
-                      <Avatar><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold">{academy.initials}</AvatarFallback></Avatar>
+                      <Avatar><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{academy.initials}</AvatarFallback></Avatar>
                       <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{academy.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{academy.location || "—"}</p></div>
                       <span className={`h-2.5 w-2.5 rounded-full mt-1 ${academy.publishedCourseCount > 0 ? "bg-green-500" : "bg-gray-300"}`} />
                     </div>
@@ -406,7 +406,7 @@ export default function AdminAcademyPage() {
                       <Button size="sm" className="w-full h-7 text-xs" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: academy.userId, status: "approved" })} data-testid={`button-approve-academy-${academy.userId}`}>Approuver</Button>
                     )}
                     {academy.status === "approved" && (
-                      <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 text-red-600 hover:bg-red-50" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: academy.userId, status: "rejected" })} data-testid={`button-suspend-academy-${academy.userId}`}>Suspendre</Button>
+                      <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: academy.userId, status: "rejected" })} data-testid={`button-suspend-academy-${academy.userId}`}>Suspendre</Button>
                     )}
                   </CardContent>
                 </Card>

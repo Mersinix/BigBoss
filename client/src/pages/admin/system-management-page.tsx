@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Sun, SunMoon, Car } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Sun, SunMoon, Car, Store, ShieldCheck } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type DeliveryPricingSettings, useFinancialLedgerEntries, type FinancialLedgerFilters, useAdminSettlements, useApproveSettlement, useVoidSettlement, type SettlementFilters, useSettlementPayments, useCreatePayment, useConfirmPayment, useFailPayment, useReversePayment, type PaymentMethod, useAdminCodReconciliations, useReconcileCod, useAdminRefunds, useRequestRefund, useConfirmRefund, useFailRefund, useCancelRefund, useAdminAdjustments, useCreateAdjustment, useAdminFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -44,9 +44,9 @@ const SERVICE_ORDER_CARDS: { id: MarketplaceServiceId; key?: ServiceKey; label: 
 ];
 
 const STATE_OPTIONS: { value: ServiceState; label: string; icon: any; badgeClass: string }[] = [
-  { value: "VISIBLE",     label: "Visible",      icon: Eye,    badgeClass: "bg-green-100 text-green-700 border-green-200" },
-  { value: "COMING_SOON", label: "Coming Soon",  icon: Clock,  badgeClass: "bg-amber-400 text-amber-700 border-amber-200" },
-  { value: "HIDDEN",      label: "Hidden",       icon: EyeOff, badgeClass: "bg-gray-100 text-gray-600 border-gray-200" },
+  { value: "VISIBLE",     label: "Visible",      icon: Eye,    badgeClass: "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30" },
+  { value: "COMING_SOON", label: "Coming Soon",  icon: Clock,  badgeClass: "bg-amber-400 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30" },
+  { value: "HIDDEN",      label: "Hidden",       icon: EyeOff, badgeClass: "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-500/15 dark:text-gray-400 dark:border-gray-500/30" },
 ];
 
 type MessagingSettings = {
@@ -252,10 +252,12 @@ function HeroActionsSection() {
 
 // Independent of both SERVICES (marketplace visibility) and HERO_SERVICES
 // (Coffee Owner hero icons) above — this controls whether the dark/light
-// toggle appears in each of the 7 non-Coffee-Owner service accounts' own
-// navbar. Deliberately does NOT include Coffee Owner (its dark mode already
-// exists independently of this control, per the task's own instruction not
-// to touch it).
+// toggle appears in each account's own navbar: the original 7 non-Coffee-
+// Owner service accounts, plus Supplier and Admin (added once Dark Mode
+// support existed for those two areas too — same mechanism, same table,
+// see dashboard-layout.tsx). Deliberately does NOT include Coffee Owner
+// (its dark mode already exists independently of this control, per the
+// original task's own instruction not to touch it).
 const DARK_MODE_ACCOUNTS: { key: DarkModeAccount; label: string; icon: any }[] = [
   { key: "BARISTA_ACADEMY",     label: "Barista Academy",     icon: GraduationCap },
   { key: "BARISTA_MARKETPLACE", label: "Barista Marketplace", icon: Users },
@@ -264,6 +266,8 @@ const DARK_MODE_ACCOUNTS: { key: DarkModeAccount; label: string; icon: any }[] =
   { key: "PRINTER",             label: "Imprimerie",          icon: Printer },
   { key: "MAINTENANCE",         label: "Maintenance",         icon: Wrench },
   { key: "MARKETING",           label: "Marketing",           icon: Megaphone },
+  { key: "SUPPLIER",            label: "Supplier",            icon: Store },
+  { key: "ADMIN",               label: "Admin",                icon: ShieldCheck },
 ];
 
 const THEME_MODE_OPTIONS: { value: AccountThemeMode; label: string; icon: any }[] = [

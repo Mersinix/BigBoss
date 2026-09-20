@@ -8,12 +8,12 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { useEffect, useRef } from "react";
 
 const ROLE_BADGE: Record<string, string> = {
-  ADMIN:            "bg-red-100 text-red-700",
-  SUPER_ADMIN:      "bg-red-100 text-red-700",
-  SUPPLIER:         "bg-amber-100 text-amber-700",
-  DELIVERY_COMPANY: "bg-green-100 text-green-700",
-  DRIVER:           "bg-green-100 text-green-700",
-  CAFE_OWNER:       "bg-blue-100 text-blue-700",
+  ADMIN:            "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+  SUPER_ADMIN:      "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+  SUPPLIER:         "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  DELIVERY_COMPANY: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
+  DRIVER:           "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
+  CAFE_OWNER:       "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
 };
 
 function formatTime(iso: string) {
@@ -58,7 +58,7 @@ export function ChatView({
   }, [messages.length]);
 
   const otherRole = conversation.otherParticipants[0]?.role ?? "CAFE_OWNER";
-  const badgeClass = ROLE_BADGE[otherRole] ?? "bg-gray-100 text-gray-600";
+  const badgeClass = ROLE_BADGE[otherRole] ?? "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400";
   const displayName = conversation.type === "BROADCAST" && conversation.title
     ? conversation.title
     : conversation.otherParticipants.map(p => p.name).join(", ") || "Inconnu";

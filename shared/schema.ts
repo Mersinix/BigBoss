@@ -1295,8 +1295,12 @@ export type HeroActionSettingsMap = Record<HeroService, { fastSearchEnabled: boo
 // toggle), LIGHT_ONLY (always light, no toggle). Defaults to BOTH: dark mode
 // is being introduced as a new capability for all 7 accounts, admin can
 // restrict it per account afterwards if desired.
+// SUPPLIER and ADMIN were added afterwards, once Dark Mode support existed
+// for those two areas too — same three-state policy, same table, reusing
+// this exact mechanism rather than a second one (see dashboard-layout.tsx,
+// which is the shared header/navbar for both).
 export const darkModeAccountEnum = pgEnum('dark_mode_account', [
-  'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING',
+  'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING', 'SUPPLIER', 'ADMIN',
 ]);
 
 export const accountThemeModeEnum = pgEnum('account_theme_mode', ['BOTH', 'DARK_ONLY', 'LIGHT_ONLY']);
@@ -1308,7 +1312,7 @@ export const accountDarkModeSettings = pgTable("account_dark_mode_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export type DarkModeAccount = 'BARISTA_ACADEMY' | 'BARISTA_MARKETPLACE' | 'DELIVERY_COMPANY' | 'DRIVER' | 'PRINTER' | 'MAINTENANCE' | 'MARKETING';
+export type DarkModeAccount = 'BARISTA_ACADEMY' | 'BARISTA_MARKETPLACE' | 'DELIVERY_COMPANY' | 'DRIVER' | 'PRINTER' | 'MAINTENANCE' | 'MARKETING' | 'SUPPLIER' | 'ADMIN';
 export type AccountThemeMode = 'BOTH' | 'DARK_ONLY' | 'LIGHT_ONLY';
 export type AccountDarkModeSetting = typeof accountDarkModeSettings.$inferSelect;
 export type AccountDarkModeSettingsMap = Record<DarkModeAccount, AccountThemeMode>;

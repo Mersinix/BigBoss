@@ -27,10 +27,10 @@ function getEffectiveStatus(c: DiscountCode): EffectiveStatus {
 }
 
 const statusStyle: Record<EffectiveStatus, string> = {
-  Active: "bg-green-100 text-green-700",
-  Inactive: "bg-gray-100 text-gray-600",
-  Expired: "bg-gray-100 text-gray-600",
-  "Limit Reached": "bg-amber-100 text-amber-700",
+  Active: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
+  Inactive: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400",
+  Expired: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400",
+  "Limit Reached": "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
 };
 
 function discountLabel(c: DiscountCode, fmt: (n: number) => string): string {

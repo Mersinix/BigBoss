@@ -285,7 +285,7 @@ function PrinterAccountDetail({ account, onClose, onRefresh, onOpenService }: {
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-blue-100 text-blue-700 font-bold">{account.initials}</AvatarFallback></Avatar>
+            <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 font-bold">{account.initials}</AvatarFallback></Avatar>
             <span className="flex-1">{account.name}</span>
             <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setPreviewOpen(true)} data-testid="button-preview-print-marketplace">
               <Eye className="w-3.5 h-3.5" />Aperçu marketplace
@@ -563,7 +563,7 @@ export default function AdminPrintPage() {
                 <Card key={printer.userId} className="hover:shadow-md transition-shadow" data-testid={`card-printer-${printer.userId}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedPrinterAccount(printer)}>
-                      <Avatar><AvatarImage src={getAvatarUrl(printer)} alt={printer.name} /><AvatarFallback className="bg-blue-100 text-blue-700 font-bold">{printer.initials}</AvatarFallback></Avatar>
+                      <Avatar><AvatarImage src={getAvatarUrl(printer)} alt={printer.name} /><AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 font-bold">{printer.initials}</AvatarFallback></Avatar>
                       <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{printer.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{printer.location || "—"}</p></div>
                       <span className={`h-2.5 w-2.5 rounded-full mt-1 ${printer.activeServiceCount > 0 ? "bg-green-500" : "bg-gray-300"}`} />
                     </div>
@@ -573,7 +573,7 @@ export default function AdminPrintPage() {
                       <Button size="sm" className="w-full h-7 text-xs" disabled={printerStatusMutation.isPending} onClick={() => printerStatusMutation.mutate({ id: printer.userId, status: "approved" })} data-testid={`button-approve-printer-${printer.userId}`}>Approuver</Button>
                     )}
                     {printer.status === "approved" && (
-                      <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 text-red-600 hover:bg-red-50" disabled={printerStatusMutation.isPending} onClick={() => printerStatusMutation.mutate({ id: printer.userId, status: "rejected" })} data-testid={`button-suspend-printer-${printer.userId}`}>Suspendre</Button>
+                      <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10" disabled={printerStatusMutation.isPending} onClick={() => printerStatusMutation.mutate({ id: printer.userId, status: "rejected" })} data-testid={`button-suspend-printer-${printer.userId}`}>Suspendre</Button>
                     )}
                   </CardContent>
                 </Card>
@@ -703,7 +703,7 @@ export default function AdminPrintPage() {
                 <Card key={c.name} className="hover:shadow-md transition-shadow" data-testid={`card-customer-${c.name}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3">
-                      <Avatar><AvatarFallback className="bg-blue-100 text-blue-700 font-bold">{c.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                      <Avatar><AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 font-bold">{c.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
                       <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{c.name}</h3><p className="text-xs text-muted-foreground">{c.orders} commande(s)</p></div>
                     </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">

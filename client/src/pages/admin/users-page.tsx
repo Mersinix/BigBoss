@@ -69,9 +69,9 @@ const roleColors: Record<string, string> = {
 };
 
 const statusConfig: Record<string, { label: string; className: string; icon: any }> = {
-  approved: { label: "Approuvé", className: "bg-green-100 text-green-700 border-green-200", icon: CheckCircle },
-  pending: { label: "En attente", className: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: Clock },
-  rejected: { label: "Rejeté", className: "bg-red-100 text-red-700 border-red-200", icon: XCircle },
+  approved: { label: "Approuvé", className: "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30", icon: CheckCircle },
+  pending: { label: "En attente", className: "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-500/15 dark:text-yellow-400 dark:border-yellow-500/30", icon: Clock },
+  rejected: { label: "Rejeté", className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30", icon: XCircle },
 };
 
 const ALL_ROLES = [
@@ -358,7 +358,7 @@ function UserDetailDialog({
               <div className="flex flex-wrap gap-2">
                 {userStatus !== "approved" && (
                   <Button size="sm" variant="outline" disabled={isPending}
-                    className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50 gap-1"
+                    className="h-7 text-xs border-green-200 dark:border-green-500/30 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-500/10 gap-1"
                     onClick={() => statusMutation.mutate({ status: "approved" })}
                     data-testid="button-modal-approve">
                     <CheckCircle className="w-3 h-3" /> Approuver
@@ -374,7 +374,7 @@ function UserDetailDialog({
                 )}
                 {userStatus !== "rejected" && (
                   <Button size="sm" variant="outline" disabled={isPending}
-                    className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50 gap-1"
+                    className="h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1"
                     onClick={() => statusMutation.mutate({ status: "rejected" })}
                     data-testid="button-modal-reject">
                     <XCircle className="w-3 h-3" /> Rejeter
@@ -388,7 +388,7 @@ function UserDetailDialog({
           <div className="border-t pt-3">
             {!confirmDelete ? (
               <Button size="sm" variant="outline" disabled={isPending}
-                className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50 gap-1"
+                className="h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 gap-1"
                 onClick={() => setConfirmDelete(true)}
                 data-testid="button-modal-delete">
                 <Trash2 className="w-3 h-3" /> Supprimer l'utilisateur
@@ -827,7 +827,7 @@ export default function UsersPage() {
                           <>
                             {userStatus !== "approved" && (
                               <Button size="sm" variant="outline"
-                                className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50 hover:border-green-400 gap-1"
+                                className="h-7 text-xs border-green-200 dark:border-green-500/30 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-500/10 hover:border-green-400 gap-1"
                                 onClick={() => statusMutation.mutate({ id: u.id, status: "approved" })}
                                 disabled={statusMutation.isPending}
                                 data-testid={`button-approve-${u.id}`}>
@@ -836,7 +836,7 @@ export default function UsersPage() {
                             )}
                             {userStatus !== "rejected" && (
                               <Button size="sm" variant="outline"
-                                className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50 hover:border-red-400 gap-1"
+                                className="h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-400 gap-1"
                                 onClick={() => statusMutation.mutate({ id: u.id, status: "rejected" })}
                                 disabled={statusMutation.isPending}
                                 data-testid={`button-reject-${u.id}`}>
@@ -855,7 +855,7 @@ export default function UsersPage() {
                           </>
                         )}
                         <Button size="sm" variant="ghost"
-                          className="h-7 w-7 p-0 text-destructive hover:bg-red-50 hover:text-destructive ml-auto"
+                          className="h-7 w-7 p-0 text-destructive hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-destructive ml-auto"
                           onClick={() => setDeletingUser(u)}
                           data-testid={`button-delete-${u.id}`}>
                           <Trash2 className="w-3.5 h-3.5" />

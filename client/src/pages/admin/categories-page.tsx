@@ -796,10 +796,10 @@ const PRESET_CATS_BY_ROLE: Record<string, string[]> = {
 
 function getRoleBadgeColor(role: string) {
   const map: Record<string, string> = {
-    SUPPLIER: "bg-blue-100 text-blue-700", PRINTER: "bg-orange-100 text-orange-700",
-    MARKETING: "bg-purple-100 text-purple-700", BARISTA_ACADEMY: "bg-emerald-100 text-emerald-700",
-    BARISTA_MARKETPLACE: "bg-indigo-100 text-indigo-700", CAFE_OWNER: "bg-amber-400 text-amber-700",
-    DELIVERY_COMPANY: "bg-teal-100 text-teal-700",
+    SUPPLIER: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400", PRINTER: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400",
+    MARKETING: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400", BARISTA_ACADEMY: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+    BARISTA_MARKETPLACE: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400", CAFE_OWNER: "bg-amber-400 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
+    DELIVERY_COMPANY: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400",
   };
   return map[role] ?? "bg-secondary text-secondary-foreground";
 }

@@ -11,14 +11,14 @@ import { VEHICLE_TYPE_LABELS } from "@/hooks/use-delivery-ecosystem";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 export const DELIVERY_STATUS_META: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "En attente de dispatch", cls: "bg-gray-100 text-gray-700" },
-  AVAILABLE: { label: "Disponible", cls: "bg-amber-100 text-amber-700" },
-  ACCEPTED: { label: "Acceptée", cls: "bg-blue-100 text-blue-700" },
-  ASSIGNED: { label: "Assignée", cls: "bg-indigo-100 text-indigo-700" },
-  PICKED_UP: { label: "Collectée", cls: "bg-purple-100 text-purple-700" },
-  IN_TRANSIT: { label: "En transit", cls: "bg-purple-100 text-purple-700" },
-  DELIVERED: { label: "Livrée", cls: "bg-green-100 text-green-700" },
-  CANCELLED: { label: "Annulée", cls: "bg-red-100 text-red-700" },
+  PENDING: { label: "En attente de dispatch", cls: "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400" },
+  AVAILABLE: { label: "Disponible", cls: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400" },
+  ACCEPTED: { label: "Acceptée", cls: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400" },
+  ASSIGNED: { label: "Assignée", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400" },
+  PICKED_UP: { label: "Collectée", cls: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" },
+  IN_TRANSIT: { label: "En transit", cls: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" },
+  DELIVERED: { label: "Livrée", cls: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" },
+  CANCELLED: { label: "Annulée", cls: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" },
 };
 
 export const DELIVERY_MODE_LABEL: Record<string, string> = {

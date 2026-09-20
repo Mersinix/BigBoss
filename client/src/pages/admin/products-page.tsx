@@ -1329,7 +1329,7 @@ function AdminPackPreviewModal({
                         </TableCell>
                         <TableCell className="py-2">
                           {item.sizeName && (
-                            <Badge className="text-[10px] px-1 py-0 bg-amber-100 text-amber-700 border-0 mb-1">{item.sizeName}</Badge>
+                            <Badge className="text-[10px] px-1 py-0 bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400 border-0 mb-1">{item.sizeName}</Badge>
                           )}
                           {(() => {
                             const sameSizeFlavors = ((item as any).listingVariants ?? [])
@@ -1339,8 +1339,8 @@ function AdminPackPreviewModal({
                                 <div className="flex flex-col gap-0.5 mt-0.5">
                                   {sameSizeFlavors.map((v: any, vi: number) => (
                                     <span key={vi} className="text-[11px] text-muted-foreground">
-                                      <Badge className="text-[10px] px-1 py-0 bg-pink-100 text-pink-700 border-0 mr-1">{v.flavorName}</Badge>
-                                      <span className="text-gray-500">({v.availableQuantity ?? 0})</span>
+                                      <Badge className="text-[10px] px-1 py-0 bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-400 border-0 mr-1">{v.flavorName}</Badge>
+                                      <span className="text-gray-500 dark:text-gray-400">({v.availableQuantity ?? 0})</span>
                                     </span>
                                   ))}
                                 </div>
@@ -1349,8 +1349,8 @@ function AdminPackPreviewModal({
                             if (item.flavorName) {
                               return (
                                 <span className="text-[11px] text-muted-foreground">
-                                  <Badge className="text-[10px] px-1 py-0 bg-pink-100 text-pink-700 border-0 mr-1">{item.flavorName}</Badge>
-                                  <span className="text-gray-500">({(item as any).availableQuantity ?? 0})</span>
+                                  <Badge className="text-[10px] px-1 py-0 bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-400 border-0 mr-1">{item.flavorName}</Badge>
+                                  <span className="text-gray-500 dark:text-gray-400">({(item as any).availableQuantity ?? 0})</span>
                                 </span>
                               );
                             }
@@ -1743,7 +1743,7 @@ function AdminPacksSection({
               data-testid={`card-pack-${pack.id}`}
               onClick={() => openPreview(pack)}
             >
-              <div className="relative aspect-square bg-amber-50 flex items-center justify-center overflow-hidden">
+              <div className="relative aspect-square bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center overflow-hidden">
                 {pack.imageUrl ? (
                   <img src={pack.imageUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -1824,8 +1824,8 @@ function AdminPacksSection({
                     {pack.imageUrl ? (
                       <img src={pack.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
                     ) : (
-                      <div className="w-12 h-12 rounded-lg bg-amber-50 flex items-center justify-center">
-                        <Layers className="w-5 h-5 text-amber-300" />
+                      <div className="w-12 h-12 rounded-lg bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
+                        <Layers className="w-5 h-5 text-amber-300 dark:text-amber-500/60" />
                       </div>
                     )}
                   </TableCell>

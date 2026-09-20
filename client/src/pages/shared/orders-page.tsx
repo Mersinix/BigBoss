@@ -314,7 +314,7 @@ export default function OrdersPage() {
             //   modal body. This avoids relying on the DB order.status column, which only
             //   advances when ALL sub-orders complete and can lag behind individual updates.
             const displayStatus = getEffectiveStatus(order, isSupplier, user?.id);
-            const badgeColor = STATUS_BADGE[displayStatus] ?? "bg-gray-100 text-gray-800";
+            const badgeColor = STATUS_BADGE[displayStatus] ?? "bg-gray-100 text-gray-800 dark:bg-gray-500/15 dark:text-gray-400";
             const label = STATUS_LABELS[displayStatus] ?? displayStatus;
             // A supplier only ever sees their own single sub-order here, so the collapsed
             // badge above is already accurate for them. Every other role sees the full,
@@ -337,7 +337,7 @@ export default function OrdersPage() {
                         <span className="font-mono text-xs text-muted-foreground">#{String(order.id).padStart(6,"0")}</span>
                         {supplierStatuses ? (
                           supplierStatuses.map((s) => (
-                            <Badge key={s.supplierId} variant="secondary" className={`${STATUS_BADGE[s.status] ?? "bg-gray-100 text-gray-800"} text-xs`}>
+                            <Badge key={s.supplierId} variant="secondary" className={`${STATUS_BADGE[s.status] ?? "bg-gray-100 text-gray-800 dark:bg-gray-500/15 dark:text-gray-400"} text-xs`}>
                               {s.supplierName} — {STATUS_LABELS[s.status] ?? s.status}
                             </Badge>
                           ))
@@ -345,7 +345,7 @@ export default function OrdersPage() {
                           <Badge variant="secondary" className={`${badgeColor} text-xs`}>{label}</Badge>
                         )}
                         {priority && priority !== "NORMAL" && (
-                          <Badge variant="secondary" className={`text-xs ${priority === "URGENT" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
+                          <Badge variant="secondary" className={`text-xs ${priority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
                             <Zap className="w-3 h-3 mr-0.5" />{priority === "URGENT" ? "Urgent" : "Haute prio."}
                           </Badge>
                         )}

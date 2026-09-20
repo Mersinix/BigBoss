@@ -69,10 +69,10 @@ function getEffectiveStatus(p: Promotion): PromotionStatus {
 }
 
 const STATUS_STYLES: Record<PromotionStatus, string> = {
-  ACTIVE: "bg-green-100 text-green-700 border-green-200",
-  PAUSED: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  SCHEDULED: "bg-blue-100 text-blue-700 border-blue-200",
-  EXPIRED: "bg-gray-100 text-gray-600 border-gray-200",
+  ACTIVE: "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30",
+  PAUSED: "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-500/15 dark:text-yellow-400 dark:border-yellow-500/30",
+  SCHEDULED: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30",
+  EXPIRED: "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-500/15 dark:text-gray-400 dark:border-gray-500/30",
 };
 
 function discountLabel(p: Promotion, fmt: (n: number) => string): string {
@@ -518,8 +518,8 @@ function PromotionAssignmentDialog({
         </DialogHeader>
 
         {/* Summary bar */}
-        <div className="flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm">
-          <span className="text-amber-800 font-medium">
+        <div className="flex items-center justify-between rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-2.5 text-sm">
+          <span className="text-amber-800 dark:text-amber-400 font-medium">
             {assignedCount} of {totalItems} {isProducts ? "products" : "categories"} assigned
           </span>
           <div className="flex gap-2">
@@ -572,16 +572,16 @@ function PromotionAssignmentDialog({
                 return (
                   <div
                     key={listing.listingId}
-                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors border ${checked ? "bg-amber-50 border-amber-200" : "border-transparent hover:bg-secondary/40"}`}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors border ${checked ? "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30" : "border-transparent hover:bg-secondary/40"}`}
                     onClick={() => toggleId(listing.listingId)}
                   >
                     <Checkbox checked={checked} onCheckedChange={() => toggleId(listing.listingId)} className="shrink-0" onClick={e => e.stopPropagation()} />
-                    <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 overflow-hidden shrink-0">
                       {listing.imageUrl ? (
                         <img src={listing.imageUrl} alt={listing.productName} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <Package className="w-4 h-4 text-gray-300" />
+                          <Package className="w-4 h-4 text-gray-300 dark:text-gray-500" />
                         </div>
                       )}
                     </div>
@@ -591,7 +591,7 @@ function PromotionAssignmentDialog({
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold">{fmt(listing.price)}</p>
-                      <p className={`text-xs ${listing.stock === 0 ? "text-destructive" : listing.stock < 10 ? "text-yellow-600" : "text-muted-foreground"}`}>
+                      <p className={`text-xs ${listing.stock === 0 ? "text-destructive" : listing.stock < 10 ? "text-yellow-600 dark:text-yellow-400" : "text-muted-foreground"}`}>
                         {listing.stock === 0 ? "Out of stock" : `${listing.stock} in stock`}
                       </p>
                     </div>
@@ -612,12 +612,12 @@ function PromotionAssignmentDialog({
                 return (
                   <div
                     key={cat.id}
-                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors border ${checked ? "bg-amber-50 border-amber-200" : "border-transparent hover:bg-secondary/40"}`}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors border ${checked ? "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30" : "border-transparent hover:bg-secondary/40"}`}
                     onClick={() => toggleId(cat.id)}
                   >
                     <Checkbox checked={checked} onCheckedChange={() => toggleId(cat.id)} className="shrink-0" onClick={e => e.stopPropagation()} />
-                    <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
-                      <Tag className="w-4 h-4 text-amber-600" />
+                    <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center shrink-0">
+                      <Tag className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{cat.name}</p>
@@ -700,12 +700,12 @@ function PromotionCard({
                   {TYPE_LABELS[promo.type]}
                 </Badge>
                 {promo.stackable && (
-                  <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">Stackable</Badge>
+                  <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30">Stackable</Badge>
                 )}
                 {promo.targetType !== 'ALL' && (
                   <Badge
                     variant="outline"
-                    className={`text-xs cursor-pointer hover:bg-amber-50 ${(promo.targetListingIds ?? []).length === 0 && (promo.targetCategoryIds ?? []).length === 0 ? "text-destructive border-destructive/30" : "text-amber-700 border-amber-300"}`}
+                    className={`text-xs cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-500/10 ${(promo.targetListingIds ?? []).length === 0 && (promo.targetCategoryIds ?? []).length === 0 ? "text-destructive border-destructive/30" : "text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30"}`}
                     onClick={onManageAssignments}
                   >
                     <Settings2 className="w-3 h-3 mr-1" />
@@ -735,7 +735,7 @@ function PromotionCard({
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {promo.targetType !== 'ALL' && (
-              <Button size="sm" variant="outline" onClick={onManageAssignments} className="h-8 px-2 text-xs gap-1 text-amber-700 border-amber-300 hover:bg-amber-50">
+              <Button size="sm" variant="outline" onClick={onManageAssignments} className="h-8 px-2 text-xs gap-1 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30 hover:bg-amber-50 dark:hover:bg-amber-500/10">
                 <Settings2 className="w-3 h-3" /> Manage
               </Button>
             )}
@@ -888,10 +888,10 @@ export default function PromotionsPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Active", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600" />, color: "bg-green-50" },
-          { label: "Paused", value: stats?.paused ?? promos.filter(p => getEffectiveStatus(p) === 'PAUSED').length, icon: <Pause className="w-4 h-4 text-yellow-600" />, color: "bg-yellow-50" },
+          { label: "Active", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />, color: "bg-green-50 dark:bg-green-500/10" },
+          { label: "Paused", value: stats?.paused ?? promos.filter(p => getEffectiveStatus(p) === 'PAUSED').length, icon: <Pause className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />, color: "bg-yellow-50 dark:bg-yellow-500/10" },
           { label: "Total Uses", value: stats?.totalUses ?? promos.reduce((s, p) => s + p.usageCount, 0), icon: <Users className="w-4 h-4 text-primary" />, color: "bg-primary/5" },
-          { label: "Savings Generated", value: stats?.totalDiscount != null ? fmt(stats.totalDiscount) : "—", icon: <TrendingUp className="w-4 h-4 text-blue-600" />, color: "bg-blue-50" },
+          { label: "Savings Generated", value: stats?.totalDiscount != null ? fmt(stats.totalDiscount) : "—", icon: <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />, color: "bg-blue-50 dark:bg-blue-500/10" },
         ].map(({ label, value, icon, color }) => (
           <Card key={label} className="rounded-xl border-border/60">
             <CardContent className="p-4 flex items-center gap-3">

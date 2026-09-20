@@ -7745,7 +7745,7 @@ export class DatabaseStorage implements IStorage {
   // doesn't restrict the dark mode capability the accounts are getting in
   // the same change).
   async getAccountDarkModeSettings(): Promise<AccountDarkModeSettingsMap> {
-    const ALL_ACCOUNTS: DarkModeAccount[] = ['BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING'];
+    const ALL_ACCOUNTS: DarkModeAccount[] = ['BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'DELIVERY_COMPANY', 'DRIVER', 'PRINTER', 'MAINTENANCE', 'MARKETING', 'SUPPLIER', 'ADMIN'];
     const rows = await db.select().from(accountDarkModeSettings);
     const map = {} as AccountDarkModeSettingsMap;
     for (const account of ALL_ACCOUNTS) map[account] = 'BOTH';

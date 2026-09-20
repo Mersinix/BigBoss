@@ -97,8 +97,8 @@ export function ConversationList({
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-16 text-center">
-            <MessageCircle className="w-12 h-12 text-gray-200 mb-3" />
-            <p className="font-medium text-gray-500">{emptyText}</p>
+            <MessageCircle className="w-12 h-12 text-muted-foreground/30 mb-3" />
+            <p className="font-medium text-muted-foreground">{emptyText}</p>
           </div>
         ) : (
           filtered.map(conv => {

@@ -163,7 +163,7 @@ function StoreDetailDialog({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                  className="text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
                   onClick={() => actionMutation.mutate({ action: "approve" })}
                   disabled={actionMutation.isPending}
                   data-testid={`button-approve-store-${store.id}`}
@@ -176,7 +176,7 @@ function StoreDetailDialog({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="text-red-600 border-red-200 hover:bg-red-50"
+                  className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-500/10"
                   onClick={() => actionMutation.mutate({ action: "reject" })}
                   disabled={actionMutation.isPending}
                   data-testid={`button-reject-store-${store.id}`}

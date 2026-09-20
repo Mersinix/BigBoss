@@ -88,7 +88,7 @@ function ReviewCard({ review, onReport }: { review: SupplierProductReview & { ca
             <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm text-foreground">{review.cafeName}</span>
-                {isReported && <Badge variant="outline" className="text-xs border-orange-300 text-orange-600 bg-orange-50 dark:bg-orange-950/30">Reported</Badge>}
+                {isReported && <Badge variant="outline" className="text-xs border-orange-300 dark:border-orange-500/30 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30">Reported</Badge>}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</span>

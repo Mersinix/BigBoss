@@ -49,7 +49,7 @@ function DeliveryCard({ delivery, onViewDetails, onCancel, cancelling }: {
   cancelling: boolean;
 }) {
   const fmt = useFormatCurrency();
-  const meta = STATUS_META[delivery.status] ?? { label: delivery.status, cls: "bg-gray-100 text-gray-700" };
+  const meta = STATUS_META[delivery.status] ?? { label: delivery.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400" };
   const canCancel = !["DELIVERED", "CANCELLED"].includes(delivery.status) && !["PICKED_UP", "IN_TRANSIT"].includes(delivery.status);
 
   return (

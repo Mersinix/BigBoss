@@ -79,7 +79,7 @@ type Overview = {
 
 const LEVEL_LABELS: Record<string, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 const LEVEL_COLORS: Record<string, string> = {
-  BEGINNER: "bg-green-100 text-green-700", ADVANCED: "bg-blue-100 text-blue-700", EXPERT: "bg-purple-100 text-purple-700",
+  BEGINNER: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400", ADVANCED: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400", EXPERT: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400",
 };
 // Same labels/colors as barista-marketplace/requests.tsx and missions.tsx — Admin must
 // read the exact same business states, never invent its own.
@@ -88,13 +88,13 @@ const REQUEST_STATUS_LABELS: Record<string, string> = {
   REJECTED: "Refusée", CANCELLED: "Annulée", COMPLETED: "Terminée",
 };
 const REQUEST_STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-700", DISCUSSION: "bg-blue-100 text-blue-700", ACCEPTED: "bg-green-100 text-green-700",
-  REJECTED: "bg-red-100 text-red-700", CANCELLED: "bg-gray-100 text-gray-600", COMPLETED: "bg-purple-100 text-purple-700",
+  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400", DISCUSSION: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400", ACCEPTED: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
+  REJECTED: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400", CANCELLED: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400", COMPLETED: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400",
 };
 const MISSION_STATUS_LABELS: Record<string, string> = { UPCOMING: "À venir", ACTIVE: "En cours", COMPLETED: "Terminée", CANCELLED: "Annulée" };
 const MISSION_STATUS_COLORS: Record<string, string> = {
-  UPCOMING: "bg-blue-100 text-blue-700", ACTIVE: "bg-amber-100 text-amber-700",
-  COMPLETED: "bg-green-100 text-green-700", CANCELLED: "bg-gray-100 text-gray-600",
+  UPCOMING: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400", ACTIVE: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  COMPLETED: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400", CANCELLED: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400",
 };
 
 function RequestStatusBadge({ status }: { status: string }) {
@@ -202,7 +202,7 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold">{barista.initials}</AvatarFallback></Avatar>
+            <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{barista.initials}</AvatarFallback></Avatar>
             <span className="flex-1">{barista.name}</span>
             <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setPreviewOpen(true)} data-testid="button-preview-barista-marketplace">
               <Eye className="w-3.5 h-3.5" />Aperçu marketplace
@@ -486,7 +486,7 @@ export default function AdminBaristaPage() {
                 <Card key={barista.userId} className="hover:shadow-md transition-shadow" data-testid={`card-barista-${barista.userId}`}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedBarista(barista)}>
-                      <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold">{barista.initials}</AvatarFallback></Avatar>
+                      <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{barista.initials}</AvatarFallback></Avatar>
                       <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{barista.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{barista.location || "—"}</p></div>
                       <span className={`h-2.5 w-2.5 rounded-full mt-1 ${barista.available ? "bg-green-500" : "bg-gray-300"}`} />
                     </div>
@@ -501,7 +501,7 @@ export default function AdminBaristaPage() {
                       <Button size="sm" className="w-full h-7 text-xs" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: barista.userId, status: "approved" })} data-testid={`button-approve-barista-${barista.userId}`}>Approuver</Button>
                     )}
                     {barista.status === "approved" && (
-                      <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 text-red-600 hover:bg-red-50" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: barista.userId, status: "rejected" })} data-testid={`button-suspend-barista-${barista.userId}`}>Suspendre</Button>
+                      <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: barista.userId, status: "rejected" })} data-testid={`button-suspend-barista-${barista.userId}`}>Suspendre</Button>
                     )}
                   </CardContent>
                 </Card>

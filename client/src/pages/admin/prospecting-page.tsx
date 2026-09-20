@@ -35,19 +35,19 @@ import type { Prospect, ProspectStats, ProspectNote, ProspectTimelineEvent, Pros
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string; row: string }> = {
-  NEW:               { label: "New",               badge: "bg-gray-100 text-gray-700",           row: "" },
-  NOT_CONTACTED:     { label: "Not Contacted",     badge: "bg-slate-100 text-slate-600",          row: "" },
-  CALLED:            { label: "Called",             badge: "bg-blue-100 text-blue-700",            row: "" },
-  INTERESTED:        { label: "Interested",         badge: "bg-sky-100 text-sky-700",              row: "bg-sky-50" },
-  MEETING_SCHEDULED: { label: "Meeting Scheduled", badge: "bg-purple-100 text-purple-700",        row: "bg-purple-50" },
-  WAITING_REPLY:     { label: "Waiting Reply",     badge: "bg-amber-100 text-amber-700",           row: "bg-amber-50" },
-  NEGOTIATION:       { label: "Negotiation",       badge: "bg-orange-100 text-orange-700",         row: "bg-orange-50" },
-  CONVERTED:         { label: "Converted",         badge: "bg-green-100 text-green-700",           row: "bg-green-50" },
-  REJECTED:          { label: "Rejected",          badge: "bg-red-100 text-red-700",               row: "bg-red-50" },
-  NOT_INTERESTED:    { label: "Not Interested",    badge: "bg-red-100 text-red-600",               row: "bg-red-50" },
-  DUPLICATE:         { label: "Duplicate",         badge: "bg-gray-100 text-gray-500",             row: "bg-gray-50 opacity-60" },
-  INVALID:           { label: "Invalid",           badge: "bg-gray-100 text-gray-500",             row: "bg-gray-50 opacity-60" },
-  ARCHIVED:          { label: "Archived",          badge: "bg-gray-200 text-gray-500",             row: "bg-gray-50 opacity-60" },
+  NEW:               { label: "New",               badge: "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400",           row: "" },
+  NOT_CONTACTED:     { label: "Not Contacted",     badge: "bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-400",          row: "" },
+  CALLED:            { label: "Called",             badge: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",            row: "" },
+  INTERESTED:        { label: "Interested",         badge: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400",              row: "bg-sky-50 dark:bg-sky-500/10" },
+  MEETING_SCHEDULED: { label: "Meeting Scheduled", badge: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400",        row: "bg-purple-50 dark:bg-purple-500/10" },
+  WAITING_REPLY:     { label: "Waiting Reply",     badge: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",           row: "bg-amber-50 dark:bg-amber-500/10" },
+  NEGOTIATION:       { label: "Negotiation",       badge: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400",         row: "bg-orange-50 dark:bg-orange-500/10" },
+  CONVERTED:         { label: "Converted",         badge: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",           row: "bg-green-50 dark:bg-green-500/10" },
+  REJECTED:          { label: "Rejected",          badge: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",               row: "bg-red-50 dark:bg-red-500/10" },
+  NOT_INTERESTED:    { label: "Not Interested",    badge: "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400",               row: "bg-red-50 dark:bg-red-500/10" },
+  DUPLICATE:         { label: "Duplicate",         badge: "bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-500",             row: "bg-gray-50 dark:bg-gray-500/10 opacity-60" },
+  INVALID:           { label: "Invalid",           badge: "bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-500",             row: "bg-gray-50 dark:bg-gray-500/10 opacity-60" },
+  ARCHIVED:          { label: "Archived",          badge: "bg-gray-200 text-gray-500 dark:bg-gray-500/20 dark:text-gray-500",             row: "bg-gray-50 dark:bg-gray-500/10 opacity-60" },
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -76,10 +76,10 @@ function computeScore(p: Prospect): number {
 }
 
 function scoreGrade(score: number): { grade: string; color: string } {
-  if (score >= 60) return { grade: "A", color: "bg-green-100 text-green-700" };
-  if (score >= 40) return { grade: "B", color: "bg-blue-100 text-blue-700" };
-  if (score >= 20) return { grade: "C", color: "bg-amber-100 text-amber-700" };
-  return { grade: "D", color: "bg-gray-100 text-gray-500" };
+  if (score >= 60) return { grade: "A", color: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" };
+  if (score >= 40) return { grade: "B", color: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400" };
+  if (score >= 20) return { grade: "C", color: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400" };
+  return { grade: "D", color: "bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-400" };
 }
 
 // ── Stats Row ─────────────────────────────────────────────────────────────────
@@ -106,13 +106,13 @@ function StatsRow({ stats, isLoading }: { stats?: ProspectStats; isLoading: bool
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
       <StatCard label="Total Prospects" value={stats.total} icon={Target} color="bg-primary/10 text-primary" />
-      <StatCard label="Converted" value={stats.convertedCount} icon={CheckCircle} color="bg-green-100 text-green-600" />
-      <StatCard label="Interested" value={stats.interestedCount} icon={TrendingUp} color="bg-sky-100 text-sky-600" />
-      <StatCard label="Called Today" value={stats.calledToday} icon={PhoneCall} color="bg-blue-100 text-blue-600" />
-      <StatCard label="Follow-ups Today" value={stats.followUpsToday} icon={Calendar} color="bg-purple-100 text-purple-600" />
-      <StatCard label="Overdue" value={stats.overdueFollowUps} icon={AlertCircle} color="bg-red-100 text-red-600" />
-      <StatCard label="With Phone" value={stats.withPhone} icon={Phone} color="bg-amber-100 text-amber-600" />
-      <StatCard label="Avg Rating" value={stats.avgRating.toFixed(1)} icon={Star} color="bg-yellow-100 text-yellow-600" />
+      <StatCard label="Converted" value={stats.convertedCount} icon={CheckCircle} color="bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-400" />
+      <StatCard label="Interested" value={stats.interestedCount} icon={TrendingUp} color="bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400" />
+      <StatCard label="Called Today" value={stats.calledToday} icon={PhoneCall} color="bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400" />
+      <StatCard label="Follow-ups Today" value={stats.followUpsToday} icon={Calendar} color="bg-purple-100 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400" />
+      <StatCard label="Overdue" value={stats.overdueFollowUps} icon={AlertCircle} color="bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400" />
+      <StatCard label="With Phone" value={stats.withPhone} icon={Phone} color="bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400" />
+      <StatCard label="Avg Rating" value={stats.avgRating.toFixed(1)} icon={Star} color="bg-yellow-100 text-yellow-600 dark:bg-yellow-500/15 dark:text-yellow-400" />
     </div>
   );
 }
@@ -304,9 +304,9 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
             </div>
           )}
           {result && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1.5">
-              <p className="text-sm font-semibold text-green-700">Grid Search Complete ✓</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-green-600">
+            <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 rounded-lg p-3 space-y-1.5">
+              <p className="text-sm font-semibold text-green-700 dark:text-green-400">Grid Search Complete ✓</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-green-600 dark:text-green-400">
                 <span>Grid cells searched: <strong>{result.gridCells}</strong></span>
                 <span>API requests: <strong>{result.nearbyRequests}</strong></span>
                 <span>Places found: <strong>{result.googlePlacesFound}</strong></span>
@@ -568,7 +568,7 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
               <h2 className="font-bold text-lg leading-tight truncate">{prospect.businessName}</h2>
               {prospect.address && <p className="text-xs text-muted-foreground mt-0.5 truncate">{prospect.address}</p>}
             </div>
-            <Badge className={`text-xs shrink-0 ${STATUS_CONFIG[prospect.status]?.badge ?? "bg-gray-100 text-gray-700"}`}>
+            <Badge className={`text-xs shrink-0 ${STATUS_CONFIG[prospect.status]?.badge ?? "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400"}`}>
               {STATUS_CONFIG[prospect.status]?.label ?? prospect.status}
             </Badge>
           </div>
@@ -704,10 +704,10 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
                     <div>
                       <p className="text-sm font-semibold">{followUp.date} {followUp.time && `at ${followUp.time}`}</p>
                       <Badge className={`text-[10px] mt-1 ${
-                        followUp.priority === 'URGENT' ? 'bg-red-100 text-red-700' :
-                        followUp.priority === 'HIGH' ? 'bg-orange-100 text-orange-700' :
-                        followUp.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
-                        'bg-gray-100 text-gray-600'
+                        followUp.priority === 'URGENT' ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400' :
+                        followUp.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400' :
+                        followUp.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' :
+                        'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400'
                       }`}>{followUp.priority}</Badge>
                     </div>
                     <Button size="sm" variant="ghost" onClick={() => setFollowUp(null)}><X className="w-4 h-4" /></Button>
@@ -949,7 +949,7 @@ export default function ProspectingPage() {
                 </TableRow>
               ) : (
                 rows.map(p => {
-                  const statusCfg = STATUS_CONFIG[p.status] ?? { label: p.status, badge: "bg-gray-100 text-gray-700", row: "" };
+                  const statusCfg = STATUS_CONFIG[p.status] ?? { label: p.status, badge: "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400", row: "" };
                   const score = computeScore(p);
                   const grade = scoreGrade(score);
                   return (

@@ -18,13 +18,13 @@ import { useMyFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Banknote } from "lucide-react";
 
 const STATUS_BADGE: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-700",
-  CONFIRMED: "bg-blue-100 text-blue-700",
-  PREPARING: "bg-indigo-100 text-indigo-700",
-  READY: "bg-teal-100 text-teal-700",
-  IN_DELIVERY: "bg-cyan-100 text-cyan-700",
-  DELIVERED: "bg-green-100 text-green-700",
-  CANCELLED: "bg-red-100 text-red-700",
+  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  CONFIRMED: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
+  PREPARING: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400",
+  READY: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400",
+  IN_DELIVERY: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-400",
+  DELIVERED: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
+  CANCELLED: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
 };
 
 const STATUS_ORDER = ["PENDING", "CONFIRMED", "PREPARING", "READY", "IN_DELIVERY", "DELIVERED", "CANCELLED"];
@@ -165,7 +165,7 @@ export default function SupplierDashboard() {
                   <td className="py-2 px-2 font-medium">{o.cafe?.name}</td>
                   <td className="py-2 px-2 font-semibold">{fmt(o.totalAmount)}</td>
                   <td className="py-2 px-2">
-                    <Badge variant="secondary" className={`text-[10px] ${STATUS_BADGE[o.status] ?? "bg-gray-100 text-gray-600"}`}>
+                    <Badge variant="secondary" className={`text-[10px] ${STATUS_BADGE[o.status] ?? "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400"}`}>
                       {FR_STATUS_LABEL[o.status] ?? o.status}
                     </Badge>
                   </td>

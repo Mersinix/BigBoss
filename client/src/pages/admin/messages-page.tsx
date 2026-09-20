@@ -18,12 +18,12 @@ import type { ConversationSummary, EligibleContact } from "@shared/schema";
 const MESSAGE_SERVICES = ["SHOP", "MAINTENANCE", "BARISTA", "ACADEMY", "PRINT", "MARKETING"] as const;
 
 const ROLE_COLOR: Record<string, string> = {
-  ADMIN:            "bg-red-100 text-red-700",
-  SUPER_ADMIN:      "bg-red-100 text-red-700",
-  SUPPLIER:         "bg-amber-100 text-amber-700",
-  DELIVERY_COMPANY: "bg-green-100 text-green-700",
-  DRIVER:           "bg-green-100 text-green-700",
-  CAFE_OWNER:       "bg-blue-100 text-blue-700",
+  ADMIN:            "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+  SUPER_ADMIN:      "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+  SUPPLIER:         "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  DELIVERY_COMPANY: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
+  DRIVER:           "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
+  CAFE_OWNER:       "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
 };
 
 function roleLabel(role: string) {
@@ -91,7 +91,7 @@ function BroadcastDialog({ contacts, onClose }: { contacts: EligibleContact[]; o
                 <label key={c.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-secondary/50">
                   <Checkbox checked={selectedIds.has(c.id)} onCheckedChange={() => toggle(c.id)} />
                   <span className="flex-1 text-sm truncate">{c.name}</span>
-                  <Badge className={`text-[10px] border-0 ${ROLE_COLOR[c.role] ?? "bg-gray-100 text-gray-700"}`}>{roleLabel(c.role)}</Badge>
+                  <Badge className={`text-[10px] border-0 ${ROLE_COLOR[c.role] ?? "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400"}`}>{roleLabel(c.role)}</Badge>
                 </label>
               ))}
             </div>
@@ -238,12 +238,12 @@ function AllConversationsTab() {
                 <span className="font-medium text-sm">{displayName}</span>
                 <Badge variant="outline" className="text-[10px]">{conv.type}</Badge>
                 {allHidden && (
-                  <Badge className="text-[10px] border-0 bg-gray-100 text-gray-500">
+                  <Badge className="text-[10px] border-0 bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-400">
                     <EyeOff className="w-2.5 h-2.5 mr-1" />Hidden
                   </Badge>
                 )}
                 {someHidden && (
-                  <Badge className="text-[10px] border-0 bg-yellow-100 text-yellow-700">
+                  <Badge className="text-[10px] border-0 bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400">
                     <EyeOff className="w-2.5 h-2.5 mr-1" />Partially hidden
                   </Badge>
                 )}
@@ -255,7 +255,7 @@ function AllConversationsTab() {
                 {conv.otherParticipants.map(p => (
                   <Badge
                     key={p.id}
-                    className={`text-[10px] border-0 ${p.hiddenAt ? "bg-gray-100 text-gray-400 line-through" : (ROLE_COLOR[p.role] ?? "bg-gray-100 text-gray-700")}`}
+                    className={`text-[10px] border-0 ${p.hiddenAt ? "bg-gray-100 text-gray-400 dark:bg-gray-500/15 dark:text-gray-500 line-through" : (ROLE_COLOR[p.role] ?? "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400")}`}
                     title={p.hiddenAt ? `Hidden since ${new Date(p.hiddenAt).toLocaleDateString()}` : undefined}
                   >
                     {p.name}

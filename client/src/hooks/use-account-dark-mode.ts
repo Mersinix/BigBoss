@@ -7,7 +7,7 @@ import { useAccountThemeStore } from "@/store/account-theme-store";
 // DARK_ONLY (forced dark, no toggle), LIGHT_ONLY (forced light, no toggle).
 // Defaults to BOTH for every account so a load failure never restricts a
 // mode that should be available.
-export type DarkModeAccount = "BARISTA_ACADEMY" | "BARISTA_MARKETPLACE" | "DELIVERY_COMPANY" | "DRIVER" | "PRINTER" | "MAINTENANCE" | "MARKETING";
+export type DarkModeAccount = "BARISTA_ACADEMY" | "BARISTA_MARKETPLACE" | "DELIVERY_COMPANY" | "DRIVER" | "PRINTER" | "MAINTENANCE" | "MARKETING" | "SUPPLIER" | "ADMIN";
 export type AccountThemeMode = "BOTH" | "DARK_ONLY" | "LIGHT_ONLY";
 export type AccountDarkModeSettingsMap = Record<DarkModeAccount, AccountThemeMode>;
 
@@ -19,6 +19,8 @@ const DEFAULT_ACCOUNT_DARK_MODE: AccountDarkModeSettingsMap = {
   PRINTER: "BOTH",
   MAINTENANCE: "BOTH",
   MARKETING: "BOTH",
+  SUPPLIER: "BOTH",
+  ADMIN: "BOTH",
 };
 
 export function useAccountDarkModeSettings() {

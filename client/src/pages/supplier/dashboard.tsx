@@ -75,11 +75,11 @@ export default function SupplierDashboard() {
   );
 
   if (isLoading) {
-    return <div className="flex flex-col gap-4 p-6">{[1, 2, 3].map((i) => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}</div>;
+    return <div className="flex flex-col gap-4 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">{[1, 2, 3].map((i) => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}</div>;
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6">
+    <div className="flex flex-col gap-6 py-4 px-3 -mx-6 sm:py-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Bienvenue !"
         subtitle="Voici votre aperçu fournisseur sur BigBoss Coffee."

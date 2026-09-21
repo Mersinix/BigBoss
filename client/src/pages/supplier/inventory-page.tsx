@@ -132,7 +132,7 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Inventory"
         subtitle="Track stock levels, adjust quantities, and manage product visibility in real time."

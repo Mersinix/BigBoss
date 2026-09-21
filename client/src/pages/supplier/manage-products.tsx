@@ -2101,7 +2101,7 @@ export default function ManageProducts() {
   const handleGoToCategories = () => navigate("/supplier/categories");
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Products"
         subtitle="Browse the admin catalog and manage your product listings with custom pricing and stock."

@@ -184,7 +184,7 @@ export default function StorePage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-4 max-w-6xl mx-auto">
+      <div className="py-6 px-3 -mx-6 sm:px-6 sm:mx-auto space-y-4 max-w-6xl">
         <Skeleton className="h-8 w-48" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Skeleton className="h-96 rounded-2xl" />
@@ -200,7 +200,7 @@ export default function StorePage() {
     : [];
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="py-6 px-3 -mx-6 sm:px-6 sm:mx-auto max-w-6xl space-y-6">
       <DashboardHero
         title={<span className="flex items-center gap-2"><Store className="w-6 h-6 text-primary" />My Store</span>}
         subtitle="Configure how your store appears to Coffee Owners in the marketplace."

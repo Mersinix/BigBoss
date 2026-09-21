@@ -140,7 +140,7 @@ export default function DiscountCodesPage() {
     + (stats?.usageLimitReached ?? codes.filter(c => getEffectiveStatus(c) === "Limit Reached").length);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Discount Codes"
         subtitle="Create and manage promo codes for your café customers."

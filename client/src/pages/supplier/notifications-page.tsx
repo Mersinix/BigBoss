@@ -18,7 +18,7 @@ export default function SupplierNotificationsPage() {
   const orderNotifications = notifications.filter((n) => n.type.startsWith("order") || n.type.startsWith("suborder")).length;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Notifications"
         subtitle="Stay updated on orders, payments and alerts."

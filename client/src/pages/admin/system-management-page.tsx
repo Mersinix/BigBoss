@@ -24,6 +24,21 @@ import { useAccountDarkModeSettings, type DarkModeAccount, type AccountDarkModeS
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { LandingConfig, HeroSlide } from "@shared/schema";
 
+// ── System Management horizontal switcher ─────────────────────────────────────
+// Groups the page's many configuration areas into logical tabs (task: "the page has become
+// too long"). Purely a UI reorganization — every component below still renders exactly as
+// before, just conditionally by active tab instead of always stacked.
+
+type SystemManagementSection = "landing" | "delivery" | "services" | "messages" | "global";
+
+const SYSTEM_MANAGEMENT_SECTIONS: { id: SystemManagementSection; label: string; icon: any }[] = [
+  { id: "landing",  label: "Landing Page",     icon: LayoutTemplate },
+  { id: "delivery", label: "Delivery",         icon: Truck },
+  { id: "services", label: "Services",         icon: Zap },
+  { id: "messages", label: "Messages System",  icon: MessageSquare },
+  { id: "global",   label: "Global Settings",  icon: Sliders },
+];
+
 // ── Service visibility ────────────────────────────────────────────────────────
 
 // The old combined "Barista" service/card is retired — Barista Marketplace and
@@ -415,7 +430,9 @@ function HeroSlidesEditor({ slides, onChange }: { slides: HeroSlide[]; onChange:
 function LandingConfigSection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  // Open by default — this is now the sole content of the "Landing Page" tab (the default
+  // tab on entering System Management), so the Admin must see it immediately, no extra click.
+  const [open, setOpen] = useState(true);
 
   const { data: cfg, isLoading } = useQuery<LandingConfig>({ queryKey: ["/api/landing-config"] });
 
@@ -1781,6 +1798,10 @@ export default function SystemManagementPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Landing Page is the default/open tab (task requirement — Admin must see Landing Page
+  // configuration immediately on entering System Management, no extra click).
+  const [activeSection, setActiveSection] = useState<SystemManagementSection>("landing");
+
   const { data: states, isLoading } = useQuery<ServiceStatesMap>({ queryKey: ["/api/system-services"] });
   const { order: savedOrder } = useServiceOrder();
   const [serviceOrder, setServiceOrder] = useState<MarketplaceServiceId[]>(savedOrder);
@@ -1831,81 +1852,101 @@ export default function SystemManagementPage() {
         gradientClass="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20"
       />
 
-      {/* ── Service visibility ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {isLoading
-          ? Array.from({ length: SERVICE_ORDER_CARDS.length }).map((_, i) => (
-              <Card key={i}><CardContent className="p-6"><Skeleton className="h-6 w-32 mb-3" /><Skeleton className="h-4 w-full mb-1" /><Skeleton className="h-4 w-2/3 mb-4" /><Skeleton className="h-9 w-full" /></CardContent></Card>
-            ))
-          : orderedCards.map((svc) => {
-              const serviceKey = svc.key;
-              const currentState: ServiceState = serviceKey ? (states?.[serviceKey] ?? "VISIBLE") : "VISIBLE";
-              const currentOption = STATE_OPTIONS.find((o) => o.value === currentState)!;
-              const isPending = !!serviceKey && updateState.isPending && updateState.variables?.service === serviceKey;
-              return (
-                <Card key={svc.id} draggable onDragStart={() => setDraggedService(svc.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => moveService(svc.id)} data-testid={`card-service-${svc.id.toLowerCase()}`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" aria-label="Drag to reorder" />
-                        <div className="bg-muted rounded-lg p-2.5"><svc.icon className="w-5 h-5 text-foreground/70" /></div>
-                        <CardTitle className="text-base">{svc.label}</CardTitle>
-                      </div>
-                      <Badge variant="outline" className={`text-xs ${currentOption.badgeClass}`} data-testid={`badge-status-${(serviceKey ?? svc.id).toLowerCase()}`}>
-                        {currentOption.label}
-                      </Badge>
-                    </div>
-                    <CardDescription className="pt-2 text-sm">{svc.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="flex flex-col gap-2">
-                      {serviceKey && STATE_OPTIONS.map((opt) => (
-                        <Button key={opt.value} type="button" size="sm" variant={currentState === opt.value ? "default" : "outline"}
-                          disabled={isPending} onClick={() => updateState.mutate({ service: serviceKey, state: opt.value })}
-                          className={`justify-start gap-2 w-full ${currentState === opt.value ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}`}
-                          data-testid={`button-set-${serviceKey.toLowerCase()}-${opt.value.toLowerCase()}`}>
-                          <opt.icon className="w-4 h-4" />{opt.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+      {/* ── Horizontal section switcher — scrolls on mobile instead of wrapping ── */}
+      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
+          {SYSTEM_MANAGEMENT_SECTIONS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveSection(id)}
+              className={`flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${activeSection === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              data-testid={`tab-system-management-${id}`}
+            >
+              <Icon className="w-4 h-4" />{label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── Global Currency ── */}
-      <GlobalCurrencySection />
+      {/* ── Landing Page ── */}
+      {activeSection === "landing" && (
+        <LandingConfigSection />
+      )}
+
+      {/* ── Delivery (pricing, weather, peak hours, zones, waiting time, safety cap + financial management) ── */}
+      {activeSection === "delivery" && (
+        <>
+          <DeliveryPricingSection />
+          <DeliveryFinancialLedgerSection />
+          <DeliverySettlementsSection />
+          <AdminFinancialSummarySection />
+          <AdminCodReconciliationsSection />
+          <AdminRefundsAdjustmentsSection />
+        </>
+      )}
+
+      {/* ── Services (whole-service visibility + Hero Actions per service) ── */}
+      {activeSection === "services" && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {isLoading
+              ? Array.from({ length: SERVICE_ORDER_CARDS.length }).map((_, i) => (
+                  <Card key={i}><CardContent className="p-6"><Skeleton className="h-6 w-32 mb-3" /><Skeleton className="h-4 w-full mb-1" /><Skeleton className="h-4 w-2/3 mb-4" /><Skeleton className="h-9 w-full" /></CardContent></Card>
+                ))
+              : orderedCards.map((svc) => {
+                  const serviceKey = svc.key;
+                  const currentState: ServiceState = serviceKey ? (states?.[serviceKey] ?? "VISIBLE") : "VISIBLE";
+                  const currentOption = STATE_OPTIONS.find((o) => o.value === currentState)!;
+                  const isPending = !!serviceKey && updateState.isPending && updateState.variables?.service === serviceKey;
+                  return (
+                    <Card key={svc.id} draggable onDragStart={() => setDraggedService(svc.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => moveService(svc.id)} data-testid={`card-service-${svc.id.toLowerCase()}`}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" aria-label="Drag to reorder" />
+                            <div className="bg-muted rounded-lg p-2.5"><svc.icon className="w-5 h-5 text-foreground/70" /></div>
+                            <CardTitle className="text-base">{svc.label}</CardTitle>
+                          </div>
+                          <Badge variant="outline" className={`text-xs ${currentOption.badgeClass}`} data-testid={`badge-status-${(serviceKey ?? svc.id).toLowerCase()}`}>
+                            {currentOption.label}
+                          </Badge>
+                        </div>
+                        <CardDescription className="pt-2 text-sm">{svc.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="flex flex-col gap-2">
+                          {serviceKey && STATE_OPTIONS.map((opt) => (
+                            <Button key={opt.value} type="button" size="sm" variant={currentState === opt.value ? "default" : "outline"}
+                              disabled={isPending} onClick={() => updateState.mutate({ service: serviceKey, state: opt.value })}
+                              className={`justify-start gap-2 w-full ${currentState === opt.value ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}`}
+                              data-testid={`button-set-${serviceKey.toLowerCase()}-${opt.value.toLowerCase()}`}>
+                              <opt.icon className="w-4 h-4" />{opt.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+          </div>
+
+          <HeroActionsSection />
+        </>
+      )}
 
       {/* ── Messages System ── */}
-      <MessagesSystemSection />
+      {activeSection === "messages" && (
+        <MessagesSystemSection />
+      )}
 
-      {/* ── Hero Actions (Fast Search / Report per service) ── */}
-      <HeroActionsSection />
-
-      {/* ── Dark Mode (per service account) ── */}
-      <AccountDarkModeSection />
-
-      {/* ── Delivery Pricing ── */}
-      <DeliveryPricingSection />
-
-      {/* ── Delivery Financial Ledger (Phase 5A) ── */}
-      <DeliveryFinancialLedgerSection />
-
-      {/* ── Delivery Settlements (Phase 5C.1) ── */}
-      <DeliverySettlementsSection />
-
-      {/* ── Financial Summary (Phase 5C.2) ── */}
-      <AdminFinancialSummarySection />
-
-      {/* ── COD Reconciliation (Phase 5C.2) ── */}
-      <AdminCodReconciliationsSection />
-
-      {/* ── Refunds & Adjustments (Phase 5C.2) ── */}
-      <AdminRefundsAdjustmentsSection />
-
-      {/* ── Landing Page Config ── */}
-      <LandingConfigSection />
+      {/* ── Global Settings (currency + dark mode) ── */}
+      {activeSection === "global" && (
+        <>
+          <GlobalCurrencySection />
+          <AccountDarkModeSection />
+        </>
+      )}
     </div>
   );
 }

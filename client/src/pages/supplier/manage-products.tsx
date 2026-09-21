@@ -24,6 +24,7 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { ProductWithTaxonomy, FlavorWithCount, SizeWithCount, BrandWithCount, SupplierListingWithProduct, CategoryWithCount, SubCategoryWithDetails } from "@shared/schema";
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";
 import { PackTab } from "./manage-packs";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2101,12 +2102,10 @@ export default function ManageProducts() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Products</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Browse the admin catalog and manage your product listings with custom pricing and stock.
-        </p>
-      </div>
+      <DashboardHero
+        title="Products"
+        subtitle="Browse the admin catalog and manage your product listings with custom pricing and stock."
+      />
 
       <Tabs defaultValue="admin-products" className="w-full">
         <TabsList className="mb-2">

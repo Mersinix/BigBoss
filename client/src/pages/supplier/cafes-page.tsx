@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Coffee, Plus, Search, MapPin, Phone, Mail, ShoppingBag, Wallet, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 function AddCafeModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
@@ -134,15 +135,11 @@ export default function CafesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Cafes</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Vos cafés clients et leur activité.</p>
-        </div>
-        <Button onClick={() => setAddOpen(true)} className="gap-1.5" data-testid="button-add-cafe">
-          <Plus className="w-4 h-4" />Ajouter un café
-        </Button>
-      </div>
+      <DashboardHero
+        title="Cafes"
+        subtitle="Vos cafés clients et leur activité."
+        action={<Button onClick={() => setAddOpen(true)} className="gap-1.5" data-testid="button-add-cafe"><Plus className="w-4 h-4" />Ajouter un café</Button>}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>

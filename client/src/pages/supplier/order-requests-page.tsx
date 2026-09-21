@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { OrderWithDetails } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -34,12 +35,12 @@ const PRIORITY_OPTS = [
 ];
 
 const HIST_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  CONFIRMED:   { label: "Acceptée",        color: "bg-blue-100 text-blue-700" },
-  PREPARING:   { label: "En préparation",  color: "bg-orange-100 text-orange-700" },
-  READY:       { label: "Prête",           color: "bg-teal-100 text-teal-700" },
-  IN_DELIVERY: { label: "En livraison",    color: "bg-purple-100 text-purple-700" },
-  DELIVERED:   { label: "Livrée",          color: "bg-green-100 text-green-700" },
-  CANCELLED:   { label: "Refusée",         color: "bg-red-100 text-red-700" },
+  CONFIRMED:   { label: "Acceptée",        color: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400" },
+  PREPARING:   { label: "En préparation",  color: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400" },
+  READY:       { label: "Prête",           color: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400" },
+  IN_DELIVERY: { label: "En livraison",    color: "bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400" },
+  DELIVERED:   { label: "Livrée",          color: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" },
+  CANCELLED:   { label: "Refusée",         color: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -165,10 +166,10 @@ export default function OrderRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Demandes de commandes</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Examinez et répondez aux nouvelles commandes reçues.</p>
-      </div>
+      <DashboardHero
+        title="Demandes de commandes"
+        subtitle="Examinez et répondez aux nouvelles commandes reçues."
+      />
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -278,7 +279,7 @@ export default function OrderRequestsPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-mono text-xs text-muted-foreground">#{String(so.orderId).padStart(6, "0")}</span>
                             {so.orderPriority && so.orderPriority !== "NORMAL" && (
-                              <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
+                              <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
                                 <Zap className="w-3 h-3 mr-0.5" />{so.orderPriority === "URGENT" ? "Urgent" : "Haute prio."}
                               </Badge>
                             )}
@@ -428,7 +429,7 @@ export default function OrderRequestsPage() {
             <>
               <div className="space-y-3">
                 {pageHistoryRequests.map(so => {
-                  const s = HIST_STATUS_MAP[so.status] ?? { label: so.status, color: "bg-gray-100 text-gray-700" };
+                  const s = HIST_STATUS_MAP[so.status] ?? { label: so.status, color: "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400" };
                   return (
                     <Card key={so.id} className="border-border/50">
                       <CardContent className="p-4">
@@ -438,7 +439,7 @@ export default function OrderRequestsPage() {
                               <span className="font-mono text-xs text-muted-foreground">#{String(so.orderId).padStart(6, "0")}</span>
                               <Badge variant="secondary" className={`${s.color} text-xs`}>{s.label}</Badge>
                               {so.orderPriority && so.orderPriority !== "NORMAL" && (
-                                <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
+                                <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
                                   <Zap className="w-3 h-3 mr-0.5" />{so.orderPriority === "URGENT" ? "Urgent" : "Haute prio."}
                                 </Badge>
                               )}

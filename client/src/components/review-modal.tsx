@@ -35,7 +35,7 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
             className={`w-7 h-7 transition-colors ${
               i <= (hovered || value)
                 ? "fill-amber-400 text-amber-400"
-                : "text-gray-600/40"
+                : "text-gray-600/40 dark:text-gray-400/40"
             }`}
           />
         </button>
@@ -50,7 +50,7 @@ function StarDisplay({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={`w-3.5 h-3.5 ${i <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-gray-600/25"}`}
+          className={`w-3.5 h-3.5 ${i <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-gray-600/25 dark:text-gray-400/25"}`}
         />
       ))}
     </div>

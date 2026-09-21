@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { OrderWithDetails } from "@shared/schema";
 import { deriveOrderStatus, getSupplierStatusEntries, orderMatchesStatus } from "@/lib/order-status";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -198,12 +199,10 @@ export default function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">
-          {isAdmin ? "Gestion des Commandes" : "Mes Commandes"}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Suivez et gérez le cycle de vie des commandes.</p>
-      </div>
+      <DashboardHero
+        title={isAdmin ? "Gestion des Commandes" : "Mes Commandes"}
+        subtitle="Suivez et gérez le cycle de vie des commandes."
+      />
 
       {/* ── Main view switcher: Active Orders / Historique ── */}
       <div className="flex gap-1 bg-secondary/40 rounded-xl p-1">

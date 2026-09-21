@@ -14,6 +14,7 @@ import { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { DispatchDialog } from "@/pages/supplier/delivery-status-page";
 import type { DeliveryWithDetails } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 function AssignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
   const { data: drivers = [] } = useSupplierDrivers();
@@ -73,10 +74,10 @@ export default function SupplierMyDeliveriesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Delivery</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Livraisons gérées directement avec vos propres chauffeurs.</p>
-      </div>
+      <DashboardHero
+        title="Delivery"
+        subtitle="Livraisons gérées directement avec vos propres chauffeurs."
+      />
 
       <SupplierDeliveryTabs />
 
@@ -105,7 +106,7 @@ export default function SupplierMyDeliveriesPage() {
       ) : (
         <div className="space-y-3">
           {pageList.map((d) => {
-            const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700" };
+            const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400" };
             return (
               <Card key={d.id}>
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">

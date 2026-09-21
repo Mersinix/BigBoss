@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Bell, AlertTriangle, ShoppingBag } from "lucide-react";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 export default function SupplierNotificationsPage() {
   // Real, persisted SHOP-service notifications — orders, low stock, deliveries.
@@ -18,15 +19,13 @@ export default function SupplierNotificationsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Stay updated on orders, payments and alerts.</p>
-        </div>
-        {unread > 0 && (
+      <DashboardHero
+        title="Notifications"
+        subtitle="Stay updated on orders, payments and alerts."
+        action={unread > 0 && (
           <Button variant="outline" size="sm" onClick={() => markAllRead.mutate("SHOP")} data-testid="button-mark-all-read">Mark all as read</Button>
         )}
-      </div>
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>

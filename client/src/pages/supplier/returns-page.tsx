@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RotateCcw, CheckCircle, Clock, XCircle, AlertCircle, Loader2, Box } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderReturnRow } from "@/hooks/use-orders";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -184,10 +185,10 @@ export default function ReturnsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Retours</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Gérez les demandes de retour et de remboursement de vos clients.</p>
-      </div>
+      <DashboardHero
+        title="Retours"
+        subtitle="Gérez les demandes de retour et de remboursement de vos clients."
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

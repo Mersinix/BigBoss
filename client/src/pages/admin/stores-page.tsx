@@ -13,6 +13,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { StoreAdminRow, StoreDetail } from "@shared/schema";
 
 // ── Approval badge ─────────────────────────────────────────────────────────────
@@ -406,18 +407,17 @@ export default function AdminStoresPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <Store className="w-6 h-6 text-primary" />Stores
-          {pendingCount > 0 && (
-            <Badge className="bg-amber-500 text-white border-0 text-xs ml-1">{pendingCount} pending</Badge>
-          )}
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Manage supplier stores. Drag cards to reorder — order saves automatically.
-        </p>
-      </div>
+      <DashboardHero
+        title={
+          <span className="flex items-center gap-2">
+            <Store className="w-6 h-6 text-primary" />Stores
+            {pendingCount > 0 && (
+              <Badge className="bg-amber-500 text-white border-0 text-xs ml-1">{pendingCount} pending</Badge>
+            )}
+          </span>
+        }
+        subtitle="Manage supplier stores. Drag cards to reorder — order saves automatically."
+      />
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3">

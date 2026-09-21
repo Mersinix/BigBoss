@@ -54,13 +54,11 @@ export default function EarningsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Revenus</h1>
-          <p className="text-muted-foreground text-sm mt-1">Vue financière de la marketplace.</p>
-        </div>
-        <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
-      </div>
+      <DashboardHero
+        title="Revenus"
+        subtitle="Vue financière de la marketplace."
+        action={<DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />}
+      />
 
       <DashboardHero
         title="Chiffre d'affaires livré"

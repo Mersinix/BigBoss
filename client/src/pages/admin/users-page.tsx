@@ -20,6 +20,7 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { User, AddressDetails } from "@shared/schema";
 import { ADDRESS_DETAIL_FIELDS } from "@/components/settings/address-details-fields";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -719,13 +720,11 @@ export default function UsersPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Utilisateurs</h1>
-          <p className="text-muted-foreground text-sm mt-1">Gérez les utilisateurs et approuvez les comptes en attente.</p>
-        </div>
-        <AddUserModal onRefresh={invalidateUsers} />
-      </div>
+      <DashboardHero
+        title="Utilisateurs"
+        subtitle="Gérez les utilisateurs et approuvez les comptes en attente."
+        action={<AddUserModal onRefresh={invalidateUsers} />}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

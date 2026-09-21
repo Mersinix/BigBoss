@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { HelpCircle, MessageCircle, Book, Search } from "lucide-react";
 import { useState } from "react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const faqs = [
   { q: "How do I add a new product?", a: "Go to Business → Products, click 'Add Product' and fill in the details including name, price, stock and category." },
@@ -23,11 +24,11 @@ export default function HelpCenterPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Help Center</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Find answers to common supplier questions.</p>
-      </div>
+    <div className="flex flex-col gap-6 p-6">
+      <DashboardHero
+        title="Help Center"
+        subtitle="Find answers to common supplier questions."
+      />
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

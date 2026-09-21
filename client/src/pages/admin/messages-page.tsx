@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Download, Eye, EyeOff, Megaphone, MessageSquare, Trash2, Users } from "lucide-react";
 import { MessagesPanel } from "@/components/messages/messages-panel";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { ConversationSummary, EligibleContact } from "@shared/schema";
 
 const MESSAGE_SERVICES = ["SHOP", "MAINTENANCE", "BARISTA", "ACADEMY", "PRINT", "MARKETING"] as const;
@@ -303,15 +304,15 @@ export default function AdminMessagesPage() {
 
   return (
     <div className="flex flex-col gap-6  p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Messages</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Centralized messaging with all platform users.</p>
-        </div>
-        <Button onClick={() => setBroadcastOpen(true)} data-testid="button-open-broadcast">
-          <Megaphone className="w-4 h-4 mr-2" />Broadcast
-        </Button>
-      </div>
+      <DashboardHero
+        title="Messages"
+        subtitle="Centralized messaging with all platform users."
+        action={
+          <Button onClick={() => setBroadcastOpen(true)} data-testid="button-open-broadcast">
+            <Megaphone className="w-4 h-4 mr-2" />Broadcast
+          </Button>
+        }
+      />
 
       <Tabs defaultValue="chat">
         <TabsList>

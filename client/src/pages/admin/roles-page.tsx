@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck } from "lucide-react";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const roles = [
   {
@@ -44,10 +45,10 @@ const roles = [
 export default function RolesPage() {
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Roles &amp; Permissions</h1>
-        <p className="text-muted-foreground text-sm mt-1">An overview of each role and its capabilities on the platform.</p>
-      </div>
+      <DashboardHero
+        title="Roles & Permissions"
+        subtitle="An overview of each role and its capabilities on the platform."
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {roles.map((role) => (

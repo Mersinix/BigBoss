@@ -21,7 +21,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // Mirrors admin/barista-page.tsx's architecture exactly: one aggregate overview
@@ -353,10 +353,11 @@ export default function AdminAcademyPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><GraduationCap className="w-6 h-6 text-indigo-600" />ACADEMY</h1>
-        <p className="text-muted-foreground text-sm mt-1">Contrôle centralisé du service Academy : académies, formations, inscriptions, étudiants, calendrier, finance et analytics.</p>
-      </div>
+      <DashboardHero
+        title={<span className="flex items-center gap-2"><GraduationCap className="w-6 h-6 text-indigo-600" />ACADEMY</span>}
+        subtitle="Contrôle centralisé du service Academy : académies, formations, inscriptions, étudiants, calendrier, finance et analytics."
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {kpis.map(([label, value, Icon]) => (

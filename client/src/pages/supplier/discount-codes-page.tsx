@@ -16,6 +16,7 @@ import {
   type DiscountCodeFormInput,
 } from "@/hooks/use-discount-codes";
 import type { DiscountCode } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 type EffectiveStatus = "Active" | "Inactive" | "Expired" | "Limit Reached";
 
@@ -140,13 +141,11 @@ export default function DiscountCodesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Discount Codes</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Create and manage promo codes for your café customers.</p>
-        </div>
-        <Button size="sm" onClick={openCreate} data-testid="button-add-code"><Plus className="w-4 h-4 mr-1" /> New Code</Button>
-      </div>
+      <DashboardHero
+        title="Discount Codes"
+        subtitle="Create and manage promo codes for your café customers."
+        action={<Button size="sm" onClick={openCreate} data-testid="button-add-code"><Plus className="w-4 h-4 mr-1" /> New Code</Button>}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[

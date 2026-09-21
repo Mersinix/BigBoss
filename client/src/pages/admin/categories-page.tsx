@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount, CatalogSuggestion, AdminSupplierCategoryOverview, SupplierCategoryMapping } from "@shared/schema";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1524,12 +1525,10 @@ export default function AdminCategoriesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Categories</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Manage product taxonomy, review category requests, and approve supplier suggestions.
-        </p>
-      </div>
+      <DashboardHero
+        title="Categories"
+        subtitle="Manage product taxonomy, review category requests, and approve supplier suggestions."
+      />
 
       {/* Section switcher */}
       <div className="flex gap-1 p-1 bg-secondary/30 rounded-lg w-fit border">

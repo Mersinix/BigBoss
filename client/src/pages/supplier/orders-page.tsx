@@ -12,6 +12,7 @@ import { Calendar, Clock, Archive, Search, X, Store, Box, Layers, MapPin, Packag
 import { useToast } from "@/hooks/use-toast";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
 import type { OrderWithDetails } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -162,10 +163,10 @@ export default function SupplierOrdersPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Mes Commandes</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Gérez et suivez vos commandes en cours.</p>
-      </div>
+      <DashboardHero
+        title="Mes Commandes"
+        subtitle="Gérez et suivez vos commandes en cours."
+      />
 
       {/* ── View switcher ── */}
       <div className="flex gap-1 bg-secondary/40 rounded-xl p-1">
@@ -253,7 +254,7 @@ export default function SupplierOrdersPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map(so => {
-            const badgeColor = STATUS_BADGE[so.status] ?? "bg-gray-100 text-gray-800";
+            const badgeColor = STATUS_BADGE[so.status] ?? "bg-gray-100 text-gray-800 dark:bg-gray-500/15 dark:text-gray-400";
             const label = STATUS_LABELS[so.status] ?? so.status;
             const nextStatuses = NEXT_STATUSES[so.status] ?? [];
             const priority = so.orderPriority;
@@ -269,7 +270,7 @@ export default function SupplierOrdersPage() {
                         </span>
                         <Badge variant="secondary" className={`${badgeColor} text-xs`}>{label}</Badge>
                         {priority && priority !== "NORMAL" && (
-                          <Badge variant="secondary" className={`text-xs ${priority === "URGENT" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`}>
+                          <Badge variant="secondary" className={`text-xs ${priority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
                             <Zap className="w-3 h-3 mr-0.5" />{priority === "URGENT" ? "Urgent" : "Haute prio."}
                           </Badge>
                         )}

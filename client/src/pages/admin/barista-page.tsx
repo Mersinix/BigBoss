@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useAuth } from "@/hooks/use-auth";
-import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
 import { AlertTriangle } from "lucide-react";
 import { useAdminBaristaReports, useResolveBaristaReport } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
@@ -406,10 +406,11 @@ export default function AdminBaristaPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><Coffee className="w-6 h-6 text-indigo-600" />BARISTA</h1>
-        <p className="text-muted-foreground text-sm mt-1">Contrôle centralisé du Marketplace Baristas : profils, demandes, missions et revenus.</p>
-      </div>
+      <DashboardHero
+        title={<span className="flex items-center gap-2"><Coffee className="w-6 h-6 text-indigo-600" />BARISTA</span>}
+        subtitle="Contrôle centralisé du Marketplace Baristas : profils, demandes, missions et revenus."
+        gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {kpis.map(([label, value, Icon]) => (

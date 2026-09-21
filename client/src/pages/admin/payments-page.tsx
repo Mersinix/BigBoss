@@ -12,6 +12,7 @@ import {
 import { PaymentCard } from "@/components/financial/financial-cards";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import PaymentDetailsModal from "@/components/financial/payment-details-modal";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "Tous les statuts" },
@@ -55,10 +56,10 @@ export default function PaymentsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Payments</h1>
-        <p className="text-muted-foreground text-sm mt-1">Overview of platform payment activity.</p>
-      </div>
+      <DashboardHero
+        title="Payments"
+        subtitle="Overview of platform payment activity."
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>

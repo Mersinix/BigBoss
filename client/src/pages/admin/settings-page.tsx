@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { User, Lock, LogOut } from "lucide-react";
-import { SectionCard } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, SectionCard } from "@/components/dashboard/dashboard-kit";
 import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 
 // New — Admin previously had no personal account settings page (System
@@ -53,11 +53,11 @@ export default function AdminSettingsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Paramètres</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Gérez votre compte et vos préférences de notification.</p>
-      </div>
+    <div className="flex flex-col gap-6 p-6">
+      <DashboardHero
+        title="Paramètres"
+        subtitle="Gérez votre compte et vos préférences de notification."
+      />
 
       <SectionCard title="Compte" icon={User}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

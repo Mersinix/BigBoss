@@ -10,7 +10,7 @@ import {
   topSuppliers, topProducts, topPacks, topCustomers, FR_STATUS_LABEL,
   type DateRangePreset,
 } from "@/lib/marketplace-analytics";
-import { StatCard, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, StatCard, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
 
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
 
@@ -39,13 +39,11 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Analyses</h1>
-          <p className="text-muted-foreground text-sm mt-1">Performance de la marketplace et indicateurs clés.</p>
-        </div>
-        <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
-      </div>
+      <DashboardHero
+        title="Analyses"
+        subtitle="Performance de la marketplace et indicateurs clés."
+        action={<DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard label="CA livré" value={fmt(stats.deliveredRevenue)} icon={TrendingUp} tone="green" />

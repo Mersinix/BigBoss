@@ -24,6 +24,7 @@ import { VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-deliv
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { DeliveryWithDetails, User, DeliveryStatus, DeliveryMode } from "@shared/schema";
 
 // ── Livraisons tab — mapped cards (replaces the previous raw <Table>) ────────────────────
@@ -527,10 +528,10 @@ export default function DeliveryPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Livraisons</h1>
-        <p className="text-muted-foreground text-sm mt-1">Supervision de toutes les livraisons de la plateforme.</p>
-      </div>
+      <DashboardHero
+        title="Livraisons"
+        subtitle="Supervision de toutes les livraisons de la plateforme."
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>

@@ -21,6 +21,7 @@ import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-ser
 import { useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
 import { useHeroActionSettings, type HeroService, type HeroActionSettingsMap } from "@/hooks/use-hero-actions";
 import { useAccountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode } from "@/hooks/use-account-dark-mode";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { LandingConfig, HeroSlide } from "@shared/schema";
 
 // ── Service visibility ────────────────────────────────────────────────────────
@@ -1824,15 +1825,11 @@ export default function SystemManagementPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center gap-3">
-        <div className="bg-amber-500/10 rounded-xl p-3">
-          <Sliders className="w-5 h-5 text-amber-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">System Management</h1>
-          <p className="text-muted-foreground text-sm mt-1">Control the global visibility of each marketplace service and configure the Landing Page.</p>
-        </div>
-      </div>
+      <DashboardHero
+        title={<span className="flex items-center gap-2" data-testid="text-page-title"><Sliders className="w-6 h-6 text-amber-600" />System Management</span>}
+        subtitle="Control the global visibility of each marketplace service and configure the Landing Page."
+        gradientClass="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20"
+      />
 
       {/* ── Service visibility ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

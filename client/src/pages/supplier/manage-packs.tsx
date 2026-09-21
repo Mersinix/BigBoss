@@ -974,7 +974,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                       {listing.product.categoryLabel && <Badge variant="secondary" className="text-[10px]">{listing.product.categoryLabel.name}</Badge>}
                       {listing.product.subCategoryLabel && <Badge variant="outline" className="text-[10px]">{listing.product.subCategoryLabel.name}</Badge>}
                       {listing.product.brandLabel && <Badge variant="outline" className="text-[10px]">{listing.product.brandLabel.name}</Badge>}
-                      {(listing as any).onlyForPack && <Badge className="text-[10px] bg-amber-100 text-amber-700 border-0">Pack only</Badge>}
+                      {(listing as any).onlyForPack && <Badge className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400 border-0">Pack only</Badge>}
                     </div>
                   </div>
                   <Button
@@ -1102,7 +1102,7 @@ function ActivePackCard({ pack, onPreview }: {
           <Badge variant={pack.visibility === "VISIBLE" ? "default" : "secondary"} className="text-[10px]">
             {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}
           </Badge>
-          {!pack.isAvailable && !pack.isExpired && <Badge variant="outline" className="text-[10px] bg-white/80">Out of stock</Badge>}
+          {!pack.isAvailable && !pack.isExpired && <Badge variant="outline" className="text-[10px] bg-white/80 dark:bg-gray-900/80">Out of stock</Badge>}
         </div>
       </div>
       <CardContent className="p-3">

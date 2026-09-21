@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import type { Promotion, PromotionType, PromotionStatus } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── API helpers ─────────────────────────────────────────────────────────────
 
@@ -872,18 +873,11 @@ export default function PromotionsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Promotions</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Create and manage promotional campaigns for your products.
-          </p>
-        </div>
-        <Button onClick={openCreate} size="sm">
-          <Plus className="w-4 h-4 mr-1.5" /> Create Promotion
-        </Button>
-      </div>
+      <DashboardHero
+        title="Promotions"
+        subtitle="Create and manage promotional campaigns for your products."
+        action={<Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1.5" /> Create Promotion</Button>}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

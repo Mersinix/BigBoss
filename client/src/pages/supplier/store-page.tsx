@@ -17,6 +17,7 @@ import { CoverSlideshow } from "@/pages/cafe/store-detail-page";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SupplierStore, OpeningHoursMap, OpeningDayHours } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -200,13 +201,11 @@ export default function StorePage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Store className="w-6 h-6 text-primary" />My Store</h1>
-          <p className="text-sm text-muted-foreground mt-1">Configure how your store appears to Coffee Owners in the marketplace.</p>
-        </div>
-        <ApprovalBadge status={store?.approvalStatus} />
-      </div>
+      <DashboardHero
+        title={<span className="flex items-center gap-2"><Store className="w-6 h-6 text-primary" />My Store</span>}
+        subtitle="Configure how your store appears to Coffee Owners in the marketplace."
+        action={<ApprovalBadge status={store?.approvalStatus} />}
+      />
 
        {/* Store immersive preview — matches Coffee Owner view */}
           <div

@@ -12,6 +12,7 @@ import { Star, Loader2, Package, Store, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SupplierProductReview } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -213,10 +214,10 @@ export default function ReviewsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Reviews</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Customer feedback on your products and service.</p>
-      </div>
+      <DashboardHero
+        title="Reviews"
+        subtitle="Customer feedback on your products and service."
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -13,6 +13,7 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { User, CreditCard, MapPin, Building2, FileText, Landmark } from "lucide-react";
 import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Company Details Modal ─────────────────────────────────────────────────────
 
@@ -168,11 +169,11 @@ export default function SupplierSettingsPage() {
   ];
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Paramètres</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Gérez votre profil fournisseur et vos préférences.</p>
-      </div>
+    <div className="flex flex-col gap-6 p-6">
+      <DashboardHero
+        title="Paramètres"
+        subtitle="Gérez votre profil fournisseur et vos préférences."
+      />
 
       {/* Profile Card */}
       <Card>

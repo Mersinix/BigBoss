@@ -18,6 +18,7 @@ import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
 import DeliveryDetails, { DELIVERY_STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_FILTERS = ["ALL", "PENDING", "AVAILABLE", "ACCEPTED", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "CANCELLED"];
 const DATE_FILTERS = [
@@ -76,7 +77,7 @@ function CompanyBrowseView({ delivery, onBack, onClose }: { delivery: DeliveryWi
             >
               <Avatar className="w-10 h-10 shrink-0">
                 <AvatarImage src={getAvatarUrl(c as any)} alt={c.name} />
-                <AvatarFallback className="bg-teal-100 text-teal-700 font-semibold">{c.initials}</AvatarFallback>
+                <AvatarFallback className="bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400 font-semibold">{c.initials}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
                 <p className="font-medium text-sm truncate">{c.name}</p>
@@ -213,10 +214,10 @@ export default function SupplierDeliveryStatusPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Delivery</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Suivi et gestion de toutes vos livraisons.</p>
-      </div>
+      <DashboardHero
+        title="Delivery"
+        subtitle="Suivi et gestion de toutes vos livraisons."
+      />
 
       <SupplierDeliveryTabs />
 
@@ -289,7 +290,7 @@ export default function SupplierDeliveryStatusPage() {
       ) : (
         <div className="space-y-3">
           {pageDeliveries.map((d) => {
-            const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-600" };
+            const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400" };
             return (
               <Card key={d.id}>
                 <CardContent className="p-5">

@@ -19,7 +19,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
 import { PRINT_ORDER_STATUS_META, formatMonthKey } from "@/lib/print-order-status";
 import { printCategoryIcon } from "@/lib/print-category-icons";
 import { buildPrintInvoiceRows, PRINT_INVOICE_STATUS_META } from "@/lib/print-financial-rows";
@@ -515,10 +515,11 @@ export default function AdminPrintPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><Printer className="w-6 h-6 text-blue-600" />PRINT</h1>
-        <p className="text-muted-foreground text-sm mt-1">Contrôle centralisé du marketplace PRINT : imprimeurs, catalogue, commandes et finance.</p>
-      </div>
+      <DashboardHero
+        title={<span className="flex items-center gap-2"><Printer className="w-6 h-6 text-blue-600" />PRINT</span>}
+        subtitle="Contrôle centralisé du marketplace PRINT : imprimeurs, catalogue, commandes et finance."
+        gradientClass="bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20"
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {kpis.map(([label, value, Icon]) => (

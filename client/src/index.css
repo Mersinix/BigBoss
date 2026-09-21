@@ -15,7 +15,15 @@
     
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
-    
+    /* Referenced by the base Card primitive (ui/card.tsx: border-card-border) but never
+       defined until now — an undefined custom property inside hsl() is invalid CSS, so every
+       plain <Card> silently fell back to border-color: currentColor (the "old plain white/
+       black border" look) instead of the deliberate border-border/50 treatment DashboardHero/
+       StatCard/SectionCard already apply via an explicit override. Matches --border exactly so
+       Card's own default now IS the Dashboard's established border language, with no per-page
+       overrides required. */
+    --card-border: 214 32% 91%;
+
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
     
@@ -58,32 +66,45 @@
   }
 
   .dark {
+    /* Surface hierarchy — reference: Admin → Orders → Order Details modal's own
+       dark palette (client/src/components/cafe/order-details-modal.tsx useTheme:
+       modalBg bg-gray-900, cardBg/innerCard bg-gray-800, borders/nested surfaces
+       bg-gray-700). background stays the gray-900-equivalent page level; card/
+       popover now sit one step up at what was already the app's established
+       "gray-800" secondary/muted/border tone (previously identical to
+       background, which is what collapsed every card into the page — see the
+       Admin Dark Mode color-consistency task); secondary/muted/accent/border/
+       input move up one more step to a gray-700-equivalent so they stay visible
+       against the new card level, matching the modal's own border-gray-700 /
+       bg-gray-700 nested-surface usage exactly. Light mode (:root above) is
+       untouched.  */
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
-    
-    --card: 222 47% 11%;
+
+    --card: 217 32% 17%;
     --card-foreground: 210 40% 98%;
-    
-    --popover: 222 47% 11%;
+    --card-border: 217 27% 24%;
+
+    --popover: 217 32% 17%;
     --popover-foreground: 210 40% 98%;
-    
+
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 11%;
-    
-    --secondary: 217 32% 17%;
+
+    --secondary: 217 27% 24%;
     --secondary-foreground: 210 40% 98%;
-    
-    --muted: 217 32% 17%;
+
+    --muted: 217 27% 24%;
     --muted-foreground: 215 20.2% 65.1%;
-    
-    --accent: 217 32% 17%;
+
+    --accent: 217 27% 24%;
     --accent-foreground: 210 40% 98%;
-    
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    
-    --border: 217 32% 17%;
-    --input: 217 32% 17%;
+
+    --border: 217 27% 24%;
+    --input: 217 27% 24%;
     --ring: 224 71% 4%;
 
     --sidebar-background: 222 47% 11%;

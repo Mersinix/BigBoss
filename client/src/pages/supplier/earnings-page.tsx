@@ -60,13 +60,11 @@ export default function SupplierEarningsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Revenus</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Aperçu financier de votre activité.</p>
-        </div>
-        <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
-      </div>
+      <DashboardHero
+        title="Revenus"
+        subtitle="Aperçu financier de votre activité."
+        action={<DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />}
+      />
 
       <DashboardHero
         title="Gains nets"

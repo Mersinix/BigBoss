@@ -16,6 +16,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { ProductWithTaxonomy, CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount } from "@shared/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -2024,20 +2025,15 @@ export default function AdminProductsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Product Catalog</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Admin-managed product catalog. Suppliers browse and claim products from here.
-          </p>
-        </div>
-        {section === 'catalog' && (
+      <DashboardHero
+        title="Product Catalog"
+        subtitle="Admin-managed product catalog. Suppliers browse and claim products from here."
+        action={section === 'catalog' && (
           <Button onClick={openAdd} data-testid="button-add-product">
             <Plus className="w-4 h-4 mr-1.5" />Add Product
           </Button>
         )}
-      </div>
+      />
 
       {/* Section + View switcher */}
       <div className="flex items-center justify-between gap-4 flex-wrap">

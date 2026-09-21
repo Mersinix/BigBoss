@@ -14,6 +14,7 @@ import { InventoryTable } from "./inventory/inventory-table";
 import { AdjustStockDialog } from "./inventory/adjust-stock-dialog";
 import { StockHistoryDialog } from "./inventory/stock-history-dialog";
 import { EditListingDialog } from "./inventory/edit-listing-dialog";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
@@ -132,10 +133,10 @@ export default function InventoryPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Inventory</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Track stock levels, adjust quantities, and manage product visibility in real time.</p>
-      </div>
+      <DashboardHero
+        title="Inventory"
+        subtitle="Track stock levels, adjust quantities, and manage product visibility in real time."
+      />
 
       <InventoryStatsCards stats={stats} isLoading={statsLoading} />
 

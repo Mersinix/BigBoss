@@ -335,24 +335,24 @@ function SupplierSection({
 
 function CommercialGate({ isPending }: { isPending: boolean }) {
   return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-8 text-center space-y-4">
-      <div className="w-14 h-14 bg-amber-400 rounded-2xl flex items-center justify-center mx-auto">
-        <Lock className="w-7 h-7 text-amber-600" />
+    <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/10 p-8 text-center space-y-4">
+      <div className="w-14 h-14 bg-amber-400 dark:bg-amber-500/80 rounded-2xl flex items-center justify-center mx-auto">
+        <Lock className="w-7 h-7 text-amber-600 dark:text-amber-950" />
       </div>
       <div>
-        <h3 className="font-bold text-gray-900 text-lg">Commercial Access Required</h3>
+        <h3 className="font-bold text-gray-900 dark:text-white text-lg">Commercial Access Required</h3>
         {isPending ? (
           <div className="mt-2 space-y-2">
-            <div className="flex items-center justify-center gap-2 text-yellow-700">
+            <div className="flex items-center justify-center gap-2 text-yellow-700 dark:text-yellow-400">
               <AlertTriangle className="w-4 h-4" />
               <span className="font-medium text-sm">Your account is awaiting approval</span>
             </div>
-            <p className="text-sm text-gray-500 max-w-sm mx-auto">
+            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
               You'll have full access to prices, suppliers, and ordering once an admin approves your account.
             </p>
           </div>
         ) : (
-          <p className="mt-2 text-sm text-gray-500 max-w-sm mx-auto">
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
             Sign in as an approved coffee shop owner to view prices, suppliers and place orders.
           </p>
         )}
@@ -924,8 +924,8 @@ export function ProductDetailContent({
           )}
         </div>
       ) : (
-        <div className="flex items-center gap-2 pt-2 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
-          <Lock className="w-4 h-4 shrink-0 text-amber-500" />
+        <div className="flex items-center gap-2 pt-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/30 rounded-xl px-4 py-3">
+          <Lock className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400" />
           <span>Price available for approved coffee shop owners</span>
         </div>
       )}

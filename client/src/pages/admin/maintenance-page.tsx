@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
 import { useThemeStore } from "@/store/theme-store";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 type TaxonomyItem = { id: number; name: string; icon?: string | null; isActive: boolean; isFrozen: boolean };
 type Overview = {
@@ -471,7 +472,11 @@ export default function MaintenanceAdminPage() {
     ["Annulées", stats?.cancelledReservations ?? 0, XCircle], ["Note moyenne", stats ? stats.averageRating.toFixed(1) : "0.0", Star],
   ] as const;
   return <div className="flex flex-col gap-6 p-6">
-    <div><h1 className="text-2xl font-bold text-foreground flex items-center gap-2"><Wrench className="w-6 h-6 text-orange-600" />Maintenance</h1><p className="text-muted-foreground text-sm mt-1">Suivi du marketplace Maintenance, des comptes, interventions et avis.</p></div>
+    <DashboardHero
+      title={<span className="flex items-center gap-2"><Wrench className="w-6 h-6 text-orange-600" />Maintenance</span>}
+      subtitle="Suivi du marketplace Maintenance, des comptes, interventions et avis."
+      gradientClass="bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/20"
+    />
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{kpis.map(([label, value, Icon]) => <Card key={label}><CardContent className="p-4 flex items-center gap-3"><div className="rounded-xl bg-orange-500/10 p-2.5"><Icon className="w-4 h-4 text-orange-600" /></div><div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div></CardContent></Card>)}</div>
     <Tabs value={section} onValueChange={setSection}>
       <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>

@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Store, Package, TrendingUp } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { User } from "@shared/schema";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 
 export default function SuppliersPage() {
@@ -13,13 +14,10 @@ export default function SuppliersPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Suppliers</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage registered suppliers and their public stores.</p>
-        </div>
-      
-      </div>
+      <DashboardHero
+        title="Suppliers"
+        subtitle="Manage registered suppliers and their public stores."
+      />
       <>
   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
     <Card>

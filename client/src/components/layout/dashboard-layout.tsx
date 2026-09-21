@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { ShoppingBag, Sun, Moon } from "lucide-react";
@@ -9,6 +9,7 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { NotificationBellDropdown } from "@/components/notifications/notification-bell-dropdown";
 import { useThemeStore } from "@/store/theme-store";
 import { useAccountDarkModeSettings, type DarkModeAccount } from "@/hooks/use-account-dark-mode";
+import { useSidebarOpenStore } from "@/store/sidebar-store";
 
 const NOTIFICATIONS_PAGE_BY_ROLE: Record<string, string> = {
   ADMIN: "/admin/notifications",
@@ -16,10 +17,30 @@ const NOTIFICATIONS_PAGE_BY_ROLE: Record<string, string> = {
   SUPPLIER: "/supplier/notifications",
 };
 
+// Admin/Supplier's desktop sidebar now controls itself entirely through its own logo (see
+// app-sidebar.tsx) — one control instead of two — so this header trigger is hidden for them
+// there. But on mobile the sidebar renders as an off-canvas sheet that isn't in the DOM at all
+// while closed, so the logo can never be hovered/clicked to open it; the header trigger must
+// stay as the only way in. isMobile only exists inside SidebarProvider's context, which
+// DashboardLayout itself can't read (it's the one creating that provider), hence this tiny
+// child component instead of inlining the check.
+function HeaderSidebarTrigger({ showAlways }: { showAlways: boolean }) {
+  const { isMobile } = useSidebar();
+  if (!showAlways && !isMobile) return null;
+  return <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />;
+}
+
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { items } = useCart();
   useRealtime(user?.id);
+  // Desktop open/collapsed state, lifted out of SidebarProvider's own internal state — every
+  // route wraps itself in its own <DashboardLayout> (see App.tsx), so this component (and the
+  // SidebarProvider it renders) unmounts/remounts on every navigation. Backing it with this
+  // persisted store instead of letting SidebarProvider default back to open each time is what
+  // makes the sidebar's open/collapsed choice survive navigating between tabs.
+  const sidebarOpen = useSidebarOpenStore((s) => s.open);
+  const setSidebarOpen = useSidebarOpenStore((s) => s.setOpen);
   const isDark = useThemeStore((s) => s.isDark);
   const toggleDark = useThemeStore((s) => s.toggle);
   const setIsDark = useThemeStore((s) => s.setIsDark);
@@ -72,7 +93,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <SidebarProvider>
+    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <div className="flex min-h-screen w-full bg-background/50">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative">
@@ -81,7 +102,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           
           <header className="flex items-center justify-between h-16 px-6 border-b border-border/40 bg-background/80 backdrop-blur-md sticky top-0 z-40">
             <div className="flex items-center gap-4">
-              <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
+              {/* Coffee Owner (accountKey null) keeps this trigger unchanged and always visible —
+                  it never got the logo-based interaction and this task is scoped to Admin/
+                  Supplier only. For Admin/Supplier it only shows on mobile (see
+                  HeaderSidebarTrigger above). */}
+              <HeaderSidebarTrigger showAlways={!accountKey} />
             </div>
             
             <div className="flex items-center gap-4">

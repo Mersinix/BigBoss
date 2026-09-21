@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { Prospect, ProspectStats, ProspectNote, ProspectTimelineEvent, ProspectFollowUp } from "@shared/schema";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -873,30 +874,26 @@ export default function ProspectingPage() {
 
   return (
     <div className="space-y-5 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Target className="w-6 h-6 text-primary" />
-            Prospecting
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Discover and manage potential customers &amp; suppliers</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/stats"] }); }}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download className="w-3.5 h-3.5 mr-1.5" />Export CSV
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1.5" />Add Manually
-          </Button>
-          <Button size="sm" onClick={() => setSearchOpen(true)}>
-            <Search className="w-3.5 h-3.5 mr-1.5" />Search Google Places
-          </Button>
-        </div>
-      </div>
+      <DashboardHero
+        title={<span className="flex items-center gap-2"><Target className="w-6 h-6 text-primary" />Prospecting</span>}
+        subtitle="Discover and manage potential customers & suppliers"
+        action={
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={() => { qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/stats"] }); }}>
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportCSV}>
+              <Download className="w-3.5 h-3.5 mr-1.5" />Export CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" />Add Manually
+            </Button>
+            <Button size="sm" onClick={() => setSearchOpen(true)}>
+              <Search className="w-3.5 h-3.5 mr-1.5" />Search Google Places
+            </Button>
+          </div>
+        }
+      />
 
       {/* Stats */}
       <StatsRow stats={statsData} isLoading={statsLoading} />

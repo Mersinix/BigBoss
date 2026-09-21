@@ -27,8 +27,11 @@ export function DashboardHero({
   iconBgClass = "bg-primary/15",
   iconTextClass = "text-primary",
 }: {
-  title: string;
-  subtitle: string;
+  // ReactNode (not just string) so pages whose existing h1 already embeds an inline icon next
+  // to the title text (e.g. Prospecting, Stores, System Management) can keep it unchanged
+  // instead of losing it — a plain string still works identically since it's valid ReactNode.
+  title: ReactNode;
+  subtitle: ReactNode;
   stat?: string;
   statLabel?: string;
   icon?: ComponentType<{ className?: string }>;

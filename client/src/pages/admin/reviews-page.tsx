@@ -9,6 +9,7 @@ import { Star, Loader2, Package, Store, Wrench, Flag, Trash2, CheckCircle2, Aler
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -100,10 +101,10 @@ export default function AdminReviewsPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Reviews</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage all reviews across the platform from one place.</p>
-      </div>
+      <DashboardHero
+        title="Reviews"
+        subtitle="Manage all reviews across the platform from one place."
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

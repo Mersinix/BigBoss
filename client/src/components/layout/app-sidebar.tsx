@@ -11,7 +11,7 @@ import {
   Folder, Warehouse, ClipboardCheck, RotateCcw,
   MapPin, Wallet, Tag, Ticket, HelpCircle,
   Printer, Megaphone, GraduationCap, Image, Briefcase,
-   BookOpen, UserCheck, Sliders, Target, Wrench
+   BookOpen, UserCheck, Sliders, Target, Wrench, PanelLeftIcon
 } from "lucide-react";
 import {
   Sidebar,
@@ -23,7 +23,8 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarHeader
+  SidebarHeader,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
@@ -46,6 +47,7 @@ function NavLink({ item, badge }: { item: NavItem; badge?: number }) {
       <SidebarMenuButton
         asChild
         isActive={isActive}
+        tooltip={item.title}
         className={`rounded-lg transition-all duration-150 py-4 ${
           isActive
             ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground"
@@ -54,9 +56,9 @@ function NavLink({ item, badge }: { item: NavItem; badge?: number }) {
       >
         <Link href={item.url} className="flex items-center gap-3">
           <item.icon className="w-4 h-4" />
-          <span className="font-medium text-sm flex-1">{item.title}</span>
+          <span className="font-medium text-sm flex-1 group-data-[collapsible=icon]:hidden">{item.title}</span>
           {badge != null && badge > 0 && (
-            <span className="bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+            <span className="bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 group-data-[collapsible=icon]:hidden">
               {badge > 99 ? "99+" : badge}
             </span>
           )}
@@ -70,6 +72,7 @@ const MESSAGES_URLS = new Set(["/admin/messages", "/cafe/messages", "/supplier/m
 
 export function AppSidebar() {
   const { user, logout } = useAuth();
+  const { toggleSidebar } = useSidebar();
   const isAdmin = !!user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN");
   const { settings: messagingSettings } = useMessagingSettings();
 
@@ -269,19 +272,38 @@ export function AppSidebar() {
   const navGroups = getNavGroups();
 
   return (
-    <Sidebar className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="p-4 pb-2">
-        <div className="flex items-center gap-2.5 px-1 py-1">
-          <div className="bg-primary/10 p-1.5 rounded-lg">
-            <Coffee className="w-5 h-5 text-primary" />
+        {/* Logo area doubles as the collapse/expand control (ChatGPT-style interaction —
+            behavior only, not its design): expanded, it's just the existing logo + wordmark,
+            unchanged. Collapsed, the logo icon remains the only thing shown; hovering it swaps
+            the coffee icon for an expand affordance, and clicking it (in either state) toggles
+            the SAME existing toggleSidebar() the header's own SidebarTrigger already calls —
+            this is an additional way to reach it, not a replacement, so nothing existing moves
+            or disappears. */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="group/logo flex items-center gap-2.5 px-1 py-1 w-full text-left rounded-lg hover:bg-sidebar-accent/60 transition-colors group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+          aria-label="Toggle sidebar"
+          data-testid="button-sidebar-logo-toggle"
+        >
+          <div className="bg-primary/10 p-1.5 rounded-lg shrink-0 relative">
+            <Coffee className="w-5 h-5 text-primary group-data-[collapsible=icon]:group-hover/logo:opacity-0 transition-opacity" />
+            <PanelLeftIcon className="w-5 h-5 text-primary absolute inset-1.5 opacity-0 group-data-[collapsible=icon]:group-hover/logo:opacity-100 transition-opacity" />
           </div>
-          <span className="font-bold text-base tracking-tight text-sidebar-foreground">
+          <span className="font-bold text-base tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:hidden">
             BigBoss Coffee
           </span>
-        </div>
+        </button>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 pt-2 pb-2">
+      {/* The primitive's own SidebarContent forces overflow-hidden while collapsed (icon rail)
+          — overridden here so the full nav list stays reachable by scrolling instead of being
+          silently clipped once it no longer fits the rail's height. twMerge (via cn()) resolves
+          the conflicting group-data-[collapsible=icon]:overflow-* utilities in our favor since
+          this className is applied after the primitive's own defaults. */}
+      <SidebarContent className="px-2 pt-2 pb-2 group-data-[collapsible=icon]:overflow-y-auto group-data-[collapsible=icon]:overflow-x-hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         {navGroups.map((group) => (
           <SidebarGroup key={group.label} className="mb-1">
             <SidebarGroupLabel className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest px-2 mb-1">
@@ -303,14 +325,14 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-3 border-t border-sidebar-border">
-        <div className="flex items-center gap-3 mb-3 px-1">
-          <Avatar className="w-8 h-8 border border-sidebar-border">
+        <div className="flex items-center gap-3 mb-3 px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <Avatar className="w-8 h-8 border border-sidebar-border shrink-0">
             <AvatarImage src={getAvatarUrl(user)} alt={user.name} />
             <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
               {user.name.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-col overflow-hidden flex-1">
+          <div className="flex flex-col overflow-hidden flex-1 group-data-[collapsible=icon]:hidden">
             <span className="font-semibold text-sm truncate text-sidebar-foreground">{user.name}</span>
             <span className="text-xs text-muted-foreground truncate">
               {user.role.replace(/_/g, " ")}
@@ -321,11 +343,12 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
+              tooltip="Sign Out"
               className="rounded-lg text-muted-foreground py-4"
             >
               <button onClick={() => logout()} className="w-full flex items-center gap-3">
                 <LogOut className="w-4 h-4" />
-                <span className="font-medium text-sm">Sign Out</span>
+                <span className="font-medium text-sm group-data-[collapsible=icon]:hidden">Sign Out</span>
               </button>
             </SidebarMenuButton>
           </SidebarMenuItem>

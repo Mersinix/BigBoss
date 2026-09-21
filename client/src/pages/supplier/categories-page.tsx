@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { CategoryWithCount, SupplierCategoryMapping, SubCategoryWithDetails, CatalogSuggestion } from "@shared/schema";
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
 
@@ -147,8 +148,8 @@ function CategoryMappingCard({
           </button>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {isFrozen && <Badge variant="secondary" className="text-xs">Frozen</Badge>}
-            {!isFrozen && mappingStatus === "PENDING" && <Badge className="bg-red-100 text-red-700 border-0 text-xs">Pending</Badge>}
-            {!isFrozen && mappingStatus === "APPROVED" && <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Approved</Badge>}
+            {!isFrozen && mappingStatus === "PENDING" && <Badge className="bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400 border-0 text-xs">Pending</Badge>}
+            {!isFrozen && mappingStatus === "APPROVED" && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400 border-0 text-xs">Approved</Badge>}
             {mappingStatus === "APPROVED" && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onFreeze} disabled={isActionPending}>
                 <Snowflake className="w-3 h-3 mr-1" />{isFrozen ? "Unfreeze" : "Freeze"}
@@ -209,10 +210,9 @@ function CategoryMappingCard({
 
 // ── My Categories Section ─────────────────────────────────────────────────────
 
-function MyCategoriesSection() {
+function MyCategoriesSection({ modalOpen, setModalOpen }: { modalOpen: boolean; setModalOpen: (v: boolean) => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [modalOpen, setModalOpen] = useState(false);
   const [orderedMappings, setOrderedMappings] = useState<SupplierCategoryMapping[]>([]);
   const [draggedCategoryId, setDraggedCategoryId] = useState<number | null>(null);
 
@@ -288,30 +288,25 @@ function MyCategoriesSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="grid grid-cols-3 gap-3 flex-1">
-          <Card className="border shadow-none">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="rounded-lg p-2 bg-blue-50 dark:bg-blue-950/30"><Layers className="w-4 h-4 text-blue-600" /></div>
-              <div><p className="text-xl font-bold leading-none">{filteredMappings.length}</p><p className="text-xs text-muted-foreground mt-0.5">Selected categories</p></div>
-            </CardContent>
-          </Card>
-          <Card className="border shadow-none">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="rounded-lg p-2 bg-purple-50 dark:bg-purple-950/30"><Check className="w-4 h-4 text-purple-600" /></div>
-              <div><p className="text-xl font-bold leading-none">{allSelectedSubIds.length}</p><p className="text-xs text-muted-foreground mt-0.5">Sub-categories active</p></div>
-            </CardContent>
-          </Card>
-          <Card className="border shadow-none">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="rounded-lg p-2 bg-amber-50 dark:bg-amber-950/30"><RefreshCw className="w-4 h-4 text-amber-600" /></div>
-              <div><p className="text-xl font-bold leading-none">{allCats.length}</p><p className="text-xs text-muted-foreground mt-0.5">Available</p></div>
-            </CardContent>
-          </Card>
-        </div>
-        <Button onClick={() => setModalOpen(true)} data-testid="button-add-category" className="gap-2">
-          <Plus className="w-4 h-4" />Add Category
-        </Button>
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="border shadow-none">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg p-2 bg-blue-50 dark:bg-blue-950/30"><Layers className="w-4 h-4 text-blue-600" /></div>
+            <div><p className="text-xl font-bold leading-none">{filteredMappings.length}</p><p className="text-xs text-muted-foreground mt-0.5">Selected categories</p></div>
+          </CardContent>
+        </Card>
+        <Card className="border shadow-none">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg p-2 bg-purple-50 dark:bg-purple-950/30"><Check className="w-4 h-4 text-purple-600" /></div>
+            <div><p className="text-xl font-bold leading-none">{allSelectedSubIds.length}</p><p className="text-xs text-muted-foreground mt-0.5">Sub-categories active</p></div>
+          </CardContent>
+        </Card>
+        <Card className="border shadow-none">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg p-2 bg-amber-50 dark:bg-amber-950/30"><RefreshCw className="w-4 h-4 text-amber-600" /></div>
+            <div><p className="text-xl font-bold leading-none">{allCats.length}</p><p className="text-xs text-muted-foreground mt-0.5">Available</p></div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Selection hint */}
@@ -656,15 +651,19 @@ function CategoryRequestsSection() {
 
 export default function SupplierCategoriesPage() {
   const [activeSection, setActiveSection] = useState<'my-categories' | 'category-requests'>('my-categories');
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Categories</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Manage your categories and suggest new catalog items for admin approval.
-        </p>
-      </div>
+      <DashboardHero
+        title="Categories"
+        subtitle="Manage your categories and suggest new catalog items for admin approval."
+        action={activeSection === 'my-categories' && (
+          <Button onClick={() => setAddCategoryOpen(true)} data-testid="button-add-category" className="gap-2">
+            <Plus className="w-4 h-4" />Add Category
+          </Button>
+        )}
+      />
 
       {/* Section switcher */}
       <div className="flex gap-1 p-1 bg-secondary/30 rounded-lg w-fit border">
@@ -678,7 +677,7 @@ export default function SupplierCategoriesPage() {
         </button>
       </div>
 
-      {activeSection === 'my-categories' && <MyCategoriesSection />}
+      {activeSection === 'my-categories' && <MyCategoriesSection modalOpen={addCategoryOpen} setModalOpen={setAddCategoryOpen} />}
       {activeSection === 'category-requests' && <CategoryRequestsSection />}
     </div>
   );

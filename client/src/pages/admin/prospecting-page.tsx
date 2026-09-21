@@ -873,7 +873,7 @@ export default function ProspectingPage() {
   const toggleAll = () => setSelectedIds(prev => prev.length === rows.length ? [] : rows.map(r => r.id));
 
   return (
-    <div className="space-y-5 p-6">
+    <div className="space-y-5 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title={<span className="flex items-center gap-2"><Target className="w-6 h-6 text-primary" />Prospecting</span>}
         subtitle="Discover and manage potential customers & suppliers"

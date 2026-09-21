@@ -2024,7 +2024,7 @@ export default function AdminProductsPage() {
   const openEdit = (p: ProductWithTaxonomy) => { setEditing(p); setModalOpen(true); };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Product Catalog"
         subtitle="Admin-managed product catalog. Suppliers browse and claim products from here."

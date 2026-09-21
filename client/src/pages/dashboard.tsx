@@ -76,7 +76,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6">
+    <div className="flex flex-col gap-6 py-4 px-3 -mx-6 sm:py-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title={`Bon retour, ${user?.name ?? "Admin"}`}
         subtitle="Voici ce qu'il se passe sur votre marketplace aujourd'hui."

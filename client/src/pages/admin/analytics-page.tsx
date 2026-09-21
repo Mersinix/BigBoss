@@ -38,7 +38,7 @@ export default function AnalyticsPage() {
   const packs5 = useMemo(() => topPacks(lines, 5), [lines]);
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6">
+    <div className="flex flex-col gap-6 py-4 px-3 -mx-6 sm:py-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Analyses"
         subtitle="Performance de la marketplace et indicateurs clés."

@@ -514,7 +514,7 @@ export default function AdminPrintPage() {
   const averageOrderValue = orders.length > 0 ? Math.round((data?.orders ?? []).reduce((s, o) => s + o.totalInCents, 0) / (data?.orders?.length || 1)) : 0;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title={<span className="flex items-center gap-2"><Printer className="w-6 h-6 text-blue-600" />PRINT</span>}
         subtitle="Contrôle centralisé du marketplace PRINT : imprimeurs, catalogue, commandes et finance."

@@ -55,7 +55,7 @@ export default function PaymentsPage() {
   const pageRows = rows.slice(pagination.start, pagination.end);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Payments"
         subtitle="Overview of platform payment activity."

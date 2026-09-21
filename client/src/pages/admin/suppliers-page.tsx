@@ -13,7 +13,7 @@ export default function SuppliersPage() {
   const suppliers = users.filter((u) => u.role === "SUPPLIER");
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Suppliers"
         subtitle="Manage registered suppliers and their public stores."

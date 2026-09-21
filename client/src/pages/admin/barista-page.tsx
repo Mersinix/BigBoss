@@ -405,7 +405,7 @@ export default function AdminBaristaPage() {
   const cancellationRate = stats && stats.totalMissions > 0 ? Math.round((stats.cancelledMissions / stats.totalMissions) * 100) : 0;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title={<span className="flex items-center gap-2"><Coffee className="w-6 h-6 text-indigo-600" />BARISTA</span>}
         subtitle="Contrôle centralisé du Marketplace Baristas : profils, demandes, missions et revenus."

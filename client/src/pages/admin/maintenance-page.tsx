@@ -471,7 +471,7 @@ export default function MaintenanceAdminPage() {
     ["En attente", stats?.pendingReservations ?? 0, Clock], ["Terminées", stats?.completedReservations ?? 0, CheckCircle],
     ["Annulées", stats?.cancelledReservations ?? 0, XCircle], ["Note moyenne", stats ? stats.averageRating.toFixed(1) : "0.0", Star],
   ] as const;
-  return <div className="flex flex-col gap-6 p-6">
+  return <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
     <DashboardHero
       title={<span className="flex items-center gap-2"><Wrench className="w-6 h-6 text-orange-600" />Maintenance</span>}
       subtitle="Suivi du marketplace Maintenance, des comptes, interventions et avis."

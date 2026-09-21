@@ -406,7 +406,7 @@ export default function AdminStoresPage() {
   const pendingCount = stores.filter((s) => s.approvalStatus === "PENDING").length;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title={
           <span className="flex items-center gap-2">

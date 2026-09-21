@@ -194,11 +194,11 @@ export default function OrdersPage() {
   if (user?.role === "CAFE_OWNER") return <CafeOrdersPage />;
 
   if (isLoading) return (
-    <div className="flex flex-col gap-4 p-6">{[1,2,3].map(i => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}</div>
+    <div className="flex flex-col gap-4 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">{[1,2,3].map(i => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}</div>
   );
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex flex-col gap-5 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title={isAdmin ? "Gestion des Commandes" : "Mes Commandes"}
         subtitle="Suivez et gérez le cycle de vie des commandes."

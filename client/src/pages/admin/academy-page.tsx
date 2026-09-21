@@ -352,7 +352,7 @@ export default function AdminAcademyPage() {
   const cancellationRate = stats && stats.totalRegistrations > 0 ? Math.round((stats.cancelledRegistrations / stats.totalRegistrations) * 100) : 0;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title={<span className="flex items-center gap-2"><GraduationCap className="w-6 h-6 text-indigo-600" />ACADEMY</span>}
         subtitle="Contrôle centralisé du service Academy : académies, formations, inscriptions, étudiants, calendrier, finance et analytics."

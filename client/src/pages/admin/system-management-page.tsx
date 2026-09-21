@@ -1824,7 +1824,7 @@ export default function SystemManagementPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title={<span className="flex items-center gap-2" data-testid="text-page-title"><Sliders className="w-6 h-6 text-amber-600" />System Management</span>}
         subtitle="Control the global visibility of each marketplace service and configure the Landing Page."

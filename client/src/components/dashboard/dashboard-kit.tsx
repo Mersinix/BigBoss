@@ -70,7 +70,7 @@ export function DashboardHero({
             </div>
           </div>
         )}
-        {action && <div className="shrink-0 flex items-center gap-2">{action}</div>}
+        {action && <div className="flex items-center gap-2 flex-wrap min-w-0 max-w-full">{action}</div>}
       </CardContent>
     </Card>
   );

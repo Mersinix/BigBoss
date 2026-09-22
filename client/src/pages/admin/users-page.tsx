@@ -20,7 +20,8 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { User, AddressDetails } from "@shared/schema";
 import { ADDRESS_DETAIL_FIELDS } from "@/components/settings/address-details-fields";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -660,6 +661,8 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
@@ -723,36 +726,72 @@ export default function UsersPage() {
       <DashboardHero
         title="Utilisateurs"
         subtitle="Gérez les utilisateurs et approuvez les comptes en attente."
-        action={<AddUserModal onRefresh={invalidateUsers} />}
+        action={
+          <>
+            <AddUserModal onRefresh={invalidateUsers} />
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-primary/10 rounded-xl p-3"><Users className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-xs text-muted-foreground font-medium">Total utilisateurs</p><p className="text-2xl font-bold">{users.length}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3"><UserCheck className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground font-medium">Membres actifs</p><p className="text-2xl font-bold">{totalNonAdmin}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-yellow-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-yellow-600" /></div>
-            <div><p className="text-xs text-muted-foreground font-medium">En attente</p><p className="text-2xl font-bold text-yellow-600">{pendingCount}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-purple-500/10 rounded-xl p-3"><ShieldCheck className="w-5 h-5 text-purple-600" /></div>
-            <div><p className="text-xs text-muted-foreground font-medium">Admins</p><p className="text-2xl font-bold">{adminCount}</p></div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Users className="w-5 h-5 text-primary" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Total utilisateurs</p><p className="text-2xl font-bold">{users.length}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><UserCheck className="w-5 h-5 text-green-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Membres actifs</p><p className="text-2xl font-bold">{totalNonAdmin}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-yellow-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-yellow-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">En attente</p><p className="text-2xl font-bold text-yellow-600">{pendingCount}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-purple-500/10 rounded-xl p-3"><ShieldCheck className="w-5 h-5 text-purple-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Admins</p><p className="text-2xl font-bold">{adminCount}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Users className="w-5 h-5 text-primary" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Total utilisateurs</p><p className="text-2xl font-bold">{users.length}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><UserCheck className="w-5 h-5 text-green-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Membres actifs</p><p className="text-2xl font-bold">{totalNonAdmin}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-yellow-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-yellow-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">En attente</p><p className="text-2xl font-bold text-yellow-600">{pendingCount}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-purple-500/10 rounded-xl p-3"><ShieldCheck className="w-5 h-5 text-purple-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Admins</p><p className="text-2xl font-bold">{adminCount}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       {/* User Table */}
       <Card>

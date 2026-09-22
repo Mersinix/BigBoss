@@ -19,7 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useAuth } from "@/hooks/use-auth";
-import { DashboardHero, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { AlertTriangle } from "lucide-react";
 import { useAdminBaristaReports, useResolveBaristaReport } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
@@ -299,6 +300,9 @@ export default function AdminBaristaPage() {
   const fmt = useFormatCurrency();
   useRealtime();
 
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
+
   const [section, setSection] = useState("baristas");
   const [selectedBarista, setSelectedBarista] = useState<AdminBarista | null>(null);
 
@@ -410,18 +414,34 @@ export default function AdminBaristaPage() {
         title={<span className="flex items-center gap-2"><Coffee className="w-6 h-6 text-indigo-600" />BARISTA</span>}
         subtitle="Contrôle centralisé du Marketplace Baristas : profils, demandes, missions et revenus."
         gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {kpis.map(([label, value, Icon]) => (
-          <Card key={label}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="rounded-xl bg-indigo-500/10 p-2.5"><Icon className="w-4 h-4 text-indigo-600" /></div>
-              <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {kpis.map(([label, value, Icon]) => (
+            <Card key={label}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="rounded-xl bg-indigo-500/10 p-2.5"><Icon className="w-4 h-4 text-indigo-600" /></div>
+                <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          {kpis.map(([label, value, Icon]) => (
+            <Card key={label}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="rounded-xl bg-indigo-500/10 p-2.5"><Icon className="w-4 h-4 text-indigo-600" /></div>
+                <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </KpiOverviewModal>
 
       <Tabs value={section} onValueChange={setSection}>
         {/* Horizontally scrollable rather than wrapping — keeps every tab reachable and on

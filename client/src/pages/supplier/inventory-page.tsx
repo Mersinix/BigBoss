@@ -14,7 +14,8 @@ import { InventoryTable } from "./inventory/inventory-table";
 import { AdjustStockDialog } from "./inventory/adjust-stock-dialog";
 import { StockHistoryDialog } from "./inventory/stock-history-dialog";
 import { EditListingDialog } from "./inventory/edit-listing-dialog";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
@@ -34,6 +35,8 @@ export default function InventoryPage() {
   const { toast } = useToast();
   const fmt = useFormatCurrency();
   const qc = useQueryClient();
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
   const [filters, setFilters] = useState<InventoryFilterState>(EMPTY_INVENTORY_FILTERS);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -136,9 +139,14 @@ export default function InventoryPage() {
       <DashboardHero
         title="Inventory"
         subtitle="Track stock levels, adjust quantities, and manage product visibility in real time."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
-      <InventoryStatsCards stats={stats} isLoading={statsLoading} />
+      {!isMobile && <InventoryStatsCards stats={stats} isLoading={statsLoading} />}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <InventoryStatsCards stats={stats} isLoading={statsLoading} />
+      </KpiOverviewModal>
 
       <Card>
         <CardContent className="p-4 space-y-4">

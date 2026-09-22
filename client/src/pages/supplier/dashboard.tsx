@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
 } from "@/lib/marketplace-analytics";
 import {
   DashboardHero, StatCard, SectionCard, RankRow, AlertRow, EmptyState,
+  KpiOverviewButton, KpiOverviewModal,
 } from "@/components/dashboard/dashboard-kit";
 import { useMyFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Banknote } from "lucide-react";
@@ -43,6 +45,8 @@ export default function SupplierDashboard() {
   // obligations (as counterparty) — deliberately separate from the order revenue figures
   // above (ledger/settlement obligations, not order/product sales).
   const { data: deliveryFinancialSummary } = useMyFinancialSummary();
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const lines = useMemo(() => flattenOrders(orders), [orders]);
   const stats = useMemo(() => summarize(lines), [lines]);
@@ -86,15 +90,28 @@ export default function SupplierDashboard() {
         stat={fmt(stats.deliveredRevenue)}
         statLabel="Chiffre d'affaires livré"
         icon={DollarSign}
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`${stats.deliveredCount} livrée(s)`} />
-        <StatCard label="En attente" value={stats.statusCounts["PENDING"] ?? 0} icon={AlertCircle} tone="amber" subtext="À confirmer" />
-        <StatCard label="Annulées" value={stats.cancelledCount} icon={AlertCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% du total`} />
-        <StatCard label="Produits actifs" value={listings.length} icon={Package} tone="green" subtext="référencé(s)" />
-        <StatCard label="Stock faible" value={lowStock.length} icon={AlertTriangle} tone={lowStock.length > 0 ? "red" : "blue"} subtext={lowStock.length > 0 ? "à réapprovisionner" : "tout est ok"} />
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`${stats.deliveredCount} livrée(s)`} />
+          <StatCard label="En attente" value={stats.statusCounts["PENDING"] ?? 0} icon={AlertCircle} tone="amber" subtext="À confirmer" />
+          <StatCard label="Annulées" value={stats.cancelledCount} icon={AlertCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% du total`} />
+          <StatCard label="Produits actifs" value={listings.length} icon={Package} tone="green" subtext="référencé(s)" />
+          <StatCard label="Stock faible" value={lowStock.length} icon={AlertTriangle} tone={lowStock.length > 0 ? "red" : "blue"} subtext={lowStock.length > 0 ? "à réapprovisionner" : "tout est ok"} />
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`${stats.deliveredCount} livrée(s)`} />
+          <StatCard label="En attente" value={stats.statusCounts["PENDING"] ?? 0} icon={AlertCircle} tone="amber" subtext="À confirmer" />
+          <StatCard label="Annulées" value={stats.cancelledCount} icon={AlertCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% du total`} />
+          <StatCard label="Produits actifs" value={listings.length} icon={Package} tone="green" subtext="référencé(s)" />
+          <StatCard label="Stock faible" value={lowStock.length} icon={AlertTriangle} tone={lowStock.length > 0 ? "red" : "blue"} subtext={lowStock.length > 0 ? "à réapprovisionner" : "tout est ok"} />
+        </div>
+      </KpiOverviewModal>
 
       {deliveryFinancialSummary && (
         <SectionCard title="Règlement livraison (chauffeurs)" icon={Banknote}>

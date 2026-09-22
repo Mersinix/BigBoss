@@ -30,7 +30,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { Prospect, ProspectStats, ProspectNote, ProspectTimelineEvent, ProspectFollowUp } from "@shared/schema";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -799,6 +800,9 @@ export default function ProspectingPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
+
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -891,12 +895,17 @@ export default function ProspectingPage() {
             <Button size="sm" onClick={() => setSearchOpen(true)}>
               <Search className="w-3.5 h-3.5 mr-1.5" />Search Google Places
             </Button>
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
           </div>
         }
       />
 
       {/* Stats */}
-      <StatsRow stats={statsData} isLoading={statsLoading} />
+      {!isMobile && <StatsRow stats={statsData} isLoading={statsLoading} />}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <StatsRow stats={statsData} isLoading={statsLoading} />
+      </KpiOverviewModal>
 
       {/* Filters */}
       <FilterBar filters={filters} onChange={f => { setFilters(prev => ({ ...prev, ...f })); setPage(1); setSelectedIds([]); }} />

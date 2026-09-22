@@ -12,7 +12,8 @@ import {
 import OrderInvoiceModal from "@/components/financial/order-invoice-modal";
 import { InvoiceCard } from "@/components/financial/financial-cards";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "Tous les statuts" },
@@ -34,6 +35,8 @@ export default function InvoicesPage() {
   const fmt = useFormatCurrency();
   const [filters, setFilters] = useState(DEFAULT_FINANCIAL_FILTERS);
   const [viewing, setViewing] = useState<{ orderId: number; subOrderId: number } | null>(null);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const allRows = useMemo(() => buildFinancialRows(orders), [orders]);
   const supplierOptions = useMemo(() => {
@@ -61,32 +64,62 @@ export default function InvoicesPage() {
       <DashboardHero
         title="Invoices"
         subtitle="View and export order invoices."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-primary/10 rounded-xl p-3">
-              <FileText className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Total Invoices</p>
-              <p className="text-2xl font-bold">{nonCancelled.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3">
-              <DollarSign className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Total Invoiced Amount</p>
-              <p className="text-2xl font-bold text-green-600">{fmt(totalInvoiced)}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3">
+                <FileText className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Invoices</p>
+                <p className="text-2xl font-bold">{nonCancelled.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3">
+                <DollarSign className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Invoiced Amount</p>
+                <p className="text-2xl font-bold text-green-600">{fmt(totalInvoiced)}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3">
+                <FileText className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Invoices</p>
+                <p className="text-2xl font-bold">{nonCancelled.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3">
+                <DollarSign className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Invoiced Amount</p>
+                <p className="text-2xl font-bold text-green-600">{fmt(totalInvoiced)}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       <FinancialFilterBar
         filters={filters}

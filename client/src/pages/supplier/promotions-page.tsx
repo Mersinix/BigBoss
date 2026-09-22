@@ -21,7 +21,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import type { Promotion, PromotionType, PromotionStatus } from "@shared/schema";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // ── API helpers ─────────────────────────────────────────────────────────────
 
@@ -784,6 +785,8 @@ export default function PromotionsPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [filterType, setFilterType] = useState<string>("ALL");
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   // Dialogs
   const [formOpen, setFormOpen] = useState(false);
@@ -871,33 +874,58 @@ export default function PromotionsPage() {
 
   const isSaving = createMut.isPending || updateMut.isPending;
 
+  const kpiItems = [
+    { label: "Active", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />, color: "bg-green-50 dark:bg-green-500/10" },
+    { label: "Paused", value: stats?.paused ?? promos.filter(p => getEffectiveStatus(p) === 'PAUSED').length, icon: <Pause className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />, color: "bg-yellow-50 dark:bg-yellow-500/10" },
+    { label: "Total Uses", value: stats?.totalUses ?? promos.reduce((s, p) => s + p.usageCount, 0), icon: <Users className="w-4 h-4 text-primary" />, color: "bg-primary/5" },
+    { label: "Savings Generated", value: stats?.totalDiscount != null ? fmt(stats.totalDiscount) : "—", icon: <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />, color: "bg-blue-50 dark:bg-blue-500/10" },
+  ];
+
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Promotions"
         subtitle="Create and manage promotional campaigns for your products."
-        action={<Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1.5" /> Create Promotion</Button>}
+        action={
+          <>
+            <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1.5" /> Create Promotion</Button>
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "Active", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />, color: "bg-green-50 dark:bg-green-500/10" },
-          { label: "Paused", value: stats?.paused ?? promos.filter(p => getEffectiveStatus(p) === 'PAUSED').length, icon: <Pause className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />, color: "bg-yellow-50 dark:bg-yellow-500/10" },
-          { label: "Total Uses", value: stats?.totalUses ?? promos.reduce((s, p) => s + p.usageCount, 0), icon: <Users className="w-4 h-4 text-primary" />, color: "bg-primary/5" },
-          { label: "Savings Generated", value: stats?.totalDiscount != null ? fmt(stats.totalDiscount) : "—", icon: <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />, color: "bg-blue-50 dark:bg-blue-500/10" },
-        ].map(({ label, value, icon, color }) => (
-          <Card key={label} className="rounded-xl border-border/60">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={`rounded-xl p-2.5 shrink-0 ${color}`}>{icon}</div>
-              <div>
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="text-xl font-bold">{value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {kpiItems.map(({ label, value, icon, color }) => (
+            <Card key={label} className="rounded-xl border-border/60">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`rounded-xl p-2.5 shrink-0 ${color}`}>{icon}</div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-xl font-bold">{value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          {kpiItems.map(({ label, value, icon, color }) => (
+            <Card key={label} className="rounded-xl border-border/60">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`rounded-xl p-2.5 shrink-0 ${color}`}>{icon}</div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-xl font-bold">{value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </KpiOverviewModal>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">

@@ -12,7 +12,8 @@ import { Star, Loader2, Package, Store, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SupplierProductReview } from "@shared/schema";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -129,6 +130,8 @@ export default function ReviewsPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [subCategoryFilter, setSubCategoryFilter] = useState("");
   const [reportTarget, setReportTarget] = useState<number | null>(null);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const { data: productReviews = [], isLoading: loadingProduct } = useQuery<SupplierProductReview[]>({
     queryKey: ["/api/supplier/reviews/products"],
@@ -217,38 +220,73 @@ export default function ReviewsPage() {
       <DashboardHero
         title="Reviews"
         subtitle="Customer feedback on your products and service."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3"><Star className="w-5 h-5 text-amber-500" /></div>
-            <div>
-              <p className="text-xs text-muted-foreground">Product Avg Rating</p>
-              <p className="text-2xl font-bold">{productAvg}{productReviews.length > 0 ? " / 5" : ""}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-primary/10 rounded-xl p-3"><Package className="w-5 h-5 text-primary" /></div>
-            <div>
-              <p className="text-xs text-muted-foreground">Product Reviews</p>
-              <p className="text-2xl font-bold">{productReviews.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3"><Store className="w-5 h-5 text-green-600" /></div>
-            <div>
-              <p className="text-xs text-muted-foreground">Supplier Reviews ({supplierAvg}{supplierReviews.length > 0 ? " / 5" : ""})</p>
-              <p className="text-2xl font-bold">{supplierReviews.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><Star className="w-5 h-5 text-amber-500" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Product Avg Rating</p>
+                <p className="text-2xl font-bold">{productAvg}{productReviews.length > 0 ? " / 5" : ""}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Package className="w-5 h-5 text-primary" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Product Reviews</p>
+                <p className="text-2xl font-bold">{productReviews.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><Store className="w-5 h-5 text-green-600" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Supplier Reviews ({supplierAvg}{supplierReviews.length > 0 ? " / 5" : ""})</p>
+                <p className="text-2xl font-bold">{supplierReviews.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><Star className="w-5 h-5 text-amber-500" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Product Avg Rating</p>
+                <p className="text-2xl font-bold">{productAvg}{productReviews.length > 0 ? " / 5" : ""}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Package className="w-5 h-5 text-primary" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Product Reviews</p>
+                <p className="text-2xl font-bold">{productReviews.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><Store className="w-5 h-5 text-green-600" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Supplier Reviews ({supplierAvg}{supplierReviews.length > 0 ? " / 5" : ""})</p>
+                <p className="text-2xl font-bold">{supplierReviews.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       {/* Tab switcher */}
       <div className="flex gap-1 rounded-xl p-1 bg-secondary/50 w-fit">

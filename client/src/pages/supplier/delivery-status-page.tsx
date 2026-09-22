@@ -18,7 +18,8 @@ import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
 import DeliveryDetails, { DELIVERY_STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const STATUS_FILTERS = ["ALL", "PENDING", "AVAILABLE", "ACCEPTED", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "CANCELLED"];
 const DATE_FILTERS = [
@@ -186,6 +187,8 @@ export default function SupplierDeliveryStatusPage() {
   const [search, setSearch] = useState("");
   const [dispatchTarget, setDispatchTarget] = useState<DeliveryWithDetails | null>(null);
   const [viewTarget, setViewTarget] = useState<DeliveryWithDetails | null>(null);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const filtered = useMemo(() => {
     return deliveries.filter((d) => {
@@ -217,30 +220,56 @@ export default function SupplierDeliveryStatusPage() {
       <DashboardHero
         title="Delivery"
         subtitle="Suivi et gestion de toutes vos livraisons."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
       <SupplierDeliveryTabs />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
-            <div><p className="text-xs text-muted-foreground">À dispatcher</p><p className="text-2xl font-bold">{pendingDispatch}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-indigo-500/10 rounded-xl p-3"><Truck className="w-5 h-5 text-indigo-600" /></div>
-            <div><p className="text-xs text-muted-foreground">En transit</p><p className="text-2xl font-bold">{inTransit}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3"><CheckCircle className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Livrées</p><p className="text-2xl font-bold">{deliveredCount}</p></div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
+              <div><p className="text-xs text-muted-foreground">À dispatcher</p><p className="text-2xl font-bold">{pendingDispatch}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-indigo-500/10 rounded-xl p-3"><Truck className="w-5 h-5 text-indigo-600" /></div>
+              <div><p className="text-xs text-muted-foreground">En transit</p><p className="text-2xl font-bold">{inTransit}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><CheckCircle className="w-5 h-5 text-green-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Livrées</p><p className="text-2xl font-bold">{deliveredCount}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
+              <div><p className="text-xs text-muted-foreground">À dispatcher</p><p className="text-2xl font-bold">{pendingDispatch}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-indigo-500/10 rounded-xl p-3"><Truck className="w-5 h-5 text-indigo-600" /></div>
+              <div><p className="text-xs text-muted-foreground">En transit</p><p className="text-2xl font-bold">{inTransit}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><CheckCircle className="w-5 h-5 text-green-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Livrées</p><p className="text-2xl font-bold">{deliveredCount}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       {/* Filter bar */}
       <div className="flex flex-wrap gap-3 items-center">

@@ -21,7 +21,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { DashboardHero, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // Mirrors admin/barista-page.tsx's architecture exactly: one aggregate overview
@@ -220,6 +221,9 @@ export default function AdminAcademyPage() {
   const fmt = useFormatCurrency();
   useRealtime();
 
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
+
   const [section, setSection] = useState("academies");
   const [selectedAcademy, setSelectedAcademy] = useState<AdminAcademy | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -357,18 +361,34 @@ export default function AdminAcademyPage() {
         title={<span className="flex items-center gap-2"><GraduationCap className="w-6 h-6 text-indigo-600" />ACADEMY</span>}
         subtitle="Contrôle centralisé du service Academy : académies, formations, inscriptions, étudiants, calendrier, finance et analytics."
         gradientClass="bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/20"
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {kpis.map(([label, value, Icon]) => (
-          <Card key={label}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="rounded-xl bg-indigo-500/10 p-2.5"><Icon className="w-4 h-4 text-indigo-600" /></div>
-              <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {kpis.map(([label, value, Icon]) => (
+            <Card key={label}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="rounded-xl bg-indigo-500/10 p-2.5"><Icon className="w-4 h-4 text-indigo-600" /></div>
+                <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          {kpis.map(([label, value, Icon]) => (
+            <Card key={label}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="rounded-xl bg-indigo-500/10 p-2.5"><Icon className="w-4 h-4 text-indigo-600" /></div>
+                <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </KpiOverviewModal>
 
       <Tabs value={section} onValueChange={setSection}>
         <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>

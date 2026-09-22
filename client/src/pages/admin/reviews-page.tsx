@@ -9,7 +9,8 @@ import { Star, Loader2, Package, Store, Wrench, Flag, Trash2, CheckCircle2, Aler
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -56,6 +57,8 @@ export default function AdminReviewsPage() {
   const [activeTab, setActiveTab] = useState<ReviewType>("PRODUCT");
   const [showReportedOnly, setShowReportedOnly] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const { data: reviews = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/reviews", activeTab],
@@ -104,40 +107,77 @@ export default function AdminReviewsPage() {
       <DashboardHero
         title="Reviews"
         subtitle="Manage all reviews across the platform from one place."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3"><Star className="w-5 h-5 text-amber-500" /></div>
-            <div>
-              <p className="text-xs text-muted-foreground">Average Rating</p>
-              <p className="text-2xl font-bold">{avg}{reviews.length > 0 ? " / 5" : ""}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-primary/10 rounded-xl p-3"><Star className="w-5 h-5 text-primary" /></div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Reviews</p>
-              <p className="text-2xl font-bold">{reviews.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className={`rounded-xl p-3 ${reportedCount > 0 ? "bg-orange-500/10" : "bg-green-500/10"}`}>
-              <Flag className={`w-5 h-5 ${reportedCount > 0 ? "text-orange-500" : "text-green-600"}`} />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Pending Reports</p>
-              <p className="text-2xl font-bold">{reportedCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><Star className="w-5 h-5 text-amber-500" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Average Rating</p>
+                <p className="text-2xl font-bold">{avg}{reviews.length > 0 ? " / 5" : ""}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Star className="w-5 h-5 text-primary" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Reviews</p>
+                <p className="text-2xl font-bold">{reviews.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className={`rounded-xl p-3 ${reportedCount > 0 ? "bg-orange-500/10" : "bg-green-500/10"}`}>
+                <Flag className={`w-5 h-5 ${reportedCount > 0 ? "text-orange-500" : "text-green-600"}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Pending Reports</p>
+                <p className="text-2xl font-bold">{reportedCount}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><Star className="w-5 h-5 text-amber-500" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Average Rating</p>
+                <p className="text-2xl font-bold">{avg}{reviews.length > 0 ? " / 5" : ""}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Star className="w-5 h-5 text-primary" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Reviews</p>
+                <p className="text-2xl font-bold">{reviews.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className={`rounded-xl p-3 ${reportedCount > 0 ? "bg-orange-500/10" : "bg-green-500/10"}`}>
+                <Flag className={`w-5 h-5 ${reportedCount > 0 ? "text-orange-500" : "text-green-600"}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Pending Reports</p>
+                <p className="text-2xl font-bold">{reportedCount}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       {/* Tabs — horizontally scrollable, same responsive treatment as Admin Barista's
           switcher (task requirement), since 9 tabs no longer fit on narrow screens. */}

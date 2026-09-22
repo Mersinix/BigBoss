@@ -1,61 +1,79 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Store, Package, TrendingUp } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { User } from "@shared/schema";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 
 export default function SuppliersPage() {
   const { data: users = [], isLoading } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
   const suppliers = users.filter((u) => u.role === "SUPPLIER");
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
+
+  const kpiCards = (
+    <>
+      <Card>
+        <CardContent className="p-5 flex items-center gap-4">
+          <div className="bg-primary/10 rounded-xl p-3">
+            <Store className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground font-medium">Total Suppliers</p>
+            <p className="text-2xl font-bold text-foreground">{suppliers.length}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5 flex items-center gap-4">
+          <div className="bg-green-500/10 rounded-xl p-3">
+            <Package className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground font-medium">Active Suppliers</p>
+            <p className="text-2xl font-bold text-foreground">{suppliers.length}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5 flex items-center gap-4">
+          <div className="bg-amber-500/10 rounded-xl p-3">
+            <TrendingUp className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground font-medium">Pending Approval</p>
+            <p className="text-2xl font-bold text-foreground">0</p>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Suppliers"
         subtitle="Manage registered suppliers and their public stores."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">{kpiCards}</div>
+      </KpiOverviewModal>
+
       <>
+  {!isMobile && (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <Card>
-      <CardContent className="p-5 flex items-center gap-4">
-        <div className="bg-primary/10 rounded-xl p-3">
-          <Store className="w-5 h-5 text-primary" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">Total Suppliers</p>
-          <p className="text-2xl font-bold text-foreground">{suppliers.length}</p>
-        </div>
-      </CardContent>
-    </Card>
-
-    <Card>
-      <CardContent className="p-5 flex items-center gap-4">
-        <div className="bg-green-500/10 rounded-xl p-3">
-          <Package className="w-5 h-5 text-green-600" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">Active Suppliers</p>
-          <p className="text-2xl font-bold text-foreground">{suppliers.length}</p>
-        </div>
-      </CardContent>
-    </Card>
-
-    <Card>
-      <CardContent className="p-5 flex items-center gap-4">
-        <div className="bg-amber-500/10 rounded-xl p-3">
-          <TrendingUp className="w-5 h-5 text-amber-600" />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">Pending Approval</p>
-          <p className="text-2xl font-bold text-foreground">0</p>
-        </div>
-      </CardContent>
-    </Card>
+    {kpiCards}
   </div>
+  )}
 
   <Card>
     <CardHeader>

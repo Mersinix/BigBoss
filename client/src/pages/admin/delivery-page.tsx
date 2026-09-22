@@ -24,7 +24,8 @@ import { VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-deliv
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { DeliveryWithDetails, User, DeliveryStatus, DeliveryMode } from "@shared/schema";
 
 // ── Livraisons tab — mapped cards (replaces the previous raw <Table>) ────────────────────
@@ -514,6 +515,8 @@ export default function DeliveryPage() {
   const { toast } = useToast();
   const [viewTarget, setViewTarget] = useState<DeliveryWithDetails | null>(null);
   const [tab, setTab] = useState("deliveries");
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const inTransit = deliveries.filter((d) => ["PICKED_UP", "IN_TRANSIT"].includes(d.status)).length;
   const delivered = deliveries.filter((d) => d.status === "DELIVERED").length;
@@ -531,28 +534,54 @@ export default function DeliveryPage() {
       <DashboardHero
         title="Livraisons"
         subtitle="Supervision de toutes les livraisons de la plateforme."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-indigo-500/10 rounded-xl p-3"><Truck className="w-5 h-5 text-indigo-600" /></div>
-            <div><p className="text-xs text-muted-foreground font-medium">En transit</p><p className="text-2xl font-bold">{inTransit}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
-            <div><p className="text-xs text-muted-foreground font-medium">Non assignées</p><p className="text-2xl font-bold">{unassigned}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3"><CheckCircle className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground font-medium">Livrées</p><p className="text-2xl font-bold">{delivered}</p></div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-indigo-500/10 rounded-xl p-3"><Truck className="w-5 h-5 text-indigo-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">En transit</p><p className="text-2xl font-bold">{inTransit}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Non assignées</p><p className="text-2xl font-bold">{unassigned}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><CheckCircle className="w-5 h-5 text-green-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Livrées</p><p className="text-2xl font-bold">{delivered}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-indigo-500/10 rounded-xl p-3"><Truck className="w-5 h-5 text-indigo-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">En transit</p><p className="text-2xl font-bold">{inTransit}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-amber-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Non assignées</p><p className="text-2xl font-bold">{unassigned}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><CheckCircle className="w-5 h-5 text-green-600" /></div>
+              <div><p className="text-xs text-muted-foreground font-medium">Livrées</p><p className="text-2xl font-bold">{delivered}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>

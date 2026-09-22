@@ -6,11 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Bell, ShoppingBag, Users, AlertCircle, CheckCheck } from "lucide-react";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useState } from "react";
 
 export default function NotificationsPage() {
   const { data: orders = [] } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const fmt = useFormatCurrency();
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   // KEPT as-is (Part 3): the existing order-based KPI tiles — real order data,
   // not notification records, so left untouched.
@@ -31,48 +35,93 @@ export default function NotificationsPage() {
       <DashboardHero
         title="Notifications"
         subtitle="Recent activity and system alerts."
-        action={unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={() => markAllRead.mutate("ADMIN")} data-testid="button-mark-all-read">
-            <CheckCheck className="w-4 h-4 mr-2" /> Tout marquer comme lu
-          </Button>
-        )}
+        action={
+          <>
+            {unreadCount > 0 && (
+              <Button variant="outline" size="sm" onClick={() => markAllRead.mutate("ADMIN")} data-testid="button-mark-all-read">
+                <CheckCheck className="w-4 h-4 mr-2" /> Tout marquer comme lu
+              </Button>
+            )}
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-primary/10 rounded-xl p-3">
-              <Bell className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Non lues</p>
-              <p className="text-2xl font-bold">{unreadCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3">
-              <AlertCircle className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Pending Orders</p>
-              <p className="text-2xl font-bold">{orders.filter((o) => o.status === "PENDING").length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-blue-500/10 rounded-xl p-3">
-              <Users className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Recent Orders</p>
-              <p className="text-2xl font-bold">{recentOrders.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3">
+                <Bell className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Non lues</p>
+                <p className="text-2xl font-bold">{unreadCount}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Pending Orders</p>
+                <p className="text-2xl font-bold">{orders.filter((o) => o.status === "PENDING").length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-blue-500/10 rounded-xl p-3">
+                <Users className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Recent Orders</p>
+                <p className="text-2xl font-bold">{recentOrders.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3">
+                <Bell className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Non lues</p>
+                <p className="text-2xl font-bold">{unreadCount}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Pending Orders</p>
+                <p className="text-2xl font-bold">{orders.filter((o) => o.status === "PENDING").length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-blue-500/10 rounded-xl p-3">
+                <Users className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Recent Orders</p>
+                <p className="text-2xl font-bold">{recentOrders.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       <Card>
         <CardHeader>

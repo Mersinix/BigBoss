@@ -20,7 +20,8 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Mirrors admin/maintenance-page.tsx's architecture exactly: one aggregate
 // overview endpoint (/api/admin/marketing), client-side tabs/filters over it,
@@ -421,6 +422,8 @@ export default function MarketingAdminPage() {
   const qc = useQueryClient();
   const fmt = useFormatCurrency();
   useRealtime();
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
   const [section, setSection] = useState("taxonomy");
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
@@ -489,8 +492,14 @@ export default function MarketingAdminPage() {
       title={<span className="flex items-center gap-2"><Megaphone className="w-6 h-6 text-fuchsia-600" />Marketing</span>}
       subtitle="Suivi du marketplace Marketing, des comptes, projets et avis."
       gradientClass="bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-500/5 to-transparent border-fuchsia-500/20"
+      action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
     />
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{kpis.map(([label, value, Icon]) => <Card key={label}><CardContent className="p-4 flex items-center gap-3"><div className="rounded-xl bg-fuchsia-500/10 p-2.5"><Icon className="w-4 h-4 text-fuchsia-600" /></div><div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div></CardContent></Card>)}</div>
+    {!isMobile && (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{kpis.map(([label, value, Icon]) => <Card key={label}><CardContent className="p-4 flex items-center gap-3"><div className="rounded-xl bg-fuchsia-500/10 p-2.5"><Icon className="w-4 h-4 text-fuchsia-600" /></div><div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div></CardContent></Card>)}</div>
+    )}
+    <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+      <div className="grid grid-cols-2 gap-3">{kpis.map(([label, value, Icon]) => <Card key={label}><CardContent className="p-4 flex items-center gap-3"><div className="rounded-xl bg-fuchsia-500/10 p-2.5"><Icon className="w-4 h-4 text-fuchsia-600" /></div><div><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{isLoading ? "…" : value}</p></div></CardContent></Card>)}</div>
+    </KpiOverviewModal>
     {!isLoading && stats && stats.totalRevenueCents > 0 && (
       <p className="text-sm text-muted-foreground -mt-2">Chiffre d'affaires plateforme (projets terminés) : <span className="font-semibold text-foreground">{fmt(stats.totalRevenueCents)}</span></p>
     )}

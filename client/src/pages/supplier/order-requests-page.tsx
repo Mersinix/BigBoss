@@ -13,7 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { OrderWithDetails } from "@shared/schema";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,8 @@ export default function OrderRequestsPage() {
 
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const [modalReadOnly, setModalReadOnly] = useState(false);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   // View switcher
   const [requestsView, setRequestsView] = useState<"pending" | "history">("pending");
@@ -169,28 +172,53 @@ export default function OrderRequestsPage() {
       <DashboardHero
         title="Demandes de commandes"
         subtitle="Examinez et répondez aux nouvelles commandes reçues."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: "En attente", value: allPending.length,  icon: Clock,       color: "text-amber-500 bg-amber-500/10" },
-          { label: "Acceptées",  value: approvedCount,      icon: CheckCircle, color: "text-green-600 bg-green-500/10" },
-          { label: "Refusées",   value: rejectedCount,      icon: XCircle,     color: "text-red-600 bg-red-500/10" },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label}>
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className={`rounded-xl p-3 ${color.split(" ")[1]}`}>
-                <Icon className={`w-5 h-5 ${color.split(" ")[0]}`} />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="text-2xl font-bold">{value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { label: "En attente", value: allPending.length,  icon: Clock,       color: "text-amber-500 bg-amber-500/10" },
+            { label: "Acceptées",  value: approvedCount,      icon: CheckCircle, color: "text-green-600 bg-green-500/10" },
+            { label: "Refusées",   value: rejectedCount,      icon: XCircle,     color: "text-red-600 bg-red-500/10" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label}>
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className={`rounded-xl p-3 ${color.split(" ")[1]}`}>
+                  <Icon className={`w-5 h-5 ${color.split(" ")[0]}`} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-2xl font-bold">{value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          {[
+            { label: "En attente", value: allPending.length,  icon: Clock,       color: "text-amber-500 bg-amber-500/10" },
+            { label: "Acceptées",  value: approvedCount,      icon: CheckCircle, color: "text-green-600 bg-green-500/10" },
+            { label: "Refusées",   value: rejectedCount,      icon: XCircle,     color: "text-red-600 bg-red-500/10" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label}>
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className={`rounded-xl p-3 ${color.split(" ")[1]}`}>
+                  <Icon className={`w-5 h-5 ${color.split(" ")[0]}`} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-2xl font-bold">{value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </KpiOverviewModal>
 
       {/* ── View switcher ── */}
       <div className="flex gap-1 bg-secondary/40 rounded-xl p-1">

@@ -12,7 +12,8 @@ import { flattenOrders, resolveDateRange, monthlySeries, type DateRangePreset } 
 import {
   buildFinancialRows, PLATFORM_COMMISSION_RATE, PAYOUT_STATUS_META, payoutReference,
 } from "@/lib/financial-rows";
-import { DashboardHero, StatCard, SectionCard, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, StatCard, SectionCard, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Supplier "Revenus" tab — no separate payout/invoice system exists (see lib/financial-rows.ts);
 // this reuses that exact same derivation so numbers here always agree with Supplier Payouts/
@@ -25,6 +26,8 @@ export default function SupplierEarningsPage() {
   const { data: orders = [] } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
   const [preset, setPreset] = useState<DateRangePreset>("30d");
   const [custom, setCustom] = useState({ from: "", to: "" });
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const allLines = useMemo(() => flattenOrders(orders), [orders]);
   const series = useMemo(() => monthlySeries(allLines, 12), [allLines]);
@@ -63,7 +66,12 @@ export default function SupplierEarningsPage() {
       <DashboardHero
         title="Revenus"
         subtitle="Aperçu financier de votre activité."
-        action={<DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />}
+        action={
+          <>
+            <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
       <DashboardHero
@@ -74,12 +82,23 @@ export default function SupplierEarningsPage() {
         icon={Wallet}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Chiffre d'affaires livré" value={fmt(grossDelivered)} icon={DollarSign} tone="amber" />
-        <StatCard label="Croissance mensuelle" value={`${monthGrowth >= 0 ? "+" : ""}${monthGrowth.toFixed(1)}%`} icon={TrendingUp} tone={monthGrowth >= 0 ? "green" : "red"} subtext="vs mois précédent" />
-        <StatCard label="Commission plateforme" value={fmt(commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% du livré`} />
-        <StatCard label="Versements à venir" value={fmt(pendingNet)} icon={Wallet} tone="amber" subtext="Commandes en cours" />
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard label="Chiffre d'affaires livré" value={fmt(grossDelivered)} icon={DollarSign} tone="amber" />
+          <StatCard label="Croissance mensuelle" value={`${monthGrowth >= 0 ? "+" : ""}${monthGrowth.toFixed(1)}%`} icon={TrendingUp} tone={monthGrowth >= 0 ? "green" : "red"} subtext="vs mois précédent" />
+          <StatCard label="Commission plateforme" value={fmt(commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% du livré`} />
+          <StatCard label="Versements à venir" value={fmt(pendingNet)} icon={Wallet} tone="amber" subtext="Commandes en cours" />
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="Chiffre d'affaires livré" value={fmt(grossDelivered)} icon={DollarSign} tone="amber" />
+          <StatCard label="Croissance mensuelle" value={`${monthGrowth >= 0 ? "+" : ""}${monthGrowth.toFixed(1)}%`} icon={TrendingUp} tone={monthGrowth >= 0 ? "green" : "red"} subtext="vs mois précédent" />
+          <StatCard label="Commission plateforme" value={fmt(commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% du livré`} />
+          <StatCard label="Versements à venir" value={fmt(pendingNet)} icon={Wallet} tone="amber" subtext="Commandes en cours" />
+        </div>
+      </KpiOverviewModal>
 
       <SectionCard title="Revenu mensuel" icon={TrendingUp} right={<span className="text-xs text-muted-foreground">12 derniers mois</span>}>
         <ResponsiveContainer width="100%" height={220}>

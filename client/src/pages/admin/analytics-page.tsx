@@ -10,7 +10,8 @@ import {
   topSuppliers, topProducts, topPacks, topCustomers, FR_STATUS_LABEL,
   type DateRangePreset,
 } from "@/lib/marketplace-analytics";
-import { DashboardHero, StatCard, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, StatCard, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
 
@@ -22,6 +23,8 @@ export default function AnalyticsPage() {
 
   const [preset, setPreset] = useState<DateRangePreset>("30d");
   const [custom, setCustom] = useState({ from: "", to: "" });
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const allLines = useMemo(() => flattenOrders(orders), [orders]);
   const range = useMemo(() => resolveDateRange(preset, custom), [preset, custom]);
@@ -42,17 +45,35 @@ export default function AnalyticsPage() {
       <DashboardHero
         title="Analyses"
         subtitle="Performance de la marketplace et indicateurs clés."
-        action={<DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />}
+        action={
+          <>
+            <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard label="CA livré" value={fmt(stats.deliveredRevenue)} icon={TrendingUp} tone="green" />
-        <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
-        <StatCard label="Livrées" value={stats.deliveredCount} icon={CheckCircle2} tone="green" />
-        <StatCard label="Annulées" value={stats.cancelledCount} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}%`} />
-        <StatCard label="Utilisateurs" value={users.length} icon={Users} tone="blue" />
-        <StatCard label="Produits" value={products.length} icon={Package} tone="amber" />
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <StatCard label="CA livré" value={fmt(stats.deliveredRevenue)} icon={TrendingUp} tone="green" />
+          <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
+          <StatCard label="Livrées" value={stats.deliveredCount} icon={CheckCircle2} tone="green" />
+          <StatCard label="Annulées" value={stats.cancelledCount} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}%`} />
+          <StatCard label="Utilisateurs" value={users.length} icon={Users} tone="blue" />
+          <StatCard label="Produits" value={products.length} icon={Package} tone="amber" />
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="CA livré" value={fmt(stats.deliveredRevenue)} icon={TrendingUp} tone="green" />
+          <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
+          <StatCard label="Livrées" value={stats.deliveredCount} icon={CheckCircle2} tone="green" />
+          <StatCard label="Annulées" value={stats.cancelledCount} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}%`} />
+          <StatCard label="Utilisateurs" value={users.length} icon={Users} tone="blue" />
+          <StatCard label="Produits" value={products.length} icon={Package} tone="amber" />
+        </div>
+      </KpiOverviewModal>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SectionCard title="Chiffre d'affaires par mois" icon={TrendingUp}>

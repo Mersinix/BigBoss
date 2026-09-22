@@ -16,7 +16,8 @@ import {
   type DiscountCodeFormInput,
 } from "@/hooks/use-discount-codes";
 import type { DiscountCode } from "@shared/schema";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type EffectiveStatus = "Active" | "Inactive" | "Expired" | "Limit Reached";
 
@@ -72,6 +73,8 @@ export default function DiscountCodesPage() {
   const { data: stats } = useDiscountCodeStats();
   const createMut = useCreateDiscountCode();
   const updateMut = useUpdateDiscountCode();
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingCode, setEditingCode] = useState<DiscountCode | null>(null);
@@ -144,23 +147,47 @@ export default function DiscountCodesPage() {
       <DashboardHero
         title="Discount Codes"
         subtitle="Create and manage promo codes for your café customers."
-        action={<Button size="sm" onClick={openCreate} data-testid="button-add-code"><Plus className="w-4 h-4 mr-1" /> New Code</Button>}
+        action={
+          <>
+            <Button size="sm" onClick={openCreate} data-testid="button-add-code"><Plus className="w-4 h-4 mr-1" /> New Code</Button>
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: "Active Codes", value: activeCount },
-          { label: "Total Redemptions", value: totalRedemptions },
-          { label: "Expired Codes", value: expiredCount },
-        ].map(({ label, value }) => (
-          <Card key={label}>
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="bg-primary/10 rounded-xl p-3"><Ticket className="w-5 h-5 text-primary" /></div>
-              <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-2xl font-bold">{value}</p></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { label: "Active Codes", value: activeCount },
+            { label: "Total Redemptions", value: totalRedemptions },
+            { label: "Expired Codes", value: expiredCount },
+          ].map(({ label, value }) => (
+            <Card key={label}>
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="bg-primary/10 rounded-xl p-3"><Ticket className="w-5 h-5 text-primary" /></div>
+                <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-2xl font-bold">{value}</p></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          {[
+            { label: "Active Codes", value: activeCount },
+            { label: "Total Redemptions", value: totalRedemptions },
+            { label: "Expired Codes", value: expiredCount },
+          ].map(({ label, value }) => (
+            <Card key={label}>
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="bg-primary/10 rounded-xl p-3"><Ticket className="w-5 h-5 text-primary" /></div>
+                <div><p className="text-xs text-muted-foreground">{label}</p><p className="text-2xl font-bold">{value}</p></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </KpiOverviewModal>
 
       <Card>
         <CardHeader><CardTitle className="text-base font-semibold">All Codes</CardTitle></CardHeader>

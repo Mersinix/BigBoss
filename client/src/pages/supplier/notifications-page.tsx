@@ -4,9 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Bell, AlertTriangle, ShoppingBag } from "lucide-react";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useState } from "react";
 
 export default function SupplierNotificationsPage() {
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
   // Real, persisted SHOP-service notifications — orders, low stock, deliveries.
   // No mock data (this page previously seeded a static fakeNotifications array).
   const { data: notifications = [], isLoading } = useNotifications("SHOP", { limit: 50 });
@@ -22,31 +26,61 @@ export default function SupplierNotificationsPage() {
       <DashboardHero
         title="Notifications"
         subtitle="Stay updated on orders, payments and alerts."
-        action={unread > 0 && (
-          <Button variant="outline" size="sm" onClick={() => markAllRead.mutate("SHOP")} data-testid="button-mark-all-read">Mark all as read</Button>
-        )}
+        action={
+          <>
+            {unread > 0 && (
+              <Button variant="outline" size="sm" onClick={() => markAllRead.mutate("SHOP")} data-testid="button-mark-all-read">Mark all as read</Button>
+            )}
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-primary/10 rounded-xl p-3"><Bell className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-xs text-muted-foreground">Unread</p><p className="text-2xl font-bold">{unread}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Low Stock Alerts</p><p className="text-2xl font-bold">{stockAlerts}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-blue-500/10 rounded-xl p-3"><ShoppingBag className="w-5 h-5 text-blue-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Order Notifications</p><p className="text-2xl font-bold">{orderNotifications}</p></div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Bell className="w-5 h-5 text-primary" /></div>
+              <div><p className="text-xs text-muted-foreground">Unread</p><p className="text-2xl font-bold">{unread}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Low Stock Alerts</p><p className="text-2xl font-bold">{stockAlerts}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-blue-500/10 rounded-xl p-3"><ShoppingBag className="w-5 h-5 text-blue-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Order Notifications</p><p className="text-2xl font-bold">{orderNotifications}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Bell className="w-5 h-5 text-primary" /></div>
+              <div><p className="text-xs text-muted-foreground">Unread</p><p className="text-2xl font-bold">{unread}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Low Stock Alerts</p><p className="text-2xl font-bold">{stockAlerts}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-blue-500/10 rounded-xl p-3"><ShoppingBag className="w-5 h-5 text-blue-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Order Notifications</p><p className="text-2xl font-bold">{orderNotifications}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       <Card>
         <CardHeader><CardTitle className="text-base font-semibold">All Notifications</CardTitle></CardHeader>

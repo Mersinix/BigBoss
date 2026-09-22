@@ -12,7 +12,8 @@ import {
 import { PaymentCard } from "@/components/financial/financial-cards";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import PaymentDetailsModal from "@/components/financial/payment-details-modal";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "Tous les statuts" },
@@ -30,6 +31,8 @@ export default function PaymentsPage() {
   const fmt = useFormatCurrency();
   const { data: orders = [], isLoading } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
   const [filters, setFilters] = useState(DEFAULT_FINANCIAL_FILTERS);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const allRows = useMemo(() => buildFinancialRows(orders), [orders]);
   const supplierOptions = useMemo(() => {
@@ -59,43 +62,84 @@ export default function PaymentsPage() {
       <DashboardHero
         title="Payments"
         subtitle="Overview of platform payment activity."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3">
-              <DollarSign className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Revenue (livrées)</p>
-              <p className="text-2xl font-bold text-green-600">{fmt(totalRevenue)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-amber-500/10 rounded-xl p-3">
-              <CreditCard className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Pending Payments</p>
-              <p className="text-2xl font-bold text-amber-600">{fmt(pendingAmount)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-blue-500/10 rounded-xl p-3">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">Platform Commission (5%)</p>
-              <p className="text-2xl font-bold text-blue-600">{fmt(commission)}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3">
+                <DollarSign className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Revenue (livrées)</p>
+                <p className="text-2xl font-bold text-green-600">{fmt(totalRevenue)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3">
+                <CreditCard className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Pending Payments</p>
+                <p className="text-2xl font-bold text-amber-600">{fmt(pendingAmount)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-blue-500/10 rounded-xl p-3">
+                <TrendingUp className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Platform Commission (5%)</p>
+                <p className="text-2xl font-bold text-blue-600">{fmt(commission)}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3">
+                <DollarSign className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Revenue (livrées)</p>
+                <p className="text-2xl font-bold text-green-600">{fmt(totalRevenue)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-amber-500/10 rounded-xl p-3">
+                <CreditCard className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Pending Payments</p>
+                <p className="text-2xl font-bold text-amber-600">{fmt(pendingAmount)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-blue-500/10 rounded-xl p-3">
+                <TrendingUp className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Platform Commission (5%)</p>
+                <p className="text-2xl font-bold text-blue-600">{fmt(commission)}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       <FinancialFilterBar
         filters={filters}

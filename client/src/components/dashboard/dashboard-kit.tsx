@@ -1,7 +1,9 @@
 import type { ComponentType, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Inbox } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { TrendingUp, TrendingDown, Inbox, LayoutGrid } from "lucide-react";
 
 /**
  * Shared "premium dashboard" building blocks for the Admin/Supplier Dashboard, Analytics and
@@ -73,6 +75,52 @@ export function DashboardHero({
         {action && <div className="flex items-center gap-2 flex-wrap min-w-0 max-w-full">{action}</div>}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Mobile KPI Overview modal ────────────────────────────────────────────────
+// Mobile-only: on Admin pages that have both a DashboardHero and a "KPI overview" stat grid
+// right below it, the grid moves into this modal on mobile (below the app's existing
+// useIsMobile() breakpoint) instead of taking up vertical scroll space. Desktop/tablet is
+// completely untouched — callers keep rendering the KPI grid inline there exactly as before,
+// and only swap it for this button+modal pair when isMobile is true. Renders the exact same
+// KPI content/data the page already computed — never a second, separate source of truth.
+
+export function KpiOverviewButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      onClick={onClick}
+      className="rounded-xl shrink-0"
+      aria-label="Voir les statistiques"
+      data-testid="button-kpi-overview"
+    >
+      <LayoutGrid className="w-4 h-4" />
+    </Button>
+  );
+}
+
+export function KpiOverviewModal({
+  open, onClose, title = "Statistiques", children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      {/* Same thin-scrollbar treatment as the rest of the Admin modals (Order Details, etc.). */}
+      <DialogContent
+        className="max-w-md max-h-[80vh] overflow-y-auto rounded-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+        data-testid="modal-kpi-overview"
+      >
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
   );
 }
 

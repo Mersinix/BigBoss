@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useOrders } from "@/hooks/use-orders";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/lib/marketplace-analytics";
 import {
   DashboardHero, StatCard, SectionCard, RankRow, AlertRow, EmptyState,
+  KpiOverviewButton, KpiOverviewModal,
 } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -43,6 +45,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { data: orders = [], isLoading } = useOrders();
   const fmt = useFormatCurrency();
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const lines = useMemo(() => flattenOrders(orders), [orders]);
   const stats = useMemo(() => summarize(lines), [lines]);
@@ -83,16 +87,29 @@ export default function Dashboard() {
         stat={fmt(stats.grossRevenue)}
         statLabel="Chiffre d'affaires"
         icon={DollarSign}
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
-      {/* KPI overview */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`${stats.activeCount} active(s)`} />
-        <StatCard label="En attente fournisseur" value={pendingSupplierRequests} icon={Clock} tone="amber" subtext="Réponse requise" />
-        <StatCard label="Livrées" value={stats.deliveredCount} icon={CheckCircle2} tone="green" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
-        <StatCard label="Annulées" value={stats.cancelledCount} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% du total`} />
-        <StatCard label="Commission plateforme" value={fmt(stats.commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% du livré`} />
-      </div>
+      {/* KPI overview — desktop/tablet only; moves into a modal on mobile (see action above) */}
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`${stats.activeCount} active(s)`} />
+          <StatCard label="En attente fournisseur" value={pendingSupplierRequests} icon={Clock} tone="amber" subtext="Réponse requise" />
+          <StatCard label="Livrées" value={stats.deliveredCount} icon={CheckCircle2} tone="green" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
+          <StatCard label="Annulées" value={stats.cancelledCount} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% du total`} />
+          <StatCard label="Commission plateforme" value={fmt(stats.commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% du livré`} />
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)} title="Aperçu KPI">
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`${stats.activeCount} active(s)`} />
+          <StatCard label="En attente fournisseur" value={pendingSupplierRequests} icon={Clock} tone="amber" subtext="Réponse requise" />
+          <StatCard label="Livrées" value={stats.deliveredCount} icon={CheckCircle2} tone="green" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
+          <StatCard label="Annulées" value={stats.cancelledCount} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% du total`} />
+          <StatCard label="Commission plateforme" value={fmt(stats.commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}% du livré`} />
+        </div>
+      </KpiOverviewModal>
 
       {/* Trends: revenue evolution + status distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

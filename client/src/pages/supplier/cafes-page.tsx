@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Coffee, Plus, Search, MapPin, Phone, Mail, ShoppingBag, Wallet, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 function AddCafeModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
@@ -119,6 +120,8 @@ export default function CafesPage() {
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<SupplierCafe | null>(null);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const filtered = cafes.filter((c) => {
     if (!search) return true;
@@ -138,29 +141,59 @@ export default function CafesPage() {
       <DashboardHero
         title="Cafes"
         subtitle="Vos cafés clients et leur activité."
-        action={<Button onClick={() => setAddOpen(true)} className="gap-1.5" data-testid="button-add-cafe"><Plus className="w-4 h-4" />Ajouter un café</Button>}
+        action={
+          <>
+            <Button onClick={() => setAddOpen(true)} className="gap-1.5" data-testid="button-add-cafe"><Plus className="w-4 h-4" />Ajouter un café</Button>
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-primary/10 rounded-xl p-3"><Coffee className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-xs text-muted-foreground">Cafés</p><p className="text-2xl font-bold">{cafes.length}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-indigo-500/10 rounded-xl p-3"><ShoppingBag className="w-5 h-5 text-indigo-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Commandes totales</p><p className="text-2xl font-bold">{totalOrders}</p></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="bg-green-500/10 rounded-xl p-3"><Wallet className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Chiffre d'affaires</p><p className="text-2xl font-bold text-green-600">{fmt(totalSpent)}</p></div>
-          </CardContent>
-        </Card>
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Coffee className="w-5 h-5 text-primary" /></div>
+              <div><p className="text-xs text-muted-foreground">Cafés</p><p className="text-2xl font-bold">{cafes.length}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-indigo-500/10 rounded-xl p-3"><ShoppingBag className="w-5 h-5 text-indigo-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Commandes totales</p><p className="text-2xl font-bold">{totalOrders}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><Wallet className="w-5 h-5 text-green-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Chiffre d'affaires</p><p className="text-2xl font-bold text-green-600">{fmt(totalSpent)}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-1 gap-3">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-primary/10 rounded-xl p-3"><Coffee className="w-5 h-5 text-primary" /></div>
+              <div><p className="text-xs text-muted-foreground">Cafés</p><p className="text-2xl font-bold">{cafes.length}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-indigo-500/10 rounded-xl p-3"><ShoppingBag className="w-5 h-5 text-indigo-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Commandes totales</p><p className="text-2xl font-bold">{totalOrders}</p></div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="bg-green-500/10 rounded-xl p-3"><Wallet className="w-5 h-5 text-green-600" /></div>
+              <div><p className="text-xs text-muted-foreground">Chiffre d'affaires</p><p className="text-2xl font-bold text-green-600">{fmt(totalSpent)}</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      </KpiOverviewModal>
 
       <div className="relative flex-1 min-w-[200px] max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

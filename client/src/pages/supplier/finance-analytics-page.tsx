@@ -10,7 +10,8 @@ import {
   topProducts, topPacks, type DateRangePreset,
 } from "@/lib/marketplace-analytics";
 import { PLATFORM_COMMISSION_RATE } from "@/lib/financial-rows";
-import { DashboardHero, StatCard, SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, StatCard, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
 
@@ -24,6 +25,8 @@ export default function FinanceAnalyticsPage() {
   const { data: listings = [] } = useQuery<any[]>({ queryKey: ["/api/supplier/listings"] });
   const [preset, setPreset] = useState<DateRangePreset>("30d");
   const [custom, setCustom] = useState({ from: "", to: "" });
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const allLines = useMemo(() => flattenOrders(orders), [orders]);
   const range = useMemo(() => resolveDateRange(preset, custom), [preset, custom]);
@@ -39,17 +42,35 @@ export default function FinanceAnalyticsPage() {
       <DashboardHero
         title="Analyses"
         subtitle="Performance financière et insights de vente."
-        action={<DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />}
+        action={
+          <>
+            <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
+            {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
+          </>
+        }
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard label="CA livré" value={fmt(stats.deliveredRevenue)} icon={TrendingUp} tone="amber" />
-        <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
-        <StatCard label="Livrées / annulées" value={`${stats.deliveredCount} / ${stats.cancelledCount}`} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% annulé`} />
-        <StatCard label="Produits référencés" value={listings.length} icon={Package} tone="green" />
-        <StatCard label="Commission plateforme" value={fmt(stats.commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}%`} />
-        <StatCard label="Gains nets" value={fmt(stats.supplierNet)} icon={TrendingUp} tone="green" />
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <StatCard label="CA livré" value={fmt(stats.deliveredRevenue)} icon={TrendingUp} tone="amber" />
+          <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
+          <StatCard label="Livrées / annulées" value={`${stats.deliveredCount} / ${stats.cancelledCount}`} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% annulé`} />
+          <StatCard label="Produits référencés" value={listings.length} icon={Package} tone="green" />
+          <StatCard label="Commission plateforme" value={fmt(stats.commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}%`} />
+          <StatCard label="Gains nets" value={fmt(stats.supplierNet)} icon={TrendingUp} tone="green" />
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="CA livré" value={fmt(stats.deliveredRevenue)} icon={TrendingUp} tone="amber" />
+          <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`PMC ${fmt(stats.averageOrderValue)}`} />
+          <StatCard label="Livrées / annulées" value={`${stats.deliveredCount} / ${stats.cancelledCount}`} icon={XCircle} tone="red" subtext={`${(stats.cancellationRate * 100).toFixed(1)}% annulé`} />
+          <StatCard label="Produits référencés" value={listings.length} icon={Package} tone="green" />
+          <StatCard label="Commission plateforme" value={fmt(stats.commission)} icon={Percent} tone="blue" subtext={`${(PLATFORM_COMMISSION_RATE * 100).toFixed(0)}%`} />
+          <StatCard label="Gains nets" value={fmt(stats.supplierNet)} icon={TrendingUp} tone="green" />
+        </div>
+      </KpiOverviewModal>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SectionCard title="Revenu mensuel" icon={TrendingUp}>

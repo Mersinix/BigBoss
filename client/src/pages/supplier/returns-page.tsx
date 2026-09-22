@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RotateCcw, CheckCircle, Clock, XCircle, AlertCircle, Loader2, Box } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderReturnRow } from "@/hooks/use-orders";
-import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -166,6 +167,8 @@ function ReviewModal({
 export default function ReturnsPage() {
   const { data: returns = [], isLoading } = useReturns();
   const [reviewing, setReviewing] = useState<OrderReturnRow | null>(null);
+  const isMobile = useIsMobile();
+  const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
   const stats = {
     pending:    returns.filter(r => r.status === "PENDING_REVIEW").length,
@@ -188,30 +191,57 @@ export default function ReturnsPage() {
       <DashboardHero
         title="Retours"
         subtitle="Gérez les demandes de retour et de remboursement de vos clients."
+        action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {[
-          { label: "En attente",    value: stats.pending,    icon: Clock,      cls: "text-amber-600 bg-amber-500/10" },
-          { label: "Approuvées",   value: stats.approved,   icon: CheckCircle, cls: "text-blue-600 bg-blue-500/10" },
-          { label: "En traitement",value: stats.inProgress, icon: Loader2,    cls: "text-purple-600 bg-purple-500/10" },
-          { label: "Résolues",     value: stats.resolved,   icon: RotateCcw,  cls: "text-green-600 bg-green-500/10" },
-          { label: "Rejetées",     value: stats.rejected,   icon: XCircle,    cls: "text-red-600 bg-red-500/10" },
-        ].map(({ label, value, icon: Icon, cls }) => (
-          <Card key={label}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={`rounded-xl p-2.5 ${cls.split(" ")[1]}`}>
-                <Icon className={`w-4 h-4 ${cls.split(" ")[0]}`} />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground leading-tight">{label}</p>
-                <p className="text-xl font-bold">{value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {!isMobile && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { label: "En attente",    value: stats.pending,    icon: Clock,      cls: "text-amber-600 bg-amber-500/10" },
+            { label: "Approuvées",   value: stats.approved,   icon: CheckCircle, cls: "text-blue-600 bg-blue-500/10" },
+            { label: "En traitement",value: stats.inProgress, icon: Loader2,    cls: "text-purple-600 bg-purple-500/10" },
+            { label: "Résolues",     value: stats.resolved,   icon: RotateCcw,  cls: "text-green-600 bg-green-500/10" },
+            { label: "Rejetées",     value: stats.rejected,   icon: XCircle,    cls: "text-red-600 bg-red-500/10" },
+          ].map(({ label, value, icon: Icon, cls }) => (
+            <Card key={label}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`rounded-xl p-2.5 ${cls.split(" ")[1]}`}>
+                  <Icon className={`w-4 h-4 ${cls.split(" ")[0]}`} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground leading-tight">{label}</p>
+                  <p className="text-xl font-bold">{value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)}>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "En attente",    value: stats.pending,    icon: Clock,      cls: "text-amber-600 bg-amber-500/10" },
+            { label: "Approuvées",   value: stats.approved,   icon: CheckCircle, cls: "text-blue-600 bg-blue-500/10" },
+            { label: "En traitement",value: stats.inProgress, icon: Loader2,    cls: "text-purple-600 bg-purple-500/10" },
+            { label: "Résolues",     value: stats.resolved,   icon: RotateCcw,  cls: "text-green-600 bg-green-500/10" },
+            { label: "Rejetées",     value: stats.rejected,   icon: XCircle,    cls: "text-red-600 bg-red-500/10" },
+          ].map(({ label, value, icon: Icon, cls }) => (
+            <Card key={label}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`rounded-xl p-2.5 ${cls.split(" ")[1]}`}>
+                  <Icon className={`w-4 h-4 ${cls.split(" ")[0]}`} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground leading-tight">{label}</p>
+                  <p className="text-xl font-bold">{value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </KpiOverviewModal>
 
       {/* Returns table */}
       <Card>

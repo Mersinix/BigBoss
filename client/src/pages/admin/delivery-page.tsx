@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useDeliveries, useUpdateDeliveryStatus } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { formatDate } from "@/lib/format";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -207,6 +207,77 @@ function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancell
 
 const APPROVAL_STATUS_OPTIONS = ["approved", "pending", "rejected"] as const;
 
+// Store-inspired mapped card (Admin → Stores' StoreCard is the visual reference) — used by
+// both Entreprises + Chauffeurs and Chauffeurs fournisseurs so the two Delivery sections
+// share one design system. Company/supplier-level info only (no nested driver cards); the
+// entire card is the click target that opens the existing details modal — no separate
+// "Voir les détails" button.
+function OperatorMappedCard({
+  name, profileImageUrl, coverImageUrl, status, icon: Icon, iconColorClass,
+  driverCount, active, completed, total, onSelect, testId,
+}: {
+  name: string;
+  profileImageUrl?: string | null;
+  coverImageUrl?: string | null;
+  status: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconColorClass: string;
+  driverCount: number;
+  active: number;
+  completed: number;
+  total: number;
+  onSelect: () => void;
+  testId: string;
+}) {
+  const s = status.toLowerCase();
+  const borderColor = s === "approved" ? "border-emerald-400" : s === "rejected" ? "border-red-400" : "border-border";
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
+      className={`relative bg-card rounded-2xl border-2 ${borderColor} shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group select-none`}
+      data-testid={testId}
+    >
+      {/* Cover */}
+      <div className="aspect-[16/9] bg-muted overflow-hidden">
+        {coverImageUrl ? (
+          <img src={coverImageUrl} alt={name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Icon className="w-10 h-10 text-muted-foreground/40" />
+          </div>
+        )}
+      </div>
+
+      {/* Card body */}
+      <div className="p-3 flex gap-3">
+        {/* Logo */}
+        <div className="w-10 h-10 rounded-full border-2 border-background -mt-6 bg-background shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
+          {profileImageUrl ? (
+            <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <Icon className={`w-4 h-4 ${iconColorClass}`} />
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0 mt-0.5">
+          <p className="font-semibold text-sm truncate leading-tight">{name}</p>
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <Badge variant="outline" className="text-[11px]">{status}</Badge>
+            <Badge variant="secondary" className="text-[11px]">{driverCount} chauffeur(s)</Badge>
+            <Badge variant="secondary" className="text-[11px]">{active} en cours</Badge>
+            <Badge variant="secondary" className="text-[11px]">{completed}/{total} livrée(s)</Badge>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: DeliveryWithDetails[] }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -272,59 +343,23 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
       {rows.length === 0 ? (
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune entreprise de livraison.</CardContent></Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {pageRows.map(({ company, ownDrivers, active, completed, total }) => (
-            <Card key={company.id} data-testid={`card-admin-company-${company.id}`}>
-              <CardHeader
-                className="pb-3 cursor-pointer hover:bg-muted/40 transition-colors rounded-t-xl"
-                onClick={() => setCompanyDetailId(company.id)}
-                data-testid={`button-open-admin-company-${company.id}`}
-              >
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="text-base flex items-center gap-2"><Building2 className="w-4 h-4 text-indigo-600" />{company.name}</CardTitle>
-                  <div className="flex gap-2">
-                    <Badge variant="outline">{company.status}</Badge>
-                    <Badge variant="secondary">{ownDrivers.length} chauffeur(s)</Badge>
-                    <Badge variant="secondary">{active} en cours</Badge>
-                    <Badge variant="secondary">{completed}/{total} livrée(s)</Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {ownDrivers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucun chauffeur.</p>
-                ) : (
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {ownDrivers.map((d) => {
-                      const driverActive = deliveries.filter((del) => del.driverId === d.id && ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(del.status)).length;
-                      const driverCompleted = deliveries.filter((del) => del.driverId === d.id && del.status === "DELIVERED").length;
-                      return (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => setDetail(d)}
-                          className="flex items-center justify-between gap-2 rounded-xl border p-2.5 text-sm text-left hover:border-primary hover:bg-primary/5 transition-colors"
-                          data-testid={`row-admin-driver-${d.id}`}
-                        >
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{d.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{d.phone || "—"}</p>
-                          </div>
-                          <div className="flex flex-col items-end gap-0.5 text-[10px] text-muted-foreground shrink-0">
-                            <span className={`h-2 w-2 rounded-full ${driverActive > 0 ? "bg-amber-500" : "bg-green-500"}`} />
-                            <span>{driverActive} en cours</span>
-                            <span>{driverCompleted} livrée(s)</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="flex justify-end mt-3">
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setCompanyDetailId(company.id)} data-testid={`button-company-details-${company.id}`}>Voir les détails</Button>
-                </div>
-              </CardContent>
-            </Card>
+            <OperatorMappedCard
+              key={company.id}
+              name={company.name}
+              profileImageUrl={company.profileImageUrl}
+              coverImageUrl={company.coverImageUrl}
+              status={company.status}
+              icon={Building2}
+              iconColorClass="text-indigo-600"
+              driverCount={ownDrivers.length}
+              active={active}
+              completed={completed}
+              total={total}
+              onSelect={() => setCompanyDetailId(company.id)}
+              testId={`card-admin-company-${company.id}`}
+            />
           ))}
         </div>
       )}
@@ -340,15 +375,18 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
         itemLabel="entreprises"
       />
       <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
-      {/* Clicking the company card header above opens this — same synchronized
+      {/* Clicking the company card above opens this — same synchronized
           Delivery Company details modal used everywhere a company is shown (Eye
           preview, Supplier dispatch flow). Its own "Chauffeurs" list is clickable
-          too (onOpenDriver), resolved here to the real User row already in `users`. */}
+          too (onOpenDriver), resolved here to the real User row already in `users`.
+          The company modal stays open underneath (not cleared here) — the driver
+          modal opens stacked on top via its own separate Dialog root, and the user
+          closes each one explicitly. */}
       <DeliveryCompanyDetailModal
         companyUserId={companyDetailId}
         open={companyDetailId != null}
         onClose={() => setCompanyDetailId(null)}
-        onOpenDriver={(driverId) => { const d = driversById.get(driverId); if (d) { setCompanyDetailId(null); setDetail(d); } }}
+        onOpenDriver={(driverId) => { const d = driversById.get(driverId); if (d) setDetail(d); }}
         readOnly
       />
     </div>
@@ -425,55 +463,23 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
       {rows.length === 0 ? (
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun fournisseur avec des chauffeurs.</CardContent></Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {pageRows.map(({ supplier, ownDrivers, active, completed, total }) => (
-            <Card key={supplier.id} data-testid={`card-admin-supplier-${supplier.id}`}>
-              <CardHeader
-                className="pb-3 cursor-pointer hover:bg-muted/40 transition-colors rounded-t-xl"
-                onClick={() => setSupplierDetailId(supplier.id)}
-                data-testid={`button-open-admin-supplier-${supplier.id}`}
-              >
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="text-base flex items-center gap-2"><Store className="w-4 h-4 text-slate-600" />{supplier.name}</CardTitle>
-                  <div className="flex gap-2">
-                    <Badge variant="outline">{supplier.status}</Badge>
-                    <Badge variant="secondary">{ownDrivers.length} chauffeur(s)</Badge>
-                    <Badge variant="secondary">{active} en cours</Badge>
-                    <Badge variant="secondary">{completed}/{total} livrée(s)</Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {ownDrivers.map((d) => {
-                    const driverActive = deliveries.filter((del) => del.driverId === d.id && ["ASSIGNED", "PICKED_UP", "IN_TRANSIT"].includes(del.status)).length;
-                    const driverCompleted = deliveries.filter((del) => del.driverId === d.id && del.status === "DELIVERED").length;
-                    return (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => setDetail(d)}
-                        className="flex items-center justify-between gap-2 rounded-xl border p-2.5 text-sm text-left hover:border-primary hover:bg-primary/5 transition-colors"
-                        data-testid={`row-admin-supplier-driver-${d.id}`}
-                      >
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{d.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{d.phone || "—"}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-0.5 text-[10px] text-muted-foreground shrink-0">
-                          <span className={`h-2 w-2 rounded-full ${driverActive > 0 ? "bg-amber-500" : "bg-green-500"}`} />
-                          <span>{driverActive} en cours</span>
-                          <span>{driverCompleted} livrée(s)</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex justify-end mt-3">
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSupplierDetailId(supplier.id)} data-testid={`button-supplier-details-${supplier.id}`}>Voir les détails</Button>
-                </div>
-              </CardContent>
-            </Card>
+            <OperatorMappedCard
+              key={supplier.id}
+              name={supplier.name}
+              profileImageUrl={supplier.profileImageUrl}
+              coverImageUrl={supplier.coverImageUrl}
+              status={supplier.status}
+              icon={Store}
+              iconColorClass="text-slate-600"
+              driverCount={ownDrivers.length}
+              active={active}
+              completed={completed}
+              total={total}
+              onSelect={() => setSupplierDetailId(supplier.id)}
+              testId={`card-admin-supplier-${supplier.id}`}
+            />
           ))}
         </div>
       )}
@@ -489,6 +495,8 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
         itemLabel="fournisseurs"
       />
       <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
+      {/* Supplier modal stays open underneath (not cleared here) — same stacked-modal
+          behavior as CompanyDriversTab above. */}
       <SupplierDriverFleetModal
         supplier={selectedSupplier}
         drivers={selectedSupplierDrivers}
@@ -497,7 +505,7 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
         onClose={() => setSupplierDetailId(null)}
         onOpenDriver={(driverId) => {
           const d = selectedSupplierDrivers.find((driver) => driver.id === driverId);
-          if (d) { setSupplierDetailId(null); setDetail(d); }
+          if (d) setDetail(d);
         }}
       />
     </div>

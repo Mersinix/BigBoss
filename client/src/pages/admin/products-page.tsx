@@ -2037,28 +2037,33 @@ export default function AdminProductsPage() {
 
       {/* Section + View switcher */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex gap-1 p-1 bg-secondary/50 rounded-lg">
-          <button
-            onClick={() => setSection('catalog')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${section === 'catalog' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            data-testid="section-catalog"
-          >
-            Product Management
-          </button>
-          <button
-            onClick={() => setSection('supplier')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${section === 'supplier' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            data-testid="section-supplier"
-          >
-            Supplier Products
-          </button>
-          <button
-            onClick={() => setSection('packs')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${section === 'packs' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            data-testid="section-packs"
-          >
-            <Layers className="w-3.5 h-3.5" />Packs
-          </button>
+        {/* Section switcher — same visual/scrolling design as the Admin System Management
+            switcher: hidden-scrollbar horizontal scroll on mobile, pill container, active
+            tab in a bg-background/shadow-sm chip. */}
+        <div className="min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
+            <button
+              onClick={() => setSection('catalog')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${section === 'catalog' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="section-catalog"
+            >
+              Product Management
+            </button>
+            <button
+              onClick={() => setSection('supplier')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${section === 'supplier' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="section-supplier"
+            >
+              Supplier Products
+            </button>
+            <button
+              onClick={() => setSection('packs')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all flex items-center gap-1.5 ${section === 'packs' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid="section-packs"
+            >
+              <Layers className="w-3.5 h-3.5" />Packs
+            </button>
+          </div>
         </div>
         {section === 'catalog' && (
           <div className="flex gap-1 border rounded-lg p-0.5">

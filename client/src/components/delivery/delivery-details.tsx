@@ -62,7 +62,7 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 min-w-0">
       {/* Header: status + mode */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -90,7 +90,7 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
       <Card>
         <CardContent className="p-4 space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Commande</p>
-          <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="grid grid-cols-2 gap-2 text-sm [&>*]:min-w-0">
             <div><span className="text-muted-foreground">N° :</span> #{d.order.id}</div>
             <div><span className="text-muted-foreground">Statut :</span> {d.order.status}</div>
             <div><span className="text-muted-foreground">Total :</span> {fmt(d.order.totalAmount)}</div>
@@ -219,7 +219,7 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
               <Boxes className="w-3.5 h-3.5" /> Transport requirements
             </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-2 gap-2 text-xs [&>*]:min-w-0">
               {d.subOrder.requiredVehicleType && (
                 <div className="flex items-center gap-1.5"><Truck className="w-3.5 h-3.5 text-muted-foreground" /> {VEHICLE_TYPE_LABELS[d.subOrder.requiredVehicleType] ?? d.subOrder.requiredVehicleType}</div>
               )}
@@ -258,7 +258,7 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
             <ArrowRight className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-500" />
             <span><span className="text-muted-foreground">Destination : </span>{d.destinationAddress?.address || "—"}</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-sm pt-1">
+          <div className="grid grid-cols-2 gap-2 text-sm pt-1 [&>*]:min-w-0">
             {d.deliveryCompany && (
               <div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-muted-foreground" /> {d.deliveryCompany.name}</div>
             )}
@@ -314,7 +314,7 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
               back to the pre-Phase-3 assumption (driver = full fee) only for historical
               deliveries that never computed a payout. */}
           {(viewerRole === "ADMIN" || viewerRole === "SUPER_ADMIN") && d.deliveryFee > 0 && (
-            <div className="grid grid-cols-2 gap-2 text-xs pt-2 mt-1 border-t border-border/50">
+            <div className="grid grid-cols-2 gap-2 text-xs pt-2 mt-1 border-t border-border/50 [&>*]:min-w-0">
               <div><span className="text-muted-foreground">Café :</span> {fmt(d.cafeOwnerFeeShareCents ?? 0)}</div>
               <div><span className="text-muted-foreground">Fournisseur :</span> {fmt(d.supplierFeeShareCents ?? 0)}</div>
               {(d as any).pickupLegFeeCents != null && (
@@ -347,7 +347,7 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
               either present or null for this viewer. See
               docs/bigboss-delivery-financial-visibility.md §"Financial detail per delivery". */}
           {viewerRole === "SUPPLIER" && d.deliveryFee > 0 && (
-            <div className="grid grid-cols-2 gap-2 text-xs pt-2 mt-1 border-t border-border/50">
+            <div className="grid grid-cols-2 gap-2 text-xs pt-2 mt-1 border-t border-border/50 [&>*]:min-w-0">
               <div><span className="text-muted-foreground">Café :</span> {fmt(d.cafeOwnerFeeShareCents ?? 0)}</div>
               <div><span className="text-muted-foreground">Ma contribution :</span> {fmt(d.supplierFeeShareCents ?? 0)}</div>
               {(d as any).pickupLegFeeCents != null && (
@@ -365,7 +365,7 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
             </div>
           )}
           {viewerRole === "DELIVERY_COMPANY" && d.deliveryFee > 0 && (
-            <div className="grid grid-cols-2 gap-2 text-xs pt-2 mt-1 border-t border-border/50">
+            <div className="grid grid-cols-2 gap-2 text-xs pt-2 mt-1 border-t border-border/50 [&>*]:min-w-0">
               <div><span className="text-muted-foreground">Frais de livraison :</span> {fmt(d.deliveryFee)}</div>
               {(d as any).pickupLegFeeCents != null && (
                 <div><span className="text-muted-foreground">Collecte (à charge du fournisseur) :</span> {fmt((d as any).pickupLegFeeCents)}</div>

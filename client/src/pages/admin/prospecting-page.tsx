@@ -198,7 +198,7 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-primary" />
@@ -352,7 +352,7 @@ function AddProspectDialog({ open, onClose, onSaved }: { open: boolean; onClose:
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle>Add Prospect Manually</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <div><Label>Business Name *</Label><Input className="mt-1" value={form.businessName} onChange={e => set("businessName", e.target.value)} /></div>

@@ -530,7 +530,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
           <Plus className="w-4 h-4" /> Add User
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle>Ajouter un utilisateur</DialogTitle></DialogHeader>
         <div className="space-y-4 mt-2">
 

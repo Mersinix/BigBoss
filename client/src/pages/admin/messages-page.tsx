@@ -67,7 +67,9 @@ function BroadcastDialog({ contacts, onClose }: { contacts: EligibleContact[]; o
 
   return (
     <Dialog open onOpenChange={o => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+          scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle><Megaphone className="w-4 h-4 inline mr-2" />Create Broadcast</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -87,7 +89,7 @@ function BroadcastDialog({ contacts, onClose }: { contacts: EligibleContact[]; o
               </div>
             </div>
             <Input className="h-8 text-sm" placeholder="Filter contacts…" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
-            <div className="max-h-48 overflow-y-auto border rounded-md divide-y">
+            <div className="max-h-48 overflow-y-auto border rounded-md divide-y [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
               {filtered.map(c => (
                 <label key={c.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-secondary/50">
                   <Checkbox checked={selectedIds.has(c.id)} onCheckedChange={() => toggle(c.id)} />
@@ -189,11 +191,16 @@ function AllConversationsTab() {
     <div>
       <div className="border-b px-4 pt-3">
         <Tabs value={service} onValueChange={(value) => setService(value as (typeof MESSAGE_SERVICES)[number])}>
-          <TabsList className="flex-wrap h-auto justify-start">
-            {MESSAGE_SERVICES.map((item) => (
-              <TabsTrigger key={item} value={item} className="text-xs">{item}</TabsTrigger>
-            ))}
-          </TabsList>
+          {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+              hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+              bg-background/shadow-sm chip. */}
+          <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+            <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+              {MESSAGE_SERVICES.map((item) => (
+                <TabsTrigger key={item} value={item} className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">{item}</TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
         </Tabs>
       </div>
       <div className="flex flex-wrap items-end gap-2 border-b px-4 py-3 bg-secondary/10">
@@ -324,11 +331,16 @@ export default function AdminMessagesPage() {
           <div className="border rounded-md overflow-hidden">
             <div className="border-b px-4 pt-3">
               <Tabs value={myService} onValueChange={(value) => setMyService(value as (typeof MESSAGE_SERVICES)[number])}>
-                <TabsList className="flex-wrap h-auto justify-start">
-                  {MESSAGE_SERVICES.map((item) => (
-                    <TabsTrigger key={item} value={item} className="text-xs">{item}</TabsTrigger>
-                  ))}
-                </TabsList>
+                {/* Switcher — same visual/scrolling design as the Admin System Management
+                    switcher: hidden-scrollbar horizontal scroll on mobile, pill container,
+                    active tab in a bg-background/shadow-sm chip. */}
+                <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+                  <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+                    {MESSAGE_SERVICES.map((item) => (
+                      <TabsTrigger key={item} value={item} className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">{item}</TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
               </Tabs>
             </div>
             {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service={myService} />}

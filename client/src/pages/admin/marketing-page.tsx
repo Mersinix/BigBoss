@@ -280,7 +280,7 @@ function AddMarketingAccountModal({ open, onClose, onCreated }: { open: boolean;
   });
   const valid = form.name.trim().length >= 2 && form.email.includes("@") && form.password.length >= 6;
   return <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-    <DialogContent className="max-w-md">
+    <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
       <DialogHeader><DialogTitle>Ajouter un compte Marketing</DialogTitle></DialogHeader>
       <div className="space-y-3">
         <div><label className="text-xs text-muted-foreground">Nom / Agence</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-add-marketing-name" /></div>
@@ -504,11 +504,16 @@ export default function MarketingAdminPage() {
       <p className="text-sm text-muted-foreground -mt-2">Chiffre d'affaires plateforme (projets terminés) : <span className="font-semibold text-foreground">{fmt(stats.totalRevenueCents)}</span></p>
     )}
     <Tabs value={section} onValueChange={setSection}>
-      <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
-        <TabsTrigger value="taxonomy" className="shrink-0">Catégories de services</TabsTrigger>
-        <TabsTrigger value="accounts" className="shrink-0">Comptes Marketing</TabsTrigger>
-        <TabsTrigger value="projects" className="shrink-0">Projets récents</TabsTrigger>
-      </TabsList>
+      {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+          hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+          bg-background/shadow-sm chip. */}
+      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+        <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+          <TabsTrigger value="taxonomy" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Catégories de services</TabsTrigger>
+          <TabsTrigger value="accounts" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Comptes Marketing</TabsTrigger>
+          <TabsTrigger value="projects" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Projets récents</TabsTrigger>
+        </TabsList>
+      </div>
       <TabsContent value="taxonomy" className="mt-4 grid lg:grid-cols-2 gap-6">
         <TaxonomyList items={data?.taxonomy ?? []} onRefresh={refresh} />
         <Card><CardHeader><CardTitle className="text-base">Demandes par catégorie</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{(data?.categories ?? []).map((row) => <Badge key={row.category} variant="secondary">{row.category} · {row.count}</Badge>)}</CardContent></Card>

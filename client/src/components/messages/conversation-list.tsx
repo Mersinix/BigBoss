@@ -164,7 +164,7 @@ export function ConversationList({
                 onChange={e => setContactSearch(e.target.value)}
                 data-testid="input-search-contacts"
               />
-              <div className="max-h-64 overflow-y-auto space-y-1">
+              <div className="max-h-64 overflow-y-auto space-y-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
                 {filteredContacts.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">Aucun contact disponible</p>
                 ) : (

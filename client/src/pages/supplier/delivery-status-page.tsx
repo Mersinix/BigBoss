@@ -379,7 +379,7 @@ export default function SupplierDeliveryStatusPage() {
       {dispatchTarget && <DispatchDialog delivery={dispatchTarget} onClose={() => setDispatchTarget(null)} />}
 
       <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTarget(null); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>
           {viewTarget && <DeliveryDetails delivery={viewTarget} viewerRole="SUPPLIER" />}
         </DialogContent>

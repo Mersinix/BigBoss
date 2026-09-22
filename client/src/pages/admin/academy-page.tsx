@@ -134,7 +134,9 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
   if (!academy) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
+          scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{academy.initials}</AvatarFallback></Avatar>
@@ -391,15 +393,20 @@ export default function AdminAcademyPage() {
       </KpiOverviewModal>
 
       <Tabs value={section} onValueChange={setSection}>
-        <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
-          <TabsTrigger value="academies" className="shrink-0">Académies</TabsTrigger>
-          <TabsTrigger value="courses" className="shrink-0">Formations</TabsTrigger>
-          <TabsTrigger value="registrations" className="shrink-0">Inscriptions</TabsTrigger>
-          <TabsTrigger value="students" className="shrink-0">Étudiants</TabsTrigger>
-          <TabsTrigger value="calendar" className="shrink-0">Calendrier</TabsTrigger>
-          <TabsTrigger value="finance" className="shrink-0">Finance</TabsTrigger>
-          <TabsTrigger value="analytics" className="shrink-0">Analytics</TabsTrigger>
-        </TabsList>
+        {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+            hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+            bg-background/shadow-sm chip. */}
+        <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+            <TabsTrigger value="academies" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Académies</TabsTrigger>
+            <TabsTrigger value="courses" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Formations</TabsTrigger>
+            <TabsTrigger value="registrations" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Inscriptions</TabsTrigger>
+            <TabsTrigger value="students" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Étudiants</TabsTrigger>
+            <TabsTrigger value="calendar" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Calendrier</TabsTrigger>
+            <TabsTrigger value="finance" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Finance</TabsTrigger>
+            <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Analytics</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── Académies ── */}
         <TabsContent value="academies" className="mt-4 space-y-4">

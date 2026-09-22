@@ -2108,20 +2108,25 @@ export default function ManageProducts() {
       />
 
       <Tabs defaultValue="admin-products" className="w-full">
-        <TabsList className="mb-2">
-          <TabsTrigger value="admin-products" data-testid="tab-admin-products">
-            <Package className="w-4 h-4 mr-1.5" />Admin Products
-          </TabsTrigger>
-          <TabsTrigger value="my-products" data-testid="tab-my-products">
-            <ShoppingBag className="w-4 h-4 mr-1.5" />My Products
-          </TabsTrigger>
-          <TabsTrigger value="new-product" data-testid="tab-new-product">
-            <Plus className="w-4 h-4 mr-1.5" />New Product
-          </TabsTrigger>
-          <TabsTrigger value="pack" data-testid="tab-pack">
-            <Layers className="w-4 h-4 mr-1.5" />Pack
-          </TabsTrigger>
-        </TabsList>
+        {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+            hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+            bg-background/shadow-sm chip. */}
+        <div className="mb-2 overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+            <TabsTrigger value="admin-products" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-admin-products">
+              <Package className="w-4 h-4 mr-1.5" />Admin Products
+            </TabsTrigger>
+            <TabsTrigger value="my-products" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-my-products">
+              <ShoppingBag className="w-4 h-4 mr-1.5" />My Products
+            </TabsTrigger>
+            <TabsTrigger value="new-product" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-new-product">
+              <Plus className="w-4 h-4 mr-1.5" />New Product
+            </TabsTrigger>
+            <TabsTrigger value="pack" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-pack">
+              <Layers className="w-4 h-4 mr-1.5" />Pack
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="admin-products">
           <AdminProductsTab

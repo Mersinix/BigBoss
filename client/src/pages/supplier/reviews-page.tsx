@@ -288,38 +288,42 @@ export default function ReviewsPage() {
         </div>
       </KpiOverviewModal>
 
-      {/* Tab switcher */}
-      <div className="flex gap-1 rounded-xl p-1 bg-secondary/50 w-fit">
-        <button
-          onClick={() => setActiveTab("products")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-            activeTab === "products"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Package className="w-4 h-4" /> Product Reviews
-          {productReviews.length > 0 && (
-            <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === "products" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-              {productReviews.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("supplier")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-            activeTab === "supplier"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Store className="w-4 h-4" /> Supplier Reviews
-          {supplierReviews.length > 0 && (
-            <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === "supplier" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-              {supplierReviews.length}
-            </span>
-          )}
-        </button>
+      {/* Tab switcher — same visual/scrolling design as the Admin System Management switcher:
+          hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+          bg-background/shadow-sm chip. */}
+      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
+          <button
+            onClick={() => setActiveTab("products")}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap shrink-0 transition-all ${
+              activeTab === "products"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Package className="w-4 h-4" /> Product Reviews
+            {productReviews.length > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === "products" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                {productReviews.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("supplier")}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap shrink-0 transition-all ${
+              activeTab === "supplier"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Store className="w-4 h-4" /> Supplier Reviews
+            {supplierReviews.length > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === "supplier" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                {supplierReviews.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Product Reviews filter bar */}

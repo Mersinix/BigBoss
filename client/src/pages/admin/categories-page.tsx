@@ -1530,15 +1530,19 @@ export default function AdminCategoriesPage() {
         subtitle="Manage product taxonomy, review category requests, and approve supplier suggestions."
       />
 
-      {/* Section switcher */}
-      <div className="flex gap-1 p-1 bg-secondary/30 rounded-lg w-fit border">
-        {sections.map(s => (
-          <button key={s.key} onClick={() => handleSectionChange(s.key)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${section === s.key ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            data-testid={`section-tab-${s.key}`}>
-            {s.label}
-          </button>
-        ))}
+      {/* Section switcher — same visual/scrolling design as the Admin System Management
+          switcher: hidden-scrollbar horizontal scroll on mobile, pill container, active tab
+          in a bg-background/shadow-sm chip. */}
+      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
+          {sections.map(s => (
+            <button key={s.key} onClick={() => handleSectionChange(s.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${section === s.key ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              data-testid={`section-tab-${s.key}`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {section === 'management' && (
@@ -1554,13 +1558,18 @@ export default function AdminCategoriesPage() {
             ))}
           </div>
           <Tabs defaultValue="categories" className="w-full">
-            <TabsList className="mb-2 flex-wrap h-auto">
-              <TabsTrigger value="categories" data-testid="tab-categories"><Folder className="w-4 h-4 mr-1.5" />Categories</TabsTrigger>
-              <TabsTrigger value="subcategories" data-testid="tab-subcategories"><Layers className="w-4 h-4 mr-1.5" />Sub-categories</TabsTrigger>
-              <TabsTrigger value="flavors" data-testid="tab-flavors"><Tag className="w-4 h-4 mr-1.5" />Flavors</TabsTrigger>
-              <TabsTrigger value="sizes" data-testid="tab-sizes"><Ruler className="w-4 h-4 mr-1.5" />Sizes</TabsTrigger>
-              <TabsTrigger value="brands" data-testid="tab-brands"><Award className="w-4 h-4 mr-1.5" />Brands</TabsTrigger>
-            </TabsList>
+            {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+                hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+                bg-background/shadow-sm chip. */}
+            <div className="mb-2 overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+              <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+                <TabsTrigger value="categories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-categories"><Folder className="w-4 h-4 mr-1.5" />Categories</TabsTrigger>
+                <TabsTrigger value="subcategories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-subcategories"><Layers className="w-4 h-4 mr-1.5" />Sub-categories</TabsTrigger>
+                <TabsTrigger value="flavors" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-flavors"><Tag className="w-4 h-4 mr-1.5" />Flavors</TabsTrigger>
+                <TabsTrigger value="sizes" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-sizes"><Ruler className="w-4 h-4 mr-1.5" />Sizes</TabsTrigger>
+                <TabsTrigger value="brands" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-brands"><Award className="w-4 h-4 mr-1.5" />Brands</TabsTrigger>
+              </TabsList>
+            </div>
             <TabsContent value="categories">
               <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Folder className="w-4 h-4" />Categories</CardTitle></CardHeader><CardContent className="p-4"><CategoriesTab /></CardContent></Card>
             </TabsContent>

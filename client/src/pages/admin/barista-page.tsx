@@ -444,16 +444,19 @@ export default function AdminBaristaPage() {
       </KpiOverviewModal>
 
       <Tabs value={section} onValueChange={setSection}>
-        {/* Horizontally scrollable rather than wrapping — keeps every tab reachable and on
-            one line down to small/mobile screens instead of growing the header's height. */}
-        <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
-          <TabsTrigger value="baristas" className="shrink-0">Baristas</TabsTrigger>
-          <TabsTrigger value="requests" className="shrink-0">Demandes</TabsTrigger>
-          <TabsTrigger value="missions" className="shrink-0">Missions</TabsTrigger>
-          <TabsTrigger value="finance" className="shrink-0">Finance</TabsTrigger>
-          <TabsTrigger value="analytics" className="shrink-0">Analytics</TabsTrigger>
-          <TabsTrigger value="skills" className="shrink-0">Compétences</TabsTrigger>
-        </TabsList>
+        {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+            hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+            bg-background/shadow-sm chip. */}
+        <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+            <TabsTrigger value="baristas" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Baristas</TabsTrigger>
+            <TabsTrigger value="requests" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Demandes</TabsTrigger>
+            <TabsTrigger value="missions" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Missions</TabsTrigger>
+            <TabsTrigger value="finance" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Finance</TabsTrigger>
+            <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Analytics</TabsTrigger>
+            <TabsTrigger value="skills" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Compétences</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── Baristas ── */}
         <TabsContent value="baristas" className="mt-4 space-y-4">

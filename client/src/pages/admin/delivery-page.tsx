@@ -584,11 +584,16 @@ export default function DeliveryPage() {
       </KpiOverviewModal>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="deliveries" data-testid="tab-admin-delivery-livraisons">Livraisons</TabsTrigger>
-          <TabsTrigger value="companies" data-testid="tab-admin-delivery-companies">Entreprises + Chauffeurs</TabsTrigger>
-          <TabsTrigger value="supplier-drivers" data-testid="tab-admin-delivery-supplier-drivers">Chauffeurs fournisseurs</TabsTrigger>
-        </TabsList>
+        {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+            hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+            bg-background/shadow-sm chip. */}
+        <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+            <TabsTrigger value="deliveries" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-admin-delivery-livraisons">Livraisons</TabsTrigger>
+            <TabsTrigger value="companies" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-admin-delivery-companies">Entreprises + Chauffeurs</TabsTrigger>
+            <TabsTrigger value="supplier-drivers" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-admin-delivery-supplier-drivers">Chauffeurs fournisseurs</TabsTrigger>
+          </TabsList>
+        </div>
 
         {tab === "deliveries" && (
           <div className="mt-4">

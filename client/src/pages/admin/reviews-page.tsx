@@ -179,21 +179,24 @@ export default function AdminReviewsPage() {
         </div>
       </KpiOverviewModal>
 
-      {/* Tabs — horizontally scrollable, same responsive treatment as Admin Barista's
-          switcher (task requirement), since 9 tabs no longer fit on narrow screens. */}
-      <div className="flex gap-1 rounded-xl p-1 bg-secondary/50 overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => { setActiveTab(tab.key); setShowReportedOnly(false); }}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all shrink-0 whitespace-nowrap ${
-              activeTab === tab.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-            data-testid={`tab-admin-reviews-${tab.key.toLowerCase()}`}
-          >
-            <tab.icon className="w-4 h-4" /> {tab.label}
-          </button>
-        ))}
+      {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+          hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+          bg-background/shadow-sm chip. */}
+      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => { setActiveTab(tab.key); setShowReportedOnly(false); }}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all shrink-0 whitespace-nowrap ${
+                activeTab === tab.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+              data-testid={`tab-admin-reviews-${tab.key.toLowerCase()}`}
+            >
+              <tab.icon className="w-4 h-4" /> {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Filter bar */}

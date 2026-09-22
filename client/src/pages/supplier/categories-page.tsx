@@ -665,16 +665,20 @@ export default function SupplierCategoriesPage() {
         )}
       />
 
-      {/* Section switcher */}
-      <div className="flex gap-1 p-1 bg-secondary/30 rounded-lg w-fit border">
-        <button onClick={() => setActiveSection('my-categories')} data-testid="tab-my-categories"
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === 'my-categories' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-          My Categories
-        </button>
-        <button onClick={() => setActiveSection('category-requests')} data-testid="tab-category-requests"
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === 'category-requests' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-          Category Requests
-        </button>
+      {/* Section switcher — same visual/scrolling design as the Admin System Management
+          switcher: hidden-scrollbar horizontal scroll on mobile, pill container, active tab
+          in a bg-background/shadow-sm chip. */}
+      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
+          <button onClick={() => setActiveSection('my-categories')} data-testid="tab-my-categories"
+            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${activeSection === 'my-categories' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            My Categories
+          </button>
+          <button onClick={() => setActiveSection('category-requests')} data-testid="tab-category-requests"
+            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${activeSection === 'category-requests' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            Category Requests
+          </button>
+        </div>
       </div>
 
       {activeSection === 'my-categories' && <MyCategoriesSection modalOpen={addCategoryOpen} setModalOpen={setAddCategoryOpen} />}

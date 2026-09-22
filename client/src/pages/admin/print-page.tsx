@@ -224,7 +224,7 @@ function OrderDetail({ order, onClose }: { order: PrintOrderWithParties | null; 
   if (!order) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle>Commande #{order.id}</DialogTitle></DialogHeader>
         <div className="grid sm:grid-cols-2 gap-4 text-sm">
           <div className="sm:col-span-2"><StatusBadge status={order.status} /></div>
@@ -552,15 +552,20 @@ export default function AdminPrintPage() {
       </KpiOverviewModal>
 
       <Tabs value={section} onValueChange={setSection}>
-        <TabsList className="flex-nowrap h-auto w-full justify-start overflow-x-auto" style={{ scrollbarWidth: "thin" }}>
-          <TabsTrigger value="categories" className="shrink-0">Catégories</TabsTrigger>
-          <TabsTrigger value="printers" className="shrink-0">Imprimeurs</TabsTrigger>
-          <TabsTrigger value="services" className="shrink-0">Services</TabsTrigger>
-          <TabsTrigger value="orders" className="shrink-0">Commandes</TabsTrigger>
-          <TabsTrigger value="customers" className="shrink-0">Clients</TabsTrigger>
-          <TabsTrigger value="finance" className="shrink-0">Finance</TabsTrigger>
-          <TabsTrigger value="analytics" className="shrink-0">Analytics</TabsTrigger>
-        </TabsList>
+        {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
+            hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
+            bg-background/shadow-sm chip. */}
+        <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+            <TabsTrigger value="categories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Catégories</TabsTrigger>
+            <TabsTrigger value="printers" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Imprimeurs</TabsTrigger>
+            <TabsTrigger value="services" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Services</TabsTrigger>
+            <TabsTrigger value="orders" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Commandes</TabsTrigger>
+            <TabsTrigger value="customers" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Clients</TabsTrigger>
+            <TabsTrigger value="finance" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Finance</TabsTrigger>
+            <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Analytics</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ── Categories ── */}
         <TabsContent value="categories" className="mt-4 grid lg:grid-cols-2 gap-6">

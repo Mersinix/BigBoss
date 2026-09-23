@@ -556,8 +556,9 @@ function PromotionAssignmentDialog({
           )}
         </div>
 
-        {/* Item list */}
-        <div className="flex-1 overflow-y-auto min-h-0 space-y-1 pr-1">
+        {/* Item list — thin scrollbar treatment, same thumb/track/hover classes used
+            elsewhere in the app, not a new scrollbar style. */}
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-1 pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           {isLoading ? (
             <div className="space-y-2 py-2">
               {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 rounded-lg bg-secondary/40 animate-pulse" />)}
@@ -994,9 +995,10 @@ export default function PromotionsPage() {
         </div>
       )}
 
-      {/* Create / Edit Dialog */}
+      {/* Create / Edit Dialog — thin scrollbar treatment, same thumb/track/hover
+          classes used elsewhere in the app, not a new scrollbar style. */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           <DialogHeader>
             <DialogTitle>{editingPromo ? "Edit Promotion" : "Create Promotion"}</DialogTitle>
           </DialogHeader>

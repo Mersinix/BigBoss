@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "@/hooks/use-orders";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, DollarSign } from "lucide-react";
 import { buildFinancialRows } from "@/lib/financial-rows";
@@ -114,42 +114,39 @@ export default function InvoicesPage() {
         searchPlaceholder="Café..."
       />
 
-      <Card>
-        <CardHeader><CardTitle className="text-base font-semibold">Invoice List</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
-            </div>
-          ) : rows.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10">No invoices yet</p>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pageRows.map((inv) => (
-                  <InvoiceCard
-                    key={inv.subOrderId}
-                    row={inv}
-                    showSupplier={false}
-                    onView={() => setViewing({ orderId: inv.orderId, subOrderId: inv.subOrderId })}
-                  />
-                ))}
-              </div>
-              <DataPagination
-                page={pagination.page}
-                pageSize={pagination.pageSize}
-                totalItems={rows.length}
-                totalPages={pagination.totalPages}
-                start={pagination.start}
-                end={pagination.end}
-                onPageChange={pagination.setPage}
-                onPageSizeChange={pagination.setPageSize}
-                itemLabel="factures"
+      {/* Mapped invoice cards — sit directly on the page background, same structure
+          as Supplier → Delivery's mapped cards (no wrapping title/container). */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <Card><CardContent className="p-12 text-center text-muted-foreground">No invoices yet</CardContent></Card>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pageRows.map((inv) => (
+              <InvoiceCard
+                key={inv.subOrderId}
+                row={inv}
+                showSupplier={false}
+                onView={() => setViewing({ orderId: inv.orderId, subOrderId: inv.subOrderId })}
               />
-            </>
-          )}
-        </CardContent>
-      </Card>
+            ))}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={rows.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="factures"
+          />
+        </>
+      )}
 
       <OrderInvoiceModal
         open={!!viewing}

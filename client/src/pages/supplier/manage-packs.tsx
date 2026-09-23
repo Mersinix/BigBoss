@@ -382,7 +382,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle>{editing ? "Edit Pack" : "Create a Pack"}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           <div className="space-y-4">
@@ -462,7 +462,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                 Variants in pack
                 {selectedItems.length < 2 && <span className="text-xs text-amber-600 ml-2">(select at least 2 variants)</span>}
               </Label>
-              <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
+              <div className="border rounded-lg divide-y max-h-80 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
                 {usableListings.length === 0 && (
                   <p className="text-sm text-muted-foreground p-3">No pack-eligible products found.</p>
                 )}
@@ -640,7 +640,7 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle>Pack Preview</DialogTitle></DialogHeader>
         <div className="space-y-4 mt-1">
            <PackImageGallery imageUrl={pack.imageUrl} imageUrls={pack.imageUrls} alt={pack.name} />

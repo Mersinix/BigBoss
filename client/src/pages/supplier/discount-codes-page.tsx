@@ -247,7 +247,7 @@ export default function DiscountCodesPage() {
       {/* Create / Edit Dialog — same visual language as the rest of the Supplier account
           (Dialog/Label/Input/Select, matching e.g. the Promotions page's own form dialog). */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           <DialogHeader>
             <DialogTitle>{editingCode ? "Edit Discount Code" : "Create Discount Code"}</DialogTitle>
           </DialogHeader>

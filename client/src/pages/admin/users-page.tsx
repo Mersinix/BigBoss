@@ -793,38 +793,37 @@ export default function UsersPage() {
         </div>
       </KpiOverviewModal>
 
-      {/* User Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <CardTitle className="text-base font-semibold">Tous les utilisateurs</CardTitle>
-            <div className="flex items-center gap-2">
-              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="Tous les rôles" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les rôles</SelectItem>
-                  {ALL_ROLES.map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, " ")}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Tous statuts" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous statuts</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="approved">Approuvé</SelectItem>
-                  <SelectItem value="rejected">Rejeté</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : filtered.length === 0 ? (
-            <p className="text-center py-10 text-muted-foreground">Aucun utilisateur ne correspond aux filtres.</p>
-          ) : (
+      {/* Filter bar — background/container kept exactly as before (unchanged). */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <CardTitle className="text-base font-semibold">Tous les utilisateurs</CardTitle>
+        <div className="flex items-center gap-2">
+          <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="Tous les rôles" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les rôles</SelectItem>
+              {ALL_ROLES.map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, " ")}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Tous statuts" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous statuts</SelectItem>
+              <SelectItem value="pending">En attente</SelectItem>
+              <SelectItem value="approved">Approuvé</SelectItem>
+              <SelectItem value="rejected">Rejeté</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Mapped user cards — sit directly on the page background, same structure as
+          Admin → Delivery's mapped cards (no wrapping container behind the grid). */}
+      {isLoading ? (
+        <div className="space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun utilisateur ne correspond aux filtres.</CardContent></Card>
+      ) : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
               {pageUsers.map(u => {
                 const userStatus = (u as any).status ?? "approved";
@@ -916,8 +915,6 @@ export default function UsersPage() {
             onPageSizeChange={pagination.setPageSize}
             itemLabel="utilisateurs"
           />
-        </CardContent>
-      </Card>
 
       {/* User Detail Modal — live-synced via selectedUserId → users query */}
       <UserDetailDialog

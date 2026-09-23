@@ -101,7 +101,7 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
         <DialogHeader>
           <DialogTitle>Edit Inventory Details — {item.productName}</DialogTitle>
         </DialogHeader>
-        <div className="max-h-[65vh] overflow-y-auto space-y-4 pr-1">
+        <div className="max-h-[65vh] overflow-y-auto space-y-4 pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5 col-span-2">
               <Label>SKU</Label>

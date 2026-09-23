@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, DollarSign } from "lucide-react";
 import type { OrderWithDetails } from "@shared/schema";
@@ -129,39 +129,34 @@ export default function InvoicesPage() {
         supplierOptions={supplierOptions}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Invoice List</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
-            </div>
-          ) : rows.length === 0 ? (
-            <p className="text-center text-muted-foreground py-10">No invoices yet</p>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pageRows.map((r) => (
-                  <InvoiceCard key={r.subOrderId} row={r} onView={() => setViewing({ orderId: r.orderId, subOrderId: r.subOrderId })} />
-                ))}
-              </div>
-              <DataPagination
-                page={pagination.page}
-                pageSize={pagination.pageSize}
-                totalItems={rows.length}
-                totalPages={pagination.totalPages}
-                start={pagination.start}
-                end={pagination.end}
-                onPageChange={pagination.setPage}
-                onPageSizeChange={pagination.setPageSize}
-                itemLabel="factures"
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {/* Mapped invoice cards — sit directly on the page background, same structure
+          as Admin → Delivery's mapped cards (no wrapping title/container). */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <Card><CardContent className="p-12 text-center text-muted-foreground">No invoices yet</CardContent></Card>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pageRows.map((r) => (
+              <InvoiceCard key={r.subOrderId} row={r} onView={() => setViewing({ orderId: r.orderId, subOrderId: r.subOrderId })} />
+            ))}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={rows.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="factures"
+          />
+        </>
+      )}
 
       <OrderInvoiceModal
         open={!!viewing}

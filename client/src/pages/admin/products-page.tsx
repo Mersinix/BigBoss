@@ -207,7 +207,7 @@ function MultiSelectList({ label, items, selected, onChange, hint }: {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <div className="border rounded-lg p-2 max-h-32 overflow-y-auto space-y-1 bg-background">
+      <div className="border rounded-lg p-2 max-h-32 overflow-y-auto space-y-1 bg-background [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         {items.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">No options available</p>}
         {items.map(item => (
           <label key={item.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-secondary/50 cursor-pointer">
@@ -356,7 +356,7 @@ function ProductFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit Product" : "Add Product to Catalog"}</DialogTitle>
         </DialogHeader>
@@ -662,7 +662,7 @@ function SupplierProductEditModal({
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader>
           <DialogTitle>Edit Supplier Product</DialogTitle>
         </DialogHeader>
@@ -1056,7 +1056,7 @@ function SupplierProductsSection({
           </p>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {pageDisplayed.map(p => (
             <div
               key={p.id}
@@ -1736,7 +1736,7 @@ function AdminPacksSection({
         </div>
       ) : viewMode === 'grid' ? (
         /* ── Grid ──────────────────────────────────────────────────────────── */
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {pageDisplayed.map((pack: any) => (
             <div
               key={pack.id}
@@ -2209,7 +2209,7 @@ export default function AdminProductsPage() {
           </div>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {pageDisplayed.map(p => (
             <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow" data-testid={`card-product-${p.id}`}>
               <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">

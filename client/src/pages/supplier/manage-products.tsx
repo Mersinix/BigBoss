@@ -62,7 +62,7 @@ function MultiSelectList({ label, items, selected, onChange }: { label: string; 
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <div className="border rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
+      <div className="border rounded-lg p-2 max-h-32 overflow-y-auto space-y-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         {items.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">None available from admin product</p>}
         {items.map(item => (
           <label key={item.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-secondary/50 cursor-pointer">
@@ -685,7 +685,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle>Edit Pricing & Stock — Variant Builder</DialogTitle></DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           {/* Left – Builder */}
@@ -870,7 +870,7 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit Product" : "Create New Product"}</DialogTitle>
           {!editing && <p className="text-sm text-muted-foreground mt-1">Submitted products go to admin for review and approval.</p>}

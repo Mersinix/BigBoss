@@ -798,7 +798,7 @@ export function PackQuickViewModal() {
         </VisuallyHidden>
 
         {/* ── Fixed header ───────────────────────────────────────────────── */}
-        <div className={`shrink-0 px-5 pt-4 pb-3 border-b backdrop-blur-sm transition-colors ${t.headerBg}`}>
+        <div className={`shrink-0 px-3 sm:px-5 pt-4 pb-3 border-b backdrop-blur-sm transition-colors ${t.headerBg}`}>
           <div className="flex items-center gap-3">
             {/* Fav button */}
             <button
@@ -853,12 +853,12 @@ export function PackQuickViewModal() {
         {/* ── Scrollable body ─────────────────────────────────────────────── */}
         <div
           ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
+          className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 90)}
           style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {isLoading || !pack ? (
-            <div className="px-5 py-6 space-y-4">
+            <div className="px-3 sm:px-5 py-6 space-y-4">
               <div className={`h-48 w-full rounded-2xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
               <div className={`h-6 w-2/3 rounded-xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
               <div className={`h-4 w-1/2 rounded-xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
@@ -876,7 +876,7 @@ export function PackQuickViewModal() {
               />
 
               {/* ── Pack info section ──────────────────────────────────── */}
-              <div className="px-5 pt-5 pb-4 space-y-3">
+              <div className="px-3 sm:px-5 pt-5 pb-4 space-y-3">
                 {/* Badges row */}
                 <div className="flex flex-wrap gap-1.5">
                   <Badge className={`text-[10px] font-semibold border px-2 py-0.5 ${t.badgePack}`}>
@@ -943,7 +943,7 @@ export function PackQuickViewModal() {
               </div>
 
               {/* ── Sticky tabs (Pack Details / Reviews) ──────────────── */}
-              <div className={`sticky top-0 z-10 border-b px-5 py-2 transition-colors ${t.stickyBg}`}>
+              <div className={`sticky top-0 z-10 border-b px-3 sm:px-5 py-2 transition-colors ${t.stickyBg}`}>
                 {/* Favorites-style pill switcher */}
                 <div className={`inline-flex rounded-2xl p-1 gap-1 ${t.switcherBg}`}>
                   <button
@@ -967,7 +967,7 @@ export function PackQuickViewModal() {
               </div>
 
               {/* ── Tab content ────────────────────────────────────────── */}
-              <div className="px-5 pt-4 pb-4">
+              <div className="px-3 sm:px-5 pt-4 pb-4">
 
                 {/* DETAILS TAB */}
                 {activeTab === "details" && (
@@ -1080,7 +1080,7 @@ export function PackQuickViewModal() {
 
         {/* ── Fixed footer: qty stepper + Add to Cart ──────────────────────── */}
         {pack && !isLoading && (
-          <div className={`shrink-0 border-t px-5 py-4 transition-colors ${t.cartFooter}`}>
+          <div className={`shrink-0 border-t px-3 sm:px-5 py-4 transition-colors ${t.cartFooter}`}>
             <div className="flex items-center gap-3">
               {/* Qty stepper */}
               <div className={`flex items-center border rounded-2xl overflow-hidden ${t.stepperBorder}`}>

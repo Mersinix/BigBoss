@@ -719,7 +719,7 @@ export function ProductDetailContent({
 
   // ── Shared modal header (loading + error states reuse this) ───────────────
   const ModalHeader = () => (
-    <div className={`shrink-0 ${bg} px-5 pt-5 pb-0`}>
+    <div className={`shrink-0 ${bg} px-3 sm:px-5 pt-5 pb-0`}>
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={onBack}
@@ -760,7 +760,7 @@ export function ProductDetailContent({
   // ── Loading state ─────────────────────────────────────────────────────────
   if (isLoading) {
     const skeleton = (
-      <div className={isModal ? "px-5 py-6 space-y-6" : "p-6 max-w-4xl mx-auto space-y-6"}>
+      <div className={isModal ? "px-3 sm:px-5 py-6 space-y-6" : "p-6 max-w-4xl mx-auto space-y-6"}>
         <Skeleton className="h-8 w-40 rounded-lg" />
         <div className="flex gap-6">
           <Skeleton className="w-64 h-64 rounded-2xl shrink-0" />
@@ -1074,12 +1074,12 @@ export function ProductDetailContent({
 
         {/* Scrollable body */}
         <div
-          className="flex-1 min-h-0 overflow-y-auto px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
+          className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 80)}
           style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {/* ── Product header: images + info (always scrolls) ── */}
-          <div className="px-5 pt-5 pb-4">
+          <div className="px-3 sm:px-5 pt-5 pb-4">
             <div className="flex flex-col sm:flex-row gap-6">
               {imageGallery}
               {productInfo}
@@ -1089,7 +1089,7 @@ export function ProductDetailContent({
           {/* ── Sticky filters block ── */}
           {hasCommercial && (
             <div
-              className={`sticky top-0 z-10 ${stickyBg} border-b ${stickyBorder} px-5 pt-3 pb-3 space-y-3`}
+              className={`sticky top-0 z-10 ${stickyBg} border-b ${stickyBorder} px-3 sm:px-5 pt-3 pb-3 space-y-3`}
             >
               {/* Flavor / size switchers */}
               {hasFilters && (
@@ -1108,7 +1108,7 @@ export function ProductDetailContent({
           )}
 
           {/* ── Supplier cards (scroll underneath sticky) ── */}
-          <div className="px-5 pt-3 pb-5">
+          <div className="px-3 sm:px-5 pt-3 pb-5">
             {hasCommercial ? (
               <div className="space-y-3">
                 {filteredListings.length === 0 ? (

@@ -262,7 +262,7 @@ export default function PrintDetailPage() {
                     <span className="text-white font-bold text-sm">{card.printerName.charAt(0)}</span>
                   </div>
                   <div>
-                    <p className="font-semibold text-sm">{card.printerName}</p>
+                    <p className={`font-semibold text-sm ${isDark ? "text-gray-200" : "text-gray-700"}`}>{card.printerName}</p>
                     <div className={`flex items-center gap-3 text-xs ${t.textMuted} mt-0.5`}>
                       {card.printerLocation && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{card.printerLocation}</span>}
                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Livraison {card.productionTimeDays}j</span>
@@ -281,14 +281,14 @@ export default function PrintDetailPage() {
           {/* ── Right: Customization ── */}
           <div className="space-y-5">
             <div className={`${t.cardBg} rounded-2xl border shadow-sm p-6 space-y-6`}>
-              <h2 className="font-bold text-lg flex items-center gap-2">
+              <h2 className={`font-bold text-lg flex items-center gap-2 ${isDark ? "text-gray-200" : "text-gray-700"}`}>
                 <Scissors className="w-5 h-5 text-blue-600" />
                 Personnalisation
               </h2>
 
               {/* File Upload */}
               <div className="space-y-2">
-                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                <Label className={`text-sm font-semibold flex items-center gap-1.5 ${isDark ? "text-gray-200" : "text-gray-700"}`}>
                   <FileImage className="w-3.5 h-3.5 text-blue-600" /> Logo / Fichier de design
                 </Label>
                   <FileUploadArea
@@ -308,7 +308,7 @@ export default function PrintDetailPage() {
                 <>
                   <Separator />
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Matière</Label>
+                    <Label className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-700"}`}>Matière</Label>
                     <div className="flex flex-wrap gap-2">
                       {card.materials.map((m) => (
                         <button
@@ -333,13 +333,13 @@ export default function PrintDetailPage() {
 
               {/* Quantity */}
               <div className="space-y-2">
-                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                <Label className={`text-sm font-semibold flex items-center gap-1.5 ${isDark ? "text-gray-200" : "text-gray-700"}`}>
                   <Package className="w-3.5 h-3.5 text-blue-600" /> Quantité totale
                 </Label>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setQuantity((q) => Math.max(card.minQuantity, q - (card.minQuantity > 10 ? 10 : 1)))}
-                    className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
+                    className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "text-gray-200 border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
                     data-testid="button-qty-decrease"
                   >−</button>
                   <Input
@@ -352,7 +352,7 @@ export default function PrintDetailPage() {
                   />
                   <button
                     onClick={() => setQuantity((q) => q + (card.minQuantity > 10 ? 10 : 1))}
-                    className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
+                    className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-colors text-lg font-bold ${isDark ? "text-gray-200 border-gray-700 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-100"}`}
                     data-testid="button-qty-increase"
                   >+</button>
                   <span className={`text-sm ${t.textSubtle}`}>{card.unit}(s)</span>
@@ -366,7 +366,7 @@ export default function PrintDetailPage() {
 
               {/* Notes */}
               <div className="space-y-2">
-                <Label className="text-sm font-semibold">Instructions spéciales</Label>
+                <Label className={`text-sm font-semibold ${isDark ? "text-gray-200" : "text-gray-700"}`}>Instructions spéciales</Label>
                 <Textarea
                   placeholder="Ex. : Logo sur la poitrine, impression recto-verso, finition dorée…"
                   value={notes}

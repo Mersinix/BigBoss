@@ -239,7 +239,7 @@ export function PrintServiceDetailModal({
                 <div className="flex items-center gap-3">
                   <Avatar className="w-10 h-10 shrink-0">
                     <AvatarImage src={getAvatarUrl({ profileImageUrl: service.printerImageUrl })} alt={service.printerName} />
-                    <AvatarFallback className="bg-blue-100 text-blue-700 font-bold text-sm">
+                    <AvatarFallback className={`font-bold text-sm ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
                       <Printer className="w-4 h-4" />
                     </AvatarFallback>
                   </Avatar>

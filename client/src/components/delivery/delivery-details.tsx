@@ -150,23 +150,26 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
                         {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
                       </p>
                     )}
-                    <div className="mt-1 space-y-0.5">
-                      {group.variants.map((variant) => {
-                        const cancelled = variant.status === "CANCELLED";
-                        return (
-                          <div key={variant.key} className="flex items-center justify-between gap-2 text-xs">
-                            <span className={cancelled ? "line-through text-muted-foreground/60" : "text-muted-foreground"}>
-                              {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
-                              <span className="ml-1.5">×{variant.quantity}</span>
-                            </span>
-                            <span className={`font-semibold shrink-0 ${cancelled ? "line-through text-muted-foreground/60" : ""}`}>
-                              {fmt(variant.totalPrice)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
+                </div>
+                {/* Variants — full width beneath the image/name row instead of being squeezed
+                    into the narrow middle column (same principle already used for pack
+                    composition below). */}
+                <div className="mt-1 space-y-0.5 min-w-0">
+                  {group.variants.map((variant) => {
+                    const cancelled = variant.status === "CANCELLED";
+                    return (
+                      <div key={variant.key} className="flex items-center justify-between gap-2 text-xs">
+                        <span className={cancelled ? "line-through text-muted-foreground/60" : "text-muted-foreground"}>
+                          {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                          <span className="ml-1.5">×{variant.quantity}</span>
+                        </span>
+                        <span className={`font-semibold shrink-0 ${cancelled ? "line-through text-muted-foreground/60" : ""}`}>
+                          {fmt(variant.totalPrice)}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -186,9 +189,6 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className={`font-medium text-sm truncate ${cancelled ? "line-through text-muted-foreground/60" : ""}`}>{itemName}</p>
-                      {!cancelled && (
-                        <PackCompositionView packId={item.packId} quantity={item.quantity} snapshot={packSnapshot} t={packTheme} />
-                      )}
                     </div>
                     <div className="shrink-0 text-right">
                       <span className="text-xs text-muted-foreground block">×{item.quantity}</span>
@@ -197,6 +197,14 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
                       </span>
                     </div>
                   </div>
+                  {/* Pack composition — full width beneath the image/name row instead of being
+                      squeezed into the narrow middle column (same principle used for normal
+                      products above). */}
+                  {!cancelled && (
+                    <div className="mt-1 min-w-0">
+                      <PackCompositionView packId={item.packId} quantity={item.quantity} snapshot={packSnapshot} t={packTheme} />
+                    </div>
+                  )}
                 </div>
               );
             })}

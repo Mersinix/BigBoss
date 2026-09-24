@@ -585,31 +585,34 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                               {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
                             </p>
                           )}
-                          <div className="mt-1.5 space-y-1.5">
-                            {group.variants.map((variant) => {
-                              const cancelled = variant.status === "CANCELLED";
-                              return (
-                                <div key={variant.key} className="flex items-center justify-between gap-2">
-                                  <span className={`text-xs ${cancelled ? `line-through ${t.textSubtle}` : t.textMuted}`}>
-                                    {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
-                                    <span className="ml-1.5">×{variant.quantity}</span>
-                                  </span>
-                                  <span className="flex items-center gap-1.5 shrink-0">
-                                    {cancelled && (
-                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé par le café</Badge>
-                                    )}
-                                    <span className={`text-xs font-semibold ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>
-                                      {fmt(variant.totalPrice)}
-                                    </span>
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
                         </div>
                         <div className="shrink-0 text-right">
                           <span className={`font-semibold text-sm ${t.textPrimary}`}>{fmt(group.subtotal)}</span>
                         </div>
+                      </div>
+                      {/* Variants — full width beneath the image/name row instead of being
+                          squeezed into the narrow middle column (same principle already used
+                          for pack composition below). */}
+                      <div className="mt-1.5 space-y-1.5 min-w-0">
+                        {group.variants.map((variant) => {
+                          const cancelled = variant.status === "CANCELLED";
+                          return (
+                            <div key={variant.key} className="flex items-center justify-between gap-2">
+                              <span className={`text-xs ${cancelled ? `line-through ${t.textSubtle}` : t.textMuted}`}>
+                                {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                                <span className="ml-1.5">×{variant.quantity}</span>
+                              </span>
+                              <span className="flex items-center gap-1.5 shrink-0">
+                                {cancelled && (
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé par le café</Badge>
+                                )}
+                                <span className={`text-xs font-semibold ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>
+                                  {fmt(variant.totalPrice)}
+                                </span>
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -632,14 +635,6 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                               <p className={`font-medium text-sm ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>{itemName}</p>
                               {cancelled && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé par le café</Badge>}
                             </div>
-                            {!cancelled && (
-                              <PackCompositionView
-                                packId={item.packId}
-                                quantity={item.quantity}
-                                snapshot={packSnapshot}
-                                t={t}
-                              />
-                            )}
                           </div>
                           <div className="shrink-0 text-right">
                             <span className={`text-xs font-semibold block ${t.textMuted}`}>×{item.quantity}</span>
@@ -648,6 +643,19 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                             </span>
                           </div>
                         </div>
+                        {/* Pack composition — full width beneath the image/name row instead of
+                            being squeezed into the narrow middle column (same principle used for
+                            normal products above). */}
+                        {!cancelled && (
+                          <div className="mt-1.5 min-w-0">
+                            <PackCompositionView
+                              packId={item.packId}
+                              quantity={item.quantity}
+                              snapshot={packSnapshot}
+                              t={t}
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}

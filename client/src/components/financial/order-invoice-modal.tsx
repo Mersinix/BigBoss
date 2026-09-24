@@ -17,6 +17,20 @@ import { invoiceNumber } from "@/lib/financial-rows";
 // generic definition — see components/order/pack-composition-view.tsx. No order data is
 // modified by opening this — it is a read-only presentation of what already exists.
 
+// Same sub-order status colors as cafe/order-details-modal.tsx's SUBORDER_STATUS — kept in
+// sync rather than left to the default outline Badge, whose border/text color depends on
+// theme CSS variables this app's hand-rolled dark/light `t` system never toggles (the `.dark`
+// class is never applied), which was producing low-contrast badges on the dark surface here.
+const SUBORDER_STATUS: Record<string, { label: string; badgeDk: string; badgeLt: string }> = {
+  PENDING:     { label: "En attente",      badgeDk: "bg-yellow-500/20 text-yellow-300", badgeLt: "bg-yellow-100 text-yellow-800" },
+  CONFIRMED:   { label: "Confirmée",       badgeDk: "bg-blue-500/20 text-blue-300",     badgeLt: "bg-blue-100 text-blue-800" },
+  PREPARING:   { label: "En préparation",  badgeDk: "bg-orange-500/20 text-orange-300", badgeLt: "bg-orange-100 text-orange-800" },
+  READY:       { label: "Prête",           badgeDk: "bg-teal-500/20 text-teal-300",     badgeLt: "bg-teal-100 text-teal-800" },
+  IN_DELIVERY: { label: "En livraison",    badgeDk: "bg-purple-500/20 text-purple-300", badgeLt: "bg-purple-100 text-purple-800" },
+  DELIVERED:   { label: "Livrée",          badgeDk: "bg-green-500/20 text-green-300",   badgeLt: "bg-green-100 text-green-800" },
+  CANCELLED:   { label: "Annulée",         badgeDk: "bg-red-500/20 text-red-300",       badgeLt: "bg-red-100 text-red-800" },
+};
+
 function useTheme(isDark: boolean) {
   const dk = isDark;
   return {
@@ -32,6 +46,9 @@ function useTheme(isDark: boolean) {
     textMuted: dk ? "text-gray-400" : "text-gray-500",
     textSubtle: dk ? "text-gray-500" : "text-gray-400",
     iconBtn: dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800",
+    badge: (status: string, map: Record<string, { badgeDk: string; badgeLt: string }>) =>
+      dk ? (map[status]?.badgeDk ?? "bg-gray-700 text-gray-300")
+         : (map[status]?.badgeLt ?? "bg-gray-100 text-gray-700"),
   };
 }
 
@@ -150,7 +167,9 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
                   <div className={`px-4 py-2.5 border-b flex items-center gap-2 ${t.cardHeader}`}>
                     <Store className="w-3.5 h-3.5 text-amber-500" />
                     <span className={`font-semibold text-sm ${t.textPrimary}`}>{sub.supplierName}</span>
-                    <Badge variant="outline" className="ml-auto text-[10px]">{sub.status}</Badge>
+                    <Badge variant="outline" className={`ml-auto text-[10px] border-0 ${t.badge(sub.status, SUBORDER_STATUS)}`}>
+                      {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
+                    </Badge>
                   </div>
                 )}
                 <div className={`divide-y ${t.rowDivide}`}>
@@ -162,19 +181,22 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className={`font-medium text-sm ${t.textPrimary}`}>{group.productName}</p>
-                          <div className="mt-1 space-y-1">
-                            {group.variants.map((variant: any) => (
-                              <div key={variant.key} className="flex items-center justify-between gap-2">
-                                <span className={`text-xs ${t.textMuted}`}>
-                                  {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
-                                  <span className="ml-1.5">×{variant.quantity} @ {fmt(variant.totalPrice / Math.max(variant.quantity, 1))}</span>
-                                </span>
-                                <span className={`text-xs font-semibold ${t.textPrimary}`}>{fmt(variant.totalPrice)}</span>
-                              </div>
-                            ))}
-                          </div>
                         </div>
                         <span className={`font-semibold text-sm shrink-0 ${t.textPrimary}`}>{fmt(group.subtotal)}</span>
+                      </div>
+                      {/* Variants — full width beneath the image/name row instead of being
+                          squeezed into the narrow middle column (same principle already used
+                          for pack composition below). */}
+                      <div className="mt-1 space-y-1 min-w-0">
+                        {group.variants.map((variant: any) => (
+                          <div key={variant.key} className="flex items-center justify-between gap-2">
+                            <span className={`text-xs ${t.textMuted}`}>
+                              {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                              <span className="ml-1.5">×{variant.quantity} @ {fmt(variant.totalPrice / Math.max(variant.quantity, 1))}</span>
+                            </span>
+                            <span className={`text-xs font-semibold ${t.textPrimary}`}>{fmt(variant.totalPrice)}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -190,9 +212,14 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className={`font-medium text-sm ${t.textPrimary}`}>{itemName} ×{item.quantity}</p>
-                            <PackCompositionView packId={item.packId} quantity={item.quantity} snapshot={packSnapshot} t={t} />
                           </div>
                           <span className={`font-semibold text-sm shrink-0 ${t.textPrimary}`}>{fmt((item.unitPrice ?? 0) * item.quantity)}</span>
+                        </div>
+                        {/* Pack composition — full width beneath the image/name row instead of
+                            being squeezed into the narrow middle column (same principle used for
+                            normal products above). */}
+                        <div className="mt-1.5 min-w-0">
+                          <PackCompositionView packId={item.packId} quantity={item.quantity} snapshot={packSnapshot} t={t} />
                         </div>
                       </div>
                     );
@@ -231,19 +258,19 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className={`font-medium text-sm ${t.textPrimary}`}>{group.productName}</p>
-                          <div className="mt-1 space-y-1">
-                            {group.variants.map((variant: any) => (
-                              <div key={variant.key} className="flex items-center justify-between gap-2">
-                                <span className={`text-xs ${t.textMuted}`}>
-                                  {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
-                                  <span className="ml-1.5">×{variant.quantity}</span>
-                                </span>
-                                <span className={`text-xs font-semibold ${t.textPrimary}`}>{fmt(variant.totalPrice)}</span>
-                              </div>
-                            ))}
-                          </div>
                         </div>
                         <span className={`font-semibold text-sm shrink-0 ${t.textPrimary}`}>{fmt(group.subtotal)}</span>
+                      </div>
+                      <div className="mt-1 space-y-1 min-w-0">
+                        {group.variants.map((variant: any) => (
+                          <div key={variant.key} className="flex items-center justify-between gap-2">
+                            <span className={`text-xs ${t.textMuted}`}>
+                              {[variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "—"}
+                              <span className="ml-1.5">×{variant.quantity}</span>
+                            </span>
+                            <span className={`text-xs font-semibold ${t.textPrimary}`}>{fmt(variant.totalPrice)}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -259,9 +286,11 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className={`font-medium text-sm ${t.textPrimary}`}>{itemName} ×{item.quantity}</p>
-                            <PackCompositionView packId={item.packId} quantity={item.quantity} snapshot={packSnapshot} t={t} />
                           </div>
                           <span className={`font-semibold text-sm shrink-0 ${t.textPrimary}`}>{fmt((item.unitPrice ?? 0) * item.quantity)}</span>
+                        </div>
+                        <div className="mt-1.5 min-w-0">
+                          <PackCompositionView packId={item.packId} quantity={item.quantity} snapshot={packSnapshot} t={t} />
                         </div>
                       </div>
                     );
@@ -295,7 +324,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
               <span className={`rounded-lg px-2.5 py-1 ${t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
                 Paiement: {paymentLabel}
               </span>
-              <span className={`rounded-lg px-2.5 py-1 ${allDelivered ? "bg-green-500/15 text-green-600" : (t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700")}`}>
+              <span className={`rounded-lg px-2.5 py-1 ${allDelivered ? (t.dk ? "bg-green-500/20 text-green-300" : "bg-green-100 text-green-800") : (t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700")}`}>
                 {allDelivered ? "Encaissé" : "En attente"}
               </span>
             </div>

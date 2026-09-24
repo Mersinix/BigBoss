@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -763,6 +763,8 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
   const fmt = useFormatCurrency();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [packSearchOpen, setPackSearchOpen] = useState(false);
+  const packSearchInputRef = useRef<HTMLInputElement>(null);
   const [filterCategory, setFilterCategory] = useState("__all__");
   const [filterSubCategory, setFilterSubCategory] = useState("__all__");
   const [filterBrand, setFilterBrand] = useState("__all__");
@@ -851,21 +853,36 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
   // ≥2 selected variant groups (each checkbox = one size variant group)
   const canCreate = selected.length >= 2;
 
-  const hasActiveFilters = filterCategory !== "__all__" || filterSubCategory !== "__all__" || filterBrand !== "__all__" || filterFlavor !== "__all__" || filterSize !== "__all__";
+  const hasActiveFilters = search !== "" || filterCategory !== "__all__" || filterSubCategory !== "__all__" || filterBrand !== "__all__" || filterFlavor !== "__all__" || filterSize !== "__all__";
 
   return (
     <div className="space-y-4">
       {/* Search + Create Pack button */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            placeholder="Search products…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            data-testid="input-pack-products-search"
-          />
+          {!packSearchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setPackSearchOpen(true); setTimeout(() => packSearchInputRef.current?.focus(), 0); }}
+              aria-label="Ouvrir la recherche"
+              data-testid="button-open-pack-products-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+          <div className={`${packSearchOpen ? "flex" : "hidden"} sm:flex items-center relative`}>
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={packSearchInputRef}
+              className="pl-8"
+              placeholder="Search products…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setPackSearchOpen(false); }}
+              data-testid="input-pack-products-search"
+            />
+          </div>
         </div>
         <Button
           onClick={() => onCreatePack(selected)}
@@ -879,64 +896,74 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
       </div>
 
       {/* Filter bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
         {categories.length > 0 && (
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-category">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All categories</SelectItem>
-              {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="w-32 shrink-0">
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-category">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All categories</SelectItem>
+                {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         )}
         {subCategories.length > 0 && (
-          <Select value={filterSubCategory} onValueChange={setFilterSubCategory}>
-            <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-subcategory">
-              <SelectValue placeholder="Sub Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All sub-categories</SelectItem>
-              {subCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="w-36 shrink-0">
+            <Select value={filterSubCategory} onValueChange={setFilterSubCategory}>
+              <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-subcategory">
+                <SelectValue placeholder="Sub Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All sub-categories</SelectItem>
+                {subCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         )}
         {brands.length > 0 && (
-          <Select value={filterBrand} onValueChange={setFilterBrand}>
-            <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-brand">
-              <SelectValue placeholder="Brand" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All brands</SelectItem>
-              {brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="w-32 shrink-0">
+            <Select value={filterBrand} onValueChange={setFilterBrand}>
+              <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-brand">
+                <SelectValue placeholder="Brand" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All brands</SelectItem>
+                {brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         )}
         {flavors.length > 0 && (
-          <Select value={filterFlavor} onValueChange={setFilterFlavor}>
-            <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-flavor">
-              <SelectValue placeholder="Flavor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All flavors</SelectItem>
-              {flavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="w-32 shrink-0">
+            <Select value={filterFlavor} onValueChange={setFilterFlavor}>
+              <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-flavor">
+                <SelectValue placeholder="Flavor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All flavors</SelectItem>
+                {flavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         )}
         {sizes.length > 0 && (
-          <Select value={filterSize} onValueChange={setFilterSize}>
-            <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-size">
-              <SelectValue placeholder="Size" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All sizes</SelectItem>
-              {sizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="w-32 shrink-0">
+            <Select value={filterSize} onValueChange={setFilterSize}>
+              <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-size">
+                <SelectValue placeholder="Size" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All sizes</SelectItem>
+                {sizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         )}
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs px-2 text-muted-foreground" onClick={() => { setFilterCategory("__all__"); setFilterSubCategory("__all__"); setFilterBrand("__all__"); setFilterFlavor("__all__"); setFilterSize("__all__"); }}>
+          <Button variant="ghost" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setFilterCategory("__all__"); setFilterSubCategory("__all__"); setFilterBrand("__all__"); setFilterFlavor("__all__"); setFilterSize("__all__"); }}>
             Clear filters
           </Button>
         )}
@@ -1210,6 +1237,8 @@ export function PackTab() {
   const [packCreateResetSignal, setPackCreateResetSignal] = useState(0);
 
   const [packsSearch, setPacksSearch] = useState("");
+  const [packsSearchOpen, setPacksSearchOpen] = useState(false);
+  const packsSearchInputRef = useRef<HTMLInputElement>(null);
   const [packsFilterCategory, setPacksFilterCategory] = useState("__all__");
   const [packsFilterSubCategory, setPacksFilterSubCategory] = useState("__all__");
   const [packsFilterBrand, setPacksFilterBrand] = useState("__all__");
@@ -1244,7 +1273,7 @@ export function PackTab() {
   useEffect(() => { activePacksPagination.resetPage(); }, [packsSearch, packsFilterCategory, packsFilterSubCategory, packsFilterBrand, packsFilterFlavor, packsFilterSize]);
   const pageActivePacks = filteredActivePacks.slice(activePacksPagination.start, activePacksPagination.end);
 
-  const packsHasActiveFilters = packsFilterCategory !== "__all__" || packsFilterSubCategory !== "__all__" || packsFilterBrand !== "__all__" || packsFilterFlavor !== "__all__" || packsFilterSize !== "__all__";
+  const packsHasActiveFilters = packsSearch !== "" || packsFilterCategory !== "__all__" || packsFilterSubCategory !== "__all__" || packsFilterBrand !== "__all__" || packsFilterFlavor !== "__all__" || packsFilterSize !== "__all__";
 
   // Always derive preview pack from live data to fix stale visibility/state
   const livePreviewPack = useMemo(() =>
@@ -1348,73 +1377,98 @@ export function PackTab() {
           {activePacks.length > 0 && (
             <div className="space-y-2 mb-3">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-                <Input
-                  className="pl-8"
-                  placeholder="Search packs…"
-                  value={packsSearch}
-                  onChange={e => setPacksSearch(e.target.value)}
-                  data-testid="input-new-packs-search"
-                />
+                {!packsSearchOpen && (
+                  <button
+                    type="button"
+                    className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                    onClick={() => { setPacksSearchOpen(true); setTimeout(() => packsSearchInputRef.current?.focus(), 0); }}
+                    aria-label="Ouvrir la recherche"
+                    data-testid="button-open-new-packs-search"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                )}
+                <div className={`${packsSearchOpen ? "flex" : "hidden"} sm:flex items-center relative`}>
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    ref={packsSearchInputRef}
+                    className="pl-8"
+                    placeholder="Search packs…"
+                    value={packsSearch}
+                    onChange={e => setPacksSearch(e.target.value)}
+                    onBlur={() => { if (!packsSearch) setPacksSearchOpen(false); }}
+                    data-testid="input-new-packs-search"
+                  />
+                </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
                 {packsCategories.length > 0 && (
-                  <Select value={packsFilterCategory} onValueChange={setPacksFilterCategory}>
-                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-category">
-                      <SelectValue placeholder="Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All categories</SelectItem>
-                      {packsCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-32 shrink-0">
+                    <Select value={packsFilterCategory} onValueChange={setPacksFilterCategory}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-category">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All categories</SelectItem>
+                        {packsCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
                 {packsSubCategories.length > 0 && (
-                  <Select value={packsFilterSubCategory} onValueChange={setPacksFilterSubCategory}>
-                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-subcategory">
-                      <SelectValue placeholder="Sub Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All sub-categories</SelectItem>
-                      {packsSubCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-36 shrink-0">
+                    <Select value={packsFilterSubCategory} onValueChange={setPacksFilterSubCategory}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-subcategory">
+                        <SelectValue placeholder="Sub Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All sub-categories</SelectItem>
+                        {packsSubCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
                 {packsBrands.length > 0 && (
-                  <Select value={packsFilterBrand} onValueChange={setPacksFilterBrand}>
-                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-brand">
-                      <SelectValue placeholder="Brand" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All brands</SelectItem>
-                      {packsBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-32 shrink-0">
+                    <Select value={packsFilterBrand} onValueChange={setPacksFilterBrand}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-brand">
+                        <SelectValue placeholder="Brand" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All brands</SelectItem>
+                        {packsBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
                 {packsFlavors.length > 0 && (
-                  <Select value={packsFilterFlavor} onValueChange={setPacksFilterFlavor}>
-                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-flavor">
-                      <SelectValue placeholder="Flavor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All flavors</SelectItem>
-                      {packsFlavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-32 shrink-0">
+                    <Select value={packsFilterFlavor} onValueChange={setPacksFilterFlavor}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-flavor">
+                        <SelectValue placeholder="Flavor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All flavors</SelectItem>
+                        {packsFlavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
                 {packsSizes.length > 0 && (
-                  <Select value={packsFilterSize} onValueChange={setPacksFilterSize}>
-                    <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-size">
-                      <SelectValue placeholder="Size" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All sizes</SelectItem>
-                      {packsSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-32 shrink-0">
+                    <Select value={packsFilterSize} onValueChange={setPacksFilterSize}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-size">
+                        <SelectValue placeholder="Size" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All sizes</SelectItem>
+                        {packsSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
                 {packsHasActiveFilters && (
-                  <Button variant="ghost" size="sm" className="h-8 text-xs px-2 text-muted-foreground" onClick={() => { setPacksFilterCategory("__all__"); setPacksFilterSubCategory("__all__"); setPacksFilterBrand("__all__"); setPacksFilterFlavor("__all__"); setPacksFilterSize("__all__"); }}>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setPacksSearch(""); setPacksFilterCategory("__all__"); setPacksFilterSubCategory("__all__"); setPacksFilterBrand("__all__"); setPacksFilterFlavor("__all__"); setPacksFilterSize("__all__"); }}>
                     Clear filters
                   </Button>
                 )}

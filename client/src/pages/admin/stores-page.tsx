@@ -325,6 +325,8 @@ export default function AdminStoresPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [visibilityFilter, setVisibilityFilter] = useState<string>("ALL");
+  const [storeSearchOpen, setStoreSearchOpen] = useState(false);
+  const storeSearchInputRef = useRef<HTMLInputElement>(null);
 
   // Detail modal
   const [selectedStore, setSelectedStore] = useState<StoreAdminRow | null>(null);
@@ -404,6 +406,7 @@ export default function AdminStoresPage() {
   };
 
   const pendingCount = stores.filter((s) => s.approvalStatus === "PENDING").length;
+  const hasActiveFilters = search !== "" || statusFilter !== "ALL" || visibilityFilter !== "ALL";
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
@@ -420,26 +423,41 @@ export default function AdminStoresPage() {
       />
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search stores or suppliers…"
-            className="pl-9 h-9"
-            data-testid="input-store-search"
-          />
+        <div className="relative shrink-0 sm:flex-1 sm:min-w-[200px] sm:max-w-xs">
+          {!storeSearchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setStoreSearchOpen(true); setTimeout(() => storeSearchInputRef.current?.focus(), 0); }}
+              aria-label="Open search"
+              data-testid="button-open-store-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+          <div className={`${storeSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={storeSearchInputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setStoreSearchOpen(false); }}
+              placeholder="Search stores or suppliers…"
+              className="pl-9 h-9"
+              data-testid="input-store-search"
+            />
+          </div>
         </div>
 
         {/* Status filter */}
-        <div className="inline-flex rounded-lg border p-1 bg-muted/40 text-sm">
+        <div className="inline-flex rounded-lg border p-1 bg-muted/40 text-sm shrink-0">
           {["ALL", "PENDING", "APPROVED", "REJECTED", "ON_HOLD"].map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-2.5 py-1 rounded-md transition-colors font-medium ${
+              className={`px-2.5 py-1 rounded-md transition-colors font-medium whitespace-nowrap ${
                 statusFilter === s ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
               data-testid={`filter-status-${s.toLowerCase()}`}
@@ -450,12 +468,12 @@ export default function AdminStoresPage() {
         </div>
 
         {/* Visibility filter */}
-        <div className="inline-flex rounded-lg border p-1 bg-muted/40 text-sm">
+        <div className="inline-flex rounded-lg border p-1 bg-muted/40 text-sm shrink-0">
           {["ALL", "VISIBLE", "HIDDEN"].map((v) => (
             <button
               key={v}
               onClick={() => setVisibilityFilter(v)}
-              className={`px-2.5 py-1 rounded-md transition-colors font-medium ${
+              className={`px-2.5 py-1 rounded-md transition-colors font-medium whitespace-nowrap ${
                 visibilityFilter === v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
               data-testid={`filter-visibility-${v.toLowerCase()}`}
@@ -469,6 +487,18 @@ export default function AdminStoresPage() {
           <span className="text-xs text-muted-foreground flex items-center gap-1">
             <RefreshCw className="w-3 h-3 animate-spin" />Saving order…
           </span>
+        )}
+
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground shrink-0"
+            onClick={() => { setSearch(""); setStatusFilter("ALL"); setVisibilityFilter("ALL"); }}
+            data-testid="button-clear-store-filters"
+          >
+            <X className="w-3.5 h-3.5" /> Clear
+          </Button>
         )}
       </div>
 

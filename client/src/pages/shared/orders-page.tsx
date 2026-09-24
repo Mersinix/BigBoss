@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useOrders, useDeleteOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/format";
@@ -106,6 +106,16 @@ export default function OrdersPage() {
   const [dateFilter, setDateFilter] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+
+  // Mobile-only: each search input collapses to an icon button until tapped, so it
+  // doesn't permanently eat most of the horizontal filter strip's width — same
+  // underlying search state either way, nothing about search behavior changes.
+  const [cafeSearchOpen, setCafeSearchOpen] = useState(false);
+  const cafeSearchInputRef = useRef<HTMLInputElement>(null);
+  const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
+  const supplierSearchInputRef = useRef<HTMLInputElement>(null);
+  const [productSearchOpen, setProductSearchOpen] = useState(false);
+  const productSearchInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
   const isSupplier = user?.role === "SUPPLIER";
@@ -240,44 +250,109 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* ── Filter bar ── */}
-      <div className="flex flex-wrap gap-3 items-center">
+      {/* ── Filter bar — mobile: one non-wrapping horizontally scrollable row (hidden
+          scrollbar, same technique already used for the app's horizontal tab
+          switchers) instead of wrapping across multiple lines. sm+: unchanged. ── */}
+      <div
+        className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0"
+        style={{ scrollbarWidth: "none" }}
+      >
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Statut" /></SelectTrigger>
+          <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
           <SelectContent>
             {STATUS_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
 
         {isAdmin && (
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input placeholder="Café..." value={cafeSearch} onChange={e => setCafeSearch(e.target.value)} className="pl-9 w-40" />
+          <div className="relative shrink-0 sm:flex-1 sm:min-w-40">
+            {!cafeSearchOpen && (
+              <button
+                type="button"
+                className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                onClick={() => { setCafeSearchOpen(true); setTimeout(() => cafeSearchInputRef.current?.focus(), 0); }}
+                aria-label="Ouvrir la recherche"
+                data-testid="button-open-cafe-search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            )}
+            <div className={`${cafeSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-40 sm:w-auto`}>
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                ref={cafeSearchInputRef}
+                placeholder="Café..."
+                value={cafeSearch}
+                onChange={e => setCafeSearch(e.target.value)}
+                onBlur={() => { if (!cafeSearch) setCafeSearchOpen(false); }}
+                className="pl-9 w-40"
+              />
+            </div>
           </div>
         )}
 
         {isAdmin && (
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input placeholder="Fournisseur..." value={supplierSearch} onChange={e => setSupplierSearch(e.target.value)} className="pl-9 w-44" />
+          <div className="relative shrink-0 sm:flex-1 sm:min-w-44">
+            {!supplierSearchOpen && (
+              <button
+                type="button"
+                className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                onClick={() => { setSupplierSearchOpen(true); setTimeout(() => supplierSearchInputRef.current?.focus(), 0); }}
+                aria-label="Ouvrir la recherche"
+                data-testid="button-open-supplier-search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            )}
+            <div className={`${supplierSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-auto`}>
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                ref={supplierSearchInputRef}
+                placeholder="Fournisseur..."
+                value={supplierSearch}
+                onChange={e => setSupplierSearch(e.target.value)}
+                onBlur={() => { if (!supplierSearch) setSupplierSearchOpen(false); }}
+                className="pl-9 w-44"
+              />
+            </div>
           </div>
         )}
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input placeholder="Produit..." value={productSearch} onChange={e => setProductSearch(e.target.value)} className="pl-9 w-40" />
+        <div className="relative shrink-0 sm:flex-1 sm:min-w-40">
+          {!productSearchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setProductSearchOpen(true); setTimeout(() => productSearchInputRef.current?.focus(), 0); }}
+              aria-label="Ouvrir la recherche"
+              data-testid="button-open-product-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+          <div className={`${productSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-40 sm:w-auto`}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={productSearchInputRef}
+              placeholder="Produit..."
+              value={productSearch}
+              onChange={e => setProductSearch(e.target.value)}
+              onBlur={() => { if (!productSearch) setProductSearchOpen(false); }}
+              className="pl-9 w-40"
+            />
+          </div>
         </div>
 
         <Input
           type="date"
           value={dateFilter}
           onChange={e => setDateFilter(e.target.value)}
-          className="w-40"
+          className="w-40 shrink-0"
           title="Filtrer par date"
         />
 
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={clearFilters}>
             <X className="w-3.5 h-3.5" /> Effacer
           </Button>
         )}

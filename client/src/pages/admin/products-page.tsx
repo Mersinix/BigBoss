@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -840,6 +840,8 @@ function SupplierProductsSection({
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [spFilters, setSpFilters] = useState<SpFilters>(EMPTY_SP_FILTERS);
+  const [spSearchOpen, setSpSearchOpen] = useState(false);
+  const spSearchInputRef = useRef<HTMLInputElement>(null);
   const [selectedProduct, setSelectedProduct] = useState<SupplierProductItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SupplierProductItem | null>(null);
 
@@ -965,18 +967,33 @@ function SupplierProductsSection({
       <div className="flex items-start gap-3">
         <Card className="border shadow-none flex-1">
           <CardContent className="p-4">
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="relative flex-1 min-w-[180px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  data-testid="input-sp-search"
-                  className="pl-9"
-                  placeholder="Search products…"
-                  value={spFilters.search}
-                  onChange={e => setSpFilter("search", e.target.value)}
-                />
+            <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
+                {!spSearchOpen && (
+                  <button
+                    type="button"
+                    className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                    onClick={() => { setSpSearchOpen(true); setTimeout(() => spSearchInputRef.current?.focus(), 0); }}
+                    aria-label="Ouvrir la recherche"
+                    data-testid="button-open-sp-search"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                )}
+                <div className={`${spSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    ref={spSearchInputRef}
+                    data-testid="input-sp-search"
+                    className="pl-9"
+                    placeholder="Search products…"
+                    value={spFilters.search}
+                    onChange={e => setSpFilter("search", e.target.value)}
+                    onBlur={() => { if (!spFilters.search) setSpSearchOpen(false); }}
+                  />
+                </div>
               </div>
-              <div className="min-w-[150px]">
+              <div className="w-[150px] shrink-0">
                 <Select value={spFilters.categoryId} onValueChange={v => setSpFilter("categoryId", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-sp-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
                   <SelectContent>
@@ -985,7 +1002,7 @@ function SupplierProductsSection({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-[150px]">
+              <div className="w-[150px] shrink-0">
                 <Select value={spFilters.subCategoryId} onValueChange={v => setSpFilter("subCategoryId", v === "__all__" ? "" : v)} disabled={!spFilters.categoryId}>
                   <SelectTrigger data-testid="select-sp-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
                   <SelectContent>
@@ -994,7 +1011,7 @@ function SupplierProductsSection({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-[130px]">
+              <div className="w-[130px] shrink-0">
                 <Select value={spFilters.flavorId} onValueChange={v => setSpFilter("flavorId", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-sp-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
                   <SelectContent>
@@ -1003,7 +1020,7 @@ function SupplierProductsSection({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-[130px]">
+              <div className="w-[130px] shrink-0">
                 <Select value={spFilters.sizeId} onValueChange={v => setSpFilter("sizeId", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-sp-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
                   <SelectContent>
@@ -1012,7 +1029,7 @@ function SupplierProductsSection({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-[130px]">
+              <div className="w-[130px] shrink-0">
                 <Select value={spFilters.brandId} onValueChange={v => setSpFilter("brandId", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-sp-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
                   <SelectContent>
@@ -1022,7 +1039,7 @@ function SupplierProductsSection({
                 </Select>
               </div>
               {hasActiveSpFilters && (
-                <Button variant="ghost" size="sm" onClick={() => setSpFilters(EMPTY_SP_FILTERS)} className="text-muted-foreground">
+                <Button variant="ghost" size="sm" onClick={() => setSpFilters(EMPTY_SP_FILTERS)} className="text-muted-foreground shrink-0">
                   <X className="w-4 h-4 mr-1" />Clear
                 </Button>
               )}
@@ -1453,6 +1470,8 @@ function AdminPacksSection({
   const { toast } = useToast();
   const qc = useQueryClient();
   const [packFilters, setPackFilters] = useState<PackFilters>(EMPTY_PACK_FILTERS);
+  const [packSearchOpen, setPackSearchOpen] = useState(false);
+  const packSearchInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [previewPack, setPreviewPack] = useState<any | null>(null);
   const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
@@ -1609,21 +1628,36 @@ function AdminPacksSection({
       <div className="flex items-start gap-3">
         <Card className="border shadow-none flex-1">
           <CardContent className="p-4">
-            <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
               {/* Search */}
-              <div className="relative flex-1 min-w-[180px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  className="pl-9"
-                  placeholder="Search packs or suppliers…"
-                  value={packFilters.search}
-                  onChange={e => setPackFilter("search", e.target.value)}
-                  data-testid="input-pack-search"
-                />
+              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
+                {!packSearchOpen && (
+                  <button
+                    type="button"
+                    className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                    onClick={() => { setPackSearchOpen(true); setTimeout(() => packSearchInputRef.current?.focus(), 0); }}
+                    aria-label="Ouvrir la recherche"
+                    data-testid="button-open-pack-search"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                )}
+                <div className={`${packSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    ref={packSearchInputRef}
+                    className="pl-9"
+                    placeholder="Search packs or suppliers…"
+                    value={packFilters.search}
+                    onChange={e => setPackFilter("search", e.target.value)}
+                    onBlur={() => { if (!packFilters.search) setPackSearchOpen(false); }}
+                    data-testid="input-pack-search"
+                  />
+                </div>
               </div>
 
               {/* Category */}
-              <div className="min-w-[150px]">
+              <div className="w-[150px] shrink-0">
                 <Select value={packFilters.categoryId} onValueChange={v => setPackFilter("categoryId", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-pack-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
                   <SelectContent>
@@ -1634,7 +1668,7 @@ function AdminPacksSection({
               </div>
 
               {/* Sub-category */}
-              <div className="min-w-[150px]">
+              <div className="w-[150px] shrink-0">
                 <Select value={packFilters.subCategoryId} onValueChange={v => setPackFilter("subCategoryId", v === "__all__" ? "" : v)} disabled={!packFilters.categoryId}>
                   <SelectTrigger data-testid="select-pack-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
                   <SelectContent>
@@ -1645,7 +1679,7 @@ function AdminPacksSection({
               </div>
 
               {/* Brand */}
-              <div className="min-w-[130px]">
+              <div className="w-[130px] shrink-0">
                 <Select value={packFilters.brandId} onValueChange={v => setPackFilter("brandId", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-pack-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
                   <SelectContent>
@@ -1656,7 +1690,7 @@ function AdminPacksSection({
               </div>
 
               {/* Flavor */}
-              <div className="min-w-[130px]">
+              <div className="w-[130px] shrink-0">
                 <Select value={packFilters.flavorId} onValueChange={v => setPackFilter("flavorId", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-pack-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
                   <SelectContent>
@@ -1667,7 +1701,7 @@ function AdminPacksSection({
               </div>
 
               {/* Size */}
-              <div className="min-w-[130px]">
+              <div className="w-[130px] shrink-0">
                 <Select value={packFilters.sizeId} onValueChange={v => setPackFilter("sizeId", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-pack-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
                   <SelectContent>
@@ -1678,7 +1712,7 @@ function AdminPacksSection({
               </div>
 
               {/* Status */}
-              <div className="min-w-[130px]">
+              <div className="w-[130px] shrink-0">
                 <Select value={packFilters.status} onValueChange={v => setPackFilter("status", v === "__all__" ? "" : v)}>
                   <SelectTrigger data-testid="select-pack-filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
                   <SelectContent>
@@ -1694,7 +1728,7 @@ function AdminPacksSection({
 
               {/* Clear */}
               {hasActivePackFilters && (
-                <Button variant="ghost" size="sm" onClick={() => setPackFilters(EMPTY_PACK_FILTERS)} className="text-muted-foreground">
+                <Button variant="ghost" size="sm" onClick={() => setPackFilters(EMPTY_PACK_FILTERS)} className="text-muted-foreground shrink-0">
                   <X className="w-4 h-4 mr-1" />Clear
                 </Button>
               )}
@@ -1928,6 +1962,8 @@ export default function AdminProductsPage() {
   const [section, setSection] = useState<'catalog' | 'supplier' | 'packs'>('catalog');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [prodSearchOpen, setProdSearchOpen] = useState(false);
+  const prodSearchInputRef = useRef<HTMLInputElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ProductWithTaxonomy | null>(null);
   const [deleting, setDeleting] = useState<ProductWithTaxonomy | null>(null);
@@ -2109,21 +2145,36 @@ export default function AdminProductsPage() {
       {/* Filter bar */}
       <Card className="border shadow-none">
         <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
             {/* Search */}
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                data-testid="input-product-search"
-                className="pl-9"
-                placeholder="Search products…"
-                value={filters.search}
-                onChange={e => setFilter("search", e.target.value)}
-              />
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
+              {!prodSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setProdSearchOpen(true); setTimeout(() => prodSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-product-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${prodSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  ref={prodSearchInputRef}
+                  data-testid="input-product-search"
+                  className="pl-9"
+                  placeholder="Search products…"
+                  value={filters.search}
+                  onChange={e => setFilter("search", e.target.value)}
+                  onBlur={() => { if (!filters.search) setProdSearchOpen(false); }}
+                />
+              </div>
             </div>
 
             {/* Category */}
-            <div className="min-w-[150px]">
+            <div className="w-[150px] shrink-0">
               <Select value={filters.categoryId} onValueChange={v => setFilter("categoryId", v === "__all__" ? "" : v)}>
                 <SelectTrigger data-testid="select-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
                 <SelectContent>
@@ -2134,7 +2185,7 @@ export default function AdminProductsPage() {
             </div>
 
             {/* SubCategory */}
-            <div className="min-w-[150px]">
+            <div className="w-[150px] shrink-0">
               <Select value={filters.subCategoryId} onValueChange={v => setFilter("subCategoryId", v === "__all__" ? "" : v)} disabled={!filters.categoryId}>
                 <SelectTrigger data-testid="select-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
                 <SelectContent>
@@ -2145,7 +2196,7 @@ export default function AdminProductsPage() {
             </div>
 
             {/* Flavor — dynamic based on subcat */}
-            <div className="min-w-[130px]">
+            <div className="w-[130px] shrink-0">
               <Select value={filters.flavorId} onValueChange={v => setFilter("flavorId", v === "__all__" ? "" : v)}>
                 <SelectTrigger data-testid="select-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
                 <SelectContent>
@@ -2156,7 +2207,7 @@ export default function AdminProductsPage() {
             </div>
 
             {/* Size — dynamic based on subcat */}
-            <div className="min-w-[130px]">
+            <div className="w-[130px] shrink-0">
               <Select value={filters.sizeId} onValueChange={v => setFilter("sizeId", v === "__all__" ? "" : v)}>
                 <SelectTrigger data-testid="select-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
                 <SelectContent>
@@ -2167,7 +2218,7 @@ export default function AdminProductsPage() {
             </div>
 
             {/* Brand — dynamic based on subcat */}
-            <div className="min-w-[130px]">
+            <div className="w-[130px] shrink-0">
               <Select value={filters.brandId} onValueChange={v => setFilter("brandId", v === "__all__" ? "" : v)}>
                 <SelectTrigger data-testid="select-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
                 <SelectContent>
@@ -2179,7 +2230,7 @@ export default function AdminProductsPage() {
 
             {/* Clear */}
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_FILTERS)} className="text-muted-foreground">
+              <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_FILTERS)} className="text-muted-foreground shrink-0">
                 <X className="w-4 h-4 mr-1" />Clear
               </Button>
             )}

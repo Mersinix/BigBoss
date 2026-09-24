@@ -388,29 +388,61 @@ type Filters = { search: string; status: string; prospectType: string; city: str
 
 function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Partial<Filters>) => void }) {
   const active = Object.values(filters).filter(v => v && v !== 'createdAt' && v !== 'desc').length;
+  // Mobile-only: the search input collapses to an icon button until tapped, so it
+  // doesn't permanently eat most of the horizontal filter strip's width — same
+  // filters.search state either way, nothing about search behavior changes.
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="relative flex-1 min-w-48">
-        <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-        <Input className="pl-8" placeholder="Search by name, phone, city…" value={filters.search} onChange={e => onChange({ search: e.target.value })} />
+    // Mobile: one non-wrapping horizontally scrollable row (hidden scrollbar, same
+    // technique already used for the app's horizontal tab switchers) instead of
+    // wrapping across multiple lines. sm+: reverts to the original wrapping row.
+    <div
+      className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0"
+      style={{ scrollbarWidth: "none" }}
+    >
+      <div className="relative shrink-0 sm:flex-1 sm:min-w-48">
+        {!mobileSearchOpen && (
+          <button
+            type="button"
+            className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+            onClick={() => { setMobileSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+            aria-label="Ouvrir la recherche"
+            data-testid="button-open-prospecting-search"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        )}
+        <div className={`${mobileSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            ref={searchInputRef}
+            className="pl-8"
+            placeholder="Search by name, phone, city…"
+            value={filters.search}
+            onChange={e => onChange({ search: e.target.value })}
+            onBlur={() => { if (!filters.search) setMobileSearchOpen(false); }}
+            data-testid="input-prospecting-search"
+          />
+        </div>
       </div>
       <Select value={filters.status || "all"} onValueChange={v => onChange({ status: v === "all" ? "" : v })}>
-        <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+        <SelectTrigger className="w-40 shrink-0"><SelectValue placeholder="Status" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Statuses</SelectItem>
           {Object.entries(STATUS_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filters.prospectType || "all"} onValueChange={v => onChange({ prospectType: v === "all" ? "" : v })}>
-        <SelectTrigger className="w-44"><SelectValue placeholder="Type" /></SelectTrigger>
+        <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Type" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Types</SelectItem>
           {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Input className="w-32" placeholder="City" value={filters.city} onChange={e => onChange({ city: e.target.value })} />
+      <Input className="w-32 shrink-0" placeholder="City" value={filters.city} onChange={e => onChange({ city: e.target.value })} />
       <Select value={filters.hasPhone || "all"} onValueChange={v => onChange({ hasPhone: v === "all" ? "" : v })}>
-        <SelectTrigger className="w-36"><SelectValue placeholder="Phone" /></SelectTrigger>
+        <SelectTrigger className="w-36 shrink-0"><SelectValue placeholder="Phone" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Phone: Any</SelectItem>
           <SelectItem value="true">Has Phone</SelectItem>
@@ -418,7 +450,7 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Part
         </SelectContent>
       </Select>
       <Select value={`${filters.sortBy}:${filters.sortOrder}`} onValueChange={v => { const [by, order] = v.split(':'); onChange({ sortBy: by, sortOrder: order }); }}>
-        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="w-44 shrink-0"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="createdAt:desc">Newest First</SelectItem>
           <SelectItem value="createdAt:asc">Oldest First</SelectItem>
@@ -429,7 +461,7 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Part
         </SelectContent>
       </Select>
       {active > 0 && (
-        <Button size="sm" variant="ghost" onClick={() => onChange({ search: "", status: "", prospectType: "", city: "", hasPhone: "", hasWebsite: "", sortBy: "createdAt", sortOrder: "desc" })}>
+        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => onChange({ search: "", status: "", prospectType: "", city: "", hasPhone: "", hasWebsite: "", sortBy: "createdAt", sortOrder: "desc" })}>
           <X className="w-3.5 h-3.5 mr-1" />Clear filters
         </Button>
       )}

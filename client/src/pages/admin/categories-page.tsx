@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Folder, Tag, Ruler, Award, Layers, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Clock, Building2, ChevronDown, ChevronUp, Snowflake } from "lucide-react";
+import { Plus, Pencil, Trash2, Folder, Tag, Ruler, Award, Layers, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Clock, Building2, ChevronDown, ChevronUp, Snowflake, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount, CatalogSuggestion, AdminSupplierCategoryOverview, SupplierCategoryMapping } from "@shared/schema";
@@ -334,10 +334,10 @@ function SubCategoriesTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">{subs.length} sub-categories</p>
+        <div className="flex items-center gap-2 min-w-0 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+          <p className="text-sm text-muted-foreground shrink-0">{subs.length} sub-categories</p>
           <Select value={filterCat} onValueChange={setFilterCat}>
-            <SelectTrigger className="h-8 w-44 text-sm" data-testid="select-filter-cat">
+            <SelectTrigger className="h-8 w-44 text-sm shrink-0" data-testid="select-filter-cat">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
@@ -345,6 +345,11 @@ function SubCategoriesTab() {
               {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          {filterCat !== "all" && (
+            <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={() => setFilterCat("all")} data-testid="button-clear-subcat-filters">
+              <X className="w-3.5 h-3.5 mr-1" />Clear
+            </Button>
+          )}
         </div>
         <Button size="sm" onClick={openAdd} data-testid="button-add-subcat"><Plus className="w-4 h-4 mr-1.5" />Add Sub-category</Button>
       </div>
@@ -590,10 +595,10 @@ function TaxonomyCrudTab({
     <div className="space-y-4">
       {/* Table header with filter */}
       <div className="flex justify-between items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">{items.length} {title.toLowerCase()}s defined</p>
+        <div className="flex items-center gap-2 min-w-0 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+          <p className="text-sm text-muted-foreground shrink-0">{items.length} {title.toLowerCase()}s defined</p>
           <Select value={filterCatId} onValueChange={v => { setFilterCatId(v); setFilterSubCatId("all"); }}>
-            <SelectTrigger className="h-8 w-36 text-sm">
+            <SelectTrigger className="h-8 w-36 text-sm shrink-0">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
@@ -602,7 +607,7 @@ function TaxonomyCrudTab({
             </SelectContent>
           </Select>
           <Select value={filterSubCatId} onValueChange={setFilterSubCatId} disabled={filterCatId === "all" && filterSubs.length === 0}>
-            <SelectTrigger className="h-8 w-40 text-sm">
+            <SelectTrigger className="h-8 w-40 text-sm shrink-0">
               <SelectValue placeholder="All sub-cats" />
             </SelectTrigger>
             <SelectContent>
@@ -610,6 +615,11 @@ function TaxonomyCrudTab({
               {filterSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          {(filterCatId !== "all" || filterSubCatId !== "all") && (
+            <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={() => { setFilterCatId("all"); setFilterSubCatId("all"); }} data-testid={`button-clear-${testPrefix}-filters`}>
+              <X className="w-3.5 h-3.5 mr-1" />Clear
+            </Button>
+          )}
         </div>
         <Button size="sm" onClick={openAdd} data-testid={`button-add-${testPrefix}`}><Plus className="w-4 h-4 mr-1.5" />Add {title}</Button>
       </div>
@@ -1040,6 +1050,8 @@ function CategoryRequestsSection() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [crSearchOpen, setCrSearchOpen] = useState(false);
+  const crSearchInputRef = useRef<HTMLInputElement>(null);
   const [roleFilter, setRoleFilter] = useState("all");
   const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
   const [editUser, setEditUser] = useState<UserRowLocal | null>(null);
@@ -1134,18 +1146,44 @@ function CategoryRequestsSection() {
           );
         })}
       </div>
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input className="pl-9" placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-cr" />
+      <div className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+        <div className="relative shrink-0 sm:flex-1">
+          {!crSearchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setCrSearchOpen(true); setTimeout(() => crSearchInputRef.current?.focus(), 0); }}
+              aria-label="Ouvrir la recherche"
+              data-testid="button-open-cr-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+          <div className={`${crSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={crSearchInputRef}
+              className="pl-9"
+              placeholder="Rechercher..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setCrSearchOpen(false); }}
+              data-testid="input-search-cr"
+            />
+          </div>
         </div>
         <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-full sm:w-52" data-testid="select-role-filter-cr"><SelectValue placeholder="Tous les rôles" /></SelectTrigger>
+          <SelectTrigger className="w-44 shrink-0 sm:w-52" data-testid="select-role-filter-cr"><SelectValue placeholder="Tous les rôles" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tous les rôles</SelectItem>
             {CAT_ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
           </SelectContent>
         </Select>
+        {(search || roleFilter !== "all") && (
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setRoleFilter("all"); }} data-testid="button-clear-cr-filters">
+            <X className="w-3.5 h-3.5" /> Effacer
+          </Button>
+        )}
       </div>
       <Card>
         <CardHeader className="pb-3">
@@ -1355,16 +1393,16 @@ function SupplierCategoriesSection() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap items-center">
+      <div className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-44 h-8 text-sm" data-testid="select-type-filter"><SelectValue placeholder="All types" /></SelectTrigger>
+          <SelectTrigger className="w-44 h-8 text-sm shrink-0" data-testid="select-type-filter"><SelectValue placeholder="All types" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All types</SelectItem>
             {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36 h-8 text-sm" data-testid="select-status-filter"><SelectValue placeholder="All statuses" /></SelectTrigger>
+          <SelectTrigger className="w-36 h-8 text-sm shrink-0" data-testid="select-status-filter"><SelectValue placeholder="All statuses" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="PENDING">Pending</SelectItem>
@@ -1372,7 +1410,12 @@ function SupplierCategoriesSection() {
             <SelectItem value="REJECTED">Rejected</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-sm text-muted-foreground">{filtered.length} suggestion{filtered.length !== 1 ? 's' : ''}</p>
+        {(typeFilter !== "all" || statusFilter !== "all") && (
+          <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={() => { setTypeFilter("all"); setStatusFilter("all"); }} data-testid="button-clear-suggestions-filters">
+            <X className="w-3.5 h-3.5 mr-1" />Clear
+          </Button>
+        )}
+        <p className="text-sm text-muted-foreground shrink-0">{filtered.length} suggestion{filtered.length !== 1 ? 's' : ''}</p>
       </div>
 
       {/* Table */}

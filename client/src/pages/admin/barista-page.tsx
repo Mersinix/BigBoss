@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Coffee, Users, CheckCircle, XCircle, Star, Plus, Pencil, Trash2, Snowflake, Search,
-  MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, Briefcase, Award, Eye,
+  MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, Briefcase, Award, Eye, X,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
@@ -309,12 +309,18 @@ export default function AdminBaristaPage() {
   const [baristaSearch, setBaristaSearch] = useState("");
   const [baristaStatus, setBaristaStatus] = useState("all");
   const [baristaLevel, setBaristaLevel] = useState("all");
+  const [baristaSearchOpen, setBaristaSearchOpen] = useState(false);
+  const baristaSearchInputRef = useRef<HTMLInputElement>(null);
 
   const [requestSearch, setRequestSearch] = useState("");
   const [requestStatus, setRequestStatus] = useState("all");
+  const [requestSearchOpen, setRequestSearchOpen] = useState(false);
+  const requestSearchInputRef = useRef<HTMLInputElement>(null);
 
   const [missionSearch, setMissionSearch] = useState("");
   const [missionStatus, setMissionStatus] = useState("all");
+  const [missionSearchOpen, setMissionSearchOpen] = useState(false);
+  const missionSearchInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<Overview>({ queryKey: ["/api/admin/barista"] });
   const { data: pendingReports = [] } = useAdminBaristaReports("PENDING");
@@ -493,16 +499,45 @@ export default function AdminBaristaPage() {
               </CardContent>
             </Card>
           )}
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={baristaSearch} onChange={(e) => setBaristaSearch(e.target.value)} placeholder="Rechercher un barista…" data-testid="input-search-baristas" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!baristaSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setBaristaSearchOpen(true); setTimeout(() => baristaSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-baristas-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${baristaSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={baristaSearchInputRef}
+                  className="pl-9"
+                  value={baristaSearch}
+                  onChange={(e) => setBaristaSearch(e.target.value)}
+                  onBlur={() => { if (!baristaSearch) setBaristaSearchOpen(false); }}
+                  placeholder="Rechercher un barista…"
+                  data-testid="input-search-baristas"
+                />
+              </div>
+            </div>
             <Select value={baristaStatus} onValueChange={setBaristaStatus}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvé</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejeté</SelectItem></SelectContent>
             </Select>
             <Select value={baristaLevel} onValueChange={setBaristaLevel}>
-              <SelectTrigger className="w-[150px]"><SelectValue placeholder="Niveau" /></SelectTrigger>
+              <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Niveau" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous niveaux</SelectItem><SelectItem value="BEGINNER">Débutant</SelectItem><SelectItem value="ADVANCED">Avancé</SelectItem><SelectItem value="EXPERT">Expert</SelectItem></SelectContent>
             </Select>
+            {(baristaSearch || baristaStatus !== "all" || baristaLevel !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setBaristaSearch(""); setBaristaStatus("all"); setBaristaLevel("all"); }} data-testid="button-clear-baristas-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {baristas.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun barista correspondant.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -547,12 +582,41 @@ export default function AdminBaristaPage() {
 
         {/* ── Requests (Demandes) ── */}
         <TabsContent value="requests" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={requestSearch} onChange={(e) => setRequestSearch(e.target.value)} placeholder="Rechercher une demande, un barista, un client…" data-testid="input-search-requests" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!requestSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setRequestSearchOpen(true); setTimeout(() => requestSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-requests-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${requestSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={requestSearchInputRef}
+                  className="pl-9"
+                  value={requestSearch}
+                  onChange={(e) => setRequestSearch(e.target.value)}
+                  onBlur={() => { if (!requestSearch) setRequestSearchOpen(false); }}
+                  placeholder="Rechercher une demande, un barista, un client…"
+                  data-testid="input-search-requests"
+                />
+              </div>
+            </div>
             <Select value={requestStatus} onValueChange={setRequestStatus}>
-              <SelectTrigger className="w-[170px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[170px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(REQUEST_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
             </Select>
+            {(requestSearch || requestStatus !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setRequestSearch(""); setRequestStatus("all"); }} data-testid="button-clear-requests-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {requests.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune demande correspondante.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -587,12 +651,41 @@ export default function AdminBaristaPage() {
 
         {/* ── Missions ── */}
         <TabsContent value="missions" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={missionSearch} onChange={(e) => setMissionSearch(e.target.value)} placeholder="Rechercher une mission, un barista, un client…" data-testid="input-search-missions" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!missionSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setMissionSearchOpen(true); setTimeout(() => missionSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-missions-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${missionSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={missionSearchInputRef}
+                  className="pl-9"
+                  value={missionSearch}
+                  onChange={(e) => setMissionSearch(e.target.value)}
+                  onBlur={() => { if (!missionSearch) setMissionSearchOpen(false); }}
+                  placeholder="Rechercher une mission, un barista, un client…"
+                  data-testid="input-search-missions"
+                />
+              </div>
+            </div>
             <Select value={missionStatus} onValueChange={setMissionStatus}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(MISSION_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
             </Select>
+            {(missionSearch || missionStatus !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setMissionSearch(""); setMissionStatus("all"); }} data-testid="button-clear-missions-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {missions.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune mission correspondante.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDeliveries, useDispatchDelivery } from "@/hooks/use-deliveries";
 import { useDeliveryCompanyProfiles } from "@/hooks/use-delivery-company-marketplace";
 import { DeliveryCompanyDetailModal } from "@/components/delivery/delivery-company-detail-modal";
@@ -185,6 +185,8 @@ export default function SupplierDeliveryStatusPage() {
   const [dateFilter, setDateFilter] = useState("ALL");
   const [modeFilter, setModeFilter] = useState("ALL");
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [dispatchTarget, setDispatchTarget] = useState<DeliveryWithDetails | null>(null);
   const [viewTarget, setViewTarget] = useState<DeliveryWithDetails | null>(null);
   const isMobile = useIsMobile();
@@ -272,9 +274,9 @@ export default function SupplierDeliveryStatusPage() {
       </KpiOverviewModal>
 
       {/* Filter bar */}
-      <div className="flex flex-wrap gap-3 items-center">
+      <div className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Statut" /></SelectTrigger>
+          <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
           <SelectContent>
             {STATUS_FILTERS.map((s) => (
               <SelectItem key={s} value={s}>{s === "ALL" ? "Tous les statuts" : (DELIVERY_STATUS_META[s]?.label ?? s)}</SelectItem>
@@ -282,29 +284,49 @@ export default function SupplierDeliveryStatusPage() {
           </SelectContent>
         </Select>
         <Select value={dateFilter} onValueChange={setDateFilter}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Date" /></SelectTrigger>
+          <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Date" /></SelectTrigger>
           <SelectContent>
             {DATE_FILTERS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={modeFilter} onValueChange={setModeFilter}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Mode de livraison" /></SelectTrigger>
+          <SelectTrigger className="w-48 shrink-0"><SelectValue placeholder="Mode de livraison" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Tous les modes</SelectItem>
             <SelectItem value="DELIVERY_COMPANY">{DELIVERY_MODE_LABEL.DELIVERY_COMPANY}</SelectItem>
             <SelectItem value="SUPPLIER">{DELIVERY_MODE_LABEL.SUPPLIER}</SelectItem>
           </SelectContent>
         </Select>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input placeholder="Commande, café, chauffeur…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 w-56" />
+        <div className="relative shrink-0">
+          {!searchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+              aria-label="Ouvrir la recherche"
+              data-testid="button-open-delivery-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+          <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-56 sm:w-auto`}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={searchInputRef}
+              placeholder="Commande, café, chauffeur…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setSearchOpen(false); }}
+              className="pl-9 w-56"
+            />
+          </div>
         </div>
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={clearFilters}>
             <X className="w-3.5 h-3.5" /> Effacer
           </Button>
         )}
-        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} livraison{filtered.length !== 1 ? "s" : ""}</span>
+        <span className="text-xs text-muted-foreground shrink-0 sm:ml-auto">{filtered.length} livraison{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
       {isLoading ? (

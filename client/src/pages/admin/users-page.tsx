@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserCheck, ShieldCheck, Plus, CheckCircle, XCircle, Clock,
-  Filter, Trash2, Save, MapPin
+  Filter, Trash2, Save, MapPin, X
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
@@ -774,17 +774,17 @@ export default function UsersPage() {
       {/* Filter bar — background/container kept exactly as before (unchanged). */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <CardTitle className="text-base font-semibold">Tous les utilisateurs</CardTitle>
-        <div className="flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+        <div className="flex items-center gap-2 min-w-0 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+          <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="Tous les rôles" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs w-40 shrink-0"><SelectValue placeholder="Tous les rôles" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les rôles</SelectItem>
               {ALL_ROLES.map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, " ")}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Tous statuts" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs w-36 shrink-0"><SelectValue placeholder="Tous statuts" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous statuts</SelectItem>
               <SelectItem value="pending">En attente</SelectItem>
@@ -792,6 +792,11 @@ export default function UsersPage() {
               <SelectItem value="rejected">Rejeté</SelectItem>
             </SelectContent>
           </Select>
+          {(roleFilter !== "all" || statusFilter !== "all") && (
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground shrink-0" onClick={() => { setRoleFilter("all"); setStatusFilter("all"); }} data-testid="button-clear-users-filters">
+              <X className="w-3.5 h-3.5" /> Effacer
+            </Button>
+          )}
         </div>
       </div>
 

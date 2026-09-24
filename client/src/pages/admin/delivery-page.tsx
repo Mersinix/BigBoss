@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDeliveries, useUpdateDeliveryStatus } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Truck, Clock, CheckCircle, XCircle, Search, Building2, Store,
-  Package, User as UserIcon, Receipt, Calendar, Coffee,
+  Package, User as UserIcon, Receipt, Calendar, Coffee, X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
@@ -105,6 +105,8 @@ function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancell
   const [mode, setMode] = useState<DeliveryMode | "ALL">("ALL");
   const [datePreset, setDatePreset] = useState<DateRangePreset>("all");
   const [dateCustom, setDateCustom] = useState({ from: "", to: "" });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Only offer vehicle types that actually appear on at least one real delivery — never a
   // hardcoded/unsupported mode.
@@ -140,39 +142,73 @@ function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancell
   useEffect(() => { pagination.resetPage(); }, [search, status, vehicleType, mode, range]);
   const pageDeliveries = filtered.slice(pagination.start, pagination.end);
 
+  const hasActiveFilters = search !== "" || status !== "ALL" || vehicleType !== "ALL" || mode !== "ALL" || datePreset !== "all" || dateCustom.from !== "" || dateCustom.to !== "";
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="N° commande, café, fournisseur, transporteur, chauffeur…" data-testid="input-search-deliveries" />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Select value={status} onValueChange={(v) => setStatus(v as DeliveryStatus | "ALL")}>
-            <SelectTrigger className="w-40" data-testid="select-delivery-status"><SelectValue placeholder="Statut" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Tous les statuts</SelectItem>
-              {DELIVERY_STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{STATUS_META[s]?.label ?? s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {availableVehicleTypes.length > 0 && (
-            <Select value={vehicleType} onValueChange={(v) => setVehicleType(v as DeliveryVehicleType | "ALL")}>
-              <SelectTrigger className="w-36" data-testid="select-delivery-vehicle"><SelectValue placeholder="Transport" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tous véhicules</SelectItem>
-                {availableVehicleTypes.map((v) => <SelectItem key={v} value={v}>{VEHICLE_TYPE_LABELS[v] ?? v}</SelectItem>)}
-              </SelectContent>
-            </Select>
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+        <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+          {!searchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+              aria-label="Ouvrir la recherche"
+              data-testid="button-open-deliveries-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
           )}
-          <Select value={mode} onValueChange={(v) => setMode(v as DeliveryMode | "ALL")}>
-            <SelectTrigger className="w-44" data-testid="select-delivery-transporter-type"><SelectValue placeholder="Transporteur" /></SelectTrigger>
+          <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={searchInputRef}
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setSearchOpen(false); }}
+              placeholder="N° commande, café, fournisseur, transporteur, chauffeur…"
+              data-testid="input-search-deliveries"
+            />
+          </div>
+        </div>
+        <Select value={status} onValueChange={(v) => setStatus(v as DeliveryStatus | "ALL")}>
+          <SelectTrigger className="w-40 shrink-0" data-testid="select-delivery-status"><SelectValue placeholder="Statut" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Tous les statuts</SelectItem>
+            {DELIVERY_STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{STATUS_META[s]?.label ?? s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {availableVehicleTypes.length > 0 && (
+          <Select value={vehicleType} onValueChange={(v) => setVehicleType(v as DeliveryVehicleType | "ALL")}>
+            <SelectTrigger className="w-36 shrink-0" data-testid="select-delivery-vehicle"><SelectValue placeholder="Transport" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Tous transporteurs</SelectItem>
-              {DELIVERY_MODE_OPTIONS.map((m) => <SelectItem key={m} value={m}>{DELIVERY_MODE_LABEL[m]}</SelectItem>)}
+              <SelectItem value="ALL">Tous véhicules</SelectItem>
+              {availableVehicleTypes.map((v) => <SelectItem key={v} value={v}>{VEHICLE_TYPE_LABELS[v] ?? v}</SelectItem>)}
             </SelectContent>
           </Select>
+        )}
+        <Select value={mode} onValueChange={(v) => setMode(v as DeliveryMode | "ALL")}>
+          <SelectTrigger className="w-44 shrink-0" data-testid="select-delivery-transporter-type"><SelectValue placeholder="Transporteur" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Tous transporteurs</SelectItem>
+            {DELIVERY_MODE_OPTIONS.map((m) => <SelectItem key={m} value={m}>{DELIVERY_MODE_LABEL[m]}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <div className="shrink-0">
           <DateRangeFilter preset={datePreset} onPresetChange={setDatePreset} custom={dateCustom} onCustomChange={setDateCustom} />
         </div>
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground shrink-0"
+            onClick={() => { setSearch(""); setStatus("ALL"); setVehicleType("ALL"); setMode("ALL"); setDatePreset("all"); setDateCustom({ from: "", to: "" }); }}
+            data-testid="button-clear-deliveries-filters"
+          >
+            <X className="w-3.5 h-3.5" /> Effacer
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -285,6 +321,8 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
   const [driverFilter, setDriverFilter] = useState<"ALL" | "WITH" | "WITHOUT">("ALL");
   const [detail, setDetail] = useState<User | null>(null);
   const [companyDetailId, setCompanyDetailId] = useState<number | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const companies = users.filter((u) => u.role === "DELIVERY_COMPANY");
   const drivers = users.filter((u) => u.role === "DRIVER" && u.deliveryCompanyId);
   const driversById = new Map(drivers.map((d) => [d.id, d]));
@@ -307,38 +345,70 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
   useEffect(() => { pagination.resetPage(); }, [search, statusFilter, activityFilter, driverFilter]);
   const pageRows = rows.slice(pagination.start, pagination.end);
 
+  const hasActiveFilters = search !== "" || statusFilter !== "ALL" || activityFilter !== "ALL" || driverFilter !== "ALL";
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher une entreprise…" data-testid="input-search-companies" />
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+        <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+          {!searchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+              aria-label="Ouvrir la recherche"
+              data-testid="button-open-companies-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+          <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={searchInputRef}
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setSearchOpen(false); }}
+              placeholder="Rechercher une entreprise…"
+              data-testid="input-search-companies"
+            />
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36" data-testid="select-company-status"><SelectValue placeholder="Statut" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Tous statuts</SelectItem>
-              {APPROVAL_STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
-            <SelectTrigger className="w-52" data-testid="select-company-activity"><SelectValue placeholder="Activité" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Toute activité</SelectItem>
-              <SelectItem value="ACTIVE">Avec livraisons en cours</SelectItem>
-              <SelectItem value="IDLE">Sans livraison en cours</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={driverFilter} onValueChange={(v) => setDriverFilter(v as typeof driverFilter)}>
-            <SelectTrigger className="w-44" data-testid="select-company-drivers"><SelectValue placeholder="Chauffeurs" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Tous</SelectItem>
-              <SelectItem value="WITH">Avec chauffeurs</SelectItem>
-              <SelectItem value="WITHOUT">Sans chauffeurs</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-36 shrink-0" data-testid="select-company-status"><SelectValue placeholder="Statut" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Tous statuts</SelectItem>
+            {APPROVAL_STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
+          <SelectTrigger className="w-52 shrink-0" data-testid="select-company-activity"><SelectValue placeholder="Activité" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Toute activité</SelectItem>
+            <SelectItem value="ACTIVE">Avec livraisons en cours</SelectItem>
+            <SelectItem value="IDLE">Sans livraison en cours</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={driverFilter} onValueChange={(v) => setDriverFilter(v as typeof driverFilter)}>
+          <SelectTrigger className="w-44 shrink-0" data-testid="select-company-drivers"><SelectValue placeholder="Chauffeurs" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Tous</SelectItem>
+            <SelectItem value="WITH">Avec chauffeurs</SelectItem>
+            <SelectItem value="WITHOUT">Sans chauffeurs</SelectItem>
+          </SelectContent>
+        </Select>
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground shrink-0"
+            onClick={() => { setSearch(""); setStatusFilter("ALL"); setActivityFilter("ALL"); setDriverFilter("ALL"); }}
+            data-testid="button-clear-companies-filters"
+          >
+            <X className="w-3.5 h-3.5" /> Effacer
+          </Button>
+        )}
       </div>
       {rows.length === 0 ? (
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune entreprise de livraison.</CardContent></Card>
@@ -399,6 +469,8 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
   const [supplierFilter, setSupplierFilter] = useState<string>("ALL");
   const [detail, setDetail] = useState<User | null>(null);
   const [supplierDetailId, setSupplierDetailId] = useState<number | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const suppliers = users.filter((u) => u.role === "SUPPLIER");
   const drivers = users.filter((u) => u.role === "DRIVER" && u.supplierId);
 
@@ -433,32 +505,64 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
   const selectedSupplier = rows.find((r) => r.supplier.id === supplierDetailId)?.supplier ?? null;
   const selectedSupplierDrivers = rows.find((r) => r.supplier.id === supplierDetailId)?.ownDrivers ?? [];
 
+  const hasActiveFilters = search !== "" || activityFilter !== "ALL" || supplierFilter !== "ALL";
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un chauffeur, un fournisseur…" data-testid="input-search-supplier-drivers" />
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+        <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+          {!searchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+              aria-label="Ouvrir la recherche"
+              data-testid="button-open-supplier-drivers-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+          <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={searchInputRef}
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setSearchOpen(false); }}
+              placeholder="Rechercher un chauffeur, un fournisseur…"
+              data-testid="input-search-supplier-drivers"
+            />
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
-            <SelectTrigger className="w-52" data-testid="select-supplier-driver-activity"><SelectValue placeholder="Activité" /></SelectTrigger>
+        <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
+          <SelectTrigger className="w-52 shrink-0" data-testid="select-supplier-driver-activity"><SelectValue placeholder="Activité" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Toute activité</SelectItem>
+            <SelectItem value="ACTIVE">En cours</SelectItem>
+            <SelectItem value="IDLE">Disponible / inactif</SelectItem>
+          </SelectContent>
+        </Select>
+        {supplierOptions.length > 1 && (
+          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <SelectTrigger className="w-48 shrink-0" data-testid="select-supplier-filter"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Toute activité</SelectItem>
-              <SelectItem value="ACTIVE">En cours</SelectItem>
-              <SelectItem value="IDLE">Disponible / inactif</SelectItem>
+              <SelectItem value="ALL">Tous fournisseurs</SelectItem>
+              {supplierOptions.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          {supplierOptions.length > 1 && (
-            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-              <SelectTrigger className="w-48" data-testid="select-supplier-filter"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tous fournisseurs</SelectItem>
-                {supplierOptions.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
+        )}
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground shrink-0"
+            onClick={() => { setSearch(""); setActivityFilter("ALL"); setSupplierFilter("ALL"); }}
+            data-testid="button-clear-supplier-drivers-filters"
+          >
+            <X className="w-3.5 h-3.5" /> Effacer
+          </Button>
+        )}
       </div>
       {rows.length === 0 ? (
         <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun fournisseur avec des chauffeurs.</CardContent></Card>

@@ -549,22 +549,28 @@ export default function CartPage() {
                       </div>
                       <div className={`divide-y ${divideClr}`}>
                          {groupCartProducts(group.items).map(({ product, variants }) => (
-                           <div key={`product-${product.productId}`} className="flex gap-3 p-3 sm:p-4" data-testid={`cart-product-${product.productId}`}>
-                             <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
-                               {product.productImageUrl ? (
-                                 <img src={product.productImageUrl} className="w-full h-full object-cover" alt="" />
-                               ) : (
-                                 <div className={`w-full h-full flex items-center justify-center text-xs ${textMuted}`}>—</div>
-                               )}
-                             </div>
-                             <div className="flex-1 min-w-0">
-                               <p className={`font-medium text-sm truncate ${textPrimary}`}>{product.productName}</p>
-                               <div className={`flex flex-wrap gap-x-2 gap-y-0.5 text-xs mt-0.5 ${textMuted}`}>
-                                 {product.brandName && <span>Brand: {product.brandName}</span>}
-                                 {product.categoryName && <span>Category: {product.categoryName}</span>}
-                                 {product.subCategoryName && <span>SubCategory: {product.subCategoryName}</span>}
+                           <div key={`product-${product.productId}`} className="p-3 sm:p-4" data-testid={`cart-product-${product.productId}`}>
+                             <div className="flex gap-3">
+                               <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
+                                 {product.productImageUrl ? (
+                                   <img src={product.productImageUrl} className="w-full h-full object-cover" alt="" />
+                                 ) : (
+                                   <div className={`w-full h-full flex items-center justify-center text-xs ${textMuted}`}>—</div>
+                                 )}
                                </div>
-                               <div className="mt-2 space-y-2">
+                               <div className="flex-1 min-w-0">
+                                 <p className={`font-medium text-sm truncate ${textPrimary}`}>{product.productName}</p>
+                                 <div className={`flex flex-wrap gap-x-2 gap-y-0.5 text-xs mt-0.5 ${textMuted}`}>
+                                   {product.brandName && <span>Brand: {product.brandName}</span>}
+                                   {product.categoryName && <span>Category: {product.categoryName}</span>}
+                                   {product.subCategoryName && <span>SubCategory: {product.subCategoryName}</span>}
+                                 </div>
+                               </div>
+                             </div>
+                             {/* Variants — full width beneath the image/name row instead of being
+                                 squeezed into the narrow middle column (same principle already used
+                                 for Orders/Facture/Delivery product rows). */}
+                             <div className="mt-2 space-y-2">
                                  {variants.map((item) => {
                                    const variantLabel = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
                                    const cancelled = !!item.cancelledBySupplier;
@@ -602,7 +608,6 @@ export default function CartPage() {
                                    );
                                  })}
                                </div>
-                             </div>
                            </div>
                          ))}
                       </div>
@@ -669,10 +674,21 @@ export default function CartPage() {
                               Ce Pack n'est plus disponible chez le fournisseur et ne sera pas inclus dans la commande.
                             </p>
                           )}
-                          {pack.includedProducts.length > 0 && (
-                             <div className={`mt-3 space-y-2.5 border-t pt-2 ${dk ? "border-amber-500/20" : "border-amber-100"}`}>
-                                {groupPackIncludedProducts(pack.includedProducts).map((group) => (
-                                 <div key={group.productId} className="flex items-start gap-2">
+                        </div>
+                        <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
+                          <p className={`font-bold text-sm ${notEditable ? textMuted : textPrimary}`}>{fmt(displayUnitPrice * pack.quantity)}</p>
+                          <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePackItem(pack.packId)} data-testid={`button-remove-pack-${pack.packId}`}><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      {/* Included products + actions — full width beneath the image/name row
+                          instead of being squeezed into the narrow middle column (same
+                          principle already used for Orders/Facture/Delivery product rows). */}
+                      <div className="min-w-0">
+                        {pack.includedProducts.length > 0 && (
+                           <div className={`mt-3 space-y-2.5 border-t pt-2 ${dk ? "border-amber-500/20" : "border-amber-100"}`}>
+                              {groupPackIncludedProducts(pack.includedProducts).map((group) => (
+                               <div key={group.productId}>
+                                 <div className="flex items-start gap-2">
                                    <div className={`w-9 h-9 rounded-lg overflow-hidden shrink-0 ${imgBg}`}>
                                      {group.productImageUrl
                                        ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
@@ -685,49 +701,45 @@ export default function CartPage() {
                                          {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
                                        </p>
                                      )}
-                                     <div className="mt-0.5 space-y-0.5">
-                                       {group.distributions.map((d, i) => (
-                                         <p key={i} className={`text-[10px] leading-4 ${textMuted}`}>
-                                           {d.quantity}× {[d.flavorName, d.sizeName].filter(Boolean).join(" · ")}
-                                         </p>
-                                       ))}
-                                     </div>
                                    </div>
                                  </div>
-                               ))}
-                             </div>
-                          )}
-                          {!notEditable && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <button
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-200 text-amber-700 hover:bg-amber-50"}`}
-                                onClick={() => openPackForEdit(pack)}
-                                data-testid={`button-edit-pack-${pack.packId}`}
-                              >
-                                <Pencil className="w-3 h-3" /> Edit
-                              </button>
-                            </div>
-                          )}
-                          {pack.cancelledBySupplier && (
-                            <div className={`mt-2 flex flex-wrap items-center gap-2 rounded-xl border px-2.5 py-2 ${dk ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200"}`}>
-                              <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${dk ? "text-red-400" : "text-red-600"}`} />
-                              <span className={`text-xs flex-1 min-w-0 ${dk ? "text-red-300" : "text-red-700"}`}>
-                                Commande annulée par le fournisseur{pack.cancelledBySupplier.supplierName ? ` (${pack.cancelledBySupplier.supplierName})` : ""}
-                              </span>
-                              <button
-                                className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors shrink-0 ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-300 text-amber-700 hover:bg-amber-50"}`}
-                                onClick={() => handleReplacePack(pack.packId, pack.packName)}
-                                data-testid={`button-replace-pack-${pack.packId}`}
-                              >
-                                Choisir un autre fournisseur
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-2 shrink-0 min-w-[52px]">
-                          <p className={`font-bold text-sm ${notEditable ? textMuted : textPrimary}`}>{fmt(displayUnitPrice * pack.quantity)}</p>
-                          <button className={`transition-colors ${textMuted} hover:text-red-500`} onClick={() => removePackItem(pack.packId)} data-testid={`button-remove-pack-${pack.packId}`}><Trash2 className="w-4 h-4" /></button>
-                        </div>
+                                 <div className="mt-0.5 space-y-0.5">
+                                   {group.distributions.map((d, i) => (
+                                     <p key={i} className={`text-[10px] leading-4 ${textMuted}`}>
+                                       {d.quantity}× {[d.flavorName, d.sizeName].filter(Boolean).join(" · ")}
+                                     </p>
+                                   ))}
+                                 </div>
+                               </div>
+                             ))}
+                           </div>
+                        )}
+                        {!notEditable && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <button
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-200 text-amber-700 hover:bg-amber-50"}`}
+                              onClick={() => openPackForEdit(pack)}
+                              data-testid={`button-edit-pack-${pack.packId}`}
+                            >
+                              <Pencil className="w-3 h-3" /> Edit
+                            </button>
+                          </div>
+                        )}
+                        {pack.cancelledBySupplier && (
+                          <div className={`mt-2 flex flex-wrap items-center gap-2 rounded-xl border px-2.5 py-2 ${dk ? "bg-red-500/10 border-red-500/30" : "bg-red-50 border-red-200"}`}>
+                            <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${dk ? "text-red-400" : "text-red-600"}`} />
+                            <span className={`text-xs flex-1 min-w-0 ${dk ? "text-red-300" : "text-red-700"}`}>
+                              Commande annulée par le fournisseur{pack.cancelledBySupplier.supplierName ? ` (${pack.cancelledBySupplier.supplierName})` : ""}
+                            </span>
+                            <button
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors shrink-0 ${dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-300 text-amber-700 hover:bg-amber-50"}`}
+                              onClick={() => handleReplacePack(pack.packId, pack.packName)}
+                              data-testid={`button-replace-pack-${pack.packId}`}
+                            >
+                              Choisir un autre fournisseur
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

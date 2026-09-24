@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import {
   Wrench, Users, Calendar, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
-  Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image, Zap, Eye,
+  Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image, Zap, Eye, X,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -417,6 +417,8 @@ export default function MaintenanceAdminPage() {
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<any | null>(null);
   const [search, setSearch] = useState("");
+  const [accountSearchOpen, setAccountSearchOpen] = useState(false);
+  const accountSearchInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState("all");
   const [availability, setAvailability] = useState("all");
   const [visibility, setVisibility] = useState("all");
@@ -507,15 +509,49 @@ export default function MaintenanceAdminPage() {
         <div className="flex justify-end">
           <Button size="sm" onClick={() => setAddAccountOpen(true)} data-testid="button-add-maintenance-account"><Plus className="h-4 w-4 mr-1.5" />Ajouter un compte Maintenance</Button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un compte, une zone, une compétence…" /></div>
-          <Select value={status} onValueChange={setStatus}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Statut" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvé</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejeté</SelectItem></SelectContent></Select>
-          <Select value={visibility} onValueChange={setVisibility}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Visibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes visibilités</SelectItem><SelectItem value="visible">Visible</SelectItem><SelectItem value="hidden">Masqué</SelectItem></SelectContent></Select>
-          <Select value={availability} onValueChange={setAvailability}><SelectTrigger className="w-[160px]"><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes disponibilités</SelectItem><SelectItem value="available">Disponibles</SelectItem><SelectItem value="unavailable">Indisponibles</SelectItem></SelectContent></Select>
-          <Select value={profileType} onValueChange={setProfileType}><SelectTrigger className="w-[140px]"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les types</SelectItem>{filterOptions.types.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
-          <Select value={category} onValueChange={setCategory}><SelectTrigger className="w-[180px]"><SelectValue placeholder="Compétence" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes compétences</SelectItem>{filterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
-          <Select value={location} onValueChange={setLocation}><SelectTrigger className="w-[160px]"><SelectValue placeholder="Zone" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les zones</SelectItem>{filterOptions.locations.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
-          <Select value={rating} onValueChange={setRating}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Note" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les notes</SelectItem><SelectItem value="rated">Avec avis</SelectItem><SelectItem value="4">4+ étoiles</SelectItem><SelectItem value="3">3+ étoiles</SelectItem></SelectContent></Select>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+          <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+            {!accountSearchOpen && (
+              <button
+                type="button"
+                className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                onClick={() => { setAccountSearchOpen(true); setTimeout(() => accountSearchInputRef.current?.focus(), 0); }}
+                aria-label="Ouvrir la recherche"
+                data-testid="button-open-maintenance-account-search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            )}
+            <div className={`${accountSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                ref={accountSearchInputRef}
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onBlur={() => { if (!search) setAccountSearchOpen(false); }}
+                placeholder="Rechercher un compte, une zone, une compétence…"
+              />
+            </div>
+          </div>
+          <Select value={status} onValueChange={setStatus}><SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvé</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejeté</SelectItem></SelectContent></Select>
+          <Select value={visibility} onValueChange={setVisibility}><SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Visibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes visibilités</SelectItem><SelectItem value="visible">Visible</SelectItem><SelectItem value="hidden">Masqué</SelectItem></SelectContent></Select>
+          <Select value={availability} onValueChange={setAvailability}><SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes disponibilités</SelectItem><SelectItem value="available">Disponibles</SelectItem><SelectItem value="unavailable">Indisponibles</SelectItem></SelectContent></Select>
+          <Select value={profileType} onValueChange={setProfileType}><SelectTrigger className="w-[140px] shrink-0"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les types</SelectItem>{filterOptions.types.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Select value={category} onValueChange={setCategory}><SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Compétence" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes compétences</SelectItem>{filterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Select value={location} onValueChange={setLocation}><SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Zone" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les zones</SelectItem>{filterOptions.locations.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Select value={rating} onValueChange={setRating}><SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Note" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les notes</SelectItem><SelectItem value="rated">Avec avis</SelectItem><SelectItem value="4">4+ étoiles</SelectItem><SelectItem value="3">3+ étoiles</SelectItem></SelectContent></Select>
+          {(search || status !== "all" || visibility !== "all" || availability !== "all" || profileType !== "all" || category !== "all" || location !== "all" || rating !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground shrink-0"
+              onClick={() => { setSearch(""); setStatus("all"); setVisibility("all"); setAvailability("all"); setProfileType("all"); setCategory("all"); setLocation("all"); setRating("all"); }}
+              data-testid="button-clear-maintenance-account-filters"
+            >
+              <X className="w-3.5 h-3.5" /> Effacer
+            </Button>
+          )}
         </div>
         {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{pageAccounts.map((account) => <Card key={account.userId} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedAccount(account)}><CardContent className="p-4 space-y-3"><div className="flex items-start gap-3"><Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400 font-bold">{account.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.jobTitle}</p></div><span className={`h-2.5 w-2.5 rounded-full mt-1 ${account.available ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`} /></div><div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">{account.profileType}</Badge><Badge variant="outline" className="text-xs">{account.status}</Badge><span className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{account.location || "—"}</span></div><div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis · {account.yearsExperience} ans exp.</span></div><div className="flex flex-wrap gap-1">{(account.skills ?? []).slice(0, 4).map((x: string) => <span key={x} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{x}</span>)}</div></CardContent></Card>)}</div>}
         <DataPagination

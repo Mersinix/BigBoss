@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -987,6 +987,8 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string; packs: PackUsage[] } | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [filters, setFilters] = useState<NewProductFilters>(EMPTY_NEW_FILTERS);
+  const [newProdSearchOpen, setNewProdSearchOpen] = useState(false);
+  const newProdSearchInputRef = useRef<HTMLInputElement>(null);
 
   const { data: createdProducts = [], isLoading } = useQuery<ProductWithTaxonomy[]>({
     queryKey: ["/api/supplier/created-products"],
@@ -1090,20 +1092,35 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
       {/* Filter Bar */}
       <Card className="border shadow-none">
         <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
             {/* Search */}
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                data-testid="input-new-product-search"
-                className="pl-9"
-                placeholder="Search products…"
-                value={filters.search}
-                onChange={e => setFilter("search", e.target.value)}
-              />
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
+              {!newProdSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setNewProdSearchOpen(true); setTimeout(() => newProdSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-new-product-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${newProdSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  ref={newProdSearchInputRef}
+                  data-testid="input-new-product-search"
+                  className="pl-9"
+                  placeholder="Search products…"
+                  value={filters.search}
+                  onChange={e => setFilter("search", e.target.value)}
+                  onBlur={() => { if (!filters.search) setNewProdSearchOpen(false); }}
+                />
+              </div>
             </div>
             {/* Category */}
-            <div className="min-w-[150px]">
+            <div className="w-[150px] shrink-0">
               <Select value={filters.categoryId} onValueChange={v => setFilter("categoryId", v)}>
                 <SelectTrigger data-testid="select-new-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
                 <SelectContent>
@@ -1113,7 +1130,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               </Select>
             </div>
             {/* SubCategory */}
-            <div className="min-w-[150px]">
+            <div className="w-[150px] shrink-0">
               <Select value={filters.subCategoryId} onValueChange={v => setFilter("subCategoryId", v)} disabled={!filters.categoryId}>
                 <SelectTrigger data-testid="select-new-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
                 <SelectContent>
@@ -1123,7 +1140,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               </Select>
             </div>
             {/* Flavor */}
-            <div className="min-w-[130px]">
+            <div className="w-[130px] shrink-0">
               <Select value={filters.flavorId} onValueChange={v => setFilter("flavorId", v)}>
                 <SelectTrigger data-testid="select-new-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
                 <SelectContent>
@@ -1133,7 +1150,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               </Select>
             </div>
             {/* Size */}
-            <div className="min-w-[130px]">
+            <div className="w-[130px] shrink-0">
               <Select value={filters.sizeId} onValueChange={v => setFilter("sizeId", v)}>
                 <SelectTrigger data-testid="select-new-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
                 <SelectContent>
@@ -1143,7 +1160,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               </Select>
             </div>
             {/* Brand */}
-            <div className="min-w-[130px]">
+            <div className="w-[130px] shrink-0">
               <Select value={filters.brandId} onValueChange={v => setFilter("brandId", v)}>
                 <SelectTrigger data-testid="select-new-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
                 <SelectContent>
@@ -1154,7 +1171,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             </div>
             {/* Clear */}
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_NEW_FILTERS)} className="text-muted-foreground">
+              <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_NEW_FILTERS)} className="text-muted-foreground shrink-0">
                 <X className="w-4 h-4 mr-1" />Clear
               </Button>
             )}
@@ -1342,6 +1359,8 @@ function AdminProductsTab({
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [detailProduct, setDetailProduct] = useState<AdminProductWithListing | null>(null);
   const [addingProduct, setAddingProduct] = useState<AdminProductWithListing | null>(null);
+  const [adminProdSearchOpen, setAdminProdSearchOpen] = useState(false);
+  const adminProdSearchInputRef = useRef<HTMLInputElement>(null);
 
   const { selectedCategoryId, selectedSubCategoryId, setSelectedCategory, setSelectedSubCategory } = useSupplierCategoryStore();
 
@@ -1472,20 +1491,35 @@ function AdminProductsTab({
           {/* Filter Bar */}
           <Card className="border shadow-none">
             <CardContent className="p-4">
-              <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
                 {/* Search */}
-                <div className="relative flex-1 min-w-[180px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    data-testid="input-search-admin-products"
-                    className="pl-9"
-                    placeholder="Search products…"
-                    value={filters.search}
-                    onChange={e => setFilter("search", e.target.value)}
-                  />
+                <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
+                  {!adminProdSearchOpen && (
+                    <button
+                      type="button"
+                      className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                      onClick={() => { setAdminProdSearchOpen(true); setTimeout(() => adminProdSearchInputRef.current?.focus(), 0); }}
+                      aria-label="Ouvrir la recherche"
+                      data-testid="button-open-admin-products-search"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div className={`${adminProdSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      ref={adminProdSearchInputRef}
+                      data-testid="input-search-admin-products"
+                      className="pl-9"
+                      placeholder="Search products…"
+                      value={filters.search}
+                      onChange={e => setFilter("search", e.target.value)}
+                      onBlur={() => { if (!filters.search) setAdminProdSearchOpen(false); }}
+                    />
+                  </div>
                 </div>
                 {/* Category */}
-                <div className="min-w-[150px]">
+                <div className="w-[150px] shrink-0">
                   <Select value={catIdStr || "__all__"} onValueChange={handleCatChange}>
                     <SelectTrigger data-testid="select-admin-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
                     <SelectContent>
@@ -1495,7 +1529,7 @@ function AdminProductsTab({
                   </Select>
                 </div>
                 {/* SubCategory */}
-                <div className="min-w-[150px]">
+                <div className="w-[150px] shrink-0">
                   <Select value={subCatIdStr || "__all__"} onValueChange={handleSubCatChange} disabled={!catIdStr}>
                     <SelectTrigger data-testid="select-admin-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
                     <SelectContent>
@@ -1505,7 +1539,7 @@ function AdminProductsTab({
                   </Select>
                 </div>
                 {/* Flavor */}
-                <div className="min-w-[130px]">
+                <div className="w-[130px] shrink-0">
                   <Select value={filters.flavorId || "__all__"} onValueChange={v => setFilter("flavorId", v)}>
                     <SelectTrigger data-testid="select-admin-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
                     <SelectContent>
@@ -1515,7 +1549,7 @@ function AdminProductsTab({
                   </Select>
                 </div>
                 {/* Size */}
-                <div className="min-w-[130px]">
+                <div className="w-[130px] shrink-0">
                   <Select value={filters.sizeId || "__all__"} onValueChange={v => setFilter("sizeId", v)}>
                     <SelectTrigger data-testid="select-admin-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
                     <SelectContent>
@@ -1525,7 +1559,7 @@ function AdminProductsTab({
                   </Select>
                 </div>
                 {/* Brand */}
-                <div className="min-w-[130px]">
+                <div className="w-[130px] shrink-0">
                   <Select value={filters.brandId || "__all__"} onValueChange={v => setFilter("brandId", v)}>
                     <SelectTrigger data-testid="select-admin-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
                     <SelectContent>
@@ -1535,7 +1569,7 @@ function AdminProductsTab({
                   </Select>
                 </div>
                 {/* View toggle + Clear */}
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
                   {hasActiveFilters && (
                     <Button variant="ghost" size="sm" onClick={() => {
                       setFilters(EMPTY_SIMPLE);
@@ -1699,6 +1733,8 @@ function MyProductsTab({
   const [filters, setFilters] = useState<SimpleFilters>(EMPTY_SIMPLE);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [editingListing, setEditingListing] = useState<SupplierListingWithProduct | null>(null);
+  const [myProdSearchOpen, setMyProdSearchOpen] = useState(false);
+  const myProdSearchInputRef = useRef<HTMLInputElement>(null);
 
   const { selectedCategoryId, selectedSubCategoryId, setSelectedCategory, setSelectedSubCategory } = useSupplierCategoryStore();
   const [removeTarget, setRemoveTarget] = useState<{ id: number; name: string; packs: PackUsage[] } | null>(null);
@@ -1849,20 +1885,35 @@ function MyProductsTab({
           {/* Filter Bar */}
           <Card className="border shadow-none">
             <CardContent className="p-4">
-              <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
                 {/* Search */}
-                <div className="relative flex-1 min-w-[180px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    data-testid="input-search-my-products"
-                    className="pl-9"
-                    placeholder="Search products…"
-                    value={filters.search}
-                    onChange={e => setFilter("search", e.target.value)}
-                  />
+                <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
+                  {!myProdSearchOpen && (
+                    <button
+                      type="button"
+                      className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                      onClick={() => { setMyProdSearchOpen(true); setTimeout(() => myProdSearchInputRef.current?.focus(), 0); }}
+                      aria-label="Ouvrir la recherche"
+                      data-testid="button-open-my-products-search"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div className={`${myProdSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      ref={myProdSearchInputRef}
+                      data-testid="input-search-my-products"
+                      className="pl-9"
+                      placeholder="Search products…"
+                      value={filters.search}
+                      onChange={e => setFilter("search", e.target.value)}
+                      onBlur={() => { if (!filters.search) setMyProdSearchOpen(false); }}
+                    />
+                  </div>
                 </div>
                 {/* Category */}
-                <div className="min-w-[150px]">
+                <div className="w-[150px] shrink-0">
                   <Select value={catIdStr || "__all__"} onValueChange={handleCatChange}>
                     <SelectTrigger data-testid="select-my-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
                     <SelectContent>
@@ -1872,7 +1923,7 @@ function MyProductsTab({
                   </Select>
                 </div>
                 {/* SubCategory */}
-                <div className="min-w-[150px]">
+                <div className="w-[150px] shrink-0">
                   <Select value={subCatIdStr || "__all__"} onValueChange={handleSubCatChange} disabled={!catIdStr}>
                     <SelectTrigger data-testid="select-my-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
                     <SelectContent>
@@ -1882,7 +1933,7 @@ function MyProductsTab({
                   </Select>
                 </div>
                 {/* Flavor */}
-                <div className="min-w-[130px]">
+                <div className="w-[130px] shrink-0">
                   <Select value={filters.flavorId || "__all__"} onValueChange={v => setFilter("flavorId", v)}>
                     <SelectTrigger data-testid="select-my-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
                     <SelectContent>
@@ -1892,7 +1943,7 @@ function MyProductsTab({
                   </Select>
                 </div>
                 {/* Size */}
-                <div className="min-w-[130px]">
+                <div className="w-[130px] shrink-0">
                   <Select value={filters.sizeId || "__all__"} onValueChange={v => setFilter("sizeId", v)}>
                     <SelectTrigger data-testid="select-my-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
                     <SelectContent>
@@ -1902,7 +1953,7 @@ function MyProductsTab({
                   </Select>
                 </div>
                 {/* Brand */}
-                <div className="min-w-[130px]">
+                <div className="w-[130px] shrink-0">
                   <Select value={filters.brandId || "__all__"} onValueChange={v => setFilter("brandId", v)}>
                     <SelectTrigger data-testid="select-my-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
                     <SelectContent>
@@ -1912,7 +1963,7 @@ function MyProductsTab({
                   </Select>
                 </div>
                 {/* View toggle + Clear */}
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
                   {hasActiveFilters && (
                     <Button variant="ghost" size="sm" onClick={() => {
                       setFilters(EMPTY_SIMPLE);

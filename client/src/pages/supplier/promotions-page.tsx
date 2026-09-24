@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -786,6 +786,8 @@ export default function PromotionsPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [filterType, setFilterType] = useState<string>("ALL");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
@@ -874,6 +876,8 @@ export default function PromotionsPage() {
   });
 
   const isSaving = createMut.isPending || updateMut.isPending;
+  const hasFilters = !!search || filterStatus !== "ALL" || filterType !== "ALL";
+  const clearFilters = () => { setSearch(""); setFilterStatus("ALL"); setFilterType("ALL"); };
 
   const kpiItems = [
     { label: "Active", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />, color: "bg-green-50 dark:bg-green-500/10" },
@@ -929,13 +933,33 @@ export default function PromotionsPage() {
       </KpiOverviewModal>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input className="pl-9 h-9" placeholder="Search promotions…" value={search} onChange={e => setSearch(e.target.value)} />
+      <div className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+        <div className="relative shrink-0 sm:flex-1 sm:min-w-48">
+          {!searchOpen && (
+            <button
+              type="button"
+              className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+              onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+              aria-label="Open search"
+              data-testid="button-open-promotions-search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+          <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={searchInputRef}
+              className="pl-9 h-9"
+              placeholder="Search promotions…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onBlur={() => { if (!search) setSearchOpen(false); }}
+            />
+          </div>
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-36 h-9 shrink-0"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">All Statuses</SelectItem>
             <SelectItem value="ACTIVE">Active</SelectItem>
@@ -945,7 +969,7 @@ export default function PromotionsPage() {
           </SelectContent>
         </Select>
         <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-44 h-9"><SelectValue placeholder="Type" /></SelectTrigger>
+          <SelectTrigger className="w-44 h-9 shrink-0"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">All Types</SelectItem>
             {(Object.entries(TYPE_LABELS) as [PromotionType, string][]).map(([k, v]) => (
@@ -953,6 +977,11 @@ export default function PromotionsPage() {
             ))}
           </SelectContent>
         </Select>
+        {hasFilters && (
+          <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={clearFilters}>
+            <X className="w-3.5 h-3.5 mr-1" />Clear
+          </Button>
+        )}
       </div>
 
       {/* List */}

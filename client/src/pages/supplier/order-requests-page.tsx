@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useOrders, useUpdateSubOrderStatus } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/format";
@@ -74,12 +74,16 @@ export default function OrderRequestsPage() {
   const [pendingCafeSearch, setPendingCafeSearch] = useState("");
   const [pendingDateFilter, setPendingDateFilter] = useState("");
   const [pendingPriorityFilter, setPendingPriorityFilter] = useState("ALL");
+  const [pendingSearchOpen, setPendingSearchOpen] = useState(false);
+  const pendingSearchInputRef = useRef<HTMLInputElement>(null);
 
   // History filters
   const [histStatusFilter, setHistStatusFilter] = useState("ALL");
   const [histCafeSearch, setHistCafeSearch] = useState("");
   const [histDateFilter, setHistDateFilter] = useState("");
   const [histPriorityFilter, setHistPriorityFilter] = useState("ALL");
+  const [histSearchOpen, setHistSearchOpen] = useState(false);
+  const histSearchInputRef = useRef<HTMLInputElement>(null);
 
   // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -248,19 +252,34 @@ export default function OrderRequestsPage() {
       {requestsView === "pending" && (
         <>
           {/* Pending filters */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Café..."
-                value={pendingCafeSearch}
-                onChange={e => setPendingCafeSearch(e.target.value)}
-                className="pl-9 w-40"
-              />
+          <div className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0">
+              {!pendingSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setPendingSearchOpen(true); setTimeout(() => pendingSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-pending-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${pendingSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-40 sm:w-auto`}>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  ref={pendingSearchInputRef}
+                  placeholder="Café..."
+                  value={pendingCafeSearch}
+                  onChange={e => setPendingCafeSearch(e.target.value)}
+                  onBlur={() => { if (!pendingCafeSearch) setPendingSearchOpen(false); }}
+                  className="pl-9 w-40"
+                />
+              </div>
             </div>
 
             <Select value={pendingPriorityFilter} onValueChange={setPendingPriorityFilter}>
-              <SelectTrigger className="w-44"><SelectValue placeholder="Priorité" /></SelectTrigger>
+              <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Priorité" /></SelectTrigger>
               <SelectContent>
                 {PRIORITY_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
               </SelectContent>
@@ -270,7 +289,7 @@ export default function OrderRequestsPage() {
               type="date"
               value={pendingDateFilter}
               onChange={e => setPendingDateFilter(e.target.value)}
-              className="w-40"
+              className="w-40 shrink-0"
               title="Filtrer par date"
             />
 
@@ -278,7 +297,7 @@ export default function OrderRequestsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="gap-1.5 text-muted-foreground"
+                className="gap-1.5 text-muted-foreground shrink-0"
                 onClick={() => { setPendingCafeSearch(""); setPendingDateFilter(""); setPendingPriorityFilter("ALL"); }}
               >
                 <X className="w-3.5 h-3.5" /> Effacer
@@ -398,26 +417,41 @@ export default function OrderRequestsPage() {
       {requestsView === "history" && (
         <>
           {/* History filters */}
-          <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
             <Select value={histStatusFilter} onValueChange={setHistStatusFilter}>
-              <SelectTrigger className="w-44"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent>
                 {HIST_STATUS_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Café..."
-                value={histCafeSearch}
-                onChange={e => setHistCafeSearch(e.target.value)}
-                className="pl-9 w-40"
-              />
+            <div className="relative shrink-0">
+              {!histSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setHistSearchOpen(true); setTimeout(() => histSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-hist-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${histSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-40 sm:w-auto`}>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  ref={histSearchInputRef}
+                  placeholder="Café..."
+                  value={histCafeSearch}
+                  onChange={e => setHistCafeSearch(e.target.value)}
+                  onBlur={() => { if (!histCafeSearch) setHistSearchOpen(false); }}
+                  className="pl-9 w-40"
+                />
+              </div>
             </div>
 
             <Select value={histPriorityFilter} onValueChange={setHistPriorityFilter}>
-              <SelectTrigger className="w-44"><SelectValue placeholder="Priorité" /></SelectTrigger>
+              <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Priorité" /></SelectTrigger>
               <SelectContent>
                 {PRIORITY_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
               </SelectContent>
@@ -427,7 +461,7 @@ export default function OrderRequestsPage() {
               type="date"
               value={histDateFilter}
               onChange={e => setHistDateFilter(e.target.value)}
-              className="w-40"
+              className="w-40 shrink-0"
               title="Filtrer par date"
             />
 
@@ -435,7 +469,7 @@ export default function OrderRequestsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="gap-1.5 text-muted-foreground"
+                className="gap-1.5 text-muted-foreground shrink-0"
                 onClick={() => { setHistStatusFilter("ALL"); setHistCafeSearch(""); setHistDateFilter(""); setHistPriorityFilter("ALL"); }}
               >
                 <X className="w-3.5 h-3.5" /> Effacer

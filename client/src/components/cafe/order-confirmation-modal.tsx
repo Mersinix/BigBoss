@@ -302,20 +302,26 @@ export default function OrderConfirmationModal({
                     page uses, via the shared groupCartProducts helper). */}
                 <div className={`divide-y ${t.rowDivide}`}>
                   {groupCartProducts(group.items).map(({ product, variants }) => (
-                    <div key={`product-${product.productId}`} className="flex gap-3 px-4 py-3">
-                      <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 bg-gray-700/60">
-                        {product.productImageUrl
-                          ? <img src={product.productImageUrl} alt="" className="w-full h-full object-cover" />
-                          : <Package className="w-4 h-4 m-3 text-gray-500" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{product.productName}</p>
-                        <div className={`flex flex-wrap gap-x-2 text-[10px] mt-0.5 ${t.textMuted}`}>
-                          {product.brandName && <span>Brand: {product.brandName}</span>}
-                          {product.categoryName && <span>Category: {product.categoryName}</span>}
-                          {product.subCategoryName && <span>SubCategory: {product.subCategoryName}</span>}
+                    <div key={`product-${product.productId}`} className="px-4 py-3">
+                      <div className="flex gap-3">
+                        <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 bg-gray-700/60">
+                          {product.productImageUrl
+                            ? <img src={product.productImageUrl} alt="" className="w-full h-full object-cover" />
+                            : <Package className="w-4 h-4 m-3 text-gray-500" />}
                         </div>
-                        <div className="mt-2 space-y-2">
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{product.productName}</p>
+                          <div className={`flex flex-wrap gap-x-2 text-[10px] mt-0.5 ${t.textMuted}`}>
+                            {product.brandName && <span>Brand: {product.brandName}</span>}
+                            {product.categoryName && <span>Category: {product.categoryName}</span>}
+                            {product.subCategoryName && <span>SubCategory: {product.subCategoryName}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Variants — full width beneath the image/name row instead of being
+                          squeezed into the narrow middle column (same principle already used
+                          for Orders/Facture/Delivery/Cart product rows). */}
+                      <div className="mt-2 space-y-2">
                           {variants.map(item => {
                             const variant = [item.flavorName, item.sizeName].filter(Boolean).join(" · ");
                             return (
@@ -358,7 +364,6 @@ export default function OrderConfirmationModal({
                             );
                           })}
                         </div>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -385,46 +390,6 @@ export default function OrderConfirmationModal({
                   <div className="flex-1 min-w-0">
                     <p className={`font-semibold text-sm ${t.textPrimary}`}>{pack.packName}</p>
                       <p className={`text-[11px] mt-0.5 ${t.textMuted}`}>{pack.supplierName}</p>
-                    {pack.includedProducts.length > 0 && (
-                        <div className={`mt-2 space-y-2 border-t pt-2 ${t.dk ? "border-amber-800/40" : "border-amber-200"}`}>
-                           {groupPackIncludedProducts(pack.includedProducts).map((group) => (
-                            <div key={group.productId} className="flex items-start gap-2">
-                              <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-gray-700/60">
-                                {group.productImageUrl
-                                  ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
-                                  : <Package className="w-3 h-3 m-2 text-gray-500" />}
-                              </div>
-                              <div className="min-w-0">
-                                <p className={`text-[11px] font-semibold ${t.textPrimary}`}>{group.productName}</p>
-                                {(group.brandName || group.categoryName || group.subCategoryName) && (
-                                  <p className={`text-[10px] ${t.textMuted}`}>
-                                    {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
-                                  </p>
-                                )}
-                                <div className="mt-0.5 space-y-0.5">
-                                  {group.distributions.map((d, i) => (
-                                    <p key={i} className={`text-[10px] ${t.textMuted}`}>
-                                      {d.quantity}× {[d.flavorName, d.sizeName].filter(Boolean).join(" · ")}
-                                    </p>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                    )}
-                    <p className={`text-xs mt-0.5 ${t.textSubtle}`}>{fmt(pack.unitPrice)} / pack</p>
-                    <button
-                      className={`flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${t.dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-300 text-amber-700 hover:bg-amber-100/60"}`}
-                      onClick={() => openPackForEdit(pack, (updated) => {
-                        // Draft-only: writes back into this modal's local
-                        // order draft, never into the real Cart.
-                        setLocalPackItems(prev => prev.map(p => p.packId === updated.packId ? updated : p));
-                      })}
-                      data-testid={`button-edit-pack-summary-${pack.packId}`}
-                    >
-                      <Pencil className="w-3 h-3" /> Edit
-                    </button>
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <span className={`text-sm font-bold min-w-[64px] text-right ${t.textPrimary}`}>
@@ -437,6 +402,53 @@ export default function OrderConfirmationModal({
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                </div>
+                {/* Included products + Edit — full width beneath the image/name row instead
+                    of being squeezed into the narrow middle column (same principle already
+                    used for Orders/Facture/Delivery/Cart product rows). */}
+                <div className="px-4 pb-3 min-w-0">
+                  {pack.includedProducts.length > 0 && (
+                      <div className={`space-y-2 border-t pt-2 ${t.dk ? "border-amber-800/40" : "border-amber-200"}`}>
+                         {groupPackIncludedProducts(pack.includedProducts).map((group) => (
+                          <div key={group.productId}>
+                            <div className="flex items-start gap-2">
+                              <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-gray-700/60">
+                                {group.productImageUrl
+                                  ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
+                                  : <Package className="w-3 h-3 m-2 text-gray-500" />}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-[11px] font-semibold ${t.textPrimary}`}>{group.productName}</p>
+                                {(group.brandName || group.categoryName || group.subCategoryName) && (
+                                  <p className={`text-[10px] ${t.textMuted}`}>
+                                    {[group.brandName, group.categoryName, group.subCategoryName].filter(Boolean).join(" · ")}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="mt-0.5 space-y-0.5">
+                              {group.distributions.map((d, i) => (
+                                <p key={i} className={`text-[10px] ${t.textMuted}`}>
+                                  {d.quantity}× {[d.flavorName, d.sizeName].filter(Boolean).join(" · ")}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                  )}
+                  <p className={`text-xs mt-2 ${t.textSubtle}`}>{fmt(pack.unitPrice)} / pack</p>
+                  <button
+                    className={`flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${t.dk ? "border-amber-500/40 text-amber-400 hover:bg-amber-500/10" : "border-amber-300 text-amber-700 hover:bg-amber-100/60"}`}
+                    onClick={() => openPackForEdit(pack, (updated) => {
+                      // Draft-only: writes back into this modal's local
+                      // order draft, never into the real Cart.
+                      setLocalPackItems(prev => prev.map(p => p.packId === updated.packId ? updated : p));
+                    })}
+                    data-testid={`button-edit-pack-summary-${pack.packId}`}
+                  >
+                    <Pencil className="w-3 h-3" /> Edit
+                  </button>
                 </div>
               </div>
             ))}

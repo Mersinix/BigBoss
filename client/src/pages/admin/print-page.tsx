@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Printer, Users, ShoppingBag, Package, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
-  Trash2, Snowflake, Search, MapPin, Phone, Mail, Calendar, TrendingUp, Layers, Percent, Wallet, Eye,
+  Trash2, Snowflake, Search, MapPin, Phone, Mail, Calendar, TrendingUp, Layers, Percent, Wallet, Eye, X,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
@@ -378,14 +378,20 @@ export default function AdminPrintPage() {
 
   const [printerSearch, setPrinterSearch] = useState("");
   const [printerStatus, setPrinterStatus] = useState("all");
+  const [printerSearchOpen, setPrinterSearchOpen] = useState(false);
+  const printerSearchInputRef = useRef<HTMLInputElement>(null);
 
   const [serviceSearch, setServiceSearch] = useState("");
   const [serviceCategory, setServiceCategory] = useState("all");
   const [serviceStatus, setServiceStatus] = useState("all");
+  const [serviceSearchOpen, setServiceSearchOpen] = useState(false);
+  const serviceSearchInputRef = useRef<HTMLInputElement>(null);
 
   const [orderSearch, setOrderSearch] = useState("");
   const [orderStatus, setOrderStatus] = useState("all");
   const [orderPrinter, setOrderPrinter] = useState("all");
+  const [orderSearchOpen, setOrderSearchOpen] = useState(false);
+  const orderSearchInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<Overview>({ queryKey: ["/api/admin/print"] });
 
@@ -575,12 +581,41 @@ export default function AdminPrintPage() {
 
         {/* ── Printers ── */}
         <TabsContent value="printers" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={printerSearch} onChange={(e) => setPrinterSearch(e.target.value)} placeholder="Rechercher un imprimeur…" data-testid="input-search-printers" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!printerSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setPrinterSearchOpen(true); setTimeout(() => printerSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-printers-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${printerSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={printerSearchInputRef}
+                  className="pl-9"
+                  value={printerSearch}
+                  onChange={(e) => setPrinterSearch(e.target.value)}
+                  onBlur={() => { if (!printerSearch) setPrinterSearchOpen(false); }}
+                  placeholder="Rechercher un imprimeur…"
+                  data-testid="input-search-printers"
+                />
+              </div>
+            </div>
             <Select value={printerStatus} onValueChange={setPrinterStatus}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvé</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejeté</SelectItem></SelectContent>
             </Select>
+            {(printerSearch || printerStatus !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setPrinterSearch(""); setPrinterStatus("all"); }} data-testid="button-clear-printers-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {printers.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun imprimeur correspondant.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -620,16 +655,45 @@ export default function AdminPrintPage() {
 
         {/* ── Services (global catalog, cross-printer) ── */}
         <TabsContent value="services" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} placeholder="Rechercher un service, un imprimeur…" data-testid="input-search-services" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!serviceSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setServiceSearchOpen(true); setTimeout(() => serviceSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-services-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${serviceSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={serviceSearchInputRef}
+                  className="pl-9"
+                  value={serviceSearch}
+                  onChange={(e) => setServiceSearch(e.target.value)}
+                  onBlur={() => { if (!serviceSearch) setServiceSearchOpen(false); }}
+                  placeholder="Rechercher un service, un imprimeur…"
+                  data-testid="input-search-services"
+                />
+              </div>
+            </div>
             <Select value={serviceCategory} onValueChange={setServiceCategory}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+              <SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Catégorie" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Toutes catégories</SelectItem>{serviceFilterOptions.categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={serviceStatus} onValueChange={setServiceStatus}>
-              <SelectTrigger className="w-[150px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous statuts</SelectItem><SelectItem value="active">Actif</SelectItem><SelectItem value="inactive">Inactif</SelectItem></SelectContent>
             </Select>
+            {(serviceSearch || serviceCategory !== "all" || serviceStatus !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setServiceSearch(""); setServiceCategory("all"); setServiceStatus("all"); }} data-testid="button-clear-services-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {services.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun service correspondant.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -677,16 +741,45 @@ export default function AdminPrintPage() {
 
         {/* ── Orders ── */}
         <TabsContent value="orders" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={orderSearch} onChange={(e) => setOrderSearch(e.target.value)} placeholder="Rechercher une commande, un imprimeur, un client…" data-testid="input-search-orders" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!orderSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setOrderSearchOpen(true); setTimeout(() => orderSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-orders-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${orderSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={orderSearchInputRef}
+                  className="pl-9"
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  onBlur={() => { if (!orderSearch) setOrderSearchOpen(false); }}
+                  placeholder="Rechercher une commande, un imprimeur, un client…"
+                  data-testid="input-search-orders"
+                />
+              </div>
+            </div>
             <Select value={orderStatus} onValueChange={setOrderStatus}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(PRINT_ORDER_STATUS_META).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={orderPrinter} onValueChange={setOrderPrinter}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Imprimeur" /></SelectTrigger>
+              <SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Imprimeur" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous les imprimeurs</SelectItem>{orderFilterOptions.printers.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
+            {(orderSearch || orderStatus !== "all" || orderPrinter !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setOrderSearch(""); setOrderStatus("all"); setOrderPrinter("all"); }} data-testid="button-clear-orders-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {orders.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune commande correspondante.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">

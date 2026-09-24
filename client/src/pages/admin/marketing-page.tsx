@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import {
   Megaphone, Users, Briefcase, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
-  Trash2, Snowflake, Search, MapPin, Phone, Image, DollarSign, Eye,
+  Trash2, Snowflake, Search, MapPin, Phone, Image, DollarSign, Eye, X,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -429,6 +429,8 @@ export default function MarketingAdminPage() {
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState("all");
   const [visibility, setVisibility] = useState("all");
   const [profileType, setProfileType] = useState("all");
@@ -522,13 +524,41 @@ export default function MarketingAdminPage() {
         <div className="flex justify-end">
           <Button size="sm" onClick={() => setAddAccountOpen(true)} data-testid="button-add-marketing-account"><Plus className="h-4 w-4 mr-1.5" />Ajouter un compte Marketing</Button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un compte, un service…" /></div>
-          <Select value={status} onValueChange={setStatus}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Statut" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvé</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejeté</SelectItem></SelectContent></Select>
-          <Select value={visibility} onValueChange={setVisibility}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Visibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes visibilités</SelectItem><SelectItem value="visible">Visible</SelectItem><SelectItem value="hidden">Masqué</SelectItem></SelectContent></Select>
-          <Select value={profileType} onValueChange={setProfileType}><SelectTrigger className="w-[140px]"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les types</SelectItem>{filterOptions.types.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
-          <Select value={category} onValueChange={setCategory}><SelectTrigger className="w-[180px]"><SelectValue placeholder="Service" /></SelectTrigger><SelectContent><SelectItem value="all">Tous services</SelectItem>{filterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
-          <Select value={rating} onValueChange={setRating}><SelectTrigger className="w-[150px]"><SelectValue placeholder="Note" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les notes</SelectItem><SelectItem value="rated">Avec avis</SelectItem><SelectItem value="4">4+ étoiles</SelectItem><SelectItem value="3">3+ étoiles</SelectItem></SelectContent></Select>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+          <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+            {!searchOpen && (
+              <button
+                type="button"
+                className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+                aria-label="Ouvrir la recherche"
+                data-testid="button-open-marketing-account-search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            )}
+            <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                ref={searchInputRef}
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onBlur={() => { if (!search) setSearchOpen(false); }}
+                placeholder="Rechercher un compte, un service…"
+              />
+            </div>
+          </div>
+          <Select value={status} onValueChange={setStatus}><SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvé</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejeté</SelectItem></SelectContent></Select>
+          <Select value={visibility} onValueChange={setVisibility}><SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Visibilité" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes visibilités</SelectItem><SelectItem value="visible">Visible</SelectItem><SelectItem value="hidden">Masqué</SelectItem></SelectContent></Select>
+          <Select value={profileType} onValueChange={setProfileType}><SelectTrigger className="w-[140px] shrink-0"><SelectValue placeholder="Type" /></SelectTrigger><SelectContent><SelectItem value="all">Tous les types</SelectItem>{filterOptions.types.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Select value={category} onValueChange={setCategory}><SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Service" /></SelectTrigger><SelectContent><SelectItem value="all">Tous services</SelectItem>{filterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <Select value={rating} onValueChange={setRating}><SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Note" /></SelectTrigger><SelectContent><SelectItem value="all">Toutes les notes</SelectItem><SelectItem value="rated">Avec avis</SelectItem><SelectItem value="4">4+ étoiles</SelectItem><SelectItem value="3">3+ étoiles</SelectItem></SelectContent></Select>
+          {(search || status !== "all" || visibility !== "all" || profileType !== "all" || category !== "all" || rating !== "all") && (
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setStatus("all"); setVisibility("all"); setProfileType("all"); setCategory("all"); setRating("all"); }} data-testid="button-clear-marketing-account-filters">
+              <X className="w-3.5 h-3.5" /> Effacer
+            </Button>
+          )}
         </div>
         {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{pageAccounts.map((account) => <Card key={account.userId} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedAccount(account)}><CardContent className="p-4 space-y-3"><div className="flex items-start gap-3"><Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-400 font-bold">{account.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.location || "—"}</p></div><span className={`h-2.5 w-2.5 rounded-full mt-1 ${account.marketplaceVisible ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`} /></div><div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">{account.profileType}</Badge><Badge variant="outline" className="text-xs">{account.status}</Badge></div><div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis</span></div>{/* Real services (Part 10), not the legacy profile.categories field */}<div className="flex flex-wrap gap-1">{(account.services ?? []).slice(0, 4).map((s: any) => <span key={s.id} className={`rounded-full px-2 py-0.5 text-[10px] ${s.isPublished ? "bg-muted" : "bg-muted/50 text-muted-foreground/70 italic"}`}>{s.category}</span>)}{(account.services ?? []).length === 0 && <span className="text-[10px] text-muted-foreground italic">Aucun service</span>}</div></CardContent></Card>)}</div>}
         <DataPagination

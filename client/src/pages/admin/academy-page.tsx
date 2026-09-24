@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   GraduationCap, Users, CheckCircle, XCircle, Star, Search,
   MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, BookOpen, Award, CalendarDays, Eye,
-  Pencil, Trash2, Snowflake,
+  Pencil, Trash2, Snowflake, X,
 } from "lucide-react";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
@@ -232,12 +232,18 @@ export default function AdminAcademyPage() {
 
   const [academySearch, setAcademySearch] = useState("");
   const [academyStatus, setAcademyStatus] = useState("all");
+  const [academySearchOpen, setAcademySearchOpen] = useState(false);
+  const academySearchInputRef = useRef<HTMLInputElement>(null);
 
   const [courseSearch, setCourseSearch] = useState("");
   const [courseStatus, setCourseStatus] = useState("all");
+  const [courseSearchOpen, setCourseSearchOpen] = useState(false);
+  const courseSearchInputRef = useRef<HTMLInputElement>(null);
 
   const [registrationSearch, setRegistrationSearch] = useState("");
   const [registrationStatus, setRegistrationStatus] = useState("all");
+  const [registrationSearchOpen, setRegistrationSearchOpen] = useState(false);
+  const registrationSearchInputRef = useRef<HTMLInputElement>(null);
 
   const [studentSearch, setStudentSearch] = useState("");
 
@@ -410,12 +416,41 @@ export default function AdminAcademyPage() {
 
         {/* ── Académies ── */}
         <TabsContent value="academies" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={academySearch} onChange={(e) => setAcademySearch(e.target.value)} placeholder="Rechercher une académie…" data-testid="input-search-academies" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!academySearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setAcademySearchOpen(true); setTimeout(() => academySearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-academies-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${academySearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={academySearchInputRef}
+                  className="pl-9"
+                  value={academySearch}
+                  onChange={(e) => setAcademySearch(e.target.value)}
+                  onBlur={() => { if (!academySearch) setAcademySearchOpen(false); }}
+                  placeholder="Rechercher une académie…"
+                  data-testid="input-search-academies"
+                />
+              </div>
+            </div>
             <Select value={academyStatus} onValueChange={setAcademyStatus}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvée</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejetée</SelectItem></SelectContent>
             </Select>
+            {(academySearch || academyStatus !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setAcademySearch(""); setAcademyStatus("all"); }} data-testid="button-clear-academies-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {academies.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune académie correspondante.</CardContent></Card> : (
             <>
@@ -457,12 +492,41 @@ export default function AdminAcademyPage() {
 
         {/* ── Formations ── */}
         <TabsContent value="courses" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={courseSearch} onChange={(e) => setCourseSearch(e.target.value)} placeholder="Rechercher une formation, une académie…" data-testid="input-search-courses" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!courseSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setCourseSearchOpen(true); setTimeout(() => courseSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-courses-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${courseSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={courseSearchInputRef}
+                  className="pl-9"
+                  value={courseSearch}
+                  onChange={(e) => setCourseSearch(e.target.value)}
+                  onBlur={() => { if (!courseSearch) setCourseSearchOpen(false); }}
+                  placeholder="Rechercher une formation, une académie…"
+                  data-testid="input-search-courses"
+                />
+              </div>
+            </div>
             <Select value={courseStatus} onValueChange={setCourseStatus}>
-              <SelectTrigger className="w-[150px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Toutes</SelectItem><SelectItem value="published">Publiées</SelectItem><SelectItem value="draft">Brouillons</SelectItem></SelectContent>
             </Select>
+            {(courseSearch || courseStatus !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setCourseSearch(""); setCourseStatus("all"); }} data-testid="button-clear-courses-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {courses.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune formation correspondante.</CardContent></Card> : (
             <>
@@ -500,12 +564,41 @@ export default function AdminAcademyPage() {
 
         {/* ── Inscriptions ── */}
         <TabsContent value="registrations" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={registrationSearch} onChange={(e) => setRegistrationSearch(e.target.value)} placeholder="Rechercher une inscription, une académie, un client…" data-testid="input-search-registrations" /></div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+              {!registrationSearchOpen && (
+                <button
+                  type="button"
+                  className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                  onClick={() => { setRegistrationSearchOpen(true); setTimeout(() => registrationSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Ouvrir la recherche"
+                  data-testid="button-open-registrations-search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+              <div className={`${registrationSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={registrationSearchInputRef}
+                  className="pl-9"
+                  value={registrationSearch}
+                  onChange={(e) => setRegistrationSearch(e.target.value)}
+                  onBlur={() => { if (!registrationSearch) setRegistrationSearchOpen(false); }}
+                  placeholder="Rechercher une inscription, une académie, un client…"
+                  data-testid="input-search-registrations"
+                />
+              </div>
+            </div>
             <Select value={registrationStatus} onValueChange={setRegistrationStatus}>
-              <SelectTrigger className="w-[170px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[170px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(REGISTRATION_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
             </Select>
+            {(registrationSearch || registrationStatus !== "all") && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setRegistrationSearch(""); setRegistrationStatus("all"); }} data-testid="button-clear-registrations-filters">
+                <X className="w-3.5 h-3.5" /> Effacer
+              </Button>
+            )}
           </div>
           {registrations.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune inscription correspondante.</CardContent></Card> : (
             <>

@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -42,22 +43,49 @@ export function FinancialFilterBar({
   supplierOptions?: { value: string; label: string }[];
 }) {
   const set = (patch: Partial<FinancialFiltersState>) => onChange({ ...filters, ...patch });
+  // Mobile-only: the search input collapses to an icon button until tapped, so it
+  // doesn't permanently eat most of the horizontal filter strip's width — same
+  // filters.search state either way, nothing about search behavior changes.
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="flex flex-wrap gap-3 items-center">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-        <Input
-          placeholder={searchPlaceholder}
-          value={filters.search}
-          onChange={(e) => set({ search: e.target.value })}
-          className="pl-9 w-44"
-          data-testid="input-financial-search"
-        />
+    // Mobile: one non-wrapping horizontally scrollable row (hidden scrollbar, same
+    // technique already used for the app's horizontal tab switchers) instead of
+    // wrapping across multiple lines. sm+: reverts to the original wrapping row,
+    // unchanged.
+    <div
+      className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0"
+      style={{ scrollbarWidth: "none" }}
+    >
+      <div className="relative shrink-0 sm:flex-1 sm:min-w-48">
+        {!mobileSearchOpen && (
+          <button
+            type="button"
+            className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+            onClick={() => { setMobileSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+            aria-label="Ouvrir la recherche"
+            data-testid="button-open-financial-search"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        )}
+        <div className={`${mobileSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-auto`}>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            ref={searchInputRef}
+            placeholder={searchPlaceholder}
+            value={filters.search}
+            onChange={(e) => set({ search: e.target.value })}
+            onBlur={() => { if (!filters.search) setMobileSearchOpen(false); }}
+            className="pl-9 w-44"
+            data-testid="input-financial-search"
+          />
+        </div>
       </div>
 
       <Select value={filters.status} onValueChange={(v) => set({ status: v })}>
-        <SelectTrigger className="w-40" data-testid="select-financial-status"><SelectValue placeholder="Statut" /></SelectTrigger>
+        <SelectTrigger className="w-40 shrink-0" data-testid="select-financial-status"><SelectValue placeholder="Statut" /></SelectTrigger>
         <SelectContent>
           {statusOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
         </SelectContent>
@@ -65,7 +93,7 @@ export function FinancialFilterBar({
 
       {supplierOptions && (
         <Select value={filters.supplierId} onValueChange={(v) => set({ supplierId: v })}>
-          <SelectTrigger className="w-44" data-testid="select-financial-supplier"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
+          <SelectTrigger className="w-44 shrink-0" data-testid="select-financial-supplier"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Tous les fournisseurs</SelectItem>
             {supplierOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -73,7 +101,7 @@ export function FinancialFilterBar({
         </Select>
       )}
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 shrink-0">
         <Input
           type="date"
           value={filters.dateFrom}
@@ -93,7 +121,7 @@ export function FinancialFilterBar({
         />
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 shrink-0">
         <Input
           type="number"
           inputMode="decimal"
@@ -116,7 +144,7 @@ export function FinancialFilterBar({
       </div>
 
       {isFinancialFiltersActive(filters) && (
-        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => onChange(DEFAULT_FINANCIAL_FILTERS)}>
+        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => onChange(DEFAULT_FINANCIAL_FILTERS)}>
           <X className="w-3.5 h-3.5" /> Effacer
         </Button>
       )}

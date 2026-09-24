@@ -136,15 +136,17 @@ export default function NotificationsPage() {
                 <button
                   key={n.id}
                   onClick={() => !n.isRead && markRead.mutate(n.id)}
-                  className={`w-full flex items-start gap-4 p-3 rounded-lg border text-left transition-colors ${n.isRead ? "border-border/50" : "border-primary/30 bg-primary/5"}`}
+                  className={`w-full flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 p-3 rounded-lg border text-left transition-colors ${n.isRead ? "border-border/50" : "border-primary/30 bg-primary/5"}`}
                   data-testid={`notification-${n.id}`}
                 >
-                  <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${NOTIFICATION_PRIORITY_DOT[n.priority]}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">{n.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
+                  <div className="flex items-start gap-3 sm:flex-1 min-w-0">
+                    <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${NOTIFICATION_PRIORITY_DOT[n.priority]}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{n.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
+                  <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-1 shrink-0 pl-5 sm:pl-0">
                     <Badge variant="outline" className="text-xs">{n.type.replace(/_/g, " ")}</Badge>
                     <span className="text-xs text-muted-foreground">{formatNotificationTime(n.createdAt)}</span>
                   </div>

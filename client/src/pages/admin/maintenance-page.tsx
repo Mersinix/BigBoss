@@ -167,8 +167,8 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
       <DialogHeader><DialogTitle className="flex items-center gap-3">
         <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400 font-bold">{account.initials}</AvatarFallback></Avatar>
         <span className="flex-1">{account.name}</span>
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setPreviewOpen(true)} data-testid="button-preview-maintenance-marketplace">
-          <Eye className="w-3.5 h-3.5" />Aperçu marketplace
+        <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-maintenance-marketplace">
+          <Eye className="w-3.5 h-3.5" />
         </Button>
       </DialogTitle></DialogHeader>
       <div className="grid sm:grid-cols-2 gap-4 text-sm">

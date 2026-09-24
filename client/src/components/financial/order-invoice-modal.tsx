@@ -87,7 +87,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
 
         <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${t.modalBg}`}>
           {/* Header */}
-          <div className={`shrink-0 border-b px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
+          <div className={`shrink-0 border-b px-4 sm:px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
             <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors print:hidden ${t.iconBtn}`}>
               <X className="w-4 h-4" />
             </button>
@@ -104,7 +104,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
               scroll container exactly (client/src/components/cafe/order-details-modal.tsx),
               same thumb/track/hover classes, not a new scrollbar style. */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4
+            className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4
               [&::-webkit-scrollbar]:w-1
               [&::-webkit-scrollbar-track]:bg-transparent
               [&::-webkit-scrollbar-thumb]:rounded-full
@@ -276,7 +276,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
           </div>
 
           {/* Sticky footer */}
-          <div className={`shrink-0 border-t px-6 py-4 space-y-3 ${t.stickyBg}`}>
+          <div className={`shrink-0 border-t px-4 sm:px-6 py-4 space-y-3 ${t.stickyBg}`}>
             <div className="space-y-1.5 text-sm">
               <div className={`flex justify-between ${t.textMuted}`}>
                 <span>Sous-total</span><span>{fmt(linesTotal)}</span>

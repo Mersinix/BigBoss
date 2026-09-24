@@ -161,8 +161,8 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
         {/* Same synchronized Marketing Profile Details modal reused by the provider's own
             Eye preview and Coffee Owner /marketing (Part 41-42) — read-only here, Admin's
             approval/freeze/delete controls stay on this dialog's own actions below. */}
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setProfileOpen(true)} data-testid="button-preview-marketing-marketplace">
-          <Eye className="w-3.5 h-3.5" /> Aperçu marketplace
+        <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setProfileOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-marketing-marketplace">
+          <Eye className="w-3.5 h-3.5" />
         </Button>
       </DialogTitle></DialogHeader>
       <div className="grid sm:grid-cols-2 gap-4 text-sm">

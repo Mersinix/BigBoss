@@ -205,8 +205,8 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{barista.initials}</AvatarFallback></Avatar>
             <span className="flex-1">{barista.name}</span>
-            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setPreviewOpen(true)} data-testid="button-preview-barista-marketplace">
-              <Eye className="w-3.5 h-3.5" />Aperçu marketplace
+            <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-barista-marketplace">
+              <Eye className="w-3.5 h-3.5" />
             </Button>
           </DialogTitle>
         </DialogHeader>

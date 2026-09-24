@@ -56,7 +56,7 @@ export default function PaymentDetailsModal({
         <DialogTitle className="sr-only">Paiement {payoutReference(row.subOrderId)}</DialogTitle>
 
         <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${t.modalBg}`}>
-          <div className={`shrink-0 border-b px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
+          <div className={`shrink-0 border-b px-4 sm:px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
             <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
               <X className="w-4 h-4" />
             </button>
@@ -71,7 +71,7 @@ export default function PaymentDetailsModal({
               scroll container exactly (client/src/components/cafe/order-details-modal.tsx),
               same thumb/track/hover classes, not a new scrollbar style. */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4
+            className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4
               [&::-webkit-scrollbar]:w-1
               [&::-webkit-scrollbar-track]:bg-transparent
               [&::-webkit-scrollbar-thumb]:rounded-full
@@ -175,7 +175,7 @@ export default function PaymentDetailsModal({
           </div>
 
           {/* Sticky footer: statuses */}
-          <div className={`shrink-0 border-t px-6 py-4 space-y-3 ${t.stickyBg}`}>
+          <div className={`shrink-0 border-t px-4 sm:px-6 py-4 space-y-3 ${t.stickyBg}`}>
             <div className="flex flex-wrap gap-2 text-xs">
               <span className={`rounded-lg px-2.5 py-1 ${collectionMeta.className}`}>Paiement : {collectionMeta.label}</span>
               <span className={`rounded-lg px-2.5 py-1 ${payoutMeta.className}`}>Payout : {payoutMeta.label}</span>

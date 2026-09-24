@@ -325,28 +325,6 @@ function UserDetailDialog({
             </div>
           )}
 
-          {/* Role-specific multi-selects */}
-          {user.role === "DELIVERY_COMPANY" && (
-            <MultiChip label="Gouvernorats couverts" options={TUNISIAN_GOVERNORATES}
-              selected={form.governorates} onChange={v => setForm(f => ({ ...f, governorates: v }))} />
-          )}
-          {user.role === "PRINTER" && (
-            <MultiChip label="Catégories impression" options={printCategoryOptions}
-              selected={form.printCategories} onChange={v => setForm(f => ({ ...f, printCategories: v }))} />
-          )}
-          {user.role === "MARKETING" && (
-            <MultiChip label="Services marketing" options={MARKETING_CATS}
-              selected={form.marketingCategories} onChange={v => setForm(f => ({ ...f, marketingCategories: v }))} />
-          )}
-          {(user.role === "BARISTA_ACADEMY" || user.role === "BARISTA_MARKETPLACE") && (
-            <MultiChip label="Spécialités" options={baristaSkillOptions}
-              selected={form.categories} onChange={v => setForm(f => ({ ...f, categories: v }))} />
-          )}
-          {user.role === "MAINTENANCE" && (
-            <MultiChip label="Catégories de maintenance" options={MAINTENANCE_CATS}
-              selected={form.maintenanceCategories} onChange={v => setForm(f => ({ ...f, maintenanceCategories: v }))} />
-          )}
-
           {/* Save button */}
           <Button onClick={handleSave} disabled={isPending} className="w-full gap-2" data-testid="button-save-user-detail">
             <Save className="w-4 h-4" />

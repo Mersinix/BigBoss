@@ -101,7 +101,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)} title="Aperçu KPI">
+      <KpiOverviewModal open={isMobile && kpiModalOpen} onClose={() => setKpiModalOpen(false)} title="Statistiques">
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Commandes" value={stats.orderCount} icon={ShoppingBag} tone="primary" subtext={`${stats.activeCount} active(s)`} />
           <StatCard label="En attente fournisseur" value={pendingSupplierRequests} icon={Clock} tone="amber" subtext="Réponse requise" />

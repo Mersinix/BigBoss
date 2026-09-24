@@ -288,8 +288,8 @@ function PrinterAccountDetail({ account, onClose, onRefresh, onOpenService }: {
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 font-bold">{account.initials}</AvatarFallback></Avatar>
             <span className="flex-1">{account.name}</span>
-            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setPreviewOpen(true)} data-testid="button-preview-print-marketplace">
-              <Eye className="w-3.5 h-3.5" />Aperçu marketplace
+            <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-print-marketplace">
+              <Eye className="w-3.5 h-3.5" />
             </Button>
           </DialogTitle>
         </DialogHeader>

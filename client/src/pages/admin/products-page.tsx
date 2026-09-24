@@ -1224,7 +1224,7 @@ function AdminPackPreviewModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5">
+        <div className="space-y-5 min-w-0">
           {/* Hero image */}
           <div className="relative aspect-[16/9] bg-secondary rounded-xl overflow-hidden">
             {pack.imageUrl ? (

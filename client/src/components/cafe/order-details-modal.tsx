@@ -374,7 +374,7 @@ export default function OrderDetailsModal({
         <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${t.modalBg}`}>
 
           {/* ── Header ── */}
-          <div className={`shrink-0 border-b px-6 pt-5 pb-4 ${t.headerBg}`}>
+          <div className={`shrink-0 border-b px-4 sm:px-6 pt-5 pb-4 ${t.headerBg}`}>
 
             {/* Top row: close / order number / theme toggle */}
             <div className="flex items-center justify-between mb-3">
@@ -455,7 +455,7 @@ export default function OrderDetailsModal({
 
           {/* ── Scrollable body ── */}
           <div
-            className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4
+            className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4
               [&::-webkit-scrollbar]:w-1
               [&::-webkit-scrollbar-track]:bg-transparent
               [&::-webkit-scrollbar-thumb]:rounded-full
@@ -696,14 +696,6 @@ export default function OrderDetailsModal({
                                     <p className={`font-medium text-sm ${cancelled ? `line-through ${t.textSubtle}` : t.textPrimary}`}>{itemName}</p>
                                     {cancelled && <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-red-400/50 text-red-500">Annulé</Badge>}
                                   </div>
-                                  {!cancelled && (
-                                    <PackCompositionView
-                                      packId={item.packId}
-                                      quantity={item.quantity}
-                                      snapshot={packSnapshot}
-                                      t={t}
-                                    />
-                                  )}
                                 </div>
                                 <div className="shrink-0 text-right">
                                   <span className={`text-xs font-semibold block ${t.textMuted}`}>
@@ -714,6 +706,19 @@ export default function OrderDetailsModal({
                                   </span>
                                 </div>
                               </div>
+                              {/* Pack composition — full width beneath the image/name row instead of
+                                  being squeezed into the narrow middle column (Part 6's "text can use
+                                  full available width underneath the product/pack image"). */}
+                              {!cancelled && (
+                                <div className="mt-1.5 min-w-0">
+                                  <PackCompositionView
+                                    packId={item.packId}
+                                    quantity={item.quantity}
+                                    snapshot={packSnapshot}
+                                    t={t}
+                                  />
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -751,26 +756,34 @@ export default function OrderDetailsModal({
                           when the supplier marks it READY). Read-only: the Coffee Owner tracks
                           delivery progress here but doesn't act on it. */}
                       {sub.delivery && (
-                        <div className={`px-4 py-3 border-t flex items-start gap-3 ${t.dk ? "border-gray-700/50 bg-gray-800/40" : "border-gray-100 bg-gray-50/60"}`}>
-                          <div className="w-8 h-8 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
-                            <Truck className="w-4 h-4 text-indigo-500" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`text-xs font-semibold ${t.textMuted}`}>Livraison</span>
-                              <Badge variant="outline" className={`text-[11px] px-2 py-0.5 rounded-lg border-0 ${t.badge(sub.delivery.status, DELIVERY_STATUS_META)}`}>
-                                {DELIVERY_STATUS_META[sub.delivery.status]?.label ?? sub.delivery.status}
-                              </Badge>
+                        <div className={`px-4 py-3 border-t ${t.dk ? "border-gray-700/50 bg-gray-800/40" : "border-gray-100 bg-gray-50/60"}`}>
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
+                              <Truck className="w-4 h-4 text-indigo-500" />
                             </div>
-                            {sub.delivery.driver && (
-                              <p className={`text-xs mt-1 ${t.textPrimary}`}>Chauffeur: {sub.delivery.driver.name}</p>
-                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-xs font-semibold ${t.textMuted}`}>Livraison</span>
+                                <Badge variant="outline" className={`text-[11px] px-2 py-0.5 rounded-lg border-0 ${t.badge(sub.delivery.status, DELIVERY_STATUS_META)}`}>
+                                  {DELIVERY_STATUS_META[sub.delivery.status]?.label ?? sub.delivery.status}
+                                </Badge>
+                              </div>
+                              {sub.delivery.driver && (
+                                <p className={`text-xs mt-1 ${t.textPrimary}`}>Chauffeur: {sub.delivery.driver.name}</p>
+                              )}
+                            </div>
+                          </div>
+                          {/* Financial breakdown + delivery progress — full width beneath the icon
+                              row instead of being squeezed beside it (Part 6's "use the full
+                              available width rather than being unnecessarily constrained beside
+                              the icon"). */}
+                          <div className="mt-2 min-w-0">
                             {/* Admin-only cross-party breakdown — the Coffee Owner never sees a
                                 supplier's internal contribution (see isAdmin prop / task: Order
                                 Details synchronization). Real persisted figures only, from the
                                 same deliveries row every other surface reads — never recomputed. */}
                             {isAdmin && (
-                              <div className={`mt-2 pt-2 border-t space-y-0.5 ${t.dk ? "border-gray-700/50" : "border-gray-200"}`}>
+                              <div className={`pt-2 border-t space-y-0.5 ${t.dk ? "border-gray-700/50" : "border-gray-200"}`}>
                                 <div className={`flex justify-between text-xs ${t.textMuted}`}>
                                   <span>Frais de livraison total</span>
                                   <span className={t.textPrimary}>{fmt(sub.delivery.deliveryFee)}</span>
@@ -942,7 +955,7 @@ export default function OrderDetailsModal({
           </div>
 
           {/* ── Sticky footer: total + actions ── */}
-          <div className={`shrink-0 border-t px-6 py-4 space-y-4 ${t.stickyBg}`}>
+          <div className={`shrink-0 border-t px-4 sm:px-6 py-4 space-y-4 ${t.stickyBg}`}>
 
             {/* Grand total — order.totalAmount is always the sum of sub-order subtotals only
                 (products/packs, net of promotion + discount-code, see storage.createOrder /

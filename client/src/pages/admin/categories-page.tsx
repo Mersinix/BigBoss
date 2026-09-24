@@ -970,7 +970,7 @@ function SupplierCategoryOverviewPanel({ supplierId }: { supplierId: number }) {
   }
 
   const renderRow = (m: SupplierCategoryMapping, actions: ReactNode) => (
-    <div key={m.category.id} className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${m.isFrozen ? "border-muted-foreground/40 bg-muted/30" : m.mappingStatus === "APPROVED" ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-800"}`}>
+    <div key={m.category.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 p-3 rounded-lg border ${m.isFrozen ? "border-muted-foreground/40 bg-muted/30" : m.mappingStatus === "APPROVED" ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-800"}`}>
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-lg">{m.category.icon || "📦"}</span>
         <div className="min-w-0">
@@ -978,7 +978,7 @@ function SupplierCategoryOverviewPanel({ supplierId }: { supplierId: number }) {
           <p className="text-xs text-muted-foreground">{m.selectedSubCategoryIds.length} sub-categories selected</p>
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">{actions}</div>
+      <div className="flex items-center gap-2 flex-wrap sm:shrink-0">{actions}</div>
     </div>
   );
 
@@ -1012,9 +1012,9 @@ function SupplierCategoryOverviewPanel({ supplierId }: { supplierId: number }) {
         {overview.notAdded.length === 0 ? (
           <p className="text-xs text-muted-foreground italic px-1">All active categories are assigned.</p>
         ) : overview.notAdded.slice(0, 12).map(cat => (
-          <div key={cat.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-dashed">
+          <div key={cat.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 p-3 rounded-lg border border-dashed">
             <div className="flex items-center gap-2"><span>{cat.icon || "📦"}</span><span className="text-sm">{cat.name}</span></div>
-            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => addToSupplier.mutate(cat.id)} disabled={addToSupplier.isPending}>Add to Supplier</Button>
+            <Button size="sm" variant="outline" className="text-xs h-7 self-start sm:self-auto" onClick={() => addToSupplier.mutate(cat.id)} disabled={addToSupplier.isPending}>Add to Supplier</Button>
           </div>
         ))}
         {overview.notAdded.length > 12 && <p className="text-xs text-muted-foreground">+{overview.notAdded.length - 12} more categories</p>}
@@ -1167,7 +1167,8 @@ function CategoryRequestsSection() {
                 const hasPendingMappings = (mappingCounts?.pendingCount ?? 0) > 0;
                 return (
                   <div key={u.id} data-testid={`row-user-${u.id}`} className={hasPendingMappings ? "bg-amber-50/60 dark:bg-amber-950/10" : undefined}>
-                    <div className={`flex items-center gap-4 p-4 hover:bg-secondary/20 transition-colors ${hasPendingMappings ? "border-l-4 border-l-amber-400" : ""} ${isExpanded ? "bg-secondary/30" : ""}`}>
+                    <div className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 hover:bg-secondary/20 transition-colors ${hasPendingMappings ? "border-l-4 border-l-amber-400" : ""} ${isExpanded ? "bg-secondary/30" : ""}`}>
+                      <div className="flex items-start sm:items-center gap-4 min-w-0 sm:flex-1">
                       <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                         <Building2 className="w-4 h-4 text-primary" />
                       </div>
@@ -1207,7 +1208,8 @@ function CategoryRequestsSection() {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
                         {isSupplier && (
                           <Button
                             type="button"

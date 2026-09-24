@@ -144,8 +144,8 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
             {/* Same synchronized Academy Profile Details modal reused by the Academy's own
                 Eye preview and the Coffee Owner "click Académie" flow (Part 38-39) — read-only
                 here, Admin's approval/moderation controls stay on the card outside this dialog. */}
-            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setProfileOpen(true)} data-testid="button-preview-academy-marketplace">
-              <Eye className="w-3.5 h-3.5" /> Aperçu marketplace
+            <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setProfileOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-academy-marketplace">
+              <Eye className="w-3.5 h-3.5" />
             </Button>
           </DialogTitle>
         </DialogHeader>

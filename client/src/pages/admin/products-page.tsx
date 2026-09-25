@@ -964,11 +964,10 @@ function SupplierProductsSection({
       </div>
 
       {/* Filter bar + view toggle */}
-      <div className="flex items-start gap-3">
-        <Card className="border shadow-none flex-1">
-          <CardContent className="p-4">
-            <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
-              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
+      <Card className="border shadow-none">
+        <CardContent className="p-4">
+          <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
                 {!spSearchOpen && (
                   <button
                     type="button"
@@ -1043,18 +1042,19 @@ function SupplierProductsSection({
                   <X className="w-4 h-4 mr-1" />Clear
                 </Button>
               )}
+              <div className="shrink-0 sm:ml-auto">
+                <div className="flex border rounded-md overflow-hidden">
+                  <button onClick={() => setViewMode('list')} className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-list" title="List view">
+                    <LayoutList className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setViewMode('grid')} className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-grid" title="Grid view">
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
-        <div className="flex gap-1 border rounded-lg p-0.5 self-start mt-0 shrink-0">
-          <button onClick={() => setViewMode('list')} className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-list" title="List view">
-            <LayoutList className="w-4 h-4" />
-          </button>
-          <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-grid" title="Grid view">
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
 
       {/* Content */}
       {isLoading ? (
@@ -1625,12 +1625,11 @@ function AdminPacksSection({
       </div>
 
       {/* Filter bar + view toggle */}
-      <div className="flex items-start gap-3">
-        <Card className="border shadow-none flex-1">
-          <CardContent className="p-4">
-            <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
-              {/* Search */}
-              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
+      <Card className="border shadow-none">
+        <CardContent className="p-4">
+          <div className="flex items-end gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+            {/* Search */}
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px]">
                 {!packSearchOpen && (
                   <button
                     type="button"
@@ -1732,30 +1731,30 @@ function AdminPacksSection({
                   <X className="w-4 h-4 mr-1" />Clear
                 </Button>
               )}
+              {/* Grid / List toggle */}
+              <div className="shrink-0 sm:ml-auto">
+                <div className="flex border rounded-md overflow-hidden">
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    data-testid="toggle-pack-view-list"
+                    title="List view"
+                  >
+                    <LayoutList className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    data-testid="toggle-pack-view-grid"
+                    title="Grid view"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Grid / List toggle */}
-        <div className="flex gap-1 border rounded-lg p-0.5 self-start mt-0">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            data-testid="toggle-pack-view-list"
-            title="List view"
-          >
-            <LayoutList className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            data-testid="toggle-pack-view-grid"
-            title="Grid view"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
 
       {/* Content */}
       {isLoading ? (
@@ -2101,26 +2100,6 @@ export default function AdminProductsPage() {
             </button>
           </div>
         </div>
-        {section === 'catalog' && (
-          <div className="flex gap-1 border rounded-lg p-0.5">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              data-testid="toggle-view-list"
-              title="List view"
-            >
-              <LayoutList className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              data-testid="toggle-view-grid"
-              title="Grid view"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-          </div>
-        )}
       </div>
 
       {section === 'supplier' && <SupplierProductsSection cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} />}
@@ -2234,6 +2213,28 @@ export default function AdminProductsPage() {
                 <X className="w-4 h-4 mr-1" />Clear
               </Button>
             )}
+
+            {/* Grid / List toggle */}
+            <div className="shrink-0 sm:ml-auto">
+              <div className="flex border rounded-md overflow-hidden">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  data-testid="toggle-view-list"
+                  title="List view"
+                >
+                  <LayoutList className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  data-testid="toggle-view-grid"
+                  title="Grid view"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

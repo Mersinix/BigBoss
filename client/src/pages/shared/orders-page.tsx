@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useOrders, useDeleteOrder } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/format";
@@ -9,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Clock, Calendar, Archive, Search, X, Box, Zap, Store, MapPin, Trash2, Loader2, History, ListChecks } from "lucide-react";
+import { Clock, Calendar, Archive, Search, X, Box, Zap, Store, MapPin, Trash2, Loader2, History, ListChecks, ArrowRight } from "lucide-react";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
 import CafeOrdersPage from "@/pages/cafe/orders-page";
@@ -100,6 +101,7 @@ export default function OrdersPage() {
   const [mainView, setMainView] = useState<"active" | "historique">("active");
   const [activeSubView, setActiveSubView] = useState<"old" | "today" | "future">("today");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [cafeSearch, setCafeSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
@@ -119,6 +121,18 @@ export default function OrdersPage() {
 
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
   const isSupplier = user?.role === "SUPPLIER";
+
+  // Supplier workflow "Next" hop (task: "Connect the Complete Order → Delivery Workflow"):
+  // a ?focus=<orderId> query param, set by the Order Requests page's own Next button, singles
+  // out the exact related order regardless of whatever tab/filter/sort/page this page was last
+  // left on — the Supplier should never have to hunt for it manually.
+  const [, setLocation] = useLocation();
+  const searchStr = useSearch();
+  const focusOrderId = useMemo(() => {
+    const raw = new URLSearchParams(searchStr).get("focus");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  }, [searchStr]);
 
   // Realtime order updates (status changes) already re-trigger classification via the `orders`
   // dependency below — but a pure calendar-day rollover (task §15 scenarios 2/3: "Futures"
@@ -180,12 +194,24 @@ export default function OrdersPage() {
     });
   }, [filteredByView, statusFilter, cafeSearch, supplierSearch, productSearch, dateFilter]);
 
-  const pagination = usePagination(filtered.length);
-  useEffect(() => { pagination.resetPage(); }, [mainView, activeSubView, statusFilter, cafeSearch, supplierSearch, productSearch, dateFilter]);
-  const pageOrders = filtered.slice(pagination.start, pagination.end);
+  // Default + user-selectable ordering (task: "Default Order Sorting — Newest First" + "Add a
+  // Sort Filter"): sorts by each order's actual creation timestamp — the same date/time already
+  // shown on every card — without touching the underlying `orders` data or the old/today/future
+  // bucket classification above, which still uses getRelevantDate for its own separate purpose.
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const da = new Date(a.createdAt as any).getTime();
+      const db = new Date(b.createdAt as any).getTime();
+      return sortOrder === "desc" ? db - da : da - db;
+    });
+  }, [filtered, sortOrder]);
 
-  const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setSupplierSearch(""); setProductSearch(""); setDateFilter(""); };
-  const hasFilters = statusFilter !== "ALL" || cafeSearch || supplierSearch || productSearch || dateFilter;
+  const pagination = usePagination(sorted.length);
+  useEffect(() => { pagination.resetPage(); }, [mainView, activeSubView, statusFilter, cafeSearch, supplierSearch, productSearch, dateFilter, sortOrder]);
+  const pageOrders = sorted.slice(pagination.start, pagination.end);
+
+  const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setSupplierSearch(""); setProductSearch(""); setDateFilter(""); setSortOrder("desc"); };
+  const hasFilters = statusFilter !== "ALL" || cafeSearch || supplierSearch || productSearch || dateFilter || sortOrder !== "desc";
 
   const mainViews = [
     { id: "active" as const,     label: "Active Orders", icon: ListChecks, count: buckets.old.length + buckets.today.length + buckets.future.length },
@@ -206,6 +232,127 @@ export default function OrdersPage() {
   if (isLoading) return (
     <div className="flex flex-col gap-4 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">{[1,2,3].map(i => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}</div>
   );
+
+  // Extracted so the exact same card renders both in the normal filtered grid and in the
+  // single-order "Next" focus view above (task: "Preserve Existing Card Design — do not
+  // redesign the cards again").
+  function renderOrderCard(order: OrderWithDetails) {
+    // Derive the display status from sub-orders so every card badge stays in sync
+    // with what the Order Details modal shows — there is a single source of truth
+    // (the sub-order rows) and no separate cached state on the cards.
+    //
+    // • Supplier  → their own sub-order status (already correct from previous fix)
+    // • All other roles (Admin, Coffee Owner, Delivery) → aggregate status derived
+    //   from sub-orders via deriveOrderStatus(), which mirrors the Order Details
+    //   modal body. This avoids relying on the DB order.status column, which only
+    //   advances when ALL sub-orders complete and can lag behind individual updates.
+    const displayStatus = getEffectiveStatus(order, isSupplier, user?.id);
+    const badgeColor = STATUS_BADGE[displayStatus] ?? "bg-gray-100 text-gray-800 dark:bg-gray-500/15 dark:text-gray-400";
+    const label = STATUS_LABELS[displayStatus] ?? displayStatus;
+    // A supplier only ever sees their own single sub-order here, so the collapsed
+    // badge above is already accurate for them. Every other role sees the full,
+    // possibly multi-supplier order — for those, a single aggregate badge can hide
+    // suppliers that are behind. Null (one supplier, or none) keeps today's single
+    // badge; otherwise render one badge per supplier instead.
+    const supplierStatuses = isSupplier ? null : getSupplierStatusEntries(order);
+    const priority = (order as any).priority;
+    const scheduledAt = (order as any).scheduledAt;
+    const deliveryAddress = (order as any).deliveryAddress as { address: string } | null;
+    const subOrderCount = order.subOrders?.length ?? 0;
+
+    return (
+      <Card
+        key={order.id}
+        className="border-border/50 hover:shadow-md transition-shadow cursor-pointer"
+        data-testid={`card-order-${order.id}`}
+        onClick={() => setSelectedOrder(order)}
+      >
+        <CardContent className="p-4 space-y-3">
+          {/* Header: order # + café/supplier name + single-status badge */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="font-mono text-xs text-muted-foreground">#{String(order.id).padStart(6, "0")}</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Store className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <h3 className="font-semibold text-sm break-words">{order.cafe?.name}</h3>
+              </div>
+            </div>
+            {!supplierStatuses && (
+              <Badge variant="secondary" className={`${badgeColor} text-xs shrink-0`}>{label}</Badge>
+            )}
+          </div>
+
+          {/* Per-supplier statuses (multi-supplier orders) + priority + scheduled date */}
+          {(supplierStatuses || (priority && priority !== "NORMAL") || scheduledAt) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {supplierStatuses?.map((s) => (
+                <Badge key={s.supplierId} variant="secondary" className={`${STATUS_BADGE[s.status] ?? "bg-gray-100 text-gray-800 dark:bg-gray-500/15 dark:text-gray-400"} text-xs`}>
+                  {s.supplierName} — {STATUS_LABELS[s.status] ?? s.status}
+                </Badge>
+              ))}
+              {priority && priority !== "NORMAL" && (
+                <Badge variant="secondary" className={`text-xs ${priority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
+                  <Zap className="w-3 h-3 mr-0.5" />{priority === "URGENT" ? "Urgent" : "Haute prio."}
+                </Badge>
+              )}
+              {scheduledAt && (
+                <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                  <Calendar className="w-3 h-3" /> {formatDate(scheduledAt)}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Meta: created date + supplier count */}
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(order.createdAt as any)}</span>
+            {subOrderCount > 0 && (
+              <span>{subOrderCount} fournisseur{subOrderCount > 1 ? "s" : ""}</span>
+            )}
+          </div>
+
+          {/* Delivery address */}
+          {deliveryAddress && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <MapPin className="w-3 h-3 shrink-0" /><span className="truncate">{deliveryAddress.address}</span>
+            </div>
+          )}
+
+          {/* Footer: total + actions */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <p className="font-bold text-amber-500 text-lg">{fmt(order.totalAmount)}</p>
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Next: Supplier workflow hop to the Delivery Status page once this order is
+                  ready — dispatch is the next action available for it there. Admin never sees
+                  this; it's a Supplier-only workflow step. */}
+              {isSupplier && displayStatus === "READY" && (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={(e) => { e.stopPropagation(); setLocation(`/supplier/delivery-status?focus=${order.id}`); }}
+                  data-testid={`button-next-order-${order.id}`}
+                >
+                  Suivant <ArrowRight className="w-3.5 h-3.5" />
+                </Button>
+              )}
+              {/* Admin delete — the card itself now opens Details on click, so this stops
+                  its own click from bubbling up and re-triggering that. */}
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(order.id); }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
@@ -261,6 +408,14 @@ export default function OrdersPage() {
           <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
           <SelectContent>
             {STATUS_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
+          <SelectTrigger className="w-40 shrink-0" data-testid="select-orders-sort"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="desc">Plus récentes</SelectItem>
+            <SelectItem value="asc">Plus anciennes</SelectItem>
           </SelectContent>
         </Select>
 
@@ -361,7 +516,37 @@ export default function OrdersPage() {
       </div>
 
       {/* ── Order list ── */}
-      {filtered.length === 0 ? (
+      {focusOrderId != null ? (
+        <>
+          {/* Supplier workflow "Next" landing: bypasses the tab/filter/sort/pagination state
+              above entirely so the linked order is always shown, regardless of what this page
+              was last left on. */}
+          <Card className="border-primary/40 bg-primary/5">
+            <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm text-muted-foreground">
+                Commande liée affichée — <span className="font-mono text-foreground">#{String(focusOrderId).padStart(6, "0")}</span>
+              </p>
+              <Button size="sm" variant="outline" onClick={() => setLocation("/orders")} data-testid="button-clear-order-focus">
+                Voir toutes les commandes
+              </Button>
+            </CardContent>
+          </Card>
+          {(() => {
+            const focused = orders.find(o => o.id === focusOrderId);
+            if (!focused) {
+              return (
+                <Card>
+                  <CardContent className="py-16 text-center">
+                    <Box className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
+                    <p className="font-semibold text-lg">Commande introuvable</p>
+                  </CardContent>
+                </Card>
+              );
+            }
+            return <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{renderOrderCard(focused)}</div>;
+          })()}
+        </>
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <Box className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
@@ -376,107 +561,12 @@ export default function OrdersPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {pageOrders.map(order => {
-            // Derive the display status from sub-orders so every card badge stays in sync
-            // with what the Order Details modal shows — there is a single source of truth
-            // (the sub-order rows) and no separate cached state on the cards.
-            //
-            // • Supplier  → their own sub-order status (already correct from previous fix)
-            // • All other roles (Admin, Coffee Owner, Delivery) → aggregate status derived
-            //   from sub-orders via deriveOrderStatus(), which mirrors the Order Details
-            //   modal body. This avoids relying on the DB order.status column, which only
-            //   advances when ALL sub-orders complete and can lag behind individual updates.
-            const displayStatus = getEffectiveStatus(order, isSupplier, user?.id);
-            const badgeColor = STATUS_BADGE[displayStatus] ?? "bg-gray-100 text-gray-800 dark:bg-gray-500/15 dark:text-gray-400";
-            const label = STATUS_LABELS[displayStatus] ?? displayStatus;
-            // A supplier only ever sees their own single sub-order here, so the collapsed
-            // badge above is already accurate for them. Every other role sees the full,
-            // possibly multi-supplier order — for those, a single aggregate badge can hide
-            // suppliers that are behind. Null (one supplier, or none) keeps today's single
-            // badge; otherwise render one badge per supplier instead.
-            const supplierStatuses = isSupplier ? null : getSupplierStatusEntries(order);
-            const priority = (order as any).priority;
-            const scheduledAt = (order as any).scheduledAt;
-            const deliveryAddress = (order as any).deliveryAddress as { address: string } | null;
-            const subOrderCount = order.subOrders?.length ?? 0;
-
-            return (
-              <Card key={order.id} className="border-border/50">
-                <CardContent className="p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                    {/* Left */}
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs text-muted-foreground">#{String(order.id).padStart(6,"0")}</span>
-                        {supplierStatuses ? (
-                          supplierStatuses.map((s) => (
-                            <Badge key={s.supplierId} variant="secondary" className={`${STATUS_BADGE[s.status] ?? "bg-gray-100 text-gray-800 dark:bg-gray-500/15 dark:text-gray-400"} text-xs`}>
-                              {s.supplierName} — {STATUS_LABELS[s.status] ?? s.status}
-                            </Badge>
-                          ))
-                        ) : (
-                          <Badge variant="secondary" className={`${badgeColor} text-xs`}>{label}</Badge>
-                        )}
-                        {priority && priority !== "NORMAL" && (
-                          <Badge variant="secondary" className={`text-xs ${priority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
-                            <Zap className="w-3 h-3 mr-0.5" />{priority === "URGENT" ? "Urgent" : "Haute prio."}
-                          </Badge>
-                        )}
-                        {scheduledAt && (
-                          <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-                            <Calendar className="w-3 h-3" /> {formatDate(scheduledAt)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3 text-sm">
-                        <span className="flex items-center gap-1.5">
-                          <Store className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="font-medium">{order.cafe?.name}</span>
-                        </span>
-                        {subOrderCount > 0 && (
-                          <span className="text-xs text-muted-foreground">{subOrderCount} fournisseur{subOrderCount > 1 ? "s" : ""}</span>
-                        )}
-                        <span className="text-xs text-muted-foreground">{formatDate(order.createdAt as any)}</span>
-                      </div>
-
-                      {deliveryAddress && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <MapPin className="w-3 h-3 shrink-0" /><span className="truncate">{deliveryAddress.address}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Right */}
-                    <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
-                      <p className="font-bold text-amber-500 text-lg">{fmt(order.totalAmount)}</p>
-                      <div className="flex gap-2 flex-wrap justify-end">
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-primary" onClick={() => setSelectedOrder(order)}>
-                          Détails
-                        </Button>
-                        {/* Admin delete */}
-                        {isAdmin && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => setDeleteTarget(order.id)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {pageOrders.map(order => renderOrderCard(order))}
         </div>
       )}
 
-      {filtered.length > 0 && (
+      {focusOrderId == null && filtered.length > 0 && (
         <DataPagination
           page={pagination.page}
           pageSize={pagination.pageSize}

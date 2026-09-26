@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { useOrders, useUpdateSubOrderStatus } from "@/hooks/use-orders";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/format";
@@ -8,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, Clock, Box, Store, Layers, Eye, Search, X, Zap, Calendar, MapPin } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Box, Store, Layers, Search, X, Zap, Calendar, MapPin, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
@@ -57,6 +58,7 @@ function matchesDate(dateStr: any, filter: string): boolean {
 
 export default function OrderRequestsPage() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const { data: orders = [], isLoading } = useOrders();
   const updateSubOrderStatus = useUpdateSubOrderStatus();
   const { toast } = useToast();
@@ -74,6 +76,7 @@ export default function OrderRequestsPage() {
   const [pendingCafeSearch, setPendingCafeSearch] = useState("");
   const [pendingDateFilter, setPendingDateFilter] = useState("");
   const [pendingPriorityFilter, setPendingPriorityFilter] = useState("ALL");
+  const [pendingSortOrder, setPendingSortOrder] = useState<"desc" | "asc">("desc");
   const [pendingSearchOpen, setPendingSearchOpen] = useState(false);
   const pendingSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,6 +85,7 @@ export default function OrderRequestsPage() {
   const [histCafeSearch, setHistCafeSearch] = useState("");
   const [histDateFilter, setHistDateFilter] = useState("");
   const [histPriorityFilter, setHistPriorityFilter] = useState("ALL");
+  const [histSortOrder, setHistSortOrder] = useState<"desc" | "asc">("desc");
   const [histSearchOpen, setHistSearchOpen] = useState(false);
   const histSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,12 +111,18 @@ export default function OrderRequestsPage() {
   const allPending = useMemo(() => mySubOrders.filter(so => so.status === "PENDING"), [mySubOrders]);
   const allHistory = useMemo(() => mySubOrders.filter(so => so.status !== "PENDING"), [mySubOrders]);
 
+  // mySubOrders is already sorted newest-first at construction, so "desc" is a no-op reuse of
+  // that order; only "asc" needs an explicit re-sort — same underlying orderCreatedAt either way.
   const pendingRequests = useMemo(() => allPending.filter(so => {
     if (pendingCafeSearch && !so.cafeName.toLowerCase().includes(pendingCafeSearch.toLowerCase())) return false;
     if (pendingPriorityFilter !== "ALL" && so.orderPriority !== pendingPriorityFilter) return false;
     if (!matchesDate(so.orderCreatedAt, pendingDateFilter)) return false;
     return true;
-  }), [allPending, pendingCafeSearch, pendingDateFilter, pendingPriorityFilter]);
+  }).sort((a, b) => {
+    const da = new Date(a.orderCreatedAt as any).getTime();
+    const db = new Date(b.orderCreatedAt as any).getTime();
+    return pendingSortOrder === "desc" ? db - da : da - db;
+  }), [allPending, pendingCafeSearch, pendingDateFilter, pendingPriorityFilter, pendingSortOrder]);
 
   const historyRequests = useMemo(() => allHistory.filter(so => {
     if (histStatusFilter !== "ALL" && so.status !== histStatusFilter) return false;
@@ -120,7 +130,11 @@ export default function OrderRequestsPage() {
     if (histPriorityFilter !== "ALL" && so.orderPriority !== histPriorityFilter) return false;
     if (!matchesDate(so.orderCreatedAt, histDateFilter)) return false;
     return true;
-  }), [allHistory, histStatusFilter, histCafeSearch, histDateFilter, histPriorityFilter]);
+  }).sort((a, b) => {
+    const da = new Date(a.orderCreatedAt as any).getTime();
+    const db = new Date(b.orderCreatedAt as any).getTime();
+    return histSortOrder === "desc" ? db - da : da - db;
+  }), [allHistory, histStatusFilter, histCafeSearch, histDateFilter, histPriorityFilter, histSortOrder]);
 
   // ── Counts ────────────────────────────────────────────────────────────────
 
@@ -148,15 +162,15 @@ export default function OrderRequestsPage() {
     setModalReadOnly(readOnly);
   };
 
-  const hasPendingFilters = pendingCafeSearch || pendingDateFilter || pendingPriorityFilter !== "ALL";
-  const hasHistFilters = histStatusFilter !== "ALL" || histCafeSearch || histDateFilter || histPriorityFilter !== "ALL";
+  const hasPendingFilters = pendingCafeSearch || pendingDateFilter || pendingPriorityFilter !== "ALL" || pendingSortOrder !== "desc";
+  const hasHistFilters = histStatusFilter !== "ALL" || histCafeSearch || histDateFilter || histPriorityFilter !== "ALL" || histSortOrder !== "desc";
 
   const pendingPagination = usePagination(pendingRequests.length);
-  useEffect(() => { pendingPagination.resetPage(); }, [pendingCafeSearch, pendingDateFilter, pendingPriorityFilter]);
+  useEffect(() => { pendingPagination.resetPage(); }, [pendingCafeSearch, pendingDateFilter, pendingPriorityFilter, pendingSortOrder]);
   const pagePendingRequests = pendingRequests.slice(pendingPagination.start, pendingPagination.end);
 
   const histPagination = usePagination(historyRequests.length);
-  useEffect(() => { histPagination.resetPage(); }, [histStatusFilter, histCafeSearch, histDateFilter, histPriorityFilter]);
+  useEffect(() => { histPagination.resetPage(); }, [histStatusFilter, histCafeSearch, histDateFilter, histPriorityFilter, histSortOrder]);
   const pageHistoryRequests = historyRequests.slice(histPagination.start, histPagination.end);
 
   // ── Loading ────────────────────────────────────────────────────────────────
@@ -285,6 +299,14 @@ export default function OrderRequestsPage() {
               </SelectContent>
             </Select>
 
+            <Select value={pendingSortOrder} onValueChange={(v) => setPendingSortOrder(v as "desc" | "asc")}>
+              <SelectTrigger className="w-40 shrink-0" data-testid="select-pending-sort"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desc">Plus récentes</SelectItem>
+                <SelectItem value="asc">Plus anciennes</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Input
               type="date"
               value={pendingDateFilter}
@@ -298,7 +320,7 @@ export default function OrderRequestsPage() {
                 variant="ghost"
                 size="sm"
                 className="gap-1.5 text-muted-foreground shrink-0"
-                onClick={() => { setPendingCafeSearch(""); setPendingDateFilter(""); setPendingPriorityFilter("ALL"); }}
+                onClick={() => { setPendingCafeSearch(""); setPendingDateFilter(""); setPendingPriorityFilter("ALL"); setPendingSortOrder("desc"); }}
               >
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
@@ -317,80 +339,91 @@ export default function OrderRequestsPage() {
             </Card>
           ) : (
             <>
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {pagePendingRequests.map(so => (
-                  <Card key={so.id} className="border-border/50">
-                    <CardContent className="p-4">
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-xs text-muted-foreground">#{String(so.orderId).padStart(6, "0")}</span>
-                            {so.orderPriority && so.orderPriority !== "NORMAL" && (
-                              <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
-                                <Zap className="w-3 h-3 mr-0.5" />{so.orderPriority === "URGENT" ? "Urgent" : "Haute prio."}
-                              </Badge>
-                            )}
-                            {so.orderScheduledAt && (
-                              <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                                <Calendar className="w-3 h-3" /> {formatDate(so.orderScheduledAt)}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-sm">
-                            <Store className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <span className="font-medium">{so.cafeName}</span>
-                            <span className="text-muted-foreground text-xs">· {formatDate(so.orderCreatedAt)}</span>
-                          </div>
-                          {so.deliveryAddress?.address && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <MapPin className="w-3 h-3 shrink-0" />
-                              <span className="truncate">{so.deliveryAddress.address}</span>
-                            </div>
-                          )}
-                          <div className="flex flex-wrap gap-1.5">
-                            {(so.items ?? []).slice(0, 4).map((item: any, idx: number) => (
-                              <span key={idx} className="inline-flex items-center gap-1 text-xs bg-secondary/60 px-2 py-0.5 rounded-full text-muted-foreground">
-                                {item.packId ? <Layers className="w-2.5 h-2.5" /> : <Box className="w-2.5 h-2.5" />}
-                                {item.quantity}× {item.packId ? item.packName : item.product?.name}
-                              </span>
-                            ))}
-                            {(so.items ?? []).length > 4 && (
-                              <span className="text-xs text-muted-foreground self-center">+{(so.items ?? []).length - 4}</span>
-                            )}
-                          </div>
+                  <Card
+                    key={so.id}
+                    className="border-border/50 hover:shadow-md transition-shadow cursor-pointer"
+                    data-testid={`card-request-${so.id}`}
+                    onClick={() => openModal((so as any)._order, false)}
+                  >
+                    <CardContent className="p-4 space-y-3">
+                      {/* Header: order # + café name */}
+                      <div className="min-w-0">
+                        <span className="font-mono text-xs text-muted-foreground">#{String(so.orderId).padStart(6, "0")}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Store className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <h3 className="font-semibold text-sm break-words">{so.cafeName}</h3>
                         </div>
-                        <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
-                          <p className="font-bold text-amber-500">{fmt(so.subtotal)}</p>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                              onClick={() => handleApprove(so.id)}
-                              disabled={updateSubOrderStatus.isPending}
-                              data-testid={`button-approve-${so.id}`}
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                              onClick={() => handleReject(so.id)}
-                              disabled={updateSubOrderStatus.isPending}
-                              data-testid={`button-reject-${so.id}`}
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs text-primary"
-                              onClick={() => openModal((so as any)._order, false)}
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
+                      </div>
+
+                      {/* Priority + scheduled date */}
+                      {((so.orderPriority && so.orderPriority !== "NORMAL") || so.orderScheduledAt) && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {so.orderPriority && so.orderPriority !== "NORMAL" && (
+                            <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
+                              <Zap className="w-3 h-3 mr-0.5" />{so.orderPriority === "URGENT" ? "Urgent" : "Haute prio."}
+                            </Badge>
+                          )}
+                          {so.orderScheduledAt && (
+                            <span className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" /> {formatDate(so.orderScheduledAt)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Meta: created date */}
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="w-3 h-3" />{formatDate(so.orderCreatedAt)}
+                      </div>
+
+                      {/* Address */}
+                      {so.deliveryAddress?.address && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{so.deliveryAddress.address}</span>
+                        </div>
+                      )}
+
+                      {/* Items */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {(so.items ?? []).slice(0, 4).map((item: any, idx: number) => (
+                          <span key={idx} className="inline-flex items-center gap-1 text-xs bg-secondary/60 px-2 py-0.5 rounded-full text-muted-foreground">
+                            {item.packId ? <Layers className="w-2.5 h-2.5" /> : <Box className="w-2.5 h-2.5" />}
+                            {item.quantity}× {item.packId ? item.packName : item.product?.name}
+                          </span>
+                        ))}
+                        {(so.items ?? []).length > 4 && (
+                          <span className="text-xs text-muted-foreground self-center">+{(so.items ?? []).length - 4}</span>
+                        )}
+                      </div>
+
+                      {/* Footer: amount + actions — the card itself now opens Details on
+                          click, so Approve/Reject stop their own click from bubbling up. */}
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <p className="font-bold text-amber-500 text-lg">{fmt(so.subtotal)}</p>
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            onClick={(e) => { e.stopPropagation(); handleApprove(so.id); }}
+                            disabled={updateSubOrderStatus.isPending}
+                            data-testid={`button-approve-${so.id}`}
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            onClick={(e) => { e.stopPropagation(); handleReject(so.id); }}
+                            disabled={updateSubOrderStatus.isPending}
+                            data-testid={`button-reject-${so.id}`}
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
@@ -457,6 +490,14 @@ export default function OrderRequestsPage() {
               </SelectContent>
             </Select>
 
+            <Select value={histSortOrder} onValueChange={(v) => setHistSortOrder(v as "desc" | "asc")}>
+              <SelectTrigger className="w-40 shrink-0" data-testid="select-hist-sort"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desc">Plus récentes</SelectItem>
+                <SelectItem value="asc">Plus anciennes</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Input
               type="date"
               value={histDateFilter}
@@ -470,7 +511,7 @@ export default function OrderRequestsPage() {
                 variant="ghost"
                 size="sm"
                 className="gap-1.5 text-muted-foreground shrink-0"
-                onClick={() => { setHistStatusFilter("ALL"); setHistCafeSearch(""); setHistDateFilter(""); setHistPriorityFilter("ALL"); }}
+                onClick={() => { setHistStatusFilter("ALL"); setHistCafeSearch(""); setHistDateFilter(""); setHistPriorityFilter("ALL"); setHistSortOrder("desc"); }}
               >
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
@@ -489,40 +530,58 @@ export default function OrderRequestsPage() {
             </Card>
           ) : (
             <>
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {pageHistoryRequests.map(so => {
                   const s = HIST_STATUS_MAP[so.status] ?? { label: so.status, color: "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400" };
                   return (
-                    <Card key={so.id} className="border-border/50">
-                      <CardContent className="p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                          <div className="flex-1 min-w-0 space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-xs text-muted-foreground">#{String(so.orderId).padStart(6, "0")}</span>
-                              <Badge variant="secondary" className={`${s.color} text-xs`}>{s.label}</Badge>
-                              {so.orderPriority && so.orderPriority !== "NORMAL" && (
-                                <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
-                                  <Zap className="w-3 h-3 mr-0.5" />{so.orderPriority === "URGENT" ? "Urgent" : "Haute prio."}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-sm">
+                    <Card
+                      key={so.id}
+                      className="border-border/50 hover:shadow-md transition-shadow cursor-pointer"
+                      data-testid={`card-history-request-${so.id}`}
+                      onClick={() => openModal((so as any)._order, true)}
+                    >
+                      <CardContent className="p-4 space-y-3">
+                        {/* Header: order # + café name + status */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-mono text-xs text-muted-foreground">#{String(so.orderId).padStart(6, "0")}</span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
                               <Store className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                              <span className="font-medium">{so.cafeName}</span>
-                              <span className="text-muted-foreground text-xs">· {formatDate(so.orderCreatedAt)}</span>
+                              <h3 className="font-semibold text-sm break-words">{so.cafeName}</h3>
                             </div>
                           </div>
-                          <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 shrink-0">
-                            <p className="font-bold text-amber-500">{fmt(so.subtotal)}</p>
+                          <Badge variant="secondary" className={`${s.color} text-xs shrink-0`}>{s.label}</Badge>
+                        </div>
+
+                        {so.orderPriority && so.orderPriority !== "NORMAL" && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="secondary" className={`text-xs ${so.orderPriority === "URGENT" ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400"}`}>
+                              <Zap className="w-3 h-3 mr-0.5" />{so.orderPriority === "URGENT" ? "Urgent" : "Haute prio."}
+                            </Badge>
+                          </div>
+                        )}
+
+                        {/* Meta: created date */}
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="w-3 h-3" />{formatDate(so.orderCreatedAt)}
+                        </div>
+
+                        {/* Footer: total + workflow "Next" hop — only for an accepted request
+                            (i.e. not rejected/CANCELLED) that has progressed into the Orders
+                            page's own workflow. Stops its own click from bubbling up to the
+                            card's onClick, which opens Details instead. */}
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <p className="font-bold text-amber-500 text-lg">{fmt(so.subtotal)}</p>
+                          {so.status !== "CANCELLED" && (
                             <Button
                               size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs text-primary"
-                              onClick={() => openModal((so as any)._order, true)}
+                              className="h-7 text-xs gap-1 shrink-0"
+                              onClick={(e) => { e.stopPropagation(); setLocation(`/orders?focus=${so.orderId}`); }}
+                              data-testid={`button-next-request-${so.id}`}
                             >
-                              <Eye className="w-3.5 h-3.5 mr-1" />Détails
+                              Suivant <ArrowRight className="w-3.5 h-3.5" />
                             </Button>
-                          </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>

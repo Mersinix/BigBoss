@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useDeliveries, useDispatchDelivery } from "@/hooks/use-deliveries";
 import { useDeliveryCompanyProfiles } from "@/hooks/use-delivery-company-marketplace";
 import { DeliveryCompanyDetailModal } from "@/components/delivery/delivery-company-detail-modal";
@@ -11,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
-import { Truck, CheckCircle, Clock, MapPin, Package, Search, X, Building2, User as UserIcon, Star, ChevronLeft, Users as UsersIcon } from "lucide-react";
+import { Truck, CheckCircle, Clock, MapPin, Package, Search, X, Building2, User as UserIcon, Star, ChevronLeft, Users as UsersIcon, ArrowRight } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
@@ -181,9 +182,20 @@ export function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDe
 
 export default function SupplierDeliveryStatusPage() {
   const { data: deliveries = [], isLoading } = useDeliveries();
+  const [, setLocation] = useLocation();
+  const searchStr = useSearch();
+  // Supplier workflow "Next" hop (task: "Connect the Complete Order → Delivery Workflow"): a
+  // ?focus=<orderId> query param, set by the Orders page's own Next button, singles out the
+  // exact related delivery regardless of whatever filter/sort/page this page was last left on.
+  const focusOrderId = useMemo(() => {
+    const raw = new URLSearchParams(searchStr).get("focus");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  }, [searchStr]);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
   const [modeFilter, setModeFilter] = useState("ALL");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -203,18 +215,22 @@ export default function SupplierDeliveryStatusPage() {
         if (!haystack.includes(q)) return false;
       }
       return true;
+    }).sort((a, b) => {
+      const da = new Date(a.createdAt as any).getTime();
+      const db = new Date(b.createdAt as any).getTime();
+      return sortOrder === "desc" ? db - da : da - db;
     });
-  }, [deliveries, statusFilter, dateFilter, modeFilter, search]);
+  }, [deliveries, statusFilter, dateFilter, modeFilter, search, sortOrder]);
 
   const inTransit = deliveries.filter((d) => ["PICKED_UP", "IN_TRANSIT"].includes(d.status)).length;
   const deliveredCount = deliveries.filter((d) => d.status === "DELIVERED").length;
   const pendingDispatch = deliveries.filter((d) => d.status === "PENDING").length;
 
-  const hasFilters = statusFilter !== "ALL" || dateFilter !== "ALL" || modeFilter !== "ALL" || !!search;
-  const clearFilters = () => { setStatusFilter("ALL"); setDateFilter("ALL"); setModeFilter("ALL"); setSearch(""); };
+  const hasFilters = statusFilter !== "ALL" || dateFilter !== "ALL" || modeFilter !== "ALL" || !!search || sortOrder !== "desc";
+  const clearFilters = () => { setStatusFilter("ALL"); setDateFilter("ALL"); setModeFilter("ALL"); setSearch(""); setSortOrder("desc"); };
 
   const pagination = usePagination(filtered.length);
-  useEffect(() => { pagination.resetPage(); }, [statusFilter, dateFilter, modeFilter, search]);
+  useEffect(() => { pagination.resetPage(); }, [statusFilter, dateFilter, modeFilter, search, sortOrder]);
   const pageDeliveries = filtered.slice(pagination.start, pagination.end);
 
   return (
@@ -297,6 +313,13 @@ export default function SupplierDeliveryStatusPage() {
             <SelectItem value="SUPPLIER">{DELIVERY_MODE_LABEL.SUPPLIER}</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
+          <SelectTrigger className="w-40 shrink-0" data-testid="select-delivery-sort"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="desc">Plus récentes</SelectItem>
+            <SelectItem value="asc">Plus anciennes</SelectItem>
+          </SelectContent>
+        </Select>
         <div className="relative shrink-0">
           {!searchOpen && (
             <button
@@ -331,6 +354,36 @@ export default function SupplierDeliveryStatusPage() {
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}</div>
+      ) : focusOrderId != null ? (
+        <>
+          {/* Supplier workflow "Next" landing: bypasses the filter/sort/pagination state above
+              entirely so the linked delivery is always shown, regardless of what this page was
+              last left on. */}
+          <Card className="border-primary/40 bg-primary/5">
+            <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm text-muted-foreground">
+                Livraison liée affichée — <span className="font-mono text-foreground">#{focusOrderId}</span>
+              </p>
+              <Button size="sm" variant="outline" onClick={() => setLocation("/supplier/delivery-status")} data-testid="button-clear-delivery-focus">
+                Voir toutes les livraisons
+              </Button>
+            </CardContent>
+          </Card>
+          {(() => {
+            const focused = deliveries.find(d => d.orderId === focusOrderId);
+            if (!focused) {
+              return (
+                <Card>
+                  <CardContent className="py-16 text-center">
+                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
+                    <p className="font-semibold">Livraison introuvable</p>
+                  </CardContent>
+                </Card>
+              );
+            }
+            return <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{renderDeliveryCard(focused)}</div>;
+          })()}
+        </>
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
@@ -339,52 +392,12 @@ export default function SupplierDeliveryStatusPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {pageDeliveries.map((d) => {
-            const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400" };
-            return (
-              <Card key={d.id}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div className="flex items-start gap-4">
-                      <div className="rounded-lg p-2 mt-0.5 bg-secondary"><Truck className="w-4 h-4 text-muted-foreground" /></div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-semibold text-sm">Commande #{d.orderId}</p>
-                          <Badge variant="secondary" className={meta.cls}>{meta.label}</Badge>
-                          {d.deliveryMode && <Badge variant="outline" className="text-[11px]">{DELIVERY_MODE_LABEL[d.deliveryMode]}</Badge>}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">Café: <span className="font-medium text-foreground">{d.cafe.name}</span></p>
-                        {d.deliveryCompany && <p className="text-xs text-muted-foreground">Transporteur: <span className="font-medium text-foreground">{d.deliveryCompany.name}</span></p>}
-                        {d.driver && <p className="text-xs text-muted-foreground">Chauffeur: <span className="font-medium text-foreground">{d.driver.name}</span></p>}
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" /> {d.destinationAddress?.address || "—"}</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <span className="text-xs text-muted-foreground">{formatDate(d.createdAt as any)}</span>
-                      <div className="flex gap-2">
-                        {d.status === "PENDING" && (
-                          <Button size="sm" onClick={() => setDispatchTarget(d)}>Dispatcher</Button>
-                        )}
-                        {/* Redispatch (task: "Supplier redispatch before driver confirmation") — the
-                            driver is assigned but has not yet progressed past ASSIGNED (i.e. not yet
-                            picked up), so the Supplier can still reopen the full dispatch choice,
-                            regardless of which mode is currently assigned. */}
-                        {d.status === "ASSIGNED" && (
-                          <Button size="sm" variant="outline" onClick={() => setDispatchTarget(d)} data-testid={`button-reassign-status-${d.id}`}>Changer de chauffeur</Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => setViewTarget(d)}>Détails</Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {pageDeliveries.map((d) => renderDeliveryCard(d))}
         </div>
       )}
 
-      {!isLoading && (
+      {!isLoading && focusOrderId == null && (
         <DataPagination
           page={pagination.page}
           pageSize={pagination.pageSize}
@@ -408,4 +421,79 @@ export default function SupplierDeliveryStatusPage() {
       </Dialog>
     </div>
   );
+
+  function renderDeliveryCard(d: DeliveryWithDetails) {
+    const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400" };
+    return (
+      <Card
+        key={d.id}
+        className="border-border/50 hover:shadow-md transition-shadow cursor-pointer"
+        data-testid={`card-delivery-${d.id}`}
+        onClick={() => setViewTarget(d)}
+      >
+        <CardContent className="p-4 space-y-3">
+          {/* Header: order # + café name + status */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="font-mono text-xs text-muted-foreground">#{d.orderId}</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Truck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <h3 className="font-semibold text-sm break-words">{d.cafe.name}</h3>
+              </div>
+            </div>
+            <Badge variant="secondary" className={`${meta.cls} text-xs shrink-0`}>{meta.label}</Badge>
+          </div>
+
+          {/* Mode + transporteur/chauffeur */}
+          {(d.deliveryMode || d.deliveryCompany || d.driver) && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              {d.deliveryMode && <Badge variant="outline" className="text-[11px]">{DELIVERY_MODE_LABEL[d.deliveryMode]}</Badge>}
+              {d.deliveryCompany && <span>Transporteur: <span className="font-medium text-foreground">{d.deliveryCompany.name}</span></span>}
+              {d.driver && <span>Chauffeur: <span className="font-medium text-foreground">{d.driver.name}</span></span>}
+            </div>
+          )}
+
+          {/* Meta: created date */}
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="w-3 h-3" />{formatDate(d.createdAt as any)}
+          </div>
+
+          {/* Address */}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="w-3 h-3 shrink-0" /><span className="truncate">{d.destinationAddress?.address || "—"}</span>
+          </div>
+
+          {/* Actions — the card itself now opens Details on click, so these stop
+              their own click from bubbling up and re-triggering that. */}
+          {(d.status === "PENDING" || d.status === "ASSIGNED" || (d.deliveryMode === "SUPPLIER" && d.status !== "CANCELLED")) && (
+            <div className="flex items-center justify-end gap-2 pt-1">
+              {d.status === "PENDING" && (
+                <Button size="sm" onClick={(e) => { e.stopPropagation(); setDispatchTarget(d); }}>Dispatcher</Button>
+              )}
+              {/* Redispatch (task: "Supplier redispatch before driver confirmation") — the
+                  driver is assigned but has not yet progressed past ASSIGNED (i.e. not yet
+                  picked up), so the Supplier can still reopen the full dispatch choice,
+                  regardless of which mode is currently assigned. */}
+              {d.status === "ASSIGNED" && (
+                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setDispatchTarget(d); }} data-testid={`button-reassign-status-${d.id}`}>Changer de chauffeur</Button>
+              )}
+              {/* Next: Supplier workflow hop to My Deliveries, once this delivery has been
+                  dispatched to the Supplier's own drivers ("Mes chauffeurs"). The outer
+                  condition above already guarantees d.status isn't CANCELLED here. */}
+              {d.deliveryMode === "SUPPLIER" && (
+                <Button
+                  size="sm"
+                  className="h-8 text-xs gap-1"
+                  onClick={(e) => { e.stopPropagation(); setLocation(`/delivery/my-deliveries?focus=${d.orderId}`); }}
+                  data-testid={`button-next-delivery-${d.id}`}
+                >
+                  Suivant <ArrowRight className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 }

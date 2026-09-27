@@ -688,7 +688,7 @@ function PromotionCard({
   return (
     <Card className="rounded-2xl border-border/60 shadow-sm hover:shadow-md transition-shadow">
       <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <div className="bg-amber-500/10 rounded-xl p-2.5 shrink-0 text-amber-600 mt-0.5">
               {icon}
@@ -736,7 +736,7 @@ function PromotionCard({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 w-full justify-end sm:w-auto sm:justify-start">
             {promo.targetType !== 'ALL' && (
               <Button size="sm" variant="outline" onClick={onManageAssignments} className="h-8 px-2 text-xs gap-1 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30 hover:bg-amber-50 dark:hover:bg-amber-500/10">
                 <Settings2 className="w-3 h-3" /> Manage

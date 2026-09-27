@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePromotionEvaluation } from "@/hooks/use-promotion-evaluation";
 import { useValidateDiscountCode } from "@/hooks/use-discount-codes";
 import { usePackAvailability, isPackFrozen, PACK_AVAILABILITY_KEY } from "@/hooks/use-pack-availability";
+import { useServiceStates } from "@/hooks/use-service-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Trash2, Plus, Minus, ShoppingBag, Store, ArrowRight, Printer,
-  Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck, Sun, Moon,
+  Clock, Package, MapPin, CheckCircle, Layers, Tag, Gift, Truck,
   CreditCard, Banknote, Smartphone, Landmark, Pencil, AlertTriangle, X, Ticket
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -29,6 +30,7 @@ import type { CreateOrderRequest, GeoLocation } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { userToAccountAddress, pickedToGeoLocation } from "@/store/search-location-store";
 import OrderConfirmationModal, { type ConfirmOrderOpts } from "@/components/cafe/order-confirmation-modal";
+import PrintOrderConfirmationModal, { type ConfirmPrintOrderOpts } from "@/components/cafe/print-order-confirmation-modal";
 import { useAccountOpenStore } from "@/store/account-open-store";
 import { groupPackIncludedProducts } from "@/lib/pack-grouping";
 import { groupCartProducts } from "@/lib/cart-grouping";
@@ -137,10 +139,20 @@ export default function CartPage() {
   const [courierInstructions, setCourierInstructions] = useState("");
   const [deliveryPickerOpen, setDeliveryPickerOpen] = useState(false);
   const isDark = useThemeStore((s) => s.isDark);
-  const toggle = useThemeStore((s) => s.toggle);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [printConfirmOpen, setPrintConfirmOpen] = useState(false);
   const [isPreparingOrder, setIsPreparingOrder] = useState(false);
   const fmt = useFormatCurrency();
+
+  // SHOP/PRINT switcher (task: "/cart — SHOP / PRINT Switcher") — PRINT's visibility here
+  // must follow the single existing source of truth (Admin → System Management → Services →
+  // PRINT), never a second independent flag. GatedServiceRoute already gates the whole /print
+  // marketplace page the same way; this just reads the same state for the Cart's own switcher.
+  const { states: serviceStates } = useServiceStates();
+  const printState = serviceStates.PRINTING;
+  const printHidden = printState === "HIDDEN";
+  const printComingSoon = printState === "COMING_SOON";
+  const [activeTab, setActiveTab] = useState<"shop" | "print">("shop");
 
   // Discount Codes — a single code the Coffee Owner types in, completely separate from the
   // Promotions above. Resolves to whichever one supplier issued it (see /validate route);
@@ -167,9 +179,6 @@ export default function CartPage() {
     ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 rounded-xl text-sm"
     : "border-gray-200 rounded-xl text-sm";
   const labelCls    = dk ? "text-sm font-semibold text-gray-300" : "text-sm font-semibold";
-  const toggleBtn   = dk
-    ? "bg-gray-800 hover:bg-gray-700 text-amber-400"
-    : "bg-gray-100 hover:bg-gray-200 text-gray-600";
   const backBtn     = dk
     ? "border-gray-700 text-gray-300 hover:bg-gray-800"
     : "border-gray-200 text-gray-700 hover:bg-gray-50";
@@ -201,6 +210,10 @@ export default function CartPage() {
   // content" (must stay visible), but there is nothing left to actually order.
   const hasOrderableShop = orderableItems.length > 0 || orderablePackItems.length > 0;
   const hasPrint = printItems.length > 0;
+  // PRINT existing in the cart doesn't mean it should be shown here — Admin → System
+  // Management → Services → PRINT is the single source of truth for that (see printHidden
+  // above); when Hidden, PRINT must behave as if it weren't in the cart at all on this page.
+  const showPrintSection = !printHidden && hasPrint;
   const discountCodeAmount = appliedDiscountCode?.discountAmount ?? 0;
   const grandTotal = totalShop + totalPack + totalPrint - promoEval.totalDiscount - discountCodeAmount;
 
@@ -445,12 +458,17 @@ export default function CartPage() {
     });
   };
 
-  const handlePrintCheckout = () => {
-    if (createPrintOrders.isPending || printItems.length === 0) return;
-    createPrintOrders.mutate(printItems, {
+  // Called when the user clicks "Confirmer la commande" inside the PRINT recap modal — same
+  // shape as handleConfirmOrder (SHOP): only the items actually submitted from the modal's
+  // draft are removed from the real cart on success, so a line the Coffee Owner removed from
+  // the draft (but not the live cart) stays untouched, exactly like SHOP's behavior.
+  const handleConfirmPrintOrder = (opts: ConfirmPrintOrderOpts) => {
+    if (createPrintOrders.isPending || opts.modifiedItems.length === 0) return;
+    createPrintOrders.mutate(opts.modifiedItems, {
       onSuccess: () => {
         toast({ title: "Commande PRINT envoyée !", description: "Vos demandes d'impression ont été transmises." });
-        clearPrintItems();
+        for (const item of opts.modifiedItems) removePrintItem(item.id);
+        setPrintConfirmOpen(false);
         queryClient.invalidateQueries({ queryKey: ["/api/print/orders"] });
       },
       onError: (error) => {
@@ -478,25 +496,29 @@ export default function CartPage() {
   }
   const orderableSupplierEntries = Array.from(orderableBySupplier.entries());
 
-  if (!hasShop && !hasPrint) {
+  if (!hasShop && !showPrintSection) {
     return (
       <div className={`flex flex-col items-center justify-center py-32 text-center min-h-screen transition-colors duration-200 ${pageBg}`}>
         <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 ${dk ? "bg-amber-500/10" : "bg-primary/10"}`}>
           <ShoppingBag className="w-12 h-12 text-amber-500" />
         </div>
         <h2 className={`text-3xl font-bold ${textPrimary}`}>Votre panier est vide</h2>
-        <p className={`mt-3 max-w-md text-lg ${textMuted}`}>Parcourez la marketplace ou les services PRINT.</p>
+        <p className={`mt-3 max-w-md text-lg ${textMuted}`}>
+          {printHidden ? "Parcourez la marketplace." : "Parcourez la marketplace ou les services PRINT."}
+        </p>
         <div className="flex gap-3 mt-8">
           <Link href="/products">
             <button className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm shadow-lg shadow-amber-500/20 transition-all hover:-translate-y-0.5">
               Marketplace SHOP
             </button>
           </Link>
+          {!printHidden && (
           <Link href="/print">
             <button className={`px-5 py-2.5 rounded-2xl border font-semibold text-sm transition-all hover:-translate-y-0.5 ${dk ? "border-blue-500/40 text-blue-400 hover:bg-blue-500/10" : "border-blue-200 text-blue-600 hover:bg-blue-50"}`}>
               Services PRINT
             </button>
           </Link>
+          )}
         </div>
       </div>
     );
@@ -506,36 +528,42 @@ export default function CartPage() {
     <div className={`min-h-screen overflow-x-hidden transition-colors duration-200 ${pageBg}`}>
       <div className="w-full max-w-5xl mx-auto space-y-4 sm:space-y-6 p-4 sm:p-6">
 
-        {/* ── Page header ── */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className={`text-xl sm:text-2xl font-bold tracking-tight ${textPrimary}`}>Votre panier</h1>
-            <p className={`mt-1 text-sm ${textMuted}`}>
-              {items.length + packItems.length + printItems.length} article{items.length + packItems.length + printItems.length !== 1 ? "s" : ""}
-              {hasShop && hasPrint ? " · SHOP + PRINT" : hasShop ? " · SHOP" : " · PRINT"}
-            </p>
+        {/* ── SHOP / PRINT switcher — only shown when there's actually something to switch
+            between; PRINT's own tab option follows the same Admin → System Management →
+            Services → PRINT state used everywhere else (GatedServiceRoute), never a second
+            visibility system. When PRINT is Hidden, the tab disappears entirely and SHOP
+            renders exactly as if it were the only section (no switcher chrome at all). ── */}
+        {!printHidden && (
+          <div className={`flex gap-1 rounded-xl p-1 w-fit ${dk ? "bg-gray-800" : "bg-gray-100"}`}>
+            <button
+              type="button"
+              onClick={() => setActiveTab("shop")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === "shop" ? (dk ? "bg-gray-700 text-white shadow-sm" : "bg-white text-gray-900 shadow-sm") : textMuted
+              }`}
+              data-testid="button-cart-tab-shop"
+            >
+              <ShoppingBag className="w-4 h-4 text-amber-500" /> Commandes SHOP
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("print")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === "print" ? (dk ? "bg-gray-700 text-white shadow-sm" : "bg-white text-gray-900 shadow-sm") : textMuted
+              }`}
+              data-testid="button-cart-tab-print"
+            >
+              <Printer className="w-4 h-4 text-blue-500" /> Commandes PRINT
+            </button>
           </div>
-          {/* Dark/light toggle */}
-          <button
-            onClick={() => toggle()}
-            aria-label="Toggle theme"
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 ${toggleBtn}`}
-          >
-            {dk ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
-        </div>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-4 sm:gap-6 w-full">
           <div className="lg:col-span-2 space-y-4 min-w-0">
 
             {/* ── SHOP Items ── */}
-            {hasShop && (
+            {(printHidden || activeTab === "shop") && hasShop && (
               <div className="space-y-4">
-                {hasShop && hasPrint && (
-                  <div className={`flex items-center gap-2 text-sm font-semibold uppercase tracking-wide ${dk ? "text-amber-500" : "text-amber-500"}`}>
-                    <ShoppingBag className="w-4 h-4" /> Commandes SHOP
-                  </div>
-                )}
                 {supplierEntries.map(([supplierId, group]) => {
                   const supplierTotal = group.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
                   return (
@@ -748,14 +776,41 @@ export default function CartPage() {
               </div>
             )}
 
+            {/* ── SHOP empty state (only relevant once a PRINT tab exists to switch away
+                to — otherwise the top-level "cart is empty" early return already covers
+                the single-section case) ── */}
+            {!printHidden && activeTab === "shop" && !hasShop && (
+              <div className={`border rounded-2xl p-10 text-center ${cardBg}`}>
+                <ShoppingBag className={`w-10 h-10 mx-auto mb-3 ${textMuted}`} />
+                <p className={`font-semibold ${textPrimary}`}>Aucun article SHOP</p>
+                <p className={`text-sm mt-1 ${textMuted}`}>Parcourez la marketplace pour ajouter des produits.</p>
+              </div>
+            )}
+
+            {/* ── PRINT — Coming Soon (Admin → System Management → Services → PRINT), same
+                visual language already used on the /print marketplace page itself ── */}
+            {activeTab === "print" && printComingSoon && (
+              <div className="max-w-md mx-auto py-16 text-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${imgBg}`}>
+                  <Clock className="w-8 h-8 text-blue-600" />
+                </div>
+                <h2 className={`text-xl font-bold mb-2 ${textPrimary}`} data-testid="text-cart-print-coming-soon">Bientôt disponible</h2>
+                <p className={`text-sm ${textMuted}`}>Ce service est en cours de préparation. Revenez bientôt pour le découvrir.</p>
+              </div>
+            )}
+
+            {/* ── PRINT empty state ── */}
+            {activeTab === "print" && !printComingSoon && !hasPrint && (
+              <div className={`border rounded-2xl p-10 text-center ${dk ? "bg-gray-800 border-blue-500/25" : "bg-white border-blue-100"}`}>
+                <Printer className={`w-10 h-10 mx-auto mb-3 ${dk ? "text-blue-400" : "text-blue-400"}`} />
+                <p className={`font-semibold ${textPrimary}`}>Aucun article PRINT</p>
+                <p className={`text-sm mt-1 ${textMuted}`}>Parcourez les services PRINT pour ajouter une demande d'impression.</p>
+              </div>
+            )}
+
             {/* ── PRINT Items ── */}
-            {hasPrint && (
+            {activeTab === "print" && !printComingSoon && hasPrint && (
               <div className="space-y-4">
-                {hasShop && hasPrint && (
-                  <div className={`flex items-center gap-2 text-sm font-semibold uppercase tracking-wide mt-6 ${dk ? "text-blue-400" : "text-blue-500"}`}>
-                    <Printer className="w-4 h-4" /> Commandes PRINT
-                  </div>
-                )}
                 {printItems.map((item) => {
                   const isPdf = item.uploadedFileName?.toLowerCase().endsWith(".pdf");
                   return (
@@ -819,7 +874,7 @@ export default function CartPage() {
 
           {/* ── Order Summary ── */}
           <div className="lg:col-span-1 space-y-4 min-w-0">
-            {hasShop && (
+            {(printHidden || activeTab === "shop") && hasShop && (
               <div className={`border rounded-2xl shadow-sm lg:sticky lg:top-24 ${cardBg}`}>
                 <div className="p-4 sm:p-5 space-y-4">
                   <h3 className={`font-bold text-lg flex items-center gap-2 ${textPrimary}`}>
@@ -1007,7 +1062,7 @@ export default function CartPage() {
               </div>
             )}
 
-            {hasPrint && (
+            {activeTab === "print" && !printComingSoon && hasPrint && (
               <div className={`border rounded-2xl shadow-sm ${dk ? "bg-gray-800 border-blue-500/25" : "bg-white border-blue-100"}`}>
                 <div className="p-4 sm:p-5 space-y-4">
                   <h3 className={`font-bold text-lg flex items-center gap-2 ${dk ? "text-blue-400" : "text-blue-700"}`}>
@@ -1027,12 +1082,12 @@ export default function CartPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={handlePrintCheckout}
+                    onClick={() => setPrintConfirmOpen(true)}
                     disabled={createPrintOrders.isPending || printItems.length === 0}
                     className={`w-full rounded-2xl py-3.5 font-semibold text-sm transition-all shadow-lg text-white disabled:opacity-50 ${dk ? "bg-blue-600 hover:bg-blue-500 shadow-blue-500/20" : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"}`}
                     data-testid="button-place-print-order"
                   >
-                    {createPrintOrders.isPending ? "Traitement…" : <span className="flex items-center justify-center gap-2">Confirmer PRINT <ArrowRight className="w-4 h-4" /></span>}
+                    Confirmer PRINT
                   </button>
                   <button className={`w-full text-xs text-center transition-colors ${textMuted} hover:text-red-500`} onClick={clearPrintItems}>
                     Vider PRINT
@@ -1046,7 +1101,7 @@ export default function CartPage() {
               </div>
             )}
 
-            {hasShop && hasPrint && (
+            {hasShop && showPrintSection && (
               <div className={`border rounded-2xl shadow-sm ${cardBg}`}>
                 <div className="p-5">
                   <div className="flex justify-between items-center">
@@ -1061,9 +1116,11 @@ export default function CartPage() {
               <Link href="/products" className="flex-1">
                 <button className={`w-full text-xs rounded-2xl border py-2.5 font-medium transition-colors ${backBtn}`}>← SHOP</button>
               </Link>
-              <Link href="/print" className="flex-1">
-                <button className={`w-full text-xs rounded-2xl border py-2.5 font-medium transition-colors ${dk ? "border-blue-500/40 text-blue-400 hover:bg-blue-500/10" : "border-blue-200 text-blue-600 hover:bg-blue-50"}`}>← PRINT</button>
-              </Link>
+              {!printHidden && (
+                <Link href="/print" className="flex-1">
+                  <button className={`w-full text-xs rounded-2xl border py-2.5 font-medium transition-colors ${dk ? "border-blue-500/40 text-blue-400 hover:bg-blue-500/10" : "border-blue-200 text-blue-600 hover:bg-blue-50"}`}>← PRINT</button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -1092,6 +1149,15 @@ export default function CartPage() {
         discountCodeLabel={appliedDiscountCode?.code}
         isSubmitting={createOrder.isPending || isPreparingOrder}
         onConfirm={handleConfirmOrder}
+      />
+
+      {/* ── PRINT Order Confirmation Modal ────────────────────────────────────── */}
+      <PrintOrderConfirmationModal
+        open={printConfirmOpen}
+        onClose={() => setPrintConfirmOpen(false)}
+        items={printItems}
+        isSubmitting={createPrintOrders.isPending}
+        onConfirm={handleConfirmPrintOrder}
       />
     </div>
   );

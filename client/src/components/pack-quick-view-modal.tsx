@@ -790,7 +790,7 @@ export function PackQuickViewModal() {
         hide the default shadcn close button (we use our own in the header).
       */}
       <DialogContent
-        className={`max-w-2xl w-[calc(100%-2rem)] max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0 border-0 shadow-2xl rounded-3xl [&>button:last-child]:hidden ${t.modalBg}`}
+        className={`max-w-2xl sm:w-[calc(100%-2rem)] max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0 border-0 shadow-2xl rounded-3xl [&>button:last-child]:hidden ${t.modalBg}`}
         data-testid="modal-pack-quick-view"
       >
         <VisuallyHidden>

@@ -11,7 +11,7 @@ export function ProductQuickViewModal() {
   return (
     <Dialog open={productId != null} onOpenChange={(open) => { if (!open) close(); }}>
       <DialogContent
-        className="max-w-2xl w-[calc(100%-2rem)] h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        className="max-w-2xl sm:w-[calc(100%-2rem)] h-[88vh] max-h-[88vh] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
         style={{ display: "flex", flexDirection: "column" }}
         data-testid="modal-quick-view"
       >

@@ -231,7 +231,7 @@ export default function OrderConfirmationModal({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !isSubmitting) onClose(); }}>
       <DialogContent
-        className="max-w-2xl w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        className="max-w-2xl sm:w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
       >
         {/* Accessible title (visually hidden — custom header below) */}
         <DialogTitle className="sr-only">Récapitulatif de commande</DialogTitle>

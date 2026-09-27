@@ -13,7 +13,7 @@ import {
   Video, Music, Clock, Plus, Trash2, ChevronLeft, ChevronRight,
   Zap, Star, MapPin, Info,
 } from "lucide-react";
-import { CoverSlideshow } from "@/pages/cafe/store-detail-page";
+import { CoverSlideshow, InfoModal } from "@/pages/cafe/store-detail-page";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SupplierStore, OpeningHoursMap, OpeningDayHours } from "@shared/schema";
@@ -95,6 +95,12 @@ export default function StorePage() {
   const { data: store, isLoading } = useQuery<SupplierStore | null>({
     queryKey: ["/api/supplier/store"],
   });
+
+  // Info icon on the live preview (mirrors the Coffee Owner-facing store card) opens the
+  // same real InfoModal used there, reading directly from form.openingHours — the exact
+  // same state the editable Opening Hours card below writes to, so there is exactly one
+  // source of truth (task: "Do not create a second independent source of truth").
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -247,9 +253,14 @@ export default function StorePage() {
                   <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                   <span className="text-[11px] font-bold text-white">4.8</span>
                 </div>
-                <div className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => setInfoOpen(true)}
+                  className="w-8 h-8 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center"
+                  data-testid="button-store-preview-info"
+                >
                   <Info className="w-3.5 h-3.5 text-white/80" />
-                </div>
+                </button>
               </div>
 
               {/* Closed badge */}
@@ -349,7 +360,7 @@ export default function StorePage() {
               {DAYS.map(({ key, label }) => {
                 const day = form.openingHours[key] ?? DEFAULT_HOURS;
                 return (
-                  <div key={key} className="flex items-center gap-3">
+                  <div key={key} className="flex flex-wrap items-center gap-3">
                     <div className="w-24 shrink-0">
                       <p className="text-sm font-medium">{label}</p>
                     </div>
@@ -359,7 +370,7 @@ export default function StorePage() {
                       data-testid={`switch-${key}`}
                     />
                     {!day.closed ? (
-                      <>
+                      <div className="flex items-center gap-3 flex-wrap min-w-0">
                         <Input
                           type="time"
                           value={day.open}
@@ -375,7 +386,7 @@ export default function StorePage() {
                           className="h-8 text-xs w-28"
                           data-testid={`input-${key}-close`}
                         />
-                      </>
+                      </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">Closed</span>
                     )}
@@ -484,32 +495,21 @@ export default function StorePage() {
               <p className="text-xs text-muted-foreground">Music plays automatically when Coffee Owners visit your store page. It only affects your store.</p>
             </CardContent>
           </Card>
- {/* Opening hours preview */}
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="w-3.5 h-3.5" />Opening Hours Preview</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-1">
-                {DAYS.map(({ key, label }) => {
-                  const day = form.openingHours[key] ?? DEFAULT_HOURS;
-                  return (
-                    <div key={key} className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground w-24">{label}</span>
-                      {day.closed ? (
-                        <span className="text-red-500 font-medium">Closed</span>
-                      ) : (
-                        <span className="font-medium">{day.open} – {day.close}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
           {form.visibility === "HIDDEN" && (
             <p className="text-xs text-muted-foreground text-center">This store card is hidden from the marketplace. Your products still appear normally.</p>
           )}
         </div>
       </div>
+
+      {/* Info icon on the live preview above opens this — the same real InfoModal the
+          Coffee Owner-facing store page uses, reading the same form.openingHours state
+          the editable Opening Hours card writes to (single source of truth). */}
+      <InfoModal
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        openingHours={form.openingHours}
+        storeName={form.name || "Your Store Name"}
+      />
     </div>
   );
 }

@@ -133,7 +133,7 @@ export function MusicPlayer({ musicUrl }: { musicUrl: string }) {
 
 // ── Opening hours modal ───────────────────────────────────────────────────────
 
-function InfoModal({ open, onClose, openingHours, storeName }: {
+export function InfoModal({ open, onClose, openingHours, storeName }: {
   open: boolean;
   onClose: () => void;
   openingHours: OpeningHoursMap | null;

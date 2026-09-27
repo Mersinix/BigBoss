@@ -131,6 +131,7 @@ export default function InvoicesPage() {
                 row={inv}
                 showSupplier={false}
                 onView={() => setViewing({ orderId: inv.orderId, subOrderId: inv.subOrderId })}
+                clickable
               />
             ))}
           </div>

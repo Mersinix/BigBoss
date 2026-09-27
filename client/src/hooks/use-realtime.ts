@@ -61,6 +61,11 @@ const NOTIFICATION_EVENTS = ["notification_created"];
 function invalidateInventoryQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
   qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
+  // Covers both the unfiltered stats query and every filtered variant, which are keyed
+  // ["/api/supplier/inventory/stats", filteredQs] — invalidateQueries matches by key
+  // prefix, so this one call refreshes all of them (InventoryStatsCards: Total Products,
+  // Active, Hidden, In Stock, Low Stock, Out of Stock, Total Units, Inventory Value).
+  qc.invalidateQueries({ queryKey: ["/api/supplier/inventory/stats"] });
   invalidateMarketplace(qc);
   invalidateStoreQueries(qc);
 }
@@ -69,6 +74,10 @@ function invalidateProductQueries(qc: QueryClient) {
   invalidateMarketplace(qc);
   invalidatePackQueries(qc);
   invalidateStoreQueries(qc);
+  // Admin → Analytics' "Produits" KPI count reads this list directly and was never
+  // invalidated by product_updated, so a product created/edited/deleted elsewhere never
+  // reached an already-open Analytics page without a manual refresh.
+  qc.invalidateQueries({ queryKey: ["/api/products"] });
   qc.invalidateQueries({ queryKey: ["/api/marketplace/promotions"] });
   qc.invalidateQueries({ queryKey: ["/api/favorites"] });
   qc.invalidateQueries({ queryKey: ["/api/pack-favorites"] });
@@ -206,6 +215,13 @@ export function useRealtime(userId?: number) {
             invalidateMarketplace(qc);
             qc.invalidateQueries({ queryKey: ["/api/marketplace/promotions"] });
             qc.invalidateQueries({ queryKey: ["/api/stores"] });
+            // The owning supplier's own Promotions page (list + Active/Paused/Total Uses/
+            // Savings Generated stats) was previously only refreshed by its own local
+            // mutations — never by this broadcast, so a status change, usage, or edit made
+            // elsewhere (another tab, an order being placed) never reached an already-open
+            // Promotions page without a manual refresh.
+            qc.invalidateQueries({ queryKey: ["/api/promotions"] });
+            qc.invalidateQueries({ queryKey: ["/api/promotions/stats"] });
           }
           if (DISCOUNT_CODE_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/discount-codes"] });

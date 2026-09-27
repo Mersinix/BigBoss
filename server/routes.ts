@@ -3892,6 +3892,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (const result of promoEval.bySupplier) {
         if (result.promotionId && result.discountAmount > 0) {
           await storage.recordPromotionUsage(result.promotionId, cafeId, order.id, result.discountAmount);
+          // Usage count/savings just changed — let the owning supplier's Promotions page
+          // (list + stats) refresh in real time, same broadcast used by every other
+          // promotion mutation below.
+          broadcast('promotion_updated', { supplierId: result.supplierId, promotionId: result.promotionId });
         }
       }
 

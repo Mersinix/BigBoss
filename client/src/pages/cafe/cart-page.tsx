@@ -606,7 +606,7 @@ export default function CartPage() {
                                      <div key={`${item.listingId}-${item.flavorId ?? 0}-${item.sizeId ?? 0}`} className={cancelled ? "opacity-60" : ""}>
                                        <div className="flex items-center gap-2 min-w-0">
                                          <div className="flex-1 min-w-0">
-                                           {variantLabel && <p className={`text-xs truncate ${textMuted}`}>Variant: {variantLabel}</p>}
+                                           {variantLabel && <p className={`text-xs truncate ${textMuted}`}> {variantLabel}</p>}
                                            <p className={`text-xs ${textMuted}`}>{fmt(item.unitPrice)} chacun</p>
                                          </div>
                                          <div className={`flex items-center border rounded-xl overflow-hidden shrink-0 ${borderClr}`}>

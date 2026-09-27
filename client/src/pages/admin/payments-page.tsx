@@ -161,7 +161,7 @@ export default function PaymentsPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {pageRows.map((r) => (
-              <PaymentCard key={r.subOrderId} row={r} onView={() => setViewing(r)} />
+              <PaymentCard key={r.subOrderId} row={r} onView={() => setViewing(r)} clickable />
             ))}
           </div>
           <DataPagination

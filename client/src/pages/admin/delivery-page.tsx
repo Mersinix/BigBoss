@@ -55,7 +55,11 @@ function DeliveryCard({ delivery, onViewDetails, onCancel, cancelling }: {
   const canCancel = !["DELIVERED", "CANCELLED"].includes(delivery.status) && !["PICKED_UP", "IN_TRANSIT"].includes(delivery.status);
 
   return (
-    <Card data-testid={`card-admin-delivery-${delivery.id}`}>
+    <Card
+      data-testid={`card-admin-delivery-${delivery.id}`}
+      className="cursor-pointer hover:shadow-md transition-shadow"
+      onClick={onViewDetails}
+    >
       <CardContent className="p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <span className="font-mono text-sm font-semibold">#{delivery.orderId}</span>
@@ -76,14 +80,20 @@ function DeliveryCard({ delivery, onViewDetails, onCancel, cancelling }: {
           <InfoTile icon={Calendar} label="Créée le" value={formatDate(delivery.createdAt as any)} />
         </div>
 
-        <div className="flex items-center gap-2 justify-end">
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onViewDetails} data-testid={`button-admin-delivery-details-${delivery.id}`}>Détails</Button>
-          {canCancel && (
-            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={onCancel} disabled={cancelling} data-testid={`button-admin-delivery-cancel-${delivery.id}`}>
+        {canCancel && (
+          <div className="flex items-center justify-end">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-destructive hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); onCancel(); }}
+              disabled={cancelling}
+              data-testid={`button-admin-delivery-cancel-${delivery.id}`}
+            >
               <XCircle className="w-3.5 h-3.5 mr-1" /> Annuler
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

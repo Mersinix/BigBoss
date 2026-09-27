@@ -99,7 +99,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className={`max-w-2xl w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden print:shadow-none print:rounded-none ${t.modalBg}`}>
+      <DialogContent className={`max-w-2xl sm:w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden print:shadow-none print:rounded-none ${t.modalBg}`}>
         <DialogTitle className="sr-only">Facture {number}</DialogTitle>
 
         <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${t.modalBg}`}>

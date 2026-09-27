@@ -141,7 +141,7 @@ export default function InvoicesPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {pageRows.map((r) => (
-              <InvoiceCard key={r.subOrderId} row={r} onView={() => setViewing({ orderId: r.orderId, subOrderId: r.subOrderId })} />
+              <InvoiceCard key={r.subOrderId} row={r} onView={() => setViewing({ orderId: r.orderId, subOrderId: r.subOrderId })} clickable />
             ))}
           </div>
           <DataPagination

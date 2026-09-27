@@ -28,12 +28,16 @@ export function InfoTile({ icon: Icon, label, value }: { icon: React.ComponentTy
   );
 }
 
-export function InvoiceCard({ row, showSupplier = true, onView }: { row: FinancialRow; showSupplier?: boolean; onView: () => void }) {
+export function InvoiceCard({ row, showSupplier = true, onView, clickable = false }: { row: FinancialRow; showSupplier?: boolean; onView: () => void; clickable?: boolean }) {
   const fmt = useFormatCurrency();
   const meta = PAYMENT_COLLECTION_META[row.paymentCollectionStatus];
 
   return (
-    <Card data-testid={`card-invoice-${row.subOrderId}`}>
+    <Card
+      data-testid={`card-invoice-${row.subOrderId}`}
+      className={clickable ? "cursor-pointer hover:shadow-md transition-shadow" : undefined}
+      onClick={clickable ? onView : undefined}
+    >
       <CardContent className="p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <span className="font-mono text-sm font-semibold">{invoiceNumber(row.subOrderId)}</span>
@@ -52,23 +56,29 @@ export function InvoiceCard({ row, showSupplier = true, onView }: { row: Financi
           <Badge variant="outline" className="text-[10px] shrink-0">{row.subOrderStatus}</Badge>
         </div>
 
-        <div className="flex items-center justify-end">
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={onView} data-testid={`button-view-invoice-${row.subOrderId}`}>
-            <Eye className="w-3.5 h-3.5" /> Voir
-          </Button>
-        </div>
+        {!clickable && (
+          <div className="flex items-center justify-end">
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={onView} data-testid={`button-view-invoice-${row.subOrderId}`}>
+              <Eye className="w-3.5 h-3.5" /> Voir
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-export function PaymentCard({ row, showSupplier = true, onView }: { row: FinancialRow; showSupplier?: boolean; onView: () => void }) {
+export function PaymentCard({ row, showSupplier = true, onView, clickable = false }: { row: FinancialRow; showSupplier?: boolean; onView: () => void; clickable?: boolean }) {
   const fmt = useFormatCurrency();
   const collectionMeta = PAYMENT_COLLECTION_META[row.paymentCollectionStatus];
   const payoutMeta = PAYOUT_STATUS_META[row.payoutStatus];
 
   return (
-    <Card data-testid={`card-payment-${row.subOrderId}`}>
+    <Card
+      data-testid={`card-payment-${row.subOrderId}`}
+      className={clickable ? "cursor-pointer hover:shadow-md transition-shadow" : undefined}
+      onClick={clickable ? onView : undefined}
+    >
       <CardContent className="p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <span className="font-mono text-sm font-semibold">{payoutReference(row.subOrderId)}</span>
@@ -90,9 +100,11 @@ export function PaymentCard({ row, showSupplier = true, onView }: { row: Financi
 
         <div className="flex items-center justify-between">
           <Badge variant="secondary" className={`text-[10px] ${collectionMeta.className}`}>{collectionMeta.label}</Badge>
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={onView} data-testid={`button-view-payment-${row.subOrderId}`}>
-            <Eye className="w-3.5 h-3.5" /> Détails
-          </Button>
+          {!clickable && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={onView} data-testid={`button-view-payment-${row.subOrderId}`}>
+              <Eye className="w-3.5 h-3.5" /> Détails
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

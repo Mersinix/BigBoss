@@ -330,7 +330,7 @@ export default function OrderConfirmationModal({
                                 className="flex items-center gap-2.5"
                               >
                                 <div className="flex-1 min-w-0">
-                                  {variant && <p className={`text-xs truncate ${t.textMuted}`}>Variant: {variant}</p>}
+                                  {variant && <p className={`text-xs truncate ${t.textMuted}`}> {variant}</p>}
                                   <p className={`text-xs ${t.textSubtle}`}>{fmt(item.unitPrice)} chacun</p>
                                 </div>
                                 {/* Stepper */}

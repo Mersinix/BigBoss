@@ -16,15 +16,16 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 // same /api/marketing/projects: a devis is any project with a quote amount set,
 // a facture is any COMPLETED project (finalAmountInCents is the invoiced total).
 const VIEWS = [
+  { key: "all", label: "Tous" },
   { key: "devis", label: "Devis" },
   { key: "factures", label: "Factures" },
-  { key: "all", label: "Tous" },
+  
 ] as const;
 
 export default function MarketingInvoices() {
   const fmt = useFormatCurrency();
   const { data: projects = [], isLoading } = useMarketingProjects();
-  const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("devis");
+  const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("all");
   const [search, setSearch] = useState("");
 
   const devis = useMemo(() => projects.filter((p) => p.quoteAmountInCents != null), [projects]);

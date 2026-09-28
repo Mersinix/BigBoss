@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Megaphone, Plus, Pencil, Trash2, Clock, Eye, EyeOff } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 type ServiceFormState = {
   category: string; startingPrice: string; responseTime: string; description: string; imageUrl: string;
@@ -145,6 +146,12 @@ export default function MarketingServicesPage() {
     });
   };
 
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Espace Livraison → Business → Chauffeurs' driver-roster-view.tsx).
+  const pagination = usePagination(services.length);
+  useEffect(() => { pagination.resetPage(); }, [services.length]);
+  const pageServices = services.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-5">
       <DashboardHero
@@ -172,8 +179,9 @@ export default function MarketingServicesPage() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {services.map((service) => (
+          {pageServices.map((service) => (
             <Card key={service.id} data-testid={`card-service-${service.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-5 flex flex-col gap-3">
                 <button type="button" onClick={() => setPreviewServiceId(service.id)} className="text-left" data-testid={`button-preview-service-${service.id}`}>
@@ -211,6 +219,18 @@ export default function MarketingServicesPage() {
             </Card>
           ))}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={services.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="services"
+        />
+        </>
       )}
 
       <ServiceFormDialog service={editing} onClose={() => setEditing(null)} />

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Menu, Info, MessageCircle, Package2, MapPin, Navigation } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails, { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
@@ -48,6 +49,7 @@ export default function DriverDeliveriesPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [listTab, setListTab] = useState<"active" | "completed">("active");
+  const [listStatusFilter, setListStatusFilter] = useState("ALL");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
   const [codePrompt, setCodePrompt] = useState<{ deliveryId: number; next: DeliveryStatus; label: string } | null>(null);
@@ -202,46 +204,74 @@ export default function DriverDeliveriesPage() {
       {/* ── Sandwich panel — En cours / Terminées, switch delivery without leaving the map ── */}
       <Dialog open={listOpen} onOpenChange={setListOpen}>
         {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
-            scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+            scroll container exactly, same thumb/track/hover classes, not a new scrollbar style.
+            overflow-x-hidden alongside overflow-y-auto: the card layout below is now safe at
+            any width (flex-col on mobile, flex-row from sm: up), but this is a last-resort
+            guard against horizontal scroll, not a substitute for that fix. */}
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           <DialogHeader><DialogTitle>Mes livraisons</DialogTitle></DialogHeader>
-          <Tabs value={listTab} onValueChange={(v) => setListTab(v as "active" | "completed")}>
+          <Tabs value={listTab} onValueChange={(v) => { setListTab(v as "active" | "completed"); setListStatusFilter("ALL"); }}>
             <TabsList>
               <TabsTrigger value="active" data-testid="tab-deliveries-active">En cours ({active.length})</TabsTrigger>
               <TabsTrigger value="completed" data-testid="tab-deliveries-completed">Terminées ({completed.length})</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="space-y-3 pt-2">
-            {(listTab === "active" ? active : completed).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Aucune livraison ici.</p>
-            ) : (listTab === "active" ? active : completed).map((d) => {
-              const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
-              const dStep = NEXT_STEP[d.status];
-              return (
-                <Card key={d.id} className={`bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl ${d.id === current?.id ? "border-primary" : ""}`} data-testid={`card-delivery-list-${d.id}`}>
-                  <CardContent className="p-4 flex items-center justify-between gap-3 cursor-pointer" onClick={() => selectDelivery(d.id)}>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs text-muted-foreground">#{d.orderId}</span>
-                        <Badge variant="secondary" className={meta.cls}>{meta.label}</Badge>
-                        <span className="text-xs text-muted-foreground">{formatDate(d.createdAt as any)}</span>
-                      </div>
-                      <p className="text-sm font-medium">{d.supplier.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{d.pickupAddress?.address || "—"} → {d.destinationAddress?.address || "—"}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      <span className="text-sm font-semibold">{fmt(d.deliveryFee ?? 0)}</span>
-                      {dStep && listTab === "active" && (
-                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); selectDelivery(d.id); handleStepClick(d.id, dStep); }} disabled={updateStatus.isPending}>
-                          {dStep.label}
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          {(() => {
+            const tabList = listTab === "active" ? active : completed;
+            // Real statuses actually present in the current tab's own data — never a
+            // hardcoded set, so the filter never offers a status this tab can't have.
+            const availableStatuses = Array.from(new Set(tabList.map((d) => d.status)));
+            const filteredList = listStatusFilter === "ALL" ? tabList : tabList.filter((d) => d.status === listStatusFilter);
+            return (
+              <>
+                {availableStatuses.length > 1 && (
+                  <Select value={listStatusFilter} onValueChange={setListStatusFilter}>
+                    <SelectTrigger className="w-44 h-9" data-testid="select-deliveries-list-status"><SelectValue placeholder="Statut" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Tous statuts</SelectItem>
+                      {availableStatuses.map((s) => (
+                        <SelectItem key={s} value={s}>{DELIVERY_STATUS_META[s]?.label ?? s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <div className="space-y-3 pt-2">
+                  {filteredList.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">Aucune livraison ici.</p>
+                  ) : filteredList.map((d) => {
+                    const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
+                    const dStep = NEXT_STEP[d.status];
+                    return (
+                      <Card key={d.id} className={`bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl ${d.id === current?.id ? "border-primary" : ""}`} data-testid={`card-delivery-list-${d.id}`}>
+                        <CardContent
+                          className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between cursor-pointer"
+                          onClick={() => selectDelivery(d.id)}
+                        >
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-xs text-muted-foreground">#{d.orderId}</span>
+                              <Badge variant="secondary" className={meta.cls}>{meta.label}</Badge>
+                              <span className="text-xs text-muted-foreground">{formatDate(d.createdAt as any)}</span>
+                            </div>
+                            <p className="text-sm font-medium truncate">{d.supplier.name}</p>
+                            <p className="text-xs text-muted-foreground break-words">{d.pickupAddress?.address || "—"} → {d.destinationAddress?.address || "—"}</p>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-start sm:gap-1.5 sm:shrink-0">
+                            <span className="text-sm font-semibold">{fmt(d.deliveryFee ?? 0)}</span>
+                            {dStep && listTab === "active" && (
+                              <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={(e) => { e.stopPropagation(); selectDelivery(d.id); handleStepClick(d.id, dStep); }} disabled={updateStatus.isPending}>
+                                {dStep.label}
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

@@ -78,8 +78,8 @@ function ProjectCard({ project, onQuote, onAction, onProgress }: {
 }
 
 const FILTERS = [
-  { key: "active", label: "Actifs" },
   { key: "all", label: "Tous" },
+  { key: "active", label: "Actifs" },
   { key: "completed", label: "Terminés" },
 ] as const;
 
@@ -87,7 +87,7 @@ export default function MarketingProjects() {
   const { toast } = useToast();
   const { data: projects = [], isLoading } = useMarketingProjects();
   const updateStatus = useUpdateMarketingProjectStatus();
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("active");
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [quoteTarget, setQuoteTarget] = useState<MarketingProjectWithParties | null>(null);
   const [quoteAmount, setQuoteAmount] = useState("");
 

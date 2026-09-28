@@ -24,6 +24,7 @@ import {
   GraduationCap, Search, Clock, Award, MapPin, Star, Users, Calendar,
   CheckCircle, Send, RotateCcw, SlidersHorizontal, BookOpen, MessageCircle,
 } from "lucide-react";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // Personal Academy workspace for the Barista — reuses the EXACT SAME Academy
 // ecosystem as Coffee Owner /academy, the Academy Account and Admin Academy:
@@ -189,6 +190,12 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
   );
   const hasFilters = !!(search || level || certification);
 
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Espace Livraison → Business → Chauffeurs' driver-roster-view.tsx).
+  const pagination = usePagination(courses.length);
+  useEffect(() => { pagination.resetPage(); }, [search, level, certification]);
+  const pageCourses = courses.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-4">
       <div className={`border rounded-2xl p-3 shadow-sm bg-card`}>
@@ -234,8 +241,9 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {courses.map((course) => {
+          {pageCourses.map((course) => {
             const registered = registeredCourseIds.has(course.id);
             return (
               <Card key={course.id} className="hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" onClick={() => setTarget(course)} data-testid={`card-formation-${course.id}`}>
@@ -268,6 +276,18 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
             );
           })}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={courses.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="formations"
+        />
+        </>
       )}
 
       <EnrollDialog course={target} alreadyRegistered={!!target && registeredCourseIds.has(target.id)} onClose={() => setTarget(null)} />
@@ -369,6 +389,12 @@ function MesFormationsTab({ registrations, isLoading, onGoToFormations }: { regi
   const [detail, setDetail] = useState<AcademyRegistrationWithParties | null>(null);
   const sorted = useMemo(() => [...registrations].sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1)), [registrations]);
 
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Espace Livraison → Business → Chauffeurs' driver-roster-view.tsx).
+  const pagination = usePagination(sorted.length);
+  useEffect(() => { pagination.resetPage(); }, [sorted.length]);
+  const pageSorted = sorted.slice(pagination.start, pagination.end);
+
   if (isLoading) {
     return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}</div>;
   }
@@ -391,7 +417,7 @@ function MesFormationsTab({ registrations, isLoading, onGoToFormations }: { regi
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {sorted.map((r) => (
+        {pageSorted.map((r) => (
           <Card key={r.id} className="hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" onClick={() => setDetail(r)} data-testid={`card-my-formation-${r.id}`}>
             <CardContent className="p-5 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
@@ -412,6 +438,17 @@ function MesFormationsTab({ registrations, isLoading, onGoToFormations }: { regi
           </Card>
         ))}
       </div>
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={sorted.length}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        itemLabel="formations"
+      />
       <RegistrationDetail registration={detail} onClose={() => setDetail(null)} />
     </>
   );

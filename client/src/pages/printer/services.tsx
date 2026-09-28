@@ -17,6 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { Plus, Pencil, Trash2, Printer, X, Layers, Eye, Clock, Package } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Link } from "wouter";
@@ -316,6 +317,12 @@ export default function PrinterServices() {
   const openCreate = () => { setEditing(null); setFormOpen(true); };
   const openEdit = (item: PrintCatalogItem) => { setEditing(item); setFormOpen(true); };
 
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Espace Livraison → Business → Chauffeurs' driver-roster-view.tsx).
+  const pagination = usePagination(catalog.length);
+  useEffect(() => { pagination.resetPage(); }, [catalog.length]);
+  const pageCatalog = catalog.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-6">
       <DashboardHero
@@ -337,8 +344,9 @@ export default function PrinterServices() {
       ) : catalog.length === 0 ? (
         <EmptyState message="Aucun service pour le moment. Ajoutez votre premier service ci-dessus." icon={Printer} />
       ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {catalog.map((item) => (
+          {pageCatalog.map((item) => (
             <Card key={item.id} data-testid={`card-service-${item.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-0 flex flex-col">
                 <button type="button" className="text-left" onClick={() => setPreviewServiceId(item.id)} data-testid={`button-preview-service-${item.id}`}>
@@ -391,6 +399,18 @@ export default function PrinterServices() {
             </Card>
           ))}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={catalog.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="services"
+        />
+        </>
       )}
 
       <ServiceFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} />

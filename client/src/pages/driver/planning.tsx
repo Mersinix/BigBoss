@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -13,6 +13,7 @@ import { MapPin, Calendar, Zap, Package2, Search, ArrowRight } from "lucide-reac
 import { formatDate } from "@/lib/format";
 import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 const PRIORITY_META: Record<string, { label: string; cls: string }> = {
@@ -79,6 +80,12 @@ export default function DriverPlanningPage() {
 
   const statusOptions = tab === "past" ? ["DELIVERED", "CANCELLED"] : ["AVAILABLE", "ACCEPTED", "ASSIGNED", "PICKED_UP", "IN_TRANSIT"];
 
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Espace Livraison → Business → Chauffeurs' driver-roster-view.tsx).
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [tab, statusFilter, supplierFilter, search]);
+  const pageFiltered = filtered.slice(pagination.start, pagination.end);
+
   if (isLoading) {
     return <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}</div>;
   }
@@ -128,8 +135,9 @@ export default function DriverPlanningPage() {
       {filtered.length === 0 ? (
         <EmptyState icon={Package2} message={tab === "today" ? "Rien de planifié pour aujourd'hui." : tab === "upcoming" ? "Aucune livraison planifiée à venir." : "Aucune livraison passée."} />
       ) : (
+        <>
         <div className="space-y-3">
-          {filtered.map((d) => {
+          {pageFiltered.map((d) => {
             const meta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
             const priority = PRIORITY_META[d.order.priority] ?? PRIORITY_META.NORMAL;
             const canGo = !["DELIVERED", "CANCELLED"].includes(d.status);
@@ -166,6 +174,18 @@ export default function DriverPlanningPage() {
             );
           })}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="livraisons"
+        />
+        </>
       )}
     </div>
   );

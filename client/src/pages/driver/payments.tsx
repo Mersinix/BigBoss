@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/format";
 import { SectionCard, EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const PAYMENT_STATUS_META: Record<string, { label: string; cls: string }> = {
   DELIVERED: { label: "Livrée", cls: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300" },
@@ -49,6 +50,12 @@ export default function DriverPaymentsPage() {
       .sort((a, b) => new Date((b.deliveredAt ?? b.cancelledAt ?? b.createdAt) as any).getTime() - new Date((a.deliveredAt ?? a.cancelledAt ?? a.createdAt) as any).getTime());
   }, [deliveries, range, statusFilter]);
 
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Espace Livraison → Business → Chauffeurs' driver-roster-view.tsx).
+  const pagination = usePagination(rows.length);
+  useEffect(() => { pagination.resetPage(); }, [preset, custom.from, custom.to, statusFilter]);
+  const pageRows = rows.slice(pagination.start, pagination.end);
+
   if (isLoading) return <Skeleton className="h-64 w-full rounded-2xl" />;
 
   return (
@@ -77,7 +84,7 @@ export default function DriverPaymentsPage() {
       <SectionCard title="Historique" icon={Receipt} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         {rows.length === 0 ? <EmptyState message="Aucun paiement pour cette période." /> : (
           <div className="space-y-3">
-            {rows.map((d) => {
+            {pageRows.map((d) => {
               const meta = PAYMENT_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
               return (
                 <Card key={d.id} data-testid={`card-payment-${d.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
@@ -112,6 +119,18 @@ export default function DriverPaymentsPage() {
           </div>
         )}
       </SectionCard>
+
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={rows.length}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        itemLabel="paiements"
+      />
     </div>
   );
 }

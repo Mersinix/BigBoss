@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeliveries, useAssignDriver, useDeliveryCompanyDrivers } from "@/hooks/use-deliveries";
 import { useReassignDriver } from "@/hooks/use-delivery-ecosystem";
@@ -14,6 +14,7 @@ import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META } from "@/components/delivery/delivery-details";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 function AssignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
@@ -101,6 +102,13 @@ export default function MyDeliveriesPage() {
   const completed = mine.filter((d) => ["DELIVERED", "CANCELLED"].includes(d.status));
   const list = view === "active" ? active : completed;
 
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Business → Chauffeurs' driver-roster-view.tsx). resetPage() on the active/historique
+  // toggle too, so switching tabs never leaves pagination pointing past the new list's end.
+  const pagination = usePagination(list.length);
+  useEffect(() => { pagination.resetPage(); }, [view, list.length]);
+  const pageList = list.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-6">
       <DashboardHero
@@ -129,62 +137,78 @@ export default function MyDeliveriesPage() {
       ) : list.length === 0 ? (
         <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl"><CardContent className="py-16 text-center text-muted-foreground">Aucune livraison ici.</CardContent></Card>
       ) : (
-        <div className="space-y-3">
-          {list.map((d) => {
-            const meta = STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
-            return (
-              <Card key={d.id} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
-                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs text-muted-foreground">Commande #{d.orderId}</span>
-                      <Badge variant="secondary" className={meta.cls}>{meta.label}</Badge>
-                      <span className="text-xs text-muted-foreground">{formatDate(d.createdAt as any)}</span>
+        <>
+          <div className="space-y-3">
+            {pageList.map((d) => {
+              const meta = STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
+              return (
+                <Card
+                  key={d.id}
+                  onClick={() => setViewTarget(d)}
+                  className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl cursor-pointer hover:shadow-md transition-shadow"
+                >
+                  <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs text-muted-foreground">Commande #{d.orderId}</span>
+                        <Badge variant="secondary" className={meta.cls}>{meta.label}</Badge>
+                        <span className="text-xs text-muted-foreground">{formatDate(d.createdAt as any)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Store className="w-3.5 h-3.5 text-muted-foreground" /> {d.supplier.name}
+                        {d.driver && <span className="text-xs text-muted-foreground ml-2">· Chauffeur: {d.driver.name}</span>}
+                      </div>
+                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+                        <span className="truncate">{d.pickupAddress?.address || "—"}</span>
+                        <ArrowRight className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{d.destinationAddress?.address || "—"}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <Store className="w-3.5 h-3.5 text-muted-foreground" /> {d.supplier.name}
-                      {d.driver && <span className="text-xs text-muted-foreground ml-2">· Chauffeur: {d.driver.name}</span>}
+                    <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <span className="font-semibold text-sm">{fmt(d.deliveryFee ?? 0)}</span>
+                      {d.status === "ACCEPTED" && <AssignDriverControl delivery={d} />}
+                      {d.status === "ASSIGNED" && (
+                        redispatchId === d.id ? (
+                          <ReassignDriverControl delivery={d} onDone={() => setRedispatchId(null)} />
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                              <Truck className="w-3 h-3" /> {d.driver?.name ?? "—"}
+                            </Badge>
+                            {/* Pre-confirmation redispatch (task: "Delivery Company redispatch
+                                before driver confirmation") — only shown while ASSIGNED, i.e. the
+                                driver has not yet progressed past this stage (see
+                                storage.reassignDriver's own ASSIGNED-only guard). */}
+                            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setRedispatchId(d.id)} data-testid={`button-redispatch-${d.id}`}>
+                              Redispatcher
+                            </Button>
+                          </div>
+                        )
+                      )}
+                      {["PICKED_UP", "IN_TRANSIT"].includes(d.status) && (
+                        <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                          <Truck className="w-3 h-3" /> {d.driver?.name ?? "—"}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                      <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
-                      <span className="truncate">{d.pickupAddress?.address || "—"}</span>
-                      <ArrowRight className="w-3 h-3 shrink-0" />
-                      <span className="truncate">{d.destinationAddress?.address || "—"}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="font-semibold text-sm">{fmt(d.deliveryFee ?? 0)}</span>
-                    {d.status === "ACCEPTED" && <AssignDriverControl delivery={d} />}
-                    {d.status === "ASSIGNED" && (
-                      redispatchId === d.id ? (
-                        <ReassignDriverControl delivery={d} onDone={() => setRedispatchId(null)} />
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                            <Truck className="w-3 h-3" /> {d.driver?.name ?? "—"}
-                          </Badge>
-                          {/* Pre-confirmation redispatch (task: "Delivery Company redispatch
-                              before driver confirmation") — only shown while ASSIGNED, i.e. the
-                              driver has not yet progressed past this stage (see
-                              storage.reassignDriver's own ASSIGNED-only guard). */}
-                          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setRedispatchId(d.id)} data-testid={`button-redispatch-${d.id}`}>
-                            Redispatcher
-                          </Button>
-                        </div>
-                      )
-                    )}
-                    {["PICKED_UP", "IN_TRANSIT"].includes(d.status) && (
-                      <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                        <Truck className="w-3 h-3" /> {d.driver?.name ?? "—"}
-                      </Badge>
-                    )}
-                    <Button size="sm" variant="ghost" onClick={() => setViewTarget(d)}>Détails</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={list.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="livraisons"
+          />
+        </>
       )}
 
       <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) { setViewTarget(null); setRedispatchId(null); } }}>

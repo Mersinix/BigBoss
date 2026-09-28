@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDeliveries, useAcceptDelivery } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { MapPin, Store, ArrowRight, Package } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails from "@/components/delivery/delivery-details";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
 
 export default function AvailableDeliveriesPage() {
@@ -22,6 +23,12 @@ export default function AvailableDeliveriesPage() {
   // GET /api/deliveries already scopes DELIVERY_COMPANY to "own + AVAILABLE pool" —
   // filter to the pool here (own deliveries live on the "My Deliveries" page).
   const available = deliveries.filter((d) => d.status === "AVAILABLE");
+
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Business → Chauffeurs' driver-roster-view.tsx).
+  const pagination = usePagination(available.length);
+  useEffect(() => { pagination.resetPage(); }, [available.length]);
+  const pageAvailable = available.slice(pagination.start, pagination.end);
 
   const handleAccept = (id: number) => {
     acceptDelivery.mutate(id, {
@@ -52,45 +59,59 @@ export default function AvailableDeliveriesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {available.map((d) => (
-            <Card key={d.id} className="bg-white dark:bg-gray-800 rounded-2xl border-amber-200/60 dark:border-amber-800/40">
-              <CardContent className="p-5 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs text-muted-foreground">Commande #{d.orderId}</span>
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-700">Disponible</Badge>
-                </div>
-
-                <div className="flex items-center gap-2 text-sm">
-                  <Store className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="font-medium">{d.supplier.name}</span>
-                  <span className="text-xs text-muted-foreground ml-auto">{d.order.itemCount} article{d.order.itemCount !== 1 ? "s" : ""}</span>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-muted-foreground">
-                  <div className="flex items-start gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
-                    <span>{d.pickupAddress?.address || "Adresse non renseignée"}</span>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pageAvailable.map((d) => (
+              <Card
+                key={d.id}
+                onClick={() => setViewTarget(d)}
+                className="bg-white dark:bg-gray-800 rounded-2xl border-amber-200/60 dark:border-amber-800/40 cursor-pointer hover:shadow-md transition-shadow"
+              >
+                <CardContent className="p-5 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs text-muted-foreground">Commande #{d.orderId}</span>
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-700">Disponible</Badge>
                   </div>
-                  <div className="flex items-start gap-1.5 pl-0.5">
-                    <ArrowRight className="w-3 h-3 shrink-0 mt-0.5" />
-                    <span>{d.destinationAddress?.address || "—"}</span>
-                  </div>
-                </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                  <span className="text-sm font-semibold">{fmt(d.deliveryFee ?? 0)}</span>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setViewTarget(d)}>Détails</Button>
-                    <Button size="sm" onClick={() => handleAccept(d.id)} disabled={acceptDelivery.isPending}>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Store className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="font-medium">{d.supplier.name}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{d.order.itemCount} article{d.order.itemCount !== 1 ? "s" : ""}</span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs text-muted-foreground">
+                    <div className="flex items-start gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+                      <span>{d.pickupAddress?.address || "Adresse non renseignée"}</span>
+                    </div>
+                    <div className="flex items-start gap-1.5 pl-0.5">
+                      <ArrowRight className="w-3 h-3 shrink-0 mt-0.5" />
+                      <span>{d.destinationAddress?.address || "—"}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                    <span className="text-sm font-semibold">{fmt(d.deliveryFee ?? 0)}</span>
+                    <Button size="sm" onClick={(e) => { e.stopPropagation(); handleAccept(d.id); }} disabled={acceptDelivery.isPending}>
                       Accepter
                     </Button>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={available.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="livraisons disponibles"
+          />
+        </>
       )}
 
       <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTarget(null); }}>

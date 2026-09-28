@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAcademyRegistrations, type AcademyRegistrationStatus } from "@/hooks/use-barista-academy";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Search, GraduationCap, CalendarDays, Clock } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const STATUS_LABELS: Record<AcademyRegistrationStatus, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", CANCELLED: "Annulée", COMPLETED: "Terminée",
@@ -36,6 +37,11 @@ export default function AcademyStudentsPage() {
       });
   }, [registrations, search]);
 
+  // Same usePagination/DataPagination pattern used throughout the app.
+  const pagination = usePagination(rows.length);
+  useEffect(() => { pagination.resetPage(); }, [search, rows.length]);
+  const pageRows = rows.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-5">
       <DashboardHero
@@ -63,8 +69,9 @@ export default function AcademyStudentsPage() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="space-y-3">
-          {rows.map((r) => (
+          {pageRows.map((r) => (
             <Card key={r.id} data-testid={`card-student-${r.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-4 flex flex-col gap-2.5">
                 <div className="flex items-center gap-2 flex-wrap justify-between">
@@ -90,6 +97,18 @@ export default function AcademyStudentsPage() {
             </Card>
           ))}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={rows.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="étudiants"
+        />
+        </>
       )}
     </div>
   );

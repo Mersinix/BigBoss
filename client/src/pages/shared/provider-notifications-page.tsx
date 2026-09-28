@@ -1,9 +1,13 @@
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Bell, CheckCheck } from "lucide-react";
 import type { NotificationService } from "@shared/schema";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DateRangeFilter } from "@/components/analytics/date-range-filter";
+import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
 
 // One shared Notifications tab/page reused by every *AccountShell (Driver,
 // Delivery, Printer, Academy, Barista Marketplace, Maintenance, Marketing)
@@ -38,10 +42,30 @@ export default function ProviderNotificationsPage() {
   const { user } = useAuth();
   const service = user ? ROLE_TO_SERVICE[user.role] : undefined;
   const accent = (user && ROLE_ACCENT[user.role]) || {};
-  const { data: notifications = [], isLoading } = useNotifications(service, { limit: 100 });
+  // Server caps `limit` at 200 (see GET /api/notifications) — the largest batch it'll
+  // ever return, so this is effectively "all", with pagination/filtering done
+  // client-side exactly like every other list page in this app.
+  const { data: notifications = [], isLoading } = useNotifications(service, { limit: 200 });
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const unread = notifications.filter((n) => !n.isRead).length;
+
+  const [preset, setPreset] = useState<DateRangePreset>("all");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+
+  const filtered = useMemo(() => {
+    if (preset === "all") return notifications;
+    const { from, to } = resolveDateRange(preset, custom);
+    if (!from || !to) return notifications;
+    return notifications.filter((n) => {
+      const d = new Date(n.createdAt as any);
+      return d >= from && d <= to;
+    });
+  }, [notifications, preset, custom]);
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [preset, custom.from, custom.to]);
+  const pageNotifications = filtered.slice(pagination.start, pagination.end);
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,11 +85,15 @@ export default function ProviderNotificationsPage() {
         ) : undefined}
       />
 
+      <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
+
       <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl overflow-hidden">
-        {!isLoading && notifications.length === 0 ? (
-          <div className="text-center text-gray-400 dark:text-gray-500 text-sm py-14">Aucune nouvelle notification</div>
+        {!isLoading && filtered.length === 0 ? (
+          <div className="text-center text-gray-400 dark:text-gray-500 text-sm py-14">
+            {notifications.length === 0 ? "Aucune nouvelle notification" : "Aucune notification sur cette période"}
+          </div>
         ) : (
-          notifications.map((n) => (
+          pageNotifications.map((n) => (
             <button
               key={n.id}
               onClick={() => !n.isRead && markRead.mutate(n.id)}
@@ -84,6 +112,18 @@ export default function ProviderNotificationsPage() {
           ))
         )}
       </div>
+
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={filtered.length}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        itemLabel="notifications"
+      />
     </div>
   );
 }

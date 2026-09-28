@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -19,6 +19,7 @@ import {
   Navigation,
 } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 export type MaintenanceReservationRow = {
   id: number;
@@ -158,6 +159,10 @@ export default function Planning() {
   const upcomingCount = reservations.filter((r) => getTab(r.date) === "upcoming").length;
   const pendingCount = reservations.filter((r) => r.status === "PENDING").length;
 
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [planTab, filtered.length]);
+  const pageFiltered = filtered.slice(pagination.start, pagination.end);
+
   const updateStatus = useMutation({
     mutationFn: ({ id, status, date, time }: { id: number; status: string; date?: string; time?: string | null }) =>
       apiRequest("PATCH", `/api/maintenance/reservations/${id}/status`, { status, date, time }),
@@ -227,19 +232,32 @@ export default function Planning() {
           <p className="text-sm text-gray-400 mt-1">Pas de réservation pour cette période.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((res) => (
-            <ReservationCard
-              key={res.id}
-              res={res}
-              onConfirm={handleConfirm}
-              onCancel={handleCancel}
-              onReschedule={handleReschedule}
-              onComplete={handleComplete}
-              fromAddress={user?.locationAddress}
-            />
-          ))}
-        </div>
+        <>
+          <div className="space-y-3">
+            {pageFiltered.map((res) => (
+              <ReservationCard
+                key={res.id}
+                res={res}
+                onConfirm={handleConfirm}
+                onCancel={handleCancel}
+                onReschedule={handleReschedule}
+                onComplete={handleComplete}
+                fromAddress={user?.locationAddress}
+              />
+            ))}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={filtered.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="réservations"
+          />
+        </>
       )}
 
       <Dialog open={rescheduleTarget !== null} onOpenChange={(open) => { if (!open) setRescheduleTarget(null); }}>

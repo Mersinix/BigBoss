@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BookOpen, Plus, Pencil, Trash2, Award, Clock, MapPin, Eye, EyeOff } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 const LEVEL_COLORS: Record<AcademyCourseLevel, string> = {
@@ -175,6 +176,11 @@ export default function AcademyCoursesPage() {
   const [editing, setEditing] = useState<AcademyCourse | "new" | null>(null);
   const [previewCourseId, setPreviewCourseId] = useState<number | null>(null);
 
+  // Same usePagination/DataPagination pattern used throughout the app.
+  const pagination = usePagination(courses.length);
+  useEffect(() => { pagination.resetPage(); }, [courses.length]);
+  const pageCourses = courses.slice(pagination.start, pagination.end);
+
   const togglePublish = (course: AcademyCourse) => {
     update.mutate({ id: course.id, isPublished: !course.isPublished } as any, {
       onSuccess: () => toast({ title: course.isPublished ? "Formation dépubliée" : "Formation publiée" }),
@@ -217,8 +223,9 @@ export default function AcademyCoursesPage() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {courses.map((course) => (
+          {pageCourses.map((course) => (
             <Card key={course.id} data-testid={`card-course-${course.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-5 flex flex-col gap-3">
                 {/* Clicking the formation itself opens the same Formation details modal
@@ -263,6 +270,18 @@ export default function AcademyCoursesPage() {
             </Card>
           ))}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={courses.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="formations"
+        />
+        </>
       )}
 
       <CourseFormDialog course={editing} onClose={() => setEditing(null)} />

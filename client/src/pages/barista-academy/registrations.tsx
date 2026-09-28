@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useAcademyRegistrations, useUpdateAcademyRegistrationStatus,
   type AcademyRegistrationWithParties, type AcademyRegistrationStatus,
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClipboardList, Calendar, Users, User } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const STATUS_LABELS: Record<AcademyRegistrationStatus, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", CANCELLED: "Annulée", COMPLETED: "Terminée",
@@ -102,6 +103,13 @@ export default function AcademyRegistrationsPage() {
   const active = sorted.filter((r) => r.status === "PENDING" || r.status === "CONFIRMED");
   const list = tab === "active" ? active : sorted;
 
+  // Same usePagination/DataPagination pattern used throughout the app (reference:
+  // delivery/my-deliveries-page.tsx). resetPage() on tab change too, so switching tabs
+  // never leaves pagination pointing past the new list's end.
+  const pagination = usePagination(list.length);
+  useEffect(() => { pagination.resetPage(); }, [tab, list.length]);
+  const pageList = list.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-5">
       <DashboardHero
@@ -131,9 +139,22 @@ export default function AcademyRegistrationsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {list.map((registration) => <RegistrationCard key={registration.id} registration={registration} />)}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pageList.map((registration) => <RegistrationCard key={registration.id} registration={registration} />)}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={list.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="inscriptions"
+          />
+        </>
       )}
     </div>
   );

@@ -1,10 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Star } from "lucide-react";
 import type { SupplierProductReview } from "@shared/schema";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DateRangeFilter } from "@/components/analytics/date-range-filter";
+import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
 
 // Real PRINT reviews only — GET /api/print/reviews/:printerId reads the same
 // shared supplierProductReviews table (reviewType='PRINT') that the Coffee
@@ -23,11 +26,27 @@ export default function PrinterReviewsPage() {
     enabled: !!user?.id,
   });
 
+  // Overall rating stays computed over the FULL, unfiltered review list — the date filter
+  // below only narrows which reviews are listed/paginated, never what "your rating" means.
   const stats = useMemo(() => {
     if (reviews.length === 0) return { average: 0, count: 0 };
     const sum = reviews.reduce((s, r) => s + r.rating, 0);
     return { average: sum / reviews.length, count: reviews.length };
   }, [reviews]);
+
+  const [preset, setPreset] = useState<DateRangePreset>("all");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+
+  const filtered = useMemo(() => {
+    if (preset === "all") return reviews;
+    const { from, to } = resolveDateRange(preset, custom);
+    if (!from || !to) return reviews;
+    return reviews.filter((r) => r.createdAt && new Date(r.createdAt) >= from && new Date(r.createdAt) <= to);
+  }, [reviews, preset, custom]);
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [preset, custom.from, custom.to]);
+  const pageReviews = filtered.slice(pagination.start, pagination.end);
 
   return (
     <div className="flex flex-col gap-5">
@@ -42,14 +61,16 @@ export default function PrinterReviewsPage() {
         iconTextClass="text-blue-600 dark:text-blue-400"
       />
 
+      <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
+
       <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
         <CardContent className="p-0 divide-y divide-border/40">
           {isLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Chargement…</p>
-          ) : reviews.length === 0 ? (
-            <EmptyState message="Aucun avis pour le moment" icon={Star} />
+          ) : filtered.length === 0 ? (
+            <EmptyState icon={Star} message={reviews.length === 0 ? "Aucun avis pour le moment" : "Aucun avis sur cette période"} />
           ) : (
-            reviews.map((review) => (
+            pageReviews.map((review) => (
               <div key={review.id} className="p-4" data-testid={`row-review-${review.id}`}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-foreground">{review.cafeName || "Café"}</p>
@@ -69,6 +90,18 @@ export default function PrinterReviewsPage() {
           )}
         </CardContent>
       </Card>
+
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={filtered.length}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        itemLabel="avis"
+      />
     </div>
   );
 }

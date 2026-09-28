@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { User, CreditCard, MapPin, Building2, FileText, Landmark } from "lucide-react";
 import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
+import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Company Details Modal ─────────────────────────────────────────────────────
@@ -148,6 +149,7 @@ export default function SupplierSettingsPage() {
   const [companyOpen, setCompanyOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
   const [bankingOpen, setBankingOpen] = useState(false);
+  const addressRef = useRef<SettingsCardHandle>(null);
 
   const save = async () => {
     try {
@@ -155,6 +157,10 @@ export default function SupplierSettingsPage() {
         name: profile.name, phone: profile.phone,
         isWhatsapp: profile.isWhatsapp, profileImageUrl: profile.profileImageUrl.trim() || null,
       });
+      // AccountAddressCard's own save is no longer triggered by its own button (removed
+      // when it became ref-driven for the 7 service-account Settings pages) — this
+      // existing "Sauvegarder" button now also covers Localisation, so it isn't lost.
+      await addressRef.current?.save();
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast({ title: "Sauvegardé", description: "Profil mis à jour." });
     } catch {
@@ -246,7 +252,7 @@ export default function SupplierSettingsPage() {
         </CardContent>
       </Card>
 
-      <AccountAddressCard />
+      <AccountAddressCard ref={addressRef} />
 
       <NotificationPreferencesCard role="SUPPLIER" />
 

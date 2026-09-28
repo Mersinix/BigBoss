@@ -3,8 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtime } from "@/hooks/use-realtime";
-import { Button } from "@/components/ui/button";
-import { LogOut, Sun, Moon, type LucideIcon } from "lucide-react";
+import { LogOut, Sun, Moon, Coffee, type LucideIcon } from "lucide-react";
 import { AccountHeaderActions } from "@/components/account/account-header-actions";
 import { useAccountThemeStore } from "@/store/account-theme-store";
 import { useThemeStore } from "@/store/theme-store";
@@ -48,6 +47,7 @@ export function ProfessionalAccountShell({
   communicationPath,
   testIdPrefix,
   accountKey,
+  useServiceIconAsBrandLogo = false,
 }: {
   children: React.ReactNode;
   title: string;
@@ -69,6 +69,13 @@ export function ProfessionalAccountShell({
   // from Coffee Owner's own useThemeStore (client/src/store/theme-store.ts) —
   // these 7 accounts default to light, Coffee Owner's stays untouched.
   accountKey: DarkModeAccount;
+  // Mobile-only identity block: the one prominent logo tile normally shows the
+  // generic BigBoss Coffee cup icon. Driver's Truck icon already functions as
+  // its own established "logo" (task: mobile navbar identity hierarchy) — set
+  // this to reuse HeaderIcon there instead, so the account doesn't end up with
+  // two different icons (a generic cup + its own truck) in the same block.
+  // Every other account leaves this false and keeps the generic cup icon.
+  useServiceIconAsBrandLogo?: boolean;
 }) {
   const { user, logout, isLoggingOut } = useAuth();
   const [location] = useLocation();
@@ -128,19 +135,26 @@ export function ProfessionalAccountShell({
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className={`bg-gradient-to-r ${gradientClass} px-4 py-5 md:py-6`}>
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
-              <HeaderIcon className="w-5 h-5 text-white" />
+      {/* Header — one unified layout at every breakpoint (mobile/tablet/desktop):
+          identity on the left (brand logo, dominant "BigBoss Coffee" wordmark,
+          secondary service name, account name), icon-only actions on the right. Icon
+          size (w-9 h-9 / w-4 h-4) is the same size this app's desktop row previously
+          used. Below sm, the icon grid wraps into the required 2-row x 3-col
+          arrangement (grid-cols-3); at sm and up it's a single row of 6
+          (sm:grid-cols-6) — same 6 elements/order, no separate desktop-only markup. */}
+      <div className={`bg-gradient-to-r ${gradientClass} px-4 py-3 sm:py-4`}>
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+              {useServiceIconAsBrandLogo ? <HeaderIcon className="w-6 h-6 text-white" /> : <Coffee className="w-6 h-6 text-white" />}
             </div>
             <div className="min-w-0">
-              <h1 className="font-bold text-white text-lg truncate">{title}</h1>
-              <p className={`text-xs truncate ${subtitleTextClass}`}>{user?.name}</p>
+              <p className="font-bold text-white text-base sm:text-lg leading-tight truncate">BigBoss Coffee</p>
+              <p className="text-[11px] sm:text-xs text-white/80 truncate">{title}</p>
+              <p className={`text-[11px] sm:text-xs truncate ${subtitleTextClass}`}>{user?.name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 shrink-0">
             <AccountHeaderActions
               messagesPath={messagesPath}
               reviewsPath={reviewsPath}
@@ -148,28 +162,38 @@ export function ProfessionalAccountShell({
               notificationService={notificationService}
               notificationViewAllPath={`${communicationPath}?tab=notifications`}
               accentLinkTextClass={activeTextClass}
+              order={["settings"]}
             />
             {toggleAllowed && (
               <button
                 onClick={() => toggleDark()}
                 aria-label="Changer de thème"
                 title={effectiveDark ? "Mode clair" : "Mode sombre"}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors shrink-0"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors"
                 data-testid={`button-${testIdPrefix}-theme-toggle`}
               >
                 {effectiveDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
             )}
-            <Button
-              variant="ghost"
+            <button
               onClick={() => logout()}
               disabled={isLoggingOut}
-              className="text-white hover:bg-white/15 hover:text-white rounded-xl text-xs shrink-0"
+              aria-label="Se déconnecter"
+              title="Se déconnecter"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors disabled:opacity-60"
               data-testid={`button-${testIdPrefix}-logout`}
             >
-              <LogOut className="w-4 h-4 mr-1.5" />
-              <span className="hidden sm:inline">Se déconnecter</span>
-            </Button>
+              <LogOut className="w-4 h-4" />
+            </button>
+            <AccountHeaderActions
+              messagesPath={messagesPath}
+              reviewsPath={reviewsPath}
+              settingsPath={settingsPath}
+              notificationService={notificationService}
+              notificationViewAllPath={`${communicationPath}?tab=notifications`}
+              accentLinkTextClass={activeTextClass}
+              order={["messages", "notifications", "avis"]}
+            />
           </div>
         </div>
       </div>

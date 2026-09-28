@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit"
 import { Briefcase, Calendar, Phone, DollarSign } from "lucide-react";
 import { useMarketingProjects, useUpdateMarketingProjectStatus, type MarketingProjectWithParties } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META, MARKETING_PROJECT_NEXT_ACTIONS } from "@/lib/marketing-project-status";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // ── Projets tab — real marketingProjects for the authenticated provider.
 // Covers the request → quote → active project → completion lifecycle in one
@@ -96,6 +97,10 @@ export default function MarketingProjects() {
     return true;
   });
 
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [filter, filtered.length]);
+  const pageItems = filtered.slice(pagination.start, pagination.end);
+
   const sendQuote = () => {
     if (!quoteTarget || !quoteAmount) return;
     updateStatus.mutate(
@@ -147,11 +152,24 @@ export default function MarketingProjects() {
       {isLoading ? null : filtered.length === 0 ? (
         <EmptyState message="Aucun projet pour cette vue." icon={Briefcase} />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {filtered.map((p) => (
-            <ProjectCard key={p.id} project={p} onQuote={(proj) => { setQuoteTarget(proj); setQuoteAmount(""); }} onAction={handleAction} onProgress={handleProgress} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {pageItems.map((p) => (
+              <ProjectCard key={p.id} project={p} onQuote={(proj) => { setQuoteTarget(proj); setQuoteAmount(""); }} onAction={handleAction} onProgress={handleProgress} />
+            ))}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={filtered.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="projets"
+          />
+        </>
       )}
 
       <Dialog open={quoteTarget !== null} onOpenChange={(open) => { if (!open) setQuoteTarget(null); }}>

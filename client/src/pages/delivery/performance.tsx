@@ -1,11 +1,14 @@
 import { LayoutDashboard, BarChart2, DollarSign } from "lucide-react";
 import { SubTabSwitcher } from "@/components/account/sub-tab-switcher";
-import { PerformanceEmptyState } from "@/components/account/performance-empty-state";
 import DeliveryDashboard from "@/pages/delivery/dashboard";
+import DeliveryAnalyticsPage from "@/pages/delivery/analytics";
+import DeliveryRevenuePage from "@/pages/delivery/revenue";
 
-// Performance tab — Dashboard / Analytics / Revenue. Delivery Company has no
-// separate Analytics/Revenue pages: KPIs (including "Frais générés") already
-// live on Dashboard, so those sub-tabs point there rather than duplicating.
+// Performance tab — Dashboard / Analyses / Revenus. Analyses/Revenus now have
+// their own real, data-backed content (client-computed from the same
+// useDeliveries()/useMyFinancialSummary() data Dashboard already uses — see
+// analytics.tsx/revenue.tsx), matching the other 6 service accounts'
+// Performance tabs instead of pointing back to Dashboard.
 export default function DeliveryPerformance() {
   return (
     <SubTabSwitcher
@@ -13,14 +16,8 @@ export default function DeliveryPerformance() {
       activeTextClass="text-teal-600 dark:text-teal-400"
       tabs={[
         { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, content: <DeliveryDashboard /> },
-        {
-          key: "analytics", label: "Analyses", icon: BarChart2,
-          content: <PerformanceEmptyState message="Vos statistiques sont affichées sur l'onglet Tableau de bord ci-dessus." />,
-        },
-        {
-          key: "revenue", label: "Revenus", icon: DollarSign,
-          content: <PerformanceEmptyState icon={DollarSign} message="Vos frais générés sont affichés sur l'onglet Tableau de bord ci-dessus." />,
-        },
+        { key: "analytics", label: "Analyses", icon: BarChart2, content: <DeliveryAnalyticsPage /> },
+        { key: "revenue", label: "Revenus", icon: DollarSign, content: <DeliveryRevenuePage /> },
       ]}
     />
   );

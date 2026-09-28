@@ -1,6 +1,8 @@
+import { forwardRef } from "react";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
 import { MapPin } from "lucide-react";
 import { AddressDetailsFields } from "@/components/settings/address-details-fields";
+import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
 
 // Unified "Localisation" section (Part 6) — replaces the owner-side map modal
 // with a static address-details form for every professional account, and now
@@ -23,10 +25,16 @@ import { AddressDetailsFields } from "@/components/settings/address-details-fiel
 // ProfessionalAccountShell). AddressDetailsFields is the one exception: its
 // inputs use literal Tailwind colors (not CSS-variable tokens), so it still
 // needs the explicit isDark prop.
-export function AccountAddressCard({ accentClassName = "", isDark = false, className }: { accentClassName?: string; isDark?: boolean; className?: string }) {
+//
+// Forwards its ref straight through to AddressDetailsFields (see
+// settings-card-handle.ts) so callers driving a unified page-level Save
+// button — every 7-account Settings page, and now Supplier's own — can hold
+// one ref per card without reaching into internals.
+export const AccountAddressCard = forwardRef<SettingsCardHandle, { isDark?: boolean; className?: string }>(
+  function AccountAddressCard({ isDark = false, className }, ref) {
   return (
     <SectionCard title="Localisation" icon={MapPin} className={className}>
-      <AddressDetailsFields accentClassName={accentClassName} isDark={isDark} />
+      <AddressDetailsFields ref={ref} isDark={isDark} standalone={false} />
     </SectionCard>
   );
-}
+});

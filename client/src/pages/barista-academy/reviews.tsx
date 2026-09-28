@@ -1,10 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useAcademyReviews } from "@/hooks/use-barista-academy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DateRangeFilter } from "@/components/analytics/date-range-filter";
+import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
@@ -14,10 +17,26 @@ export default function AcademyReviewsPage() {
   const { user } = useAuth();
   const { data: reviews = [], isLoading } = useAcademyReviews(user?.id ?? null);
 
+  // Overall rating stays computed over the FULL, unfiltered review list — the date filter
+  // below only narrows which reviews are listed/paginated, never what "your rating" means.
   const avgRating = useMemo(
     () => (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0),
     [reviews],
   );
+
+  const [preset, setPreset] = useState<DateRangePreset>("all");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+
+  const filtered = useMemo(() => {
+    if (preset === "all") return reviews;
+    const { from, to } = resolveDateRange(preset, custom);
+    if (!from || !to) return reviews;
+    return reviews.filter((r) => r.createdAt && new Date(r.createdAt) >= from && new Date(r.createdAt) <= to);
+  }, [reviews, preset, custom]);
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [preset, custom.from, custom.to]);
+  const pageReviews = filtered.slice(pagination.start, pagination.end);
 
   return (
     <div className="flex flex-col gap-5">
@@ -31,6 +50,8 @@ export default function AcademyReviewsPage() {
         iconBgClass="bg-indigo-500/15"
         iconTextClass="text-indigo-600 dark:text-indigo-400"
       />
+
+      <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
 
       {isLoading ? (
         <div className="space-y-3">
@@ -63,10 +84,12 @@ export default function AcademyReviewsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {reviews.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">Aucun avis pour le moment. Les avis apparaîtront ici après vos premières formations terminées.</p>
+              {filtered.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  {reviews.length === 0 ? "Aucun avis pour le moment. Les avis apparaîtront ici après vos premières formations terminées." : "Aucun avis sur cette période."}
+                </p>
               ) : (
-                reviews.map((review) => (
+                pageReviews.map((review) => (
                   <div key={review.id} className="rounded-xl bg-secondary/30 p-3" data-testid={`row-review-${review.id}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -83,6 +106,18 @@ export default function AcademyReviewsPage() {
               )}
             </CardContent>
           </Card>
+
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={filtered.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="avis"
+          />
         </>
       )}
     </div>

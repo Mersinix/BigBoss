@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useVehicles, useCreateVehicle, useUpdateVehicle, useDeleteVehicle, useAssignVehicle,
   VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type Vehicle,
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Truck, Plus, Pencil, Trash2, User as UserIcon, Snowflake } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const VEHICLE_ICONS: Record<DeliveryVehicleType, string> = {
   BICYCLE: "🚲", MOTO: "🏍️", CAR: "🚗", VAN: "🚐", TRUCK: "🚚", OTHER: "🚙",
@@ -90,6 +91,12 @@ export default function DeliveryVehiclesPage() {
   const driverName = (id: number | null) => (id ? drivers.find((d) => d.id === id)?.name ?? `Chauffeur #${id}` : null);
   const unassignedDrivers = drivers.filter((d) => !vehicles.some((v) => v.assignedDriverId === d.id));
 
+  // Same usePagination/DataPagination pattern already used throughout the app (reference:
+  // Business → Chauffeurs' driver-roster-view.tsx).
+  const pagination = usePagination(vehicles.length);
+  useEffect(() => { pagination.resetPage(); }, [vehicles.length]);
+  const pageVehicles = vehicles.slice(pagination.start, pagination.end);
+
   const toggleActive = (v: Vehicle) => {
     update.mutate({ id: v.id, isActive: !v.isActive }, {
       onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
@@ -127,8 +134,9 @@ export default function DeliveryVehiclesPage() {
           <p className="text-sm text-muted-foreground mt-1">Ajoutez un véhicule pour l'assigner à un chauffeur.</p>
         </CardContent></Card>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {vehicles.map((v) => (
+          {pageVehicles.map((v) => (
             <Card key={v.id} data-testid={`card-vehicle-${v.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
               <CardContent className="p-5 flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-2">
@@ -174,6 +182,18 @@ export default function DeliveryVehiclesPage() {
             </Card>
           ))}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={vehicles.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="véhicules"
+        />
+        </>
       )}
 
       <VehicleFormDialog vehicle={editing} onClose={() => setEditing(null)} />

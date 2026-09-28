@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Star, Flag } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { DateRangeFilter } from "@/components/analytics/date-range-filter";
+import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
 
 // ── Reviews ("Avis") tab ──────────────────────────────────────────────────────
 
@@ -39,10 +42,27 @@ export default function Reviews() {
     onError: (error: Error) => toast({ title: "Signalement impossible", description: error.message, variant: "destructive" }),
   });
 
+  // Overall rating stays computed over the FULL, unfiltered review list — the date filter
+  // below only narrows which reviews are listed/paginated (same convention as
+  // delivery/reviews-page.tsx).
   const avgRating = useMemo(
     () => (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0),
     [reviews],
   );
+
+  const [preset, setPreset] = useState<DateRangePreset>("all");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+
+  const filtered = useMemo(() => {
+    if (preset === "all") return reviews;
+    const { from, to } = resolveDateRange(preset, custom);
+    if (!from || !to) return reviews;
+    return reviews.filter((r) => r.createdAt && new Date(r.createdAt) >= from && new Date(r.createdAt) <= to);
+  }, [reviews, preset, custom]);
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [preset, custom.from, custom.to]);
+  const pageReviews = filtered.slice(pagination.start, pagination.end);
 
   return (
     <div className="flex flex-col gap-5">
@@ -56,6 +76,7 @@ export default function Reviews() {
         iconBgClass="bg-orange-500/15"
         iconTextClass="text-orange-600 dark:text-orange-400"
       />
+      <DateRangeFilter preset={preset} onPresetChange={setPreset} custom={custom} onCustomChange={setCustom} />
       <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -63,9 +84,9 @@ export default function Reviews() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {isLoading ? <p className="text-sm text-gray-400">Chargement…</p> : reviews.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">Aucun avis reçu pour le moment.</p>
-        ) : reviews.map((review) => {
+        {isLoading ? <p className="text-sm text-gray-400">Chargement…</p> : filtered.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{reviews.length === 0 ? "Aucun avis reçu pour le moment." : "Aucun avis sur cette période."}</p>
+        ) : pageReviews.map((review) => {
           const reported = !!review.reportedAt;
           return (
             <div key={review.id} className="rounded-xl bg-gray-50 dark:bg-gray-700/60 p-3">
@@ -104,6 +125,18 @@ export default function Reviews() {
         </DialogContent>
       </Dialog>
       </Card>
+
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        totalItems={filtered.length}
+        totalPages={pagination.totalPages}
+        start={pagination.start}
+        end={pagination.end}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        itemLabel="avis"
+      />
     </div>
   );
 }

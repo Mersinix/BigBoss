@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit"
 import { FileText, DollarSign, Clock, Search, Briefcase } from "lucide-react";
 import { useMarketingProjects } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // Marketing has no separate quotes/invoices tables (like every service-provider
 // module in this app — see pages/printer/invoices.tsx, itself derived live from
@@ -38,6 +39,10 @@ export default function MarketingInvoices() {
       .filter((p) => !q || (p.cafeOwner ?? "").toLowerCase().includes(q) || p.service.toLowerCase().includes(q))
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [view, devis, factures, projects, search]);
+
+  const pagination = usePagination(rows.length);
+  useEffect(() => { pagination.resetPage(); }, [view, search, rows.length]);
+  const pageRows = rows.slice(pagination.start, pagination.end);
 
   return (
     <div className="flex flex-col gap-6">
@@ -98,8 +103,9 @@ export default function MarketingInvoices() {
       ) : rows.length === 0 ? (
         <EmptyState message="Aucun élément pour cette vue." icon={FileText} />
       ) : (
+        <>
         <div className="space-y-3">
-          {rows.map((p) => {
+          {pageRows.map((p) => {
             const meta = MARKETING_PROJECT_STATUS_META[p.status];
             return (
               <Card key={p.id} data-testid={`card-invoice-${p.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
@@ -122,6 +128,18 @@ export default function MarketingInvoices() {
             );
           })}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={rows.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="éléments"
+        />
+        </>
       )}
     </div>
   );

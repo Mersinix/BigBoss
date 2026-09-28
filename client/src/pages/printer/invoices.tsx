@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import type { PrintOrderWithParties } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,7 +12,8 @@ import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit"
 import { formatDate } from "@/lib/format";
 import { buildPrintInvoiceRows, PRINT_INVOICE_STATUS_META, type PrintInvoiceRow, type PrintInvoiceStatus } from "@/lib/print-financial-rows";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
-import { FileText, DollarSign, Clock, Eye, Search, Calendar } from "lucide-react";
+import { FileText, DollarSign, Clock, Search, Calendar } from "lucide-react";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 function InvoiceDetailDialog({ row, onClose }: { row: PrintInvoiceRow | null; onClose: () => void }) {
   const fmt = useFormatCurrency();
@@ -84,6 +84,10 @@ export default function PrinterInvoices() {
       .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime());
   }, [allRows, search, statusFilter]);
 
+  const pagination = usePagination(rows.length);
+  useEffect(() => { pagination.resetPage(); }, [search, statusFilter, rows.length]);
+  const pageRows = rows.slice(pagination.start, pagination.end);
+
   const paid = allRows.filter((r) => r.invoiceStatus === "PAID");
   const pending = allRows.filter((r) => r.invoiceStatus === "PENDING");
   const totalPaid = paid.reduce((s, r) => s + r.amount, 0);
@@ -141,9 +145,15 @@ export default function PrinterInvoices() {
       ) : rows.length === 0 ? (
         <EmptyState message={allRows.length === 0 ? "Aucune facture pour le moment." : "Aucune facture ne correspond à ces filtres."} icon={FileText} />
       ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {rows.map((r) => (
-            <Card key={r.orderId} data-testid={`card-invoice-${r.orderId}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
+          {pageRows.map((r) => (
+            <Card
+              key={r.orderId}
+              data-testid={`card-invoice-${r.orderId}`}
+              onClick={() => setViewing(r)}
+              className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl cursor-pointer hover:shadow-md transition-shadow"
+            >
               <CardContent className="p-4 flex flex-col gap-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -162,13 +172,22 @@ export default function PrinterInvoices() {
                   </div>
                   <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />{r.createdAt ? formatDate(r.createdAt as any) : "—"}</p>
                 </div>
-                <Button size="sm" variant="outline" className="self-end" onClick={() => setViewing(r)} data-testid={`button-view-invoice-${r.orderId}`}>
-                  <Eye className="w-3.5 h-3.5 mr-1" />Voir
-                </Button>
               </CardContent>
             </Card>
           ))}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={rows.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="factures"
+        />
+        </>
       )}
 
       <InvoiceDetailDialog row={viewing} onClose={() => setViewing(null)} />

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -6,6 +6,7 @@ import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit"
 import { Users, Phone } from "lucide-react";
 import { useMarketingProjects } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // ── Clients tab — grouped view over the same marketingProjects the provider
 // already sees on Projets, never a second Coffee-Owner-relationship dataset.
@@ -35,6 +36,10 @@ export default function MarketingClients() {
     }).sort((a, b) => b.lastActivity - a.lastActivity);
   }, [projects]);
 
+  const pagination = usePagination(clients.length);
+  useEffect(() => { pagination.resetPage(); }, [clients.length]);
+  const pageClients = clients.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-5">
       <DashboardHero
@@ -49,8 +54,9 @@ export default function MarketingClients() {
       {isLoading ? null : clients.length === 0 ? (
         <EmptyState message="Aucun client pour le moment." icon={Users} />
       ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {clients.map((c) => {
+          {pageClients.map((c) => {
             const meta = c.latestStatus ? MARKETING_PROJECT_STATUS_META[c.latestStatus as keyof typeof MARKETING_PROJECT_STATUS_META] : null;
             return (
               <div key={c.cafeOwnerId} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-sm p-4 space-y-3" data-testid={`card-client-${c.cafeOwnerId}`}>
@@ -82,6 +88,18 @@ export default function MarketingClients() {
             );
           })}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={clients.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="clients"
+        />
+        </>
       )}
     </div>
   );

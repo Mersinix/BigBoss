@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -14,8 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { formatDate } from "@/lib/format";
 import { PRINT_ORDER_STATUS_META, PRINT_ORDER_NEXT_ACTIONS, PRINT_ORDER_STATUSES } from "@/lib/print-order-status";
-import { Search, ClipboardList, Eye, MapPin, Phone, Calendar, User, Package } from "lucide-react";
+import { Search, ClipboardList, MapPin, Phone, Calendar, User, Package } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 function StatusBadge({ status }: { status: string }) {
   const meta = PRINT_ORDER_STATUS_META[status as PrintOrderStatus] ?? PRINT_ORDER_STATUS_META.PENDING;
@@ -128,6 +129,10 @@ export default function PrinterOrders() {
       .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime());
   }, [orders, search, statusFilter]);
 
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [search, statusFilter, filtered.length]);
+  const pageOrders = filtered.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-6">
       <DashboardHero
@@ -160,9 +165,15 @@ export default function PrinterOrders() {
       ) : filtered.length === 0 ? (
         <EmptyState message={orders.length === 0 ? "Aucune commande pour le moment." : "Aucune commande ne correspond à ces filtres."} icon={ClipboardList} />
       ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((o) => (
-            <Card key={o.id} data-testid={`card-order-${o.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
+          {pageOrders.map((o) => (
+            <Card
+              key={o.id}
+              data-testid={`card-order-${o.id}`}
+              onClick={() => setViewing(o)}
+              className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl cursor-pointer hover:shadow-md transition-shadow"
+            >
               <CardContent className="p-4 flex flex-col gap-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -179,13 +190,22 @@ export default function PrinterOrders() {
                   </div>
                   <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />{o.createdAt ? formatDate(o.createdAt as any) : "—"}</p>
                 </div>
-                <Button size="sm" variant="outline" className="self-end" onClick={() => setViewing(o)} data-testid={`button-view-order-${o.id}`}>
-                  <Eye className="w-3.5 h-3.5 mr-1" />Voir
-                </Button>
               </CardContent>
             </Card>
           ))}
         </div>
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="commandes"
+        />
+        </>
       )}
 
       <OrderDetailDialog

@@ -3,13 +3,21 @@ import { MessageCircle, Star, Settings } from "lucide-react";
 import { NotificationBellPopover } from "@/components/account/notification-bell-popover";
 import type { NotificationService } from "@shared/schema";
 
+type ActionKey = "messages" | "notifications" | "avis" | "settings";
+
 // Header action icons (Message / Notification / Avis / Settings), reused by
 // every professional account shell next to the existing "Se déconnecter"
 // action. Each icon deep-links straight into the account's own existing
 // Communication (Messages/Notifications/Avis) or Paramètres routes — no new
 // pages, no new data, just direct navigation shortcuts from the header.
+// Icon-only, no wrapping row div — the one unified navbar layout (mobile,
+// tablet, desktop alike) places these directly into its own 2x3 icon grid,
+// so this component only needs to emit bare cells in whatever order/subset
+// the caller asks for (Settings sits in its own call, separated from
+// Messages/Notifications/Avis by Dark Mode + Se déconnecter in between).
 export function AccountHeaderActions({
   messagesPath, reviewsPath, settingsPath, notificationService, notificationViewAllPath, accentLinkTextClass,
+  order = ["messages", "notifications", "avis", "settings"],
 }: {
   messagesPath: string;
   reviewsPath: string;
@@ -19,10 +27,12 @@ export function AccountHeaderActions({
   // Full Tailwind class string for the notification popover's "Voir tout" link,
   // e.g. "text-fuchsia-600 dark:text-fuchsia-400" (never interpolated).
   accentLinkTextClass: string;
+  // Which of the 4 icons to render, and in what order.
+  order?: ActionKey[];
 }) {
-  return (
-    <div className="flex items-center gap-0.5 shrink-0">
-      <Link href={messagesPath}>
+  const render: Record<ActionKey, React.ReactNode> = {
+    messages: (
+      <Link key="messages" href={messagesPath}>
         <a
           aria-label="Messages"
           title="Messagerie"
@@ -32,12 +42,17 @@ export function AccountHeaderActions({
           <MessageCircle className="w-4 h-4" />
         </a>
       </Link>
+    ),
+    notifications: (
       <NotificationBellPopover
+        key="notifications"
         service={notificationService}
         viewAllPath={notificationViewAllPath}
         linkTextClass={accentLinkTextClass}
       />
-      <Link href={reviewsPath}>
+    ),
+    avis: (
+      <Link key="avis" href={reviewsPath}>
         <a
           aria-label="Avis"
           title="Avis"
@@ -47,7 +62,9 @@ export function AccountHeaderActions({
           <Star className="w-4 h-4" />
         </a>
       </Link>
-      <Link href={settingsPath}>
+    ),
+    settings: (
+      <Link key="settings" href={settingsPath}>
         <a
           aria-label="Paramètres"
           title="Paramètres"
@@ -57,6 +74,7 @@ export function AccountHeaderActions({
           <Settings className="w-4 h-4" />
         </a>
       </Link>
-    </div>
-  );
+    ),
+  };
+  return <>{order.map((key) => render[key])}</>;
 }

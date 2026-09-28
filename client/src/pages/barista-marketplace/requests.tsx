@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useBaristaRequests, useUpdateBaristaRequestStatus, type BaristaRequest, type BaristaRequestStatus } from "@/hooks/use-barista-marketplace";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Briefcase, Calendar, MessageSquare, User } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const STATUS_LABELS: Record<BaristaRequestStatus, string> = {
   PENDING: "En attente",
@@ -96,6 +97,10 @@ export default function BaristaRequestsPage() {
   const active = sorted.filter((r) => r.status === "PENDING" || r.status === "DISCUSSION");
   const list = tab === "active" ? active : sorted;
 
+  const pagination = usePagination(list.length);
+  useEffect(() => { pagination.resetPage(); }, [tab, list.length]);
+  const pageList = list.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-5">
       <DashboardHero
@@ -125,9 +130,22 @@ export default function BaristaRequestsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {list.map((request) => <RequestCard key={request.id} request={request} />)}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pageList.map((request) => <RequestCard key={request.id} request={request} />)}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={list.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="demandes"
+          />
+        </>
       )}
     </div>
   );

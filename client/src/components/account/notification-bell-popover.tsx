@@ -63,7 +63,7 @@ export function NotificationBellPopover({
             </span>
           )}
         </div>
-        <div className="max-h-80 overflow-y-auto">
+        <div className="max-h-80 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           {notifications.length === 0 ? (
             <div className="text-center py-8 text-sm text-gray-400 dark:text-gray-500">Aucune notification</div>
           ) : (

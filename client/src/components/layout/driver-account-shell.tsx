@@ -48,6 +48,7 @@ export function DriverAccountShell({ children }: { children: React.ReactNode }) 
       communicationPath="/driver/communication"
       testIdPrefix="driver"
       accountKey="DRIVER"
+      useServiceIconAsBrandLogo
     >
       {children}
     </ProfessionalAccountShell>

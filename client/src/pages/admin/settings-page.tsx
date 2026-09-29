@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { User, Lock, LogOut } from "lucide-react";
 import { DashboardHero, SectionCard } from "@/components/dashboard/dashboard-kit";
 import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
+import { PasswordInputField } from "@/components/settings/password-input-field";
 
 // New — Admin previously had no personal account settings page (System
 // Management is platform config, not this). Same generic profile-update
@@ -89,11 +90,25 @@ export default function AdminSettingsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Mot de passe actuel</Label>
-            <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+            <PasswordInputField
+              value={currentPassword}
+              onChange={setCurrentPassword}
+              autoComplete="current-password"
+              testId="input-admin-current-password"
+              toggleTestId="button-toggle-admin-current-password"
+              ariaLabel="mot de passe actuel"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Nouveau mot de passe</Label>
-            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <PasswordInputField
+              value={newPassword}
+              onChange={setNewPassword}
+              autoComplete="new-password"
+              testId="input-admin-new-password"
+              toggleTestId="button-toggle-admin-new-password"
+              ariaLabel="nouveau mot de passe"
+            />
           </div>
         </div>
         <Button className="mt-4" variant="outline" onClick={changePassword} disabled={saving || !currentPassword || !newPassword}>

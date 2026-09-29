@@ -10,11 +10,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getAvatarUrl } from "@/lib/avatar";
-import { User, CreditCard, MapPin, Building2, FileText, Landmark } from "lucide-react";
+import { User, CreditCard, MapPin, Building2, FileText, Landmark, Lock, LogOut } from "lucide-react";
 import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
 import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { PasswordInputField } from "@/components/settings/password-input-field";
 
 // ── Company Details Modal ─────────────────────────────────────────────────────
 
@@ -137,7 +138,7 @@ function BankingModal({ open, onClose, user }: { open: boolean; onClose: () => v
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function SupplierSettingsPage() {
-  const { user } = useAuth();
+  const { user, logout, isLoggingOut } = useAuth();
   const { toast } = useToast();
   const [profile, setProfile] = useState({
     name: user?.name || "Premium Beans Co",
@@ -150,6 +151,29 @@ export default function SupplierSettingsPage() {
   const [legalOpen, setLegalOpen] = useState(false);
   const [bankingOpen, setBankingOpen] = useState(false);
   const addressRef = useRef<SettingsCardHandle>(null);
+
+  // Sécurité — reuses the exact same PATCH /api/auth/me/profile mechanism as
+  // Admin → Paramètres (server/routes.ts:682), which already verifies
+  // currentPassword via storage.verifyPassword and enforces the shared
+  // registration password policy server-side. No new endpoint.
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const changePassword = async () => {
+    if (!currentPassword || !newPassword) return;
+    setChangingPassword(true);
+    try {
+      await apiRequest("PATCH", "/api/auth/me/profile", { password: newPassword, currentPassword });
+      setCurrentPassword("");
+      setNewPassword("");
+      toast({ title: "Mot de passe mis à jour" });
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message ?? "Mot de passe actuel incorrect.", variant: "destructive" });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   const save = async () => {
     try {
@@ -255,6 +279,49 @@ export default function SupplierSettingsPage() {
       <AccountAddressCard ref={addressRef} />
 
       <NotificationPreferencesCard role="SUPPLIER" />
+
+      {/* Sécurité — same content/layout as Admin → Paramètres (admin/settings-page.tsx),
+          styled with this page's own Card/CardHeader convention so it sits naturally
+          among the sections above rather than introducing SectionCard's slightly
+          different header size on this one page. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold flex items-center gap-2"><Lock className="w-4 h-4" /> Sécurité</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Mot de passe actuel</Label>
+              <PasswordInputField
+                value={currentPassword}
+                onChange={setCurrentPassword}
+                autoComplete="current-password"
+                testId="input-supplier-current-password"
+                toggleTestId="button-toggle-supplier-current-password"
+                ariaLabel="mot de passe actuel"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Nouveau mot de passe</Label>
+              <PasswordInputField
+                value={newPassword}
+                onChange={setNewPassword}
+                autoComplete="new-password"
+                testId="input-supplier-new-password"
+                toggleTestId="button-toggle-supplier-new-password"
+                ariaLabel="nouveau mot de passe"
+              />
+            </div>
+          </div>
+          <Button className="mt-4" variant="outline" onClick={changePassword} disabled={changingPassword || !currentPassword || !newPassword} data-testid="button-supplier-change-password">
+            Changer le mot de passe
+          </Button>
+          <Separator className="my-4" />
+          <Button variant="ghost" className="text-destructive hover:text-destructive gap-2" onClick={() => logout()} disabled={isLoggingOut} data-testid="button-supplier-logout">
+            <LogOut className="w-4 h-4" /> Se déconnecter
+          </Button>
+        </CardContent>
+      </Card>
 
       <Button data-testid="button-save-settings" onClick={save} className="w-fit">Sauvegarder</Button>
 

@@ -3,7 +3,9 @@ import { createServer, type Server } from "http";
 import { broadcast, broadcastToUsers } from "./ws";
 import { notify, notifyMany } from "./notify";
 import { storage } from "./storage";
-import { sendPasswordResetEmail } from "./email";
+import { sendPasswordResetEmail, EmailDeliveryError } from "./email";
+import { registerOAuthRoutes, isGoogleConfigured, isFacebookConfigured } from "./oauth";
+import { getCooldownRemainingSeconds, recordFailedAttempt, resetLoginAttempts } from "./login-attempts";
 import {
   geocodeAddress,
   generateGrid,
@@ -18,6 +20,7 @@ import {
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { sessionMiddleware } from "./session";
+import rateLimit from "express-rate-limit";
 import { db } from "./db";
 import {
   users, categories, subCategories, flavors, sizes, brands, products, supplierProductListings, supplierCategories, supplierSubCategories,
@@ -36,8 +39,32 @@ declare module "express-session" {
   interface SessionData { userId: number; }
 }
 
+// Registration/reset password rule — 8+ characters, at least one uppercase letter, one
+// number, and one symbol. Enforced here (not just client-side in landing-page.tsx) so a
+// request sent directly to these endpoints can't bypass it.
+const REGISTRATION_PASSWORD_MESSAGE = "Le mot de passe doit contenir au moins 8 caractères, une majuscule, un chiffre et un symbole.";
+const registrationPasswordSchema = z.string()
+  .min(8, REGISTRATION_PASSWORD_MESSAGE)
+  .regex(/[A-Z]/, REGISTRATION_PASSWORD_MESSAGE)
+  .regex(/[0-9]/, REGISTRATION_PASSWORD_MESSAGE)
+  .regex(/[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/, REGISTRATION_PASSWORD_MESSAGE);
+function isValidRegistrationPassword(pw: string): boolean {
+  return pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/.test(pw);
+}
+
+// Rate limiting for the authentication endpoints — generous, rolling (never permanent)
+// windows, and a single generic message that never reveals which part of a request
+// failed or distinguishes a real account from an unknown one.
+const authRateLimitMessage = { message: "Trop de tentatives. Veuillez réessayer plus tard." };
+const loginRateLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, message: authRateLimitMessage });
+const registerRateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: authRateLimitMessage });
+const forgotPasswordRateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: authRateLimitMessage });
+const verifyResetCodeRateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, message: authRateLimitMessage });
+const resetPasswordRateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, message: authRateLimitMessage });
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   app.use(sessionMiddleware);
+  registerOAuthRoutes(app);
 
   const requireAuth = (req: any, res: any, next: any) => {
     if (!req.session.userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -140,7 +167,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const registerBodySchema = z.object({
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Valid email required"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
+    password: registrationPasswordSchema,
     role: z.enum(['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE']).optional(),
     phone: z.string().optional().nullable(),
     isWhatsapp: z.boolean().optional(),
@@ -173,7 +200,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }).optional().nullable(),
   });
 
-  app.post(api.auth.register.path, async (req, res) => {
+  app.post(api.auth.register.path, registerRateLimiter, async (req, res) => {
     try {
       const parsed = registerBodySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0].message });
@@ -187,6 +214,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // geolocation later via the full 3-step location picker (see /api/admin/users/:id/location).
       if (LOCATION_REQUIRED_ROLES.includes(role) && !body.locationAddress) {
         return res.status(400).json({ message: "L'adresse est requise pour ce type de compte." });
+      }
+      // Adresse (the free-text street field on the registration address step) is now
+      // required independently of locationAddress — a request could otherwise satisfy
+      // the check above while sending an empty/missing locationDetails.street.
+      if (LOCATION_REQUIRED_ROLES.includes(role) && !body.locationDetails?.street?.trim()) {
+        return res.status(400).json({ message: "L'adresse est requise." });
       }
       const status = PENDING_ROLES.includes(role) ? 'pending' : 'approved';
       const existing = await storage.getUserByEmail(body.email);
@@ -251,14 +284,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post(api.auth.login.path, async (req, res) => {
+  app.post(api.auth.login.path, loginRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       if (!email || !password) return res.status(400).json({ message: "Email/phone and password required" });
       // Try email first, then phone
       let user = await storage.getUserByEmail(email);
       if (!user) user = await storage.getUserByPhone(email);
-      if (!user || user.password !== password) return res.status(401).json({ message: "Invalid credentials" });
+      // Tracked by the account's own canonical email when one was found (so trying the
+      // same account via its phone number vs its email number shares one counter, and
+      // one account's failures never touch another's) — falls back to whatever
+      // identifier was typed when no account matches at all, so repeatedly guessing a
+      // single nonexistent identifier is still throttled. This is a SEPARATE, tighter,
+      // per-account layer on top of the existing IP-scoped loginRateLimiter above
+      // (unchanged) — that broader limiter still guards against distributed abuse
+      // across many different accounts from one IP.
+      const identifier = user ? user.email : email;
+
+      const activeCooldown = getCooldownRemainingSeconds(identifier);
+      if (activeCooldown > 0) {
+        return res.status(429).json({
+          message: `Trop de tentatives. Veuillez patienter ${activeCooldown} secondes avant de réessayer.`,
+          retryAfterSeconds: activeCooldown,
+        });
+      }
+
+      if (!user || !(await storage.verifyPassword(user.id, password, user.password))) {
+        const { cooldownSeconds } = await storage.getLoginSecuritySettings();
+        const { cooldownRemainingSeconds } = recordFailedAttempt(identifier, cooldownSeconds);
+        if (cooldownRemainingSeconds > 0) {
+          return res.status(429).json({
+            message: `Trop de tentatives. Veuillez patienter ${cooldownRemainingSeconds} secondes avant de réessayer.`,
+            retryAfterSeconds: cooldownRemainingSeconds,
+          });
+        }
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      resetLoginAttempts(identifier);
       req.session.userId = user.id;
       res.json(user);
     } catch (err) {
@@ -274,7 +337,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post(api.auth.logout.path, (req, res) => {
-    req.session.destroy(() => res.json({ message: "Logged out" }));
+    req.session.destroy(() => {
+      // Session is already invalidated server-side by destroy() above — this just clears
+      // the now-meaningless cookie from the browser too, instead of leaving it to sit
+      // until it naturally expires/gets overwritten.
+      res.clearCookie("connect.sid");
+      res.json({ message: "Logged out" });
+    });
   });
 
   // ── Password reset ────────────────────────────────────────────────────────────
@@ -284,7 +353,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // model (hashed codes, expiry, single-use, attempt limits, opaque second-phase token).
   const GENERIC_FORGOT_MESSAGE = "Si un compte existe avec cet email, un code de vérification a été envoyé.";
 
-  app.post("/api/auth/forgot-password", async (req, res) => {
+  app.post("/api/auth/forgot-password", forgotPasswordRateLimiter, async (req, res) => {
     try {
       const { email } = z.object({ email: z.string().email() }).parse(req.body);
       const user = await storage.getUserByEmail(email);
@@ -300,11 +369,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ message: GENERIC_FORGOT_MESSAGE });
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: "Email invalide." });
+      // A real SMTP failure now surfaces as EmailDeliveryError (see email.ts) instead of
+      // being indistinguishable from success — log it loudly here so an operator can see
+      // it, while the CLIENT still gets the exact same generic message either way (never
+      // reveals whether the account exists or whether delivery actually happened).
+      if (err instanceof EmailDeliveryError) {
+        console.error("[auth:forgot-password] Email delivery failed:", err.message, err.cause instanceof Error ? err.cause.message : err.cause);
+      }
       res.status(200).json({ message: GENERIC_FORGOT_MESSAGE });
     }
   });
 
-  app.post("/api/auth/verify-reset-code", async (req, res) => {
+  app.post("/api/auth/verify-reset-code", verifyResetCodeRateLimiter, async (req, res) => {
     try {
       const { email, code } = z.object({ email: z.string().email(), code: z.string().min(1) }).parse(req.body);
       const user = await storage.getUserByEmail(email);
@@ -325,11 +401,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/auth/reset-password", async (req, res) => {
+  app.post("/api/auth/reset-password", resetPasswordRateLimiter, async (req, res) => {
     try {
       const { resetToken, newPassword, confirmPassword } = z.object({
         resetToken: z.string().min(1),
-        newPassword: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+        newPassword: registrationPasswordSchema,
         confirmPassword: z.string().min(1),
       }).parse(req.body);
       if (newPassword !== confirmPassword) {
@@ -476,6 +552,82 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Google/Facebook sign-in controls ───────────────────────────────────────
+  // Public GET returns AVAILABILITY (enabled AND configured collapsed into one boolean) —
+  // never the raw admin toggle, never whether env credentials exist, so the Connexion
+  // modal can decide what to show without ever learning server configuration state.
+  app.get("/api/auth-provider-settings", async (_req, res) => {
+    try {
+      const settings = await storage.getAuthProviderSettings();
+      res.json({
+        googleAvailable: settings.googleEnabled && isGoogleConfigured(),
+        facebookAvailable: settings.facebookEnabled && isFacebookConfigured(),
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to load auth provider settings" });
+    }
+  });
+
+  // Admin GET additionally exposes the raw toggle + whether credentials are actually
+  // configured, so System Management can show "Enabled but not configured" distinctly
+  // from "Disabled" — never the credential values themselves.
+  app.get("/api/admin/auth-provider-settings", requireAdmin, async (_req, res) => {
+    try {
+      const settings = await storage.getAuthProviderSettings();
+      res.json({
+        ...settings,
+        googleConfigured: isGoogleConfigured(),
+        facebookConfigured: isFacebookConfigured(),
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to load auth provider settings" });
+    }
+  });
+
+  app.patch("/api/admin/auth-provider-settings", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        googleEnabled: z.boolean().optional(),
+        facebookEnabled: z.boolean().optional(),
+      }).strict().parse(req.body);
+      const settings = await storage.updateAuthProviderSettings(body);
+      broadcast("auth_provider_settings_updated", settings);
+      res.json({ ...settings, googleConfigured: isGoogleConfigured(), facebookConfigured: isFacebookConfigured() });
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid auth provider settings" });
+      res.status(500).json({ message: "Failed to update auth provider settings" });
+    }
+  });
+
+  // ── Login-attempt cooldown duration ────────────────────────────────────────
+  // Admin-only: the login route itself (below) reads storage.getLoginSecuritySettings()
+  // directly server-side every time a cooldown is triggered — the pre-login public
+  // Connexion modal never needs to know the configured duration in advance, only the
+  // actual remaining seconds a real 429 response already carries (retryAfterSeconds).
+  app.get("/api/admin/login-security-settings", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await storage.getLoginSecuritySettings());
+    } catch {
+      res.status(500).json({ message: "Failed to load login security settings" });
+    }
+  });
+
+  app.patch("/api/admin/login-security-settings", requireAdmin, async (req, res) => {
+    try {
+      // 1–3600s (1 hour cap) — rejects 0/negative/absurd values that would effectively
+      // disable or misuse the protection, per the task's explicit validation requirement.
+      const body = z.object({
+        cooldownSeconds: z.number().int().min(1, "Doit être un entier positif").max(3600, "Maximum 3600 secondes"),
+      }).strict().parse(req.body);
+      const settings = await storage.updateLoginSecuritySettings(body);
+      broadcast("login_security_settings_updated", settings);
+      res.json(settings);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update login security settings" });
+    }
+  });
+
   // ── Currency ─────────────────────────────────────────────────────────────
 
   app.get("/api/system-currency", async (_req, res) => {
@@ -544,11 +696,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (password) {
         if (!currentPassword) return res.status(400).json({ message: "Current password required" });
         const existing = await storage.getUser(req.session.userId!);
-        if (!existing || existing.password !== currentPassword) {
+        if (!existing || !(await storage.verifyPassword(existing.id, currentPassword, existing.password))) {
           return res.status(400).json({ message: "Current password is incorrect" });
         }
-        if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
-        updates.password = password;
+        if (!isValidRegistrationPassword(password)) return res.status(400).json({ message: REGISTRATION_PASSWORD_MESSAGE });
+        updates.password = await storage.hashPassword(password);
       }
       const user = await storage.updateUserProfile(req.session.userId!, updates);
       broadcastToUsers([req.session.userId!], "user_profile_updated");

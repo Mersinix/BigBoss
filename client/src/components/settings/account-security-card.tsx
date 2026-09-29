@@ -2,12 +2,12 @@ import { forwardRef, useImperativeHandle, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Lock, LogOut } from "lucide-react";
 import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
+import { PasswordInputField } from "@/components/settings/password-input-field";
 
 // Unified "Sécurité" section (Part 9) — identical for all seven accounts
 // already (password change + logout), just extracted into one shared
@@ -46,11 +46,27 @@ export const AccountSecurityCard = forwardRef<SettingsCardHandle, { testIdPrefix
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Mot de passe actuel</Label>
-          <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} disabled={saving} data-testid={`input-${testIdPrefix}-current-password`} />
+          <PasswordInputField
+            value={currentPassword}
+            onChange={setCurrentPassword}
+            disabled={saving}
+            autoComplete="current-password"
+            testId={`input-${testIdPrefix}-current-password`}
+            toggleTestId={`button-toggle-${testIdPrefix}-current-password`}
+            ariaLabel="mot de passe actuel"
+          />
         </div>
         <div className="space-y-1.5">
           <Label>Nouveau mot de passe</Label>
-          <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={saving} data-testid={`input-${testIdPrefix}-new-password`} />
+          <PasswordInputField
+            value={newPassword}
+            onChange={setNewPassword}
+            disabled={saving}
+            autoComplete="new-password"
+            testId={`input-${testIdPrefix}-new-password`}
+            toggleTestId={`button-toggle-${testIdPrefix}-new-password`}
+            ariaLabel="nouveau mot de passe"
+          />
         </div>
       </div>
       <p className="text-xs text-muted-foreground mt-2">

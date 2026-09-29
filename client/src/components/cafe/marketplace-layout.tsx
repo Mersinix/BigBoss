@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { PasswordInputField } from "@/components/settings/password-input-field";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -69,7 +69,6 @@ import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
 
-const CITIES = ["Tunis", "Sfax", "Sousse", "Béja"];
 
 // ── Theme tokens helper ───────────────────────────────────────────────────────
 
@@ -135,10 +134,6 @@ const fakeThreads: Thread[] = [
   { id: 11, name: "CleanTech Maintenance",service: "MAINTENANCE", lastMessage: "Devis envoyé par email.", time: "Mon",       unread: 0, messages: [{ from: "me", text: "Bonjour, nous avons besoin d'une maintenance préventive pour nos équipements.", time: "Mon" }, { from: "them", text: "Devis envoyé par email. N'hésitez pas à nous contacter.", time: "Mon" }] },
 ];
 
-const favItems = [
-  { id: 1, type: "product", name: "Espresso Roast 1kg", supplier: "Premium Beans Co", price: 2500, image: "https://images.unsplash.com/photo-1559525839-b184a4d698c7?w=300&q=80" },
-  { id: 2, type: "product", name: "Oat Milk 1L x 6", supplier: "Oat & Grain", price: 1800, image: "https://images.unsplash.com/photo-1600788886242-5c96aabe3757?w=300&q=80" },
-];
 
 // ── Account Panel (premium dark/light — mirrors FavoritesPanel design) ────────
 
@@ -1440,17 +1435,39 @@ function AccountPanel({
             </div>
 
             {/* Security — same generic password-change flow (currentPassword required
-                server-side) every other role's Settings page uses. */}
-            <div className={`border rounded-2xl p-4 ${cardBg}`}>
+                server-side) every other role's Settings page uses. The `dark` class here
+                (this card only, not the whole layout) is what makes the existing global
+                .dark input:-webkit-autofill rule in index.css apply to these two fields —
+                unlike the 7 shared-shell accounts/Admin/Supplier, this layout never adds
+                that ancestor class to <html> (see professional-account-shell.tsx's own
+                note), so a saved/autofilled password here was showing the browser's
+                default light background even in Dark Mode. */}
+            <div className={`border rounded-2xl p-4 ${cardBg} ${dk ? "dark" : ""}`}>
               <p className={`font-semibold text-sm mb-3 flex items-center gap-2 ${textPrimary}`}><Lock className="w-4 h-4" /> Sécurité</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className={`text-xs ${textMuted}`}>Mot de passe actuel</Label>
-                  <Input type="password" value={settingsCurrentPassword} onChange={(e) => setSettingsCurrentPassword(e.target.value)} className={`h-9 ${inputCls}`} data-testid="input-settings-current-password" />
+                  <PasswordInputField
+                    value={settingsCurrentPassword}
+                    onChange={setSettingsCurrentPassword}
+                    autoComplete="current-password"
+                    className={`h-9 ${inputCls}`}
+                    testId="input-settings-current-password"
+                    toggleTestId="button-toggle-settings-current-password"
+                    ariaLabel="mot de passe actuel"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className={`text-xs ${textMuted}`}>Nouveau mot de passe</Label>
-                  <Input type="password" value={settingsNewPassword} onChange={(e) => setSettingsNewPassword(e.target.value)} className={`h-9 ${inputCls}`} data-testid="input-settings-new-password" />
+                  <PasswordInputField
+                    value={settingsNewPassword}
+                    onChange={setSettingsNewPassword}
+                    autoComplete="new-password"
+                    className={`h-9 ${inputCls}`}
+                    testId="input-settings-new-password"
+                    toggleTestId="button-toggle-settings-new-password"
+                    ariaLabel="nouveau mot de passe"
+                  />
                 </div>
               </div>
               <Button

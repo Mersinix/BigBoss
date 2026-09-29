@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Sun, SunMoon, Car, Store, ShieldCheck } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type DeliveryPricingSettings, useFinancialLedgerEntries, type FinancialLedgerFilters, useAdminSettlements, useApproveSettlement, useVoidSettlement, type SettlementFilters, useSettlementPayments, useCreatePayment, useConfirmPayment, useFailPayment, useReversePayment, type PaymentMethod, useAdminCodReconciliations, useReconcileCod, useAdminRefunds, useRequestRefund, useConfirmRefund, useFailRefund, useCancelRefund, useAdminAdjustments, useCreateAdjustment, useAdminFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -160,6 +160,171 @@ function MessagesSystemSection() {
             </div>
             <p className="text-xs text-muted-foreground">Admins always retain access to manage Messages, including when visibility is hidden.</p>
           </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Google/Facebook sign-in ────────────────────────────────────────────────────
+// Same Switch-row pattern as MessagesSystemSection. GET here (requireAdmin) returns the
+// raw googleEnabled/facebookEnabled toggle PLUS googleConfigured/facebookConfigured
+// (whether GOOGLE_CLIENT_ID/SECRET or FACEBOOK_APP_ID/SECRET env vars are actually set) —
+// so an admin who enables a provider without configuring credentials sees a clear warning
+// here rather than a silently-broken public button. Never exposes the credentials
+// themselves, only these two booleans.
+type AuthProviderSettings = { googleEnabled: boolean; facebookEnabled: boolean; googleConfigured: boolean; facebookConfigured: boolean };
+
+function AuthProviderSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery<AuthProviderSettings>({ queryKey: ["/api/admin/auth-provider-settings"] });
+  const [local, setLocal] = useState<AuthProviderSettings | null>(null);
+
+  useEffect(() => {
+    if (settings) setLocal(settings);
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: (updates: Partial<{ googleEnabled: boolean; facebookEnabled: boolean }>) =>
+      apiRequest("PATCH", "/api/admin/auth-provider-settings", updates),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      queryClient.setQueryData(["/api/admin/auth-provider-settings"], saved);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth-provider-settings"] });
+      toast({ title: "Paramètres de connexion mis à jour" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message }),
+  });
+
+  const value = local ?? settings;
+  const update = (field: "googleEnabled" | "facebookEnabled", next: boolean) => {
+    if (!value) return;
+    setLocal({ ...value, [field]: next });
+    saveMutation.mutate({ [field]: next });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-indigo-500/10 rounded-xl p-3"><LogIn className="w-5 h-5 text-indigo-600" /></div>
+          <div>
+            <CardTitle className="text-base">Connexion Google / Facebook</CardTitle>
+            <CardDescription className="pt-1">Autoriser la connexion via Google ou Facebook sur la Connexion publique, pour les comptes existants uniquement.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!value ? <Skeleton className="h-20 w-full" /> : (
+          <>
+            {([
+              ["googleEnabled", "googleConfigured", "Google", "Autorise \"Continuer avec Google\" sur la Connexion."],
+              ["facebookEnabled", "facebookConfigured", "Facebook", "Autorise \"Continuer avec Facebook\" sur la Connexion."],
+            ] as const).map(([field, configuredField, label, description]) => (
+              <div key={field} className="rounded-xl border border-border/50 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                  </div>
+                  <Switch
+                    checked={value[field]}
+                    onCheckedChange={(checked) => update(field, checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label={label}
+                    data-testid={`switch-auth-${label.toLowerCase()}`}
+                  />
+                </div>
+                {value[field] && !value[configuredField] && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5" data-testid={`warning-auth-${label.toLowerCase()}-not-configured`}>
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Activé mais non configuré — ajoutez les identifiants {label} (Client ID/Secret) dans les variables d'environnement du serveur pour l'activer réellement.
+                  </p>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Login-attempt cooldown duration ────────────────────────────────────────────
+// Same immediate-save-on-valid-input numeric-field pattern already used by
+// MessagesSystemSection's "Post-closure conversation window" (gracePeriodMinutes) —
+// no separate Save button, matching that existing convention. This only configures
+// the DURATION; the per-account failed-attempt counters themselves are enforced
+// server-side in server/login-attempts.ts and are never exposed/editable here.
+type LoginSecuritySettings = { cooldownSeconds: number };
+
+function LoginSecuritySection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery<LoginSecuritySettings>({ queryKey: ["/api/admin/login-security-settings"] });
+  const [local, setLocal] = useState<LoginSecuritySettings | null>(null);
+  const [inputValue, setInputValue] = useState("");
+
+  useEffect(() => {
+    if (settings) { setLocal(settings); setInputValue(String(settings.cooldownSeconds)); }
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: (cooldownSeconds: number) => apiRequest("PATCH", "/api/admin/login-security-settings", { cooldownSeconds }),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      queryClient.setQueryData(["/api/admin/login-security-settings"], saved);
+      toast({ title: "Durée de blocage mise à jour" });
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message });
+      // Revert the input to the last known-good saved value so an invalid entry
+      // doesn't linger looking "saved" when it wasn't.
+      if (local) setInputValue(String(local.cooldownSeconds));
+    },
+  });
+
+  const handleChange = (raw: string) => {
+    setInputValue(raw);
+    const next = Number(raw);
+    if (raw.trim() !== "" && Number.isInteger(next) && next >= 1 && next <= 3600) {
+      saveMutation.mutate(next);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-red-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-red-600" /></div>
+          <div>
+            <CardTitle className="text-base">Durée du blocage après plusieurs tentatives de connexion</CardTitle>
+            <CardDescription className="pt-1">Nombre de secondes pendant lesquelles un compte doit attendre après plusieurs tentatives de connexion échouées.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!local ? <Skeleton className="h-14 w-full" /> : (
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+            <div>
+              <p className="text-sm font-medium">Durée du blocage (secondes)</p>
+              <p className="text-xs text-muted-foreground mt-0.5">3 tentatives échouées consécutives déclenchent ce blocage, par compte.</p>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={3600}
+              className="w-24"
+              value={inputValue}
+              onChange={(event) => handleChange(event.target.value)}
+              disabled={saveMutation.isPending}
+              aria-label="Durée du blocage en secondes"
+              data-testid="input-login-cooldown-seconds"
+            />
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1945,6 +2110,8 @@ export default function SystemManagementPage() {
         <>
           <GlobalCurrencySection />
           <AccountDarkModeSection />
+          <AuthProviderSection />
+          <LoginSecuritySection />
         </>
       )}
     </div>

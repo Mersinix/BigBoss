@@ -70,6 +70,26 @@ interface Props {
   showRadius?: boolean; // adds radius slider in step 2
   startStep?: 1 | 2 | 3; // open directly on a later step (e.g. registration skips the map picker)
   lockStep?: boolean; // hide back-navigation into earlier steps (used with startStep to keep them unreachable)
+  // Makes Step 3's "Adresse" free-text field required (registration only — every other
+  // caller of this shared modal, e.g. Settings' own address-completion flow, leaves this
+  // false and keeps every Step 3 field optional exactly as before). Distinct from the
+  // existing `required` prop above, which is about the Step 2 map pin, not this field.
+  requireStreetAddress?: boolean;
+  // Registration-only: when `lockStep` hides normal step<->step back-navigation, this
+  // adds a visible Retour button instead, which reports the in-progress entry upward
+  // (rather than navigating internally, since a lockStep flow never visited step 1/2)
+  // so the caller can restore it if the user comes forward again. Every other caller
+  // of this shared modal omits this prop and keeps its existing back-navigation as-is.
+  onBack?: (partial: PickedLocation) => void;
+  // Hides this modal's own sun/moon toggle (registration only — the Connexion/
+  // Inscription flow inherits its theme from the Navbar's single global store and must
+  // not offer an independent toggle; every other caller keeps its own toggle unchanged).
+  hideThemeToggle?: boolean;
+  // Registration-only: overrides the "Étape {step} sur {totalSteps}" label/dots with the
+  // outer registration flow's own step count (2: account info, then address) instead of
+  // this component's internal 3-step search/map/details count, since registration skips
+  // straight to step 3 and only ever shows this one internal step.
+  stepLabelOverride?: { current: number; total: number };
 }
 
 interface Suggestion {
@@ -117,6 +137,10 @@ export default function LocationPickerModal({
   showRadius = false,
   startStep = 1,
   lockStep = false,
+  requireStreetAddress = false,
+  onBack,
+  hideThemeToggle = false,
+  stepLabelOverride,
 }: Props) {
   const hasDetailsStep = mode !== "search";
   const totalSteps = hasDetailsStep ? 3 : 2;
@@ -135,6 +159,7 @@ export default function LocationPickerModal({
   const [positionPicked, setPositionPicked] = useState(false);
   const [details, setDetails] = useState<AddressDetails>({ ...EMPTY_DETAILS, ...initialDetails });
   const [saving, setSaving] = useState(false);
+  const [streetError, setStreetError] = useState<string | null>(null);
   const [radiusKm, setRadiusKm] = useState<number | null>(null);
   const { isDark, toggle } = useThemeStore();
 
@@ -180,6 +205,7 @@ export default function LocationPickerModal({
     setPositionPicked(hasInitialCoords);
     setDetails({ ...EMPTY_DETAILS, ...initialDetails });
     setSaving(false);
+    setStreetError(null);
     setRadiusKm(null);
     mapRef.current = null;
     markerRef.current = null;
@@ -299,6 +325,11 @@ export default function LocationPickerModal({
   }, [details.street]);
 
   const handleConfirm = useCallback(async () => {
+    if (requireStreetAddress && !details.street?.trim()) {
+      setStreetError("L'adresse est requise.");
+      return;
+    }
+    setStreetError(null);
     setSaving(true);
     const cleaned: AddressDetails = {};
     (Object.keys(details) as (keyof AddressDetails)[]).forEach((k) => {
@@ -320,7 +351,28 @@ export default function LocationPickerModal({
     } finally {
       setSaving(false);
     }
-  }, [selectedAddress, coords, placeId, details, onConfirm, showRadius, radiusKm, positionPicked]);
+  }, [selectedAddress, coords, placeId, details, onConfirm, showRadius, radiusKm, positionPicked, requireStreetAddress]);
+
+  // Retour (lockStep flows only) — reports the in-progress entry upward without
+  // validating requireStreetAddress (the user isn't submitting, just stepping away) and
+  // without touching `saving`/local state, so it's still here untouched if they come
+  // forward again and the caller feeds it back in as initialAddress/initialDetails/etc.
+  const handleBack = useCallback(() => {
+    if (!onBack) return;
+    const cleaned: AddressDetails = {};
+    (Object.keys(details) as (keyof AddressDetails)[]).forEach((k) => {
+      const v = details[k]?.trim();
+      if (v) cleaned[k] = v;
+    });
+    onBack({
+      address: selectedAddress || details.street || "",
+      lat: positionPicked ? String(coords.lat) : "",
+      lng: positionPicked ? String(coords.lng) : "",
+      placeId: positionPicked ? placeId : "",
+      details: Object.keys(cleaned).length ? cleaned : undefined,
+      ...(showRadius ? { radius: radiusKm } : {}),
+    });
+  }, [onBack, selectedAddress, coords, placeId, details, showRadius, radiusKm, positionPicked]);
 
   const reset = () => {
     setStep(startStep);
@@ -332,6 +384,7 @@ export default function LocationPickerModal({
     setPositionPicked(false);
     setDetails({ ...EMPTY_DETAILS, ...initialDetails });
     setSaving(false);
+    setStreetError(null);
     setRadiusKm(null);
     mapRef.current = null;
     markerRef.current = null;
@@ -380,17 +433,32 @@ export default function LocationPickerModal({
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-[480px] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
         <VisuallyHidden><DialogTitle>Sélectionner une adresse</DialogTitle></VisuallyHidden>
-        <div className={`flex flex-col max-h-[92vh] overflow-hidden transition-colors duration-200 ${bg}`}>
+        {/* "dark" here (scoped to just this modal) is what makes the existing
+            .dark input:-webkit-autofill rule in index.css actually apply — this modal's
+            own dark toggle never added that ancestor class before, so autofilled values
+            showed a light background regardless of the toggle shown in its header. */}
+        <div className={`flex flex-col max-h-[92vh] overflow-hidden transition-colors duration-200 ${bg} ${dk ? "dark" : ""}`}>
 
           {/* ── Fixed header ── */}
           <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
             <div className="flex items-center justify-between mb-4">
-              {/* Back or dummy spacer */}
+              {/* Back (internal step nav), Retour (lockStep + onBack — registration
+                  only), or a dummy spacer */}
               {step > 1 && !lockStep ? (
                 <button
                   type="button"
                   onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}
                   aria-label="Back"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              ) : lockStep && onBack ? (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  aria-label="Retour"
+                  data-testid="button-address-step-back"
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -407,20 +475,22 @@ export default function LocationPickerModal({
                   {step === 3 && "Détails de l'adresse"}
                 </span>
                 <span className={`text-[10px] font-medium ${textMuted}`}>
-                  Étape {step} sur {totalSteps}
+                  Étape {stepLabelOverride?.current ?? step} sur {stepLabelOverride?.total ?? totalSteps}
                 </span>
               </div>
 
-              {/* Right: sun/moon + close */}
+              {/* Right: sun/moon (unless hidden) + close */}
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={toggle}
-                  aria-label="Toggle theme"
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-                >
-                  {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
-                </button>
+                {!hideThemeToggle && (
+                  <button
+                    type="button"
+                    onClick={toggle}
+                    aria-label="Toggle theme"
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+                  >
+                    {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleClose}
@@ -434,10 +504,10 @@ export default function LocationPickerModal({
 
             {/* Progress dots */}
             <div className="flex items-center gap-1.5">
-              {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
+              {Array.from({ length: stepLabelOverride?.total ?? totalSteps }, (_, i) => i + 1).map((s) => (
                 <div
                   key={s}
-                  className={`h-1.5 rounded-full transition-all ${s <= step ? "bg-amber-500 w-8" : (dk ? "bg-gray-700 w-4" : "bg-gray-200 w-4")}`}
+                  className={`h-1.5 rounded-full transition-all ${s <= (stepLabelOverride?.current ?? step) ? "bg-amber-500 w-8" : (dk ? "bg-gray-700 w-4" : "bg-gray-200 w-4")}`}
                 />
               ))}
             </div>
@@ -602,8 +672,15 @@ export default function LocationPickerModal({
                 )}
 
                 <div className="space-y-1.5">
-                  <Label className={labelCls}>Adresse (optionnel)</Label>
-                  <Input value={details.street ?? ""} onChange={(e) => setDetail("street", e.target.value)} placeholder="Rue, avenue…" className={inputCls} data-testid="input-street" />
+                  <Label className={labelCls}>{requireStreetAddress ? "Adresse *" : "Adresse (optionnel)"}</Label>
+                  <Input
+                    value={details.street ?? ""}
+                    onChange={(e) => { setDetail("street", e.target.value); if (streetError) setStreetError(null); }}
+                    placeholder="Rue, avenue…"
+                    className={inputCls}
+                    data-testid="input-street"
+                  />
+                  {streetError && <p className="text-xs text-red-500">{streetError}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

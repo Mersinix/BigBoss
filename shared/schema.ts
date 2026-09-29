@@ -1320,6 +1320,29 @@ export type AccountDarkModeSettingsMap = Record<DarkModeAccount, AccountThemeMod
 // Admin-controlled messaging behavior. This is intentionally separate from
 // marketplace service visibility: hiding Messages must never delete data and
 // must not remove an admin's ability to manage it.
+// Per-account login-attempt cooldown duration — admin-configured, same
+// getOrCreate-singleton pattern as messagingSettings/authProviderSettings. Only the
+// DURATION lives here; the actual per-account failed-attempt counters/cooldown
+// timestamps are tracked in-memory server-side (server/login-attempts.ts) — same
+// tradeoff already accepted for sessions (memorystore): ephemeral, resets on server
+// restart, which is fine for a short security cooldown and needs no schema/migration.
+export const loginSecuritySettings = pgTable("login_security_settings", {
+  id: serial("id").primaryKey(),
+  cooldownSeconds: integer("cooldown_seconds").notNull().default(10),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Google/Facebook sign-in visibility — same getOrCreate-singleton pattern as
+// messagingSettings. Only the ADMIN-CHOSEN on/off state lives here; the actual
+// GOOGLE_CLIENT_ID/SECRET/FACEBOOK_APP_ID/SECRET stay server-side env vars only (see
+// server/oauth.ts) — this table never holds credentials, only the boolean toggle.
+export const authProviderSettings = pgTable("auth_provider_settings", {
+  id: serial("id").primaryKey(),
+  googleEnabled: boolean("google_enabled").notNull().default(false),
+  facebookEnabled: boolean("facebook_enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const messagingSettings = pgTable("messaging_settings", {
   id: serial("id").primaryKey(),
   globalVisible: boolean("global_visible").notNull().default(true),

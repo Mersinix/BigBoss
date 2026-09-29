@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { isNull, isNotNull, or, like, gte, lte } from "drizzle-orm";
 import { evaluateCartPromotions as engineEvaluate } from "./promotions-engine";
@@ -8,7 +9,7 @@ import {
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
   platformServices, supplierStores, storeFavorites, supplierProductReviews,
-  landingConfig, messagingSettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
+  landingConfig, messagingSettings, authProviderSettings, loginSecuritySettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones, maintenanceReports,
   marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
@@ -309,6 +310,16 @@ export interface IStorage {
   getCurrency(): Promise<string>;
   setCurrency(symbol: string): Promise<string>;
 
+  // Google/Facebook sign-in — admin on/off toggle only (never credentials, see
+  // server/oauth.ts for the env-var-driven "configured" check).
+  getAuthProviderSettings(): Promise<{ googleEnabled: boolean; facebookEnabled: boolean }>;
+  updateAuthProviderSettings(updates: Partial<{ googleEnabled: boolean; facebookEnabled: boolean }>): Promise<{ googleEnabled: boolean; facebookEnabled: boolean }>;
+
+  // Per-account login-attempt cooldown duration (the counters themselves are
+  // in-memory, see server/login-attempts.ts — this is just the configured duration).
+  getLoginSecuritySettings(): Promise<{ cooldownSeconds: number }>;
+  updateLoginSecuritySettings(updates: Partial<{ cooldownSeconds: number }>): Promise<{ cooldownSeconds: number }>;
+
   // Maintenance marketplace
   getMaintenanceProfiles(filters?: { search?: string; category?: string; profileType?: string; available?: boolean; location?: string }): Promise<MaintenanceMarketplaceCard[]>;
   getMaintenanceCategories(): Promise<string[]>;
@@ -553,8 +564,33 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  // ── Password hashing ──────────────────────────────────────────────────────────
+  // users.password used to be stored/compared as plaintext everywhere. hashPassword is
+  // now the single write path (createUser, registration, password reset, Settings'
+  // change-password) so every NEW/changed password is bcrypt from now on.
+  // verifyPassword is the single read path: it accepts either a bcrypt hash (the normal
+  // case going forward) or — for rows that predate this change — the legacy plaintext
+  // value, and on a successful legacy match it transparently rehashes and saves it, so
+  // every real account gets silently migrated to bcrypt on its next successful login/
+  // password-change, with no forced reset and no disruption.
+  private isBcryptHash(s: string): boolean {
+    return /^\$2[aby]\$/.test(s);
+  }
+
+  async hashPassword(plain: string): Promise<string> {
+    return bcrypt.hash(plain, 10);
+  }
+
+  async verifyPassword(userId: number, plain: string, stored: string): Promise<boolean> {
+    if (this.isBcryptHash(stored)) return bcrypt.compare(plain, stored);
+    if (plain !== stored) return false;
+    await db.update(users).set({ password: await this.hashPassword(plain) }).where(eq(users.id, userId));
+    return true;
+  }
+
   async createUser(user: InsertUser) {
-    const [created] = await db.insert(users).values(user as any).returning();
+    const hashedUser = { ...user, password: await this.hashPassword((user as any).password) };
+    const [created] = await db.insert(users).values(hashedUser as any).returning();
     // A Maintenance account gets its marketplace profile from the same
     // registration record. The profile remains private until the account is
     // approved, because marketplace queries filter by users.status.
@@ -716,8 +752,9 @@ export class DatabaseStorage implements IStorage {
       ));
     if (!row) return false;
 
+    const hashed = await this.hashPassword(newPassword);
     await db.transaction(async (tx) => {
-      await tx.update(users).set({ password: newPassword }).where(eq(users.id, row.userId));
+      await tx.update(users).set({ password: hashed }).where(eq(users.id, row.userId));
       await tx.update(passwordResetCodes).set({ usedAt: sql`now()` }).where(eq(passwordResetCodes.id, row.id));
     });
     return true;
@@ -10845,6 +10882,46 @@ export class DatabaseStorage implements IStorage {
       await db.update(messagingSettings).set({ ...next, updatedAt: new Date() }).where(eq(messagingSettings.id, row.id));
     } else {
       await db.insert(messagingSettings).values(next);
+    }
+    return next;
+  }
+
+  // Same getOrCreate-singleton pattern as getMessagingSettings/updateMessagingSettings.
+  async getAuthProviderSettings() {
+    const [row] = await db.select().from(authProviderSettings).limit(1);
+    if (row) return { googleEnabled: row.googleEnabled, facebookEnabled: row.facebookEnabled };
+    const [created] = await db.insert(authProviderSettings).values({}).returning();
+    return { googleEnabled: created.googleEnabled, facebookEnabled: created.facebookEnabled };
+  }
+
+  async updateAuthProviderSettings(updates: Partial<{ googleEnabled: boolean; facebookEnabled: boolean }>) {
+    const current = await this.getAuthProviderSettings();
+    const next = { ...current, ...updates };
+    const [row] = await db.select({ id: authProviderSettings.id }).from(authProviderSettings).limit(1);
+    if (row) {
+      await db.update(authProviderSettings).set({ ...next, updatedAt: new Date() }).where(eq(authProviderSettings.id, row.id));
+    } else {
+      await db.insert(authProviderSettings).values(next);
+    }
+    return next;
+  }
+
+  // Same getOrCreate-singleton pattern as getAuthProviderSettings/updateAuthProviderSettings.
+  async getLoginSecuritySettings() {
+    const [row] = await db.select().from(loginSecuritySettings).limit(1);
+    if (row) return { cooldownSeconds: row.cooldownSeconds };
+    const [created] = await db.insert(loginSecuritySettings).values({}).returning();
+    return { cooldownSeconds: created.cooldownSeconds };
+  }
+
+  async updateLoginSecuritySettings(updates: Partial<{ cooldownSeconds: number }>) {
+    const current = await this.getLoginSecuritySettings();
+    const next = { ...current, ...updates };
+    const [row] = await db.select({ id: loginSecuritySettings.id }).from(loginSecuritySettings).limit(1);
+    if (row) {
+      await db.update(loginSecuritySettings).set({ ...next, updatedAt: new Date() }).where(eq(loginSecuritySettings.id, row.id));
+    } else {
+      await db.insert(loginSecuritySettings).values(next);
     }
     return next;
   }

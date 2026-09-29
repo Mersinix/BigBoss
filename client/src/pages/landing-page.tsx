@@ -246,20 +246,6 @@ const MARKETING_SERVICES = [
   { id: "photo",    icon: "📸", label: "Photographie" },
 ];
 
-const MAINTENANCE_CATEGORIES = [
-  "Machines à café",
-  "Machines espresso",
-  "Moulins à café",
-  "Machines à glace",
-  "Réfrigération",
-  "Plomberie",
-  "Électricité",
-  "Climatisation",
-  "Réseaux & Wi-Fi",
-  "Systèmes POS",
-  "Mobilier & décoration",
-  "Peinture & signalétique",
-];
 
 // ── Role config ───────────────────────────────────────────────────────────────
 
@@ -281,13 +267,22 @@ const loginSchema = z.object({
   password: z.string().min(6, "Mot de passe requis (min. 6 caractères)"),
 });
 type AuthTab = "login" | "register" | "forgot-email" | "forgot-code" | "forgot-password" | "forgot-success";
+// 8+ characters, at least one uppercase letter, one symbol, and one number — enforced
+// identically on the server (registerBodySchema in server/routes.ts) so a request
+// sent directly to the API can't bypass this.
+const REGISTRATION_PASSWORD_MESSAGE = "Au moins 8 caractères, une majuscule, un chiffre et un symbole (ex: ! @ # $ %).";
+const registrationPassword = z.string()
+  .min(8, REGISTRATION_PASSWORD_MESSAGE)
+  .regex(/[A-Z]/, REGISTRATION_PASSWORD_MESSAGE)
+  .regex(/[0-9]/, REGISTRATION_PASSWORD_MESSAGE)
+  .regex(/[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/, REGISTRATION_PASSWORD_MESSAGE);
 const baseFields = {
   email: z.string().email("Email invalide"),
   phone: z.string().min(8, "Numéro invalide"),
   isWhatsapp: z.boolean().optional(),
   profileImageUrl: z.string().url("URL invalide").optional().or(z.literal("")),
-  password: z.string().min(6, "Min. 6 caractères"),
-  confirmPassword: z.string().min(6, "Min. 6 caractères"),
+  password: registrationPassword,
+  confirmPassword: registrationPassword,
 };
 const pw = (d: any) => d.password === d.confirmPassword;
 const pwErrMsg = { message: "Les mots de passe ne correspondent pas", path: ["confirmPassword"] };
@@ -297,28 +292,95 @@ const deliverySchema = z.object({ ...baseFields, firstName: z.string().min(2), l
 const printerSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 const marketingSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 const baristaSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
-const maintenanceSchema = z.object({
-  ...baseFields,
-  companyName: z.string().min(2),
-  contactName: z.string().min(2),
-  maintenanceJobTitle: z.string().min(2, "Intitulé requis"),
-  maintenanceProfileType: z.enum(["Freelance", "Company", "Agency"]),
-  maintenanceCategories: z.array(z.string()).min(1, "Sélectionnez au moins une catégorie"),
-  maintenanceSkills: z.string().optional(),
-  maintenanceDescription: z.string().min(20, "Décrivez votre activité en quelques mots"),
-  maintenanceExperienceYears: z.coerce.number().int().min(0).max(80),
-}).refine(pw, pwErrMsg);
+// Registration only collects the essentials, matching the other service accounts —
+// job title, profile type, categories, skills, experience and description are now
+// completed later from the Maintenance account's own profile page (they stay fully
+// supported there and server-side; only the public registration form is simplified).
+const maintenanceSchema = z.object({ ...baseFields, companyName: z.string().min(2), contactName: z.string().min(2) }).refine(pw, pwErrMsg);
 
 // ── Reusable form components ──────────────────────────────────────────────────
 
 function FormField({ id, label, type = "text", placeholder, register, error }: { id: string; label: string; type?: string; placeholder?: string; register: any; error?: string }) {
+  // Password fields get the same show/hide eye-icon behavior already used by
+  // Connexion/Mot de passe oublié's password fields — self-contained here so both
+  // "Mot de passe" and "Confirmer" pick it up everywhere this component is used
+  // (all 8 registration role forms) from one place, instead of duplicating it per form.
+  const [visible, setVisible] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword ? (visible ? "text" : "password") : type;
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} type={type} placeholder={placeholder} data-testid={`input-${id}`} className="rounded-xl px-4 py-5 bg-secondary/30 border-border/50" {...register} />
+      <div className={isPassword ? "relative" : undefined}>
+        <Input
+          id={id}
+          type={inputType}
+          placeholder={placeholder}
+          data-testid={`input-${id}`}
+          // "new-password" tells the browser this is a fresh credential being created,
+          // not a login field — without it, Chrome/Edge's saved-password manager can
+          // silently autofill a previously-saved password into a brand-new registration
+          // form (defaultValues is already "" — the browser injects the value after
+          // mount, outside React's own state).
+          autoComplete={isPassword ? "new-password" : undefined}
+          className={`rounded-xl px-4 py-5 bg-secondary/30 border-border/50 ${isPassword ? "pr-11" : ""}`}
+          {...register}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            data-testid={`button-toggle-${id}`}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+          >
+            {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
+}
+
+// No "Google" icon exists in lucide-react (it's a trademarked logo, not a generic
+// glyph) — this is the standard 4-color "G" mark used by every "Sign in with Google"
+// button, inlined so no new asset/dependency is needed.
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82Z" />
+      <path fill="#34A853" d="M12 24c3.24 0 5.96-1.08 7.95-2.91l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.09A12 12 0 0 0 12 24Z" />
+      <path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.63H1.27A12 12 0 0 0 0 12c0 1.94.46 3.77 1.27 5.37l4-3.09Z" />
+      <path fill="#EA4335" d="M12 4.77c1.76 0 3.34.61 4.59 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.63l4 3.09C6.22 6.88 8.87 4.77 12 4.77Z" />
+    </svg>
+  );
+}
+
+// Per-account login-cooldown countdown persistence — see the loginCooldown state
+// comment in LandingPage for why this is a display aid only, never the actual gate.
+function cooldownStorageKey(email: string): string {
+  return `bbc_login_cooldown:${email.trim().toLowerCase()}`;
+}
+function readStoredCooldownUntil(email: string): number | null {
+  try {
+    const raw = localStorage.getItem(cooldownStorageKey(email));
+    if (!raw) return null;
+    const untilTs = Number(raw);
+    if (!Number.isFinite(untilTs) || untilTs <= Date.now()) {
+      localStorage.removeItem(cooldownStorageKey(email));
+      return null;
+    }
+    return untilTs;
+  } catch {
+    return null;
+  }
+}
+function storeCooldownUntil(email: string, untilTs: number) {
+  try { localStorage.setItem(cooldownStorageKey(email), String(untilTs)); } catch { /* private mode, etc. — display-only, safe to skip */ }
+}
+function clearStoredCooldown(email: string) {
+  try { localStorage.removeItem(cooldownStorageKey(email)); } catch { /* no-op */ }
 }
 
 function PhoneWhatsappField({ register, whatsappRegister, error }: { register: any; whatsappRegister: any; error?: string }) {
@@ -327,7 +389,12 @@ function PhoneWhatsappField({ register, whatsappRegister, error }: { register: a
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor="reg-phone">Téléphone</Label>
         <label htmlFor="reg-is-whatsapp" className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-          <input id="reg-is-whatsapp" type="checkbox" data-testid="checkbox-whatsapp" className="w-3.5 h-3.5 rounded border-border/50 accent-primary" {...whatsappRegister} />
+          {/* Explicit bg/border per theme (not just accent-color) — a native checkbox's
+              unchecked fill isn't reliably styled by accent-color alone and was showing
+              the browser's default white box even with the modal's dark ancestor class.
+              accent-amber-500 (not accent-primary, which resolves to the app's blue) for
+              the checked indicator, consistent in both themes. */}
+          <input id="reg-is-whatsapp" type="checkbox" data-testid="checkbox-whatsapp" className="w-3.5 h-3.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 accent-amber-500" {...whatsappRegister} />
           Numéro WhatsApp
         </label>
       </div>
@@ -378,222 +445,172 @@ function FeatureChip({ icon, label, sublabel, dk }: { icon: ReactNode; label: st
 
 // ── Role-specific forms ───────────────────────────────────────────────────────
 
-function CafeForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(cafeSchema), defaultValues: { cafeName: "", firstName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
+function CafeForm({ onSubmit, isLoading, initialData }: { onSubmit: (data: any) => void; isLoading: boolean; initialData?: Partial<z.infer<typeof cafeSchema>> }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(cafeSchema), defaultValues: { cafeName: "", firstName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "", ...initialData } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="cafeName" label="Nom du café" placeholder="Ex: Café des Arts" register={register("cafeName")} error={errors.cafeName?.message} />
+        <FormField id="cafeName" label="Nom du café" placeholder="Café des Arts" register={register("cafeName")} error={errors.cafeName?.message} />
         <FormField id="firstName" label="Prénom" placeholder="Votre prénom" register={register("firstName")} error={errors.firstName?.message} />
       </div>
-      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="cafe@example.com" register={register("email")} error={errors.email?.message} />
       <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 8 car., 1 majuscule, 1 symbole" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera demandée à l'étape suivante.</p>
-      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="bg-amber-500 hover:bg-amber-500 w-full rounded-xl py-5 text-white mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
-function SupplierForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(supplierSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
+function SupplierForm({ onSubmit, isLoading, initialData }: { onSubmit: (data: any) => void; isLoading: boolean; initialData?: Partial<z.infer<typeof supplierSchema>> }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(supplierSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "", ...initialData } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="companyName" label="Nom de l'entreprise" placeholder="Ex: TunRoast SARL" register={register("companyName")} error={errors.companyName?.message} />
+        <FormField id="companyName" label="Nom de l'entreprise" placeholder="Fournisseur Magic" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Nom du contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
-      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@company.com" register={register("email")} error={errors.email?.message} />
       <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 8 car., 1 majuscule, 1 symbole" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation GPS sera requise à l'étape suivante.</p>
-      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="bg-amber-500 hover:bg-amber-500 w-full rounded-xl py-5 text-white mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
-function DeliveryForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(deliverySchema), defaultValues: { firstName: "", lastName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
+function DeliveryForm({ onSubmit, isLoading, initialData }: { onSubmit: (data: any) => void; isLoading: boolean; initialData?: Partial<z.infer<typeof deliverySchema>> }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(deliverySchema), defaultValues: { firstName: "", lastName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "", ...initialData } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <FormField id="firstName" label="Prénom" placeholder="Votre prénom" register={register("firstName")} error={errors.firstName?.message} />
         <FormField id="lastName" label="Nom" placeholder="Votre nom" register={register("lastName")} error={errors.lastName?.message} />
       </div>
-      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="delivery@example.com" register={register("email")} error={errors.email?.message} />
       <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 8 car., 1 majuscule, 1 symbole" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
-      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="bg-amber-500 hover:bg-amber-500 w-full rounded-xl py-5 text-white mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
-function PrinterForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(printerSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
+function PrinterForm({ onSubmit, isLoading, initialData }: { onSubmit: (data: any) => void; isLoading: boolean; initialData?: Partial<z.infer<typeof printerSchema>> }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(printerSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "", ...initialData } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="companyName" label="Nom de l'imprimerie" placeholder="Ex: ImprimTunis" register={register("companyName")} error={errors.companyName?.message} />
+        <FormField id="companyName" label="Nom de l'imprimerie" placeholder="ImprimTunis" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
-      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@imprimerie.com" register={register("email")} error={errors.email?.message} />
       <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 8 car., 1 majuscule, 1 symbole" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
-      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="bg-amber-500 hover:bg-amber-500 w-full rounded-xl py-5 text-white mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
-function MarketingForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(marketingSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
+function MarketingForm({ onSubmit, isLoading, initialData }: { onSubmit: (data: any) => void; isLoading: boolean; initialData?: Partial<z.infer<typeof marketingSchema>> }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(marketingSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "", ...initialData } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="companyName" label="Nom de l'agence" placeholder="Ex: TunMedia" register={register("companyName")} error={errors.companyName?.message} />
+        <FormField id="companyName" label="Nom de l'agence" placeholder="TunMedia" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
-      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@agence.com" register={register("email")} error={errors.email?.message} />
       <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 8 car., 1 majuscule, 1 symbole" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
-      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="bg-amber-500 hover:bg-amber-500 w-full rounded-xl py-5 text-white mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
-function BaristaAcademyForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
+function BaristaAcademyForm({ onSubmit, isLoading, initialData }: { onSubmit: (data: any) => void; isLoading: boolean; initialData?: Partial<z.infer<typeof baristaSchema>> }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "", ...initialData } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="companyName" label="Nom de l'académie" placeholder="Ex: Tunis Barista Academy" register={register("companyName")} error={errors.companyName?.message} />
+        <FormField id="companyName" label="Nom de l'académie" placeholder="Tunis Barista Academy" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
-      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@academy.com" register={register("email")} error={errors.email?.message} />
       <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 8 car., 1 majuscule, 1 symbole" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
-      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="bg-amber-500 hover:bg-amber-500 w-full rounded-xl py-5 text-white mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
-function BaristaMarketplaceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "" } });
+function BaristaMarketplaceForm({ onSubmit, isLoading, initialData }: { onSubmit: (data: any) => void; isLoading: boolean; initialData?: Partial<z.infer<typeof baristaSchema>> }) {
+  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(baristaSchema), defaultValues: { companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", confirmPassword: "", ...initialData } });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="companyName" label="Nom / Structure" placeholder="Ex: Barista Pro TN" register={register("companyName")} error={errors.companyName?.message} />
+        <FormField id="companyName" label="Nom / Structure" placeholder="Barista Pro TN" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Nom du barista" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
-      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="barista@example.com" register={register("email")} error={errors.email?.message} />
       <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 8 car., 1 majuscule, 1 symbole" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
-      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="bg-amber-500 hover:bg-amber-500 w-full rounded-xl py-5 text-white mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
 
-function MaintenanceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
+function MaintenanceForm({ onSubmit, isLoading, initialData }: { onSubmit: (data: any) => void; isLoading: boolean; initialData?: Partial<z.infer<typeof maintenanceSchema>> }) {
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(maintenanceSchema),
     defaultValues: {
       companyName: "", contactName: "", email: "", phone: "", isWhatsapp: false,
-      profileImageUrl: "", maintenanceJobTitle: "Technicien de maintenance",
-      maintenanceProfileType: "Freelance", maintenanceCategories: [],
-      maintenanceSkills: "", maintenanceDescription: "", maintenanceExperienceYears: 0,
-      password: "", confirmPassword: "",
+      profileImageUrl: "", password: "", confirmPassword: "",
+      ...initialData,
     },
   });
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="companyName" label="Nom / Structure" placeholder="Ex: TechPro Maintenance" register={register("companyName")} error={errors.companyName?.message} />
+        <FormField id="companyName" label="Nom / Structure" placeholder="TechPro Maintenance" register={register("companyName")} error={errors.companyName?.message} />
         <FormField id="contactName" label="Contact" placeholder="Votre nom" register={register("contactName")} error={errors.contactName?.message} />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <FormField id="maintenanceJobTitle" label="Intitulé professionnel" placeholder="Ex: Technicien machines espresso" register={register("maintenanceJobTitle")} error={errors.maintenanceJobTitle?.message} />
-        <div className="space-y-1.5">
-          <Label htmlFor="maintenanceProfileType">Type d'activité</Label>
-          <select
-            id="maintenanceProfileType"
-            data-testid="select-maintenance-profile-type"
-            className="w-full h-10 rounded-xl px-3 bg-secondary/30 border border-border/50 text-sm"
-            {...register("maintenanceProfileType")}
-          >
-            <option value="Freelance">Indépendant</option>
-            <option value="Company">Entreprise</option>
-            <option value="Agency">Agence</option>
-          </select>
-          {errors.maintenanceProfileType && <p className="text-xs text-destructive">{errors.maintenanceProfileType.message}</p>}
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label>Catégories de service</Label>
-        <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/50 bg-secondary/20 p-3">
-          {MAINTENANCE_CATEGORIES.map((category) => (
-            <label key={category} className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-              <input
-                type="checkbox"
-                value={category}
-                data-testid={`checkbox-maintenance-category-${category}`}
-                className="w-3.5 h-3.5 rounded border-border/50 accent-primary"
-                {...register("maintenanceCategories")}
-              />
-              {category}
-            </label>
-          ))}
-        </div>
-        {errors.maintenanceCategories && <p className="text-xs text-destructive">{errors.maintenanceCategories.message}</p>}
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <FormField id="maintenanceExperienceYears" label="Années d'expérience" type="number" placeholder="0" register={register("maintenanceExperienceYears", { valueAsNumber: true })} error={errors.maintenanceExperienceYears?.message} />
-        <FormField id="maintenanceSkills" label="Compétences (séparées par des virgules)" placeholder="Diagnostic, installation, SAV" register={register("maintenanceSkills")} error={errors.maintenanceSkills?.message} />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="maintenanceDescription">Présentation professionnelle</Label>
-        <Textarea id="maintenanceDescription" placeholder="Présentez votre expérience et les services que vous proposez aux cafés." className="min-h-20 rounded-xl bg-secondary/30 border-border/50" {...register("maintenanceDescription")} />
-        {errors.maintenanceDescription && <p className="text-xs text-destructive">{errors.maintenanceDescription.message}</p>}
-      </div>
-      <FormField id="reg-picture" label="Photo de profil (URL)" type="url" placeholder="https://…" register={register("profileImageUrl")} error={errors.profileImageUrl?.message} />
       <FormField id="reg-email" label="Email" type="email" placeholder="info@maintenance.com" register={register("email")} error={errors.email?.message} />
       <PhoneWhatsappField register={register("phone")} whatsappRegister={register("isWhatsapp")} error={errors.phone?.message} />
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 6 caractères" register={register("password")} error={errors.password?.message} />
+        <FormField id="reg-password" label="Mot de passe" type="password" placeholder="Min. 8 car., 1 majuscule, 1 symbole" register={register("password")} error={errors.password?.message} />
         <FormField id="reg-confirm" label="Confirmer" type="password" placeholder="Retapez le mot de passe" register={register("confirmPassword")} error={errors.confirmPassword?.message} />
       </div>
+      {/* Job title, profile type, service categories, experience, skills and
+          professional presentation are now completed later from the Maintenance
+          account's own profile page — kept fully intact there, just not collected
+          at registration time anymore. */}
       <p className="text-xs text-amber-600 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> La localisation sera requise à l'étape suivante.</p>
-      <Button type="submit" disabled={isLoading} data-testid="button-register" className="w-full rounded-xl py-5 text-base mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
+      <Button type="submit" disabled={isLoading} data-testid="button-register" className="bg-amber-500 hover:bg-amber-500 w-full rounded-xl py-5 text-white mt-2 shadow-lg shadow-primary/20">{isLoading ? "Création..." : "Créer le compte"}</Button>
     </form>
   );
 }
@@ -626,12 +643,62 @@ export default function LandingPage() {
   const [roleSubModalOpen, setRoleSubModalOpen] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
+  // Per-account login cooldown — the SERVER (server/login-attempts.ts) is the sole
+  // authority on when an account is actually blocked; this state only drives the
+  // visible countdown, seeded from the real `retryAfterSeconds` a 429 response
+  // carries (see handleModalLogin) and persisted to localStorage (keyed by the
+  // normalized email) purely so the countdown survives a tab switch/reopen — never a
+  // bypass, since any real submit attempt during an active cooldown still gets a
+  // fresh, authoritative 429 from the server regardless of what this shows.
+  const [loginCooldown, setLoginCooldown] = useState<{ email: string; untilTs: number; remainingSeconds: number } | null>(null);
+
+  // Google/Facebook sign-in — visible only per real Admin Global Settings (never
+  // hardcoded), standard react-query defaults (this pre-login page has no websocket
+  // wired up today, so a plain query — refetched on the normal cache lifecycle — is the
+  // proportionate way to stay in sync with an admin toggle without a broader change).
+  const { data: authProviders } = useQuery<{ googleAvailable: boolean; facebookAvailable: boolean }>({
+    queryKey: ["/api/auth-provider-settings"],
+  });
+
+  // Surfaces a safe error after an OAuth redirect back from the server (see
+  // server/oauth.ts) — never a stack trace/provider detail, just the safe flag it set —
+  // then cleans the URL so refreshing doesn't re-show the same toast.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("authError");
+    if (!authError) return;
+    const messages: Record<string, string> = {
+      no_account_google: "Aucun compte BigBossCoffee n'est associé à ce compte Google. Veuillez d'abord vous inscrire.",
+      no_account_facebook: "Aucun compte BigBossCoffee n'est associé à ce compte Facebook. Veuillez d'abord vous inscrire.",
+      google_unavailable: "La connexion via Google n'est pas disponible pour le moment.",
+      facebook_unavailable: "La connexion via Facebook n'est pas disponible pour le moment.",
+      google_failed: "La connexion via Google a échoué. Veuillez réessayer.",
+      facebook_failed: "La connexion via Facebook a échoué. Veuillez réessayer.",
+      no_email_from_provider: "Impossible d'obtenir une adresse email vérifiée depuis ce fournisseur.",
+    };
+    toast({ variant: "destructive", title: "Connexion impossible", description: messages[authError] ?? "Une erreur s'est produite." });
+    setAuthModalOpen(true);
+    setAuthTab("login");
+    params.delete("authError");
+    const next = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (next ? `?${next}` : ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Registration state
   const [isRegistering, setIsRegistering] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<any | null>(null);
   const [authLocationModalOpen, setAuthLocationModalOpen] = useState(false);
   const [isDoingLogin, setIsDoingLogin] = useState(false);
   const [authModalPreLocationClose, setAuthModalPreLocationClose] = useState(false);
+  // The account-info step's own raw form values (pre-buildPayload) and the address
+  // step's in-progress entry — both only needed to survive the Retour round-trip
+  // between the two registration steps (each step's inner component fully unmounts
+  // when its own Dialog/step closes, so React state alone doesn't survive that; these
+  // are fed back in as defaultValues/initialAddress on the way forward again). Cleared
+  // on a real submit or a full abandon (the header's X, not Retour).
+  const [pendingRawFormData, setPendingRawFormData] = useState<any | null>(null);
+  const [pendingAddressData, setPendingAddressData] = useState<PickedLocation | null>(null);
 
   // Forgot-password flow state
   const [resetEmail, setResetEmail] = useState("");
@@ -726,8 +793,8 @@ export default function LandingPage() {
   const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setNewPasswordError(null);
-    if (newPassword.length < 6) {
-      setNewPasswordError("Le mot de passe doit contenir au moins 6 caractères.");
+    if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/.test(newPassword)) {
+      setNewPasswordError("Au moins 8 caractères, une majuscule et un symbole (ex: ! @ # $ %).");
       return;
     }
     if (newPassword !== confirmNewPassword) {
@@ -806,15 +873,63 @@ export default function LandingPage() {
     setAuthModalOpen(true);
   };
 
+  // Restore any stored cooldown when the typed login email changes (navigate away/back,
+  // switch between accounts in the same field, reopen the modal, etc.) — purely a display
+  // restoration, the server re-validates on every real submit regardless.
+  const watchedLoginEmail = loginForm.watch("email");
+  useEffect(() => {
+    const email = (watchedLoginEmail || "").trim();
+    if (!email) { setLoginCooldown(null); return; }
+    const untilTs = readStoredCooldownUntil(email);
+    if (untilTs) {
+      setLoginCooldown({ email: email.toLowerCase(), untilTs, remainingSeconds: Math.ceil((untilTs - Date.now()) / 1000) });
+    } else {
+      setLoginCooldown((prev) => (prev && prev.email === email.toLowerCase() ? null : prev));
+    }
+  }, [watchedLoginEmail]);
+
+  // Tick the countdown every second from the real target timestamp (never a raw decrementing
+  // counter, so it can't drift) and auto-clear once it reaches 0.
+  useEffect(() => {
+    if (!loginCooldown) return;
+    const interval = setInterval(() => {
+      setLoginCooldown((prev) => {
+        if (!prev) return prev;
+        const remainingSeconds = Math.ceil((prev.untilTs - Date.now()) / 1000);
+        if (remainingSeconds <= 0) {
+          clearStoredCooldown(prev.email);
+          return null;
+        }
+        return { ...prev, remainingSeconds };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [loginCooldown?.untilTs]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleModalLogin = async (d: { email: string; password: string }) => {
+    // Defensive client-side guard — the server is still the real authority and will
+    // reject with a fresh 429 regardless, this just avoids an obviously-futile request.
+    const normalizedEmail = d.email.trim().toLowerCase();
+    if (loginCooldown && loginCooldown.email === normalizedEmail && loginCooldown.remainingSeconds > 0) {
+      return;
+    }
     setIsDoingLogin(true);
     try {
       const res = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d), credentials: "include" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        const retryAfterSeconds = (err as any).retryAfterSeconds;
+        if (res.status === 429 && typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+          const untilTs = Date.now() + retryAfterSeconds * 1000;
+          storeCooldownUntil(normalizedEmail, untilTs);
+          setLoginCooldown({ email: normalizedEmail, untilTs, remainingSeconds: retryAfterSeconds });
+          return;
+        }
         toast({ variant: "destructive", title: "Connexion échouée", description: (err as any).message ?? "Email ou mot de passe incorrect." });
         return;
       }
+      clearStoredCooldown(normalizedEmail);
+      setLoginCooldown(null);
       const userData = await res.json();
       queryClient.setQueryData(["/api/auth/me"], userData);
       const ALL_PENDING_ROLES_CHECK = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY", "MAINTENANCE", "CAFE_OWNER"];
@@ -864,16 +979,10 @@ export default function LandingPage() {
         base.name = data.companyName; break;
       case "DELIVERY_COMPANY": base.name = `${data.firstName} ${data.lastName}`; break;
     }
-    if (role === "MAINTENANCE") {
-      base.maintenanceJobTitle = data.maintenanceJobTitle;
-      base.maintenanceProfileType = data.maintenanceProfileType;
-      base.maintenanceCategories = data.maintenanceCategories;
-      base.maintenanceSkills = data.maintenanceSkills
-        ? data.maintenanceSkills.split(",").map((skill: string) => skill.trim()).filter(Boolean)
-        : [];
-      base.maintenanceDescription = data.maintenanceDescription;
-      base.maintenanceExperienceYears = data.maintenanceExperienceYears;
-    }
+    // Job title, profile type, categories, skills, experience and description are no
+    // longer collected at registration (completed later from the account's own profile
+    // page) — the server already treats all of these as optional, so simply not
+    // sending them is enough; storage.upsertMaintenanceProfile seeds sensible defaults.
     return base;
   };
 
@@ -898,6 +1007,10 @@ export default function LandingPage() {
     const payload = buildPayload(selectedRole, data);
     if (NEED_LOCATION.includes(selectedRole)) {
       setPendingFormData(payload);
+      // Raw (pre-buildPayload) values — restored as the account-info form's
+      // defaultValues if the user hits Retour from the address step, since that
+      // step's Dialog fully unmounts the form and its own RHF state with it.
+      setPendingRawFormData(data);
       setAuthModalOpen(false);
       setAuthModalPreLocationClose(true);
       setAuthLocationModalOpen(true);
@@ -919,6 +1032,8 @@ export default function LandingPage() {
         locationDetails: loc.details ?? null,
       };
       setPendingFormData(null);
+      setPendingRawFormData(null);
+      setPendingAddressData(null);
       await submitRegistration(payload);
       setAuthModalOpen(true);
     }
@@ -926,8 +1041,22 @@ export default function LandingPage() {
 
   const handleAuthLocationClose = () => {
     setPendingFormData(null);
+    setPendingRawFormData(null);
+    setPendingAddressData(null);
     setAuthLocationModalOpen(false);
     if (authModalPreLocationClose) { setAuthModalPreLocationClose(false); setAuthModalOpen(true); }
+  };
+
+  // Retour (address step -> account-info step): unlike the header's X (which fully
+  // abandons the attempt via handleAuthLocationClose above), this keeps everything
+  // entered so far — the in-progress address is stashed and fed back in as
+  // initialAddress/initialLat/initialLng/initialDetails so it's still there if the
+  // user comes forward again, and pendingRawFormData (already set by handleRegister)
+  // is left untouched so the account-info form reopens pre-filled.
+  const handleAddressStepBack = (loc: PickedLocation) => {
+    setPendingAddressData(loc);
+    setAuthLocationModalOpen(false);
+    setAuthModalOpen(true);
   };
 
   const roleConfig = ROLES.find((r) => r.id === selectedRole) ?? ROLES[0];
@@ -1517,8 +1646,11 @@ export default function LandingPage() {
           later sets/refines the precise geolocation via the full 3-step flow in
           Admin → Users → User detail. */}
       <LocationPickerModal open={authLocationModalOpen} mode="account" title="Choisissez votre adresse" required={true}
-        startStep={3} lockStep
-        onClose={handleAuthLocationClose} onConfirm={handleAuthLocationConfirm} />
+        startStep={3} lockStep requireStreetAddress hideThemeToggle
+        stepLabelOverride={{ current: 2, total: 2 }}
+        initialAddress={pendingAddressData?.address} initialLat={pendingAddressData?.lat} initialLng={pendingAddressData?.lng}
+        initialDetails={pendingAddressData?.details}
+        onClose={handleAuthLocationClose} onConfirm={handleAuthLocationConfirm} onBack={handleAddressStepBack} />
 
       {/* ── Auth modal ── */}
       {(() => {
@@ -1544,7 +1676,12 @@ export default function LandingPage() {
           <Dialog open={authModalOpen} onOpenChange={(open) => { setAuthModalOpen(open); }}>
             <DialogContent className="sm:max-w-md w-full p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl ring-1 ring-black/5 [&>button]:hidden max-h-[95vh]">
               <VisuallyHidden><DialogTitle>Bienvenue sur BigBossCoffee</DialogTitle></VisuallyHidden>
-              <div className={`flex flex-col max-h-[95vh] overflow-hidden transition-colors duration-200 ${modalBg}`}>
+              {/* "dark" here (scoped to just this modal, never touching <html>) is what makes
+                  the existing .dark input:-webkit-autofill rule in index.css actually apply —
+                  this page's own dark toggle never added that ancestor class before, so
+                  autofilled/browser-suggested values showed a light background regardless of
+                  the toggle shown in the header. */}
+              <div className={`flex flex-col max-h-[95vh] overflow-hidden transition-colors duration-200 ${modalBg} ${dk ? "dark" : ""}`}>
 
                 {/* Fixed header */}
                 <div className={`shrink-0 px-5 pt-5 pb-4 ${modalBg}`}>
@@ -1561,14 +1698,12 @@ export default function LandingPage() {
                       <div className="bg-amber-500 p-1.5 rounded-xl shrink-0"><Coffee className="w-3.5 h-3.5 text-white" /></div>
                       <span className={`text-[13px] font-semibold ${textPri}`}>BigBossCoffee</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => toggle()}
-                      aria-label="Toggle theme"
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-                    >
-                      {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
-                    </button>
+                    {/* No independent theme toggle here — Connexion/Inscription/password
+                        recovery/registration steps all inherit `dk`/`isDark` from the same
+                        global useThemeStore the main Navbar writes to (theme-store.ts), so
+                        the Navbar remains the single place to switch themes. Spacer div
+                        keeps the title centered where the toggle button used to be. */}
+                    <div className="w-8" />
                   </div>
                   <div className={`h-px w-full ${divider}`} />
                 </div>
@@ -1644,15 +1779,49 @@ export default function LandingPage() {
                               </div>
                               {loginForm.formState.errors.password && <p className="text-xs text-red-500">{loginForm.formState.errors.password.message}</p>}
                             </div>
+                            {loginCooldown && loginCooldown.email === (watchedLoginEmail || "").trim().toLowerCase() && loginCooldown.remainingSeconds > 0 && (
+                              <p className="text-xs text-red-500" data-testid="text-login-cooldown">
+                                Trop de tentatives. Veuillez patienter {loginCooldown.remainingSeconds} seconde{loginCooldown.remainingSeconds > 1 ? "s" : ""} avant de réessayer.
+                              </p>
+                            )}
                             <button
                               type="submit"
                               data-testid="button-login"
-                              disabled={isDoingLogin}
+                              disabled={isDoingLogin || Boolean(loginCooldown && loginCooldown.email === (watchedLoginEmail || "").trim().toLowerCase() && loginCooldown.remainingSeconds > 0)}
                               className="w-full rounded-2xl py-3.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white transition-all shadow-lg shadow-amber-500/20 mt-2"
                             >
                               {isDoingLogin ? "Connexion..." : <span className="flex items-center justify-center gap-2">Se connecter <ArrowRight className="w-4 h-4" /></span>}
                             </button>
                           </form>
+                          {(authProviders?.googleAvailable || authProviders?.facebookAvailable) && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`h-px flex-1 ${divider}`} />
+                                <span className={`text-xs ${textMut}`}>ou</span>
+                                <div className={`h-px flex-1 ${divider}`} />
+                              </div>
+                              <div className="space-y-2">
+                                {authProviders?.googleAvailable && (
+                                  <a
+                                    href="/api/auth/google"
+                                    data-testid="button-login-google"
+                                    className={`w-full flex items-center justify-center gap-2.5 rounded-2xl py-3 text-sm font-medium border transition-colors ${dk ? "border-gray-700 bg-gray-800 hover:bg-gray-700 text-white" : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700"}`}
+                                  >
+                                    <GoogleIcon className="w-4 h-4" /> Continuer avec Google
+                                  </a>
+                                )}
+                                {authProviders?.facebookAvailable && (
+                                  <a
+                                    href="/api/auth/facebook"
+                                    data-testid="button-login-facebook"
+                                    className="w-full flex items-center justify-center gap-2.5 rounded-2xl py-3 text-sm font-medium bg-[#1877F2] hover:bg-[#166FE5] text-white transition-colors"
+                                  >
+                                    <Facebook className="w-4 h-4" /> Continuer avec Facebook
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           <p className={`text-center text-sm pt-1 ${textMut}`}>Pas encore de compte ?{" "}
                             <button className="text-amber-500 font-medium hover:underline" onClick={() => setAuthTab("register")}>S'inscrire</button>
                           </p>
@@ -1855,10 +2024,6 @@ export default function LandingPage() {
                       {/* REGISTER */}
                       {authTab === "register" && (
                         <div className="animate-in fade-in slide-in-from-left-4 duration-300">
-                          <button type="button" data-testid="button-back-from-register" onClick={() => setAuthTab("login")}
-                            className={`flex items-center gap-1 text-sm transition-colors mb-4 ${textMut}`}>
-                            <ChevronLeft className="w-4 h-4" /> Retour à la connexion
-                          </button>
                           <div className="mb-4">
                             <p className={`text-[10px] font-semibold uppercase tracking-widest mb-2 ${textMut}`}>Type de compte</p>
                             <button type="button" data-testid="button-select-role" onClick={() => setRoleSubModalOpen(true)}
@@ -1877,14 +2042,14 @@ export default function LandingPage() {
                             </span>
                           </div>
                           <div className={formDark}>
-                            {selectedRole === "CAFE_OWNER"          && <CafeForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                            {selectedRole === "SUPPLIER"            && <SupplierForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                            {selectedRole === "DELIVERY_COMPANY"    && <DeliveryForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                            {selectedRole === "PRINTER"             && <PrinterForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                            {selectedRole === "MARKETING"           && <MarketingForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                            {selectedRole === "BARISTA_ACADEMY"     && <BaristaAcademyForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                            {selectedRole === "BARISTA_MARKETPLACE" && <BaristaMarketplaceForm onSubmit={handleRegister} isLoading={isRegistering} />}
-                            {selectedRole === "MAINTENANCE"         && <MaintenanceForm onSubmit={handleRegister} isLoading={isRegistering} />}
+                            {selectedRole === "CAFE_OWNER"          && <CafeForm onSubmit={handleRegister} isLoading={isRegistering} initialData={pendingRawFormData} />}
+                            {selectedRole === "SUPPLIER"            && <SupplierForm onSubmit={handleRegister} isLoading={isRegistering} initialData={pendingRawFormData} />}
+                            {selectedRole === "DELIVERY_COMPANY"    && <DeliveryForm onSubmit={handleRegister} isLoading={isRegistering} initialData={pendingRawFormData} />}
+                            {selectedRole === "PRINTER"             && <PrinterForm onSubmit={handleRegister} isLoading={isRegistering} initialData={pendingRawFormData} />}
+                            {selectedRole === "MARKETING"           && <MarketingForm onSubmit={handleRegister} isLoading={isRegistering} initialData={pendingRawFormData} />}
+                            {selectedRole === "BARISTA_ACADEMY"     && <BaristaAcademyForm onSubmit={handleRegister} isLoading={isRegistering} initialData={pendingRawFormData} />}
+                            {selectedRole === "BARISTA_MARKETPLACE" && <BaristaMarketplaceForm onSubmit={handleRegister} isLoading={isRegistering} initialData={pendingRawFormData} />}
+                            {selectedRole === "MAINTENANCE"         && <MaintenanceForm onSubmit={handleRegister} isLoading={isRegistering} initialData={pendingRawFormData} />}
                           </div>
                           <p className={`text-center text-sm pt-3 ${textMut}`}>Déjà un compte ?{" "}
                             <button className="text-amber-500 font-medium hover:underline" onClick={() => setAuthTab("login")}>Se connecter</button>

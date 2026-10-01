@@ -293,7 +293,7 @@ export function AppSidebar() {
             <PanelLeftIcon className="w-5 h-5 text-primary absolute inset-1.5 opacity-0 group-data-[collapsible=icon]:group-hover/logo:opacity-100 transition-opacity" />
           </div>
           <span className="font-bold text-base tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:hidden">
-            BigBoss Coffee
+            BigBossCoffee
           </span>
         </button>
       </SidebarHeader>

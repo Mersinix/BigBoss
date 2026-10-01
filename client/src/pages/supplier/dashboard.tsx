@@ -86,7 +86,7 @@ export default function SupplierDashboard() {
     <div className="flex flex-col gap-6 py-4 px-3 -mx-6 sm:py-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Bienvenue !"
-        subtitle="Voici votre aperçu fournisseur sur BigBoss Coffee."
+        subtitle="Voici votre aperçu fournisseur sur BigBossCoffee."
         stat={fmt(stats.deliveredRevenue)}
         statLabel="Chiffre d'affaires livré"
         icon={DollarSign}

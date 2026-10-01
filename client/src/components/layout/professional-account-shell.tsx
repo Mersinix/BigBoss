@@ -70,7 +70,7 @@ export function ProfessionalAccountShell({
   // these 7 accounts default to light, Coffee Owner's stays untouched.
   accountKey: DarkModeAccount;
   // Mobile-only identity block: the one prominent logo tile normally shows the
-  // generic BigBoss Coffee cup icon. Driver's Truck icon already functions as
+  // generic BigBossCoffee cup icon. Driver's Truck icon already functions as
   // its own established "logo" (task: mobile navbar identity hierarchy) — set
   // this to reuse HeaderIcon there instead, so the account doesn't end up with
   // two different icons (a generic cup + its own truck) in the same block.
@@ -136,7 +136,7 @@ export function ProfessionalAccountShell({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header — one unified layout at every breakpoint (mobile/tablet/desktop):
-          identity on the left (brand logo, dominant "BigBoss Coffee" wordmark,
+          identity on the left (brand logo, dominant "BigBossCoffee" wordmark,
           secondary service name, account name), icon-only actions on the right. Icon
           size (w-9 h-9 / w-4 h-4) is the same size this app's desktop row previously
           used. Below sm, the icon grid wraps into the required 2-row x 3-col
@@ -149,7 +149,7 @@ export function ProfessionalAccountShell({
               {useServiceIconAsBrandLogo ? <HeaderIcon className="w-6 h-6 text-white" /> : <Coffee className="w-6 h-6 text-white" />}
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-white text-base sm:text-lg leading-tight truncate">BigBoss Coffee</p>
+              <p className="font-bold text-white text-base sm:text-lg leading-tight truncate">BigBossCoffee</p>
               <p className="text-[11px] sm:text-xs text-white/80 truncate">{title}</p>
               <p className={`text-[11px] sm:text-xs truncate ${subtitleTextClass}`}>{user?.name}</p>
             </div>

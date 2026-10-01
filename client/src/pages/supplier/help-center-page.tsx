@@ -11,7 +11,7 @@ const faqs = [
   { q: "When will I receive my payout?", a: "Payouts are processed on the 5th of each month. You'll receive the previous month's net earnings minus the 5% platform commission." },
   { q: "How do I handle a return request?", a: "Navigate to Orders → Returns, review the request details and either approve or reject it. Approved returns will automatically deduct from your next payout." },
   { q: "How do I set up a discount code?", a: "Go to Marketing → Discount Codes, click 'New Code', enter the code, discount percentage, usage limit and expiry date." },
-  { q: "What is the platform commission rate?", a: "BigBoss Coffee charges a 5% commission on all delivered orders. This is automatically deducted from your monthly payout." },
+  { q: "What is the platform commission rate?", a: "BigBossCoffee charges a 5% commission on all delivered orders. This is automatically deducted from your monthly payout." },
   { q: "How can I update my product stock?", a: "Go to Business → Inventory and click 'Restock' next to the product you want to update. You can also edit stock directly from the Products page." },
   { q: "Can I offer custom pricing to specific cafés?", a: "Currently custom pricing is not available per café. You can create targeted discount codes for specific customers instead." },
 ];

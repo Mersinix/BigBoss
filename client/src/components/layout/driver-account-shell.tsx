@@ -1,4 +1,5 @@
 import {
+  Coffee,
   Truck,
   Briefcase,
   MessageSquare,
@@ -34,7 +35,7 @@ export function DriverAccountShell({ children }: { children: React.ReactNode }) 
   return (
     <ProfessionalAccountShell
       title="Espace Chauffeur"
-      headerIcon={Truck}
+      headerIcon={Coffee}
       gradientClass="from-blue-600 to-indigo-700"
       subtitleTextClass="text-blue-100"
       activeBorderClass="border-blue-600"

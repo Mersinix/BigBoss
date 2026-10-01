@@ -1,5 +1,5 @@
 import {
-  Truck,
+  Coffee,
   Briefcase,
   MessageSquare,
   TrendingUp,
@@ -33,7 +33,7 @@ export function DeliveryCompanyAccountShell({ children }: { children: React.Reac
   return (
     <ProfessionalAccountShell
       title="Espace Livraison"
-      headerIcon={Truck}
+      headerIcon={Coffee}
       gradientClass="from-teal-600 to-cyan-700"
       subtitleTextClass="text-teal-100"
       activeBorderClass="border-teal-600"

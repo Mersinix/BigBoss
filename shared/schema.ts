@@ -3623,6 +3623,20 @@ export const PROSPECT_TYPES = [
   'CLEANING_COMPANY', 'OTHER',
 ] as const;
 
+// Admin-added prospect types, layered on top of the built-in PROSPECT_TYPES
+// above — the built-ins are never stored/deletable (they're compiled-in
+// constants, existing prospect records already reference them by key), this
+// table only holds NEW types an admin creates via "Add New Type", so there is
+// a single source of truth (built-ins ∪ this table) for the Type filter, Edit
+// Details, Add Manually, and Google Places search to all read from.
+export const prospectCustomTypes = pgTable("prospect_custom_types", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export type ProspectCustomType = typeof prospectCustomTypes.$inferSelect;
+
 export const prospects = pgTable("prospects", {
   id: serial("id").primaryKey(),
   googlePlaceId: text("google_place_id"),
@@ -3644,6 +3658,12 @@ export const prospects = pgTable("prospects", {
   linkedin: text("linkedin"),
   distanceKm: text("distance_km"),
   searchCenter: text("search_center"),
+  // Geocoded center coordinates — distinct from the prospect's OWN lat/lng,
+  // preserved independently so distanceKm can be recalculated if the prospect's
+  // own address/location is later edited, without ever confusing the two
+  // (Phase 13's "search center vs business address are separate" requirement).
+  searchCenterLat: text("search_center_lat"),
+  searchCenterLng: text("search_center_lng"),
   searchRadius: text("search_radius"),
   keyword: text("keyword"),
   city: text("city"),

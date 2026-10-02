@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel,
@@ -27,12 +27,28 @@ import {
   ExternalLink, Copy, Calendar, Target, TrendingUp, Users, Building2,
   Filter, X, ChevronLeft, ChevronRight, AlertCircle, Loader2,
   UserPlus, Eye, BarChart2, Clock, Zap, SlidersHorizontal,
+  UserCheck, UserX, HelpCircle, Tag, Wrench, Truck, GraduationCap,
+  Coffee, Megaphone, Printer as PrinterIcon, Car,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { Prospect, ProspectStats, ProspectNote, ProspectTimelineEvent, ProspectFollowUp } from "@shared/schema";
+import type { Prospect, ProspectStats, ProspectNote, ProspectTimelineEvent, ProspectFollowUp, AddressDetails } from "@shared/schema";
+import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
+import { PasswordInputField } from "@/components/settings/password-input-field";
+
+// Account-existence indicator — computed live server-side (never stored on the
+// prospect row, see storage.matchProspectsToAccounts) so it can't go stale when
+// either side's contact info changes.
+export type ProspectAccountMatch = { status: "MATCHED" | "AMBIGUOUS" | "NONE"; accounts: { id: number; name: string; email: string; role: string }[] };
+export type ProspectWithMatch = Prospect & { accountMatch?: ProspectAccountMatch };
+
+// Admin-added types layered on top of the compiled-in TYPE_LABELS below — this
+// is the merged, live list (GET /api/admin/prospecting/types) that the Type
+// filter, Edit Details, Add Manually, and Google Places search all read from,
+// per Phase 7's single-source-of-truth requirement.
+export type ProspectTypeOption = { key: string; label: string; builtin: boolean };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -84,6 +100,31 @@ function scoreGrade(score: number): { grade: string; color: string } {
   return { grade: "D", color: "bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-400" };
 }
 
+// ── Account Match Indicator ──────────────────────────────────────────────────
+
+function AccountMatchBadge({ match, compact }: { match?: ProspectAccountMatch; compact?: boolean }) {
+  if (!match || match.status === "NONE") {
+    return compact ? <span className="text-xs text-muted-foreground">—</span> : (
+      <Badge variant="outline" className="text-[10px] gap-1 text-muted-foreground">
+        <UserX className="w-3 h-3" />No account
+      </Badge>
+    );
+  }
+  if (match.status === "AMBIGUOUS") {
+    return (
+      <Badge className="text-[10px] gap-1 bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400" title="Multiple possible accounts matched — verify manually">
+        <HelpCircle className="w-3 h-3" />Needs review
+      </Badge>
+    );
+  }
+  const acc = match.accounts[0];
+  return (
+    <Badge className="text-[10px] gap-1 bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" title={acc ? `${acc.name} (${acc.role})` : undefined}>
+      <UserCheck className="w-3 h-3" />{compact ? "Has account" : `Has account${acc ? ` · ${acc.role}` : ""}`}
+    </Badge>
+  );
+}
+
 // ── Stats Row ─────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: any; color: string }) {
@@ -121,13 +162,25 @@ function StatsRow({ stats, isLoading }: { stats?: ProspectStats; isLoading: bool
 
 // ── Google Places Search Dialog ───────────────────────────────────────────────
 
-function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: () => void; onComplete: () => void }) {
+function SearchDialog({ open, onClose, onComplete, prospectTypes }: { open: boolean; onClose: () => void; onComplete: () => void; prospectTypes: ProspectTypeOption[] }) {
   const { toast } = useToast();
   const [address, setAddress] = useState("");
   const [suggestions, setSuggestions] = useState<{ description: string; place_id: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [radiusKm, setRadiusKm] = useState("5");
-  const [keyword, setKeyword] = useState("coffee");
+  // Multiple keywords, shown as removable badges (Phase 12) — each one is a
+  // genuinely separate Google Places query (see handleSearch/the server route),
+  // not a client-side filter, so results reflect ALL of them, not just the first.
+  const [keywords, setKeywords] = useState<string[]>(["coffee"]);
+  const [keywordInput, setKeywordInput] = useState("");
+  const addKeyword = () => {
+    const trimmed = keywordInput.trim();
+    if (!trimmed) return;
+    if (keywords.some(k => k.toLowerCase() === trimmed.toLowerCase())) { setKeywordInput(""); return; }
+    setKeywords(prev => [...prev, trimmed]);
+    setKeywordInput("");
+  };
+  const removeKeyword = (k: string) => setKeywords(prev => prev.filter(x => x !== k));
   const [keytype, setkeytype] = useState("cafe");
   const [prospectType, setProspectType] = useState("");
   const [minRating, setMinRating] = useState("");
@@ -179,11 +232,18 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
 
   const handleSearch = async () => {
     if (!address.trim()) { toast({ title: "Please enter a search address", variant: "destructive" }); return; }
+    // A keyword still sitting in the input (typed but not yet confirmed as a
+    // badge) is included too, so pressing Search directly after typing doesn't
+    // silently drop it.
+    const pendingTyped = keywordInput.trim();
+    const effectiveKeywords = pendingTyped && !keywords.some(k => k.toLowerCase() === pendingTyped.toLowerCase())
+      ? [...keywords, pendingTyped] : keywords;
+    if (effectiveKeywords.length === 0) { toast({ title: "Enter at least one search keyword", variant: "destructive" }); return; }
     setIsSearching(true);
     setResult(null);
     try {
       const res = await apiRequest("POST", "/api/admin/prospecting/search", {
-        address, radiusKm: parseFloat(radiusKm), keyword,keytype, prospectType: prospectType || null,
+        address, radiusKm: parseFloat(radiusKm), keywords: effectiveKeywords, keytype, prospectType: prospectType || null,
         minRating: minRating ? parseFloat(minRating) : null, onlyWithPhone, onlyWithWebsite, includeClosedPlaces,
       });
       const data = await res.json();
@@ -261,10 +321,32 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
             </div>
           </div>
 
-          {/* Keyword */}
+          {/* Keyword — multiple, shown as removable badges (Phase 12) */}
           <div>
             <Label>Search Keyword</Label>
-            <Input className="mt-1" placeholder="coffee, café, supplier water, printer..." value={keyword} onChange={e => setKeyword(e.target.value)} />
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 rounded-md border border-input px-2 py-1.5 min-h-9">
+              {keywords.map(k => (
+                <span key={k} className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs" data-testid={`badge-keyword-${k}`}>
+                  {k}
+                  <button type="button" onClick={() => removeKeyword(k)} aria-label={`Remove keyword ${k}`} className="hover:text-destructive">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                className="flex-1 min-w-24 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                placeholder={keywords.length === 0 ? "coffee, café, supplier water..." : "Add another…"}
+                value={keywordInput}
+                onChange={e => setKeywordInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addKeyword(); }
+                  else if (e.key === "Backspace" && !keywordInput && keywords.length > 0) { removeKeyword(keywords[keywords.length - 1]); }
+                }}
+                onBlur={addKeyword}
+                data-testid="input-search-keyword"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">Press Enter to add a keyword. The search runs all of them.</p>
           </div>
           <div>
             <Label>Type de Business</Label>
@@ -275,12 +357,14 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
           <div>
             <Label>Prospect Type</Label>
             {/* Same Radix constraint as Min Rating above — "auto" sentinel translated back to
-                "" (→ auto-detect, unchanged handleSearch semantics: prospectType || null). */}
+                "" (→ auto-detect, unchanged handleSearch semantics: prospectType || null).
+                Same merged built-in ∪ admin-added list as the Type filter/Edit Details/Add
+                Manually (Phase 7). */}
             <Select value={prospectType || "auto"} onValueChange={v => setProspectType(v === "auto" ? "" : v)}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Auto Detect" /></SelectTrigger>
+              <SelectTrigger className="mt-1" data-testid="select-search-prospect-type"><SelectValue placeholder="Auto Detect" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto">Auto Detect</SelectItem>
-                {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                {prospectTypes.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -336,9 +420,9 @@ function SearchDialog({ open, onClose, onComplete }: { open: boolean; onClose: (
 
 // ── Manual Prospect Dialog ────────────────────────────────────────────────────
 
-function AddProspectDialog({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
+function AddProspectDialog({ open, onClose, onSaved, prospectTypes }: { open: boolean; onClose: () => void; onSaved: () => void; prospectTypes: ProspectTypeOption[] }) {
   const { toast } = useToast();
-  const [form, setForm] = useState({ businessName: "", prospectType: "", address: "", city: "", phone: "", website: "", email: "", rating: "", notes: "" });
+  const [form, setForm] = useState({ businessName: "", prospectType: "", address: "", city: "", phone: "", website: "", email: "", rating: "", notes: "", facebook: "", instagram: "", linkedin: "" });
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const save = useMutation({
@@ -346,7 +430,7 @@ function AddProspectDialog({ open, onClose, onSaved }: { open: boolean; onClose:
       ...form,
       notes: form.notes ? [{ id: Date.now().toString(), text: form.notes, createdAt: new Date().toISOString() }] : [],
     }),
-    onSuccess: () => { toast({ title: "Prospect created" }); onSaved(); onClose(); setForm({ businessName: "", prospectType: "", address: "", city: "", phone: "", website: "", email: "", rating: "", notes: "" }); },
+    onSuccess: () => { toast({ title: "Prospect created" }); onSaved(); onClose(); setForm({ businessName: "", prospectType: "", address: "", city: "", phone: "", website: "", email: "", rating: "", notes: "", facebook: "", instagram: "", linkedin: "" }); },
     onError: () => toast({ title: "Failed to create prospect", variant: "destructive" }),
   });
 
@@ -357,9 +441,14 @@ function AddProspectDialog({ open, onClose, onSaved }: { open: boolean; onClose:
         <div className="space-y-3 py-2">
           <div><Label>Business Name *</Label><Input className="mt-1" value={form.businessName} onChange={e => set("businessName", e.target.value)} /></div>
           <div><Label>Type</Label>
-            <Select value={form.prospectType} onValueChange={v => set("prospectType", v)}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Select type" /></SelectTrigger>
-              <SelectContent>{Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+            {/* Same merged built-in ∪ admin-added list as the Type filter/Edit
+                Details/Google Places search — single source of truth (Phase 7/11). */}
+            <Select value={form.prospectType || "none"} onValueChange={v => set("prospectType", v === "none" ? "" : v)}>
+              <SelectTrigger className="mt-1" data-testid="select-add-prospect-type"><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                {prospectTypes.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -369,6 +458,11 @@ function AddProspectDialog({ open, onClose, onSaved }: { open: boolean; onClose:
           <div><Label>Website</Label><Input className="mt-1" value={form.website} onChange={e => set("website", e.target.value)} /></div>
           <div><Label>Address</Label><Input className="mt-1" value={form.address} onChange={e => set("address", e.target.value)} /></div>
           <div><Label>City</Label><Input className="mt-1" value={form.city} onChange={e => set("city", e.target.value)} /></div>
+          <div className="grid grid-cols-3 gap-3">
+            <div><Label>Facebook</Label><Input className="mt-1" value={form.facebook} onChange={e => set("facebook", e.target.value)} /></div>
+            <div><Label>Instagram</Label><Input className="mt-1" value={form.instagram} onChange={e => set("instagram", e.target.value)} /></div>
+            <div><Label>LinkedIn</Label><Input className="mt-1" value={form.linkedin} onChange={e => set("linkedin", e.target.value)} /></div>
+          </div>
           <div><Label>Notes</Label><Textarea className="mt-1" rows={2} value={form.notes} onChange={e => set("notes", e.target.value)} /></div>
         </div>
         <DialogFooter>
@@ -384,9 +478,11 @@ function AddProspectDialog({ open, onClose, onSaved }: { open: boolean; onClose:
 
 // ── Filters ───────────────────────────────────────────────────────────────────
 
-type Filters = { search: string; status: string; prospectType: string; city: string; hasPhone: string; hasWebsite: string; sortBy: string; sortOrder: string };
+type Filters = { search: string; status: string; prospectType: string; city: string; hasPhone: string; hasWebsite: string; minRating: string; sortBy: string; sortOrder: string };
 
-function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Partial<Filters>) => void }) {
+const RATING_FILTER_OPTIONS = ["2", "3", "4", "4.5"];
+
+function FilterBar({ filters, onChange, prospectTypes, onAddType }: { filters: Filters; onChange: (f: Partial<Filters>) => void; prospectTypes: ProspectTypeOption[]; onAddType: () => void }) {
   const active = Object.values(filters).filter(v => v && v !== 'createdAt' && v !== 'desc').length;
   // Mobile-only: the search input collapses to an icon button until tapped, so it
   // doesn't permanently eat most of the horizontal filter strip's width — same
@@ -433,11 +529,13 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Part
           {Object.entries(STATUS_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Select value={filters.prospectType || "all"} onValueChange={v => onChange({ prospectType: v === "all" ? "" : v })}>
-        <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Type" /></SelectTrigger>
+      <Select value={filters.prospectType || "all"} onValueChange={v => { if (v === "__add_new__") { onAddType(); return; } onChange({ prospectType: v === "all" ? "" : v }); }}>
+        <SelectTrigger className="w-44 shrink-0" data-testid="select-type-filter"><SelectValue placeholder="Type" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Types</SelectItem>
-          {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+          {prospectTypes.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
+          <SelectSeparator />
+          <SelectItem value="__add_new__" data-testid="select-item-add-new-type">+ Add New Type</SelectItem>
         </SelectContent>
       </Select>
       <Input className="w-32 shrink-0" placeholder="City" value={filters.city} onChange={e => onChange({ city: e.target.value })} />
@@ -447,6 +545,21 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Part
           <SelectItem value="all">Phone: Any</SelectItem>
           <SelectItem value="true">Has Phone</SelectItem>
           <SelectItem value="false">No Phone</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={filters.hasWebsite || "all"} onValueChange={v => onChange({ hasWebsite: v === "all" ? "" : v })}>
+        <SelectTrigger className="w-40 shrink-0" data-testid="select-website-filter"><SelectValue placeholder="Website" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Any</SelectItem>
+          <SelectItem value="true">Has Website</SelectItem>
+          <SelectItem value="false">No Website</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={filters.minRating || "any"} onValueChange={v => onChange({ minRating: v === "any" ? "" : v })}>
+        <SelectTrigger className="w-32 shrink-0" data-testid="select-rating-filter"><SelectValue placeholder="Rating" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="any">Any</SelectItem>
+          {RATING_FILTER_OPTIONS.map(r => <SelectItem key={r} value={r}>{r}+</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={`${filters.sortBy}:${filters.sortOrder}`} onValueChange={v => { const [by, order] = v.split(':'); onChange({ sortBy: by, sortOrder: order }); }}>
@@ -461,7 +574,7 @@ function FilterBar({ filters, onChange }: { filters: Filters; onChange: (f: Part
         </SelectContent>
       </Select>
       {active > 0 && (
-        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => onChange({ search: "", status: "", prospectType: "", city: "", hasPhone: "", hasWebsite: "", sortBy: "createdAt", sortOrder: "desc" })}>
+        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => onChange({ search: "", status: "", prospectType: "", city: "", hasPhone: "", hasWebsite: "", minRating: "", sortBy: "createdAt", sortOrder: "desc" })}>
           <X className="w-3.5 h-3.5 mr-1" />Clear filters
         </Button>
       )}
@@ -498,7 +611,7 @@ function BulkActions({ ids, onClear, onAction }: { ids: number[]; onClear: () =>
 // ── Row Actions ───────────────────────────────────────────────────────────────
 
 function RowActions({ prospect, onView, onAction }: {
-  prospect: Prospect;
+  prospect: ProspectWithMatch;
   onView: () => void;
   onAction: (action: string, data?: any) => void;
 }) {
@@ -538,8 +651,11 @@ function RowActions({ prospect, onView, onAction }: {
         <DropdownMenuItem onClick={() => onAction("status", { status: "CALLED" })}><PhoneCall className="w-3.5 h-3.5 mr-2" />Mark as Called</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onAction("status", { status: "ARCHIVED" })}><Archive className="w-3.5 h-3.5 mr-2" />Archive</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onAction("create_account", { type: "CAFE_OWNER" })}><UserPlus className="w-3.5 h-3.5 mr-2" />Create Café Owner</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction("create_account", { type: "SUPPLIER" })}><Building2 className="w-3.5 h-3.5 mr-2" />Create Supplier</DropdownMenuItem>
+        {Object.entries(ACCOUNT_TYPE_CONFIG).map(([role, cfg]) => (
+          <DropdownMenuItem key={role} onClick={() => onAction("create_account", { type: role })} data-testid={`menu-item-create-${role.toLowerCase()}`}>
+            <cfg.icon className="w-3.5 h-3.5 mr-2" />Create {cfg.label}
+          </DropdownMenuItem>
+        ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onAction("delete")} className="text-destructive focus:text-destructive">
           <Trash2 className="w-3.5 h-3.5 mr-2" />Delete
@@ -551,10 +667,11 @@ function RowActions({ prospect, onView, onAction }: {
 
 // ── Prospect Detail Sheet ─────────────────────────────────────────────────────
 
-function ProspectSheet({ prospect, open, onClose, onSaved }: {
-  prospect: Prospect | null;
+function ProspectSheet({ prospect, open, onClose, onSaved, prospectTypes }: {
+  prospect: ProspectWithMatch | null;
   open: boolean;
   onClose: () => void;
+  prospectTypes: ProspectTypeOption[];
   onSaved: () => void;
 }) {
   const { toast } = useToast();
@@ -562,18 +679,29 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
   const [noteText, setNoteText] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Prospect>>({});
+  // This sheet's own authoritative copy, updated directly from each mutation's
+  // response — NOT the parent's `rows` array, which is still the pre-mutation
+  // snapshot at the moment invalidateQueries fires (the refetch is async), so
+  // relying on it here was overwriting a just-saved change back to its stale
+  // value (e.g. a freshly created follow-up would "save" successfully, the
+  // stats would update, but the sheet itself kept showing the empty form).
+  const [liveProspect, setLiveProspect] = useState<ProspectWithMatch | null>(prospect);
 
-  useEffect(() => { if (prospect) setEditForm({ ...prospect }); setEditMode(false); }, [prospect?.id]);
+  useEffect(() => { setLiveProspect(prospect); if (prospect) setEditForm({ ...prospect }); setEditMode(false); }, [prospect?.id]);
 
   const update = useMutation({
     mutationFn: (data: Partial<Prospect>) => apiRequest("PATCH", `/api/admin/prospecting/${prospect!.id}`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/stats"] }); onSaved(); toast({ title: "Saved" }); setEditMode(false); },
+    onSuccess: async (res) => {
+      const updated = await res.json();
+      setLiveProspect((prev) => ({ ...prev, ...updated, accountMatch: prev?.accountMatch }));
+      qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/stats"] }); onSaved(); toast({ title: "Saved" }); setEditMode(false);
+    },
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
 
   const addNote = () => {
-    if (!noteText.trim() || !prospect) return;
-    const notes = [...((prospect.notes as ProspectNote[]) ?? []), { id: Date.now().toString(), text: noteText.trim(), createdAt: new Date().toISOString() }];
+    if (!noteText.trim() || !liveProspect) return;
+    const notes = [...((liveProspect.notes as ProspectNote[]) ?? []), { id: Date.now().toString(), text: noteText.trim(), createdAt: new Date().toISOString() }];
     update.mutate({ notes } as any);
     setNoteText("");
   };
@@ -582,39 +710,52 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
     update.mutate({ followUp, nextFollowUpDate: followUp ? new Date(`${followUp.date}T${followUp.time ?? '09:00'}`) : null } as any);
   };
 
-  if (!prospect) return null;
+  if (!liveProspect) return null;
+  const prospectView = liveProspect;
 
-  const score = computeScore(prospect);
+  const score = computeScore(prospectView);
   const grade = scoreGrade(score);
-  const notes = (prospect.notes as ProspectNote[]) ?? [];
-  const timeline = (prospect.timeline as ProspectTimelineEvent[]) ?? [];
-  const followUp = prospect.followUp as ProspectFollowUp | null;
+  const notes = (prospectView.notes as ProspectNote[]) ?? [];
+  const timeline = (prospectView.timeline as ProspectTimelineEvent[]) ?? [];
+  const followUp = prospectView.followUp as ProspectFollowUp | null;
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      {/* [&>button]:hidden — suppresses shadcn Sheet's own default top-right close
+          button, which this sticky custom header (same bg, same corner) was
+          visually overlapping; the explicit button in the header below replaces
+          it with one guaranteed-visible close affordance (Phase 10). */}
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-background border-b px-4 pt-4 pb-3">
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              <h2 className="font-bold text-lg leading-tight truncate">{prospect.businessName}</h2>
-              {prospect.address && <p className="text-xs text-muted-foreground mt-0.5 truncate">{prospect.address}</p>}
+              <h2 className="font-bold text-lg leading-tight truncate">{prospectView.businessName}</h2>
+              {prospectView.address && <p className="text-xs text-muted-foreground mt-0.5 truncate">{prospectView.address}</p>}
             </div>
-            <Badge className={`text-xs shrink-0 ${STATUS_CONFIG[prospect.status]?.badge ?? "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400"}`}>
-              {STATUS_CONFIG[prospect.status]?.label ?? prospect.status}
+            <Badge className={`text-xs shrink-0 ${STATUS_CONFIG[prospectView.status]?.badge ?? "bg-gray-100 text-gray-700 dark:bg-gray-500/15 dark:text-gray-400"}`}>
+              {STATUS_CONFIG[prospectView.status]?.label ?? prospectView.status}
             </Badge>
+            {/* Close/back — works from every tab since it lives in the sticky header,
+                outside the Tabs component (Phase 10). Edit mode keeps its own
+                explicit Save/Cancel, so closing mid-edit via this button discards
+                unsaved changes exactly like Cancel already does (no silent save). */}
+            <Button size="sm" variant="ghost" className="shrink-0 h-7 w-7 p-0" onClick={onClose} aria-label="Close" data-testid="button-close-prospect-sheet">
+              <X className="w-4 h-4" />
+            </Button>
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            {prospect.prospectType && <Badge variant="outline" className="text-[10px]">{TYPE_LABELS[prospect.prospectType] ?? prospect.prospectType}</Badge>}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {prospectView.prospectType && <Badge variant="outline" className="text-[10px]">{prospectTypes.find(t => t.key === prospectView.prospectType)?.label ?? TYPE_LABELS[prospectView.prospectType] ?? prospectView.prospectType}</Badge>}
             <Badge className={`text-[10px] ${grade.color}`}>{grade.grade}</Badge>
-            {prospect.rating && (
+            {prospectView.rating && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                {parseFloat(prospect.rating).toFixed(1)} ({prospect.reviewCount} reviews)
+                {parseFloat(prospectView.rating).toFixed(1)} ({prospectView.reviewCount} reviews)
               </div>
             )}
+            <AccountMatchBadge match={prospectView.accountMatch} />
           </div>
         </div>
 
@@ -633,15 +774,16 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
                 <>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     {[
-                      ["Phone", prospect.phone],
-                      ["Email", prospect.email],
-                      ["Website", prospect.website],
-                      ["City", prospect.city],
-                      ["Country", prospect.country],
-                      ["Distance", prospect.distanceKm ? `${prospect.distanceKm} km` : null],
-                      ["Keyword", prospect.keyword],
-                      ["keytype", prospect.keytype],
-                      ["Search Radius", prospect.searchRadius ? `${prospect.searchRadius} km` : null],
+                      ["Phone", prospectView.phone],
+                      ["Email", prospectView.email],
+                      ["Website", prospectView.website],
+                      ["City", prospectView.city],
+                      ["Country", prospectView.country],
+                      ["Distance", prospectView.distanceKm ? `${prospectView.distanceKm} km` : null],
+                      ["Keyword", prospectView.keyword],
+                      ["Business Type", prospectView.businessType],
+                      ["Search Radius", prospectView.searchRadius ? `${prospectView.searchRadius} km` : null],
+                      ["Search Center", prospectView.searchCenter],
                     ].filter(([, v]) => v).map(([label, val]) => (
                       <div key={label as string}>
                         <p className="text-xs text-muted-foreground">{label}</p>
@@ -651,7 +793,7 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Select value={prospect.status} onValueChange={v => update.mutate({ status: v } as any)}>
+                    <Select value={prospectView.status} onValueChange={v => update.mutate({ status: v } as any)}>
                       <SelectTrigger className="mt-1 h-8"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Object.entries(STATUS_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
@@ -659,9 +801,9 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
                     </Select>
                   </div>
                   <div className="flex gap-2">
-                    {prospect.phone && <Button size="sm" variant="outline" onClick={() => window.open(`tel:${prospect.phone}`)}><PhoneCall className="w-3.5 h-3.5 mr-1" />Call</Button>}
-                    {prospect.website && <Button size="sm" variant="outline" onClick={() => window.open(prospect.website!, '_blank')}><ExternalLink className="w-3.5 h-3.5 mr-1" />Website</Button>}
-                    {prospect.latitude && <Button size="sm" variant="outline" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${prospect.latitude},${prospect.longitude}`, '_blank')}><MapPin className="w-3.5 h-3.5 mr-1" />Maps</Button>}
+                    {prospectView.phone && <Button size="sm" variant="outline" onClick={() => window.open(`tel:${prospectView.phone}`)}><PhoneCall className="w-3.5 h-3.5 mr-1" />Call</Button>}
+                    {prospectView.website && <Button size="sm" variant="outline" onClick={() => window.open(prospectView.website!, '_blank')}><ExternalLink className="w-3.5 h-3.5 mr-1" />Website</Button>}
+                    {prospectView.latitude && <Button size="sm" variant="outline" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${prospectView.latitude},${prospectView.longitude}`, '_blank')}><MapPin className="w-3.5 h-3.5 mr-1" />Maps</Button>}
                   </div>
                   <Button size="sm" variant="outline" onClick={() => setEditMode(true)}><Edit className="w-3.5 h-3.5 mr-1" />Edit Details</Button>
                 </>
@@ -683,6 +825,19 @@ function ProspectSheet({ prospect, open, onClose, onSaved }: {
                       <Input className="mt-1 h-8" value={(editForm[key] as string) ?? ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />
                     </div>
                   ))}
+                  <div>
+                    <Label className="text-xs">Type</Label>
+                    {/* Same merged built-in ∪ admin-added list the Type filter, Add
+                        Manually, and Google Places search all read from (Phase 7) —
+                        editing this never touches status/notes/timeline/follow-up. */}
+                    <Select value={editForm.prospectType ?? "none"} onValueChange={v => setEditForm(f => ({ ...f, prospectType: v === "none" ? null : v }))}>
+                      <SelectTrigger className="mt-1 h-8" data-testid="select-edit-prospect-type"><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        {prospectTypes.map(t => <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => update.mutate(editForm as any)} disabled={update.isPending}>{update.isPending ? "Saving..." : "Save"}</Button>
                     <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>Cancel</Button>
@@ -788,45 +943,236 @@ function FollowUpForm({ onSave }: { onSave: (f: ProspectFollowUp) => void }) {
   );
 }
 
-// ── Create Account Modal ──────────────────────────────────────────────────────
+// ── Prospect Type Management Modal ───────────────────────────────────────────
 
-function CreateAccountModal({ prospect, type, open, onClose }: { prospect: Prospect; type: string; open: boolean; onClose: () => void }) {
+function TypeManagementModal({ open, onClose, prospectTypes }: { open: boolean; onClose: () => void; prospectTypes: ProspectTypeOption[] }) {
   const { toast } = useToast();
-  const [name, setName] = useState(prospect?.businessName ?? "");
-  const [email, setEmail] = useState(prospect?.email ?? "");
-  const [phone, setPhone] = useState(prospect?.phone ?? "");
-  const [password, setPassword] = useState("TempPass123!");
+  const qc = useQueryClient();
+  const [newLabel, setNewLabel] = useState("");
 
   const create = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/users", { name, email, phone, password, role: type, status: "pending" }),
-    onSuccess: () => { toast({ title: `${type === "CAFE_OWNER" ? "Café Owner" : "Supplier"} account created!` }); onClose(); },
-    onError: (err: any) => toast({ title: err?.message ?? "Failed to create account", variant: "destructive" }),
+    mutationFn: () => apiRequest("POST", "/api/admin/prospecting/types", { label: newLabel.trim() }),
+    onSuccess: () => {
+      // Re-fetched immediately — every screen reading this same query (filter,
+      // Edit Details, Add Manually, Google Places search) picks it up without a
+      // manual page reload (Phase 7's single-source-of-truth requirement).
+      qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/types"] });
+      toast({ title: "Type created" });
+      setNewLabel("");
+    },
+    onError: (err: any) => toast({ title: err?.message ?? "Failed to create type", variant: "destructive" }),
   });
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Create {type === "CAFE_OWNER" ? "Café Owner" : "Supplier"} Account</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-2">
-          <div><Label>Name</Label><Input className="mt-1" value={name} onChange={e => setName(e.target.value)} /></div>
-          <div><Label>Email *</Label><Input className="mt-1" type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
-          <div><Label>Phone</Label><Input className="mt-1" value={phone} onChange={e => setPhone(e.target.value)} /></div>
-          <div><Label>Temp Password</Label><Input className="mt-1" value={password} onChange={e => setPassword(e.target.value)} /></div>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Tag className="w-4 h-4 text-primary" />Manage Prospect Types</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label className="text-xs text-muted-foreground">Existing types</Label>
+            <div className="mt-1.5 flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+              {prospectTypes.map(t => (
+                <Badge key={t.key} variant={t.builtin ? "outline" : "secondary"} className="text-[11px]" data-testid={`badge-type-${t.key}`}>
+                  {t.label}{!t.builtin && <span className="ml-1 opacity-60">· custom</span>}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className="border-t pt-3">
+            <Label className="text-xs">Add a new type</Label>
+            <div className="flex gap-2 mt-1.5">
+              <Input
+                value={newLabel}
+                onChange={e => setNewLabel(e.target.value)}
+                placeholder="e.g. Roastery Equipment"
+                onKeyDown={e => { if (e.key === "Enter" && newLabel.trim()) create.mutate(); }}
+                data-testid="input-new-type-label"
+              />
+              <Button onClick={() => create.mutate()} disabled={create.isPending || !newLabel.trim()} data-testid="button-create-type">
+                {create.isPending ? "Adding..." : "Add"}
+              </Button>
+            </div>
+          </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !email.trim()}>
-            {create.isPending ? "Creating..." : "Create Account"}
-          </Button>
+          <Button variant="outline" onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
+// ── Create Account Modal ──────────────────────────────────────────────────────
+
+// Mirrors landing-page.tsx's ROLES/buildPayload exactly — the same 9 account
+// types the public Inscription flow supports (DRIVER is the one exception:
+// it has no public self-registration path anywhere in the app today, only
+// this same generic admin-creation endpoint, so it gets the simplest shape
+// and no location requirement, matching its actual existing capability).
+const ACCOUNT_TYPE_CONFIG: Record<string, { label: string; icon: any; nameShape: "cafe" | "company" | "person" | "simple"; needsLocation: boolean }> = {
+  CAFE_OWNER:          { label: "Café Owner",          icon: Coffee,        nameShape: "cafe",    needsLocation: true },
+  SUPPLIER:            { label: "Supplier",             icon: Building2,     nameShape: "company", needsLocation: true },
+  BARISTA_ACADEMY:     { label: "Barista Academy",      icon: GraduationCap, nameShape: "company", needsLocation: true },
+  BARISTA_MARKETPLACE: { label: "Barista Marketplace",  icon: Coffee,        nameShape: "company", needsLocation: true },
+  DELIVERY_COMPANY:    { label: "Delivery",             icon: Truck,         nameShape: "person",  needsLocation: false },
+  DRIVER:              { label: "Driver",               icon: Car,           nameShape: "simple",  needsLocation: false },
+  MAINTENANCE:         { label: "Maintenance",           icon: Wrench,        nameShape: "company", needsLocation: true },
+  MARKETING:           { label: "Marketing",             icon: Megaphone,     nameShape: "company", needsLocation: true },
+  PRINTER:             { label: "Printing / Imprimerie", icon: PrinterIcon,   nameShape: "company", needsLocation: true },
+};
+
+// Satisfies the shared 8+/uppercase/digit/symbol policy by construction —
+// admin can see/edit it via the eye-toggle password field below, same as any
+// other temp password, before actually creating the account.
+function generateTempPassword(): string {
+  return `Temp${Math.random().toString(36).slice(2, 8)}1!`;
+}
+
+function CreateAccountModal({ prospect, type, open, onClose }: { prospect: ProspectWithMatch; type: string; open: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const config = ACCOUNT_TYPE_CONFIG[type] ?? ACCOUNT_TYPE_CONFIG.CAFE_OWNER;
+
+  // Prefilled from prospect data where available, never auto-overwriting
+  // anything — the admin can correct/complete every field before submitting
+  // (Phase 8C). Name sub-fields vary by account type's actual registration
+  // shape (buildPayload in landing-page.tsx), not a one-size-fits-all "Name".
+  const [cafeName, setCafeName] = useState(prospect?.businessName ?? "");
+  const [companyName, setCompanyName] = useState(prospect?.businessName ?? "");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [simpleName, setSimpleName] = useState(prospect?.businessName ?? "");
+  const [email, setEmail] = useState(prospect?.email ?? "");
+  const [phone, setPhone] = useState(prospect?.phone ?? "");
+  const [password, setPassword] = useState(generateTempPassword());
+  const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+
+  const buildName = (): string => {
+    switch (config.nameShape) {
+      case "cafe": return `${firstName} — ${cafeName}`;
+      case "person": return `${firstName} ${lastName}`;
+      case "simple": return simpleName;
+      default: return companyName;
+    }
+  };
+  const nameValid = (): boolean => {
+    switch (config.nameShape) {
+      case "cafe": return cafeName.trim().length >= 2 && firstName.trim().length >= 2;
+      case "person": return firstName.trim().length >= 2 && lastName.trim().length >= 2;
+      case "simple": return simpleName.trim().length >= 2;
+      default: return companyName.trim().length >= 2;
+    }
+  };
+
+  const create = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/users", {
+      name: buildName(), email, phone, password, role: type,
+      ...(pickedLocation ? {
+        locationAddress: pickedLocation.address,
+        locationLat: pickedLocation.lat ? parseFloat(pickedLocation.lat) : null,
+        locationLng: pickedLocation.lng ? parseFloat(pickedLocation.lng) : null,
+        locationPlaceId: pickedLocation.placeId || null,
+        locationDetails: pickedLocation.details ?? null,
+      } : {}),
+    }),
+    onSuccess: () => { toast({ title: `${config.label} account created!` }); onClose(); },
+    onError: (err: any) => toast({ title: err?.message ?? "Failed to create account", variant: "destructive" }),
+  });
+
+  const canSubmit = email.trim() && nameValid() && (!config.needsLocation || pickedLocation) && !create.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><config.icon className="w-4 h-4 text-primary" />Create {config.label} Account</DialogTitle></DialogHeader>
+        <div className="space-y-3 py-2">
+          {prospect.accountMatch && prospect.accountMatch.status !== "NONE" && (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {prospect.accountMatch.status === "MATCHED"
+                ? `This prospect already appears to match an existing account (${prospect.accountMatch.accounts[0]?.email}). Creating a new one may duplicate it.`
+                : "This prospect has ambiguous matches with existing accounts — verify before creating a new one."}
+            </div>
+          )}
+
+          {config.nameShape === "cafe" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Nom du café *</Label><Input className="mt-1" value={cafeName} onChange={e => setCafeName(e.target.value)} data-testid="input-create-account-cafename" /></div>
+              <div><Label>Prénom *</Label><Input className="mt-1" value={firstName} onChange={e => setFirstName(e.target.value)} data-testid="input-create-account-firstname" /></div>
+            </div>
+          )}
+          {config.nameShape === "company" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Nom de l'entreprise *</Label><Input className="mt-1" value={companyName} onChange={e => setCompanyName(e.target.value)} data-testid="input-create-account-companyname" /></div>
+              <div><Label>Contact *</Label><Input className="mt-1" value={contactName} onChange={e => setContactName(e.target.value)} data-testid="input-create-account-contactname" /></div>
+            </div>
+          )}
+          {config.nameShape === "person" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Prénom *</Label><Input className="mt-1" value={firstName} onChange={e => setFirstName(e.target.value)} data-testid="input-create-account-firstname" /></div>
+              <div><Label>Nom *</Label><Input className="mt-1" value={lastName} onChange={e => setLastName(e.target.value)} data-testid="input-create-account-lastname" /></div>
+            </div>
+          )}
+          {config.nameShape === "simple" && (
+            <div><Label>Name *</Label><Input className="mt-1" value={simpleName} onChange={e => setSimpleName(e.target.value)} data-testid="input-create-account-name" /></div>
+          )}
+
+          <div><Label>Email *</Label><Input className="mt-1" type="email" value={email} onChange={e => setEmail(e.target.value)} data-testid="input-create-account-email" /></div>
+          <div><Label>Phone</Label><Input className="mt-1" value={phone} onChange={e => setPhone(e.target.value)} data-testid="input-create-account-phone" /></div>
+          <div>
+            <Label>Temp Password</Label>
+            <PasswordInputField value={password} onChange={setPassword} className="mt-1" autoComplete="new-password" testId="input-create-account-password" toggleTestId="button-toggle-create-account-password" ariaLabel="temporary password" />
+          </div>
+
+          {config.needsLocation && (
+            <div>
+              <Label className="text-xs text-muted-foreground">Location {config.needsLocation && "*"}</Label>
+              {pickedLocation ? (
+                <div className="mt-1 flex items-start justify-between gap-2 rounded-lg border p-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm truncate">{pickedLocation.address || pickedLocation.details?.street}</p>
+                    {pickedLocation.details?.street && <p className="text-xs text-muted-foreground truncate">{pickedLocation.details.street}</p>}
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => setLocationModalOpen(true)} data-testid="button-edit-create-account-location">Edit</Button>
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" className="mt-1 w-full" onClick={() => setLocationModalOpen(true)} data-testid="button-pick-create-account-location">
+                  <MapPin className="w-3.5 h-3.5 mr-1.5" />Choose location{prospect.address ? ` (from "${prospect.address}")` : ""}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => create.mutate()} disabled={!canSubmit} data-testid="button-submit-create-account">
+            {create.isPending ? "Creating..." : "Create Account"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+
+      {config.needsLocation && (
+        <LocationPickerModal
+          open={locationModalOpen}
+          mode="account"
+          title="Choisissez l'emplacement du compte"
+          requireStreetAddress
+          initialAddress={pickedLocation?.address ?? prospect.address ?? undefined}
+          initialLat={pickedLocation?.lat ?? prospect.latitude ?? undefined}
+          initialLng={pickedLocation?.lng ?? prospect.longitude ?? undefined}
+          initialDetails={pickedLocation?.details ?? (prospect.city ? ({ municipality: prospect.city } as AddressDetails) : undefined)}
+          onClose={() => setLocationModalOpen(false)}
+          onConfirm={(loc) => { setPickedLocation(loc); setLocationModalOpen(false); }}
+        />
+      )}
+    </Dialog>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_FILTERS: Filters = { search: "", status: "", prospectType: "", city: "", hasPhone: "", hasWebsite: "", sortBy: "createdAt", sortOrder: "desc" };
+const DEFAULT_FILTERS: Filters = { search: "", status: "", prospectType: "", city: "", hasPhone: "", hasWebsite: "", minRating: "", sortBy: "createdAt", sortOrder: "desc" };
 
 export default function ProspectingPage() {
   const { toast } = useToast();
@@ -840,9 +1186,10 @@ export default function ProspectingPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [sheetProspect, setSheetProspect] = useState<Prospect | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Prospect | null>(null);
-  const [createAccount, setCreateAccount] = useState<{ prospect: Prospect; type: string } | null>(null);
+  const [sheetProspect, setSheetProspect] = useState<ProspectWithMatch | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProspectWithMatch | null>(null);
+  const [createAccount, setCreateAccount] = useState<{ prospect: ProspectWithMatch; type: string } | null>(null);
+  const [typeModalOpen, setTypeModalOpen] = useState(false);
 
   const LIMIT = 50;
 
@@ -850,7 +1197,11 @@ export default function ProspectingPage() {
 
   const { data: statsData, isLoading: statsLoading } = useQuery<ProspectStats>({ queryKey: ["/api/admin/prospecting/stats"] });
 
-  const { data, isLoading } = useQuery<{ prospects: Prospect[]; total: number }>({
+  // Merged built-in ∪ admin-added types — single source of truth for the Type
+  // filter, Edit Details, Add Manually, and Google Places search (Phase 7).
+  const { data: prospectTypes = [] } = useQuery<ProspectTypeOption[]>({ queryKey: ["/api/admin/prospecting/types"] });
+
+  const { data, isLoading } = useQuery<{ prospects: ProspectWithMatch[]; total: number }>({
     queryKey,
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -860,6 +1211,7 @@ export default function ProspectingPage() {
       if (filters.city) params.set("city", filters.city);
       if (filters.hasPhone) params.set("hasPhone", filters.hasPhone);
       if (filters.hasWebsite) params.set("hasWebsite", filters.hasWebsite);
+      if (filters.minRating) params.set("minRating", filters.minRating);
       params.set("sortBy", filters.sortBy);
       params.set("sortOrder", filters.sortOrder);
       params.set("page", String(page));
@@ -890,7 +1242,7 @@ export default function ProspectingPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/stats"] }); setSelectedIds([]); },
   });
 
-  const handleRowAction = (prospect: Prospect, action: string, data?: any) => {
+  const handleRowAction = (prospect: ProspectWithMatch, action: string, data?: any) => {
     if (action === "delete") { setDeleteTarget(prospect); return; }
     if (action === "create_account") { setCreateAccount({ prospect, type: data.type }); return; }
     updateProspect.mutate({ id: prospect.id, data: action === "status" ? { status: data.status } : { status: action === "archive" ? "ARCHIVED" : "CALLED", ...(action === "mark_called" ? { lastContactDate: new Date().toISOString() } : {}) } });
@@ -940,7 +1292,7 @@ export default function ProspectingPage() {
       </KpiOverviewModal>
 
       {/* Filters */}
-      <FilterBar filters={filters} onChange={f => { setFilters(prev => ({ ...prev, ...f })); setPage(1); setSelectedIds([]); }} />
+      <FilterBar filters={filters} onChange={f => { setFilters(prev => ({ ...prev, ...f })); setPage(1); setSelectedIds([]); }} prospectTypes={prospectTypes} onAddType={() => setTypeModalOpen(true)} />
 
       {/* Bulk actions */}
       {selectedIds.length > 0 && (
@@ -964,6 +1316,7 @@ export default function ProspectingPage() {
                 <TableHead>City</TableHead>
                 <TableHead>Distance</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Account</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead className="w-10" />
@@ -973,14 +1326,14 @@ export default function ProspectingPage() {
               {isLoading ? (
                 Array(8).fill(0).map((_, i) => (
                   <TableRow key={i}>
-                    {Array(12).fill(0).map((_, j) => (
+                    {Array(13).fill(0).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">
                     <Target className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     No prospects found. Search Google Places or add manually to get started.
                   </TableCell>
@@ -1038,6 +1391,9 @@ export default function ProspectingPage() {
                         <Badge className={`text-[10px] ${statusCfg.badge}`}>{statusCfg.label}</Badge>
                       </TableCell>
                       <TableCell>
+                        <AccountMatchBadge match={p.accountMatch} compact />
+                      </TableCell>
+                      <TableCell>
                         <Badge className={`text-[10px] ${grade.color}`}>{grade.grade}</Badge>
                       </TableCell>
                       <TableCell>
@@ -1085,14 +1441,16 @@ export default function ProspectingPage() {
       </Card>
 
       {/* Dialogs & Sheets */}
-      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/stats"] }); }} />
-      <AddProspectDialog open={addOpen} onClose={() => setAddOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] })} />
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} onComplete={() => { qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/stats"] }); }} prospectTypes={prospectTypes} />
+      <AddProspectDialog open={addOpen} onClose={() => setAddOpen(false)} onSaved={() => { qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); qc.invalidateQueries({ queryKey: ["/api/admin/prospecting/stats"] }); }} prospectTypes={prospectTypes} />
+      <TypeManagementModal open={typeModalOpen} onClose={() => setTypeModalOpen(false)} prospectTypes={prospectTypes} />
 
       <ProspectSheet
         prospect={sheetProspect}
         open={!!sheetProspect}
         onClose={() => setSheetProspect(null)}
         onSaved={() => { qc.invalidateQueries({ queryKey: ["/api/admin/prospecting"] }); if (sheetProspect) { const updated = rows.find(r => r.id === sheetProspect.id); if (updated) setSheetProspect(updated); } }}
+        prospectTypes={prospectTypes}
       />
 
       {createAccount && (

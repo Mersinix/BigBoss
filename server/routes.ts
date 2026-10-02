@@ -32,6 +32,7 @@ import {
   supplierProductVariants,
   type InventoryFilters, type InventorySort,
   type NotificationPriority,
+  PROSPECT_STATUSES, PROSPECT_TYPES,
 } from "@shared/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 
@@ -6032,8 +6033,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/users", requireAdmin, async (req, res) => {
     try {
-      const { name, email, password, role, phone, isWhatsapp, profileImageUrl, governorates, printCategories, marketingCategories, maintenanceCategories, categories } = req.body;
+      const {
+        name, email, password, role, phone, isWhatsapp, profileImageUrl,
+        governorates, printCategories, marketingCategories, maintenanceCategories, categories,
+        // Location — same fields the public /api/auth/register and the PATCH
+        // /api/admin/users/:id route already accept, now also accepted at
+        // creation time (previously only settable via a separate PATCH after
+        // create) so the Prospecting "Create Account" flow can set it in one
+        // call, exactly like the public Inscription flow does.
+        locationAddress, locationLat, locationLng, locationPlaceId, locationDetails,
+      } = req.body;
       if (!name || !email || !password || !role) return res.status(400).json({ message: "name, email, password and role are required" });
+      if (!isValidRegistrationPassword(password)) return res.status(400).json({ message: REGISTRATION_PASSWORD_MESSAGE });
       const existing = await storage.getUserByEmail(email);
       if (existing) return res.status(400).json({ message: "Email already exists" });
       if (phone) {
@@ -6050,7 +6061,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         marketingCategories: marketingCategories ?? null,
         maintenanceCategories: maintenanceCategories ?? null,
         categories: categories ?? null,
+        locationAddress: locationAddress ?? null,
+        locationLat: locationLat != null ? String(locationLat) : null,
+        locationLng: locationLng != null ? String(locationLng) : null,
+        locationPlaceId: locationPlaceId ?? null,
+        locationDetails: locationDetails ?? null,
       } as any);
+      // Parity with public registration: a MAINTENANCE account gets its profile
+      // row created (with sensible defaults) right away rather than waiting for
+      // first access — same storage.upsertMaintenanceProfile call /api/auth/register
+      // already makes for this role.
+      if (role === "MAINTENANCE") {
+        await storage.upsertMaintenanceProfile(user.id, {});
+      }
       broadcast("admin_user_directory_changed");
       res.status(201).json(user);
     } catch { res.status(500).json({ message: "Error" }); }
@@ -7888,19 +7911,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     catch { res.status(500).json({ message: 'Error' }); }
   });
 
+  // Merged built-in ∪ admin-added prospect types — single source of truth consumed
+  // by the Type filter, Edit Details, Add Manually, and Google Places search.
+  app.get('/api/admin/prospecting/types', requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getAllProspectTypes()); }
+    catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  app.post('/api/admin/prospecting/types', requireAdmin, async (req, res) => {
+    try {
+      const label = z.object({ label: z.string().trim().min(1, 'Type name is required').max(60) }).parse(req.body).label;
+      const created = await storage.createProspectCustomType(label);
+      res.status(201).json(created);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: err?.message ?? 'Failed to create type' });
+    }
+  });
+
   app.get('/api/admin/prospecting', requireAdmin, async (req, res) => {
     try {
-      const { search, status, prospectType, city, hasPhone, hasWebsite, hasEmail, page, limit, sortBy, sortOrder } = req.query as Record<string, string>;
+      const { search, status, prospectType, city, hasPhone, hasWebsite, hasEmail, minRating, page, limit, sortBy, sortOrder } = req.query as Record<string, string>;
       const result = await storage.getProspects({
         search, status, prospectType, city,
         hasPhone: hasPhone === 'true' ? true : hasPhone === 'false' ? false : undefined,
         hasWebsite: hasWebsite === 'true' ? true : hasWebsite === 'false' ? false : undefined,
         hasEmail: hasEmail === 'true' ? true : undefined,
+        minRating: minRating ? parseFloat(minRating) : undefined,
         page: page ? parseInt(page) : 1,
         limit: limit ? Math.min(parseInt(limit), 200) : 50,
         sortBy, sortOrder,
       });
-      res.json(result);
+      const matches = await storage.matchProspectsToAccounts(result.prospects.map((p) => ({ id: p.id, email: p.email, phone: p.phone })));
+      const prospectsWithMatch = result.prospects.map((p) => ({ ...p, accountMatch: matches.get(p.id) ?? { status: 'NONE', accounts: [] } }));
+      res.json({ ...result, prospects: prospectsWithMatch });
     } catch { res.status(500).json({ message: 'Error' }); }
   });
 
@@ -7909,8 +7953,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!MAPS_KEY) return res.status(400).json({ message: 'Google Maps API key not configured' });
 
     try {
-      const { address, radiusKm = 5, keyword = 'coffee', keytype = 'cafe', prospectType, minRating, onlyWithPhone, onlyWithWebsite } = req.body;
+      const { address, radiusKm = 5, keyword = 'coffee', keywords, keytype = 'cafe', prospectType, minRating, onlyWithPhone, onlyWithWebsite } = req.body;
       if (!address) return res.status(400).json({ message: 'address is required' });
+      // Back-compat: a lone `keyword` string still works (existing single-keyword
+      // behavior, untouched); `keywords` (badges, Phase 12) is an array of one or
+      // more terms — each is a genuinely separate Google Places query (the API's
+      // own `keyword` param is server-side, not client-filterable after the fact),
+      // so this is N legitimate searches, not duplicate calls for the same one.
+      const keywordList: string[] = (Array.isArray(keywords) && keywords.length > 0 ? keywords : [keyword])
+        .map((k: string) => String(k).trim()).filter(Boolean);
+      if (keywordList.length === 0) return res.status(400).json({ message: 'At least one search keyword is required' });
 
       const startMs = Date.now();
       const radiusKmNum = parseFloat(String(radiusKm));
@@ -7925,27 +7977,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // ── 2. Generate geographic grid ─────────────────────────────────────────
       const grid = generateGrid(lat, lng, radiusKmNum);
-      console.log(`[Prospecting] Starting search — Address: "${address}", Radius: ${radiusKmNum} km, Grid cells: ${grid.length}`);
+      console.log(`[Prospecting] Starting search — Address: "${address}", Keywords: [${keywordList.join(', ')}], Radius: ${radiusKmNum} km, Grid cells: ${grid.length}`);
 
-      // ── 3. Concurrent Nearby Search across all grid cells ───────────────────
+      // ── 3. Concurrent Nearby Search across all grid cells × keywords ────────
       const CELL_CONCURRENCY = 8;
       let nearbyRequests = 0;
-      const allPlaces: NearbyPlace[] = [];
+      const allPlaces: (NearbyPlace & { __foundByKeyword: string })[] = [];
+      const cellKeywordTasks = grid.flatMap((point) => keywordList.map((kw) => ({ point, kw })));
 
       await withConcurrency(
-        grid,
-        async (point) => {
-          const { places, requestCount } = await fetchAllNearbyPages(point, keyword, keytype, MAPS_KEY);
+        cellKeywordTasks,
+        async ({ point, kw }) => {
+          const { places, requestCount } = await fetchAllNearbyPages(point, kw, keytype, MAPS_KEY);
           nearbyRequests += requestCount;
-          allPlaces.push(...places);
+          allPlaces.push(...places.map((p) => ({ ...p, __foundByKeyword: kw })));
         },
         CELL_CONCURRENCY,
       );
 
       console.log(`[Prospecting] Nearby requests: ${nearbyRequests}, Raw places found: ${allPlaces.length}`);
 
-      // ── 4. Deduplicate by Google place_id ───────────────────────────────────
-      const uniqueMap = new Map<string, NearbyPlace>();
+      // ── 4. Deduplicate by Google place_id (also collapses overlap BETWEEN
+      //      different keywords — a place found by two keywords is saved once) ──
+      const uniqueMap = new Map<string, NearbyPlace & { __foundByKeyword: string }>();
       for (const p of allPlaces) {
         if (!uniqueMap.has(p.place_id)) uniqueMap.set(p.place_id, p);
       }
@@ -7967,7 +8021,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         },
         DB_CHECK_CONCURRENCY,
       );
-      const toFetch    = dupCheckResults.filter((r): r is NearbyPlace => r !== null);
+      const toFetch    = dupCheckResults.filter((r): r is NearbyPlace & { __foundByKeyword: string } => r !== null);
       const duplicates = ratingFiltered.length - toFetch.length;
       console.log(`[Prospecting] To fetch details: ${toFetch.length} (${duplicates} DB duplicates skipped)`);
 
@@ -8018,8 +8072,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           status:        'NEW',
           distanceKm:    distKm.toFixed(2),
           searchCenter:  address,
+          searchCenterLat: String(lat),
+          searchCenterLng: String(lng),
           searchRadius:  String(radiusKm),
-          keyword,
+          keyword:       place.__foundByKeyword,
           city:          city ?? null,
           country:       country ?? 'Tunisia',
           prospectScore: score,
@@ -8027,7 +8083,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           timeline: [{
             id:        Date.now().toString(),
             event:     'Created via Google Places grid search',
-            detail:    `Grid search: "${keyword}" near ${address} (${radiusKmNum} km, ${grid.length} cells)`,
+            detail:    `Grid search: "${place.__foundByKeyword}" (of [${keywordList.join(', ')}]) near ${address} (${radiusKmNum} km, ${grid.length} cells)`,
             createdAt: new Date().toISOString(),
             userName:  callerName,
           }],
@@ -8108,7 +8164,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const p = await storage.getProspect(parseInt(req.params.id));
       if (!p) return res.status(404).json({ message: 'Not found' });
-      res.json(p);
+      const matches = await storage.matchProspectsToAccounts([{ id: p.id, email: p.email, phone: p.phone }]);
+      res.json({ ...p, accountMatch: matches.get(p.id) ?? { status: 'NONE', accounts: [] } });
     } catch { res.status(500).json({ message: 'Error' }); }
   });
 
@@ -8120,6 +8177,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const caller = await storage.getUser(req.session.userId);
       const data = req.body;
 
+      if (data.status && !PROSPECT_STATUSES.includes(data.status)) {
+        return res.status(400).json({ message: `Invalid status: ${data.status}` });
+      }
+
       // Auto-append timeline event on status change
       let timeline = (existing.timeline as any[]) ?? [];
       if (data.status && data.status !== existing.status) {
@@ -8129,7 +8190,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           createdAt: new Date().toISOString(),
           userName: caller?.name ?? 'Admin',
         }];
-        if (data.status === 'CALLED') data.lastContactDate = new Date().toISOString();
+        if (data.status === 'CALLED') data.lastContactDate = new Date();
       }
       if (data.assignedTo && data.assignedTo !== existing.assignedTo) {
         const assignee = await storage.getUser(Number(data.assignedTo));
@@ -8141,9 +8202,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }];
       }
 
+      // If the prospect's own coordinates change and a search center was
+      // preserved from the original Google Places search, recompute distanceKm
+      // from that SAME center — the search center itself is never touched here,
+      // only the prospect's own location + the derived distance (Phase 13D).
+      if ((data.latitude !== undefined || data.longitude !== undefined) && existing.searchCenterLat && existing.searchCenterLng) {
+        const newLat = parseFloat(String(data.latitude ?? existing.latitude));
+        const newLng = parseFloat(String(data.longitude ?? existing.longitude));
+        const centerLat = parseFloat(existing.searchCenterLat);
+        const centerLng = parseFloat(existing.searchCenterLng);
+        if (!isNaN(newLat) && !isNaN(newLng) && !isNaN(centerLat) && !isNaN(centerLng)) {
+          data.distanceKm = calculateDistanceKm(centerLat, centerLng, newLat, newLng).toFixed(2);
+        }
+      }
+
+      // Timestamp columns (last_contact_date, next_follow_up_date) must be real
+      // Date instances — drizzle-orm's timestamp mapper unconditionally calls
+      // .toISOString() on whatever it's given, which throws on a plain string.
+      // The follow-up tab sends nextFollowUpDate as an ISO string over JSON (Date
+      // objects don't survive JSON.stringify), and this was the actual root cause
+      // of both "Mark as Called" and follow-up creation silently failing — the
+      // thrown TypeError was swallowed by the bare catch below with no logging.
+      if (data.lastContactDate !== undefined) data.lastContactDate = data.lastContactDate ? new Date(data.lastContactDate) : null;
+      if (data.nextFollowUpDate !== undefined) data.nextFollowUpDate = data.nextFollowUpDate ? new Date(data.nextFollowUpDate) : null;
+
       const updated = await storage.updateProspect(id, { ...data, timeline } as any);
       res.json(updated);
-    } catch { res.status(500).json({ message: 'Error' }); }
+    } catch (err) {
+      console.error('[Prospecting update]', err);
+      res.status(500).json({ message: 'Failed to update prospect' });
+    }
   });
 
   app.delete('/api/admin/prospecting/:id', requireAdmin, async (req, res) => {

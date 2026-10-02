@@ -439,7 +439,13 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
     const e: Record<string, string> = {};
     if (!form.email.trim() || !form.email.includes("@")) e.email = "Email valide requis";
     if (form.phone.length < 8) e.phone = "Numéro invalide (min. 8 chiffres)";
-    if (form.password.length < 6) e.password = "Min. 6 caractères";
+    // Matches the server's shared registration password policy (now enforced
+    // on this same POST /api/admin/users endpoint for every caller, including
+    // the Prospecting "Create Account" flow) — kept in sync here so this form
+    // warns before submit instead of surfacing a confusing server 400.
+    if (form.password.length < 8 || !/[A-Z]/.test(form.password) || !/[0-9]/.test(form.password) || !/[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/.test(form.password)) {
+      e.password = "Au moins 8 caractères, une majuscule, un chiffre et un symbole";
+    }
     switch (role) {
       case "CAFE_OWNER":
         if (form.cafeName.trim().length < 2) e.cafeName = "Nom du café requis";
@@ -591,7 +597,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
           </div>
           <div className="space-y-1.5">
             <Label>Mot de passe *</Label>
-            <Input data-testid="input-user-password" type="password" value={form.password} onChange={sf("password")} placeholder="Min. 6 caractères" />
+            <Input data-testid="input-user-password" type="password" value={form.password} onChange={sf("password")} placeholder="Min. 8 car., 1 majuscule, 1 chiffre, 1 symbole" />
             {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
           </div>
 

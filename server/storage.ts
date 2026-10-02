@@ -632,7 +632,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async updateUserProfile(id: number, updates: { name?: string; phone?: string; email?: string; password?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; coverImageUrl?: string | null; locationDetails?: import("@shared/schema").AddressDetails | null }) {
+  async updateUserProfile(id: number, updates: { name?: string; phone?: string; email?: string; password?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; coverImageUrl?: string | null; flashImageUrl?: string | null; locationDetails?: import("@shared/schema").AddressDetails | null }) {
     const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
     return updated;
   }
@@ -5814,6 +5814,11 @@ export class DatabaseStorage implements IStorage {
         eq(maintenanceProfiles.marketplaceVisible, true),
         eq(maintenanceProfiles.isOnVacation, false),
         eq(maintenanceProfiles.isFrozen, false),
+        // GO Live (Phase 5E) — one more AND-gate alongside the existing ones
+        // above, never a replacement: a profile stays hidden until BOTH an
+        // admin has approved its content AND every pre-existing visibility
+        // rule (marketplaceVisible/vacation/freeze) independently allows it.
+        eq(maintenanceProfiles.publicationStatus, "APPROVED"),
       ));
 
     const maintenanceUserIds = rows.map(({ profile }) => profile.userId);
@@ -5927,6 +5932,7 @@ export class DatabaseStorage implements IStorage {
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
       coverImageUrl: row.user.coverImageUrl ?? null,
+      flashImageUrl: row.user.flashImageUrl ?? null,
       location: this.formatPublicLocation(row.user) || row.profile.coverageArea || "",
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       available: row.profile.isAvailable && !row.profile.isOnVacation,
@@ -6463,6 +6469,8 @@ export class DatabaseStorage implements IStorage {
         eq(users.status, "approved"),
         eq(deliveryCompanyProfiles.marketplaceVisible, true),
         eq(deliveryCompanyProfiles.isOnVacation, false),
+        // GO Live (Phase 5E) — one more AND-gate, never a replacement.
+        eq(deliveryCompanyProfiles.publicationStatus, "APPROVED"),
       ));
 
     const companyIds = rows.map(({ profile }) => profile.userId);
@@ -6548,6 +6556,7 @@ export class DatabaseStorage implements IStorage {
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
       coverImageUrl: row.user.coverImageUrl ?? null,
+      flashImageUrl: row.user.flashImageUrl ?? null,
       location: row.user.locationAddress ?? row.profile.deliveryZones ?? "",
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       available: !row.profile.isOnVacation,
@@ -6686,6 +6695,8 @@ export class DatabaseStorage implements IStorage {
         eq(users.status, "approved"),
         eq(marketingProfiles.marketplaceVisible, true),
         eq(marketingProfiles.isFrozen, false),
+        // GO Live (Phase 5E) — one more AND-gate, never a replacement.
+        eq(marketingProfiles.publicationStatus, "APPROVED"),
       ));
 
     const marketingUserIds = rows.map(({ profile }) => profile.userId);
@@ -6776,6 +6787,7 @@ export class DatabaseStorage implements IStorage {
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
       coverImageUrl: row.user.coverImageUrl ?? null,
+      flashImageUrl: row.user.flashImageUrl ?? null,
       location: this.formatPublicLocation(row.user),
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       distanceKm,
@@ -6885,6 +6897,8 @@ export class DatabaseStorage implements IStorage {
         eq(users.status, "approved"),
         eq(marketingProfiles.marketplaceVisible, true),
         eq(marketingProfiles.isFrozen, false),
+        // GO Live (Phase 5E) — one more AND-gate, never a replacement.
+        eq(marketingProfiles.publicationStatus, "APPROVED"),
       ));
     for (const { profile } of agencyRows) await this.migrateMarketingServicesIfNeeded(profile.userId);
 
@@ -7402,12 +7416,14 @@ export class DatabaseStorage implements IStorage {
     // Company-level opt-out (printerProfiles.marketplaceVisible) — a printer with no
     // profile row yet defaults to visible (see getPrinterProfile's lazy-create), so
     // only an explicit false here hides its otherwise-active services.
+    // GO Live (Phase 5E) — a printer not yet approved for publication is excluded
+    // here too, one more AND-gate alongside the existing marketplaceVisible opt-out.
     const hiddenPrinterIds = printerIds.length
       ? new Set(
-          (await db.select({ userId: printerProfiles.userId, marketplaceVisible: printerProfiles.marketplaceVisible })
+          (await db.select({ userId: printerProfiles.userId, marketplaceVisible: printerProfiles.marketplaceVisible, publicationStatus: printerProfiles.publicationStatus })
             .from(printerProfiles)
             .where(inArray(printerProfiles.userId, printerIds)))
-            .filter((p) => !p.marketplaceVisible)
+            .filter((p) => !p.marketplaceVisible || p.publicationStatus !== "APPROVED")
             .map((p) => p.userId),
         )
       : new Set<number>();
@@ -7959,6 +7975,7 @@ export class DatabaseStorage implements IStorage {
       name: user.name,
       profileImageUrl: user.profileImageUrl ?? null,
       coverImageUrl: user.coverImageUrl ?? null,
+      flashImageUrl: user.flashImageUrl ?? null,
       location: this.formatPublicLocation(user),
       phone: user.phone ?? null,
       description: profile.description,
@@ -8031,6 +8048,10 @@ export class DatabaseStorage implements IStorage {
         websiteUrl: profile?.websiteUrl ?? null,
         marketplaceVisible: profile?.marketplaceVisible ?? true,
         isFrozen: profile?.isFrozen ?? false,
+        // GO Live review state (Phase 5D) — read by Admin PRINT's account detail
+        // to show the status badge + Approve/Reject block, same as Maintenance.
+        publicationStatus: profile?.publicationStatus ?? "DRAFT",
+        publicationRejectionReason: profile?.publicationRejectionReason ?? null,
         activeServiceCount: items.filter((i) => i.isActive).length,
         totalServiceCount: items.length,
         totalOrders: orders.length,
@@ -8251,6 +8272,8 @@ export class DatabaseStorage implements IStorage {
         eq(users.role, "BARISTA_MARKETPLACE" as any),
         eq(users.status, "approved"),
         eq(baristaMarketplaceProfiles.marketplaceVisible, true),
+        // GO Live (Phase 5E) — one more AND-gate, never a replacement.
+        eq(baristaMarketplaceProfiles.publicationStatus, "APPROVED"),
       ));
 
     const userIds = rows.map(({ profile }) => profile.userId);
@@ -8338,6 +8361,7 @@ export class DatabaseStorage implements IStorage {
       phone: row.user.phone ?? null,
       profileImageUrl: row.user.profileImageUrl ?? null,
       coverImageUrl: row.user.coverImageUrl ?? null,
+      flashImageUrl: row.user.flashImageUrl ?? null,
       initials: row.user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
       location: row.profile.city || this.formatPublicLocation(row.user),
       available: row.profile.isAvailable && !row.profile.isOnVacation,
@@ -8765,6 +8789,10 @@ export class DatabaseStorage implements IStorage {
         isOnVacation: profile?.isOnVacation ?? false,
         marketplaceVisible: profile?.marketplaceVisible ?? false,
         isFrozen: profile?.isFrozen ?? false,
+        // GO Live (Phase 5D) — Admin's publication-review UI needs these to
+        // show the status badge and the Approve/Reject controls.
+        publicationStatus: profile?.publicationStatus ?? "DRAFT",
+        publicationRejectionReason: profile?.publicationRejectionReason ?? null,
         available,
         dailyRateInCents: profile?.dailyRateInCents ?? 0,
         rating: stats?.rating ?? 0,
@@ -8913,7 +8941,9 @@ export class DatabaseStorage implements IStorage {
         eq(users.status, "approved"),
       ));
 
-    const filteredRows = rows.filter(({ profile }) => profile?.marketplaceVisible !== false);
+    // GO Live (Phase 5E) — one more AND-gate: an academy not yet approved for
+    // publication is excluded here too, alongside the existing marketplaceVisible check.
+    const filteredRows = rows.filter(({ profile }) => profile?.marketplaceVisible !== false && profile?.publicationStatus === "APPROVED");
     const academyUserIds = Array.from(new Set(filteredRows.map(({ course }) => course.academyUserId)));
     const statsMap = await this.computeAcademyReviewStats(academyUserIds);
     const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
@@ -8927,6 +8957,7 @@ export class DatabaseStorage implements IStorage {
         academyName: user.name,
         academyLocation: this.formatPublicLocation(user),
         academyProfileImageUrl: user.profileImageUrl ?? null,
+        flashImageUrl: user.flashImageUrl ?? null,
         academyDescription: profile?.description ?? "",
         academyPhone: user.phone ?? null,
         rating: stats?.rating ?? 0,
@@ -8963,6 +8994,7 @@ export class DatabaseStorage implements IStorage {
       academyName: row.user.name,
       academyLocation: this.formatPublicLocation(row.user),
       academyProfileImageUrl: row.user.profileImageUrl ?? null,
+      flashImageUrl: row.user.flashImageUrl ?? null,
       academyDescription: row.profile?.description ?? "",
       academyPhone: row.user.phone ?? null,
       rating: stats?.rating ?? 0,
@@ -9073,7 +9105,7 @@ export class DatabaseStorage implements IStorage {
    *  duplicate profile: built from the exact same academyProfiles/users/academyCourses/
    *  academyCourseSessions/supplierProductReviews rows every other Academy surface reads. */
   async getAcademyProfileCard(userId: number): Promise<{
-    userId: number; name: string; profileImageUrl: string | null; coverImageUrl: string | null; location: string; phone: string | null;
+    userId: number; name: string; profileImageUrl: string | null; coverImageUrl: string | null; flashImageUrl: string | null; location: string; phone: string | null;
     description: string; marketplaceVisible: boolean; weeklyHours: OpeningHoursMap | null; isOnVacation: boolean;
     rating: number; reviewCount: number; portfolioImages: string[];
     courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
@@ -9092,6 +9124,7 @@ export class DatabaseStorage implements IStorage {
       academyName: user.name,
       academyLocation: this.formatPublicLocation(user),
       academyProfileImageUrl: user.profileImageUrl ?? null,
+      flashImageUrl: user.flashImageUrl ?? null,
       academyDescription: profile.description,
       academyPhone: user.phone ?? null,
       rating: stats.get(userId)?.rating ?? 0,
@@ -9105,6 +9138,7 @@ export class DatabaseStorage implements IStorage {
       name: user.name,
       profileImageUrl: user.profileImageUrl ?? null,
       coverImageUrl: user.coverImageUrl ?? null,
+      flashImageUrl: user.flashImageUrl ?? null,
       location: this.formatPublicLocation(user),
       phone: user.phone ?? null,
       description: profile.description,
@@ -9402,6 +9436,10 @@ export class DatabaseStorage implements IStorage {
         location: u.locationAddress ?? "",
         marketplaceVisible: profile?.marketplaceVisible ?? false,
         isFrozen: profile?.isFrozen ?? false,
+        // GO Live review state (Phase 5D) — read by Admin ACADEMY's account detail
+        // to show the status badge + Approve/Reject block, same as Maintenance/Printer.
+        publicationStatus: profile?.publicationStatus ?? "DRAFT",
+        publicationRejectionReason: profile?.publicationRejectionReason ?? null,
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
         courseCount: ownCourses.length,

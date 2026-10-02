@@ -26,9 +26,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Award, MessageCircle,
-  Flag, Heart, X, GraduationCap, Layers, Users, Calendar,
+  Flag, Heart, X, GraduationCap, Layers, Users, Calendar, Zap,
 } from "lucide-react";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
+import { ReviewsModal } from "@/components/account/reviews-modal";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 
 const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 // This app's dark mode is NOT Tailwind's `dark:` class strategy on the Coffee
@@ -209,6 +211,9 @@ export function AcademyDetailModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  // Star (Phase 7) and Flash (Phase 3/5E) — alongside Signaler/Disponibilité.
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
 
   // Review eligibility mirrors the existing server rule exactly: one review
@@ -238,6 +243,8 @@ export function AcademyDetailModal({
   const handleClose = () => {
     setReviewRegistrationId(null);
     setReportModalOpen(false);
+    setReviewsModalOpen(false);
+    setFlashModalOpen(false);
     setReportReason("");
     setNavCourseId(null);
     setAcademyProfileOpen(false);
@@ -321,6 +328,10 @@ export function AcademyDetailModal({
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-academy-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-academy-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-academy-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
+                {course.flashImageUrl && (
+                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-academy-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+                )}
               </div>
               {course.hasCertification && (
                 <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm bg-amber-400/90 text-amber-900">
@@ -393,55 +404,8 @@ export function AcademyDetailModal({
                 {course.academyDescription && <p className={`text-xs mt-2.5 leading-relaxed ${t.textMuted}`}>{course.academyDescription}</p>}
               </button>
 
-              {/* Reviews */}
-              <div>
-                <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
-                {reviews.length === 0 ? (
-                  <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {reviews.map((r) => (
-                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBgAlt}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
-                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
-                        </div>
-                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {eligibleRegistrations.length > 0 && (
-                  <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-                    {eligibleRegistrations.length > 1 && (
-                      <select
-                        className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-                        value={activeRegistrationId ?? ""}
-                        onChange={(e) => setReviewRegistrationId(Number(e.target.value))}
-                        data-testid="select-review-registration"
-                      >
-                        {eligibleRegistrations.map((r) => (
-                          <option key={r.id} value={r.id}>{r.courseTitle || `Formation #${r.courseId}`} {myReviewByRegistration.has(r.id) ? "(déjà noté)" : ""}</option>
-                        ))}
-                      </select>
-                    )}
-                    <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-                    <Textarea
-                      placeholder="Commentaire (facultatif)"
-                      rows={2}
-                      defaultValue={existingReview?.comment ?? ""}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      className={t.inputBg}
-                      data-testid="input-review-comment"
-                    />
-                    <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-submit-review">
-                      {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-                    </Button>
-                  </div>
-                )}
-              </div>
+              {/* Avis — moved into the dedicated Star-icon ReviewsModal (Phase 7),
+                  no longer rendered inline here (list + existing review form). */}
             </div>
 
             {/* Actions */}
@@ -486,6 +450,61 @@ export function AcademyDetailModal({
       courseId={course?.id ?? null}
       courseTitle={course?.title ?? ""}
       isDark={isDark}
+    />
+
+    {/* Avis (Phase 7) — dedicated modal, opened via the Star icon. Same review
+        data/mutation/eligibility as before (reviews/submitReview/
+        eligibleRegistrations), just relocated out of the main modal's body.
+        course.rating is stored x10 (academy-level aggregate). */}
+    <ReviewsModal
+      open={reviewsModalOpen}
+      onClose={() => setReviewsModalOpen(false)}
+      professionalName={course?.academyName ?? ""}
+      rating={(course?.rating ?? 0) / 10}
+      reviewCount={course?.reviewCount ?? 0}
+      reviews={reviews}
+      isDark={isDark}
+      reviewForm={eligibleRegistrations.length > 0 ? (
+        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
+          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
+          {eligibleRegistrations.length > 1 && (
+            <select
+              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+              value={activeRegistrationId ?? ""}
+              onChange={(e) => setReviewRegistrationId(Number(e.target.value))}
+              data-testid="select-review-registration"
+            >
+              {eligibleRegistrations.map((r) => (
+                <option key={r.id} value={r.id}>{r.courseTitle || `Formation #${r.courseId}`} {myReviewByRegistration.has(r.id) ? "(déjà noté)" : ""}</option>
+              ))}
+            </select>
+          )}
+          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
+          <Textarea
+            placeholder="Commentaire (facultatif)"
+            rows={2}
+            defaultValue={existingReview?.comment ?? ""}
+            onChange={(e) => setReviewComment(e.target.value)}
+            className={t.inputBg}
+            data-testid="input-review-comment"
+          />
+          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-submit-review">
+            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
+          </Button>
+        </div>
+      ) : undefined}
+    />
+
+    {/* Flash (Phase 3/5E) — the academy's Flash URL (Settings → Compte), real
+        Coffee Owner-facing mode (not preview). */}
+    <FlashPreviewModal
+      open={flashModalOpen}
+      onClose={() => setFlashModalOpen(false)}
+      name={course?.academyName ?? ""}
+      typeLabel="Académie"
+      flashImageUrl={course?.flashImageUrl}
+      profileImageUrl={course?.academyProfileImageUrl}
+      accentBgClass="bg-indigo-600"
     />
 
     <AcademyProfileModal

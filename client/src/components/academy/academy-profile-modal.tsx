@@ -19,8 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen, Image as ImageIcon,
+  Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen, Image as ImageIcon, Zap,
 } from "lucide-react";
+import { ReviewsModal } from "@/components/account/reviews-modal";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -159,6 +161,9 @@ export function AcademyProfileModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  // Star (Phase 7) and Flash (Phase 3/5E) — alongside Signaler/Disponibilité.
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
   const [messaging, setMessaging] = useState(false);
@@ -166,6 +171,8 @@ export function AcademyProfileModal({
   const handleClose = () => {
     setReportModalOpen(false);
     setReportReason("");
+    setReviewsModalOpen(false);
+    setFlashModalOpen(false);
     onClose();
   };
 
@@ -237,6 +244,10 @@ export function AcademyProfileModal({
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-academy-profile-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-academy-profile-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-academy-profile-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
+                {card.flashImageUrl && (
+                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-academy-profile-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+                )}
               </div>
               {!card.marketplaceVisible ? (
                 <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm bg-black/50 text-white/80">
@@ -309,25 +320,10 @@ export function AcademyProfileModal({
                 )}
               </div>
 
-              {/* Reviews — read-only aggregate, same real data every course card shows. */}
-              <div>
-                <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
-                {reviews.length === 0 ? (
-                  <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {reviews.map((r) => (
-                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBg}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
-                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
-                        </div>
-                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* Avis — moved into the dedicated Star-icon ReviewsModal (Phase 7),
+                  no longer rendered inline here. Read-only list (no review form
+                  ever existed at the academy level — that lives on the per-formation
+                  AcademyDetailModal's ReviewsModal). */}
             </div>
 
             <div className={`p-5 sm:p-6 pt-0 flex flex-wrap gap-2 justify-end border-t mt-1 pt-4 ${t.border}`}>
@@ -362,6 +358,29 @@ export function AcademyProfileModal({
       academyName={card?.name ?? ""}
       weeklyHours={card?.weeklyHours ?? null}
       isDark={isDark}
+    />
+
+    {/* Avis (Phase 7) — same useAcademyReviews data as before, relocated.
+        card.rating is stored x10. */}
+    <ReviewsModal
+      open={reviewsModalOpen}
+      onClose={() => setReviewsModalOpen(false)}
+      professionalName={card?.name ?? ""}
+      rating={(card?.rating ?? 0) / 10}
+      reviewCount={card?.reviewCount ?? 0}
+      reviews={reviews}
+      isDark={isDark}
+    />
+
+    {/* Flash (Phase 3/5E) — real Coffee Owner-facing mode (not preview). */}
+    <FlashPreviewModal
+      open={flashModalOpen}
+      onClose={() => setFlashModalOpen(false)}
+      name={card?.name ?? ""}
+      typeLabel="Académie"
+      flashImageUrl={card?.flashImageUrl}
+      profileImageUrl={card?.profileImageUrl}
+      accentBgClass="bg-indigo-600"
     />
 
     <MarketingPortfolioAlbumModal

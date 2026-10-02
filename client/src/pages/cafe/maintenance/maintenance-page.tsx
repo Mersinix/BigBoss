@@ -12,6 +12,8 @@ import LocationPickerModal, { type PickedLocation } from "@/components/location-
 import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
 import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
+import { ReviewsModal } from "@/components/account/reviews-modal";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { Button } from "@/components/ui/button";
@@ -375,6 +377,11 @@ export function AgentDetailModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  // Star (Phase 7) and Flash (Phase 3/5E) — two new icons alongside the
+  // existing Signaler/Disponibilité pair; both open their own dedicated modal
+  // instead of expanding inline, same pattern as Signaler/Disponibilité already do.
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const { toast } = useToast();
   const submitReport = useMutation({
     mutationFn: () => {
@@ -427,10 +434,14 @@ export function AgentDetailModal({
               <button onClick={() => { if (!readOnly) toggleMaintenance({ id: agent.userId, name: agent.name, initials: agent.initials, specialty: agent.specialty, categories: agent.categories, skills: agent.skills, location: agent.location, rating: Number(ratingValue(agent)) || 0, available: agent.available, profileImageUrl: agent.profileImageUrl }); }} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Heart className={`w-4 h-4 ${faved ? "fill-rose-500 text-rose-500" : "text-white"}`} /></button>
               <button onClick={onClose} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center"><X className="w-4 h-4 text-white" /></button>
             </div>
-            {/* Bottom right — Signaler (moved here) + new Disponibilité (Part 9-10) */}
+            {/* Bottom right — Signaler, Disponibilité, new Avis (Star) + Flash icons */}
             <div className="absolute bottom-3 right-3 flex gap-2">
               <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-maintenance-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
               <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-maintenance-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+              <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-maintenance-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
+              {agent.flashImageUrl && (
+                <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-maintenance-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+              )}
             </div>
             <span className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${agent.available ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${agent.available ? "bg-white" : "bg-white/60"}`} />
@@ -491,41 +502,9 @@ export function AgentDetailModal({
                  the profile picture, which opens MaintenanceAvailabilityModal. */}
              <div className={`${t.mutedBg} rounded-xl p-3`}><h3 className={`text-xs font-semibold mb-2 ${t.textMuted}`}>Zone d'intervention</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.coverageArea || agent.location || "—"}</div></div>
              {agent.portfolioImages.length > 0 && <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</h3><div className="grid grid-cols-4 gap-2">{agent.portfolioImages.map((image, i) => <button key={i} type="button" onClick={() => { setAlbumIndex(i); setAlbumOpen(true); }} className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`} data-testid={`button-portfolio-thumb-${i}`}><img src={image} alt={`Portfolio ${i + 1}`} className="w-full h-full object-cover" /></button>)}</div></div>}
-             <div>
-               <h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviewsQuery.data?.length ?? 0})</h3>
-               {(reviewsQuery.data ?? []).length === 0 ? <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p> : <div className="space-y-2 max-h-40 overflow-y-auto">{reviewsQuery.data!.slice(0, 4).map((review) => <div key={review.id} className={`p-2.5 rounded-lg text-sm ${t.mutedBg}`}><div className="flex items-center justify-between"><span className={`font-medium text-xs ${t.textPrimary}`}>{review.cafeOwnerName || review.cafeName}</span><span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {review.rating}</span></div>{review.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{review.comment}</p>}</div>)}</div>}
-             </div>
-              {reviewReservation && (
-                <div className={`${t.mutedBg} rounded-xl p-3 space-y-2.5`}>
-                  <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Évaluer votre intervention</h3>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((value) => (
-                      <button key={value} type="button" onClick={() => setReviewRating(value)} aria-label={`${value} étoiles`}>
-                        <Star className={`w-5 h-5 ${value <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-                      </button>
-                    ))}
-                  </div>
-                  <Textarea
-                    value={reviewComment}
-                    onChange={(event) => setReviewComment(event.target.value)}
-                    placeholder="Partagez votre expérience (facultatif)"
-                    rows={2}
-                    className={t.inputBg}
-                  />
-                  <Button
-                    size="sm"
-                    onClick={() => submitReview.mutate()}
-                    disabled={submitReview.isPending}
-                    className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl"
-                  >
-                    {submitReview.isPending ? "Envoi…" : "Publier l'avis"}
-                  </Button>
-                </div>
-              )}
-            {/* Tarif already shown once above (Part 8) — action bar keeps just
-                the two primary actions, matching the Barista modal's own
-                actions-row convention. "Réserver" now opens a separate modal
-                (below, sibling to this Dialog) instead of expanding inline. */}
+            {/* Avis — moved into the dedicated Star-icon ReviewsModal (Phase 7),
+                no longer rendered inline here. "Réserver" opens a separate
+                modal (below, sibling to this Dialog) instead of expanding inline. */}
              <div className={`border-t ${t.border} pt-4 flex items-center justify-end gap-2`}>
                <Button variant="outline" onClick={() => { if (!readOnly) onContact(agent); }} className={`rounded-xl px-4 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`}><MessageCircle className="w-4 h-4 mr-1.5" />Contacter</Button>
                <Button onClick={() => { if (!readOnly) setBooking(true); }} disabled={!agent.available} className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl px-5"><Calendar className="w-4 h-4 mr-1.5" />{agent.available ? "Réserver" : "Indisponible"}</Button>
@@ -616,6 +595,60 @@ export function AgentDetailModal({
       images={agent.portfolioImages}
       initialIndex={albumIndex}
       providerName={agent.name}
+    />
+
+    {/* Avis (Phase 7) — dedicated modal, opened via the new Star icon. Same
+        review data/mutation as before (reviewsQuery/submitReview), just
+        relocated out of the main modal's body into this one. */}
+    <ReviewsModal
+      open={reviewsModalOpen}
+      onClose={() => setReviewsModalOpen(false)}
+      professionalName={agent.name}
+      rating={Number(ratingValue(agent)) || 0}
+      reviewCount={agent.reviewCount}
+      reviews={reviewsQuery.data ?? []}
+      isDark={isDark}
+      reviewForm={!readOnly && reviewReservation ? (
+        <div className={`${t.mutedBg} rounded-xl p-3 space-y-2.5`}>
+          <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Évaluer votre intervention</h3>
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button key={value} type="button" onClick={() => setReviewRating(value)} aria-label={`${value} étoiles`}>
+                <Star className={`w-5 h-5 ${value <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+              </button>
+            ))}
+          </div>
+          <Textarea
+            value={reviewComment}
+            onChange={(event) => setReviewComment(event.target.value)}
+            placeholder="Partagez votre expérience (facultatif)"
+            rows={2}
+            className={t.inputBg}
+          />
+          <Button
+            size="sm"
+            onClick={() => submitReview.mutate()}
+            disabled={submitReview.isPending}
+            className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl"
+            data-testid="button-submit-maintenance-review"
+          >
+            {submitReview.isPending ? "Envoi…" : "Publier l'avis"}
+          </Button>
+        </div>
+      ) : undefined}
+    />
+
+    {/* Flash (Phase 3/5E) — the real Coffee Owner-facing destination for the
+        Flash URL configured in Settings → Compte; same component the
+        account's own self-preview uses, not preview mode here. */}
+    <FlashPreviewModal
+      open={flashModalOpen}
+      onClose={() => setFlashModalOpen(false)}
+      name={agent.name}
+      typeLabel="Maintenance"
+      flashImageUrl={agent.flashImageUrl}
+      profileImageUrl={agent.profileImageUrl}
+      accentBgClass="bg-orange-500"
     />
     </>
   );

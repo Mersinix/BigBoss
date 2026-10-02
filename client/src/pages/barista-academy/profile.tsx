@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { useMyAcademyProfile, useUpdateAcademyProfile, useMyAcademyCourses } from "@/hooks/use-barista-academy";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
@@ -12,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { GraduationCap, BookOpen, Eye, Image as ImageIcon, X } from "lucide-react";
+import { GraduationCap, BookOpen, Eye, Image as ImageIcon, X, Zap, Rocket } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -32,6 +36,8 @@ export default function AcademyProfilePage() {
   const { data, isLoading } = useMyAcademyProfile(user?.id ?? null);
   const { data: courses = [] } = useMyAcademyCourses();
   const updateProfile = useUpdateAcademyProfile();
+  const queryClient = useQueryClient();
+  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
 
   const [description, setDescription] = useState("");
   const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
@@ -55,25 +61,6 @@ export default function AcademyProfilePage() {
   const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
     setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   };
-  const saveAvailability = () => {
-    updateProfile.mutate(
-      { isOnVacation, weeklyHours },
-      {
-        onSuccess: () => toast({ title: "Disponibilités sauvegardées" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      },
-    );
-  };
-
-  const saveDescription = () => {
-    updateProfile.mutate(
-      { description },
-      {
-        onSuccess: () => toast({ title: "Description mise à jour" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      },
-    );
-  };
 
   const addPortfolioImage = () => {
     const v = portfolioDraft.trim();
@@ -81,26 +68,40 @@ export default function AcademyProfilePage() {
     setPortfolioImages((prev) => [...prev, v]);
     setPortfolioDraft("");
   };
-  const savePortfolio = () => {
-    updateProfile.mutate(
-      { portfolioImages },
-      {
-        onSuccess: () => toast({ title: "Portfolio mis à jour" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      },
-    );
+
+  // Unified Save (Phase 4) — ONE button replaces the former separate
+  // Description/Portfolio/Disponibilité saves and the instant-mutate Visibility
+  // toggle. Every one of those fields already goes through the same
+  // PATCH /api/academy/profile Zod schema (same as Printer), so a single
+  // mutateAsync carries the whole page — no partial-failure case to report.
+  // AccountAvailabilityCard is fully controlled (weeklyHours/isOnVacation live
+  // here), so it only needs hideSaveButton, no ref.
+  const saveAll = async (): Promise<boolean> => {
+    try {
+      await updateProfile.mutateAsync({ description, portfolioImages, marketplaceVisible: visible, isOnVacation, weeklyHours });
+      toast({ title: "Profil sauvegardé" });
+      return true;
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message ?? "Sauvegarde impossible.", variant: "destructive" });
+      return false;
+    }
   };
 
-  const handleToggle = (value: boolean) => {
-    setVisible(value);
-    updateProfile.mutate(
-      { marketplaceVisible: value },
-      {
-        onSuccess: () => toast({ title: value ? "Académie visible sur la marketplace" : "Académie masquée de la marketplace" }),
-        onError: (err: Error) => { setVisible(!value); toast({ title: "Erreur", description: err.message, variant: "destructive" }); },
-      },
-    );
+  const goLive = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/academy/profile/go-live", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/academy/profile"] });
+      toast({ title: "Profil soumis", description: "Un administrateur va examiner votre profil." });
+    },
+    onError: (error: Error) => toast({ title: "Impossible de soumettre le profil", description: error.message, variant: "destructive" }),
+  });
+  const handleGoLive = async () => {
+    // Save first, only submit if that actually succeeded (Phase 5A).
+    const saved = await saveAll();
+    if (saved) goLive.mutate();
   };
+  const publicationStatus = data?.profile?.publicationStatus ?? "DRAFT";
+  const saving = updateProfile.isPending;
 
   const publishedCount = courses.filter((c) => c.isPublished).length;
 
@@ -121,9 +122,15 @@ export default function AcademyProfilePage() {
         iconBgClass="bg-indigo-500/15"
         iconTextClass="text-indigo-600 dark:text-indigo-400"
         action={
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-            <Eye className="w-3.5 h-3.5" /> Aperçu
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PublicationStatusBadge status={publicationStatus} />
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+              <Eye className="w-3.5 h-3.5" /> Aperçu
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setFlashPreviewOpen(true)} data-testid="button-flash-preview">
+              <Zap className="w-3.5 h-3.5" /> Flash
+            </Button>
+          </div>
         }
       />
 
@@ -135,11 +142,6 @@ export default function AcademyProfilePage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Présentez votre académie, votre expérience, vos spécialités…" data-testid="input-academy-description" />
-          <div className="flex justify-end">
-            <Button onClick={saveDescription} disabled={updateProfile.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-save-description">
-              {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
@@ -172,11 +174,6 @@ export default function AcademyProfilePage() {
               ))}
             </div>
           )}
-          <div className="flex justify-end">
-            <Button onClick={savePortfolio} disabled={updateProfile.isPending} variant="outline" data-testid="button-save-portfolio">
-              {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
@@ -199,7 +196,9 @@ export default function AcademyProfilePage() {
               <p className="text-sm font-medium">Afficher mon académie sur /academy</p>
               <p className="text-xs text-muted-foreground mt-0.5">Lorsque désactivé, vos formations publiées ne sont plus visibles par les Coffee Owners.</p>
             </div>
-            <Switch checked={visible} onCheckedChange={handleToggle} disabled={updateProfile.isPending} data-testid="switch-profile-visible" />
+            {/* Deferred like every other field now (Phase 4) — only takes effect
+                when the unified Save button below is clicked. */}
+            <Switch checked={visible} onCheckedChange={setVisible} disabled={saving} data-testid="switch-profile-visible" />
           </div>
         </CardContent>
       </Card>
@@ -209,8 +208,7 @@ export default function AcademyProfilePage() {
         onChangeDay={updateDayHours}
         isOnVacation={isOnVacation}
         onChangeVacation={setIsOnVacation}
-        onSave={saveAvailability}
-        saving={updateProfile.isPending}
+        hideSaveButton
         vacationDescription="Masque votre académie et stoppe les nouvelles inscriptions."
         accentClassName={ACCENT}
         testIdPrefix="academy"
@@ -218,6 +216,28 @@ export default function AcademyProfilePage() {
         summaryClassName="border-transparent bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-500/10 dark:to-violet-500/10"
         summaryTextClassName="text-indigo-700 dark:text-indigo-400"
       />
+
+      {/* Phase 4 — single primary Save button for the whole page (description +
+          portfolio + visibility + availability, via saveAll above). */}
+      <Button onClick={saveAll} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl py-5" data-testid="button-save-profile-all">
+        {saving ? "Sauvegarde…" : "Sauvegarder le profil"}
+      </Button>
+
+      {/* GO Live (Phase 5) — saves first, then submits for admin review.
+          Disabled while a request is already pending (Phase 5C). */}
+      <Button
+        onClick={handleGoLive}
+        disabled={saving || goLive.isPending || publicationStatus === "PENDING"}
+        variant="outline"
+        className="w-full rounded-2xl py-5 border-indigo-500/40 text-indigo-600 dark:text-indigo-400 gap-2"
+        data-testid="button-go-live"
+      >
+        <Rocket className="w-4 h-4" />
+        {goLive.isPending ? "Envoi…" : publicationStatus === "PENDING" ? "En attente d'approbation" : "GO Live"}
+      </Button>
+      {publicationStatus === "REJECTED" && data?.profile?.publicationRejectionReason && (
+        <p className="text-xs text-red-600 dark:text-red-400 text-center -mt-2">Motif du refus : {data.profile.publicationRejectionReason}</p>
+      )}
 
       <AcademyProfileModal
         academyUserId={user?.id ?? null}
@@ -232,6 +252,17 @@ export default function AcademyProfilePage() {
         onClose={() => setPreviewCourseId(null)}
         onEnroll={() => {}}
         readOnly
+      />
+
+      <FlashPreviewModal
+        open={flashPreviewOpen}
+        onClose={() => setFlashPreviewOpen(false)}
+        name={data?.user?.name ?? ""}
+        typeLabel="Académie"
+        flashImageUrl={data?.user?.flashImageUrl}
+        profileImageUrl={data?.user?.profileImageUrl}
+        accentBgClass="bg-indigo-600"
+        preview
       />
     </div>
   );

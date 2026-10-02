@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
-import { Printer, Globe, Eye, Package, Tag, Image as ImageIcon, X } from "lucide-react";
+import { Printer, Globe, Eye, Package, Tag, Image as ImageIcon, X, Zap, Rocket } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { usePrintCompanyDetail, useUpdatePrinterProfile } from "@/hooks/use-print-marketplace";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
@@ -17,6 +18,8 @@ import { PrintServiceDetailModal } from "@/components/print/print-service-detail
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import { AccountAvailabilityCard } from "@/components/settings/account-availability-card";
 import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import type { PrintCatalogItem, OpeningHoursMap } from "@shared/schema";
 
 const ACCENT = "bg-blue-600 hover:bg-blue-700 text-white";
@@ -36,6 +39,7 @@ const MAX_PORTFOLIO_IMAGES = 4;
 export default function PrinterProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data, isLoading } = usePrintCompanyDetail(user?.id ?? null);
   const { data: catalog = [] } = useQuery<PrintCatalogItem[]>({ queryKey: ["/api/print/catalog"] });
   const updateProfile = useUpdatePrinterProfile();
@@ -48,6 +52,7 @@ export default function PrinterProfilePage() {
   const [isOnVacation, setIsOnVacation] = useState(false);
   const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([], "08:00", "18:00"));
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
   const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -60,21 +65,47 @@ export default function PrinterProfilePage() {
     setWeeklyHours(data.profile.weeklyHours ?? buildWeeklyHoursFallback([], "08:00", "18:00"));
   }, [data?.profile?.updatedAt]);
 
-  const saveProfile = () => {
+  // Unified Save (Phase 4) — ONE button persists the whole page. Unlike
+  // Maintenance (whose Availability section owns its own state and endpoint,
+  // hence its ref + Promise.allSettled), every Printer field — description,
+  // website, portfolio, marketplaceVisible, isOnVacation, weeklyHours — already
+  // lives in this component's state and is accepted by the SAME
+  // PATCH /api/print/profile body, so it's a single atomic request (nothing to
+  // partially fail). marketplaceVisible is plain deferred state, only sent here.
+  const saveAll = async (): Promise<boolean> => {
     let url: string | undefined;
     if (websiteUrl.trim()) {
       try { url = new URL(websiteUrl.trim()).toString(); } catch {
         toast({ title: "URL de site web invalide", description: "Utilisez un lien complet, ex. https://votre-site.com", variant: "destructive" });
-        return;
+        return false;
       }
     }
-    updateProfile.mutate(
-      { description, websiteUrl: url ?? "", marketplaceVisible },
-      {
-        onSuccess: () => toast({ title: "Profil mis à jour" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      },
-    );
+    try {
+      await updateProfile.mutateAsync({
+        description, websiteUrl: url ?? "", marketplaceVisible,
+        portfolioImages,
+        isOnVacation, weeklyHours,
+      });
+      toast({ title: "Profil sauvegardé" });
+      return true;
+    } catch (err) {
+      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+      return false;
+    }
+  };
+
+  const goLive = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/print/profile/go-live", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/print/company" });
+      toast({ title: "Profil soumis", description: "Un administrateur va examiner votre profil." });
+    },
+    onError: (error: Error) => toast({ title: "Impossible de soumettre le profil", description: error.message, variant: "destructive" }),
+  });
+  const handleGoLive = async () => {
+    // Save first; only submit for review if the save actually succeeded (Phase 5A).
+    const saved = await saveAll();
+    if (saved) goLive.mutate();
   };
 
   const addPortfolioImage = () => {
@@ -83,28 +114,12 @@ export default function PrinterProfilePage() {
     setPortfolioImages((prev) => [...prev, v]);
     setPortfolioDraft("");
   };
-  const savePortfolio = () => {
-    updateProfile.mutate(
-      { portfolioImages },
-      {
-        onSuccess: () => toast({ title: "Portfolio mis à jour" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      },
-    );
-  };
 
   const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
     setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   };
-  const saveAvailability = () => {
-    updateProfile.mutate(
-      { isOnVacation, weeklyHours },
-      {
-        onSuccess: () => toast({ title: "Disponibilités sauvegardées" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      },
-    );
-  };
+  const saving = updateProfile.isPending;
+  const publicationStatus = (data?.profile?.publicationStatus ?? "DRAFT") as "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
 
   if (isLoading) {
     return <div className="flex flex-col gap-4"><Skeleton className="h-40 w-full rounded-2xl" /><Skeleton className="h-40 w-full rounded-2xl" /></div>;
@@ -122,9 +137,15 @@ export default function PrinterProfilePage() {
         iconBgClass="bg-blue-500/15"
         iconTextClass="text-blue-600 dark:text-blue-400"
         action={
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-company">
-            <Eye className="w-3.5 h-3.5" /> Aperçu
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PublicationStatusBadge status={publicationStatus} />
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-company">
+              <Eye className="w-3.5 h-3.5" /> Aperçu
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setFlashPreviewOpen(true)} data-testid="button-flash-preview">
+              <Zap className="w-3.5 h-3.5" /> Flash
+            </Button>
+          </div>
         }
       />
 
@@ -197,11 +218,6 @@ export default function PrinterProfilePage() {
               ))}
             </div>
           )}
-          <div className="flex justify-end">
-            <Button onClick={savePortfolio} disabled={updateProfile.isPending} variant="outline" data-testid="button-save-portfolio">
-              {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
-            </Button>
-          </div>
         </div>
       </SectionCard>
 
@@ -221,17 +237,14 @@ export default function PrinterProfilePage() {
         </div>
       </SectionCard>
 
-      <Button onClick={saveProfile} disabled={updateProfile.isPending} className="w-full sm:w-fit rounded-2xl" data-testid="button-save-profile">
-        {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
-      </Button>
-
+      {/* hideSaveButton: availability is persisted by the single unified
+          Save button below (same PATCH body), not its own separate button. */}
       <AccountAvailabilityCard
         weeklyHours={weeklyHours}
         onChangeDay={updateDayHours}
         isOnVacation={isOnVacation}
         onChangeVacation={setIsOnVacation}
-        onSave={saveAvailability}
-        saving={updateProfile.isPending}
+        hideSaveButton
         vacationDescription="Masque votre imprimerie et stoppe les nouvelles commandes."
         accentClassName={ACCENT}
         testIdPrefix="printer"
@@ -239,6 +252,28 @@ export default function PrinterProfilePage() {
         summaryClassName="border-transparent bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-500/10 dark:to-sky-500/10"
         summaryTextClassName="text-blue-700 dark:text-blue-400"
       />
+
+      {/* Phase 4 — single primary Save button for the whole page (profile
+          fields + portfolio + visibility + availability, via saveAll above). */}
+      <Button onClick={saveAll} disabled={saving} className={`w-full rounded-2xl py-5 ${ACCENT}`} data-testid="button-save-profile-all">
+        {saving ? "Sauvegarde…" : "Sauvegarder le profil"}
+      </Button>
+
+      {/* GO Live (Phase 5) — saves first, then submits for admin review.
+          Disabled while a request is already pending (Phase 5C). */}
+      <Button
+        onClick={handleGoLive}
+        disabled={saving || goLive.isPending || publicationStatus === "PENDING"}
+        variant="outline"
+        className="w-full rounded-2xl py-5 border-blue-500/40 text-blue-600 dark:text-blue-400 gap-2"
+        data-testid="button-go-live"
+      >
+        <Rocket className="w-4 h-4" />
+        {goLive.isPending ? "Envoi…" : publicationStatus === "PENDING" ? "En attente d'approbation" : "GO Live"}
+      </Button>
+      {publicationStatus === "REJECTED" && data?.profile?.publicationRejectionReason && (
+        <p className="text-xs text-red-600 dark:text-red-400 text-center -mt-2">Motif du refus : {data.profile.publicationRejectionReason}</p>
+      )}
 
       <PrintCompanyDetailModal
         printerUserId={user?.id ?? null}
@@ -252,6 +287,17 @@ export default function PrinterProfilePage() {
         open={previewServiceId != null}
         onClose={() => setPreviewServiceId(null)}
         readOnly
+      />
+
+      <FlashPreviewModal
+        open={flashPreviewOpen}
+        onClose={() => setFlashPreviewOpen(false)}
+        name={data?.user?.name ?? data?.card?.name ?? ""}
+        typeLabel="Imprimerie"
+        flashImageUrl={data?.user?.flashImageUrl ?? data?.card?.flashImageUrl}
+        profileImageUrl={data?.user?.profileImageUrl ?? data?.card?.profileImageUrl}
+        accentBgClass="bg-blue-600"
+        preview
       />
     </div>
   );

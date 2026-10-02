@@ -1,0 +1,7 @@
+qa-maint-1790954281@example.test
+qa-mkt-1790954281@example.test
+qa-print-1790954281@example.test
+qa-academy-1790954281@example.test
+qa-barista-1790954281@example.test
+qa-delivery-1790954281@example.test
+qa-owner-1790954281@example.test

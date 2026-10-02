@@ -37,6 +37,7 @@ export const AccountIdentityCard = forwardRef<SettingsCardHandle, {
   const [isWhatsapp, setIsWhatsapp] = useState((user as any)?.isWhatsapp ?? false);
   const [profileImageUrl, setProfileImageUrl] = useState((user as any)?.profileImageUrl ?? "");
   const [coverImageUrl, setCoverImageUrl] = useState((user as any)?.coverImageUrl ?? "");
+  const [flashImageUrl, setFlashImageUrl] = useState((user as any)?.flashImageUrl ?? "");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -47,6 +48,7 @@ export const AccountIdentityCard = forwardRef<SettingsCardHandle, {
     setIsWhatsapp((user as any).isWhatsapp ?? false);
     setProfileImageUrl((user as any).profileImageUrl ?? "");
     setCoverImageUrl((user as any).coverImageUrl ?? "");
+    setFlashImageUrl((user as any).flashImageUrl ?? "");
     setDirty(false);
   }, [user?.id, (user as any)?.updatedAt]);
 
@@ -56,6 +58,7 @@ export const AccountIdentityCard = forwardRef<SettingsCardHandle, {
   const setIsWhatsappD = markDirty(setIsWhatsapp);
   const setProfileImageUrlD = markDirty(setProfileImageUrl);
   const setCoverImageUrlD = markDirty(setCoverImageUrl);
+  const setFlashImageUrlD = markDirty(setFlashImageUrl);
 
   useImperativeHandle(ref, () => ({
     save: async () => {
@@ -66,6 +69,7 @@ export const AccountIdentityCard = forwardRef<SettingsCardHandle, {
           name, phone, isWhatsapp,
           profileImageUrl: profileImageUrl.trim() || null,
           coverImageUrl: coverImageUrl.trim() || null,
+          flashImageUrl: flashImageUrl.trim() || null,
         });
         await queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
         setDirty(false);
@@ -73,7 +77,7 @@ export const AccountIdentityCard = forwardRef<SettingsCardHandle, {
         setSaving(false);
       }
     },
-  }), [dirty, name, phone, isWhatsapp, profileImageUrl, coverImageUrl]);
+  }), [dirty, name, phone, isWhatsapp, profileImageUrl, coverImageUrl, flashImageUrl]);
 
   return (
     <SectionCard title="Compte" icon={User} className={className}>
@@ -104,6 +108,10 @@ export const AccountIdentityCard = forwardRef<SettingsCardHandle, {
         <div className="space-y-1.5">
           <Label>Cover (URL)</Label>
           <Input type="url" value={coverImageUrl} onChange={(e) => setCoverImageUrlD(e.target.value)} disabled={saving} placeholder="https://…" data-testid={`input-${testIdPrefix}-cover`} />
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label>Flash (URL)</Label>
+          <Input type="url" value={flashImageUrl} onChange={(e) => setFlashImageUrlD(e.target.value)} disabled={saving} placeholder="https://…" data-testid={`input-${testIdPrefix}-flash`} />
         </div>
       </div>
     </SectionCard>

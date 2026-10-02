@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useCurrency } from "@/hooks/use-currency";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,12 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Award, Wrench, MapPin, XCircle, X, Eye, Briefcase, Settings as SettingsIcon } from "lucide-react";
+import { Award, Wrench, MapPin, XCircle, X, Eye, Briefcase, Settings as SettingsIcon, Zap, Rocket } from "lucide-react";
 import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import Availability from "@/pages/maintenance/availability";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
+import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 
 // Portfolio cap — shared across every professional account's Profile → Portfolio
 // (Maintenance/Marketing/Delivery Company/Barista Marketplace/Academy/Printer/Driver).
@@ -38,6 +41,8 @@ export default function Profile() {
   const queryClient = useQueryClient();
   const isDark = useThemeStore((s) => s.isDark);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
+  const availabilityRef = useRef<SettingsCardHandle>(null);
 
   const { data: profileData } = useQuery<{ user: any; profile: any; card: MaintenanceMarketplaceCard }>({
     queryKey: ["/api/maintenance/profile", user?.id],
@@ -87,21 +92,15 @@ export default function Profile() {
     setMarketplaceVisible(p.marketplaceVisible);
   }, [profileData]);
 
-  const toggleVisible = useMutation({
-    mutationFn: (value: boolean) => apiRequest("PATCH", "/api/maintenance/profile", { marketplaceVisible: value }),
-    onSuccess: (_data, value) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profiles"] });
-      toast({ title: value ? "Profil visible sur la marketplace" : "Profil masqué de la marketplace" });
-    },
-    onError: (error: Error, value) => { setMarketplaceVisible(!value); toast({ title: "Erreur", description: error.message, variant: "destructive" }); },
-  });
-  const handleToggleVisible = (value: boolean) => {
-    setMarketplaceVisible(value);
-    toggleVisible.mutate(value);
-  };
-
-  const saveProfile = useMutation({
+  // Unified Save (Phase 4) — ONE button drives both the main profile PATCH
+  // (now also carrying marketplaceVisible, no longer an instant-toggle-on-click
+  // side effect) and the Availability card's own save, via its ref. Different
+  // underlying endpoints/data structures, same single user action — exactly
+  // what the task permits ("even when they use different underlying data
+  // structures"). Promise.allSettled so one section failing doesn't discard
+  // or block the other, and the user is told exactly which part failed.
+  const [saving, setSaving] = useState(false);
+  const saveProfileMutation = useMutation({
     mutationFn: () => apiRequest("PATCH", "/api/maintenance/profile", {
       jobTitle, profileType: agentType, skills: selectedSpecialties,
       categories: selectedSpecialties, description: bio,
@@ -109,13 +108,41 @@ export default function Profile() {
       responseTime,
       certifications, portfolioImages,
       yearsExperience: Math.max(0, parseInt(yearsExperience, 10) || 0),
+      marketplaceVisible,
     }),
+  });
+  const saveAll = async (): Promise<boolean> => {
+    setSaving(true);
+    const results = await Promise.allSettled([
+      saveProfileMutation.mutateAsync(),
+      availabilityRef.current?.save(),
+    ]);
+    setSaving(false);
+    queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profiles"] });
+    const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (errors.length > 0) {
+      toast({ title: "Sauvegarde partielle", description: `${errors.length === results.length ? "Aucune section n'a pu être" : "Une partie du profil n'a pas pu être"} sauvegardée. Réessayez.`, variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Profil sauvegardé" });
+    return true;
+  };
+
+  const goLive = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/maintenance/profile/go-live", {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] });
-      toast({ title: "Profil sauvegardé" });
+      toast({ title: "Profil soumis", description: "Un administrateur va examiner votre profil." });
     },
-    onError: (error: Error) => toast({ title: "Impossible de sauvegarder le profil", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Impossible de soumettre le profil", description: error.message, variant: "destructive" }),
   });
+  const handleGoLive = async () => {
+    // "Ensure the latest profile changes are saved successfully" before
+    // submitting (Phase 5A) — save first, only submit if that actually succeeded.
+    const saved = await saveAll();
+    if (saved) goLive.mutate();
+  };
 
   const toggleSpecialty = (s: string) => {
     setSelectedSpecialties((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -138,9 +165,15 @@ export default function Profile() {
         iconBgClass="bg-orange-500/15"
         iconTextClass="text-orange-600 dark:text-orange-400"
         action={
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-            <Eye className="w-3.5 h-3.5" /> Aperçu
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PublicationStatusBadge status={profileData?.profile?.publicationStatus ?? "DRAFT"} />
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+              <Eye className="w-3.5 h-3.5" /> Aperçu
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 rounded-xl" onClick={() => setFlashPreviewOpen(true)} data-testid="button-flash-preview">
+              <Zap className="w-3.5 h-3.5" /> Flash
+            </Button>
+          </div>
         }
       />
 
@@ -335,20 +368,41 @@ export default function Profile() {
               <p className="text-sm font-medium">Afficher mon profil sur la marketplace</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Lorsque désactivé, les cafés ne peuvent plus vous trouver ni réserver.</p>
             </div>
-            <Switch checked={marketplaceVisible} onCheckedChange={handleToggleVisible} disabled={toggleVisible.isPending} data-testid="switch-profile-visible" />
+            {/* Deferred like every other field now (Phase 4) — only takes
+                effect when the unified Save button below is clicked, no
+                longer an instant-mutate-on-toggle side effect. */}
+            <Switch checked={marketplaceVisible} onCheckedChange={setMarketplaceVisible} disabled={saving} data-testid="switch-profile-visible" />
           </div>
         </CardContent>
       </Card>
 
-      <Button onClick={() => saveProfile.mutate()} disabled={saveProfile.isPending} className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5">
-        Sauvegarder le profil
+      {/* Disponibilité — moved here from its former separate main tab (Part 1).
+          hideSaveButton: its own save is now driven by the single button below
+          via availabilityRef, instead of its own separate button. */}
+      <Availability ref={availabilityRef} hideSaveButton />
+
+      {/* Phase 4 — single primary Save button for the whole page (profile
+          fields + visibility + availability, via saveAll above). */}
+      <Button onClick={saveAll} disabled={saving} className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5" data-testid="button-save-profile-all">
+        {saving ? "Sauvegarde…" : "Sauvegarder le profil"}
       </Button>
 
-      {/* Disponibilité — moved here from its former separate main tab (Part 1).
-          Reuses the existing Availability component unchanged (own query/
-          mutation/save button), so the real availability data/behavior is
-          untouched, just relocated. */}
-      <Availability />
+      {/* GO Live (Phase 5) — saves first, then submits for admin review.
+          Disabled while a request is already pending, to prevent duplicate
+          submissions (Phase 5C). */}
+      <Button
+        onClick={handleGoLive}
+        disabled={saving || goLive.isPending || profileData?.profile?.publicationStatus === "PENDING"}
+        variant="outline"
+        className="w-full rounded-2xl py-5 border-orange-500/40 text-orange-600 dark:text-orange-400 gap-2"
+        data-testid="button-go-live"
+      >
+        <Rocket className="w-4 h-4" />
+        {goLive.isPending ? "Envoi…" : profileData?.profile?.publicationStatus === "PENDING" ? "En attente d'approbation" : "GO Live"}
+      </Button>
+      {profileData?.profile?.publicationStatus === "REJECTED" && profileData.profile.publicationRejectionReason && (
+        <p className="text-xs text-red-600 dark:text-red-400 text-center -mt-2">Motif du refus : {profileData.profile.publicationRejectionReason}</p>
+      )}
 
       <AgentDetailModal
         agent={profileData?.card ?? null}
@@ -358,6 +412,17 @@ export default function Profile() {
         onReserve={() => Promise.resolve()}
         isDark={isDark}
         readOnly
+      />
+
+      <FlashPreviewModal
+        open={flashPreviewOpen}
+        onClose={() => setFlashPreviewOpen(false)}
+        name={profileData?.user?.name ?? ""}
+        typeLabel="Maintenance"
+        flashImageUrl={profileData?.user?.flashImageUrl}
+        profileImageUrl={profileData?.user?.profileImageUrl}
+        accentBgClass="bg-orange-500"
+        preview
       />
     </div>
   );

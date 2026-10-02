@@ -17,9 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Flag, MessageCircle, X, Printer, Package, Globe, Tag, Clock, Image as ImageIcon,
+  Star, MapPin, Flag, MessageCircle, X, Printer, Package, Globe, Tag, Clock, Image as ImageIcon, Zap,
 } from "lucide-react";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
+import { ReviewsModal } from "@/components/account/reviews-modal";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -178,6 +180,8 @@ export function PrintCompanyDetailModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
   const [messaging, setMessaging] = useState(false);
@@ -278,6 +282,10 @@ export function PrintCompanyDetailModal({
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-print-company-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-print-company-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-print-company-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
+                {card.flashImageUrl && (
+                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-print-company-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+                )}
               </div>
               {!card.marketplaceVisible ? (
                 <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm bg-black/50 text-white/80">
@@ -369,56 +377,8 @@ export function PrintCompanyDetailModal({
                 </div>
               )}
 
-              {/* Reviews — real order-based reviews (one per DELIVERED printOrder), same
-                  data every service card shows. */}
-              <div>
-                <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
-                {reviews.length === 0 ? (
-                  <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {reviews.map((r) => (
-                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBg}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
-                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
-                        </div>
-                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!readOnly && eligibleOrders.length > 0 && (
-                  <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-                    {eligibleOrders.length > 1 && (
-                      <select
-                        className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-                        value={activeOrderId ?? ""}
-                        onChange={(e) => setReviewOrderId(Number(e.target.value))}
-                        data-testid="select-review-order"
-                      >
-                        {eligibleOrders.map((o) => (
-                          <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
-                        ))}
-                      </select>
-                    )}
-                    <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-                    <Textarea
-                      placeholder="Commentaire (facultatif)"
-                      rows={2}
-                      defaultValue={existingReview?.comment ?? ""}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      className={t.inputBg}
-                      data-testid="input-review-comment"
-                    />
-                    <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-submit-review">
-                      {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-                    </Button>
-                  </div>
-                )}
-              </div>
+              {/* Avis — moved into the dedicated Star-icon ReviewsModal (Phase 7),
+                  no longer rendered inline here. */}
             </div>
 
             <div className={`p-5 sm:p-6 pt-0 flex flex-wrap gap-2 justify-end border-t mt-1 pt-4 ${t.border}`}>
@@ -461,6 +421,63 @@ export function PrintCompanyDetailModal({
       images={card?.portfolioImages ?? []}
       initialIndex={albumIndex}
       providerName={card?.name ?? ""}
+    />
+
+    {/* Avis (Phase 7) — dedicated modal, opened via the Star icon. Same real
+        order-based reviews (usePrintReviews) and the same existing review
+        form/mutation (submitReview) as before, relocated out of the main
+        modal's body. card.rating is stored in tenths (see the header's
+        (card.rating / 10) display), hence the /10 here. */}
+    <ReviewsModal
+      open={reviewsModalOpen}
+      onClose={() => setReviewsModalOpen(false)}
+      professionalName={card?.name ?? ""}
+      rating={(card?.rating ?? 0) / 10}
+      reviewCount={card?.reviewCount ?? reviews.length}
+      reviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
+      isDark={isDark}
+      reviewForm={!readOnly && eligibleOrders.length > 0 ? (
+        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
+          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
+          {eligibleOrders.length > 1 && (
+            <select
+              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+              value={activeOrderId ?? ""}
+              onChange={(e) => setReviewOrderId(Number(e.target.value))}
+              data-testid="select-review-order"
+            >
+              {eligibleOrders.map((o) => (
+                <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
+              ))}
+            </select>
+          )}
+          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
+          <Textarea
+            placeholder="Commentaire (facultatif)"
+            rows={2}
+            defaultValue={existingReview?.comment ?? ""}
+            onChange={(e) => setReviewComment(e.target.value)}
+            className={t.inputBg}
+            data-testid="input-review-comment"
+          />
+          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-submit-review">
+            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
+          </Button>
+        </div>
+      ) : undefined}
+    />
+
+    {/* Flash (Phase 3/5E) — Coffee Owner-facing destination for the Flash URL
+        configured in Settings → Compte; same component the printer's own
+        self-preview uses, not preview mode here. */}
+    <FlashPreviewModal
+      open={flashModalOpen}
+      onClose={() => setFlashModalOpen(false)}
+      name={card?.name ?? ""}
+      typeLabel="Imprimerie"
+      flashImageUrl={card?.flashImageUrl}
+      profileImageUrl={card?.profileImageUrl}
+      accentBgClass="bg-blue-600"
     />
     </>
   );

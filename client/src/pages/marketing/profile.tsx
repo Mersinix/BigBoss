@@ -7,8 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/dashboard/dashboard-kit";
-import { Megaphone, Image as ImageIcon, X, Globe, Calendar, AlertCircle, Eye } from "lucide-react";
+import { Megaphone, Image as ImageIcon, X, Globe, Calendar, AlertCircle, Eye, Zap, Rocket } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import {
   useMyMarketingProfile, useUpdateMarketingProfile, useUpdateMarketingAvailability, useMyMarketingServices,
 } from "@/hooks/use-marketing";
@@ -45,6 +49,8 @@ export default function MarketingProfilePage() {
   const [weeklyHours, setWeeklyHours] = useState<OpeningHoursMap>(buildWeeklyHoursFallback([], "09:00", "18:00"));
   const [marketplaceVisible, setMarketplaceVisible] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
+  const queryClient = useQueryClient();
   const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -63,32 +69,49 @@ export default function MarketingProfilePage() {
     setPortfolioDraft("");
   };
 
-  const saveProfile = () => {
+  // Unified Save — ONE button drives both the agency profile PATCH
+  // (/api/marketing/profile, incl. marketplaceVisible) and the availability PATCH
+  // (/api/marketing/availability, isOnVacation + weeklyHours — a separate route),
+  // mirroring Maintenance's saveAll. Promise.allSettled so one section failing
+  // doesn't block the other, and the user is told which part failed.
+  const [saving, setSaving] = useState(false);
+  const saveAll = async (): Promise<boolean> => {
     let url: string | undefined;
     if (websiteUrl.trim()) {
       try { url = new URL(websiteUrl.trim()).toString(); } catch {
         toast({ title: "URL de site web invalide", description: "Utilisez un lien complet, ex. https://votre-site.com", variant: "destructive" });
-        return;
+        return false;
       }
     }
-    updateProfile.mutate(
-      { description, websiteUrl: url ?? "", portfolioImages, marketplaceVisible },
-      {
-        onSuccess: () => toast({ title: "Profil mis à jour" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      },
-    );
+    setSaving(true);
+    const results = await Promise.allSettled([
+      updateProfile.mutateAsync({ description, websiteUrl: url ?? "", portfolioImages, marketplaceVisible }),
+      updateAvailability.mutateAsync({ isOnVacation, isAvailable: !isOnVacation, weeklyHours }),
+    ]);
+    setSaving(false);
+    const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (errors.length > 0) {
+      toast({ title: "Sauvegarde partielle", description: `${errors.length === results.length ? "Aucune section n'a pu être" : "Une partie du profil n'a pas pu être"} sauvegardée. Réessayez.`, variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Profil sauvegardé" });
+    return true;
   };
 
-  const saveAvailability = () => {
-    updateAvailability.mutate(
-      { isOnVacation, isAvailable: !isOnVacation, weeklyHours },
-      {
-        onSuccess: () => toast({ title: "Disponibilités sauvegardées" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      },
-    );
+  const goLive = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/marketing/profile/go-live", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/marketing/profile", user?.id] });
+      toast({ title: "Profil soumis", description: "Un administrateur va examiner votre profil." });
+    },
+    onError: (error: Error) => toast({ title: "Impossible de soumettre le profil", description: error.message, variant: "destructive" }),
+  });
+  const handleGoLive = async () => {
+    // Save first, only submit for review if that actually succeeded.
+    const saved = await saveAll();
+    if (saved) goLive.mutate();
   };
+  const publicationStatus = data?.profile?.publicationStatus ?? "DRAFT";
 
   const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
     setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -111,9 +134,15 @@ export default function MarketingProfilePage() {
         iconBgClass="bg-fuchsia-500/15"
         iconTextClass="text-fuchsia-600 dark:text-fuchsia-400"
         action={
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-agency">
-            <Eye className="w-3.5 h-3.5" /> Aperçu
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PublicationStatusBadge status={publicationStatus} />
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-agency">
+              <Eye className="w-3.5 h-3.5" /> Aperçu
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setFlashPreviewOpen(true)} data-testid="button-flash-preview">
+              <Zap className="w-3.5 h-3.5" /> Flash
+            </Button>
+          </div>
         }
       />
 
@@ -198,10 +227,6 @@ export default function MarketingProfilePage() {
         </div>
       </SectionCard>
 
-      <Button onClick={saveProfile} disabled={updateProfile.isPending} className="w-full sm:w-fit bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-2xl" data-testid="button-save-profile">
-        {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
-      </Button>
-
       <SectionCard title="Disponibilité" icon={Calendar} className={CARD_CLASS}>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -249,12 +274,30 @@ export default function MarketingProfilePage() {
               );
             })}
           </div>
-
-          <Button onClick={saveAvailability} disabled={updateAvailability.isPending} variant="outline" className="w-full sm:w-fit rounded-2xl" data-testid="button-save-availability">
-            {updateAvailability.isPending ? "Enregistrement…" : "Sauvegarder les disponibilités"}
-          </Button>
         </div>
       </SectionCard>
+
+      {/* Single primary Save button for the whole page (agency fields +
+          visibility + availability/vacation, via saveAll above). */}
+      <Button onClick={saveAll} disabled={saving} className="w-full bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-2xl py-5" data-testid="button-save-profile-all">
+        {saving ? "Sauvegarde…" : "Sauvegarder le profil"}
+      </Button>
+
+      {/* GO Live — saves first, then submits for admin review. Disabled while a
+          request is already pending, to prevent duplicate submissions. */}
+      <Button
+        onClick={handleGoLive}
+        disabled={saving || goLive.isPending || publicationStatus === "PENDING"}
+        variant="outline"
+        className="w-full rounded-2xl py-5 border-fuchsia-500/40 text-fuchsia-600 dark:text-fuchsia-400 gap-2"
+        data-testid="button-go-live"
+      >
+        <Rocket className="w-4 h-4" />
+        {goLive.isPending ? "Envoi…" : publicationStatus === "PENDING" ? "En attente d'approbation" : "GO Live"}
+      </Button>
+      {publicationStatus === "REJECTED" && data?.profile?.publicationRejectionReason && (
+        <p className="text-xs text-red-600 dark:text-red-400 text-center -mt-3">Motif du refus : {data.profile.publicationRejectionReason}</p>
+      )}
 
       <MarketingDetailModal
         marketingUserId={user?.id ?? null}
@@ -269,6 +312,17 @@ export default function MarketingProfilePage() {
         open={previewServiceId != null}
         onClose={() => setPreviewServiceId(null)}
         readOnly
+      />
+
+      <FlashPreviewModal
+        open={flashPreviewOpen}
+        onClose={() => setFlashPreviewOpen(false)}
+        name={data?.user?.name ?? ""}
+        typeLabel="Marketing"
+        flashImageUrl={data?.user?.flashImageUrl}
+        profileImageUrl={data?.user?.profileImageUrl}
+        accentBgClass="bg-purple-600"
+        preview
       />
     </div>
   );

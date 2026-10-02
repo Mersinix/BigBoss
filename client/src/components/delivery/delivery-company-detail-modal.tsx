@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -20,10 +20,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Truck, Users as UsersIcon,
-  Flag, Navigation, X, CheckCircle2, Image as ImageIcon,
+  Flag, Navigation, X, CheckCircle2, Image as ImageIcon, Zap,
 } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
+import { ReviewsModal } from "@/components/account/reviews-modal";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import type { DeliveryCompanyMarketplaceCard } from "@shared/schema";
 
 // Same theming mechanism as barista-detail-modal.tsx / maintenance-page.tsx's
@@ -137,7 +139,7 @@ function DeliveryCompanyAvailabilityModal({
 // view (sanitized card+drivers+vehicles) and the Delivery Company's own Eye
 // preview (readOnly) — no separate data copy.
 export function DeliveryCompanyDetailModal({
-  companyUserId, open, onClose, onSelect, onOpenDriver, readOnly = false,
+  companyUserId, open, onClose, onSelect, onOpenDriver, readOnly = false, adminSection,
 }: {
   companyUserId: number | null;
   open: boolean;
@@ -159,6 +161,10 @@ export function DeliveryCompanyDetailModal({
   // inert (no self-review, self-report, or self-dispatch) — only
   // Disponibilité stays functional.
   readOnly?: boolean;
+  // Admin → Delivery → Entreprises + Chauffeurs only: the GO Live publication
+  // review block (status badge + Approve/Reject), owned by the admin page and
+  // rendered here, below the profile content it reviews. Absent everywhere else.
+  adminSection?: ReactNode;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -182,6 +188,10 @@ export function DeliveryCompanyDetailModal({
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
+  // Star (Avis) and Flash — two icons alongside Signaler/Disponibilité, each
+  // opening its own dedicated modal (same pattern as the Maintenance modal).
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [flashModalOpen, setFlashModalOpen] = useState(false);
 
   // Review eligibility mirrors the existing server rule exactly (POST
   // /api/delivery-company/reviews): one review per DELIVERED delivery between
@@ -270,6 +280,10 @@ export function DeliveryCompanyDetailModal({
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-delivery-company-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-delivery-company-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-delivery-company-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
+                {card.flashImageUrl && (
+                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-delivery-company-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+                )}
               </div>
               <span className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${card.available ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${card.available ? "bg-white" : "bg-white/60"}`} />
@@ -388,61 +402,10 @@ export function DeliveryCompanyDetailModal({
                 )}
               </div>
 
-              {/* Reviews */}
-              <div>
-                <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
-                {reviews.length === 0 ? (
-                  <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {reviews.map((r) => (
-                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBg}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
-                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
-                        </div>
-                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* Avis — moved into the dedicated Star-icon ReviewsModal below,
+                  no longer rendered inline here (list + write-a-review form). */}
 
-                {!readOnly && eligibleDeliveries.length > 0 && (
-                  <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-                    {eligibleDeliveries.length > 1 && (
-                      <select
-                        className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-                        value={activeDeliveryId ?? ""}
-                        onChange={(e) => setReviewDeliveryId(Number(e.target.value))}
-                        data-testid="select-review-delivery"
-                      >
-                        {eligibleDeliveries.map((d) => (
-                          <option key={d.id} value={d.id}>Commande #{d.orderId} {myReviewByDelivery.has(d.id) ? "(déjà noté)" : ""}</option>
-                        ))}
-                      </select>
-                    )}
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <button key={n} type="button" onClick={() => setReviewRating(n)} data-testid={`button-star-${n}`}>
-                          <Star className={`w-5 h-5 ${n <= (existingReview?.rating ?? reviewRating) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-                        </button>
-                      ))}
-                    </div>
-                    <Textarea
-                      placeholder="Commentaire (facultatif)"
-                      rows={2}
-                      defaultValue={existingReview?.comment ?? ""}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      className={t.inputBg}
-                      data-testid="input-review-comment"
-                    />
-                    <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-teal-600 hover:bg-teal-700 text-white" data-testid="button-submit-review">
-                      {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-                    </Button>
-                  </div>
-                )}
-              </div>
+              {adminSection}
             </div>
 
             {/* Actions — the relevant delivery/selection action required by the dispatch flow
@@ -494,6 +457,69 @@ export function DeliveryCompanyDetailModal({
       images={card?.portfolioImages ?? []}
       initialIndex={albumIndex}
       providerName={card?.name ?? ""}
+    />
+
+    {/* Avis — dedicated modal opened via the Star icon. Same review data and
+        same Supplier-only eligibility/mutation as before, just relocated out
+        of the main body. Reviewer here is a Supplier; their name is stored in
+        cafeOwnerName/cafeName by upsertDeliveryCompanyReview, so the shared
+        modal's fallback applies as-is. Only createdAt is normalized (the
+        SupplierProductReview type declares Date, the JSON payload is a string). */}
+    <ReviewsModal
+      open={reviewsModalOpen}
+      onClose={() => setReviewsModalOpen(false)}
+      professionalName={card?.name ?? ""}
+      rating={(card?.rating ?? 0) / 10}
+      reviewCount={card?.reviewCount ?? reviews.length}
+      reviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
+      isDark={isDark}
+      reviewForm={!readOnly && eligibleDeliveries.length > 0 ? (
+        <div className={`p-3 rounded-xl border space-y-2 ${t.border}`}>
+          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
+          {eligibleDeliveries.length > 1 && (
+            <select
+              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+              value={activeDeliveryId ?? ""}
+              onChange={(e) => setReviewDeliveryId(Number(e.target.value))}
+              data-testid="select-review-delivery"
+            >
+              {eligibleDeliveries.map((d) => (
+                <option key={d.id} value={d.id}>Commande #{d.orderId} {myReviewByDelivery.has(d.id) ? "(déjà noté)" : ""}</option>
+              ))}
+            </select>
+          )}
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button key={n} type="button" onClick={() => setReviewRating(n)} data-testid={`button-star-${n}`}>
+                <Star className={`w-5 h-5 ${n <= (existingReview?.rating ?? reviewRating) ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+              </button>
+            ))}
+          </div>
+          <Textarea
+            placeholder="Commentaire (facultatif)"
+            rows={2}
+            defaultValue={existingReview?.comment ?? ""}
+            onChange={(e) => setReviewComment(e.target.value)}
+            className={t.inputBg}
+            data-testid="input-review-comment"
+          />
+          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-teal-600 hover:bg-teal-700 text-white" data-testid="button-submit-review">
+            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
+          </Button>
+        </div>
+      ) : undefined}
+    />
+
+    {/* Flash — Supplier-facing destination for the Flash URL configured in
+        Settings → Compte; same component as the account's own self-preview. */}
+    <FlashPreviewModal
+      open={flashModalOpen}
+      onClose={() => setFlashModalOpen(false)}
+      name={card?.name ?? ""}
+      typeLabel="Livraison"
+      flashImageUrl={card?.flashImageUrl}
+      profileImageUrl={card?.profileImageUrl}
+      accentBgClass="bg-teal-600"
     />
     </>
   );

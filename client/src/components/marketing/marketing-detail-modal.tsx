@@ -24,11 +24,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Image as ImageIcon, Globe, MessageCircle,
-  Flag, Heart, Navigation, X, Megaphone,
+  Flag, Heart, Navigation, X, Megaphone, Zap,
 } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
+import { ReviewsModal } from "@/components/account/reviews-modal";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 
 const PROVIDER_TYPE_LABELS: Record<string, string> = { Agency: "Agence", Freelancer: "Freelancer", Studio: "Studio" };
 const PROVIDER_TYPE_COLORS: Record<string, string> = {
@@ -202,6 +204,8 @@ export function MarketingDetailModal({
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
   const [messaging, setMessaging] = useState(false);
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const services = card?.services ?? [];
 
   // Review eligibility mirrors the existing server rule exactly (POST /api/marketing/reviews):
@@ -317,6 +321,10 @@ export function MarketingDetailModal({
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-marketing-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-marketing-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-marketing-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
+                {card.flashImageUrl && (
+                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-marketing-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+                )}
               </div>
               <span
                 className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${card.isAvailable ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}
@@ -409,55 +417,8 @@ export function MarketingDetailModal({
                 </div>
               )}
 
-              {/* Reviews */}
-              <div>
-                <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
-                {reviews.length === 0 ? (
-                  <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {reviews.map((r) => (
-                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBgAlt}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
-                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
-                        </div>
-                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {eligibleProjects.length > 0 && (
-                  <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-                    {eligibleProjects.length > 1 && (
-                      <select
-                        className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-                        value={activeProjectId ?? ""}
-                        onChange={(e) => setReviewProjectId(Number(e.target.value))}
-                        data-testid="select-review-project"
-                      >
-                        {eligibleProjects.map((p) => (
-                          <option key={p.id} value={p.id}>{p.service || `Projet #${p.id}`} {myReviewByProject.has(p.id) ? "(déjà noté)" : ""}</option>
-                        ))}
-                      </select>
-                    )}
-                    <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-                    <Textarea
-                      placeholder="Commentaire (facultatif)"
-                      rows={2}
-                      defaultValue={existingReview?.comment ?? ""}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      className={t.inputBg}
-                      data-testid="input-review-comment"
-                    />
-                    <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-purple-600 hover:bg-purple-700 text-white" data-testid="button-submit-review">
-                      {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-                    </Button>
-                  </div>
-                )}
-              </div>
+              {/* Avis — moved into the dedicated Star-icon ReviewsModal (below,
+                  sibling to this Dialog), no longer rendered inline here. */}
             </div>
 
             {/* Actions */}
@@ -504,6 +465,60 @@ export function MarketingDetailModal({
       images={portfolioImages}
       initialIndex={albumIndex}
       providerName={card?.name ?? ""}
+    />
+
+    {/* Avis — dedicated modal, opened via the Star icon. Same review data,
+        eligibility and mutation as before (reviews/eligibleProjects/submitReview),
+        just relocated out of the main modal's body into this one. */}
+    <ReviewsModal
+      open={reviewsModalOpen}
+      onClose={() => setReviewsModalOpen(false)}
+      professionalName={card?.name ?? ""}
+      rating={card ? card.rating / 10 : 0}
+      reviewCount={card?.reviewCount ?? reviews.length}
+      reviews={reviews}
+      isDark={isDark}
+      reviewForm={eligibleProjects.length > 0 ? (
+        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
+          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
+          {eligibleProjects.length > 1 && (
+            <select
+              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+              value={activeProjectId ?? ""}
+              onChange={(e) => setReviewProjectId(Number(e.target.value))}
+              data-testid="select-review-project"
+            >
+              {eligibleProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.service || `Projet #${p.id}`} {myReviewByProject.has(p.id) ? "(déjà noté)" : ""}</option>
+              ))}
+            </select>
+          )}
+          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
+          <Textarea
+            placeholder="Commentaire (facultatif)"
+            rows={2}
+            defaultValue={existingReview?.comment ?? ""}
+            onChange={(e) => setReviewComment(e.target.value)}
+            className={t.inputBg}
+            data-testid="input-review-comment"
+          />
+          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-purple-600 hover:bg-purple-700 text-white" data-testid="button-submit-review">
+            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
+          </Button>
+        </div>
+      ) : undefined}
+    />
+
+    {/* Flash — the real Coffee Owner-facing destination for the Flash URL
+        configured in Settings → Compte (not preview mode here). */}
+    <FlashPreviewModal
+      open={flashModalOpen}
+      onClose={() => setFlashModalOpen(false)}
+      name={card?.name ?? ""}
+      typeLabel="Marketing"
+      flashImageUrl={card?.flashImageUrl}
+      profileImageUrl={card?.profileImageUrl}
+      accentBgClass="bg-purple-600"
     />
     </>
   );

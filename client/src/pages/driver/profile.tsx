@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { useDriverDetails, useUpdateDriverProfile } from "@/hooks/use-driver-profile";
 import { useMyVehicle, useCreateMyVehicle, useUpdateMyVehicle, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { DriverDetailModal } from "@/components/driver/driver-detail-modal";
@@ -12,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
-import { User as UserIcon, Award, XCircle, Calendar, Zap, Truck, Eye, AlertCircle, Image as ImageIcon, X, Building2 } from "lucide-react";
+import { User as UserIcon, Award, XCircle, Calendar, Zap, Truck, Eye, AlertCircle, Image as ImageIcon, X, Building2, Rocket } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -37,6 +41,9 @@ export default function DriverProfilePage() {
   const createVehicle = useCreateMyVehicle();
   const updateVehicle = useUpdateMyVehicle();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const detailsKey = ["/api/drivers", user?.id ?? null, "details"];
 
   const [bio, setBio] = useState("");
   const [experienceYears, setExperienceYears] = useState("0");
@@ -87,15 +94,40 @@ export default function DriverProfilePage() {
     setPortfolioDraft("");
   };
 
-  const saveProfile = () => {
-    updateProfile.mutate(
-      { bio, experienceYears: Math.max(0, parseInt(experienceYears, 10) || 0), certifications, portfolioImages, isOnVacation, weeklyHours },
-      {
-        onSuccess: () => toast({ title: "Profil enregistré" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  // Unified Save — ONE call persists every profile field on this page (bio,
+  // experience, certifications, portfolio, availability, vacation), exactly as
+  // the former three separate buttons already did. Vehicle stays separate
+  // (distinct `vehicles` table, its own button below). Returns success so
+  // GO Live can save first and only submit if that succeeded.
+  const saveProfile = async (): Promise<boolean> => {
+    try {
+      await updateProfile.mutateAsync({ bio, experienceYears: Math.max(0, parseInt(experienceYears, 10) || 0), certifications, portfolioImages, isOnVacation, weeklyHours });
+      // useUpdateDriverProfile's own invalidation predicate matches keys starting
+      // with "/api/drivers/" (trailing slash), which never matches this
+      // ["/api/drivers", id, "details"] key — invalidate it explicitly here.
+      queryClient.invalidateQueries({ queryKey: detailsKey });
+      toast({ title: "Profil enregistré" });
+      return true;
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message, variant: "destructive" });
+      return false;
+    }
   };
+
+  const goLive = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/driver/profile/go-live", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailsKey });
+      toast({ title: "Profil soumis", description: "Un administrateur va examiner votre profil." });
+    },
+    onError: (error: Error) => toast({ title: "Impossible de soumettre le profil", description: error.message, variant: "destructive" }),
+  });
+  const handleGoLive = async () => {
+    // Save the latest edits first; only submit if that actually succeeded.
+    const saved = await saveProfile();
+    if (saved) goLive.mutate();
+  };
+  const publicationStatus = (data?.profile?.publicationStatus ?? "DRAFT") as "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
 
   const saveVehicle = () => {
     const payload = { type: vehicleType, brand: vehicleBrand, model: vehicleModel, plateNumber: vehiclePlate };
@@ -123,9 +155,15 @@ export default function DriverProfilePage() {
         iconBgClass="bg-blue-500/15"
         iconTextClass="text-blue-600 dark:text-blue-400"
         action={
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-            <Eye className="w-3.5 h-3.5" /> Aperçu
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PublicationStatusBadge status={publicationStatus} />
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+              <Eye className="w-3.5 h-3.5" /> Aperçu
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setFlashPreviewOpen(true)} data-testid="button-flash-preview">
+              <Zap className="w-3.5 h-3.5" /> Flash
+            </Button>
+          </div>
         }
       />
 
@@ -164,9 +202,6 @@ export default function DriverProfilePage() {
               ))}
             </div>
           </div>
-          <Button onClick={saveProfile} disabled={updateProfile.isPending} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl" data-testid="button-save-profile">
-            {updateProfile.isPending ? "Enregistrement…" : "Enregistrer le profil"}
-          </Button>
         </CardContent>
       </Card>
 
@@ -200,9 +235,6 @@ export default function DriverProfilePage() {
               ))}
             </div>
           )}
-          <Button onClick={saveProfile} disabled={updateProfile.isPending} variant="outline" className="rounded-xl" data-testid="button-save-portfolio">
-            {updateProfile.isPending ? "Enregistrement…" : "Enregistrer le portfolio"}
-          </Button>
         </CardContent>
       </Card>
 
@@ -323,14 +355,44 @@ export default function DriverProfilePage() {
         </CardContent>
       </Card>
 
-      <Button onClick={saveProfile} disabled={updateProfile.isPending} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-2xl py-5">
-        {updateProfile.isPending ? "Enregistrement…" : "Enregistrer la disponibilité"}
+      {/* Single primary Save for every profile field on this page (bio,
+          experience, certifications, portfolio, availability). The vehicle card
+          above keeps its own separate save (distinct `vehicles` table). */}
+      <Button onClick={saveProfile} disabled={updateProfile.isPending} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-2xl py-5" data-testid="button-save-profile">
+        {updateProfile.isPending ? "Enregistrement…" : "Sauvegarder le profil"}
       </Button>
+
+      {/* GO Live — saves first, then submits for admin review. Disabled while a
+          request is already pending. */}
+      <Button
+        onClick={handleGoLive}
+        disabled={updateProfile.isPending || goLive.isPending || publicationStatus === "PENDING"}
+        variant="outline"
+        className="w-full rounded-2xl py-5 border-blue-500/40 text-blue-600 dark:text-blue-400 gap-2"
+        data-testid="button-go-live"
+      >
+        <Rocket className="w-4 h-4" />
+        {goLive.isPending ? "Envoi…" : publicationStatus === "PENDING" ? "En attente d'approbation" : "GO Live"}
+      </Button>
+      {publicationStatus === "REJECTED" && data?.profile?.publicationRejectionReason && (
+        <p className="text-xs text-red-600 dark:text-red-400 text-center -mt-3">Motif du refus : {data.profile.publicationRejectionReason}</p>
+      )}
 
       <DriverDetailModal
         driver={user ?? null}
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
+      />
+
+      <FlashPreviewModal
+        open={flashPreviewOpen}
+        onClose={() => setFlashPreviewOpen(false)}
+        name={user?.name ?? ""}
+        typeLabel="Chauffeur"
+        flashImageUrl={data?.flashImageUrl ?? user?.flashImageUrl}
+        profileImageUrl={user?.profileImageUrl}
+        accentBgClass="bg-blue-600"
+        preview
       />
     </div>
   );

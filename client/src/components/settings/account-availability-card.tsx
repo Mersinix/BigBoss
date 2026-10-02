@@ -44,13 +44,21 @@ export function AccountAvailabilityCard({
   // orange/amber. Defaults to a neutral tint for any caller that omits it.
   summaryClassName = "bg-muted/40 border-transparent",
   summaryTextClassName = "text-foreground",
+  // Opt-in (default false → unchanged behavior for every existing caller):
+  // hides this card's own "Sauvegarder les disponibilités" button when the
+  // page drives the save itself from a single unified Save button. Since this
+  // card is fully controlled (weeklyHours/isOnVacation live in the caller),
+  // the caller already holds everything it needs to persist — no ref needed.
+  hideSaveButton = false,
 }: {
   weeklyHours: OpeningHoursMap;
   onChangeDay: (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => void;
   isOnVacation: boolean;
   onChangeVacation: (value: boolean) => void;
-  onSave: () => void;
-  saving: boolean;
+  // Only required when the card's own save button is shown (hideSaveButton=false).
+  onSave?: () => void;
+  saving?: boolean;
+  hideSaveButton?: boolean;
   vacationTitle?: string;
   vacationDescription: string;
   accentClassName?: string;
@@ -125,9 +133,11 @@ export function AccountAvailabilityCard({
         </CardContent>
       </Card>
 
-      <Button onClick={onSave} disabled={saving} className={`w-full sm:w-fit ${accentClassName}`} data-testid={`button-save-${testIdPrefix}-availability`}>
-        {saving ? "Enregistrement…" : "Sauvegarder les disponibilités"}
-      </Button>
+      {!hideSaveButton && (
+        <Button onClick={onSave} disabled={saving} className={`w-full sm:w-fit ${accentClassName}`} data-testid={`button-save-${testIdPrefix}-availability`}>
+          {saving ? "Enregistrement…" : "Sauvegarder les disponibilités"}
+        </Button>
+      )}
     </div>
   );
 }

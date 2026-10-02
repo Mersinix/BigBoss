@@ -15,8 +15,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
-import { Building2, Award, MapPin, XCircle, X, Plus, Calendar, Zap, Eye, AlertCircle } from "lucide-react";
+import { Building2, Award, MapPin, XCircle, X, Plus, Calendar, Zap, Eye, AlertCircle, Rocket } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
@@ -37,6 +41,8 @@ export default function DeliveryCompanyProfilePage() {
   const { data, isLoading } = useDeliveryCompanyProfileDetail(user?.id ?? null);
   const updateProfile = useUpdateDeliveryCompanyProfile();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const [companyType, setCompanyType] = useState("Entreprise");
   const [description, setDescription] = useState("");
@@ -84,20 +90,40 @@ export default function DeliveryCompanyProfilePage() {
     setPortfolioDraft("");
   };
 
-  const saveAll = () => {
-    updateProfile.mutate(
-      {
+  // Unified Save — already a single PATCH carrying every field (profile +
+  // visibility + vacation + weekly hours, one route/Zod schema server-side),
+  // so no Promise.allSettled split is needed here. Returns whether it
+  // succeeded so GO Live can save first and only submit on success.
+  const saveAll = async (): Promise<boolean> => {
+    try {
+      await updateProfile.mutateAsync({
         companyType, description, deliveryZones,
         dailyRateInCents: Math.round((parseFloat(dailyRate) || 0) * 100),
         responseTime, experienceYears: Math.max(0, parseInt(experienceYears, 10) || 0),
         certifications, portfolioImages, marketplaceVisible,
         isOnVacation, weeklyHours,
-      },
-      {
-        onSuccess: () => toast({ title: "Profil enregistré" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+      });
+      toast({ title: "Profil enregistré" });
+      return true;
+    } catch (err) {
+      toast({ title: "Erreur", description: (err as Error).message, variant: "destructive" });
+      return false;
+    }
+  };
+
+  const publicationStatus = (data?.profile?.publicationStatus ?? "DRAFT") as "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
+  const goLive = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/delivery-company/profile/go-live", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-company/profile"] });
+      toast({ title: "Profil soumis", description: "Un administrateur va examiner votre profil." });
+    },
+    onError: (error: Error) => toast({ title: "Impossible de soumettre le profil", description: error.message, variant: "destructive" }),
+  });
+  const handleGoLive = async () => {
+    // Save the latest changes first; only submit if that actually succeeded.
+    const saved = await saveAll();
+    if (saved) goLive.mutate();
   };
 
   if (isLoading) {
@@ -117,9 +143,15 @@ export default function DeliveryCompanyProfilePage() {
         iconBgClass="bg-teal-500/15"
         iconTextClass="text-teal-600 dark:text-teal-400"
         action={
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-            <Eye className="w-3.5 h-3.5" /> Aperçu
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PublicationStatusBadge status={publicationStatus} />
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+              <Eye className="w-3.5 h-3.5" /> Aperçu
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setFlashPreviewOpen(true)} data-testid="button-flash-preview">
+              <Zap className="w-3.5 h-3.5" /> Flash
+            </Button>
+          </div>
         }
       />
 
@@ -297,8 +329,24 @@ export default function DeliveryCompanyProfilePage() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end sticky bottom-4">
-        <Button onClick={saveAll} disabled={updateProfile.isPending} className="bg-teal-600 hover:bg-teal-700 text-white shadow-lg rounded-2xl py-5 px-6" data-testid="button-save-profile-all">
+      {publicationStatus === "REJECTED" && data?.profile?.publicationRejectionReason && (
+        <p className="text-xs text-red-600 dark:text-red-400 text-right" data-testid="text-publication-rejection-reason">Motif du refus : {data.profile.publicationRejectionReason}</p>
+      )}
+
+      <div className="flex justify-end gap-2 flex-wrap sticky bottom-4">
+        {/* GO Live — saves first, then submits for admin review. Disabled
+            while a request is already pending (no duplicate submissions). */}
+        <Button
+          onClick={handleGoLive}
+          disabled={updateProfile.isPending || goLive.isPending || publicationStatus === "PENDING"}
+          variant="outline"
+          className="rounded-2xl py-5 px-6 shadow-lg border-teal-500/40 text-teal-600 dark:text-teal-400 bg-white dark:bg-gray-800 gap-2"
+          data-testid="button-go-live"
+        >
+          <Rocket className="w-4 h-4" />
+          {goLive.isPending ? "Envoi…" : publicationStatus === "PENDING" ? "En attente d'approbation" : "GO Live"}
+        </Button>
+        <Button onClick={() => { void saveAll(); }} disabled={updateProfile.isPending} className="bg-teal-600 hover:bg-teal-700 text-white shadow-lg rounded-2xl py-5 px-6" data-testid="button-save-profile-all">
           {updateProfile.isPending ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </div>
@@ -308,6 +356,17 @@ export default function DeliveryCompanyProfilePage() {
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         readOnly
+      />
+
+      <FlashPreviewModal
+        open={flashPreviewOpen}
+        onClose={() => setFlashPreviewOpen(false)}
+        name={data?.user?.name ?? ""}
+        typeLabel="Livraison"
+        flashImageUrl={data?.user?.flashImageUrl}
+        profileImageUrl={data?.user?.profileImageUrl}
+        accentBgClass="bg-teal-600"
+        preview
       />
     </div>
   );

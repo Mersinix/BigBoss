@@ -16,7 +16,7 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export function useDriverDetails(driverId: number | null) {
-  return useQuery<{ profile: DriverProfile; vehicle: Vehicle | null; operator: { type: "DELIVERY_COMPANY" | "SUPPLIER"; name: string } | null }>({
+  return useQuery<{ profile: DriverProfile; vehicle: Vehicle | null; operator: { type: "DELIVERY_COMPANY" | "SUPPLIER"; name: string } | null; flashImageUrl?: string | null }>({
     queryKey: ["/api/drivers", driverId, "details"],
     queryFn: () => getJson(`/api/drivers/${driverId}/details`),
     enabled: driverId != null,

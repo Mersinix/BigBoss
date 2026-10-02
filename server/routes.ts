@@ -682,13 +682,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch('/api/auth/me/profile', requireAuth, async (req, res) => {
     try {
-      const { name, phone, isWhatsapp, profileImageUrl, coverImageUrl, locationDetails, password, currentPassword } = req.body;
-      const updates: { name?: string; phone?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; coverImageUrl?: string | null; locationDetails?: import("@shared/schema").AddressDetails | null; password?: string } = {};
+      const { name, phone, isWhatsapp, profileImageUrl, coverImageUrl, flashImageUrl, locationDetails, password, currentPassword } = req.body;
+      const updates: { name?: string; phone?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; coverImageUrl?: string | null; flashImageUrl?: string | null; locationDetails?: import("@shared/schema").AddressDetails | null; password?: string } = {};
       if (name !== undefined) updates.name = name;
       if (phone !== undefined) updates.phone = phone;
       if (isWhatsapp !== undefined) updates.isWhatsapp = !!isWhatsapp;
       if (profileImageUrl !== undefined) updates.profileImageUrl = profileImageUrl?.trim() || null;
       if (coverImageUrl !== undefined) updates.coverImageUrl = coverImageUrl?.trim() || null;
+      if (flashImageUrl !== undefined) updates.flashImageUrl = flashImageUrl?.trim() || null;
       // Owner-editable address DETAILS only (street/building/postal code/…) — never
       // lat/lng/the geocoded address string, which stay exclusively Admin-authoritative
       // via the existing map-based LocationPickerModal (PATCH /api/auth/me/location,
@@ -811,6 +812,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.upsertMaintenanceProfile(user.id, body);
     broadcast("maintenance_updated", { userId: user.id, kind: "profile" });
     res.json(profile);
+  });
+
+  // GO Live — self-service publication request (Phase 5). Reuses the existing
+  // upsertMaintenanceProfile partial-update (no new storage method needed) —
+  // this is purely a status transition on the SAME profile row the professional
+  // already edits via PATCH /api/maintenance/profile above. Minimal
+  // completeness check only (a real description); the frontend is responsible
+  // for having already saved the latest edits before calling this.
+  app.post("/api/maintenance/profile/go-live", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    const profile = await storage.getMaintenanceProfile(user.id);
+    if (profile.publicationStatus === "PENDING") return res.status(400).json({ message: "Une demande est déjà en attente d'approbation." });
+    if (!profile.description?.trim()) return res.status(400).json({ message: "Complétez votre biographie avant de soumettre votre profil." });
+    if (!profile.jobTitle?.trim()) return res.status(400).json({ message: "Le titre du poste est requis avant de soumettre votre profil." });
+    const updated = await storage.upsertMaintenanceProfile(user.id, {
+      publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null,
+    });
+    broadcast("maintenance_updated", { userId: user.id, kind: "publication" });
+    res.json(updated);
+  });
+
+  // Admin review of a submitted publication request — distinct from both
+  // account registration approval (users.status) and the isFrozen kill-switch
+  // above; approving/rejecting PROFILE CONTENT for marketplace display.
+  app.patch("/api/admin/maintenance/accounts/:userId/publication", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Maintenance account not found" });
+      const { decision, rejectionReason } = z.object({
+        decision: z.enum(["APPROVED", "REJECTED"]),
+        rejectionReason: z.string().trim().max(1000).optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertMaintenanceProfile(userId, {
+        publicationStatus: decision,
+        publicationReviewedAt: new Date(),
+        publicationRejectionReason: decision === "REJECTED" ? (rejectionReason?.trim() || "Non précisé") : null,
+      });
+      broadcast("maintenance_updated", { userId, kind: "publication" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
   });
 
   app.patch("/api/maintenance/availability", requireAuth, async (req: any, res) => {
@@ -1157,6 +1203,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.upsertMarketingProfile(user.id, body);
     broadcast("marketing_updated", { userId: user.id, kind: "profile" });
     res.json(profile);
+  });
+
+  // GO Live (Phase 5) — see /api/maintenance/profile/go-live for the full rationale comment.
+  app.post("/api/marketing/profile/go-live", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MARKETING") return res.status(403).json({ message: "Marketing access required" });
+    const profile = await storage.getMarketingProfile(user.id);
+    if (profile.publicationStatus === "PENDING") return res.status(400).json({ message: "Une demande est déjà en attente d'approbation." });
+    if (!profile.description?.trim()) return res.status(400).json({ message: "Complétez votre description avant de soumettre votre profil." });
+    const updated = await storage.upsertMarketingProfile(user.id, {
+      publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null,
+    });
+    broadcast("marketing_updated", { userId: user.id, kind: "publication" });
+    res.json(updated);
+  });
+
+  app.patch("/api/admin/marketing/accounts/:userId/publication", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "MARKETING") return res.status(404).json({ message: "Marketing account not found" });
+      const { decision, rejectionReason } = z.object({
+        decision: z.enum(["APPROVED", "REJECTED"]),
+        rejectionReason: z.string().trim().max(1000).optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertMarketingProfile(userId, {
+        publicationStatus: decision, publicationReviewedAt: new Date(),
+        publicationRejectionReason: decision === "REJECTED" ? (rejectionReason?.trim() || "Non précisé") : null,
+      });
+      broadcast("marketing_updated", { userId, kind: "publication" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
   });
 
   app.patch("/api/marketing/availability", requireAuth, async (req: any, res) => {
@@ -1785,6 +1866,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: "Invalid profile data" });
+    }
+  });
+
+  // GO Live (Phase 5) — see /api/maintenance/profile/go-live for the full rationale comment.
+  app.post("/api/print/profile/go-live", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "PRINTER") return res.status(403).json({ message: "Printer access required" });
+    const profile = await storage.getPrinterProfile(user.id);
+    if (profile.publicationStatus === "PENDING") return res.status(400).json({ message: "Une demande est déjà en attente d'approbation." });
+    if (!profile.description?.trim()) return res.status(400).json({ message: "Complétez votre description avant de soumettre votre profil." });
+    const updated = await storage.upsertPrinterProfile(user.id, {
+      publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null,
+    });
+    broadcast("print_profile_updated", { printerId: user.id, kind: "publication" });
+    res.json(updated);
+  });
+
+  app.patch("/api/admin/print/accounts/:userId/publication", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "PRINTER") return res.status(404).json({ message: "Printer account not found" });
+      const { decision, rejectionReason } = z.object({
+        decision: z.enum(["APPROVED", "REJECTED"]),
+        rejectionReason: z.string().trim().max(1000).optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertPrinterProfile(userId, {
+        publicationStatus: decision, publicationReviewedAt: new Date(),
+        publicationRejectionReason: decision === "REJECTED" ? (rejectionReason?.trim() || "Non précisé") : null,
+      });
+      broadcast("print_profile_updated", { printerId: userId, kind: "publication" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
     }
   });
 
@@ -2709,6 +2825,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GO Live (Phase 5) — see /api/maintenance/profile/go-live for the full rationale comment.
+  app.post("/api/barista/profile/go-live", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    const profile = await storage.getBaristaMarketplaceProfile(user.id);
+    if (profile.publicationStatus === "PENDING") return res.status(400).json({ message: "Une demande est déjà en attente d'approbation." });
+    if (!profile.bio?.trim()) return res.status(400).json({ message: "Complétez votre biographie avant de soumettre votre profil." });
+    const updated = await storage.upsertBaristaMarketplaceProfile(user.id, {
+      publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null,
+    });
+    broadcast("barista_profile_updated", { userId: user.id, kind: "publication" });
+    res.json(updated);
+  });
+
+  app.patch("/api/admin/barista/accounts/:userId/publication", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Barista Marketplace account not found" });
+      const { decision, rejectionReason } = z.object({
+        decision: z.enum(["APPROVED", "REJECTED"]),
+        rejectionReason: z.string().trim().max(1000).optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertBaristaMarketplaceProfile(userId, {
+        publicationStatus: decision, publicationReviewedAt: new Date(),
+        publicationRejectionReason: decision === "REJECTED" ? (rejectionReason?.trim() || "Non précisé") : null,
+      });
+      broadcast("barista_profile_updated", { userId, kind: "publication" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
   app.patch("/api/barista/availability", requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
@@ -3304,6 +3455,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: "Invalid profile data" });
+    }
+  });
+
+  // GO Live (Phase 5) — see /api/maintenance/profile/go-live for the full rationale comment.
+  app.post("/api/academy/profile/go-live", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "BARISTA_ACADEMY") return res.status(403).json({ message: "Barista Academy access required" });
+    const profile = await storage.getAcademyProfile(user.id);
+    if (profile.publicationStatus === "PENDING") return res.status(400).json({ message: "Une demande est déjà en attente d'approbation." });
+    if (!profile.description?.trim()) return res.status(400).json({ message: "Complétez votre description avant de soumettre votre profil." });
+    const updated = await storage.upsertAcademyProfile(user.id, {
+      publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null,
+    });
+    broadcast("academy_profile_updated", { userId: user.id, kind: "publication" });
+    res.json(updated);
+  });
+
+  app.patch("/api/admin/academy/accounts/:userId/publication", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "BARISTA_ACADEMY") return res.status(404).json({ message: "Academy account not found" });
+      const { decision, rejectionReason } = z.object({
+        decision: z.enum(["APPROVED", "REJECTED"]),
+        rejectionReason: z.string().trim().max(1000).optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertAcademyProfile(userId, {
+        publicationStatus: decision, publicationReviewedAt: new Date(),
+        publicationRejectionReason: decision === "REJECTED" ? (rejectionReason?.trim() || "Non précisé") : null,
+      });
+      broadcast("academy_profile_updated", { userId, kind: "publication" });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
     }
   });
 
@@ -5094,6 +5280,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GO Live (Phase 5) — see /api/maintenance/profile/go-live for the full rationale
+  // comment. Driver has no public marketplace listing today (no Coffee Owner ever
+  // browses drivers directly — see driverProfiles' own schema comment), so approval
+  // here has no visible marketplace effect yet; it still exists so all 7 account
+  // types consistently support the same submit → admin-review workflow.
+  app.post('/api/driver/profile/go-live', requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== 'DRIVER') return res.status(403).json({ message: 'Driver access required' });
+    const profile = await storage.getDriverProfile(user.id);
+    if (profile.publicationStatus === 'PENDING') return res.status(400).json({ message: 'Une demande est déjà en attente d\'approbation.' });
+    if (!profile.bio?.trim()) return res.status(400).json({ message: 'Complétez votre biographie avant de soumettre votre profil.' });
+    const updated = await storage.upsertDriverProfile(user.id, {
+      publicationStatus: 'PENDING', publicationSubmittedAt: new Date(), publicationRejectionReason: null,
+    });
+    broadcast('driver_profile_updated', { userId: user.id, kind: 'publication' });
+    res.json(updated);
+  });
+
+  app.patch('/api/admin/driver/accounts/:userId/publication', requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== 'DRIVER') return res.status(404).json({ message: 'Driver account not found' });
+      const { decision, rejectionReason } = z.object({
+        decision: z.enum(['APPROVED', 'REJECTED']),
+        rejectionReason: z.string().trim().max(1000).optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertDriverProfile(userId, {
+        publicationStatus: decision, publicationReviewedAt: new Date(),
+        publicationRejectionReason: decision === 'REJECTED' ? (rejectionReason?.trim() || 'Non précisé') : null,
+      } as any);
+      broadcast('driver_profile_updated', { userId, kind: 'publication' });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: 'Invalid request' });
+    }
+  });
+
   app.get('/api/drivers/:driverId/details', requireAuth, async (req: any, res) => {
     const viewer = await storage.getUser(req.session.userId);
     if (!viewer) return res.status(401).json({ message: 'Unauthorized' });
@@ -5120,7 +5345,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const supplier = await storage.getUser(target.supplierId);
       if (supplier) operator = { type: 'SUPPLIER', name: supplier.name };
     }
-    res.json({ profile, vehicle: vehicle ?? null, operator });
+    // flashImageUrl (Settings → Compte's "Flash (URL)", stored on the users row)
+    // — surfaced here so DriverDetailModal's Flash icon reads one reliable
+    // source regardless of which caller's `driver` User object it was handed
+    // (some callers' user lists may be trimmed/stale).
+    res.json({ profile, vehicle: vehicle ?? null, operator, flashImageUrl: target.flashImageUrl ?? null });
   });
 
   // ── DELIVERY COMPANY marketplace/profile ─────────────────────────────────────
@@ -5196,6 +5425,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const profile = await storage.upsertDeliveryCompanyProfile(req.deliveryCompany.id, body);
     broadcast('delivery_company_profile_updated', { userId: req.deliveryCompany.id });
     res.json(profile);
+  });
+
+  // GO Live (Phase 5) — see /api/maintenance/profile/go-live for the full rationale comment.
+  app.post('/api/delivery-company/profile/go-live', requireApprovedDeliveryCompany, async (req: any, res) => {
+    const profile = await storage.getDeliveryCompanyProfile(req.deliveryCompany.id);
+    if (profile.publicationStatus === 'PENDING') return res.status(400).json({ message: 'Une demande est déjà en attente d\'approbation.' });
+    if (!profile.description?.trim()) return res.status(400).json({ message: 'Complétez votre description avant de soumettre votre profil.' });
+    const updated = await storage.upsertDeliveryCompanyProfile(req.deliveryCompany.id, {
+      publicationStatus: 'PENDING', publicationSubmittedAt: new Date(), publicationRejectionReason: null,
+    });
+    broadcast('delivery_company_profile_updated', { userId: req.deliveryCompany.id, kind: 'publication' });
+    res.json(updated);
+  });
+
+  app.patch('/api/admin/delivery-company/accounts/:userId/publication', requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== 'DELIVERY_COMPANY') return res.status(404).json({ message: 'Delivery Company account not found' });
+      const { decision, rejectionReason } = z.object({
+        decision: z.enum(['APPROVED', 'REJECTED']),
+        rejectionReason: z.string().trim().max(1000).optional(),
+      }).parse(req.body);
+      const profile = await storage.upsertDeliveryCompanyProfile(userId, {
+        publicationStatus: decision, publicationReviewedAt: new Date(),
+        publicationRejectionReason: decision === 'REJECTED' ? (rejectionReason?.trim() || 'Non précisé') : null,
+      });
+      broadcast('delivery_company_profile_updated', { userId, kind: 'publication' });
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: 'Invalid request' });
+    }
   });
 
   app.get('/api/delivery-company/reviews/:userId', async (req, res) => {

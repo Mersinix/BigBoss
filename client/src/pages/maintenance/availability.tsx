@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -9,10 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, AlertCircle, Zap } from "lucide-react";
+import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
 
 // ── Availability tab ──────────────────────────────────────────────────────────
 
-export default function Availability() {
+// hideSaveButton (Phase 4, unified Business → Profil Save button): when set,
+// this component's own "Sauvegarder les disponibilités" button is hidden and
+// its save is instead exposed via `ref` (same SettingsCardHandle shape the
+// Settings page's own unified Save already uses) so a SINGLE parent button
+// can drive it alongside the rest of the profile. Defaults to false/own
+// button shown — client/src/pages/maintenance/dashboard.tsx's own standalone
+// usage is completely unaffected.
+export default forwardRef<SettingsCardHandle, { hideSaveButton?: boolean }>(function Availability({ hideSaveButton = false }, ref) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -64,6 +72,10 @@ export default function Availability() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profile", user?.id] }); toast({ title: "Disponibilités sauvegardées" }); },
     onError: (error: Error) => toast({ title: "Impossible de sauvegarder les disponibilités", description: error.message, variant: "destructive" }),
   });
+
+  useImperativeHandle(ref, () => ({
+    save: async () => { await saveAvailability.mutateAsync(); },
+  }), [weeklyHours, isOnVacation, startTime, endTime]);
 
   const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
     setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -150,9 +162,11 @@ export default function Availability() {
         </CardContent>
       </Card>
 
-      <Button onClick={() => saveAvailability.mutate()} disabled={saveAvailability.isPending} className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5">
-        Sauvegarder les disponibilités
-      </Button>
+      {!hideSaveButton && (
+        <Button onClick={() => saveAvailability.mutate()} disabled={saveAvailability.isPending} className="w-full bg-orange-600 hover:bg-orange-700 text-white rounded-2xl py-5">
+          Sauvegarder les disponibilités
+        </Button>
+      )}
     </div>
   );
-}
+});

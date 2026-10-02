@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Textarea } from "@/components/ui/textarea";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
+import { useDeliveryCompanyProfileDetail } from "@/hooks/use-delivery-company-marketplace";
+import { useThemeStore } from "@/store/theme-store";
 import { useDeliveries, useUpdateDeliveryStatus } from "@/hooks/use-deliveries";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { formatDate } from "@/lib/format";
@@ -13,11 +18,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Truck, Clock, CheckCircle, XCircle, Search, Building2, Store,
-  Package, User as UserIcon, Receipt, Calendar, Coffee, X,
+  Package, User as UserIcon, Receipt, Calendar, Coffee, X, Check,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
 import { DriverDetailModal } from "@/components/driver/driver-detail-modal";
+import { useDriverDetails } from "@/hooks/use-driver-profile";
 import { DeliveryCompanyDetailModal } from "@/components/delivery/delivery-company-detail-modal";
 import { SupplierDriverFleetModal } from "@/components/delivery/supplier-driver-fleet-modal";
 import { VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
@@ -324,6 +330,161 @@ function OperatorMappedCard({
   );
 }
 
+// GO Live publication review — approve/reject the Delivery Company's submitted
+// PROFILE CONTENT (distinct from account registration approval). Same pattern
+// as Admin → Maintenance's AccountDetail review block. Delivery Company has no
+// Freeze mechanism, so this is the first profile-review action for this type;
+// it is rendered inside the company details modal (via its adminSection slot),
+// directly below the profile content being reviewed.
+function DeliveryCompanyPublicationReview({ companyUserId }: { companyUserId: number }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const isDark = useThemeStore((s) => s.isDark);
+  const { data } = useDeliveryCompanyProfileDetail(companyUserId);
+  const profile = data?.profile;
+  const status = (profile?.publicationStatus ?? "DRAFT") as "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  useEffect(() => { setRejecting(false); setRejectionReason(""); }, [companyUserId]);
+
+  const publicationMutation = useMutation({
+    mutationFn: (body: { decision: "APPROVED" | "REJECTED"; rejectionReason?: string }) =>
+      apiRequest("PATCH", `/api/admin/delivery-company/accounts/${companyUserId}/publication`, body),
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-company/profile"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/delivery-company/profiles"] });
+      setRejecting(false);
+      setRejectionReason("");
+      toast({ title: vars.decision === "APPROVED" ? "Profil approuvé et publié" : "Profil refusé" });
+    },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
+
+  if (!profile) return null;
+  return (
+    <div className={`border-t pt-4 space-y-2 ${isDark ? "border-gray-700/60" : "border-gray-100"}`} data-testid="section-admin-delivery-company-publication">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className={`text-xs font-semibold ${isDark ? "text-gray-400" : "text-gray-500"}`}>Publication du profil (Admin)</p>
+        <PublicationStatusBadge status={status} />
+      </div>
+      {status === "REJECTED" && profile.publicationRejectionReason && (
+        <div className={`text-xs rounded-lg p-2 ${isDark ? "text-red-400 bg-red-500/10" : "text-red-600 bg-red-50"}`}>
+          Motif du refus précédent : {profile.publicationRejectionReason}
+        </div>
+      )}
+      {status === "PENDING" && (
+        <div className={`rounded-lg border p-3 space-y-2 ${isDark ? "border-amber-700/50 bg-amber-500/10" : "border-amber-300 bg-amber-50"}`}>
+          <p className={`text-sm font-medium ${isDark ? "text-amber-400" : "text-amber-700"}`}>Demande de publication en attente — vérifiez le profil ci-dessus avant de décider.</p>
+          {rejecting ? (
+            <div className="space-y-2">
+              <Textarea
+                placeholder="Motif du refus (visible par le professionnel)…"
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                rows={2}
+                className={isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : ""}
+                data-testid="input-delivery-company-publication-rejection-reason"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="ghost" className={isDark ? "text-white" : ""} onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-delivery-company-publication">
+                  {publicationMutation.isPending ? "…" : "Confirmer le refus"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" className="text-destructive border-destructive/40" onClick={() => setRejecting(true)} data-testid="button-start-reject-delivery-company-publication">
+                <X className="h-3.5 w-3.5 mr-1.5" />Refuser
+              </Button>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "APPROVED" })} data-testid="button-approve-delivery-company-publication">
+                <Check className="h-3.5 w-3.5 mr-1.5" />{publicationMutation.isPending ? "…" : "Approuver"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Driver GO Live publication review (admin-only) ─────────────────────────────
+// Drivers have no dedicated admin page/table — the only per-driver surface here is
+// the shared DriverDetailModal (opened from the company/supplier modals below). This
+// block is injected into that modal via its `adminSlot` prop, ONLY from this page, so
+// the modal's other viewer contexts (Supplier, Espace Livraison, self-preview) never
+// see it. Status is read from the same useDriverDetails query the modal already uses
+// (shared React Query cache, no extra fetch). Same approve/reject flow as Admin →
+// Maintenance's AccountDetail, condensed. Colors branch off isDark because
+// DriverDetailModal's dark mode never adds `.dark` to the DOM.
+function DriverPublicationControl({ driverId }: { driverId: number }) {
+  const isDark = useThemeStore((s) => s.isDark);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data } = useDriverDetails(driverId);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const status = (data?.profile?.publicationStatus ?? "DRAFT") as "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
+  const publicationMutation = useMutation({
+    mutationFn: (body: { decision: "APPROVED" | "REJECTED"; rejectionReason?: string }) =>
+      apiRequest("PATCH", `/api/admin/driver/accounts/${driverId}/publication`, body),
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/drivers", driverId, "details"] });
+      setRejecting(false);
+      setRejectionReason("");
+      toast({ title: vars.decision === "APPROVED" ? "Profil approuvé" : "Profil refusé" });
+    },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
+
+  if (!data?.profile) return null;
+  return (
+    <div className={`rounded-xl border p-3 space-y-2 ${isDark ? "border-gray-700/60 bg-gray-800/60" : "border-gray-100 bg-gray-50"}`} data-testid="admin-driver-publication">
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-xs font-semibold ${isDark ? "text-gray-400" : "text-gray-500"}`}>Publication (GO Live)</p>
+        <PublicationStatusBadge status={status} />
+      </div>
+      {status === "REJECTED" && data.profile.publicationRejectionReason && (
+        <p className={`text-xs rounded-lg p-2 ${isDark ? "text-red-400 bg-red-500/10" : "text-red-600 bg-red-50"}`}>
+          Motif du refus précédent : {data.profile.publicationRejectionReason}
+        </p>
+      )}
+      {status === "PENDING" && (
+        <>
+          <p className={`text-xs ${isDark ? "text-amber-400" : "text-amber-700"}`}>Demande de publication en attente — vérifiez le profil ci-dessus avant de décider.</p>
+          {rejecting ? (
+            <div className="space-y-2">
+              <Textarea
+                placeholder="Motif du refus (visible par le chauffeur)…"
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                rows={2}
+                className={isDark ? "bg-gray-900 border-gray-700 text-white" : ""}
+                data-testid="input-driver-publication-rejection-reason"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="ghost" className={isDark ? "text-gray-300 hover:bg-gray-700" : ""} onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-driver-publication">
+                  {publicationMutation.isPending ? "…" : "Confirmer le refus"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" className={`text-red-500 border-red-500/40 ${isDark ? "bg-transparent hover:bg-gray-700" : ""}`} onClick={() => setRejecting(true)} data-testid="button-start-reject-driver-publication">
+                <X className="h-3.5 w-3.5 mr-1.5" />Refuser
+              </Button>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "APPROVED" })} data-testid="button-approve-driver-publication">
+                <CheckCircle className="h-3.5 w-3.5 mr-1.5" />{publicationMutation.isPending ? "…" : "Approuver"}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: DeliveryWithDetails[] }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -454,7 +615,7 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
         onPageSizeChange={pagination.setPageSize}
         itemLabel="entreprises"
       />
-      <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
+      <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} adminSlot={detail ? <DriverPublicationControl driverId={detail.id} /> : undefined} />
       {/* Clicking the company card above opens this — same synchronized
           Delivery Company details modal used everywhere a company is shown (Eye
           preview, Supplier dispatch flow). Its own "Chauffeurs" list is clickable
@@ -468,6 +629,7 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
         onClose={() => setCompanyDetailId(null)}
         onOpenDriver={(driverId) => { const d = driversById.get(driverId); if (d) setDetail(d); }}
         readOnly
+        adminSection={companyDetailId != null ? <DeliveryCompanyPublicationReview companyUserId={companyDetailId} /> : undefined}
       />
     </div>
   );
@@ -608,7 +770,7 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
         onPageSizeChange={pagination.setPageSize}
         itemLabel="fournisseurs"
       />
-      <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} />
+      <DriverDetailModal driver={detail} open={detail != null} onClose={() => setDetail(null)} adminSlot={detail ? <DriverPublicationControl driverId={detail.id} /> : undefined} />
       {/* Supplier modal stays open underneath (not cleared here) — same stacked-modal
           behavior as CompanyDriversTab above. */}
       <SupplierDriverFleetModal

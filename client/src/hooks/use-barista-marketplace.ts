@@ -29,6 +29,8 @@ export type BaristaMarketplaceCard = {
   phone: string | null;
   profileImageUrl: string | null;
   coverImageUrl?: string | null;
+  // Settings → Compte "Flash (URL)" — opened by the Flash icon on the details modal.
+  flashImageUrl?: string | null;
   level: BaristaLevel;
   bio: string;
   skills: string[];

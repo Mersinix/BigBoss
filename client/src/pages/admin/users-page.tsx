@@ -278,8 +278,14 @@ function UserDetailDialog({
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Photo de profil (URL)</Label>
-              <Input data-testid="input-detail-picture" type="url" value={form.profileImageUrl}
-                onChange={e => setForm(f => ({ ...f, profileImageUrl: e.target.value }))} placeholder="https://…" />
+              <div className="flex items-center gap-3">
+                <Avatar className="w-10 h-10 shrink-0">
+                  <AvatarImage src={getAvatarUrl({ profileImageUrl: form.profileImageUrl })} alt={form.name || user.name} />
+                  <AvatarFallback>{(form.name || user.name)?.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <Input data-testid="input-detail-picture" type="url" value={form.profileImageUrl}
+                  onChange={e => setForm(f => ({ ...f, profileImageUrl: e.target.value }))} placeholder="https://…" className="flex-1" />
+              </div>
             </div>
             <div className="space-y-1.5 col-span-2">
               <div className="flex items-center justify-between gap-2">

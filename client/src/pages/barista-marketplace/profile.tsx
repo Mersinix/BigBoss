@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import {
   useMyBaristaProfile,
   useUpdateBaristaProfile,
@@ -24,11 +26,13 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Briefcase, Pencil, Trash2, Calendar, Zap } from "lucide-react";
+import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Briefcase, Pencil, Trash2, Calendar, Zap, Rocket } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<BaristaLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -66,6 +70,8 @@ export default function BaristaProfilePage() {
   const deleteWorkHistory = useDeleteBaristaWorkHistory();
   const [workHistoryForm, setWorkHistoryForm] = useState<Partial<BaristaWorkHistory> | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!data?.profile) return;
@@ -104,25 +110,49 @@ export default function BaristaProfilePage() {
   // Single Save button covering both profile fields and availability (Part 17) —
   // fires both existing mutations together instead of exposing two separate buttons;
   // no business behavior changes, both endpoints are still called exactly as before.
-  const saving = updateProfile.isPending || updateAvailability.isPending;
-  const saveAll = () => {
-    updateProfile.mutate(
-      {
-        level, bio, skills, dailyRateInCents: Math.round(parseFloat(rate || "0") * 100), city, marketplaceVisible: visible,
-        certifications, experienceYears: experienceYears.trim() === "" ? null : Number(experienceYears), portfolioUrls,
-      },
-      { onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }) }
-    );
+  // marketplaceVisible (`visible`) is already deferred state carried in the profile
+  // PATCH payload — never an instant-toggle side effect. Now awaitable via
+  // Promise.allSettled (Phase 4) so GO Live can submit only after a fully
+  // successful save, and one section failing never blocks the other.
+  const [savingAll, setSavingAll] = useState(false);
+  const saving = savingAll || updateProfile.isPending || updateAvailability.isPending;
+  const saveAll = async (): Promise<boolean> => {
+    setSavingAll(true);
     // Legacy availableDays derived from the per-day schedule for backward
     // compatibility — weeklyHours is now the real source of truth.
     const derivedAvailableDays = WEEKLY_DAY_DEFS.filter((d) => !weeklyHours[d.key].closed).map((d) => d.short);
-    updateAvailability.mutate(
-      { availableDays: derivedAvailableDays, isOnVacation: onVacation, isAvailable: !onVacation, weeklyHours },
-      {
-        onSuccess: () => toast({ title: "Profil enregistré" }),
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+    const results = await Promise.allSettled([
+      updateProfile.mutateAsync({
+        level, bio, skills, dailyRateInCents: Math.round(parseFloat(rate || "0") * 100), city, marketplaceVisible: visible,
+        certifications, experienceYears: experienceYears.trim() === "" ? null : Number(experienceYears), portfolioUrls,
+      }),
+      updateAvailability.mutateAsync({ availableDays: derivedAvailableDays, isOnVacation: onVacation, isAvailable: !onVacation, weeklyHours }),
+    ]);
+    setSavingAll(false);
+    const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (errors.length > 0) {
+      const description = errors.map((e) => (e.reason as Error | undefined)?.message).filter(Boolean).join(" · ");
+      toast({ title: "Erreur", description: description || "Une partie du profil n'a pas pu être enregistrée.", variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Profil enregistré" });
+    return true;
+  };
+
+  // GO Live (Phase 5) — saves first, then submits for admin review only if the
+  // save fully succeeded. Disabled while a request is already PENDING.
+  const publicationStatus = (data?.profile?.publicationStatus ?? "DRAFT") as "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
+  const goLive = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/barista/profile/go-live", {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/barista/profile"] });
+      toast({ title: "Profil soumis", description: "Un administrateur va examiner votre profil." });
+    },
+    onError: (error: Error) => toast({ title: "Impossible de soumettre le profil", description: error.message, variant: "destructive" }),
+  });
+  const handleGoLive = async () => {
+    const saved = await saveAll();
+    if (saved) goLive.mutate();
   };
 
   const saveWorkHistory = () => {
@@ -165,9 +195,15 @@ export default function BaristaProfilePage() {
         iconBgClass="bg-green-500/15"
         iconTextClass="text-green-600 dark:text-green-400"
         action={
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
-            <Eye className="w-3.5 h-3.5" /> Aperçu
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PublicationStatusBadge status={publicationStatus} />
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
+              <Eye className="w-3.5 h-3.5" /> Aperçu
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setFlashPreviewOpen(true)} data-testid="button-flash-preview">
+              <Zap className="w-3.5 h-3.5" /> Flash
+            </Button>
+          </div>
         }
       />
 
@@ -430,11 +466,27 @@ export default function BaristaProfilePage() {
       {/* One main Save button covering profile + availability (Part 17) — replaces
           the two separate "Enregistrer le profil" / "Enregistrer la disponibilité"
           buttons; both underlying mutations still fire, no behavior change. */}
-      <div className="flex justify-end sticky bottom-4">
-        <Button onClick={saveAll} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white shadow-lg" data-testid="button-save-profile-all">
+      <div className="flex justify-end gap-2 sticky bottom-4">
+        {/* GO Live (Phase 5) — saves first, then submits for admin review.
+            Disabled while a request is already pending (no duplicate submissions). */}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleGoLive}
+          disabled={saving || goLive.isPending || publicationStatus === "PENDING"}
+          className="gap-1.5 bg-white dark:bg-gray-800 border-green-600/40 text-green-700 dark:text-green-400 shadow-lg"
+          data-testid="button-go-live"
+        >
+          <Rocket className="w-4 h-4" />
+          {goLive.isPending ? "Envoi…" : publicationStatus === "PENDING" ? "En attente d'approbation" : "GO Live"}
+        </Button>
+        <Button onClick={() => { void saveAll(); }} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white shadow-lg" data-testid="button-save-profile-all">
           {saving ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </div>
+      {publicationStatus === "REJECTED" && data?.profile?.publicationRejectionReason && (
+        <p className="text-xs text-red-600 dark:text-red-400 text-right -mt-3" data-testid="text-publication-rejection-reason">Motif du refus : {data.profile.publicationRejectionReason}</p>
+      )}
 
       <BaristaDetailModal
         baristaUserId={user?.id ?? null}
@@ -442,6 +494,17 @@ export default function BaristaProfilePage() {
         onClose={() => setPreviewOpen(false)}
         onRecruit={() => {}}
         readOnly
+      />
+
+      <FlashPreviewModal
+        open={flashPreviewOpen}
+        onClose={() => setFlashPreviewOpen(false)}
+        name={data?.user?.name ?? user?.name ?? ""}
+        typeLabel="Barista"
+        flashImageUrl={data?.user?.flashImageUrl}
+        profileImageUrl={data?.user?.profileImageUrl}
+        accentBgClass="bg-green-600"
+        preview
       />
     </div>
   );

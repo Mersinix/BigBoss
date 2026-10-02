@@ -12,8 +12,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   GraduationCap, Users, CheckCircle, XCircle, Star, Search,
   MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, BookOpen, Award, CalendarDays, Eye,
-  Pencil, Trash2, Snowflake, X,
+  Pencil, Trash2, Snowflake, X, Check,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -37,6 +39,7 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 type AdminAcademy = {
   userId: number; name: string; email: string; phone: string | null; profileImageUrl: string | null;
   status: string; description: string; location: string; marketplaceVisible: boolean; isFrozen: boolean;
+  publicationStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED"; publicationRejectionReason?: string | null;
   rating: number; reviewCount: number; courseCount: number; publishedCourseCount: number;
   registrationCount: number; completedRegistrationCount: number; revenueCents: number;
   createdAt: string | null; initials: string;
@@ -125,6 +128,16 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
     onSuccess: () => { onRefresh(); toast({ title: academy!.isFrozen ? "Compte dégelé" : "Compte gelé" }); },
     onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
   });
+  // GO Live review (Phase 5D) — approve/reject the submitted PROFILE CONTENT,
+  // distinct from both account registration approval and the Freeze kill-switch above.
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const publicationMutation = useMutation({
+    mutationFn: (data: { decision: "APPROVED" | "REJECTED"; rejectionReason?: string }) =>
+      apiRequest("PATCH", `/api/admin/academy/accounts/${academy!.userId}/publication`, data),
+    onSuccess: (_d, vars) => { onRefresh(); setRejecting(false); setRejectionReason(""); toast({ title: vars.decision === "APPROVED" ? "Profil approuvé et publié" : "Profil refusé" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
   const deleteMutation = useMutation({
     mutationFn: () => apiRequest("DELETE", `/api/admin/users/${academy!.userId}`),
     onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
@@ -155,7 +168,13 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
             <Badge variant={academy.publishedCourseCount > 0 ? "default" : "secondary"}>{academy.publishedCourseCount > 0 ? "Formations actives" : "Aucune formation publiée"}</Badge>
             {!academy.marketplaceVisible && <Badge variant="secondary">Masquée du marketplace</Badge>}
             {academy.isFrozen && <Badge className="bg-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé par l'Admin</Badge>}
+            <PublicationStatusBadge status={academy.publicationStatus ?? "DRAFT"} />
           </div>
+          {academy.publicationStatus === "REJECTED" && academy.publicationRejectionReason && (
+            <div className="sm:col-span-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg p-2">
+              Motif du refus précédent : {academy.publicationRejectionReason}
+            </div>
+          )}
 
           {editing ? (
             <div className="sm:col-span-2 space-y-2 rounded-lg border p-3">
@@ -180,6 +199,32 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
             <div className="flex gap-2"><Star className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{academy.reviewCount > 0 ? `${(academy.rating / 10).toFixed(1)} (${academy.reviewCount} avis)` : "Aucun avis"}</p></div></div>
             {academy.description && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{academy.description}</p></div>}
           </>}
+
+          {academy.publicationStatus === "PENDING" && (
+            <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-500/10 p-3 space-y-2">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Demande de publication en attente — vérifiez le profil ci-dessus avant de décider.</p>
+              {rejecting ? (
+                <div className="space-y-2">
+                  <Textarea placeholder="Motif du refus (visible par le professionnel)…" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} rows={2} />
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                    <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-academy-publication">
+                      {publicationMutation.isPending ? "…" : "Confirmer le refus"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="outline" className="text-destructive border-destructive/40" onClick={() => setRejecting(true)} data-testid="button-start-reject-academy-publication">
+                    <X className="h-3.5 w-3.5 mr-1.5" />Refuser
+                  </Button>
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "APPROVED" })} data-testid="button-approve-academy-publication">
+                    <Check className="h-3.5 w-3.5 mr-1.5" />{publicationMutation.isPending ? "…" : "Approuver"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
             {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-academy-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}
@@ -248,6 +293,16 @@ export default function AdminAcademyPage() {
   const [studentSearch, setStudentSearch] = useState("");
 
   const { data, isLoading } = useQuery<Overview>({ queryKey: ["/api/admin/academy"] });
+
+  // Keep the open AcademyDetail dialog in sync with refetched overview data
+  // (same fix as admin/print-page.tsx / admin/maintenance-page.tsx) — otherwise
+  // it keeps showing the cached snapshot taken on click, so publication/freeze
+  // decisions never appear until the dialog is closed and reopened.
+  useEffect(() => {
+    if (!selectedAcademy) return;
+    const fresh = data?.academies?.find((a) => a.userId === selectedAcademy.userId);
+    if (fresh && fresh !== selectedAcademy) setSelectedAcademy(fresh);
+  }, [data?.academies, selectedAcademy?.userId]);
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => apiRequest("PATCH", `/api/admin/users/${id}/status`, { status }),

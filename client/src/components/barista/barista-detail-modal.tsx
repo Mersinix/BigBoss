@@ -24,10 +24,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Award, Image as ImageIcon, Briefcase, MessageCircle,
-  Flag, Heart, Navigation, X,
+  Flag, Heart, Navigation, X, Zap,
 } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
+import { ReviewsModal } from "@/components/account/reviews-modal";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<string, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -207,6 +209,11 @@ export function BaristaDetailModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  // Star (Phase 7) and Flash (Phase 3/5E) — two new icons alongside the
+  // existing Signaler/Disponibilité pair; both open their own dedicated modal
+  // instead of expanding inline, same pattern as Signaler/Disponibilité already do.
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
   // Portfolio gallery — reuses the exact same lightbox already used by the
   // Marketing details modal (Part 25), no separate gallery component.
@@ -322,11 +329,15 @@ export function BaristaDetailModal({
                   <X className="w-4 h-4 text-white" />
                 </button>
               </div>
-              {/* Bottom right — Signaler + Disponibilité, same placement as the
-                  Maintenance details modal. */}
+              {/* Bottom right — Signaler, Disponibilité, new Avis (Star) + Flash
+                  icons, same placement as the Maintenance details modal. */}
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-barista-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-barista-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-barista-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
+                {card.flashImageUrl && (
+                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-barista-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+                )}
               </div>
               <span
                 className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${card.available ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}
@@ -421,58 +432,8 @@ export function BaristaDetailModal({
                 </div>
               )}
 
-              {/* Reviews */}
-              <div>
-                <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
-                {reviews.length === 0 ? (
-                  <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {reviews.map((r) => (
-                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBgAlt}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
-                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
-                        </div>
-                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Review submission — only offered when a completed mission with this
-                    Barista exists, exactly matching the server-side eligibility rule. */}
-                {eligibleMissions.length > 0 && (
-                  <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-                    {eligibleMissions.length > 1 && (
-                      <select
-                        className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-                        value={activeMissionId ?? ""}
-                        onChange={(e) => setReviewMissionId(Number(e.target.value))}
-                        data-testid="select-review-mission"
-                      >
-                        {eligibleMissions.map((m) => (
-                          <option key={m.id} value={m.id}>{m.missionType || `Mission #${m.id}`} {myReviewByMission.has(m.id) ? "(déjà noté)" : ""}</option>
-                        ))}
-                      </select>
-                    )}
-                    <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-                    <Textarea
-                      placeholder="Commentaire (facultatif)"
-                      rows={2}
-                      defaultValue={existingReview?.comment ?? ""}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      className={t.inputBg}
-                      data-testid="input-review-comment"
-                    />
-                    <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-submit-review">
-                      {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-                    </Button>
-                  </div>
-                )}
-              </div>
-
+              {/* Avis — moved into the dedicated Star-icon ReviewsModal (Phase 7),
+                  no longer rendered inline here. */}
             </div>
 
             {/* Actions — Signaler moved to the profile picture (Part 11);
@@ -524,6 +485,61 @@ export function BaristaDetailModal({
       images={card?.portfolioUrls ?? []}
       initialIndex={albumIndex}
       providerName={card?.name ?? ""}
+    />
+
+    {/* Avis (Phase 7) — dedicated modal, opened via the new Star icon. Same
+        review data/mutation/eligibility as before (reviews/createReview/
+        eligibleMissions), just relocated out of the main modal's body. */}
+    <ReviewsModal
+      open={reviewsModalOpen}
+      onClose={() => setReviewsModalOpen(false)}
+      professionalName={card?.name ?? ""}
+      rating={(card?.rating ?? 0) / 10}
+      reviewCount={card?.reviewCount ?? reviews.length}
+      reviews={reviews}
+      isDark={isDark}
+      reviewForm={!readOnly && eligibleMissions.length > 0 ? (
+        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
+          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
+          {eligibleMissions.length > 1 && (
+            <select
+              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+              value={activeMissionId ?? ""}
+              onChange={(e) => setReviewMissionId(Number(e.target.value))}
+              data-testid="select-review-mission"
+            >
+              {eligibleMissions.map((m) => (
+                <option key={m.id} value={m.id}>{m.missionType || `Mission #${m.id}`} {myReviewByMission.has(m.id) ? "(déjà noté)" : ""}</option>
+              ))}
+            </select>
+          )}
+          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
+          <Textarea
+            placeholder="Commentaire (facultatif)"
+            rows={2}
+            defaultValue={existingReview?.comment ?? ""}
+            onChange={(e) => setReviewComment(e.target.value)}
+            className={t.inputBg}
+            data-testid="input-review-comment"
+          />
+          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-submit-review">
+            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
+          </Button>
+        </div>
+      ) : undefined}
+    />
+
+    {/* Flash (Phase 3/5E) — the real Coffee Owner-facing destination for the
+        Flash URL configured in Settings → Compte; same component the Barista's
+        own self-preview uses, not preview mode here. */}
+    <FlashPreviewModal
+      open={flashModalOpen}
+      onClose={() => setFlashModalOpen(false)}
+      name={card?.name ?? ""}
+      typeLabel="Barista"
+      flashImageUrl={card?.flashImageUrl}
+      profileImageUrl={card?.profileImageUrl}
+      accentBgClass="bg-green-600"
     />
     </>
   );

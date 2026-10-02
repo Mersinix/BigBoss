@@ -58,6 +58,12 @@ export const users = pgTable("users", {
   // Settings → Compte section and every Details Modal read/write the exact same
   // generic PATCH /api/auth/me/profile field, same convention as profileImageUrl.
   coverImageUrl: text("cover_image_url"),
+  // Highlight image shown in the professional-profile "Flash" preview (Coffee
+  // Owner-facing, opened from the Star/lightning action in each account's own
+  // Details Modal) — distinct from profileImageUrl (logo/avatar) and
+  // coverImageUrl (banner), same generic-on-`users` convention since it's a
+  // single URL field with no per-account-type structure.
+  flashImageUrl: text("flash_image_url"),
   billingInfo: jsonb("billing_info"),
   governorates: text("governorates").array(),
   categories: text("categories").array(),
@@ -623,6 +629,16 @@ export const driverProfiles = pgTable("driver_profiles", {
   // Profile → Portfolio (max 4 enforced at the API layer) — same shape/convention as
   // maintenanceProfiles/marketingProfiles/deliveryCompanyProfiles.portfolioImages.
   portfolioImages: text("portfolio_images").array().notNull().default([]),
+  // GO Live publication workflow — same 4-column shape added to all 7
+  // professional profile tables (see maintenanceProfiles for the full
+  // rationale comment). DRAFT = never submitted; PENDING = awaiting admin
+  // review; APPROVED = eligible for marketplace display (still gated by this
+  // table's own existing visibility/vacation/freeze fields where present);
+  // REJECTED = admin declined, owner may edit and resubmit.
+  publicationStatus: text("publication_status").notNull().default("DRAFT"),
+  publicationSubmittedAt: timestamp("publication_submitted_at"),
+  publicationReviewedAt: timestamp("publication_reviewed_at"),
+  publicationRejectionReason: text("publication_rejection_reason"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export type DriverProfile = typeof driverProfiles.$inferSelect;
@@ -1524,6 +1540,11 @@ export const baristaMarketplaceProfiles = pgTable("barista_marketplace_profiles"
   // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
   // admin-only account freeze, distinct from the Barista's own isOnVacation toggle.
   isFrozen: boolean("is_frozen").notNull().default(false),
+  // GO Live publication workflow — see driverProfiles for the full rationale comment.
+  publicationStatus: text("publication_status").notNull().default("DRAFT"),
+  publicationSubmittedAt: timestamp("publication_submitted_at"),
+  publicationReviewedAt: timestamp("publication_reviewed_at"),
+  publicationRejectionReason: text("publication_rejection_reason"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1647,6 +1668,7 @@ export type BaristaMarketplaceCard = BaristaMarketplaceProfile & {
   phone: string | null;
   profileImageUrl: string | null;
   coverImageUrl?: string | null;
+  flashImageUrl?: string | null;
   initials: string;
   location: string;
   available: boolean;
@@ -1708,6 +1730,11 @@ export const academyProfiles = pgTable("academy_profiles", {
   // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
   // admin-only account freeze, distinct from the Academy's own isOnVacation toggle.
   isFrozen: boolean("is_frozen").notNull().default(false),
+  // GO Live publication workflow — see driverProfiles for the full rationale comment.
+  publicationStatus: text("publication_status").notNull().default("DRAFT"),
+  publicationSubmittedAt: timestamp("publication_submitted_at"),
+  publicationReviewedAt: timestamp("publication_reviewed_at"),
+  publicationRejectionReason: text("publication_rejection_reason"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1855,6 +1882,9 @@ export type AcademyCourseCard = AcademyCourse & {
   academyName: string;
   academyLocation: string;
   academyProfileImageUrl: string | null;
+  // The academy's Flash (Settings → Compte "Flash (URL)", users.flashImageUrl) —
+  // academy-level like the other academy* identity fields above, not per-course.
+  flashImageUrl: string | null;
   academyDescription: string;
   academyPhone: string | null;
   rating: number; // 0-50, i.e. x10
@@ -1957,6 +1987,20 @@ export const maintenanceProfiles = pgTable("maintenance_profiles", {
   isFrozen: boolean("is_frozen").notNull().default(false),
   rating: integer("rating").notNull().default(0),
   reviewCount: integer("review_count").notNull().default(0),
+  // GO Live publication workflow — admin review of PROFILE CONTENT, distinct
+  // from both account registration approval (users.status) and the admin
+  // isFrozen kill-switch above. DRAFT = never submitted; PENDING = submitted,
+  // awaiting admin review; APPROVED = admin has reviewed and cleared the
+  // profile for marketplace display (actual display still additionally
+  // requires marketplaceVisible=true, !isOnVacation and !isFrozen where this
+  // table has them — approval is one more AND-gate, never a bypass of the
+  // existing ones); REJECTED = admin declined, owner may edit and resubmit
+  // (clears back to PENDING). The same 4 columns are added identically to
+  // all 7 professional profile tables.
+  publicationStatus: text("publication_status").notNull().default("DRAFT"),
+  publicationSubmittedAt: timestamp("publication_submitted_at"),
+  publicationReviewedAt: timestamp("publication_reviewed_at"),
+  publicationRejectionReason: text("publication_rejection_reason"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -2076,6 +2120,11 @@ export const marketingProfiles = pgTable("marketing_profiles", {
   isFrozen: boolean("is_frozen").notNull().default(false),
   rating: integer("rating").notNull().default(0), // x10 convention, e.g. 47 = 4.7
   reviewCount: integer("review_count").notNull().default(0),
+  // GO Live publication workflow — see maintenanceProfiles for the full rationale comment.
+  publicationStatus: text("publication_status").notNull().default("DRAFT"),
+  publicationSubmittedAt: timestamp("publication_submitted_at"),
+  publicationReviewedAt: timestamp("publication_reviewed_at"),
+  publicationRejectionReason: text("publication_rejection_reason"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -2212,6 +2261,7 @@ export type MarketingMarketplaceCard = MarketingProfile & {
   phone: string | null;
   profileImageUrl: string | null;
   coverImageUrl?: string | null;
+  flashImageUrl?: string | null;
   location: string;
   initials: string;
   distanceKm?: number | null;
@@ -2309,6 +2359,11 @@ export const printerProfiles = pgTable("printer_profiles", {
   // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
   // admin-only account freeze, distinct from the Printer's own isOnVacation toggle.
   isFrozen: boolean("is_frozen").notNull().default(false),
+  // GO Live publication workflow — see maintenanceProfiles for the full rationale comment.
+  publicationStatus: text("publication_status").notNull().default("DRAFT"),
+  publicationSubmittedAt: timestamp("publication_submitted_at"),
+  publicationReviewedAt: timestamp("publication_reviewed_at"),
+  publicationRejectionReason: text("publication_rejection_reason"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -2884,6 +2939,7 @@ export type MaintenanceMarketplaceCard = MaintenanceProfile & {
   phone: string | null;
   profileImageUrl: string | null;
   coverImageUrl?: string | null;
+  flashImageUrl?: string | null;
   location: string;
   initials: string;
   available: boolean;
@@ -2928,6 +2984,11 @@ export const deliveryCompanyProfiles = pgTable("delivery_company_profiles", {
   marketplaceVisible: boolean("marketplace_visible").notNull().default(true),
   rating: integer("rating").notNull().default(0),
   reviewCount: integer("review_count").notNull().default(0),
+  // GO Live publication workflow — see maintenanceProfiles for the full rationale comment.
+  publicationStatus: text("publication_status").notNull().default("DRAFT"),
+  publicationSubmittedAt: timestamp("publication_submitted_at"),
+  publicationReviewedAt: timestamp("publication_reviewed_at"),
+  publicationRejectionReason: text("publication_rejection_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2940,6 +3001,7 @@ export type DeliveryCompanyMarketplaceCard = DeliveryCompanyProfile & {
   phone: string | null;
   profileImageUrl: string | null;
   coverImageUrl?: string | null;
+  flashImageUrl?: string | null;
   location: string;
   initials: string;
   available: boolean;
@@ -3013,6 +3075,7 @@ export type PrintCompanyCard = {
   name: string;
   profileImageUrl: string | null;
   coverImageUrl?: string | null;
+  flashImageUrl?: string | null;
   location: string;
   phone: string | null;
   description: string;

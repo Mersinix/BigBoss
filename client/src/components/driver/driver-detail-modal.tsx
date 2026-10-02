@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useThemeStore } from "@/store/theme-store";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { useDriverReviews, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
@@ -9,9 +9,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Star, MapPin, Clock, Truck, Mail, Phone, Award, Package, Building2, Store, X, Image as ImageIcon } from "lucide-react";
+import { Star, MapPin, Clock, Truck, Mail, Phone, Award, Package, Building2, Store, X, Zap, Image as ImageIcon } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
+import { ReviewsModal } from "@/components/account/reviews-modal";
+import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import type { User } from "@shared/schema";
 
 // Same theming mechanism as barista-detail-modal.tsx / AgentDetailModal /
@@ -125,13 +127,19 @@ function DriverAvailabilityModal({
 // Driver anywhere in the platform today — nothing to gate behind a readOnly
 // flag, so self-preview is automatically safe by construction) — the only
 // interactive element is the Disponibilité icon, which is real data in every
-// context including self-preview.
+// context including self-preview. The Avis (Star) and Flash icons sit next to
+// it — both read-only, safe for every viewer context.
+//
+// `adminSlot` — optional extra block rendered at the very end of the body,
+// passed ONLY by Admin → Delivery (GO Live publication approve/reject for the
+// driver). Omitted by every other caller, so their rendering is unchanged.
 export function DriverDetailModal({
-  driver, open, onClose,
+  driver, open, onClose, adminSlot,
 }: {
   driver: User | null;
   open: boolean;
   onClose: () => void;
+  adminSlot?: ReactNode;
 }) {
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
@@ -141,8 +149,14 @@ export function DriverDetailModal({
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
+  const [reviewsOpen, setReviewsOpen] = useState(false);
+  const [flashOpen, setFlashOpen] = useState(false);
 
   if (!driver) return null;
+
+  // Prefer the details route's own users-row value (always fresh), falling back
+  // to whatever the caller's User object carries.
+  const flashImageUrl = data?.flashImageUrl ?? driver.flashImageUrl ?? null;
 
   const profile = data?.profile;
   const vehicle = data?.vehicle;
@@ -193,6 +207,10 @@ export function DriverDetailModal({
                 </button>
               </div>
               <div className="absolute bottom-3 right-3 flex gap-2">
+                <button onClick={() => setReviewsOpen(true)} title="Avis" data-testid="button-open-driver-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
+                {flashImageUrl && (
+                  <button onClick={() => setFlashOpen(true)} title="Flash" data-testid="button-open-driver-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+                )}
                 <button onClick={() => setAvailabilityOpen(true)} title="Disponibilité" data-testid="button-open-driver-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
               </div>
               <span className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${available ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
@@ -286,22 +304,9 @@ export function DriverDetailModal({
                 </div>
               </div>
 
-              {reviews.length > 0 && (
-                <div>
-                  <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {reviews.map((r) => (
-                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBg}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
-                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
-                        </div>
-                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Avis — moved out of the inline body into ReviewsModal (Star icon above). */}
+
+              {adminSlot}
             </div>
           </div>
         )}
@@ -322,6 +327,28 @@ export function DriverDetailModal({
       images={profile?.portfolioImages ?? []}
       initialIndex={albumIndex}
       providerName={driver.name}
+    />
+
+    {/* Reviews are only ever submitted elsewhere (after a completed delivery),
+        so no reviewForm here — list only. */}
+    <ReviewsModal
+      open={reviewsOpen}
+      onClose={() => setReviewsOpen(false)}
+      professionalName={driver.name}
+      rating={avgRating}
+      reviewCount={reviews.length}
+      reviews={reviews}
+      isDark={isDark}
+    />
+
+    <FlashPreviewModal
+      open={flashOpen}
+      onClose={() => setFlashOpen(false)}
+      name={driver.name}
+      typeLabel="Chauffeur"
+      flashImageUrl={flashImageUrl}
+      profileImageUrl={driver.profileImageUrl}
+      accentBgClass="bg-blue-600"
     />
     </>
   );

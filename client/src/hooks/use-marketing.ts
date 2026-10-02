@@ -28,6 +28,9 @@ export type MarketingProfile = {
   isFrozen: boolean;
   rating: number; // x10, e.g. 47 = 4.7
   reviewCount: number;
+  // GO Live publication workflow — mirrors shared/schema.ts marketingProfiles.
+  publicationStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED";
+  publicationRejectionReason?: string | null;
   updatedAt: string;
 };
 
@@ -36,6 +39,7 @@ export type MarketingMarketplaceCard = MarketingProfile & {
   phone: string | null;
   profileImageUrl: string | null;
   coverImageUrl?: string | null;
+  flashImageUrl?: string | null;
   location: string;
   initials: string;
   distanceKm?: number | null;

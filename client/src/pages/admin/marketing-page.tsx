@@ -12,8 +12,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import {
   Megaphone, Users, Briefcase, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
-  Trash2, Snowflake, Search, MapPin, Phone, Image, DollarSign, Eye, X,
+  Trash2, Snowflake, Search, MapPin, Phone, Image, DollarSign, Eye, X, Check,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -144,6 +146,16 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
     onSuccess: () => { onRefresh(); toast({ title: account.isFrozen ? "Compte dégelé" : "Compte gelé" }); },
     onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
   });
+  // GO Live review — approve/reject the submitted PROFILE CONTENT, distinct from
+  // both account registration approval and the Freeze kill-switch above.
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const publicationMutation = useMutation({
+    mutationFn: (data: { decision: "APPROVED" | "REJECTED"; rejectionReason?: string }) =>
+      apiRequest("PATCH", `/api/admin/marketing/accounts/${account.userId}/publication`, data),
+    onSuccess: (_d, vars) => { onRefresh(); setRejecting(false); setRejectionReason(""); toast({ title: vars.decision === "APPROVED" ? "Profil approuvé et publié" : "Profil refusé" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
   const deleteMutation = useMutation({
     mutationFn: () => apiRequest("DELETE", `/api/admin/users/${account.userId}`),
     onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
@@ -170,7 +182,13 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
           <Badge variant="outline">{account.status}</Badge><Badge variant="secondary">{account.profileType}</Badge>
           <Badge className={account.marketplaceVisible ? "bg-green-600" : ""}>{account.marketplaceVisible ? "Visible marketplace" : "Masqué"}</Badge>
           {account.isFrozen && <Badge className="bg-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé par l'Admin</Badge>}
+          <PublicationStatusBadge status={account.publicationStatus ?? "DRAFT"} />
         </div>
+        {account.publicationStatus === "REJECTED" && account.publicationRejectionReason && (
+          <div className="sm:col-span-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg p-2">
+            Motif du refus précédent : {account.publicationRejectionReason}
+          </div>
+        )}
 
         {editing ? (
           <div className="sm:col-span-2 space-y-2 rounded-lg border p-3">
@@ -230,6 +248,32 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
               : <p>—</p>}
           </div>
         </>}
+
+        {account.publicationStatus === "PENDING" && (
+          <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-500/10 p-3 space-y-2">
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Demande de publication en attente — vérifiez le profil ci-dessus avant de décider.</p>
+            {rejecting ? (
+              <div className="space-y-2">
+                <Textarea placeholder="Motif du refus (visible par le professionnel)…" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} rows={2} />
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                  <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-marketing-publication">
+                    {publicationMutation.isPending ? "…" : "Confirmer le refus"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="outline" className="text-destructive border-destructive/40" onClick={() => setRejecting(true)} data-testid="button-start-reject-marketing-publication">
+                  <X className="h-3.5 w-3.5 mr-1.5" />Refuser
+                </Button>
+                <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "APPROVED" })} data-testid="button-approve-marketing-publication">
+                  <Check className="h-3.5 w-3.5 mr-1.5" />{publicationMutation.isPending ? "…" : "Approuver"}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
           {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-marketing-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Coffee, Users, CheckCircle, XCircle, Star, Plus, Pencil, Trash2, Snowflake, Search,
-  MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, Briefcase, Award, Eye, X,
+  MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, Briefcase, Award, Eye, X, Check,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
@@ -24,6 +25,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AlertTriangle } from "lucide-react";
 import { useAdminBaristaReports, useResolveBaristaReport } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
+import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // Mirrors admin/print-page.tsx's architecture exactly: one aggregate overview
@@ -44,6 +46,7 @@ type AdminBarista = {
   status: string; level: string; city: string; location: string; bio: string; skills: string[];
   availableDays: string[]; isAvailable: boolean; isOnVacation: boolean; marketplaceVisible: boolean; isFrozen: boolean;
   available: boolean; dailyRateInCents: number; rating: number; reviewCount: number;
+  publicationStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED"; publicationRejectionReason?: string | null;
   requestCount: number; missionCount: number; completedMissionCount: number; revenueCents: number;
   createdAt: string | null; initials: string;
 };
@@ -189,6 +192,16 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
     onSuccess: () => { onRefresh(); toast({ title: barista!.isFrozen ? "Compte dégelé" : "Compte gelé" }); },
     onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
   });
+  // GO Live review (Phase 5D) — approve/reject the submitted PROFILE CONTENT,
+  // distinct from both account registration approval and the Freeze kill-switch above.
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const publicationMutation = useMutation({
+    mutationFn: (data: { decision: "APPROVED" | "REJECTED"; rejectionReason?: string }) =>
+      apiRequest("PATCH", `/api/admin/barista/accounts/${barista!.userId}/publication`, data),
+    onSuccess: (_d, vars) => { onRefresh(); setRejecting(false); setRejectionReason(""); toast({ title: vars.decision === "APPROVED" ? "Profil approuvé et publié" : "Profil refusé" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
   const deleteMutation = useMutation({
     mutationFn: () => apiRequest("DELETE", `/api/admin/users/${barista!.userId}`),
     onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
@@ -217,7 +230,13 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
             <Badge variant={barista.available ? "default" : "secondary"}>{barista.available ? "Disponible" : "Indisponible"}</Badge>
             {!barista.marketplaceVisible && <Badge variant="secondary">Masqué du marketplace</Badge>}
             {barista.isFrozen && <Badge className="bg-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé par l'Admin</Badge>}
+            <PublicationStatusBadge status={barista.publicationStatus ?? "DRAFT"} />
           </div>
+          {barista.publicationStatus === "REJECTED" && barista.publicationRejectionReason && (
+            <div className="sm:col-span-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 rounded-lg p-2">
+              Motif du refus précédent : {barista.publicationRejectionReason}
+            </div>
+          )}
 
           {editing ? (
             <div className="sm:col-span-2 space-y-2 rounded-lg border p-3">
@@ -256,6 +275,32 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
               </div>
             )}
           </>}
+
+          {barista.publicationStatus === "PENDING" && (
+            <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-500/10 p-3 space-y-2">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Demande de publication en attente — vérifiez le profil ci-dessus avant de décider.</p>
+              {rejecting ? (
+                <div className="space-y-2">
+                  <Textarea placeholder="Motif du refus (visible par le professionnel)…" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} rows={2} data-testid="input-barista-publication-rejection-reason" />
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                    <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-barista-publication">
+                      {publicationMutation.isPending ? "…" : "Confirmer le refus"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="outline" className="text-destructive border-destructive/40" onClick={() => setRejecting(true)} data-testid="button-start-reject-barista-publication">
+                    <X className="h-3.5 w-3.5 mr-1.5" />Refuser
+                  </Button>
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "APPROVED" })} data-testid="button-approve-barista-publication">
+                    <Check className="h-3.5 w-3.5 mr-1.5" />{publicationMutation.isPending ? "…" : "Approuver"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
             {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-barista-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}

@@ -34,6 +34,8 @@ export type AcademyCourseCard = AcademyCourse & {
   academyName: string;
   academyLocation: string;
   academyProfileImageUrl: string | null;
+  // Academy-level Flash (users.flashImageUrl) — mirrors @shared/schema's AcademyCourseCard.
+  flashImageUrl?: string | null;
   academyDescription: string;
   academyPhone: string | null;
   rating: number; // x10, e.g. 47 = 4.7
@@ -261,7 +263,7 @@ export function useMyAcademyProfile(userId: number | null) {
 }
 
 export type AcademyProfileCard = {
-  userId: number; name: string; profileImageUrl: string | null; coverImageUrl?: string | null; location: string; phone: string | null;
+  userId: number; name: string; profileImageUrl: string | null; coverImageUrl?: string | null; flashImageUrl?: string | null; location: string; phone: string | null;
   description: string; marketplaceVisible: boolean; weeklyHours: OpeningHoursMap | null; isOnVacation: boolean;
   rating: number; reviewCount: number; portfolioImages: string[];
   courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];

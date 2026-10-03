@@ -53,10 +53,8 @@ import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { useNotificationPreferences, useUpdateNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { NOTIFICATION_PREF_DEFS, ROLE_NOTIFICATION_PREF_KEYS } from "@shared/notification-preferences";
 import type { CategoryWithCount, ShopFavoriteItem, MarketplaceProduct, PackDetail, StoreCard, ConversationSummary, ConversationMessageRow, EligibleContact, OrderWithDetails, MaintenanceMarketplaceCard, PrintOrderWithParties, PrintCatalogCard } from "@shared/schema";
-import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/hooks/use-barista-marketplace";
+import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
-import { RecruitDialog as BaristaRecruitDialog } from "@/pages/cafe/barista/barista-page";
-import { useBaristaRequests, useBaristaMissions } from "@/hooks/use-barista-marketplace";
 import { JobManagementModal } from "@/components/barista/job-management-modal";
 import { BaristaOffresList } from "@/components/cafe/barista-offres-list";
 import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
@@ -179,8 +177,6 @@ function AccountPanel({
     queryKey: ["/api/print/orders"],
     enabled: !!user,
   });
-  const { data: baristaRequests = [], isLoading: baristaRequestsLoading } = useBaristaRequests();
-  const { data: baristaMissions = [], isLoading: baristaMissionsLoading } = useBaristaMissions();
   // Barista Academy — same real, owner-scoped endpoint the Academy account's own
   // Inscriptions tab and Admin Academy read from (GET /api/academy/registrations
   // already scopes by session role, returning only this Coffee Owner's own
@@ -192,8 +188,6 @@ function AccountPanel({
   const { data: marketingProjectsForOwner = [], isLoading: marketingProjectsLoading } = useMarketingProjects();
   const [detailPrintOrder, setDetailPrintOrder] = useState<PrintOrderWithParties | null>(null);
   const [detailMaintenanceReservation, setDetailMaintenanceReservation] = useState<any | null>(null);
-  const [detailBaristaMission, setDetailBaristaMission] = useState<BaristaMission | null>(null);
-  const [detailBaristaRequest, setDetailBaristaRequest] = useState<BaristaRequest | null>(null);
   const [detailMarketingProjectId, setDetailMarketingProjectId] = useState<number | null>(null);
   const [detailAcademyRegistrationId, setDetailAcademyRegistrationId] = useState<number | null>(null);
 
@@ -208,10 +202,11 @@ function AccountPanel({
     .map((id) => RESERVATION_SERVICE_TABS.find((t) => t.orderId === id))
     .filter((t): t is typeof RESERVATION_SERVICE_TABS[number] => !!t && serviceStates[t.stateKey] !== "HIDDEN");
   const [reservationsService, setReservationsService] = useState<string | null>(null);
-  // Baristas tab split (Missions / Offres) — Missions is the existing
-  // requests+missions timeline below, unchanged; Offres is new, reading the
-  // same job posts already managed via /barista's "Offres d'emploi" hero
-  // icon (useMyBaristaJobs) — no separate job-posting system here.
+  // Baristas tab split (Missions / Offres) — both read the current job-posting
+  // system (useMyBaristaJobs), split by recordType, same data already managed
+  // via /barista's "Offres d'emploi" hero icon. The old request/mission-
+  // acceptance timeline this used to show under "Missions" was removed (see
+  // mission_workflow_cleanup_audit.md).
   const [baristaReservationTab, setBaristaReservationTab] = useState<"missions" | "offres">("missions");
   const [jobManagementJobId, setJobManagementJobId] = useState<number | null>(null);
   const [jobManagementOpen, setJobManagementOpen] = useState(false);
@@ -232,36 +227,12 @@ function AccountPanel({
     if (activeTab === "reservations" && visibleReservationTabs.length === 0) setActiveTab("orders");
   }, [activeTab, visibleReservationTabs.length]);
 
-  const baristaRequestStatusMeta: Record<string, { label: string; color: string }> = {
-    PENDING: { label: "En attente", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
-    DISCUSSION: { label: "En discussion", color: "bg-blue-100 text-blue-800 border-blue-200" },
-    ACCEPTED: { label: "Acceptée", color: "bg-green-100 text-green-800 border-green-200" },
-    REJECTED: { label: "Refusée", color: "bg-red-100 text-red-800 border-red-200" },
-    CANCELLED: { label: "Annulée", color: "bg-gray-100 text-gray-700 border-gray-200" },
-    COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
-  };
-  const baristaMissionStatusMeta: Record<string, { label: string; color: string }> = {
-    UPCOMING: { label: "À venir", color: "bg-blue-100 text-blue-800 border-blue-200" },
-    ACTIVE: { label: "En cours", color: "bg-purple-100 text-purple-800 border-purple-200" },
-    COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
-    CANCELLED: { label: "Annulée", color: "bg-gray-100 text-gray-700 border-gray-200" },
-  };
   const academyRegistrationStatusMeta: Record<string, { label: string; color: string }> = {
     PENDING: { label: "En attente", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
     CONFIRMED: { label: "Confirmée", color: "bg-indigo-100 text-indigo-800 border-indigo-200" },
     COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
     CANCELLED: { label: "Annulée", color: "bg-gray-100 text-gray-700 border-gray-200" },
   };
-  // A request that has been ACCEPTED has a corresponding mission — show the
-  // mission (which carries the real, immutable rate/schedule) instead of the
-  // now-superseded request, mirroring how Maintenance inlines its own
-  // RESCHEDULE_PENDING sub-state into the same card rather than a second list.
-  const acceptedRequestIds = new Set(baristaMissions.map((m) => m.requestId));
-  const baristaTimelineItems: ({ kind: "mission"; data: BaristaMission } | { kind: "request"; data: BaristaRequest })[] = [
-    ...baristaMissions.map((data) => ({ kind: "mission" as const, data })),
-    ...baristaRequests.filter((r) => !acceptedRequestIds.has(r.id)).map((data) => ({ kind: "request" as const, data })),
-  ].sort((a, b) => new Date(b.data.createdAt).getTime() - new Date(a.data.createdAt).getTime());
-
   const [detailOrder, setDetailOrder] = useState<OrderWithDetails | null>(null);
   const { isEnabled: isNotifCategoryEnabled } = useNotificationPreferences();
   const updateNotifPrefs = useUpdateNotificationPreferences();
@@ -850,9 +821,13 @@ function AccountPanel({
               )
             )}
 
-            {/* ── Marketplace Baristas — Missions (requests+missions timeline,
-                unchanged) / Offres (existing job posts, read here and managed
-                via the same JobManagementModal /barista already uses) switcher. ── */}
+            {/* ── Marketplace Baristas — Missions / Offres (existing job posts,
+                read here and managed via the same JobManagementModal /barista
+                already uses) switcher. The old request/mission-acceptance
+                timeline that used to render under "Missions" here was removed
+                as part of the mission-workflow cleanup (see
+                mission_workflow_cleanup_audit.md) — both options now show the
+                current job-posting system, split by recordType. ── */}
             {reservationsService === "barista_marketplace" && (
               <div className="space-y-3">
                 <div className={`flex gap-1 rounded-2xl p-1 w-fit ${switcherBg}`}>
@@ -872,55 +847,15 @@ function AccountPanel({
                   </button>
                 </div>
 
-                {baristaReservationTab === "missions" ? (
-                  (baristaRequestsLoading || baristaMissionsLoading) ? (
-                    <div className="space-y-3">
-                      {[...Array(2)].map((_, i) => <div key={i} className={`h-28 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}
-                    </div>
-                  ) : baristaTimelineItems.length === 0 ? (
-                    <div className={`text-center py-16 ${textMuted}`}>
-                      <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                      <p className={`font-medium text-sm ${textPrimary}`}>Aucune réservation Barista pour le moment</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {baristaTimelineItems.map((item) => {
-                        const meta = item.kind === "mission"
-                          ? (baristaMissionStatusMeta[item.data.status] ?? baristaMissionStatusMeta.UPCOMING)
-                          : (baristaRequestStatusMeta[item.data.status] ?? baristaRequestStatusMeta.PENDING);
-                        return (
-                          <button
-                            key={`${item.kind}-${item.data.id}`}
-                            onClick={() => item.kind === "mission" ? setDetailBaristaMission(item.data) : setDetailBaristaRequest(item.data)}
-                            className={`w-full text-left border rounded-2xl p-4 space-y-3 ${cardBg}`}
-                            data-testid={`card-reservation-barista-${item.kind}-${item.data.id}`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.data.baristaName}</p>
-                                <p className={`text-xs mt-0.5 ${textMuted}`}>{item.data.missionType}</p>
-                              </div>
-                              <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
-                            </div>
-                            <div className={`flex items-center gap-1 text-xs ${textMuted}`}>
-                              <Calendar className="w-3 h-3 text-amber-500" />
-                              {item.data.startDate}{item.data.endDate ? ` → ${item.data.endDate}` : ""}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )
-                ) : (
-                  <BaristaOffresList
-                    dk={dk}
-                    cardBg={cardBg}
-                    textPrimary={textPrimary}
-                    textMuted={textMuted}
-                    onOpenJob={(id) => { setJobManagementJobId(id); setJobManagementOpen(true); }}
-                    onCreateJob={() => { setJobManagementJobId(null); setJobManagementOpen(true); }}
-                  />
-                )}
+                <BaristaOffresList
+                  recordType={baristaReservationTab === "missions" ? "MISSION" : "OFFER"}
+                  dk={dk}
+                  cardBg={cardBg}
+                  textPrimary={textPrimary}
+                  textMuted={textMuted}
+                  onOpenJob={(id) => { setJobManagementJobId(id); setJobManagementOpen(true); }}
+                  onCreateJob={() => { setJobManagementJobId(null); setJobManagementOpen(true); }}
+                />
               </div>
             )}
 
@@ -1152,56 +1087,7 @@ function AccountPanel({
           </DialogContent>
         </Dialog>
 
-        {/* Barista Marketplace mission details */}
-        <Dialog open={!!detailBaristaMission} onOpenChange={(o) => !o && setDetailBaristaMission(null)}>
-          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
-            <DialogTitle className={textPrimary}>Mission {detailBaristaMission ? `#${detailBaristaMission.id}` : ""}</DialogTitle>
-            <DialogDescription className="sr-only">Détails de la mission Barista</DialogDescription>
-            {(() => {
-              const mission = detailBaristaMission ? (baristaMissions.find((m) => m.id === detailBaristaMission.id) ?? detailBaristaMission) : null;
-              if (!mission) return null;
-              const meta = baristaMissionStatusMeta[mission.status] ?? baristaMissionStatusMeta.UPCOMING;
-              return (
-                <div className="space-y-3 text-sm">
-                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><p className={`text-xs ${textMuted}`}>Barista</p><p className={`font-medium ${textPrimary}`}>{mission.baristaName}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Mission</p><p className={`font-medium ${textPrimary}`}>{mission.missionType}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Tarif</p><p className={textPrimary}>{fmt(mission.rateInCents)}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Dates</p><p className={textPrimary}>{mission.startDate}{mission.endDate ? ` → ${mission.endDate}` : ""}</p></div>
-                  </div>
-                </div>
-              );
-            })()}
-          </DialogContent>
-        </Dialog>
-
-        {/* Barista Marketplace request details (not yet accepted into a mission) */}
-        <Dialog open={!!detailBaristaRequest} onOpenChange={(o) => !o && setDetailBaristaRequest(null)}>
-          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
-            <DialogTitle className={textPrimary}>Demande {detailBaristaRequest ? `#${detailBaristaRequest.id}` : ""}</DialogTitle>
-            <DialogDescription className="sr-only">Détails de la demande Barista</DialogDescription>
-            {(() => {
-              const request = detailBaristaRequest ? (baristaRequests.find((r) => r.id === detailBaristaRequest.id) ?? detailBaristaRequest) : null;
-              if (!request) return null;
-              const meta = baristaRequestStatusMeta[request.status] ?? baristaRequestStatusMeta.PENDING;
-              return (
-                <div className="space-y-3 text-sm">
-                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><p className={`text-xs ${textMuted}`}>Barista</p><p className={`font-medium ${textPrimary}`}>{request.baristaName}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Mission</p><p className={`font-medium ${textPrimary}`}>{request.missionType}</p></div>
-                    {request.proposedRateInCents != null && <div><p className={`text-xs ${textMuted}`}>Tarif proposé</p><p className={textPrimary}>{fmt(request.proposedRateInCents)}</p></div>}
-                    <div><p className={`text-xs ${textMuted}`}>Dates</p><p className={textPrimary}>{request.startDate}{request.endDate ? ` → ${request.endDate}` : ""}</p></div>
-                  </div>
-                  {request.message && <div><p className={`text-xs ${textMuted}`}>Message</p><p className={textPrimary}>{request.message}</p></div>}
-                </div>
-              );
-            })()}
-          </DialogContent>
-        </Dialog>
-
-        {/* Baristas > Offres — reuses the exact same job management modal as
+        {/* Baristas > Offres/Missions — reuses the exact same job management modal as
             /barista's "Offres d'emploi" hero icon, just deep-linked to the
             clicked offer when opened from here. */}
         <JobManagementModal
@@ -1614,7 +1500,6 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   // Clicking a favorite Barista card opens the same comprehensive detail modal
   // used on /barista (Part 22) — no separate favorites-only barista view.
   const [detailBaristaId, setDetailBaristaId] = useState<number | null>(null);
-  const [recruitBarista, setRecruitBarista] = useState<BaristaMarketplaceCard | null>(null);
   // Clicking a favorite Marketing card opens the same comprehensive detail
   // modal used on /marketing — no separate favorites-only Marketing view.
   const [detailMarketingId, setDetailMarketingId] = useState<number | null>(null);
@@ -2342,13 +2227,6 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         baristaUserId={detailBaristaId}
         open={detailBaristaId != null}
         onClose={() => setDetailBaristaId(null)}
-        onRecruit={(b) => { setDetailBaristaId(null); setRecruitBarista(b); }}
-      />
-      <BaristaRecruitDialog
-        barista={recruitBarista}
-        open={!!recruitBarista}
-        onClose={() => setRecruitBarista(null)}
-        isDark={dk}
       />
 
       <MarketingDetailModal

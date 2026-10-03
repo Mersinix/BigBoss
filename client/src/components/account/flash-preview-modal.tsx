@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { X, Zap, Eye } from "lucide-react";
+import { normalizeImageUrl, getPreferredImageUrl } from "@/lib/avatar";
 
 // Shared "Flash" highlight — a single full-bleed image (Settings → Compte's
 // new "Flash (URL)" field) shown in a lightweight story-style card, reused
@@ -29,15 +30,21 @@ export function FlashPreviewModal({
   accentBgClass: string;
   preview?: boolean;
 }) {
-  const primary = flashImageUrl?.trim() || null;
-  const fallback = profileImageUrl?.trim() || null;
+  // Shared Flash (URL) > Photo de profil (URL) priority (getPreferredImageUrl,
+  // see client/src/lib/avatar.ts and flash_image_sync_audit.md) — identical to
+  // BaristaFastSearch's own selection logic. `fallback` is kept as its own
+  // normalized value (not just folded into the priority call) because the
+  // retry step below needs to name it explicitly: "if what just failed wasn't
+  // already the photo, and a photo exists, retry with it."
+  const primary = normalizeImageUrl(flashImageUrl);
+  const fallback = normalizeImageUrl(profileImageUrl);
   // Flash (URL) takes priority; if it's unset OR fails to actually load, fall
   // through to Photo de profil (URL); if that's also unset/broken, show the
   // plain placeholder below — never a blank/broken-image box.
-  const [imgSrc, setImgSrc] = useState<string | null>(primary || fallback);
+  const [imgSrc, setImgSrc] = useState<string | null>(getPreferredImageUrl(flashImageUrl, profileImageUrl));
   const [triedFallback, setTriedFallback] = useState(false);
   useEffect(() => {
-    setImgSrc(primary || fallback);
+    setImgSrc(getPreferredImageUrl(flashImageUrl, profileImageUrl));
     setTriedFallback(false);
   }, [primary, fallback]);
 

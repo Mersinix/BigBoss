@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import baristaHeroImg from "@assets/8d80708f-be87-4e8d-8805-f60e3c292914-1000x562.5-rjZKXkudAsN4bH_1780680229193.jpg";
@@ -342,6 +342,9 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   const { settings: heroActions } = useHeroActionSettings();
 
   const [trainingSearch, setTrainingSearch] = useState("");
+  // Mobile collapsible search (mobile_filters_darkmode_audit.md) — presentation only.
+  const [trainingSearchOpen, setTrainingSearchOpen] = useState(false);
+  const trainingSearchInputRef = useRef<HTMLInputElement>(null);
   const [trainingLevel, setTrainingLevel] = useState("");
   const [trainingCert, setTrainingCert] = useState("");
   const [enrollTarget, setEnrollTarget] = useState<AcademyCourseCard | null>(null);
@@ -470,23 +473,41 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
         <section>
           {/* Training Filters */}
           <div className={`border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div
+              className="flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+            >
               <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
-              <div className="relative flex-1 min-w-[180px] max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                <Input
-                  value={trainingSearch}
-                  onChange={(e) => setTrainingSearch(e.target.value)}
-                  placeholder="Rechercher une formation..."
-                  className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
-                  data-testid="input-training-search"
-                />
+              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+                {!trainingSearchOpen && (
+                  <button
+                    type="button"
+                    className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                    onClick={() => { setTrainingSearchOpen(true); setTimeout(() => trainingSearchInputRef.current?.focus(), 0); }}
+                    aria-label="Rechercher"
+                    data-testid="button-open-training-search"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <div className={`${trainingSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <Input
+                    ref={trainingSearchInputRef}
+                    value={trainingSearch}
+                    onChange={(e) => setTrainingSearch(e.target.value)}
+                    onBlur={() => { if (!trainingSearch) setTrainingSearchOpen(false); }}
+                    placeholder="Rechercher une formation..."
+                    className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                    data-testid="input-training-search"
+                  />
+                </div>
               </div>
               <Select
                 value={trainingLevel || "__all__"}
                 onValueChange={(v) => setTrainingLevel(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-training-level">
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.inputBg}`} data-testid="select-training-level">
                   <SelectValue placeholder="Niveau" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
@@ -500,7 +521,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
                 value={trainingCert || "__all__"}
                 onValueChange={(v) => setTrainingCert(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-training-cert">
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.inputBg}`} data-testid="select-training-cert">
                   <SelectValue placeholder="Certification" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
@@ -516,7 +537,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
                     setTrainingLevel("");
                     setTrainingCert("");
                   }}
-                  className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
+                  className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors shrink-0 whitespace-nowrap"
                   data-testid="button-reset-training-filters"
                 >
                   <RotateCcw className="w-3 h-3" /> Reset

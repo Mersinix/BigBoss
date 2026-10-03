@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import baristaHeroImg from "@assets/8d80708f-be87-4e8d-8805-f60e3c292914-1000x562.5-rjZKXkudAsN4bH_1780680229193.jpg";
@@ -368,6 +368,11 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
 
   // Hiring filters
   const [baristaSearch, setBaristaSearch] = useState("");
+  // Mobile collapsible search (mobile_filters_darkmode_audit.md) — the input
+  // itself/its state/filtering logic are unchanged; only its mobile
+  // presentation (icon ⇄ expanded input) is new.
+  const [baristaSearchOpen, setBaristaSearchOpen] = useState(false);
+  const baristaSearchInputRef = useRef<HTMLInputElement>(null);
   const [baristaLevel, setBaristaLevel] = useState("");
   const [baristaAvailability, setBaristaAvailability] = useState("");
   const [baristaSkill, setBaristaSkill] = useState("");
@@ -375,7 +380,6 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   const [baristaEducation, setBaristaEducation] = useState("");
   const [baristaLanguages, setBaristaLanguages] = useState<string[]>([]);
 
-  const [recruitTarget, setRecruitTarget] = useState<BaristaMarketplaceCard | null>(null);
   const [detailBaristaId, setDetailBaristaId] = useState<number | null>(null);
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
@@ -480,15 +484,6 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
     }
   };
 
-  const handleRecruit = (barista: BaristaMarketplaceCard) => {
-    if (!canAct) {
-      if (!user) { navigate("/login"); return; }
-      toast({ title: "Action réservée aux cafés approuvés", variant: "destructive" });
-      return;
-    }
-    setRecruitTarget(barista);
-  };
-
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
@@ -588,23 +583,41 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         <section>
           {/* Hiring Filters */}
            <div className={`border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div
+              className="flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+            >
                <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
-              <div className="relative flex-1 min-w-[180px] max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                <Input
-                  value={baristaSearch}
-                  onChange={(e) => setBaristaSearch(e.target.value)}
-                  placeholder="Nom ou compétence..."
-                   className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
-                  data-testid="input-barista-search"
-                />
+              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+                {!baristaSearchOpen && (
+                  <button
+                    type="button"
+                    className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                    onClick={() => { setBaristaSearchOpen(true); setTimeout(() => baristaSearchInputRef.current?.focus(), 0); }}
+                    aria-label="Rechercher"
+                    data-testid="button-open-barista-search"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <div className={`${baristaSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <Input
+                    ref={baristaSearchInputRef}
+                    value={baristaSearch}
+                    onChange={(e) => setBaristaSearch(e.target.value)}
+                    onBlur={() => { if (!baristaSearch) setBaristaSearchOpen(false); }}
+                    placeholder="Nom ou compétence..."
+                     className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                    data-testid="input-barista-search"
+                  />
+                </div>
               </div>
               <Select
                 value={baristaLevel || "__all__"}
                 onValueChange={(v) => setBaristaLevel(v === "__all__" ? "" : v)}
               >
-                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-barista-level">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.inputBg}`} data-testid="select-barista-level">
                   <SelectValue placeholder="Niveau" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
@@ -618,7 +631,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={baristaAvailability || "__all__"}
                 onValueChange={(v) => setBaristaAvailability(v === "__all__" ? "" : v)}
               >
-                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.inputBg}`} data-testid="select-barista-availability">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.inputBg}`} data-testid="select-barista-availability">
                   <SelectValue placeholder="Disponibilité" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
@@ -631,7 +644,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={baristaSkill || "__all__"}
                 onValueChange={(v) => setBaristaSkill(v === "__all__" ? "" : v)}
               >
-                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.inputBg}`} data-testid="select-barista-skill">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.inputBg}`} data-testid="select-barista-skill">
                   <SelectValue placeholder="Compétence" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
@@ -645,7 +658,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={baristaLocation || "__all__"}
                 onValueChange={(v) => setBaristaLocation(v === "__all__" ? "" : v)}
               >
-                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.inputBg}`} data-testid="select-barista-location">
+                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.inputBg}`} data-testid="select-barista-location">
                   <SelectValue placeholder="Ville" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
@@ -659,7 +672,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 value={baristaEducation || "__all__"}
                 onValueChange={(v) => setBaristaEducation(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[140px] ${t.inputBg}`} data-testid="select-barista-education">
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[140px] shrink-0 ${t.inputBg}`} data-testid="select-barista-education">
                   <SelectValue placeholder="Niveau d'étude" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
@@ -673,7 +686,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] inline-flex items-center justify-between gap-1.5 border ${t.inputBg}`}
+                    className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 inline-flex items-center justify-between gap-1.5 border ${t.inputBg}`}
                     data-testid="select-barista-language"
                   >
                     {baristaLanguages.length > 0 ? `Langue (${baristaLanguages.length})` : "Langue"}
@@ -707,7 +720,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                     setBaristaEducation("");
                     setBaristaLanguages([]);
                   }}
-                  className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
+                  className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors shrink-0 whitespace-nowrap"
                   data-testid="button-reset-barista-filters"
                 >
                   <RotateCcw className="w-3 h-3" /> Reset
@@ -764,22 +777,13 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         open={fastSearchOpen}
         onClose={() => setFastSearchOpen(false)}
         baristas={profiles}
-        onRecruit={(b) => handleRecruit(b)}
         onOpenDetail={(b) => setDetailBaristaId(b.userId)}
-      />
-
-      <RecruitDialog
-        barista={recruitTarget}
-        open={!!recruitTarget}
-        onClose={() => setRecruitTarget(null)}
-        isDark={isDark}
       />
 
       <BaristaDetailModal
         baristaUserId={detailBaristaId}
         open={detailBaristaId != null}
         onClose={() => setDetailBaristaId(null)}
-        onRecruit={(b) => { setDetailBaristaId(null); handleRecruit(b); }}
       />
 
       <BaristaBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} />

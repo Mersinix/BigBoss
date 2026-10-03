@@ -1,29 +1,36 @@
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useBaristaRequests, useBaristaMissions, useBaristaReviews, type BaristaRequestStatus } from "@/hooks/use-barista-marketplace";
+import { useMyBaristaJobApplications, useBaristaReviews, type BaristaJobApplicationStatus } from "@/hooks/use-barista-marketplace";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Briefcase, Star, Clock, TrendingUp, Coffee } from "lucide-react";
+import { Send, CalendarClock, Clock, Star, TrendingUp, Coffee } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
-const STATUS_LABELS: Record<BaristaRequestStatus, string> = {
+// Mission-workflow cleanup (barista_performance_flash_audit.md) — this
+// dashboard used to be built entirely on the legacy 1:1 request/mission
+// system (useBaristaRequests/useBaristaMissions), which no longer has any
+// creation UI anywhere in the Barista Marketplace. Rebuilt on the current
+// job-posting system: useMyBaristaJobApplications() (GET
+// /api/barista/applications/mine), covering both Offer and Mission
+// applications for this authenticated barista. No duplicate data source, no
+// legacy-request figures counted as current activity.
+
+const STATUS_LABELS: Record<BaristaJobApplicationStatus, string> = {
   PENDING: "En attente",
-  DISCUSSION: "En discussion",
-  ACCEPTED: "Acceptée",
-  REJECTED: "Refusée",
-  CANCELLED: "Annulée",
-  COMPLETED: "Terminée",
+  PRESELECTED: "Présélectionné",
+  INTERVIEW_SCHEDULED: "Entretien planifié",
+  ACCEPTED: "Accepté",
+  REJECTED: "Rejeté",
 };
 
-const STATUS_COLORS: Record<BaristaRequestStatus, string> = {
+const STATUS_COLORS: Record<BaristaJobApplicationStatus, string> = {
   PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  DISCUSSION: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+  PRESELECTED: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+  INTERVIEW_SCHEDULED: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
   ACCEPTED: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
   REJECTED: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
-  CANCELLED: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
-  COMPLETED: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
 };
 
 const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
@@ -31,44 +38,50 @@ const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-7
 
 export default function BaristaMarketplaceDashboard() {
   const { user } = useAuth();
-  const { data: requests = [], isLoading: requestsLoading } = useBaristaRequests();
-  const { data: missions = [], isLoading: missionsLoading } = useBaristaMissions();
+  const { data: applications = [], isLoading: applicationsLoading } = useMyBaristaJobApplications();
   const { data: reviews = [] } = useBaristaReviews(user?.id ?? null);
 
-  const isLoading = requestsLoading || missionsLoading;
+  const isLoading = applicationsLoading;
 
   const now = new Date();
-  const thisMonthRequests = requests.filter((r) => {
-    const d = new Date(r.createdAt);
+  const thisMonthApplications = applications.filter((a) => {
+    const d = new Date(a.createdAt);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }).length;
-  const activeMissions = missions.filter((m) => m.status === "ACTIVE").length;
-  const pendingRequests = requests.filter((r) => r.status === "PENDING").length;
+  const pendingApplications = applications.filter((a) => a.status === "PENDING").length;
+  // Upcoming interview = a proposed/confirmed meeting still in the future —
+  // mirrors the same bucketing rule jobs.tsx's applicationBucket() already
+  // uses for its own "upcoming" filter, so the two pages never disagree.
+  const upcomingInterviews = applications.filter((a) => {
+    const m = a.meeting;
+    if (!m || (m.status !== "PROPOSED" && m.status !== "CONFIRMED")) return false;
+    return new Date(m.scheduledAt).getTime() > now.getTime();
+  }).length;
   const avgRating = reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : "—";
 
   const chartData = useMemo(() => {
-    const buckets: { month: string; requests: number }[] = [];
+    const buckets: { month: string; applications: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const count = requests.filter((r) => {
-        const rd = new Date(r.createdAt);
-        return rd.getFullYear() === d.getFullYear() && rd.getMonth() === d.getMonth();
+      const count = applications.filter((a) => {
+        const ad = new Date(a.createdAt);
+        return ad.getFullYear() === d.getFullYear() && ad.getMonth() === d.getMonth();
       }).length;
-      buckets.push({ month: MONTH_LABELS[d.getMonth()], requests: count });
+      buckets.push({ month: MONTH_LABELS[d.getMonth()], applications: count });
     }
     return buckets;
-  }, [requests]);
+  }, [applications]);
 
-  const recentRequests = useMemo(
-    () => [...requests].sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1)).slice(0, 5),
-    [requests]
+  const recentApplications = useMemo(
+    () => [...applications].sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1)).slice(0, 5),
+    [applications]
   );
 
   return (
     <div className="flex flex-col gap-5">
       <DashboardHero
         title="Tableau de bord Marketplace Barista"
-        subtitle={`Bienvenue, ${user?.name}. Gérez vos offres et demandes.`}
+        subtitle={`Bienvenue, ${user?.name}. Suivez vos candidatures et vos entretiens.`}
         stat={reviews.length > 0 ? avgRating : undefined}
         statLabel="Note moyenne"
         icon={Coffee}
@@ -84,9 +97,9 @@ export default function BaristaMarketplaceDashboard() {
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Demandes ce mois", value: String(thisMonthRequests), icon: Briefcase, color: "text-indigo-500" },
-            { label: "Missions actives", value: String(activeMissions), icon: Users, color: "text-blue-500" },
-            { label: "En attente", value: String(pendingRequests), icon: Clock, color: "text-amber-500" },
+            { label: "Candidatures ce mois", value: String(thisMonthApplications), icon: Send, color: "text-indigo-500" },
+            { label: "Entretiens à venir", value: String(upcomingInterviews), icon: CalendarClock, color: "text-blue-500" },
+            { label: "En attente", value: String(pendingApplications), icon: Clock, color: "text-amber-500" },
             { label: "Note", value: avgRating, icon: Star, color: "text-yellow-500" },
           ].map((kpi) => (
             <Card key={kpi.label} className={CARD_CLASS}>
@@ -106,7 +119,7 @@ export default function BaristaMarketplaceDashboard() {
         <Card className={CARD_CLASS}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-indigo-500" /> Demandes (6 mois)
+              <TrendingUp className="w-4 h-4 text-indigo-500" /> Candidatures (6 mois)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -121,8 +134,8 @@ export default function BaristaMarketplaceDashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`${v} demandes`, "Demandes"]} />
-                <Area type="monotone" dataKey="requests" stroke="#6366f1" strokeWidth={2} fill="url(#baristaGrad)" dot={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [`${v} candidature${v > 1 ? "s" : ""}`, "Candidatures"]} />
+                <Area type="monotone" dataKey="applications" stroke="#6366f1" strokeWidth={2} fill="url(#baristaGrad)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -130,22 +143,22 @@ export default function BaristaMarketplaceDashboard() {
 
         <Card className={CARD_CLASS}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Demandes récentes</CardTitle>
+            <CardTitle className="text-sm font-semibold">Candidatures récentes</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
-            ) : recentRequests.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">Aucune demande pour le moment.</p>
+            ) : recentApplications.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Aucune candidature pour le moment.</p>
             ) : (
               <div className="space-y-3">
-                {recentRequests.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-secondary/20">
-                    <div>
-                      <p className="font-medium text-sm">{r.cafeOwnerName}</p>
-                      <p className="text-xs text-muted-foreground">{r.missionType} · {r.startDate}</p>
+                {recentApplications.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between p-3 rounded-xl border border-border/50 bg-secondary/20">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{a.jobTitle}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.establishment} · {a.recordType === "MISSION" ? "Mission" : "Offre"}</p>
                     </div>
-                    <Badge variant="secondary" className={STATUS_COLORS[r.status]}>{STATUS_LABELS[r.status]}</Badge>
+                    <Badge variant="secondary" className={`shrink-0 ${STATUS_COLORS[a.status]}`}>{STATUS_LABELS[a.status]}</Badge>
                   </div>
                 ))}
               </div>

@@ -1737,10 +1737,19 @@ export const baristaJobApplicationStatusEnum = pgEnum('barista_job_application_s
   'PENDING', 'PRESELECTED', 'INTERVIEW_SCHEDULED', 'ACCEPTED', 'REJECTED',
 ]);
 export const baristaJobMeetingStatusEnum = pgEnum('barista_job_meeting_status', ['PROPOSED', 'CONFIRMED', 'CANCELLED']);
+// OFFER = a standing job listing (no planned period). MISSION = the same
+// listing/application/targeting/meeting machinery, reused as-is, for a
+// time-boxed engagement with its own start/end dates (missionStartDate/
+// missionEndDate below) — distinct from the pre-existing baristaMarketplaceRequests/
+// Missions 1:1 recruitment-conversation system above, which is untouched and
+// keeps its own historical records. A MISSION row here is a *new*, separate
+// kind of record from an *old* baristaMarketplaceMissions row — never conflated.
+export const baristaJobRecordTypeEnum = pgEnum('barista_job_record_type', ['OFFER', 'MISSION']);
 
 export const baristaJobPosts = pgTable("barista_job_posts", {
   id: serial("id").primaryKey(),
   cafeOwnerId: integer("cafe_owner_id").notNull(),
+  recordType: baristaJobRecordTypeEnum("record_type").notNull().default('OFFER'),
   title: text("title").notNull(),
   establishment: text("establishment").notNull().default(""),
   locationAddress: text("location_address").notNull().default(""),
@@ -1748,13 +1757,17 @@ export const baristaJobPosts = pgTable("barista_job_posts", {
   // Multi-select, e.g. ['CDI','Temps plein'] — free-form strings, not an enum,
   // so Admin/business needs can evolve the list without a migration.
   employmentTypes: text("employment_types").array().notNull().default([]),
-  experienceRequired: text("experience_required").notNull().default(""), // free text, e.g. "0 à 1 an"
+  experienceRequired: text("experience_required").notNull().default(""), // free text, e.g. "Aucune" / "+1 an" / "3 ans" (custom)
   educationLevels: text("education_levels").array().notNull().default([]), // names from baristaEducationLevels
   languages: text("languages").array().notNull().default([]), // names from baristaLanguages
   remuneration: text("remuneration").notNull().default(""), // free text, or "Confidentiel"
   description: text("description").notNull().default(""),
   requirements: text("requirements").notNull().default(""),
-  expiresAt: timestamp("expires_at"),
+  expiresAt: timestamp("expires_at"), // application/publication deadline — distinct from the mission period below
+  // MISSION-only planned period — null for OFFER rows. Text, matching this
+  // schema's existing free-text date convention (baristaMarketplaceRequests.startDate).
+  missionStartDate: text("mission_start_date"),
+  missionEndDate: text("mission_end_date"),
   publicationMode: baristaJobPublicationModeEnum("publication_mode").notNull().default('AUTOMATIC'),
   status: baristaJobStatusEnum("status").notNull().default('DRAFT'),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1762,6 +1775,7 @@ export const baristaJobPosts = pgTable("barista_job_posts", {
 }, (table) => ({
   cafeOwnerIdx: index("barista_job_posts_cafe_owner_idx").on(table.cafeOwnerId),
   statusIdx: index("barista_job_posts_status_idx").on(table.status),
+  recordTypeIdx: index("barista_job_posts_record_type_idx").on(table.recordType),
 }));
 export type BaristaJobPost = typeof baristaJobPosts.$inferSelect;
 export type InsertBaristaJobPost = typeof baristaJobPosts.$inferInsert;
@@ -1833,6 +1847,10 @@ export type BaristaJobApplicationWithParties = BaristaJobApplication & {
   baristaProfileImageUrl: string | null;
   jobTitle: string;
   establishment: string;
+  // Additive (Barista Performance pages) — the parent job post's recordType,
+  // resolved server-side so it stays correct even after the job post is no
+  // longer "discoverable" (closed/expired).
+  recordType: BaristaJobPost["recordType"];
   meeting: BaristaJobMeeting | null;
 };
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useThemeStore } from "@/store/theme-store";
@@ -677,6 +677,9 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const t = useTheme(isDark);
   const { settings: heroActions } = useHeroActionSettings();
   const [search, setSearch] = useState("");
+  // Mobile collapsible search (mobile_filters_darkmode_audit.md) — presentation only.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [filterCategory, setFilterCategory] = useState("");
   const [filterType, setFilterType] = useState("");
   const [filterAvailability, setFilterAvailability] = useState("");
@@ -802,16 +805,40 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
               </div>
             </div>
             <div className={`border-b py-2 px-4 ${t.stripBg}`}>
-              <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
+              <div
+                className="max-w-7xl mx-auto flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+              >
                 <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textSubtle}`} />
-                <div className="relative flex-1 min-w-[180px] max-w-xs">
-                  <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} />
-                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom, compétence, service..." className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`} />
+                <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+                  {!searchOpen && (
+                    <button
+                      type="button"
+                      className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                      onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+                      aria-label="Rechercher"
+                      data-testid="button-open-maintenance-search"
+                    >
+                      <Search className={`w-3.5 h-3.5 ${t.textSubtle}`} />
+                    </button>
+                  )}
+                  <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                    <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} />
+                    <Input
+                      ref={searchInputRef}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      onBlur={() => { if (!search) setSearchOpen(false); }}
+                      placeholder="Nom, compétence, service..."
+                      className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                      data-testid="input-maintenance-search"
+                    />
+                  </div>
                 </div>
-                <Select value={filterType || "__all__"} onValueChange={(value) => setFilterType(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}><SelectValue placeholder="Type" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Tous types</SelectItem><SelectItem value="Freelance">Freelance</SelectItem><SelectItem value="Company">Entreprise</SelectItem><SelectItem value="Agency">Agence</SelectItem></SelectContent></Select>
-                <Select value={filterAvailability || "__all__"} onValueChange={(value) => setFilterAvailability(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.selectTrigger}`}><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes disponibilités</SelectItem><SelectItem value="available">Disponible</SelectItem><SelectItem value="unavailable">Indisponible</SelectItem></SelectContent></Select>
-                <Select value={filterLocation || "__all__"} onValueChange={(value) => setFilterLocation(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.selectTrigger}`}><SelectValue placeholder="Ville" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes villes</SelectItem>{allLocations.map((location) => <SelectItem key={location} value={location}>{location}</SelectItem>)}</SelectContent></Select>
-                {hasFilters && <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterType(""); setFilterAvailability(""); setFilterLocation(""); }} className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}><RotateCcw className="w-3 h-3" />Reset</button>}
+                <Select value={filterType || "__all__"} onValueChange={(value) => setFilterType(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Type" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Tous types</SelectItem><SelectItem value="Freelance">Freelance</SelectItem><SelectItem value="Company">Entreprise</SelectItem><SelectItem value="Agency">Agence</SelectItem></SelectContent></Select>
+                <Select value={filterAvailability || "__all__"} onValueChange={(value) => setFilterAvailability(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes disponibilités</SelectItem><SelectItem value="available">Disponible</SelectItem><SelectItem value="unavailable">Indisponible</SelectItem></SelectContent></Select>
+                <Select value={filterLocation || "__all__"} onValueChange={(value) => setFilterLocation(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Ville" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Toutes villes</SelectItem>{allLocations.map((location) => <SelectItem key={location} value={location}>{location}</SelectItem>)}</SelectContent></Select>
+                {hasFilters && <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterType(""); setFilterAvailability(""); setFilterLocation(""); }} className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}><RotateCcw className="w-3 h-3" />Reset</button>}
               </div>
             </div>
           </div>

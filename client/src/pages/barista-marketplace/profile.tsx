@@ -32,8 +32,8 @@ import { Star, UserCheck, Eye, EyeOff, Award, Image as ImageIcon, X, Plus, Brief
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
+import { BaristaFastSearch } from "@/components/barista/barista-fast-search";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import type { OpeningHoursMap } from "@shared/schema";
 
@@ -77,7 +77,12 @@ export default function BaristaProfilePage() {
   const deleteWorkHistory = useDeleteBaristaWorkHistory();
   const [workHistoryForm, setWorkHistoryForm] = useState<Partial<BaristaWorkHistory> | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
+  // Flash → Aperçu Flash (flash_barista_preview_audit.md) — Barista Marketplace's
+  // own Flash button opens the Coffee Owner's BaristaFastSearch in previewMode,
+  // fed by this account's own real card only (never the public roster), rather
+  // than the generic FlashPreviewModal every other professional account type
+  // still uses unchanged.
+  const [fastSearchPreviewOpen, setFastSearchPreviewOpen] = useState(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -211,7 +216,7 @@ export default function BaristaProfilePage() {
             <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setPreviewOpen(true)} data-testid="button-preview-profile">
               <Eye className="w-3.5 h-3.5" /> Aperçu
             </Button>
-            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setFlashPreviewOpen(true)} data-testid="button-flash-preview">
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setFastSearchPreviewOpen(true)} data-testid="button-flash-preview">
               <Zap className="w-3.5 h-3.5" /> Flash
             </Button>
           </div>
@@ -540,15 +545,18 @@ export default function BaristaProfilePage() {
         readOnly
       />
 
-      <FlashPreviewModal
-        open={flashPreviewOpen}
-        onClose={() => setFlashPreviewOpen(false)}
-        name={data?.user?.name ?? user?.name ?? ""}
-        typeLabel="Barista"
-        flashImageUrl={data?.user?.flashImageUrl}
-        profileImageUrl={data?.user?.profileImageUrl}
-        accentBgClass="bg-green-600"
-        preview
+      {/* Aperçu Flash (flash_barista_preview_audit.md) — the Coffee Owner's
+          BaristaFastSearch, previewMode on, fed by this account's own real
+          card only (never the public roster of other baristas). "Info"
+          closes this preview and reopens the existing read-only
+          BaristaDetailModal above, rather than introducing a second detail
+          view. */}
+      <BaristaFastSearch
+        open={fastSearchPreviewOpen}
+        onClose={() => setFastSearchPreviewOpen(false)}
+        baristas={data?.card ? [data.card] : []}
+        onOpenDetail={() => { setFastSearchPreviewOpen(false); setPreviewOpen(true); }}
+        previewMode
       />
     </div>
   );

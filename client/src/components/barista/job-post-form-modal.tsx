@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useThemeStore } from "@/store/theme-store";
+import { useAuth } from "@/hooks/use-auth";
 import {
   useCreateBaristaJob,
   useUpdateBaristaJob,
@@ -11,12 +12,30 @@ import {
   type BaristaJobPostInput,
   type BaristaJobPublicationMode,
   type BaristaJobStatus,
+  type BaristaJobRecordType,
 } from "@/hooks/use-barista-marketplace";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Check, Globe, UserCheck } from "lucide-react";
+
+// Experience requirement — a fixed picklist instead of free text, plus a
+// "Personnaliser" numeric escape hatch. Stored as plain text on the backend
+// (experienceRequired), exactly as before — only this form's UI changed.
+const EXPERIENCE_PRESETS = ["Aucune", "+1 an", "+2 ans", "+3 ans"];
+const EXPERIENCE_CUSTOM = "__custom__";
+
+function deriveExperienceState(saved: string): { preset: string; customYears: string } {
+  if (!saved) return { preset: "Aucune", customYears: "" };
+  if (EXPERIENCE_PRESETS.includes(saved)) return { preset: saved, customYears: "" };
+  const m = saved.match(/^(\d+)\s*ans?$/i);
+  if (m) return { preset: EXPERIENCE_CUSTOM, customYears: m[1] };
+  // Pre-existing free-text value from before this picklist existed — treat as
+  // a custom value so it's still visible/editable rather than silently lost.
+  return { preset: EXPERIENCE_CUSTOM, customYears: "" };
+}
 
 // Not Admin-managed (unlike Niveau d'étude / Langue) — the backend stores
 // employmentTypes as free-form strings, so this fixed chip list lives here.
@@ -49,30 +68,40 @@ type FormState = {
   locationAddress: string;
   openPositions: string;
   employmentTypes: string[];
-  experienceRequired: string;
+  experiencePreset: string; // one of EXPERIENCE_PRESETS, or EXPERIENCE_CUSTOM
+  experienceCustomYears: string;
   educationLevels: string[];
   languages: string[];
   remuneration: string;
   description: string;
   requirements: string;
   expiresAt: string;
+  missionStartDate: string;
+  missionEndDate: string;
   publicationMode: BaristaJobPublicationMode;
 };
 
-function initialState(job?: BaristaJobPost | null): FormState {
+// `defaultEstablishment`/`defaultLocationAddress` — the Coffee Owner's own
+// saved name/address (Phase 2), used ONLY to prefill a brand-new record;
+// never applied over an existing job/mission's own saved values on edit.
+function initialState(job: BaristaJobPost | null | undefined, defaultEstablishment: string, defaultLocationAddress: string): FormState {
+  const exp = deriveExperienceState(job?.experienceRequired ?? "");
   return {
     title: job?.title ?? "",
-    establishment: job?.establishment ?? "",
-    locationAddress: job?.locationAddress ?? "",
+    establishment: job ? job.establishment : defaultEstablishment,
+    locationAddress: job ? job.locationAddress : defaultLocationAddress,
     openPositions: String(job?.openPositions ?? 1),
     employmentTypes: job?.employmentTypes ?? [],
-    experienceRequired: job?.experienceRequired ?? "",
+    experiencePreset: exp.preset,
+    experienceCustomYears: exp.customYears,
     educationLevels: job?.educationLevels ?? [],
     languages: job?.languages ?? [],
     remuneration: job?.remuneration ?? "",
     description: job?.description ?? "",
     requirements: job?.requirements ?? "",
     expiresAt: isoToDateInput(job?.expiresAt),
+    missionStartDate: job?.missionStartDate ?? "",
+    missionEndDate: job?.missionEndDate ?? "",
     publicationMode: job?.publicationMode ?? "AUTOMATIC",
   };
 }
@@ -81,12 +110,19 @@ export function JobPostFormModal({
   open,
   onClose,
   editingJob,
+  recordType = "OFFER",
 }: {
   open: boolean;
   onClose: () => void;
   editingJob?: BaristaJobPostWithStats | BaristaJobPost | null;
+  // OFFER (default, unchanged) vs MISSION — same form, same validation, same
+  // publication workflow (Phase 6); MISSION additionally shows/requires the
+  // start/end date fields below. Ignored when editingJob is set (the job's
+  // own saved recordType is authoritative then).
+  recordType?: BaristaJobRecordType;
 }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const isDark = useThemeStore((s) => s.isDark);
   const t = {
     modalBg: isDark ? "bg-gray-900 border-gray-800" : "bg-white",
@@ -96,6 +132,14 @@ export function JobPostFormModal({
     inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
     chipOff: isDark ? "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100",
     chipOn: "bg-green-600 text-white border-green-600 shadow-sm",
+    // Same dark-mode SelectContent convention as barista-page.tsx/maintenance-page.tsx/
+    // marketing-page.tsx's own `t.selectContent` — this app's Coffee Owner shell never
+    // toggles a global `.dark` class (dark mode is applied per-component via these
+    // isDark-branched classes instead), so shadcn's SelectContent, which defaults to the
+    // `.dark`-class-driven `bg-popover` token, would otherwise always render light here.
+    selectContent: isDark
+      ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
+      : "bg-white border-gray-200 text-gray-900",
   };
 
   const createJob = useCreateBaristaJob();
@@ -103,16 +147,22 @@ export function JobPostFormModal({
   const { data: educationOptions = [] } = useBaristaEducationLevels();
   const { data: languageOptions = [] } = useBaristaLanguages();
 
-  const [form, setForm] = useState<FormState>(() => initialState(editingJob));
+  const effectiveRecordType: BaristaJobRecordType = editingJob?.recordType ?? recordType;
+  const isMission = effectiveRecordType === "MISSION";
+  const noun = isMission ? "mission" : "offre";
+
+  const [form, setForm] = useState<FormState>(() => initialState(editingJob, user?.name ?? "", user?.locationAddress ?? ""));
   const [titleError, setTitleError] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
   const [pendingStatus, setPendingStatus] = useState<BaristaJobStatus | null>(null);
 
   // Re-seed only when the modal (re)opens or the edited job changes — never on
   // a failed submit, so entered values survive an error toast.
   useEffect(() => {
     if (open) {
-      setForm(initialState(editingJob));
+      setForm(initialState(editingJob, user?.name ?? "", user?.locationAddress ?? ""));
       setTitleError(false);
+      setDateError(null);
       setPendingStatus(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,14 +183,27 @@ export function JobPostFormModal({
       toast({ title: "Champ requis", description: "L'intitulé du poste est obligatoire.", variant: "destructive" });
       return;
     }
+    setDateError(null);
+    if (isMission && form.missionStartDate && form.missionEndDate && form.missionEndDate < form.missionStartDate) {
+      setDateError("La date de fin ne peut pas être antérieure à la date de début.");
+      toast({ title: "Dates invalides", description: "La date de fin ne peut pas être antérieure à la date de début.", variant: "destructive" });
+      return;
+    }
     const positions = Math.max(1, Math.floor(Number(form.openPositions) || 1));
+
+    // Experience: a preset is used as-is; "Personnaliser" needs a valid
+    // non-negative integer, defaulting to 0 ("0 ans") for anything empty,
+    // negative, or non-numeric rather than saving a broken/blank value.
+    const experienceRequired = form.experiencePreset === EXPERIENCE_CUSTOM
+      ? `${Math.max(0, Math.floor(Number(form.experienceCustomYears) || 0))} ans`
+      : form.experiencePreset;
 
     const payload: BaristaJobPostInput = {
       title,
       locationAddress: form.locationAddress.trim(),
       openPositions: positions,
       employmentTypes: form.employmentTypes,
-      experienceRequired: form.experienceRequired.trim(),
+      experienceRequired,
       educationLevels: form.educationLevels,
       languages: form.languages,
       remuneration: form.remuneration.trim(),
@@ -150,6 +213,11 @@ export function JobPostFormModal({
       publicationMode: form.publicationMode,
       status,
     };
+    if (!isEditing) payload.recordType = effectiveRecordType;
+    if (isMission) {
+      payload.missionStartDate = form.missionStartDate || null;
+      payload.missionEndDate = form.missionEndDate || null;
+    }
     // Blank establishment on create -> omit so the backend auto-fills it from
     // the account name. On edit, send what's in the field.
     const establishment = form.establishment.trim();
@@ -158,7 +226,7 @@ export function JobPostFormModal({
     const handlers = {
       onSuccess: () => {
         toast({
-          title: status === "PUBLISHED" ? "Offre publiée" : "Brouillon enregistré",
+          title: status === "PUBLISHED" ? (isMission ? "Mission publiée" : "Offre publiée") : "Brouillon enregistré",
           description: status === "PUBLISHED"
             ? (form.publicationMode === "MANUAL" ? "Visible uniquement par les profils que vous ciblez via Flash." : "Visible par tous les baristas éligibles.")
             : undefined,
@@ -229,7 +297,9 @@ export function JobPostFormModal({
         className={`sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full ${t.modalBg} ${isDark ? "[&>button]:text-gray-400" : ""}`}
       >
         <DialogHeader>
-          <DialogTitle className={t.textPrimary}>{isEditing ? "Modifier l'offre d'emploi" : "Publier une offre d'emploi"}</DialogTitle>
+          <DialogTitle className={t.textPrimary}>
+            {isEditing ? (isMission ? "Modifier la mission" : "Modifier l'offre d'emploi") : (isMission ? "Publier une mission" : "Publier une offre d'emploi")}
+          </DialogTitle>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); submit("PUBLISHED"); }}>
@@ -252,7 +322,7 @@ export function JobPostFormModal({
               <Input
                 value={form.establishment}
                 onChange={(e) => set("establishment", e.target.value)}
-                placeholder={isEditing ? "Nom de l'établissement" : "Par défaut : le nom de votre compte"}
+                placeholder="Nom de l'établissement"
                 maxLength={200}
                 className={t.inputBg}
                 data-testid="input-job-establishment"
@@ -287,14 +357,29 @@ export function JobPostFormModal({
             </div>
             <div>
               {label("Expérience requise")}
-              <Input
-                value={form.experienceRequired}
-                onChange={(e) => set("experienceRequired", e.target.value)}
-                placeholder="ex: 0 à 1 an"
-                maxLength={120}
-                className={t.inputBg}
-                data-testid="input-job-experience"
-              />
+              <Select value={form.experiencePreset} onValueChange={(v) => set("experiencePreset", v)}>
+                <SelectTrigger className={t.inputBg} data-testid="select-job-experience">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={t.selectContent}>
+                  {EXPERIENCE_PRESETS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  <SelectItem value={EXPERIENCE_CUSTOM}>Personnaliser</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.experiencePreset === EXPERIENCE_CUSTOM && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.experienceCustomYears}
+                    onChange={(e) => set("experienceCustomYears", e.target.value)}
+                    placeholder="0"
+                    className={`${t.inputBg} w-24`}
+                    data-testid="input-job-experience-custom-years"
+                  />
+                  <span className={`text-sm ${t.textMuted}`}>ans</span>
+                </div>
+              )}
             </div>
             <div>
               {label("Date d'expiration")}
@@ -307,6 +392,32 @@ export function JobPostFormModal({
               />
             </div>
           </div>
+
+          {isMission && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                {label("Date de début")}
+                <Input
+                  type="date"
+                  value={form.missionStartDate}
+                  onChange={(e) => { set("missionStartDate", e.target.value); setDateError(null); }}
+                  className={`${t.inputBg} ${isDark ? "[color-scheme:dark]" : ""} ${dateError ? "border-red-500" : ""}`}
+                  data-testid="input-job-mission-start"
+                />
+              </div>
+              <div>
+                {label("Date de fin")}
+                <Input
+                  type="date"
+                  value={form.missionEndDate}
+                  onChange={(e) => { set("missionEndDate", e.target.value); setDateError(null); }}
+                  className={`${t.inputBg} ${isDark ? "[color-scheme:dark]" : ""} ${dateError ? "border-red-500" : ""}`}
+                  data-testid="input-job-mission-end"
+                />
+              </div>
+              {dateError && <p className="text-xs text-red-500 -mt-1 sm:col-span-2" data-testid="error-job-mission-dates">{dateError}</p>}
+            </div>
+          )}
 
           <div>
             {label("Type d'emploi")}

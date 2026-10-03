@@ -1,5 +1,5 @@
-import { Briefcase, Calendar, Globe, Plus, UserCheck, Users } from "lucide-react";
-import { useMyBaristaJobs, type BaristaJobPostWithStats, type BaristaJobStatus, type BaristaJobPublicationMode } from "@/hooks/use-barista-marketplace";
+import { Briefcase, Calendar, CalendarClock, Globe, Plus, UserCheck, Users } from "lucide-react";
+import { useMyBaristaJobs, type BaristaJobPostWithStats, type BaristaJobStatus, type BaristaJobPublicationMode, type BaristaJobRecordType } from "@/hooks/use-barista-marketplace";
 
 const JOB_STATUS_LABELS: Record<BaristaJobStatus, string> = { DRAFT: "Brouillon", PUBLISHED: "Publiée", CLOSED: "Clôturée" };
 function jobStatusColors(dk: boolean): Record<BaristaJobStatus, string> {
@@ -14,14 +14,25 @@ function fmtDate(iso: string | null) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? null : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
+function fmtPlainDate(value: string | null) {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) return fmtDate(value);
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
 
-// Coffee Owner account > Baristas > Offres — a compact, read-focused summary
-// of the Coffee Owner's existing job posts (same useMyBaristaJobs data as
-// /barista's "Offres d'emploi" hero icon). Clicking a row opens the full
-// JobManagementModal (already built, reused as-is) for details/management —
-// this component itself holds no job-posting logic of its own.
+// Coffee Owner account > Baristas > Offres/Missions — a compact, read-focused
+// summary of the Coffee Owner's own job posts of one recordType (same
+// useMyBaristaJobs data as /barista's "Offres d'emploi" hero icon). Clicking a
+// row opens the full JobManagementModal (already built, reused as-is) for
+// details/management — this component itself holds no job-posting logic of
+// its own. Used for BOTH "Offres" (recordType=OFFER) and "Missions"
+// (recordType=MISSION) in the Reservations > Barista tab, replacing the old
+// request/mission-acceptance timeline that used to live there (mission-
+// workflow cleanup — see mission_workflow_cleanup_audit.md).
 export function BaristaOffresList({
-  dk, cardBg, textPrimary, textMuted, onOpenJob, onCreateJob,
+  dk, cardBg, textPrimary, textMuted, onOpenJob, onCreateJob, recordType = "OFFER",
 }: {
   dk: boolean;
   cardBg: string;
@@ -29,9 +40,12 @@ export function BaristaOffresList({
   textMuted: string;
   onOpenJob: (jobId: number) => void;
   onCreateJob: () => void;
+  recordType?: BaristaJobRecordType;
 }) {
-  const { data: jobs = [], isLoading } = useMyBaristaJobs();
+  const { data: jobs = [], isLoading } = useMyBaristaJobs(recordType);
   const statusColors = jobStatusColors(dk);
+  const isMission = recordType === "MISSION";
+  const noun = isMission ? "mission" : "offre";
 
   if (isLoading) {
     return (
@@ -47,29 +61,31 @@ export function BaristaOffresList({
         <button
           onClick={onCreateJob}
           className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl ${dk ? "bg-green-900/40 text-green-300 hover:bg-green-900/60" : "bg-green-50 text-green-700 hover:bg-green-100"}`}
-          data-testid="button-baristas-offres-create"
+          data-testid={`button-baristas-${recordType.toLowerCase()}-create`}
         >
-          <Plus className="w-3.5 h-3.5" /> Publier une offre
+          <Plus className="w-3.5 h-3.5" /> Publier une {noun}
         </button>
       </div>
 
       {jobs.length === 0 ? (
         <div className={`text-center py-16 ${textMuted}`}>
           <Briefcase className="w-10 h-10 mx-auto mb-3 opacity-20" />
-          <p className={`font-medium text-sm ${textPrimary}`}>Aucune offre d'emploi</p>
-          <p className="text-xs mt-1 opacity-70">Publiez une offre pour recevoir des candidatures de baristas.</p>
+          <p className={`font-medium text-sm ${textPrimary}`}>Aucune {noun}{isMission ? "" : " d'emploi"}</p>
+          <p className="text-xs mt-1 opacity-70">Publiez une {noun} pour recevoir des candidatures de baristas.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {jobs.map((job: BaristaJobPostWithStats) => {
             const ModeIcon = job.publicationMode === "MANUAL" ? UserCheck : Globe;
             const expiry = fmtDate(job.expiresAt);
+            const missionStart = fmtPlainDate(job.missionStartDate);
+            const missionEnd = fmtPlainDate(job.missionEndDate);
             return (
               <button
                 key={job.id}
                 onClick={() => onOpenJob(job.id)}
                 className={`w-full text-left border rounded-2xl p-4 space-y-2 ${cardBg}`}
-                data-testid={`card-baristas-offre-${job.id}`}
+                data-testid={`card-baristas-${recordType.toLowerCase()}-${job.id}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -82,6 +98,9 @@ export function BaristaOffresList({
                   <span className="flex items-center gap-1"><ModeIcon className="w-3 h-3" /> {MODE_LABELS[job.publicationMode]}</span>
                   <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {job.totalApplications} candidature{job.totalApplications > 1 ? "s" : ""}</span>
                   {expiry && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Expire le {expiry}</span>}
+                  {isMission && (missionStart || missionEnd) && (
+                    <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> Du {missionStart ?? "—"} au {missionEnd ?? "—"}</span>
+                  )}
                 </div>
               </button>
             );

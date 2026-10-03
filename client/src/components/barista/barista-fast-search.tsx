@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Heart, X, ChevronRight, Users, Zap, SlidersHorizontal, Check, Info, MapPin, Star } from "lucide-react";
+import { Heart, X, ChevronRight, Users, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Eye, Briefcase } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl } from "@/lib/avatar";
+import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
 import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 import { BaristaJobTargetButton } from "@/components/barista/barista-job-target-button";
 
@@ -18,11 +18,20 @@ export interface BaristaFastSearchProps {
   open: boolean;
   onClose: () => void;
   baristas: BaristaMarketplaceCard[];
-  onRecruit: (barista: BaristaMarketplaceCard) => void;
+  // Recruter was removed from Fast Search (mission-workflow cleanup) — kept
+  // optional rather than deleted so existing callers don't need to change
+  // just to drop a now-unused prop.
+  onRecruit?: (barista: BaristaMarketplaceCard) => void;
   onOpenDetail: (barista: BaristaMarketplaceCard) => void;
+  // Barista Marketplace's own "Aperçu Flash" (see flash_barista_preview_audit.md)
+  // — renders the exact same interface but disables every action that would
+  // normally create/modify persistent data (Favorite, Associer à une offre/
+  // mission). The Coffee Owner's own integration (barista-page.tsx) never
+  // passes this, so its behavior is completely unchanged. Defaults to false.
+  previewMode?: boolean;
 }
 
-export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDetail }: BaristaFastSearchProps) {
+export function BaristaFastSearch({ open, onClose, baristas, onOpenDetail, previewMode = false }: BaristaFastSearchProps) {
   const [idx, setIdx] = useState(0);
   const [heartAnim, setHeartAnim] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -47,19 +56,28 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
   const current = filtered[idx] ?? null;
 
   // Flash (URL) is the "Fast Search" hero image when set and loadable;
-  // Photo de profil (URL) is the fallback — same priority/fallback rule as
-  // the Barista's own Flash preview (FlashPreviewModal), so what a Coffee
-  // Owner sees here always matches what the Barista configured as Flash.
+  // Photo de profil (URL) is the fallback — shared priority logic
+  // (getPreferredImageUrl, see client/src/lib/avatar.ts and
+  // flash_image_sync_audit.md) with FlashPreviewModal, so what a Coffee Owner
+  // sees here always matches what the Barista configured as Flash. (The
+  // actual data gap that made these two silently disagree was the public
+  // barista list missing flashImageUrl server-side — fixed in
+  // getBaristaMarketplaceProfiles; this component's own logic was already
+  // correct once that field is present.)
   const [flashFailed, setFlashFailed] = useState(false);
   useEffect(() => { setFlashFailed(false); }, [current?.userId]);
-  const flashUrl = current?.flashImageUrl?.trim() || null;
-  const heroImageSrc = !flashFailed && flashUrl ? flashUrl : getAvatarUrl(current as any);
+  const preferredImageUrl = getPreferredImageUrl(current?.flashImageUrl, current?.profileImageUrl);
+  const heroImageSrc = !flashFailed && preferredImageUrl ? preferredImageUrl : getAvatarUrl(current as any);
 
   const faved = useFavorites((s) => (current ? !!s.baristaMarket[current.userId] : false));
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
 
   const triggerFavorite = useCallback(() => {
-    if (!current) return;
+    // Preview mode (Barista Marketplace's own "Aperçu Flash") never creates a
+    // real favorite — the server already rejects this for a non-Coffee-Owner
+    // session (POST /api/barista-favorites requires role CAFE_OWNER), but this
+    // is a client-side no-op too rather than relying on that alone.
+    if (!current || previewMode) return;
     toggleBaristaMarket({
       id: current.userId, name: current.name, initials: current.initials, skills: current.skills,
       location: current.location, rating: current.rating / 10, available: current.available,
@@ -86,7 +104,7 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
           <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pt-4 pb-3 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-green-400 fill-green-400" />
-              <span className="text-white font-bold text-sm">Fast Search</span>
+              <span className="text-white font-bold text-sm">{previewMode ? "Aperçu Flash" : "Fast Search"}</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-white/60 text-xs">{filtered.length > 0 ? `${idx + 1} / ${filtered.length}` : "0 / 0"}</span>
@@ -103,6 +121,15 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
               </button>
             </div>
           </div>
+
+          {/* Mode aperçu badge — same visual convention as FlashPreviewModal's own
+              `preview` badge (amber pill, Eye icon), reused rather than
+              reinvented, so "preview mode" always looks the same across the app. */}
+          {previewMode && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 bg-amber-500/90 backdrop-blur-sm text-white text-[11px] font-semibold px-3 py-1.5 rounded-full" data-testid="badge-fastsearch-preview">
+              <Eye className="w-3 h-3" /> Mode aperçu — Aperçu Flash
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top) + 60px)" }}>
@@ -134,7 +161,7 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
                   src={heroImageSrc}
                   alt={current!.name}
                   className="object-cover"
-                  onLoadingStatusChange={(status) => { if (status === "error" && !flashFailed && flashUrl) setFlashFailed(true); }}
+                  onLoadingStatusChange={(status) => { if (status === "error" && !flashFailed && preferredImageUrl) setFlashFailed(true); }}
                 />
                 <AvatarFallback className="rounded-none bg-gradient-to-br from-green-900 to-emerald-950">
                   <span className="text-white/80 font-bold text-6xl">{current!.initials}</span>
@@ -189,27 +216,39 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
             )}
             {current && (
               <button
-                className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${faved ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"}`}
-                onClick={triggerFavorite} data-testid="button-fastsearch-favorite"
+                className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${faved ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"} ${previewMode ? "opacity-40 cursor-not-allowed" : ""}`}
+                onClick={triggerFavorite} disabled={previewMode}
+                title={previewMode ? "Indisponible en mode aperçu" : undefined}
+                data-testid="button-fastsearch-favorite"
               >
                 <Heart className={`w-5 h-5 transition-colors ${faved ? "fill-white text-white" : "text-white"}`} />
               </button>
             )}
-            {current && (
+            {/* Recruter removed (mission-workflow cleanup) — the legacy request/accept
+                flow it created is no longer tracked anywhere in the Barista Marketplace
+                UI. Associer à une offre/mission (above) is the current workflow. */}
+            {current && (previewMode ? (
+              // Preview mode (flash_barista_preview_audit.md) — the real
+              // BaristaJobTargetButton fetches the Coffee Owner's own job
+              // posts (requireApprovedCafeOwner) internally; mounting it for
+              // a Barista Marketplace session would only ever 403. Shown as a
+              // visually identical but inert icon instead of being hidden
+              // outright, so the preview still demonstrates the full icon row.
+              <button
+                className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg opacity-40 cursor-not-allowed"
+                disabled
+                title="Indisponible en mode aperçu — réservé aux comptes Café"
+                data-testid="button-fastsearch-jobtarget-disabled"
+              >
+                <Briefcase className="w-4 h-4 text-white" />
+              </button>
+            ) : (
               <BaristaJobTargetButton
                 baristaUserId={current.userId}
                 baristaName={current.name}
                 className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"
               />
-            )}
-            {current && (
-              <button
-                className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"
-                onClick={() => onRecruit(current)} disabled={!current.available} data-testid="button-fastsearch-recruit" title="Recruter"
-              >
-                <Users className="w-4 h-4 text-white" />
-              </button>
-            )}
+            ))}
           </div>
 
           {/* Prev/Next */}

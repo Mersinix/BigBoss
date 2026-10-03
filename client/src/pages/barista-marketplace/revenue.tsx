@@ -8,6 +8,18 @@ import { DollarSign, TrendingUp, CalendarCheck, Briefcase } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
+// Mission-workflow cleanup audit (barista_performance_flash_audit.md,
+// Section C) — this page's data source (getBaristaRevenueSummary, a real
+// ledger over completed baristaMarketplaceMissions.rateInCents) was inspected
+// and found correctly scoped to the authenticated barista, not fabricated,
+// and not duplicated by joins. Preserved as-is per the task's explicit
+// instruction. The one change is the clarifying subtitle below: manually
+// published missions (the current/going-forward workflow) use a free-text
+// `remuneration` field with no numeric rate, so they cannot and do not
+// contribute to these figures — this is called out so the page isn't
+// mistaken for a stale/broken ledger once new recruitment happens entirely
+// through manually published missions instead of the legacy request flow.
+
 export default function BaristaRevenuePage() {
   const { data, isLoading } = useBaristaRevenue();
   const fmt = useFormatCurrency();
@@ -30,7 +42,7 @@ export default function BaristaRevenuePage() {
     <div className="flex flex-col gap-5">
       <DashboardHero
         title="Revenus"
-        subtitle="Revenus générés par vos missions terminées."
+        subtitle="Revenus générés par vos missions terminées à tarif fixe (hors missions manuelles à rémunération libre)."
         stat={fmt(data.totalEarnedCents)}
         statLabel="Total gagné"
         icon={DollarSign}

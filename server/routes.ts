@@ -2899,8 +2899,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     description: z.string().trim().max(5000).optional(),
     requirements: z.string().trim().max(5000).optional(),
     expiresAt: z.string().optional().nullable(),
+    // MISSION-only planned period — see shared/schema.ts baristaJobPosts for
+    // the distinction from expiresAt. Validated below (end >= start) rather
+    // than here, since both fields arrive independently and partial() (the
+    // PATCH case) may send only one of them.
+    missionStartDate: z.string().trim().max(40).optional().nullable(),
+    missionEndDate: z.string().trim().max(40).optional().nullable(),
     publicationMode: z.enum(["AUTOMATIC", "MANUAL"]).optional(),
     status: z.enum(["DRAFT", "PUBLISHED", "CLOSED"]).optional(),
+    recordType: z.enum(["OFFER", "MISSION"]).optional(),
   });
 
   function normalizeJobPostBody(body: Partial<z.infer<typeof jobPostBodySchema>>) {
@@ -2909,9 +2916,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return payload;
   }
 
+  // Mission period validation — only meaningful once both dates are actually
+  // known for the row being saved; `existing` lets PATCH validate using
+  // whichever of the two dates the request didn't just change.
+  function validateMissionDates(body: Partial<z.infer<typeof jobPostBodySchema>>, existing?: { missionStartDate: string | null; missionEndDate: string | null }): string | null {
+    const start = body.missionStartDate !== undefined ? body.missionStartDate : existing?.missionStartDate;
+    const end = body.missionEndDate !== undefined ? body.missionEndDate : existing?.missionEndDate;
+    if (start && end && end < start) return "La date de fin ne peut pas être antérieure à la date de début.";
+    return null;
+  }
+
   app.post("/api/barista/jobs", requireApprovedCafeOwner, async (req: any, res) => {
     try {
       const body = jobPostBodySchema.parse(req.body);
+      const dateError = validateMissionDates(body);
+      if (dateError) return res.status(400).json({ message: dateError });
       const user = await storage.getUser(req.session.userId!);
       const payload = normalizeJobPostBody(body);
       if (!payload.establishment) payload.establishment = user!.name;
@@ -2927,7 +2946,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/barista/jobs/mine", requireApprovedCafeOwner, async (req: any, res) => {
     try {
-      const jobs = await storage.getBaristaJobPostsForOwner(req.session.userId!);
+      const recordType = req.query.recordType === "MISSION" || req.query.recordType === "OFFER" ? req.query.recordType : undefined;
+      const jobs = await storage.getBaristaJobPostsForOwner(req.session.userId!, recordType);
       res.json(jobs);
     } catch { res.status(500).json({ message: "Failed to load job posts" }); }
   });
@@ -2938,7 +2958,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId!);
     if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
     try {
-      const jobs = await storage.getDiscoverableBaristaJobPosts(user.id);
+      const recordType = req.query.recordType === "MISSION" || req.query.recordType === "OFFER" ? req.query.recordType : undefined;
+      const jobs = await storage.getDiscoverableBaristaJobPosts(user.id, recordType);
       const appliedRows = await storage.getBaristaJobApplicationsForBarista(user.id);
       const appliedIds = new Set(appliedRows.map((a) => a.jobPostId));
       res.json(jobs.map((j) => ({ ...j, hasApplied: appliedIds.has(j.id) })));
@@ -2980,6 +3001,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/barista/jobs/:id", requireApprovedCafeOwner, async (req: any, res) => {
     try {
       const body = jobPostBodySchema.partial().parse(req.body);
+      const existing = await storage.getBaristaJobPostById(Number(req.params.id));
+      if (!existing || existing.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Job post not found" });
+      const dateError = validateMissionDates(body, existing);
+      if (dateError) return res.status(400).json({ message: dateError });
       const payload = normalizeJobPostBody(body);
       const updated = await storage.updateBaristaJobPost(Number(req.params.id), req.session.userId!, payload);
       if (!updated) return res.status(404).json({ message: "Job post not found" });

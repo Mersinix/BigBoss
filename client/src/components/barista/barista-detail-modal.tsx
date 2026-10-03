@@ -163,10 +163,14 @@ export function BaristaDetailModal({
   baristaUserId: number | null;
   open: boolean;
   onClose: () => void;
-  onRecruit: (barista: BaristaMarketplaceCard) => void;
+  // Recruter was removed from this modal (Fast Search still has its own
+  // Recruter button and keeps using this same handler via its own prop) —
+  // kept optional rather than deleted so none of this modal's existing
+  // callers need to change just to drop a now-unused prop.
+  onRecruit?: (barista: BaristaMarketplaceCard) => void;
   // Used by the Barista's own "preview my profile" (Eye icon on Business →
   // Profil): renders the exact same modal a Coffee Owner sees, but Favorite/
-  // Report/Message/Avis/Recruter become inert (no self-favorite, self-message,
+  // Report/Message/Avis become inert (no self-favorite, self-message,
   // self-report, or self-review) — only Disponibilité stays functional, since
   // it's just displaying the Barista's own real saved availability.
   readOnly?: boolean;
@@ -455,13 +459,12 @@ export function BaristaDetailModal({
             </div>
 
             {/* Actions — Signaler moved to the profile picture (Part 11);
-                Message/Recruter unchanged. */}
+                Recruter removed from this modal (job/mission association via
+                the Briefcase icon above replaces it here — Fast Search keeps
+                its own separate Recruter button/flow, untouched). */}
             <div className={`p-5 sm:p-6 pt-0 flex flex-wrap gap-2 justify-end border-t mt-1 pt-4 ${t.border}`}>
               <Button variant="outline" size="sm" className={`gap-1.5 ${t.textPrimary} ${isDark ? "border-gray-700" : ""}`} onClick={handleMessage} disabled={messaging} data-testid="button-message-barista">
                 <MessageCircle className="w-3.5 h-3.5" /> Message
-              </Button>
-              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5" disabled={!card.available} onClick={() => { if (!readOnly) onRecruit(card); }} data-testid="button-recruit-barista-modal">
-                {card.available ? "Recruter" : "Indisponible"}
               </Button>
             </div>
           </div>

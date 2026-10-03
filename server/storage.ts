@@ -434,9 +434,9 @@ export interface IStorage {
   createBaristaJobPost(cafeOwnerId: number, data: Partial<InsertBaristaJobPost>): Promise<BaristaJobPost>;
   updateBaristaJobPost(id: number, cafeOwnerId: number, data: Partial<InsertBaristaJobPost>): Promise<BaristaJobPost | undefined>;
   getBaristaJobPostById(id: number): Promise<BaristaJobPost | undefined>;
-  getBaristaJobPostsForOwner(cafeOwnerId: number): Promise<BaristaJobPostWithStats[]>;
+  getBaristaJobPostsForOwner(cafeOwnerId: number, recordType?: "OFFER" | "MISSION"): Promise<BaristaJobPostWithStats[]>;
   getBaristaJobPostWithStats(id: number): Promise<BaristaJobPostWithStats | undefined>;
-  getDiscoverableBaristaJobPosts(baristaUserId: number): Promise<(BaristaJobPost & { establishment: string; isTargeted: boolean })[]>;
+  getDiscoverableBaristaJobPosts(baristaUserId: number, recordType?: "OFFER" | "MISSION"): Promise<(BaristaJobPost & { establishment: string; isTargeted: boolean })[]>;
   addBaristaJobTarget(jobPostId: number, baristaUserId: number): Promise<BaristaJobTarget>;
   getBaristaJobTargets(jobPostId: number): Promise<(BaristaJobTarget & { baristaName: string; baristaProfileImageUrl: string | null })[]>;
   isBaristaJobTargeted(jobPostId: number, baristaUserId: number): Promise<boolean>;
@@ -8389,6 +8389,14 @@ export class DatabaseStorage implements IStorage {
         name: user.name,
         phone: user.phone ?? null,
         profileImageUrl: user.profileImageUrl ?? null,
+        // Flash image sync fix (flash_image_sync_audit.md) — this field was
+        // missing from the public list, so the Coffee Owner's Fast Search
+        // (fed by this list) could never show a barista's Flash image: every
+        // card's flashImageUrl was silently undefined, making the client's
+        // already-correct Flash-first logic always fall through to the
+        // profile photo. getBaristaMarketplaceCard (the single-barista detail
+        // endpoint) already included it — this just brings the list in line.
+        flashImageUrl: user.flashImageUrl ?? null,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
         location: profile.city || this.formatPublicLocation(user),
         available,
@@ -8500,8 +8508,11 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getBaristaJobPostsForOwner(cafeOwnerId: number): Promise<BaristaJobPostWithStats[]> {
-    const rows = await db.select().from(baristaJobPosts).where(eq(baristaJobPosts.cafeOwnerId, cafeOwnerId)).orderBy(desc(baristaJobPosts.createdAt));
+  async getBaristaJobPostsForOwner(cafeOwnerId: number, recordType?: "OFFER" | "MISSION"): Promise<BaristaJobPostWithStats[]> {
+    const rows = await db.select().from(baristaJobPosts).where(and(
+      eq(baristaJobPosts.cafeOwnerId, cafeOwnerId),
+      recordType ? eq(baristaJobPosts.recordType, recordType) : undefined,
+    )).orderBy(desc(baristaJobPosts.createdAt));
     const statsMap = await this.computeBaristaJobStats(rows.map((r) => r.id));
     return rows.map((r) => this.attachJobStats(r, statsMap.get(r.id)));
   }
@@ -8516,11 +8527,12 @@ export class DatabaseStorage implements IStorage {
   // Automatic jobs eligible to every barista, UNION jobs this barista was specifically
   // targeted for (MANUAL) — both filtered to PUBLISHED and not expired. `isTargeted`
   // tells the client which kind this is so it can label manually-offered opportunities.
-  async getDiscoverableBaristaJobPosts(baristaUserId: number): Promise<(BaristaJobPost & { isTargeted: boolean })[]> {
+  async getDiscoverableBaristaJobPosts(baristaUserId: number, recordType?: "OFFER" | "MISSION"): Promise<(BaristaJobPost & { isTargeted: boolean })[]> {
     const now = new Date();
     const automatic = await db.select().from(baristaJobPosts).where(and(
       eq(baristaJobPosts.status, "PUBLISHED"),
       eq(baristaJobPosts.publicationMode, "AUTOMATIC"),
+      recordType ? eq(baristaJobPosts.recordType, recordType) : undefined,
     ));
     const targetRows = await db.select({ jobPostId: baristaJobTargets.jobPostId }).from(baristaJobTargets).where(eq(baristaJobTargets.baristaUserId, baristaUserId));
     const targetedIds = targetRows.map((t) => t.jobPostId);
@@ -8529,6 +8541,7 @@ export class DatabaseStorage implements IStorage {
           eq(baristaJobPosts.status, "PUBLISHED"),
           eq(baristaJobPosts.publicationMode, "MANUAL"),
           inArray(baristaJobPosts.id, targetedIds),
+          recordType ? eq(baristaJobPosts.recordType, recordType) : undefined,
         ))
       : [];
     const notExpired = (j: BaristaJobPost) => !j.expiresAt || new Date(j.expiresAt as any) > now;
@@ -8593,6 +8606,14 @@ export class DatabaseStorage implements IStorage {
       baristaProfileImageUrl: baristaMap.get(r.baristaUserId)?.profileImageUrl ?? null,
       jobTitle: jobMap.get(r.jobPostId)?.title ?? "—",
       establishment: jobMap.get(r.jobPostId)?.establishment ?? "",
+      // Additive (Performance pages update) — lets the Barista's own
+      // Dashboard/Analyses distinguish Offer vs Mission applications directly,
+      // without the discover-endpoint cross-reference jobs.tsx's own
+      // useMyJobApplicationsByType() uses (which mis-buckets an application
+      // once its job post is no longer "discoverable", e.g. closed/expired).
+      // Backward-compatible: existing consumers (job-management-modal.tsx)
+      // simply ignore the extra field.
+      recordType: jobMap.get(r.jobPostId)?.recordType ?? "OFFER",
       meeting: meetingMap.get(r.id) ?? null,
     }));
   }
@@ -9023,6 +9044,13 @@ export class DatabaseStorage implements IStorage {
     const requestRows = await db.select().from(baristaMarketplaceRequests).orderBy(desc(baristaMarketplaceRequests.createdAt));
     const missionRows = await db.select().from(baristaMarketplaceMissions).orderBy(desc(baristaMarketplaceMissions.createdAt));
     const reviewRows = await db.select().from(supplierProductReviews).where(eq(supplierProductReviews.reviewType, "BARISTA_MARKETPLACE"));
+    // Job posting system (Offres/Missions, Phase 9) — same underlying
+    // baristaJobPosts/baristaJobApplications rows the Coffee Owner's own "Mes
+    // offres d'emploi" modal and the Barista's "Offres"/"Missions" pages read;
+    // read-only here, no parallel admin data source.
+    const jobPostRows = await db.select().from(baristaJobPosts).orderBy(desc(baristaJobPosts.createdAt));
+    const jobApplicationRows = await db.select().from(baristaJobApplications);
+    const jobMeetingRows = await db.select().from(baristaJobMeetings);
     const allUsers = await db.select().from(users);
     const userMap = new Map(allUsers.map((u) => [u.id, u]));
 
@@ -9064,6 +9092,12 @@ export class DatabaseStorage implements IStorage {
         missionCount: ownMissions.length,
         completedMissionCount: completedOwnMissions.length,
         revenueCents: completedOwnMissions.reduce((s, m) => s + m.rateInCents, 0),
+        // New job-posting system (mission-workflow cleanup) — the Admin
+        // Baristas tab shows these instead of the legacy request/mission
+        // counts above, which stay computed here (not deleted) but unused by
+        // that tab now. See mission_workflow_cleanup_audit.md.
+        jobApplicationCount: jobApplicationRows.filter((a) => a.baristaUserId === u.id).length,
+        acceptedJobApplicationCount: jobApplicationRows.filter((a) => a.baristaUserId === u.id && a.status === "ACCEPTED").length,
         createdAt: u.createdAt,
         initials: u.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       };
@@ -9090,6 +9124,29 @@ export class DatabaseStorage implements IStorage {
     const pendingMissions = missionRows.filter((m) => m.status === "UPCOMING" || m.status === "ACTIVE");
     const totalReviewRating = reviewRows.reduce((s, r) => s + r.rating, 0);
 
+    // Job posting system (Phase 9) — read-only admin visibility, same rows
+    // the Coffee Owner/Barista interfaces already manage. Offers and Missions
+    // are counted separately (recordType), never merged into one bucket, and
+    // applications are counted once each (no double-counting across statuses).
+    const jobOfferRows = jobPostRows.filter((j) => j.recordType === "OFFER");
+    const jobMissionRows = jobPostRows.filter((j) => j.recordType === "MISSION");
+    const jobPosts = jobPostRows.map((j) => ({
+      ...j,
+      cafeOwnerName: userMap.get(j.cafeOwnerId)?.name ?? "—",
+      applicationCount: jobApplicationRows.filter((a) => a.jobPostId === j.id).length,
+    }));
+    const jobPostRecordTypeById = new Map(jobPostRows.map((j) => [j.id, j.recordType]));
+    // Lightweight (no message/PII) rows for Analytics' applications-over-time
+    // trend and applications-by-status/record-type breakdown — same
+    // jobApplicationRows counted in `stats` above, just not pre-aggregated.
+    const jobApplications = jobApplicationRows.map((a) => ({
+      id: a.id,
+      jobPostId: a.jobPostId,
+      recordType: jobPostRecordTypeById.get(a.jobPostId) ?? "OFFER",
+      status: a.status,
+      createdAt: a.createdAt,
+    }));
+
     return {
       stats: {
         totalBaristas: baristaUsers.length,
@@ -9104,12 +9161,35 @@ export class DatabaseStorage implements IStorage {
         pendingMissionValueCents: pendingMissions.reduce((s, m) => s + m.rateInCents, 0),
         reviewCount: reviewRows.length,
         averageRating: reviewRows.length ? Math.round((totalReviewRating / reviewRows.length) * 10) / 10 : 0,
+        totalJobOffers: jobOfferRows.length,
+        publishedJobOffers: jobOfferRows.filter((j) => j.status === "PUBLISHED").length,
+        totalJobMissions: jobMissionRows.length,
+        publishedJobMissions: jobMissionRows.filter((j) => j.status === "PUBLISHED").length,
+        totalJobApplications: jobApplicationRows.length,
+        // Mission-workflow cleanup (new-system Analytics/KPIs) — see
+        // mission_workflow_cleanup_audit.md. Counted from the same rows above,
+        // never double-counted (one application = one row; one meeting = one
+        // application via its unique applicationId).
+        pendingJobApplications: jobApplicationRows.filter((a) => a.status === "PENDING").length,
+        preselectedJobApplications: jobApplicationRows.filter((a) => a.status === "PRESELECTED").length,
+        interviewScheduledJobApplications: jobApplicationRows.filter((a) => a.status === "INTERVIEW_SCHEDULED").length,
+        acceptedJobApplications: jobApplicationRows.filter((a) => a.status === "ACCEPTED").length,
+        rejectedJobApplications: jobApplicationRows.filter((a) => a.status === "REJECTED").length,
+        applicationsToJobOffers: jobApplicationRows.filter((a) => jobOfferRows.some((j) => j.id === a.jobPostId)).length,
+        applicationsToJobMissions: jobApplicationRows.filter((a) => jobMissionRows.some((j) => j.id === a.jobPostId)).length,
+        scheduledInterviews: jobMeetingRows.filter((m) => m.status === "PROPOSED" || m.status === "CONFIRMED").length,
+        closedJobOffers: jobOfferRows.filter((j) => j.status === "CLOSED").length,
+        closedJobMissions: jobMissionRows.filter((j) => j.status === "CLOSED").length,
+        draftJobOffers: jobOfferRows.filter((j) => j.status === "DRAFT").length,
+        draftJobMissions: jobMissionRows.filter((j) => j.status === "DRAFT").length,
       },
       skills,
       baristas,
       requests,
       missions,
       reviews,
+      jobPosts,
+      jobApplications,
     };
   }
 

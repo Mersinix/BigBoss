@@ -308,11 +308,14 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
 
   return (
     <div className={`border-b py-2 px-4 ${t.stripBg}`}>
-      <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
+      <div
+        className="max-w-7xl mx-auto flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+      >
             <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
         {subCategories.length > 0 && (
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.selectTrigger}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sous-catégories</SelectItem>
               {subCategories.map((sc) => <SelectItem key={sc} value={sc}>{sc}</SelectItem>)}
@@ -321,7 +324,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
         )}
         {printers.length > 0 && (
           <Select value={filters.brandId || "__all__"} onValueChange={(v) => onChange("brandId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}><SelectValue placeholder="Société d'impression" /></SelectTrigger>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Société d'impression" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sociétés</SelectItem>
               {printers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -330,7 +333,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
         )}
         {materials.length > 0 && (
           <Select value={filters.material || "__all__"} onValueChange={(v) => onChange("material", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.selectTrigger}`}><SelectValue placeholder="Matière" /></SelectTrigger>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Matière" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes matières</SelectItem>
               {materials.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
@@ -339,7 +342,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
         )}
         {deliveryBuckets.length > 0 && (
           <Select value={filters.deliveryTime || "__all__"} onValueChange={(v) => onChange("deliveryTime", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.selectTrigger}`}><SelectValue placeholder="Livraison" /></SelectTrigger>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Livraison" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes livraisons</SelectItem>
               {deliveryBuckets.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -347,7 +350,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
           </Select>
         )}
         {hasActive && (
-          <button onClick={onReset} className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}>
+          <button onClick={onReset} className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}>
             <RotateCcw className="w-3 h-3" /> Reset
           </button>
         )}

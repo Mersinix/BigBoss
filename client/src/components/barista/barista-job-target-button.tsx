@@ -1,11 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Briefcase, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useThemeStore } from "@/store/theme-store";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useMyBaristaJobs, useAddBaristaJobTarget } from "@/hooks/use-barista-marketplace";
+import {
+  useMyBaristaJobs, useAddBaristaJobTarget,
+  type BaristaJobRecordType, type BaristaJobPostWithStats,
+} from "@/hooks/use-barista-marketplace";
+
+// Only MANUAL + PUBLISHED records (offers or missions) can be targeted.
+const isEligible = (j: BaristaJobPostWithStats) => j.publicationMode === "MANUAL" && j.status === "PUBLISHED";
 
 // Manual job targeting — the ONE shared "Associer à une offre d'emploi"
 // action/dropdown, used identically from both the Fast Search ("Flash")
@@ -38,28 +44,57 @@ export function BaristaJobTargetButton({
   // driven `bg-popover` token, would otherwise always render light. Branch
   // explicitly instead of relying on that token here.
   const isDark = useThemeStore((s) => s.isDark);
-  const { data: myJobs = [], isLoading } = useMyBaristaJobs();
+  // Offres and Missions share the same job-post backend/association mechanism
+  // (distinguished only by recordType), so fetch each type separately
+  // (server-side filtered) and let the Coffee Owner switch between them
+  // inside the dropdown. The selected barista stays fixed via props.
+  const [section, setSection] = useState<BaristaJobRecordType>("OFFER");
+  const { data: myOffers = [], isLoading: offersLoading } = useMyBaristaJobs("OFFER");
+  const { data: myMissions = [], isLoading: missionsLoading } = useMyBaristaJobs("MISSION");
   const addTarget = useAddBaristaJobTarget();
 
-  const eligibleJobs = useMemo(
-    () => myJobs.filter((j) => j.publicationMode === "MANUAL" && j.status === "PUBLISHED"),
-    [myJobs]
-  );
-  const disabled = isLoading || addTarget.isPending || eligibleJobs.length === 0;
-  const title = isLoading
-    ? "Chargement de vos offres…"
-    : eligibleJobs.length === 0
-      ? "Créez d'abord une offre en publication manuelle"
-      : "Associer à une offre d'emploi";
+  const eligibleOffers = useMemo(() => myOffers.filter(isEligible), [myOffers]);
+  const eligibleMissions = useMemo(() => myMissions.filter(isEligible), [myMissions]);
+  const visibleJobs = section === "OFFER" ? eligibleOffers : eligibleMissions;
 
-  const pick = (jobId: number, jobTitle: string) => {
+  const isLoading = offersLoading || missionsLoading;
+  const noneEligible = eligibleOffers.length === 0 && eligibleMissions.length === 0;
+  const disabled = isLoading || addTarget.isPending || noneEligible;
+  const title = isLoading
+    ? "Chargement de vos offres et missions…"
+    : noneEligible
+      ? "Créez d'abord une offre ou une mission en publication manuelle"
+      : "Associer à une offre d'emploi ou à une mission";
+
+  const pick = (jobId: number, jobTitle: string, recordType: BaristaJobRecordType) => {
     if (addTarget.isPending) return;
+    const kind = recordType === "MISSION" ? "la mission" : "l'offre";
     addTarget.mutate(
       { jobId, baristaUserId },
       {
-        onSuccess: () => toast({ title: "Barista associé à l'offre", description: `${baristaName} a été associé à l'offre « ${jobTitle} ».` }),
+        onSuccess: () => toast({ title: `Barista associé à ${kind}`, description: `${baristaName} a été associé à ${kind} « ${jobTitle} ».` }),
         onError: (err: Error) => toast({ title: "Association impossible", description: err.message, variant: "destructive" }),
       }
+    );
+  };
+
+  const sectionBtn = (value: BaristaJobRecordType, label: string, count: number) => {
+    const active = section === value;
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSection(value); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        aria-pressed={active}
+        className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+          active
+            ? isDark ? "bg-gray-700 text-white" : "bg-white text-gray-900 shadow-sm"
+            : isDark ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-800"
+        }`}
+        data-testid={`switch-job-target-${value.toLowerCase()}`}
+      >
+        {label} ({count})
+      </button>
     );
   };
 
@@ -88,12 +123,31 @@ export function BaristaJobTargetButton({
         }`}
         data-testid="menu-job-target"
       >
-        <DropdownMenuLabel className={isDark ? "text-gray-200" : "text-gray-700"}>Associer à une offre d'emploi</DropdownMenuLabel>
+        <DropdownMenuLabel className={isDark ? "text-gray-200" : "text-gray-700"}>
+          {section === "OFFER" ? "Associer à une offre d'emploi" : "Associer à une Mission"}
+        </DropdownMenuLabel>
+        <div
+          className={`mx-1 mb-1 flex gap-1 rounded-lg p-0.5 ${isDark ? "bg-gray-800" : "bg-gray-100"}`}
+          role="group"
+          aria-label="Type d'association"
+        >
+          {sectionBtn("OFFER", "Offres", eligibleOffers.length)}
+          {sectionBtn("MISSION", "Missions", eligibleMissions.length)}
+        </div>
         <DropdownMenuSeparator className={isDark ? "bg-gray-700" : "bg-gray-200"} />
-        {eligibleJobs.map((job) => (
+        {visibleJobs.length === 0 && (
+          <p
+            className={`px-2 py-3 text-center text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}
+            data-testid="text-job-target-empty"
+          >
+            {section === "OFFER" ? "Aucune offre manuelle publiée" : "Aucune mission manuelle publiée"}
+          </p>
+        )}
+        {visibleJobs.map((job) => (
           <DropdownMenuItem
             key={job.id}
-            onSelect={() => pick(job.id, job.title)}
+            disabled={addTarget.isPending}
+            onSelect={() => pick(job.id, job.title, job.recordType ?? section)}
             className={`flex flex-col items-start gap-0.5 ${isDark ? "text-gray-100 focus:bg-gray-800 focus:text-white" : "text-gray-900 focus:bg-gray-100"}`}
             data-testid={`menuitem-job-target-${job.id}`}
           >

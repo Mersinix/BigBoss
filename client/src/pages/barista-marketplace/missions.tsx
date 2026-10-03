@@ -86,7 +86,9 @@ const TABS: { value: BaristaMissionStatus | "all"; label: string }[] = [
   { value: "CANCELLED", label: "Annulées" },
 ];
 
-export default function BaristaMissionsPage() {
+// hideHero: set only when embedded inside the Missions hub (missions-hub.tsx),
+// which renders its own hero — standalone behavior is unchanged by default.
+export default function BaristaMissionsPage({ hideHero = false }: { hideHero?: boolean } = {}) {
   const { data: missions = [], isLoading } = useBaristaMissions();
   const [tab, setTab] = useState<BaristaMissionStatus | "all">("all");
 
@@ -99,14 +101,16 @@ export default function BaristaMissionsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <DashboardHero
-        title="Mes missions"
-        subtitle="Missions créées à partir de demandes acceptées."
-        icon={ClipboardList}
-        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
-        iconBgClass="bg-green-500/15"
-        iconTextClass="text-green-600 dark:text-green-400"
-      />
+      {!hideHero && (
+        <DashboardHero
+          title="Mes missions"
+          subtitle="Missions créées à partir de demandes acceptées."
+          icon={ClipboardList}
+          gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+          iconBgClass="bg-green-500/15"
+          iconTextClass="text-green-600 dark:text-green-400"
+        />
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as BaristaMissionStatus | "all")}>
         <TabsList className="flex-wrap h-auto">

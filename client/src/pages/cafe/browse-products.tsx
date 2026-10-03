@@ -821,11 +821,14 @@ function FilterBar({
 
   return (
     <div className={`border-b ${t.filterBg} py-2 px-4`}>
-      <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
+      <div
+        className="max-w-7xl mx-auto flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+      >
         <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
         {subCategories.length > 0 && (
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
               <SelectValue placeholder="Sub-Category" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
@@ -836,7 +839,7 @@ function FilterBar({
         )}
         {brands.length > 0 && (
           <Select value={filters.brandId || "__all__"} onValueChange={(v) => onChange("brandId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] shrink-0 ${t.selectTrigger}`}>
               <SelectValue placeholder="Brand" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
@@ -847,7 +850,7 @@ function FilterBar({
         )}
         {flavors.length > 0 && (
           <Select value={filters.flavorId || "__all__"} onValueChange={(v) => onChange("flavorId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] shrink-0 ${t.selectTrigger}`}>
               <SelectValue placeholder="Flavor" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
@@ -858,7 +861,7 @@ function FilterBar({
         )}
         {sizes.length > 0 && (
           <Select value={filters.sizeId || "__all__"} onValueChange={(v) => onChange("sizeId", v === "__all__" ? "" : v)}>
-            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+            <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] shrink-0 ${t.selectTrigger}`}>
               <SelectValue placeholder="Size" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
@@ -868,7 +871,7 @@ function FilterBar({
           </Select>
         )}
         <Select value={filters.sortBy || "recommended"} onValueChange={(v) => onChange("sortBy", v === "recommended" ? "" : v)}>
-          <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
+          <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
@@ -886,7 +889,7 @@ function FilterBar({
         {hasActive && (
           <button
             onClick={onReset}
-            className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
+            className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
           >
             <RotateCcw className="w-3 h-3" /> Reset
           </button>

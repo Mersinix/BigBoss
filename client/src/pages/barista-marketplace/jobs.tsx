@@ -8,6 +8,7 @@ import {
   type BaristaJobApplication,
   type BaristaJobApplicationStatus,
   type BaristaJobMeetingStatus,
+  type BaristaJobRecordType,
 } from "@/hooks/use-barista-marketplace";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,6 +58,24 @@ const CHIP = "bg-secondary/60 text-foreground dark:bg-gray-700/70 dark:text-gray
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// missionStartDate/missionEndDate are plain date text ("YYYY-MM-DD"); parse a
+// bare date as local midnight so it never shifts by a day across timezones.
+function parseDay(value: string) {
+  return new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
+}
+
+function formatDay(value: string) {
+  return parseDay(value).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function missionPeriodLabel(job: BaristaDiscoverableJob) {
+  if (job.recordType !== "MISSION") return null;
+  if (job.missionStartDate && job.missionEndDate) return `Du ${formatDay(job.missionStartDate)} au ${formatDay(job.missionEndDate)}`;
+  if (job.missionStartDate) return `À partir du ${formatDay(job.missionStartDate)}`;
+  if (job.missionEndDate) return `Jusqu'au ${formatDay(job.missionEndDate)}`;
+  return null;
 }
 
 function formatDateTime(iso: string) {
@@ -114,7 +133,7 @@ function JobCard({ job, onOpen, onApply }: { job: BaristaDiscoverableJob; onOpen
             </Badge>
           ) : (
             <Badge variant="secondary" className="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 shrink-0">
-              Offre publique
+              {job.recordType === "MISSION" ? "Mission publique" : "Offre publique"}
             </Badge>
           )}
         </div>
@@ -123,6 +142,13 @@ function JobCard({ job, onOpen, onApply }: { job: BaristaDiscoverableJob; onOpen
           <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <span className="truncate">{job.locationAddress}</span>
         </div>
+
+        {missionPeriodLabel(job) && (
+          <div className="flex items-center gap-2 text-sm" data-testid={`text-job-mission-period-${job.id}`}>
+            <CalendarClock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <span className="truncate">{missionPeriodLabel(job)}</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
@@ -195,6 +221,9 @@ function JobDetailDialog({ job, onClose, onApply }: { job: BaristaDiscoverableJo
               <div><p className="text-xs text-muted-foreground">Expérience</p><p>{job.experienceRequired || "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Rémunération</p><p className="font-semibold">{job.remuneration || "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Date limite</p><p>{job.expiresAt ? formatDate(job.expiresAt) : "—"}</p></div>
+              {job.recordType === "MISSION" && (
+                <div className="col-span-2"><p className="text-xs text-muted-foreground">Période de la mission</p><p>{missionPeriodLabel(job) ?? "—"}</p></div>
+              )}
               <div className="col-span-2"><p className="text-xs text-muted-foreground mb-1">Type de contrat</p><Chips items={job.employmentTypes} /></div>
               <div className="col-span-2"><p className="text-xs text-muted-foreground mb-1">Niveau d'études</p><Chips items={job.educationLevels} /></div>
               <div className="col-span-2"><p className="text-xs text-muted-foreground mb-1">Langues</p><Chips items={job.languages} /></div>
@@ -359,31 +388,296 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
   );
 }
 
-export default function BaristaMarketplaceJobsPage() {
-  const { data: jobs = [], isLoading: jobsLoading } = useDiscoverBaristaJobs();
-  const { data: applications = [], isLoading: appsLoading } = useMyBaristaJobApplications();
-  const [tab, setTab] = useState<"offers" | "applications">("offers");
-  const [detailJob, setDetailJob] = useState<BaristaDiscoverableJob | null>(null);
-  const [applyJob, setApplyJob] = useState<BaristaDiscoverableJob | null>(null);
+// ─────────────────────────────────────────────────────────────────────────────
+// Status filter (Toutes / À venir / En cours / Terminées / Annulées)
+//
+// Purely client-side, read-only filtering over already-fetched data — selecting
+// a filter never writes any status. Mapping:
+//
+// "Mes candidatures" — each application lands in exactly ONE bucket (so the
+// per-bucket counts always add up to "Toutes"), evaluated in this order:
+//   1. Terminées : application ACCEPTED or REJECTED (a decided application is
+//                  closed, whatever happened to its meeting).
+//   2. Annulées  : meeting CANCELLED (and the application is still undecided).
+//   3. À venir   : meeting PROPOSED or CONFIRMED with scheduledAt in the future.
+//   4. Terminées : meeting CONFIRMED with scheduledAt in the past (the interview
+//                  already happened; awaiting the café's decision).
+//   5. En cours  : everything else still undecided — PENDING / PRESELECTED /
+//                  INTERVIEW_SCHEDULED with no meeting, or a PROPOSED meeting
+//                  whose date lapsed without being confirmed.
+//
+// "Offres / Missions disponibles" — a discoverable listing has no lifecycle from
+// the barista's read-only viewpoint (the backend already hides CLOSED/expired
+// listings entirely), so:
+//   - Terminées : hasApplied === true (the barista already acted on it).
+//   - À venir / En cours : listings not yet applied to and still open
+//                  (expiresAt null or in the future). For OFFER rows these two
+//                  are synonymous. For MISSION rows the real missionStartDate
+//                  splits them: start date after today → À venir, start date
+//                  today or earlier → En cours; a mission with no start date
+//                  set is shown under both (same as an offer).
+//   - Annulées  : no data can exist here (cancelled/closed listings never reach
+//                  this list) → always an empty state, never an error.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // Targeted opportunities first, then most recent.
-  const sortedJobs = useMemo(
+export type JobStatusFilter = "all" | "upcoming" | "ongoing" | "done" | "cancelled";
+
+const STATUS_FILTERS: { value: JobStatusFilter; label: string }[] = [
+  { value: "all", label: "Toutes" },
+  { value: "upcoming", label: "À venir" },
+  { value: "ongoing", label: "En cours" },
+  { value: "done", label: "Terminées" },
+  { value: "cancelled", label: "Annulées" },
+];
+
+type ApplicationBucket = Exclude<JobStatusFilter, "all">;
+
+function applicationBucket(app: BaristaJobApplication, now: number): ApplicationBucket {
+  if (app.status === "ACCEPTED" || app.status === "REJECTED") return "done";
+  const meeting = app.meeting;
+  if (meeting) {
+    if (meeting.status === "CANCELLED") return "cancelled";
+    const at = new Date(meeting.scheduledAt).getTime();
+    if ((meeting.status === "PROPOSED" || meeting.status === "CONFIRMED") && at > now) return "upcoming";
+    if (meeting.status === "CONFIRMED" && at <= now) return "done";
+  }
+  return "ongoing";
+}
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function jobMatchesFilter(job: BaristaDiscoverableJob, filter: JobStatusFilter, now: number, today: number): boolean {
+  if (filter === "all") return true;
+  if (filter === "cancelled") return false;
+  if (filter === "done") return job.hasApplied;
+  // upcoming / ongoing: still open and not yet applied to.
+  if (job.hasApplied) return false;
+  if (job.expiresAt && new Date(job.expiresAt).getTime() <= now) return false;
+  if (job.recordType === "MISSION" && job.missionStartDate) {
+    const start = parseDay(job.missionStartDate).getTime();
+    return filter === "upcoming" ? start > today : start <= today;
+  }
+  return true;
+}
+
+function StatusFilterTabs({ value, onChange, counts, testIdPrefix }: {
+  value: JobStatusFilter;
+  onChange: (v: JobStatusFilter) => void;
+  counts: Record<JobStatusFilter, number>;
+  testIdPrefix: string;
+}) {
+  return (
+    <Tabs value={value} onValueChange={(v) => onChange(v as JobStatusFilter)}>
+      <TabsList className="flex-wrap h-auto">
+        {STATUS_FILTERS.map((f) => (
+          <TabsTrigger key={f.value} value={f.value} data-testid={`${testIdPrefix}-${f.value}`}>
+            {f.label} ({counts[f.value]})
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
+  );
+}
+
+const COPY: Record<BaristaJobRecordType, {
+  itemLabel: string;
+  emptyTitle: string;
+  emptySubtitle: string;
+  emptyAppsTitle: string;
+  emptyAppsSubtitle: string;
+}> = {
+  OFFER: {
+    itemLabel: "offres",
+    emptyTitle: "Aucune offre disponible",
+    emptySubtitle: "Les nouvelles offres d'emploi des cafés apparaîtront ici.",
+    emptyAppsTitle: "Aucune candidature",
+    emptyAppsSubtitle: "Postulez à une offre pour suivre son avancement ici.",
+  },
+  MISSION: {
+    itemLabel: "missions",
+    emptyTitle: "Aucune mission disponible",
+    emptySubtitle: "Les nouvelles missions proposées par les cafés apparaîtront ici.",
+    emptyAppsTitle: "Aucune candidature à une mission",
+    emptyAppsSubtitle: "Postulez à une mission pour suivre son avancement ici.",
+  },
+};
+
+const FILTERED_EMPTY_SUBTITLE = "Aucun élément ne correspond à ce filtre.";
+
+function ListSkeleton() {
+  return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Data hooks shared by the lists and by their hosts' tab-trigger counts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Discoverable listings of one record type, targeted first then most recent. */
+export function useSortedDiscoverJobs(recordType: BaristaJobRecordType) {
+  const { data: jobs = [], isLoading } = useDiscoverBaristaJobs(recordType);
+  const sorted = useMemo(
     () => [...jobs].sort((a, b) => (a.isTargeted !== b.isTargeted ? (a.isTargeted ? -1 : 1) : b.createdAt > a.createdAt ? 1 : -1)),
     [jobs]
   );
-  const sortedApps = useMemo(() => [...applications].sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1)), [applications]);
+  return { jobs: sorted, isLoading };
+}
 
-  const listLength = tab === "offers" ? sortedJobs.length : sortedApps.length;
-  const pagination = usePagination(listLength);
-  useEffect(() => { pagination.resetPage(); }, [tab, listLength]);
+/**
+ * The barista's applications narrowed to one record type, most recent first.
+ *
+ * Application rows don't carry recordType, so each one is classified by
+ * cross-referencing its jobPostId against the (unfiltered) discover listing.
+ * Known limitation: discover only returns listings that are still open and
+ * visible, so an application whose listing has since closed/expired can't be
+ * classified — those fall back to OFFER (where every application was shown
+ * before Missions existed), so nothing is ever hidden from the barista.
+ */
+export function useMyJobApplicationsByType(recordType: BaristaJobRecordType) {
+  const { data: applications = [], isLoading: appsLoading } = useMyBaristaJobApplications();
+  const { data: allJobs = [], isLoading: jobsLoading } = useDiscoverBaristaJobs();
+  const filtered = useMemo(() => {
+    const missionIds = new Set(allJobs.filter((j) => j.recordType === "MISSION").map((j) => j.id));
+    return applications
+      .filter((a) => (recordType === "MISSION") === missionIds.has(a.jobPostId))
+      .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+  }, [applications, allJobs, recordType]);
+  return { applications: filtered, isLoading: appsLoading || jobsLoading };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reusable lists — used by the Offres page below (recordType="OFFER") and by
+// the Missions hub (missions-hub.tsx, recordType="MISSION").
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function JobDiscoverList({ recordType }: { recordType: BaristaJobRecordType }) {
+  const { jobs, isLoading } = useSortedDiscoverJobs(recordType);
+  const [filter, setFilter] = useState<JobStatusFilter>("all");
+  const [detailJob, setDetailJob] = useState<BaristaDiscoverableJob | null>(null);
+  const [applyJob, setApplyJob] = useState<BaristaDiscoverableJob | null>(null);
+  const copy = COPY[recordType];
+
+  const { counts, list } = useMemo(() => {
+    const now = Date.now();
+    const today = startOfToday();
+    const c = {} as Record<JobStatusFilter, number>;
+    for (const f of STATUS_FILTERS) c[f.value] = jobs.filter((j) => jobMatchesFilter(j, f.value, now, today)).length;
+    return { counts: c, list: jobs.filter((j) => jobMatchesFilter(j, filter, now, today)) };
+  }, [jobs, filter]);
+
+  const pagination = usePagination(list.length);
+  useEffect(() => { pagination.resetPage(); }, [filter, list.length]);
 
   // Keep the open detail dialog in sync with refetched data (e.g. hasApplied
   // flipping to true right after a successful application).
-  const liveDetailJob = detailJob ? sortedJobs.find((j) => j.id === detailJob.id) ?? detailJob : null;
-
+  const liveDetailJob = detailJob ? jobs.find((j) => j.id === detailJob.id) ?? detailJob : null;
   const openApply = (job: BaristaDiscoverableJob) => { setDetailJob(null); setApplyJob(job); };
 
-  const isLoading = tab === "offers" ? jobsLoading : appsLoading;
+  return (
+    <div className="flex flex-col gap-5">
+      <StatusFilterTabs value={filter} onChange={setFilter} counts={counts} testIdPrefix={`filter-discover-${recordType.toLowerCase()}`} />
+
+      {isLoading ? (
+        <ListSkeleton />
+      ) : list.length === 0 ? (
+        jobs.length === 0 ? (
+          <EmptyState title={copy.emptyTitle} subtitle={copy.emptySubtitle} />
+        ) : filter === "cancelled" ? (
+          <EmptyState title="Aucun élément annulé" subtitle="Les annonces clôturées ou annulées n'apparaissent pas dans cette liste." />
+        ) : (
+          <EmptyState title="Aucun résultat" subtitle={FILTERED_EMPTY_SUBTITLE} />
+        )
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {list.slice(pagination.start, pagination.end).map((job) => (
+              <JobCard key={job.id} job={job} onOpen={setDetailJob} onApply={openApply} />
+            ))}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={list.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel={copy.itemLabel}
+          />
+        </>
+      )}
+
+      <JobDetailDialog job={liveDetailJob} onClose={() => setDetailJob(null)} onApply={openApply} />
+      <ApplyDialog job={applyJob} onClose={() => setApplyJob(null)} />
+    </div>
+  );
+}
+
+export function JobApplicationsList({ recordType }: { recordType: BaristaJobRecordType }) {
+  const { applications, isLoading } = useMyJobApplicationsByType(recordType);
+  const [filter, setFilter] = useState<JobStatusFilter>("all");
+  const copy = COPY[recordType];
+
+  const { counts, list } = useMemo(() => {
+    const now = Date.now();
+    const c: Record<JobStatusFilter, number> = { all: applications.length, upcoming: 0, ongoing: 0, done: 0, cancelled: 0 };
+    const buckets = new Map(applications.map((a) => [a.id, applicationBucket(a, now)]));
+    buckets.forEach((b) => { c[b] += 1; });
+    return {
+      counts: c,
+      list: filter === "all" ? applications : applications.filter((a) => buckets.get(a.id) === filter),
+    };
+  }, [applications, filter]);
+
+  const pagination = usePagination(list.length);
+  useEffect(() => { pagination.resetPage(); }, [filter, list.length]);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <StatusFilterTabs value={filter} onChange={setFilter} counts={counts} testIdPrefix={`filter-applications-${recordType.toLowerCase()}`} />
+
+      {isLoading ? (
+        <ListSkeleton />
+      ) : list.length === 0 ? (
+        applications.length === 0 ? (
+          <EmptyState title={copy.emptyAppsTitle} subtitle={copy.emptyAppsSubtitle} />
+        ) : (
+          <EmptyState title="Aucun résultat" subtitle={FILTERED_EMPTY_SUBTITLE} />
+        )
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {list.slice(pagination.start, pagination.end).map((app) => (
+              <ApplicationCard key={app.id} application={app} />
+            ))}
+          </div>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={list.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="candidatures"
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// Offres page — unchanged outward behavior (same hero, same two tabs with
+// counts), now scoped to recordType OFFER and composed from the lists above.
+export default function BaristaMarketplaceJobsPage() {
+  const { jobs } = useSortedDiscoverJobs("OFFER");
+  const { applications } = useMyJobApplicationsByType("OFFER");
+  const [tab, setTab] = useState<"offers" | "applications">("offers");
 
   return (
     <div className="flex flex-col gap-5">
@@ -398,46 +692,12 @@ export default function BaristaMarketplaceJobsPage() {
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "offers" | "applications")}>
         <TabsList>
-          <TabsTrigger value="offers" data-testid="tab-jobs-offers">Offres disponibles ({sortedJobs.length})</TabsTrigger>
-          <TabsTrigger value="applications" data-testid="tab-jobs-applications">Mes candidatures ({sortedApps.length})</TabsTrigger>
+          <TabsTrigger value="offers" data-testid="tab-jobs-offers">Offres disponibles ({jobs.length})</TabsTrigger>
+          <TabsTrigger value="applications" data-testid="tab-jobs-applications">Mes candidatures ({applications.length})</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {isLoading ? (
-        <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
-      ) : listLength === 0 ? (
-        tab === "offers" ? (
-          <EmptyState title="Aucune offre disponible" subtitle="Les nouvelles offres d'emploi des cafés apparaîtront ici." />
-        ) : (
-          <EmptyState title="Aucune candidature" subtitle="Postulez à une offre pour suivre son avancement ici." />
-        )
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {tab === "offers"
-              ? sortedJobs.slice(pagination.start, pagination.end).map((job) => (
-                  <JobCard key={job.id} job={job} onOpen={setDetailJob} onApply={openApply} />
-                ))
-              : sortedApps.slice(pagination.start, pagination.end).map((app) => (
-                  <ApplicationCard key={app.id} application={app} />
-                ))}
-          </div>
-          <DataPagination
-            page={pagination.page}
-            pageSize={pagination.pageSize}
-            totalItems={listLength}
-            totalPages={pagination.totalPages}
-            start={pagination.start}
-            end={pagination.end}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-            itemLabel={tab === "offers" ? "offres" : "candidatures"}
-          />
-        </>
-      )}
-
-      <JobDetailDialog job={liveDetailJob} onClose={() => setDetailJob(null)} onApply={openApply} />
-      <ApplyDialog job={applyJob} onClose={() => setApplyJob(null)} />
+      {tab === "offers" ? <JobDiscoverList recordType="OFFER" /> : <JobApplicationsList recordType="OFFER" />}
     </div>
   );
 }

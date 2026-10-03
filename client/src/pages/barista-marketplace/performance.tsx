@@ -4,12 +4,13 @@ import BaristaMarketplaceDashboard from "@/pages/barista-marketplace/dashboard";
 import BaristaAnalyticsPage from "@/pages/barista-marketplace/analytics";
 import BaristaMarketplaceRevenuePage from "@/pages/barista-marketplace/revenue";
 
-// Performance tab — Dashboard / Analyses / Revenus. Analyses now has its own
-// real, data-backed content (client-computed from the same
-// useBaristaRequests()/useBaristaMissions()/useBaristaRevenue()/useBaristaReviews()
-// data Demandes/Mes missions/Revenus/Avis already use — see analytics.tsx),
-// matching the other service accounts' Performance tabs instead of pointing
-// back to the Dashboard tab.
+// Performance tab — Dashboard / Analyses / Revenus. Dashboard and Analyses are
+// built from useMyBaristaJobApplications()/useBaristaReviews() (the current
+// job-posting system's own data, covering both Offer and Mission
+// applications); Revenus is unchanged (real ledger over completed legacy
+// missions — see revenue.tsx's own note). See
+// barista_performance_flash_audit.md for the mission-workflow-cleanup
+// rationale behind this split.
 export default function BaristaMarketplacePerformance() {
   return (
     <SubTabSwitcher

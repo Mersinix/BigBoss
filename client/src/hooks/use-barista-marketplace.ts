@@ -117,10 +117,14 @@ export type BaristaJobPublicationMode = "AUTOMATIC" | "MANUAL";
 export type BaristaJobStatus = "DRAFT" | "PUBLISHED" | "CLOSED";
 export type BaristaJobApplicationStatus = "PENDING" | "PRESELECTED" | "INTERVIEW_SCHEDULED" | "ACCEPTED" | "REJECTED";
 export type BaristaJobMeetingStatus = "PROPOSED" | "CONFIRMED" | "CANCELLED";
+// OFFER = standing listing. MISSION = same record shape, time-boxed via
+// missionStartDate/missionEndDate — see shared/schema.ts baristaJobPosts.
+export type BaristaJobRecordType = "OFFER" | "MISSION";
 
 export type BaristaJobPost = {
   id: number;
   cafeOwnerId: number;
+  recordType: BaristaJobRecordType;
   title: string;
   establishment: string;
   locationAddress: string;
@@ -133,6 +137,8 @@ export type BaristaJobPost = {
   description: string;
   requirements: string;
   expiresAt: string | null;
+  missionStartDate: string | null;
+  missionEndDate: string | null;
   publicationMode: BaristaJobPublicationMode;
   status: BaristaJobStatus;
   createdAt: string;
@@ -170,6 +176,10 @@ export type BaristaJobApplication = {
   baristaProfileImageUrl: string | null;
   jobTitle: string;
   establishment: string;
+  // Additive (Barista Performance pages) — parent job post's recordType,
+  // resolved server-side, always correct even once the job is no longer
+  // "discoverable" (closed/expired).
+  recordType: BaristaJobRecordType;
   meeting: BaristaJobMeeting | null;
 };
 
@@ -624,7 +634,8 @@ export type BaristaJobPostInput = Partial<{
   title: string; establishment: string; locationAddress: string; openPositions: number;
   employmentTypes: string[]; experienceRequired: string; educationLevels: string[]; languages: string[];
   remuneration: string; description: string; requirements: string; expiresAt: string | null;
-  publicationMode: BaristaJobPublicationMode; status: BaristaJobStatus;
+  missionStartDate: string | null; missionEndDate: string | null;
+  publicationMode: BaristaJobPublicationMode; status: BaristaJobStatus; recordType: BaristaJobRecordType;
 }>;
 
 function invalidateBaristaJobs(qc: ReturnType<typeof useQueryClient>) {
@@ -640,10 +651,11 @@ export function useCreateBaristaJob() {
   });
 }
 
-export function useMyBaristaJobs() {
+export function useMyBaristaJobs(recordType?: BaristaJobRecordType) {
+  const qs = recordType ? `?recordType=${recordType}` : "";
   return useQuery<BaristaJobPostWithStats[]>({
-    queryKey: ["/api/barista/jobs/mine"],
-    queryFn: () => getJson("/api/barista/jobs/mine"),
+    queryKey: ["/api/barista/jobs/mine", recordType ?? "ALL"],
+    queryFn: () => getJson(`/api/barista/jobs/mine${qs}`),
   });
 }
 
@@ -685,10 +697,11 @@ export function useBaristaJobTargets(jobId: number | null) {
 
 // ── Barista-side discovery & applications ──
 
-export function useDiscoverBaristaJobs() {
+export function useDiscoverBaristaJobs(recordType?: BaristaJobRecordType) {
+  const qs = recordType ? `?recordType=${recordType}` : "";
   return useQuery<BaristaDiscoverableJob[]>({
-    queryKey: ["/api/barista/jobs/discover"],
-    queryFn: () => getJson("/api/barista/jobs/discover"),
+    queryKey: ["/api/barista/jobs/discover", recordType ?? "ALL"],
+    queryFn: () => getJson(`/api/barista/jobs/discover${qs}`),
   });
 }
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import marketingHeroImg from "@assets/image_1780681027926.png";
@@ -287,6 +287,9 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const initialService = new URLSearchParams(searchStr).get("service") ?? "";
   const [selectedService, setSelectedService] = useState<string>(initialService);
   const [search, setSearch] = useState("");
+  // Mobile collapsible search (mobile_filters_darkmode_audit.md) — presentation only.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [filterRating, setFilterRating] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [filterType, setFilterType] = useState("");
@@ -442,14 +445,38 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
           </div>
         </div>
         <div className={`border-b py-2 px-4 ${t.stripBg}`}>
-          <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
+          <div
+            className="max-w-7xl mx-auto flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+          >
             <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
-            <div className="relative flex-1 min-w-[180px] max-w-xs">
-              <SearchIcon className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un prestataire..." className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`} data-testid="input-provider-search" />
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+              {!searchOpen && (
+                <button
+                  type="button"
+                  className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                  onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+                  aria-label="Rechercher"
+                  data-testid="button-open-marketing-search"
+                >
+                  <SearchIcon className={`w-3.5 h-3.5 ${t.textSubtle}`} />
+                </button>
+              )}
+              <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                <SearchIcon className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${t.textSubtle}`} />
+                <Input
+                  ref={searchInputRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onBlur={() => { if (!search) setSearchOpen(false); }}
+                  placeholder="Rechercher un prestataire..."
+                  className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                  data-testid="input-provider-search"
+                />
+              </div>
             </div>
             <Select value={filterType || "__all__"} onValueChange={(v) => setFilterType(v === "__all__" ? "" : v)}>
-              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] ${t.selectTrigger}`} data-testid="select-provider-type">
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`} data-testid="select-provider-type">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
@@ -460,7 +487,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </SelectContent>
             </Select>
             <Select value={filterRating || "__all__"} onValueChange={(v) => setFilterRating(v === "__all__" ? "" : v)}>
-              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`} data-testid="select-provider-rating">
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`} data-testid="select-provider-rating">
                 <SelectValue placeholder="Note min." />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
@@ -471,7 +498,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </SelectContent>
             </Select>
             <Select value={filterLocation || "__all__"} onValueChange={(v) => setFilterLocation(v === "__all__" ? "" : v)}>
-              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] ${t.selectTrigger}`} data-testid="select-provider-location">
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`} data-testid="select-provider-location">
                 <SelectValue placeholder="Ville" />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
@@ -480,7 +507,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </SelectContent>
             </Select>
             {hasFilters && (
-              <button onClick={resetFilters} className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`} data-testid="button-reset-marketing-filters">
+              <button onClick={resetFilters} className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`} data-testid="button-reset-marketing-filters">
                 <RotateCcw className="w-3 h-3" /> Reset
               </button>
             )}

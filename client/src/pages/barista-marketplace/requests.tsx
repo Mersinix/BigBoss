@@ -89,7 +89,9 @@ function RequestCard({ request }: { request: BaristaRequest }) {
   );
 }
 
-export default function BaristaRequestsPage() {
+// hideHero: set only when embedded inside the Missions hub (missions-hub.tsx),
+// which renders its own hero — standalone behavior is unchanged by default.
+export default function BaristaRequestsPage({ hideHero = false }: { hideHero?: boolean } = {}) {
   const { data: requests = [], isLoading } = useBaristaRequests();
   const [tab, setTab] = useState<"active" | "all">("active");
 
@@ -103,14 +105,16 @@ export default function BaristaRequestsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <DashboardHero
-        title="Demandes reçues"
-        subtitle="Répondez aux demandes des cafés pour créer une mission."
-        icon={Briefcase}
-        gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
-        iconBgClass="bg-green-500/15"
-        iconTextClass="text-green-600 dark:text-green-400"
-      />
+      {!hideHero && (
+        <DashboardHero
+          title="Demandes reçues"
+          subtitle="Répondez aux demandes des cafés pour créer une mission."
+          icon={Briefcase}
+          gradientClass="bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/20"
+          iconBgClass="bg-green-500/15"
+          iconTextClass="text-green-600 dark:text-green-400"
+        />
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "all")}>
         <TabsList>

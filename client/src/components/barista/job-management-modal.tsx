@@ -13,6 +13,7 @@ import {
   type BaristaJobApplicationStatus,
   type BaristaJobStatus,
   type BaristaJobPublicationMode,
+  type BaristaJobRecordType,
 } from "@/hooks/use-barista-marketplace";
 import { JobPostFormModal } from "@/components/barista/job-post-form-modal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -91,6 +92,16 @@ function fmtDate(iso: string | null | undefined) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
+// Mission start/end are stored as plain "YYYY-MM-DD" text. `new Date("YYYY-MM-DD")`
+// parses as UTC midnight (can show the previous day west of UTC), so build a
+// local date from the parts; anything else falls back to fmtDate.
+function fmtPlainDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) return fmtDate(value);
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
 function fmtDateTime(iso: string | null | undefined) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -134,7 +145,14 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTokens(isDark);
   const { toast } = useToast();
-  const { data: jobs = [], isLoading } = useMyBaristaJobs();
+  const [section, setSection] = useState<BaristaJobRecordType>("OFFER");
+  // List view — only the active section's records (filtered server-side).
+  const { data: jobs = [], isLoading } = useMyBaristaJobs(section);
+  // Unfiltered list — used only to resolve the selected job regardless of its
+  // type (deep links may target a MISSION while the section is still OFFER).
+  // Both queries share the "/api/barista/jobs" prefix, so every mutation's
+  // invalidation refreshes them together.
+  const { data: allJobs = [], isLoading: allJobsLoading } = useMyBaristaJobs();
   const updateJob = useUpdateBaristaJob();
 
   const [selectedJobId, setSelectedJobId] = useState<number | null>(initialJobId);
@@ -145,12 +163,25 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
   // Deep-link support — when the modal is (re)opened with a different
   // initialJobId (e.g. clicked from the Baristas > Offres list elsewhere),
   // jump straight to that job's detail view instead of the list.
+  // Opening without a deep link always starts on the Offres section.
   useEffect(() => {
-    if (open) setSelectedJobId(initialJobId);
+    if (!open) return;
+    setSelectedJobId(initialJobId);
+    if (initialJobId == null) setSection("OFFER");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialJobId]);
 
-  const selectedJob = selectedJobId != null ? jobs.find((j) => j.id === selectedJobId) ?? null : null;
+  const selectedJob =
+    selectedJobId != null
+      ? jobs.find((j) => j.id === selectedJobId) ?? allJobs.find((j) => j.id === selectedJobId) ?? null
+      : null;
+
+  // Keep the switcher in sync with the job being viewed, so "Retour" from a
+  // deep-linked MISSION lands on the Missions list (and vice versa).
+  useEffect(() => {
+    if (selectedJob && selectedJob.recordType !== section) setSection(selectedJob.recordType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJob?.id, selectedJob?.recordType]);
 
   const handleClose = () => {
     setSelectedJobId(null);
@@ -162,10 +193,11 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
 
   const setJobStatus = (job: BaristaJobPostWithStats, status: "PUBLISHED" | "CLOSED") => {
     setBusyJobId(job.id);
+    const noun = job.recordType === "MISSION" ? "Mission" : "Offre";
     updateJob.mutate(
       { id: job.id, status },
       {
-        onSuccess: () => toast({ title: status === "CLOSED" ? "Offre clôturée" : "Offre publiée", description: job.title }),
+        onSuccess: () => toast({ title: status === "CLOSED" ? `${noun} clôturée` : `${noun} publiée`, description: job.title }),
         onError: (err: Error) => toast({ title: "Action impossible", description: err.message, variant: "destructive" }),
         onSettled: () => setBusyJobId(null),
       }
@@ -210,18 +242,27 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
               onBack={() => setSelectedJobId(null)}
               actions={statusActions(selectedJob)}
             />
+          ) : selectedJobId != null && allJobsLoading ? (
+            // Deep-linked job still resolving — avoid flashing the wrong section's list.
+            <div className="space-y-3" data-testid="loading-job-detail">
+              <DialogHeader className="sr-only"><DialogTitle>Chargement…</DialogTitle></DialogHeader>
+              <Skeleton className={`h-8 w-2/3 rounded-lg ${t.skeleton}`} />
+              {[0, 1].map((i) => <Skeleton key={i} className={`h-28 w-full rounded-xl ${t.skeleton}`} />)}
+            </div>
           ) : (
             <>
               <DialogHeader>
                 <div className="flex items-center justify-between gap-3 pr-6">
                   <DialogTitle className={`flex items-center gap-2 ${t.textPrimary}`}>
-                    <Briefcase className="w-5 h-5 text-green-600" /> Mes offres d'emploi
+                    <Briefcase className="w-5 h-5 text-green-600" /> {section === "MISSION" ? "Mes missions" : "Mes offres d'emploi"}
                   </DialogTitle>
                   <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5" onClick={openCreate} data-testid="button-job-create">
-                    <Plus className="w-4 h-4" /> Publier une offre
+                    <Plus className="w-4 h-4" /> {section === "MISSION" ? "Publier une mission" : "Publier une offre"}
                   </Button>
                 </div>
               </DialogHeader>
+
+              <RecordTypeSwitcher value={section} onChange={setSection} t={t} />
 
               {isLoading ? (
                 <div className="space-y-3">
@@ -230,8 +271,12 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
               ) : jobs.length === 0 ? (
                 <div className={`text-center py-12 ${t.textMuted}`} data-testid="empty-job-list">
                   <Briefcase className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                  <p className={`text-sm font-medium ${t.textPrimary}`}>Aucune offre d'emploi</p>
-                  <p className="text-xs mt-1 opacity-70">Publiez votre première offre pour recevoir des candidatures de baristas.</p>
+                  <p className={`text-sm font-medium ${t.textPrimary}`}>{section === "MISSION" ? "Aucune mission" : "Aucune offre d'emploi"}</p>
+                  <p className="text-xs mt-1 opacity-70">
+                    {section === "MISSION"
+                      ? "Publiez votre première mission pour recevoir des candidatures de baristas."
+                      : "Publiez votre première offre pour recevoir des candidatures de baristas."}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -256,8 +301,46 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
         open={formOpen}
         onClose={() => { setFormOpen(false); setEditingJob(null); }}
         editingJob={editingJob}
+        recordType={section}
       />
     </>
+  );
+}
+
+// Two-way segmented pill (Offres / Missions), built from the modal's own
+// tokens so it follows the same isDark styling as the rest of this modal.
+function RecordTypeSwitcher({
+  value, onChange, t,
+}: {
+  value: BaristaJobRecordType;
+  onChange: (v: BaristaJobRecordType) => void;
+  t: Tokens;
+}) {
+  const options: { value: BaristaJobRecordType; label: string; testId: string }[] = [
+    { value: "OFFER", label: "Offres", testId: "tab-job-management-offers" },
+    { value: "MISSION", label: "Missions", testId: "tab-job-management-missions" },
+  ];
+  return (
+    <div role="tablist" aria-label="Type d'annonce" className={`inline-flex items-center gap-1 rounded-lg p-1 ${t.sectionBg}`}>
+      {options.map((o) => {
+        const active = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(o.value)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              active ? `border shadow-sm ${t.card} ${t.textPrimary}` : `border border-transparent ${t.textMuted}`
+            }`}
+            data-testid={o.testId}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -325,6 +408,11 @@ function JobRow({
                 <CalendarDays className="w-3 h-3" /> {expired ? "Expirée le" : "Expire le"} {fmtDate(job.expiresAt)}
               </span>
             )}
+            {job.recordType === "MISSION" && (job.missionStartDate || job.missionEndDate) && (
+              <span className="flex items-center gap-1" data-testid={`text-job-mission-period-${job.id}`}>
+                <CalendarClock className="w-3 h-3" /> Mission du {fmtPlainDate(job.missionStartDate)} au {fmtPlainDate(job.missionEndDate)}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -351,6 +439,7 @@ function JobDetailView({
   const { data: targets = [], isLoading: targetsLoading } = useBaristaJobTargets(job.publicationMode === "MANUAL" ? job.id : null);
   const { data: applications = [], isLoading: appsLoading } = useBaristaJobApplicationsForJob(job.id);
   const expired = isExpired(job);
+  const isMission = job.recordType === "MISSION";
 
   const rows: { label: string; value: ReactNode }[] = [
     { label: "Établissement", value: job.establishment || "—" },
@@ -362,6 +451,12 @@ function JobDetailView({
     { label: "Langue", value: job.languages.length ? job.languages.join(", ") : "—" },
     { label: "Rémunération", value: job.remuneration || "—" },
     { label: "Date d'expiration", value: job.expiresAt ? <span className={expired ? "text-red-500" : ""}>{fmtDate(job.expiresAt)}{expired ? " (expirée)" : ""}</span> : "—" },
+    ...(isMission
+      ? [
+          { label: "Date de début", value: fmtPlainDate(job.missionStartDate) },
+          { label: "Date de fin", value: fmtPlainDate(job.missionEndDate) },
+        ]
+      : []),
     { label: "Mode de publication", value: job.publicationMode === "MANUAL" ? "Manuelle — profils sélectionnés via Flash" : "Automatique — visible par tous les baristas éligibles" },
     { label: "Créée le", value: fmtDate(job.createdAt) },
   ];
@@ -419,7 +514,7 @@ function JobDetailView({
             <Skeleton className={`h-12 w-full rounded-xl ${t.skeleton}`} />
           ) : targets.length === 0 ? (
             <p className={`text-xs rounded-xl p-3 ${t.sectionBg} ${t.textMuted}`} data-testid="empty-job-targets">
-              Aucun profil ciblé — utilisez Flash sur /barista pour cibler des baristas pour cette offre.
+              Aucun profil ciblé — utilisez Flash sur /barista pour cibler des baristas pour cette {isMission ? "mission" : "offre"}.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">

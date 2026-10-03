@@ -12,3 +12,26 @@ export const DEFAULT_AVATAR_URL = "https://www.citypng.com/public/uploads/previe
 export function getAvatarUrl(user?: { profileImageUrl?: string | null } | null): string {
   return user?.profileImageUrl?.trim() || DEFAULT_AVATAR_URL;
 }
+
+// Treats "", whitespace-only, null and undefined identically as "missing" —
+// shared by every Flash/photo priority check below so empty-string values
+// (e.g. a cleared Settings field) are never mistaken for a real URL.
+export function normalizeImageUrl(url?: string | null): string | null {
+  const trimmed = url?.trim();
+  return trimmed ? trimmed : null;
+}
+
+// Shared Flash (URL) > Photo de profil (URL) priority (flash_image_sync_audit.md)
+// — used identically by BaristaFastSearch (Coffee Owner's Fast Search) and
+// FlashPreviewModal (every professional account's own "Flash" preview
+// button), so the two surfaces can never silently disagree about which real
+// image wins. Returns null when neither is set; each caller keeps its own
+// existing final placeholder/empty-state for that case (this function only
+// decides which REAL candidate URL to try first — broken-image retry state
+// stays with the caller, since the two components render this differently).
+export function getPreferredImageUrl(
+  flashImageUrl?: string | null,
+  profileImageUrl?: string | null,
+): string | null {
+  return normalizeImageUrl(flashImageUrl) ?? normalizeImageUrl(profileImageUrl);
+}

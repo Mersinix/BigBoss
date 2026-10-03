@@ -134,12 +134,18 @@ function DriverAvailabilityModal({
 // passed ONLY by Admin → Delivery (GO Live publication approve/reject for the
 // driver). Omitted by every other caller, so their rendering is unchanged.
 export function DriverDetailModal({
-  driver, open, onClose, adminSlot,
+  driver, open, onClose, adminSlot, readOnly = false,
 }: {
   driver: User | null;
   open: boolean;
   onClose: () => void;
   adminSlot?: ReactNode;
+  // Opt-in (default false → unchanged for every existing caller): the
+  // Driver's own Aperçu self-preview passes this to hide the Flash icon,
+  // which would otherwise duplicate the dedicated Flash preview button
+  // already on Business → Profil. No other action in this modal needs
+  // gating (see the comment above).
+  readOnly?: boolean;
 }) {
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
@@ -208,7 +214,7 @@ export function DriverDetailModal({
               </div>
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => setReviewsOpen(true)} title="Avis" data-testid="button-open-driver-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
-                {flashImageUrl && (
+                {!readOnly && flashImageUrl && (
                   <button onClick={() => setFlashOpen(true)} title="Flash" data-testid="button-open-driver-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
                 )}
                 <button onClick={() => setAvailabilityOpen(true)} title="Disponibilité" data-testid="button-open-driver-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>

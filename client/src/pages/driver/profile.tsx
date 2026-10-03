@@ -382,6 +382,7 @@ export default function DriverProfilePage() {
         driver={user ?? null}
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
+        readOnly
       />
 
       <FlashPreviewModal

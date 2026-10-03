@@ -173,7 +173,7 @@ function JobCard({ job, onOpen, onApply }: { job: BaristaDiscoverableJob; onOpen
 function JobDetailDialog({ job, onClose, onApply }: { job: BaristaDiscoverableJob | null; onClose: () => void; onApply: (job: BaristaDiscoverableJob) => void }) {
   return (
     <Dialog open={!!job} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="dialog-job-detail">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-400 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600 [&::-webkit-scrollbar-thumb]:rounded-full" data-testid="dialog-job-detail">
         {job && (
           <>
             <DialogHeader>

@@ -1,77 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Heart, X, ChevronRight, Users, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Briefcase, Loader2 } from "lucide-react";
+import { Heart, X, ChevronRight, Users, Zap, SlidersHorizontal, Check, Info, MapPin, Star } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
-import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { getAvatarUrl } from "@/lib/avatar";
-import { useMyBaristaJobs, useAddBaristaJobTarget, type BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
-
-// Manual job targeting — associates the barista currently shown with one of the
-// Coffee Owner's own MANUAL + PUBLISHED job posts (automatic jobs are already
-// visible to every barista, drafts aren't live yet). Only mounted while the
-// Fast Search dialog is open, so the owner's job list is fetched lazily.
-function BaristaJobTargetButton({ barista }: { barista: BaristaMarketplaceCard }) {
-  const { toast } = useToast();
-  const { data: myJobs = [], isLoading } = useMyBaristaJobs();
-  const addTarget = useAddBaristaJobTarget();
-
-  const eligibleJobs = useMemo(
-    () => myJobs.filter((j) => j.publicationMode === "MANUAL" && j.status === "PUBLISHED"),
-    [myJobs]
-  );
-  const disabled = isLoading || addTarget.isPending || eligibleJobs.length === 0;
-  const title = isLoading
-    ? "Chargement de vos offres…"
-    : eligibleJobs.length === 0
-      ? "Créez d'abord une offre en publication manuelle"
-      : "Associer à une offre d'emploi";
-
-  const pick = (jobId: number, jobTitle: string) => {
-    if (addTarget.isPending) return;
-    addTarget.mutate(
-      { jobId, baristaUserId: barista.userId },
-      {
-        onSuccess: () => toast({ title: "Barista associé à l'offre", description: `${barista.name} a été associé à l'offre « ${jobTitle} ».` }),
-        onError: (err: Error) => toast({ title: "Association impossible", description: err.message, variant: "destructive" }),
-      }
-    );
-  };
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={disabled}>
-        <button
-          className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"
-          disabled={disabled}
-          title={title}
-          aria-label={title}
-          data-testid="button-fastsearch-job-target"
-        >
-          {addTarget.isPending ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Briefcase className="w-4 h-4 text-white" />}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="left" align="center" className="z-[70] w-64 max-h-72 overflow-y-auto" data-testid="menu-fastsearch-job-target">
-        <DropdownMenuLabel>Associer à une offre d'emploi</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {eligibleJobs.map((job) => (
-          <DropdownMenuItem
-            key={job.id}
-            onSelect={() => pick(job.id, job.title)}
-            className="flex flex-col items-start gap-0.5"
-            data-testid={`menuitem-fastsearch-job-${job.id}`}
-          >
-            <span className="font-medium leading-tight">{job.title}</span>
-            <span className="text-xs text-muted-foreground truncate max-w-full">{job.establishment}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
+import { BaristaJobTargetButton } from "@/components/barista/barista-job-target-button";
 
 // Fast Search — visually inspired by the Shop hero's Flash Mode
 // (client/src/components/flash-mode.tsx) per Part 30, but a fully independent
@@ -112,6 +46,15 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
 
   const current = filtered[idx] ?? null;
 
+  // Flash (URL) is the "Fast Search" hero image when set and loadable;
+  // Photo de profil (URL) is the fallback — same priority/fallback rule as
+  // the Barista's own Flash preview (FlashPreviewModal), so what a Coffee
+  // Owner sees here always matches what the Barista configured as Flash.
+  const [flashFailed, setFlashFailed] = useState(false);
+  useEffect(() => { setFlashFailed(false); }, [current?.userId]);
+  const flashUrl = current?.flashImageUrl?.trim() || null;
+  const heroImageSrc = !flashFailed && flashUrl ? flashUrl : getAvatarUrl(current as any);
+
   const faved = useFavorites((s) => (current ? !!s.baristaMarket[current.userId] : false));
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
 
@@ -147,7 +90,15 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
             </div>
             <div className="flex items-center gap-3">
               <span className="text-white/60 text-xs">{filtered.length > 0 ? `${idx + 1} / ${filtered.length}` : "0 / 0"}</span>
-              <button className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center" onClick={onClose} data-testid="button-fastsearch-close">
+              {/* Matches the Barista details modal's own close icon exactly
+                  (w-9 h-9, bg-black/40, same X size) — both are photo-overlay
+                  contexts within the same Barista feature area. */}
+              <button
+                className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center"
+                onClick={onClose}
+                aria-label="Fermer"
+                data-testid="button-fastsearch-close"
+              >
                 <X className="w-4 h-4 text-white" />
               </button>
             </div>
@@ -173,11 +124,18 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
             </div>
           ) : (
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
-              {/* Same Avatar/AvatarImage/AvatarFallback pattern (and the same
-                  getAvatarUrl default) used everywhere else in the app — real
-                  profile picture when set, existing fallback otherwise. */}
+              {/* Same Avatar/AvatarImage/AvatarFallback pattern used everywhere
+                  else in the app, fed by heroImageSrc (Flash (URL) first, Photo
+                  de profil (URL) if Flash is unset/fails to load, the app's
+                  existing default avatar/initials beyond that). */}
               <Avatar className="w-full h-full rounded-none">
-                <AvatarImage key={idx} src={getAvatarUrl(current as any)} alt={current!.name} className="object-cover" />
+                <AvatarImage
+                  key={`${idx}-${flashFailed}`}
+                  src={heroImageSrc}
+                  alt={current!.name}
+                  className="object-cover"
+                  onLoadingStatusChange={(status) => { if (status === "error" && !flashFailed && flashUrl) setFlashFailed(true); }}
+                />
                 <AvatarFallback className="rounded-none bg-gradient-to-br from-green-900 to-emerald-950">
                   <span className="text-white/80 font-bold text-6xl">{current!.initials}</span>
                 </AvatarFallback>
@@ -237,7 +195,13 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
                 <Heart className={`w-5 h-5 transition-colors ${faved ? "fill-white text-white" : "text-white"}`} />
               </button>
             )}
-            {current && <BaristaJobTargetButton barista={current} />}
+            {current && (
+              <BaristaJobTargetButton
+                baristaUserId={current.userId}
+                baristaName={current.name}
+                className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"
+              />
+            )}
             {current && (
               <button
                 className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"
@@ -264,14 +228,14 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
             <div className="bg-gray-900/95 backdrop-blur-xl rounded-b-3xl shadow-2xl">
               <div className="flex items-center justify-between px-5 pt-5 pb-4">
                 <h3 className="text-white font-bold text-base">Filtrer les baristas</h3>
-                <button onClick={() => setFilterOpen(false)} className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors">
+                <button onClick={() => setFilterOpen(false)} className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" aria-label="Fermer le filtre" data-testid="button-fastsearch-filter-close">
                   <X className="w-4 h-4 text-white" />
                 </button>
               </div>
               <div className="px-5 pb-5 space-y-4">
                 <div>
                   <p className="text-gray-400 text-xs mb-2">Compétence</p>
-                  <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                  <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/30">
                     <button onClick={() => setPendingSkill("")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!pendingSkill ? "bg-green-500 text-white" : "bg-white/10 text-gray-300 hover:bg-white/15"}`}>
                       {!pendingSkill && <Check className="w-3 h-3" />} Toutes
                     </button>
@@ -284,7 +248,7 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
                 </div>
                 <div>
                   <p className="text-gray-400 text-xs mb-2">Ville</p>
-                  <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                  <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/30">
                     <button onClick={() => setPendingLocation("")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!pendingLocation ? "bg-green-500 text-white" : "bg-white/10 text-gray-300 hover:bg-white/15"}`}>
                       {!pendingLocation && <Check className="w-3 h-3" />} Toutes
                     </button>

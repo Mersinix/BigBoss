@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { X, Zap, Eye } from "lucide-react";
 
@@ -28,7 +29,17 @@ export function FlashPreviewModal({
   accentBgClass: string;
   preview?: boolean;
 }) {
-  const imgSrc = flashImageUrl?.trim() || profileImageUrl?.trim() || null;
+  const primary = flashImageUrl?.trim() || null;
+  const fallback = profileImageUrl?.trim() || null;
+  // Flash (URL) takes priority; if it's unset OR fails to actually load, fall
+  // through to Photo de profil (URL); if that's also unset/broken, show the
+  // plain placeholder below — never a blank/broken-image box.
+  const [imgSrc, setImgSrc] = useState<string | null>(primary || fallback);
+  const [triedFallback, setTriedFallback] = useState(false);
+  useEffect(() => {
+    setImgSrc(primary || fallback);
+    setTriedFallback(false);
+  }, [primary, fallback]);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -57,7 +68,17 @@ export function FlashPreviewModal({
                 src={imgSrc}
                 alt={name}
                 className="w-full h-full object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                onError={() => {
+                  // Primary (Flash) image failed — try the profile photo once;
+                  // if that was already what failed, or there's nothing left,
+                  // drop to the placeholder instead of a broken-image box.
+                  if (!triedFallback && imgSrc !== fallback && fallback) {
+                    setTriedFallback(true);
+                    setImgSrc(fallback);
+                  } else {
+                    setImgSrc(null);
+                  }
+                }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">

@@ -23,12 +23,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Award, Image as ImageIcon, Briefcase, MessageCircle,
-  Flag, Heart, Navigation, X, Zap,
+  Flag, Heart, Navigation, X,
 } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { BaristaJobTargetButton } from "@/components/barista/barista-job-target-button";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<string, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -207,11 +207,9 @@ export function BaristaDetailModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
-  // Star (Phase 7) and Flash (Phase 3/5E) — two new icons alongside the
-  // existing Signaler/Disponibilité pair; both open their own dedicated modal
-  // instead of expanding inline, same pattern as Signaler/Disponibilité already do.
+  // Star — opens its own dedicated modal instead of expanding inline, same
+  // pattern as Signaler/Disponibilité already do.
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
-  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
   // Portfolio gallery — reuses the exact same lightbox already used by the
   // Marketing details modal (Part 25), no separate gallery component.
@@ -323,18 +321,27 @@ export function BaristaDetailModal({
                 >
                   <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
                 </button>
-                <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} data-testid="button-close-barista-modal">
+                <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} aria-label="Fermer" data-testid="button-close-barista-modal">
                   <X className="w-4 h-4 text-white" />
                 </button>
               </div>
-              {/* Bottom right — Signaler, Disponibilité, new Avis (Star) + Flash
-                  icons, same placement as the Maintenance details modal. */}
+              {/* Bottom right — Signaler, Disponibilité, Avis (Star) + "Associer
+                  à une offre d'emploi" icons, same placement as the Maintenance
+                  details modal. The Flash icon was removed from here (Phase 3) —
+                  Fast Search is now the Flash experience for Coffee Owners
+                  browsing baristas, and the Barista's own Flash preview still
+                  lives on their Business → Profil page; nothing duplicates it
+                  here anymore. */}
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-barista-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-barista-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-barista-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
-                {!readOnly && card.flashImageUrl && (
-                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-barista-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+                {!readOnly && (
+                  <BaristaJobTargetButton
+                    baristaUserId={card.userId}
+                    baristaName={card.name}
+                    className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
+                  />
                 )}
               </div>
               <span
@@ -538,19 +545,6 @@ export function BaristaDetailModal({
           </Button>
         </div>
       ) : undefined}
-    />
-
-    {/* Flash (Phase 3/5E) — the real Coffee Owner-facing destination for the
-        Flash URL configured in Settings → Compte; same component the Barista's
-        own self-preview uses, not preview mode here. */}
-    <FlashPreviewModal
-      open={flashModalOpen}
-      onClose={() => setFlashModalOpen(false)}
-      name={card?.name ?? ""}
-      typeLabel="Barista"
-      flashImageUrl={card?.flashImageUrl}
-      profileImageUrl={card?.profileImageUrl}
-      accentBgClass="bg-green-600"
     />
     </>
   );

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useThemeStore } from "@/store/theme-store";
 import {
@@ -130,17 +130,25 @@ function useTokens(isDark: boolean) {
 }
 type Tokens = ReturnType<typeof useTokens>;
 
-export function JobManagementModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function JobManagementModal({ open, onClose, initialJobId = null }: { open: boolean; onClose: () => void; initialJobId?: number | null }) {
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTokens(isDark);
   const { toast } = useToast();
   const { data: jobs = [], isLoading } = useMyBaristaJobs();
   const updateJob = useUpdateBaristaJob();
 
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(initialJobId);
   const [formOpen, setFormOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<BaristaJobPostWithStats | null>(null);
   const [busyJobId, setBusyJobId] = useState<number | null>(null);
+
+  // Deep-link support — when the modal is (re)opened with a different
+  // initialJobId (e.g. clicked from the Baristas > Offres list elsewhere),
+  // jump straight to that job's detail view instead of the list.
+  useEffect(() => {
+    if (open) setSelectedJobId(initialJobId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialJobId]);
 
   const selectedJob = selectedJobId != null ? jobs.find((j) => j.id === selectedJobId) ?? null : null;
 

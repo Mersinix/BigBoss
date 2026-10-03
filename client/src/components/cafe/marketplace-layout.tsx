@@ -57,6 +57,8 @@ import type { BaristaMarketplaceCard, BaristaRequest, BaristaMission } from "@/h
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { RecruitDialog as BaristaRecruitDialog } from "@/pages/cafe/barista/barista-page";
 import { useBaristaRequests, useBaristaMissions } from "@/hooks/use-barista-marketplace";
+import { JobManagementModal } from "@/components/barista/job-management-modal";
+import { BaristaOffresList } from "@/components/cafe/barista-offres-list";
 import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { QuoteRequestDialog as MarketingQuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
@@ -206,6 +208,13 @@ function AccountPanel({
     .map((id) => RESERVATION_SERVICE_TABS.find((t) => t.orderId === id))
     .filter((t): t is typeof RESERVATION_SERVICE_TABS[number] => !!t && serviceStates[t.stateKey] !== "HIDDEN");
   const [reservationsService, setReservationsService] = useState<string | null>(null);
+  // Baristas tab split (Missions / Offres) — Missions is the existing
+  // requests+missions timeline below, unchanged; Offres is new, reading the
+  // same job posts already managed via /barista's "Offres d'emploi" hero
+  // icon (useMyBaristaJobs) — no separate job-posting system here.
+  const [baristaReservationTab, setBaristaReservationTab] = useState<"missions" | "offres">("missions");
+  const [jobManagementJobId, setJobManagementJobId] = useState<number | null>(null);
+  const [jobManagementOpen, setJobManagementOpen] = useState(false);
 
   // Default to the first visible service, and if Admin hides the one currently
   // selected, hop to the next visible one — never leave the Coffee Owner on a
@@ -841,49 +850,78 @@ function AccountPanel({
               )
             )}
 
-            {/* ── Marketplace Baristas — merges requests (not yet accepted) with
-                missions (accepted), reusing the existing role-scoped endpoints
-                a Barista Marketplace professional already sees on their own
-                side; nothing new server-side. ── */}
+            {/* ── Marketplace Baristas — Missions (requests+missions timeline,
+                unchanged) / Offres (existing job posts, read here and managed
+                via the same JobManagementModal /barista already uses) switcher. ── */}
             {reservationsService === "barista_marketplace" && (
-              (baristaRequestsLoading || baristaMissionsLoading) ? (
-                <div className="space-y-3">
-                  {[...Array(2)].map((_, i) => <div key={i} className={`h-28 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}
+              <div className="space-y-3">
+                <div className={`flex gap-1 rounded-2xl p-1 w-fit ${switcherBg}`}>
+                  <button
+                    onClick={() => setBaristaReservationTab("missions")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${baristaReservationTab === "missions" ? switcherActive : switcherInactive}`}
+                    data-testid="tab-barista-reservations-missions"
+                  >
+                    Missions
+                  </button>
+                  <button
+                    onClick={() => setBaristaReservationTab("offres")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${baristaReservationTab === "offres" ? switcherActive : switcherInactive}`}
+                    data-testid="tab-barista-reservations-offres"
+                  >
+                    Offres
+                  </button>
                 </div>
-              ) : baristaTimelineItems.length === 0 ? (
-                <div className={`text-center py-16 ${textMuted}`}>
-                  <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                  <p className={`font-medium text-sm ${textPrimary}`}>Aucune réservation Barista pour le moment</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {baristaTimelineItems.map((item) => {
-                    const meta = item.kind === "mission"
-                      ? (baristaMissionStatusMeta[item.data.status] ?? baristaMissionStatusMeta.UPCOMING)
-                      : (baristaRequestStatusMeta[item.data.status] ?? baristaRequestStatusMeta.PENDING);
-                    return (
-                      <button
-                        key={`${item.kind}-${item.data.id}`}
-                        onClick={() => item.kind === "mission" ? setDetailBaristaMission(item.data) : setDetailBaristaRequest(item.data)}
-                        className={`w-full text-left border rounded-2xl p-4 space-y-3 ${cardBg}`}
-                        data-testid={`card-reservation-barista-${item.kind}-${item.data.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.data.baristaName}</p>
-                            <p className={`text-xs mt-0.5 ${textMuted}`}>{item.data.missionType}</p>
-                          </div>
-                          <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
-                        </div>
-                        <div className={`flex items-center gap-1 text-xs ${textMuted}`}>
-                          <Calendar className="w-3 h-3 text-amber-500" />
-                          {item.data.startDate}{item.data.endDate ? ` → ${item.data.endDate}` : ""}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )
+
+                {baristaReservationTab === "missions" ? (
+                  (baristaRequestsLoading || baristaMissionsLoading) ? (
+                    <div className="space-y-3">
+                      {[...Array(2)].map((_, i) => <div key={i} className={`h-28 rounded-2xl animate-pulse ${dk ? "bg-gray-800" : "bg-gray-100"}`} />)}
+                    </div>
+                  ) : baristaTimelineItems.length === 0 ? (
+                    <div className={`text-center py-16 ${textMuted}`}>
+                      <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                      <p className={`font-medium text-sm ${textPrimary}`}>Aucune réservation Barista pour le moment</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {baristaTimelineItems.map((item) => {
+                        const meta = item.kind === "mission"
+                          ? (baristaMissionStatusMeta[item.data.status] ?? baristaMissionStatusMeta.UPCOMING)
+                          : (baristaRequestStatusMeta[item.data.status] ?? baristaRequestStatusMeta.PENDING);
+                        return (
+                          <button
+                            key={`${item.kind}-${item.data.id}`}
+                            onClick={() => item.kind === "mission" ? setDetailBaristaMission(item.data) : setDetailBaristaRequest(item.data)}
+                            className={`w-full text-left border rounded-2xl p-4 space-y-3 ${cardBg}`}
+                            data-testid={`card-reservation-barista-${item.kind}-${item.data.id}`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.data.baristaName}</p>
+                                <p className={`text-xs mt-0.5 ${textMuted}`}>{item.data.missionType}</p>
+                              </div>
+                              <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
+                            </div>
+                            <div className={`flex items-center gap-1 text-xs ${textMuted}`}>
+                              <Calendar className="w-3 h-3 text-amber-500" />
+                              {item.data.startDate}{item.data.endDate ? ` → ${item.data.endDate}` : ""}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  <BaristaOffresList
+                    dk={dk}
+                    cardBg={cardBg}
+                    textPrimary={textPrimary}
+                    textMuted={textMuted}
+                    onOpenJob={(id) => { setJobManagementJobId(id); setJobManagementOpen(true); }}
+                    onCreateJob={() => { setJobManagementJobId(null); setJobManagementOpen(true); }}
+                  />
+                )}
+              </div>
             )}
 
             {/* ── Marketing — real marketingProjects lifecycle (request → devis →
@@ -1162,6 +1200,15 @@ function AccountPanel({
             })()}
           </DialogContent>
         </Dialog>
+
+        {/* Baristas > Offres — reuses the exact same job management modal as
+            /barista's "Offres d'emploi" hero icon, just deep-linked to the
+            clicked offer when opened from here. */}
+        <JobManagementModal
+          open={jobManagementOpen}
+          onClose={() => { setJobManagementOpen(false); setJobManagementJobId(null); }}
+          initialJobId={jobManagementJobId}
+        />
 
         {/* Marketing project details (Part 15) — resolved live from the same
             marketingProjects query, same status vocabulary/meta as the card above. */}

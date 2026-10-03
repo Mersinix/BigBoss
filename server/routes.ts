@@ -33,6 +33,7 @@ import {
   type InventoryFilters, type InventorySort,
   type NotificationPriority,
   PROSPECT_STATUSES, PROSPECT_TYPES,
+  baristaJobMeetings,
 } from "@shared/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 
@@ -2756,6 +2757,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     catch { res.status(500).json({ message: "Failed to load Barista skills" }); }
   });
 
+  // Niveau d'étude / Langue — Admin-managed taxonomies (Admin > Compétences),
+  // same read shape as /api/barista/skills above: active, non-frozen options
+  // only, consumed by the Barista profile form, the Coffee Owner /barista
+  // filters, and the job-post form.
+  app.get("/api/barista/education-levels", async (_req, res) => {
+    try { res.json(await storage.getBaristaEducationLevels(true)); }
+    catch { res.status(500).json({ message: "Failed to load education levels" }); }
+  });
+
+  app.get("/api/barista/languages", async (_req, res) => {
+    try { res.json(await storage.getBaristaLanguages(true)); }
+    catch { res.status(500).json({ message: "Failed to load languages" }); }
+  });
+
   app.get("/api/barista/profiles", async (req: any, res) => {
     try {
       const available = req.query.available === undefined ? undefined : req.query.available === "true";
@@ -2815,6 +2830,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         certifications: z.array(z.string().max(120)).optional(),
         experienceYears: z.number().int().min(0).max(80).nullable().optional(),
         portfolioUrls: z.array(z.string().max(2000)).max(4, "4 photos maximum").optional(),
+        educationLevel: z.string().max(120).nullable().optional(),
+        languages: z.array(z.string().max(60)).optional(),
       }).parse(req.body);
       const profile = await storage.upsertBaristaMarketplaceProfile(user.id, body);
       broadcast("barista_profile_updated", { userId: user.id, kind: "profile" });
@@ -2854,6 +2871,290 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       broadcast("barista_profile_updated", { userId, kind: "publication" });
       res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  // ── Barista Marketplace: Job posting system ───────────────────────────────
+  // Coffee Owner job posts, two publication modes (AUTOMATIC/MANUAL — see
+  // baristaJobPosts in shared/schema.ts for the full rationale). Visibility is
+  // enforced server-side on every read, never left to the frontend alone:
+  //   AUTOMATIC + PUBLISHED + not expired → every eligible barista
+  //   MANUAL + PUBLISHED + not expired → only baristas targeted via
+  //     POST .../targets (the existing Fast Search "Flash" component, extended)
+  //   DRAFT / CLOSED / expired → only the owning Coffee Owner / Admin
+
+  const jobPostBodySchema = z.object({
+    title: z.string().trim().min(1).max(200),
+    establishment: z.string().trim().max(200).optional(),
+    locationAddress: z.string().trim().max(300).optional(),
+    openPositions: z.number().int().min(1).max(999).optional(),
+    employmentTypes: z.array(z.string().max(40)).max(10).optional(),
+    experienceRequired: z.string().trim().max(120).optional(),
+    educationLevels: z.array(z.string().max(120)).max(20).optional(),
+    languages: z.array(z.string().max(60)).max(20).optional(),
+    remuneration: z.string().trim().max(200).optional(),
+    description: z.string().trim().max(5000).optional(),
+    requirements: z.string().trim().max(5000).optional(),
+    expiresAt: z.string().optional().nullable(),
+    publicationMode: z.enum(["AUTOMATIC", "MANUAL"]).optional(),
+    status: z.enum(["DRAFT", "PUBLISHED", "CLOSED"]).optional(),
+  });
+
+  function normalizeJobPostBody(body: Partial<z.infer<typeof jobPostBodySchema>>) {
+    const payload: any = { ...body };
+    if (body.expiresAt !== undefined) payload.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+    return payload;
+  }
+
+  app.post("/api/barista/jobs", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const body = jobPostBodySchema.parse(req.body);
+      const user = await storage.getUser(req.session.userId!);
+      const payload = normalizeJobPostBody(body);
+      if (!payload.establishment) payload.establishment = user!.name;
+      if (!payload.locationAddress) payload.locationAddress = user!.locationAddress ?? "";
+      const job = await storage.createBaristaJobPost(user!.id, payload);
+      broadcast("barista_jobs_updated", { cafeOwnerId: user!.id });
+      res.status(201).json(job);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid job post data" });
+    }
+  });
+
+  app.get("/api/barista/jobs/mine", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const jobs = await storage.getBaristaJobPostsForOwner(req.session.userId!);
+      res.json(jobs);
+    } catch { res.status(500).json({ message: "Failed to load job posts" }); }
+  });
+
+  // Barista-side discovery — automatic + published + not expired, union
+  // manually-targeted + published + not expired for this barista specifically.
+  app.get("/api/barista/jobs/discover", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    try {
+      const jobs = await storage.getDiscoverableBaristaJobPosts(user.id);
+      const appliedRows = await storage.getBaristaJobApplicationsForBarista(user.id);
+      const appliedIds = new Set(appliedRows.map((a) => a.jobPostId));
+      res.json(jobs.map((j) => ({ ...j, hasApplied: appliedIds.has(j.id) })));
+    } catch { res.status(500).json({ message: "Failed to load job opportunities" }); }
+  });
+
+  app.get("/api/barista/applications/mine", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    try { res.json(await storage.getBaristaJobApplicationsForBarista(user.id)); }
+    catch { res.status(500).json({ message: "Failed to load applications" }); }
+  });
+
+  // Single job detail — visibility enforced per the rule above. The route is
+  // deliberately a POST-auth-gated GET (requireAuth, not public) so a guessed
+  // id from an unauthenticated or unrelated account never resolves a MANUAL job.
+  app.get("/api/barista/jobs/:id", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const job = await storage.getBaristaJobPostById(Number(req.params.id));
+    if (!job) return res.status(404).json({ message: "Job post not found" });
+    const isOwnerOrAdmin = user.id === job.cafeOwnerId || ["ADMIN", "SUPER_ADMIN"].includes(user.role);
+    if (isOwnerOrAdmin) {
+      const withStats = await storage.getBaristaJobPostWithStats(job.id);
+      const targets = job.publicationMode === "MANUAL" ? await storage.getBaristaJobTargets(job.id) : [];
+      return res.json({ job: withStats, targets });
+    }
+    if (user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Forbidden" });
+    const now = new Date();
+    const notExpired = !job.expiresAt || new Date(job.expiresAt as any) > now;
+    const visible = job.status === "PUBLISHED" && notExpired && (
+      job.publicationMode === "AUTOMATIC" || await storage.isBaristaJobTargeted(job.id, user.id)
+    );
+    if (!visible) return res.status(404).json({ message: "Job post not found" });
+    const hasApplied = await storage.hasBaristaAppliedToJob(job.id, user.id);
+    res.json({ job, hasApplied });
+  });
+
+  app.patch("/api/barista/jobs/:id", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const body = jobPostBodySchema.partial().parse(req.body);
+      const payload = normalizeJobPostBody(body);
+      const updated = await storage.updateBaristaJobPost(Number(req.params.id), req.session.userId!, payload);
+      if (!updated) return res.status(404).json({ message: "Job post not found" });
+      broadcast("barista_jobs_updated", { cafeOwnerId: req.session.userId });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid job post data" });
+    }
+  });
+
+  // Manual targeting — called from the Coffee Owner's Fast Search ("Flash")
+  // component when they associate the barista currently shown with one of
+  // their own MANUAL job posts. Owner-only, and only for their own job.
+  app.post("/api/barista/jobs/:id/targets", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const { baristaUserId } = z.object({ baristaUserId: z.number().int().positive() }).parse(req.body);
+      const job = await storage.getBaristaJobPostById(Number(req.params.id));
+      if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Job post not found" });
+      if (job.publicationMode !== "MANUAL") return res.status(400).json({ message: "Seules les offres en publication manuelle peuvent être ciblées." });
+      const target = await storage.getUser(baristaUserId);
+      if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Barista not found" });
+      const row = await storage.addBaristaJobTarget(job.id, baristaUserId);
+      await notify({
+        userId: baristaUserId,
+        service: "BARISTA", type: "barista_job_targeted", priority: "INFO",
+        title: "Nouvelle opportunité d'emploi",
+        message: `${job.establishment || "Un établissement"} vous propose l'offre "${job.title}".`,
+        entityType: "barista_job_post", entityId: job.id,
+        prefKey: "barista_jobs",
+        dedupeKey: `barista:job_targeted:${job.id}:${baristaUserId}`,
+      });
+      res.status(201).json(row);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  app.get("/api/barista/jobs/:id/targets", requireApprovedCafeOwner, async (req: any, res) => {
+    const job = await storage.getBaristaJobPostById(Number(req.params.id));
+    if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Job post not found" });
+    try { res.json(await storage.getBaristaJobTargets(job.id)); }
+    catch { res.status(500).json({ message: "Failed to load targets" }); }
+  });
+
+  // ── Applications ──
+  app.post("/api/barista/jobs/:id/apply", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || user.role !== "BARISTA_MARKETPLACE") return res.status(403).json({ message: "Barista Marketplace access required" });
+    try {
+      const { message } = z.object({ message: z.string().max(2000).optional() }).parse(req.body);
+      const job = await storage.getBaristaJobPostById(Number(req.params.id));
+      if (!job) return res.status(404).json({ message: "Job post not found" });
+      const now = new Date();
+      const notExpired = !job.expiresAt || new Date(job.expiresAt as any) > now;
+      if (job.status !== "PUBLISHED" || !notExpired) return res.status(400).json({ message: "Cette offre n'accepte plus de candidatures." });
+      const eligible = job.publicationMode === "AUTOMATIC" || await storage.isBaristaJobTargeted(job.id, user.id);
+      if (!eligible) return res.status(403).json({ message: "Forbidden" });
+      if (await storage.hasBaristaAppliedToJob(job.id, user.id)) {
+        return res.status(400).json({ message: "Vous avez déjà postulé à cette offre." });
+      }
+      const application = await storage.createBaristaJobApplication(job.id, user.id, message);
+      broadcast("barista_jobs_updated", { cafeOwnerId: job.cafeOwnerId });
+      await notify({
+        userId: job.cafeOwnerId,
+        service: "BARISTA", type: "barista_job_application_received", priority: "INFO",
+        title: "Nouvelle candidature",
+        message: `${user.name} a postulé à "${job.title}".`,
+        entityType: "barista_job_application", entityId: application.id,
+        prefKey: "barista_jobs",
+        dedupeKey: `barista:job_application_created:${application.id}`,
+      });
+      res.status(201).json(application);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof Error && /duplicate key|unique/i.test(err.message)) {
+        return res.status(400).json({ message: "Vous avez déjà postulé à cette offre." });
+      }
+      res.status(400).json({ message: "Invalid application" });
+    }
+  });
+
+  app.get("/api/barista/jobs/:id/applications", requireApprovedCafeOwner, async (req: any, res) => {
+    const job = await storage.getBaristaJobPostById(Number(req.params.id));
+    if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Job post not found" });
+    try { res.json(await storage.getBaristaJobApplicationsForJob(job.id)); }
+    catch { res.status(500).json({ message: "Failed to load applications" }); }
+  });
+
+  app.patch("/api/barista/applications/:id/status", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const { status } = z.object({
+        status: z.enum(["PENDING", "PRESELECTED", "INTERVIEW_SCHEDULED", "ACCEPTED", "REJECTED"]),
+      }).parse(req.body);
+      const application = await storage.getBaristaJobApplicationById(Number(req.params.id));
+      if (!application) return res.status(404).json({ message: "Application not found" });
+      const job = await storage.getBaristaJobPostById(application.jobPostId);
+      if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Application not found" });
+      const updated = await storage.updateBaristaJobApplicationStatus(application.id, status);
+      broadcast("barista_jobs_updated", { cafeOwnerId: job.cafeOwnerId });
+      broadcastToUsers([application.baristaUserId], "barista_jobs_updated", {});
+      await notify({
+        userId: application.baristaUserId,
+        service: "BARISTA", type: "barista_job_application_status_changed", priority: "INFO",
+        title: "Candidature mise à jour",
+        message: `Le statut de votre candidature pour "${job.title}" a changé.`,
+        entityType: "barista_job_application", entityId: application.id,
+        prefKey: "barista_jobs",
+        dedupeKey: `barista:job_application_status:${application.id}:${status}`,
+      });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  // ── Meetings ──
+  app.post("/api/barista/applications/:id/meeting", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const { scheduledAt, notes } = z.object({
+        scheduledAt: z.string().min(1),
+        notes: z.string().max(1000).optional().nullable(),
+      }).parse(req.body);
+      const application = await storage.getBaristaJobApplicationById(Number(req.params.id));
+      if (!application) return res.status(404).json({ message: "Application not found" });
+      const job = await storage.getBaristaJobPostById(application.jobPostId);
+      if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Application not found" });
+      const meeting = await storage.upsertBaristaJobMeeting(application.id, { scheduledAt: new Date(scheduledAt), notes });
+      broadcastToUsers([application.baristaUserId, job.cafeOwnerId], "barista_jobs_updated", {});
+      await notify({
+        userId: application.baristaUserId,
+        service: "BARISTA", type: "barista_job_meeting_proposed", priority: "WARNING",
+        title: "Proposition d'entretien",
+        message: `${job.establishment || "Un établissement"} vous propose un entretien pour "${job.title}".`,
+        entityType: "barista_job_meeting", entityId: meeting.id,
+        prefKey: "barista_jobs",
+        dedupeKey: `barista:job_meeting_proposed:${meeting.id}:${meeting.updatedAt?.toString() ?? ""}`,
+      });
+      res.status(201).json(meeting);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid meeting data" });
+    }
+  });
+
+  // Either party (the Coffee Owner who proposed it, or the barista it was
+  // proposed to) may confirm/cancel — never an unrelated account.
+  app.patch("/api/barista/meetings/:id", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const { status } = z.object({ status: z.enum(["CONFIRMED", "CANCELLED"]) }).parse(req.body);
+      const [meeting] = await db.select().from(baristaJobMeetings).where(eq(baristaJobMeetings.id, Number(req.params.id)));
+      if (!meeting) return res.status(404).json({ message: "Meeting not found" });
+      const application = await storage.getBaristaJobApplicationById(meeting.applicationId);
+      if (!application) return res.status(404).json({ message: "Meeting not found" });
+      const job = await storage.getBaristaJobPostById(application.jobPostId);
+      const isOwner = job && job.cafeOwnerId === user.id;
+      const isBarista = application.baristaUserId === user.id;
+      if (!isOwner && !isBarista) return res.status(403).json({ message: "Forbidden" });
+      const updated = await storage.updateBaristaJobMeetingStatus(meeting.id, status);
+      broadcastToUsers([application.baristaUserId, job!.cafeOwnerId], "barista_jobs_updated", {});
+      const notifyUserId = isOwner ? application.baristaUserId : job!.cafeOwnerId;
+      await notify({
+        userId: notifyUserId,
+        service: "BARISTA", type: "barista_job_meeting_updated", priority: "INFO",
+        title: status === "CONFIRMED" ? "Entretien confirmé" : "Entretien annulé",
+        message: `L'entretien pour "${job!.title}" a été ${status === "CONFIRMED" ? "confirmé" : "annulé"}.`,
+        entityType: "barista_job_meeting", entityId: meeting.id,
+        prefKey: "barista_jobs",
+        dedupeKey: `barista:job_meeting_${status.toLowerCase()}:${meeting.id}`,
+      });
+      res.json(updated);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: "Invalid request" });
@@ -3250,6 +3551,94 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       broadcast("barista_taxonomy_updated", {});
       res.json({ ok: true });
     } catch { res.status(500).json({ message: "Failed to delete skill" }); }
+  });
+
+  // ── Barista Marketplace: admin Niveau d'étude taxonomy (same CRUD shape as skills above) ──
+
+  app.get("/api/admin/barista/education-levels", requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getBaristaEducationLevels(false)); }
+    catch { res.status(500).json({ message: "Failed to load education levels" }); }
+  });
+
+  app.post("/api/admin/barista/education-levels", requireAdmin, async (req, res) => {
+    try {
+      const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
+      const item = await storage.createBaristaEducationLevel(name);
+      broadcast("barista_taxonomy_updated", {});
+      res.status(201).json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Education level already exists or is invalid" });
+    }
+  });
+
+  app.patch("/api/admin/barista/education-levels/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const item = await storage.updateBaristaEducationLevel(Number(req.params.id), body);
+      if (!item) return res.status(404).json({ message: "Education level not found" });
+      broadcast("barista_taxonomy_updated", {});
+      res.json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid education level" });
+    }
+  });
+
+  app.delete("/api/admin/barista/education-levels/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteBaristaEducationLevel(Number(req.params.id));
+      broadcast("barista_taxonomy_updated", {});
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete education level" }); }
+  });
+
+  // ── Barista Marketplace: admin Langue taxonomy (same CRUD shape as skills above) ──
+
+  app.get("/api/admin/barista/languages", requireAdmin, async (_req, res) => {
+    try { res.json(await storage.getBaristaLanguages(false)); }
+    catch { res.status(500).json({ message: "Failed to load languages" }); }
+  });
+
+  app.post("/api/admin/barista/languages", requireAdmin, async (req, res) => {
+    try {
+      const { name } = z.object({ name: z.string().trim().min(1).max(60) }).parse(req.body);
+      const item = await storage.createBaristaLanguage(name);
+      broadcast("barista_taxonomy_updated", {});
+      res.status(201).json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Language already exists or is invalid" });
+    }
+  });
+
+  app.patch("/api/admin/barista/languages/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(60).optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const item = await storage.updateBaristaLanguage(Number(req.params.id), body);
+      if (!item) return res.status(404).json({ message: "Language not found" });
+      broadcast("barista_taxonomy_updated", {});
+      res.json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid language" });
+    }
+  });
+
+  app.delete("/api/admin/barista/languages/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteBaristaLanguage(Number(req.params.id));
+      broadcast("barista_taxonomy_updated", {});
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete language" }); }
   });
 
   // ── Admin Barista Marketplace account actions — same edit/freeze pattern as

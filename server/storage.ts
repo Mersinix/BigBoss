@@ -21,6 +21,8 @@ import {
   accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   baristaWorkHistory, baristaReports,
+  baristaEducationLevels, baristaLanguages,
+  baristaJobPosts, baristaJobTargets, baristaJobApplications, baristaJobMeetings,
   academyProfiles, academyCourses, academyCourseSessions, academyRegistrations,
   promotions, promotionUsage,
   discountCodes, discountCodeUsage,
@@ -82,6 +84,10 @@ import {
   type BaristaMarketplaceCard, type BaristaRequestWithParties, type BaristaMissionWithParties,
   type BaristaWorkHistory, type InsertBaristaWorkHistory,
   type BaristaReport, type InsertBaristaReport,
+  type BaristaEducationLevel, type BaristaLanguage,
+  type BaristaJobPost, type InsertBaristaJobPost, type BaristaJobPostWithStats,
+  type BaristaJobTarget, type BaristaJobApplication, type InsertBaristaJobApplication,
+  type BaristaJobApplicationWithParties, type BaristaJobMeeting,
   type MaintenanceReport, type InsertMaintenanceReport,
   type MarketingProfile, type InsertMarketingProfile, type MarketingMarketplaceCard,
   type MarketingProject, type InsertMarketingProject,
@@ -417,6 +423,32 @@ export interface IStorage {
   addBaristaFavorite(userId: number, baristaUserId: number): Promise<void>;
   removeBaristaFavorite(userId: number, baristaUserId: number): Promise<void>;
   getBaristaAdminOverview(): Promise<any>;
+  getBaristaEducationLevels(activeOnly?: boolean): Promise<BaristaEducationLevel[]>;
+  createBaristaEducationLevel(name: string): Promise<BaristaEducationLevel>;
+  updateBaristaEducationLevel(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaEducationLevel | undefined>;
+  deleteBaristaEducationLevel(id: number): Promise<void>;
+  getBaristaLanguages(activeOnly?: boolean): Promise<BaristaLanguage[]>;
+  createBaristaLanguage(name: string): Promise<BaristaLanguage>;
+  updateBaristaLanguage(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaLanguage | undefined>;
+  deleteBaristaLanguage(id: number): Promise<void>;
+  createBaristaJobPost(cafeOwnerId: number, data: Partial<InsertBaristaJobPost>): Promise<BaristaJobPost>;
+  updateBaristaJobPost(id: number, cafeOwnerId: number, data: Partial<InsertBaristaJobPost>): Promise<BaristaJobPost | undefined>;
+  getBaristaJobPostById(id: number): Promise<BaristaJobPost | undefined>;
+  getBaristaJobPostsForOwner(cafeOwnerId: number): Promise<BaristaJobPostWithStats[]>;
+  getBaristaJobPostWithStats(id: number): Promise<BaristaJobPostWithStats | undefined>;
+  getDiscoverableBaristaJobPosts(baristaUserId: number): Promise<(BaristaJobPost & { establishment: string; isTargeted: boolean })[]>;
+  addBaristaJobTarget(jobPostId: number, baristaUserId: number): Promise<BaristaJobTarget>;
+  getBaristaJobTargets(jobPostId: number): Promise<(BaristaJobTarget & { baristaName: string; baristaProfileImageUrl: string | null })[]>;
+  isBaristaJobTargeted(jobPostId: number, baristaUserId: number): Promise<boolean>;
+  createBaristaJobApplication(jobPostId: number, baristaUserId: number, message?: string | null): Promise<BaristaJobApplication>;
+  getBaristaJobApplicationById(id: number): Promise<BaristaJobApplication | undefined>;
+  getBaristaJobApplicationsForJob(jobPostId: number): Promise<BaristaJobApplicationWithParties[]>;
+  getBaristaJobApplicationsForBarista(baristaUserId: number): Promise<BaristaJobApplicationWithParties[]>;
+  updateBaristaJobApplicationStatus(id: number, status: string): Promise<BaristaJobApplication | undefined>;
+  hasBaristaAppliedToJob(jobPostId: number, baristaUserId: number): Promise<boolean>;
+  upsertBaristaJobMeeting(applicationId: number, data: { scheduledAt: Date; notes?: string | null }): Promise<BaristaJobMeeting>;
+  updateBaristaJobMeetingStatus(id: number, status: string): Promise<BaristaJobMeeting | undefined>;
+  getBaristaJobMeetingByApplication(applicationId: number): Promise<BaristaJobMeeting | undefined>;
 
   // Barista Academy
   getAcademyProfile(userId: number): Promise<AcademyProfile>;
@@ -8141,6 +8173,44 @@ export class DatabaseStorage implements IStorage {
     await db.delete(baristaSkills).where(eq(baristaSkills.id, id));
   }
 
+  // ── Niveau d'étude taxonomy — same CRUD shape as Skills above ──
+  async getBaristaEducationLevels(activeOnly = false): Promise<BaristaEducationLevel[]> {
+    const rows = await db.select().from(baristaEducationLevels).orderBy(asc(baristaEducationLevels.name));
+    return activeOnly ? rows.filter((s) => s.isActive && !s.isFrozen) : rows;
+  }
+  async createBaristaEducationLevel(name: string): Promise<BaristaEducationLevel> {
+    const [created] = await db.insert(baristaEducationLevels).values({ name: name.trim() }).returning();
+    return created;
+  }
+  async updateBaristaEducationLevel(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaEducationLevel | undefined> {
+    const [updated] = await db.update(baristaEducationLevels)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .where(eq(baristaEducationLevels.id, id)).returning();
+    return updated;
+  }
+  async deleteBaristaEducationLevel(id: number): Promise<void> {
+    await db.delete(baristaEducationLevels).where(eq(baristaEducationLevels.id, id));
+  }
+
+  // ── Langue taxonomy — same CRUD shape as Skills above ──
+  async getBaristaLanguages(activeOnly = false): Promise<BaristaLanguage[]> {
+    const rows = await db.select().from(baristaLanguages).orderBy(asc(baristaLanguages.name));
+    return activeOnly ? rows.filter((s) => s.isActive && !s.isFrozen) : rows;
+  }
+  async createBaristaLanguage(name: string): Promise<BaristaLanguage> {
+    const [created] = await db.insert(baristaLanguages).values({ name: name.trim() }).returning();
+    return created;
+  }
+  async updateBaristaLanguage(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaLanguage | undefined> {
+    const [updated] = await db.update(baristaLanguages)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .where(eq(baristaLanguages.id, id)).returning();
+    return updated;
+  }
+  async deleteBaristaLanguage(id: number): Promise<void> {
+    await db.delete(baristaLanguages).where(eq(baristaLanguages.id, id));
+  }
+
   // ── Profile ──
   async getBaristaMarketplaceProfile(userId: number): Promise<BaristaMarketplaceProfile> {
     const [profile] = await db.select().from(baristaMarketplaceProfiles).where(eq(baristaMarketplaceProfiles.userId, userId));
@@ -8370,6 +8440,199 @@ export class DatabaseStorage implements IStorage {
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
     };
+  }
+
+  // ── Job posting system ──────────────────────────────────────────────────
+  // Visibility is enforced here, never left to the frontend alone:
+  //   AUTOMATIC + PUBLISHED + not expired → discoverable by every eligible barista
+  //   MANUAL + PUBLISHED + not expired → discoverable only by specifically targeted baristas
+  //   DRAFT / CLOSED / expired → never discoverable; only the owner (and Admin) can see them
+
+  async createBaristaJobPost(cafeOwnerId: number, data: Partial<InsertBaristaJobPost>): Promise<BaristaJobPost> {
+    const { cafeOwnerId: _ignored, id: _id, createdAt: _c, updatedAt: _u, ...safe } = data as any;
+    const [created] = await db.insert(baristaJobPosts).values({ ...safe, cafeOwnerId }).returning();
+    return created;
+  }
+
+  async updateBaristaJobPost(id: number, cafeOwnerId: number, data: Partial<InsertBaristaJobPost>): Promise<BaristaJobPost | undefined> {
+    const { cafeOwnerId: _ignored, id: _id, createdAt: _c, updatedAt: _u, ...safe } = data as any;
+    const [updated] = await db.update(baristaJobPosts)
+      .set({ ...safe, updatedAt: new Date() })
+      .where(and(eq(baristaJobPosts.id, id), eq(baristaJobPosts.cafeOwnerId, cafeOwnerId)))
+      .returning();
+    return updated;
+  }
+
+  async getBaristaJobPostById(id: number): Promise<BaristaJobPost | undefined> {
+    const [row] = await db.select().from(baristaJobPosts).where(eq(baristaJobPosts.id, id));
+    return row;
+  }
+
+  private async computeBaristaJobStats(jobPostIds: number[]): Promise<Map<number, { total: number; pending: number; preselected: number; rejected: number; targetCount: number }>> {
+    const result = new Map<number, { total: number; pending: number; preselected: number; rejected: number; targetCount: number }>();
+    if (!jobPostIds.length) return result;
+    for (const id of jobPostIds) result.set(id, { total: 0, pending: 0, preselected: 0, rejected: 0, targetCount: 0 });
+    const appRows = await db.select({ jobPostId: baristaJobApplications.jobPostId, status: baristaJobApplications.status })
+      .from(baristaJobApplications).where(inArray(baristaJobApplications.jobPostId, jobPostIds));
+    for (const row of appRows) {
+      const s = result.get(row.jobPostId)!;
+      s.total += 1;
+      if (row.status === "PENDING") s.pending += 1;
+      else if (row.status === "PRESELECTED") s.preselected += 1;
+      else if (row.status === "REJECTED") s.rejected += 1;
+    }
+    const targetRows = await db.select({ jobPostId: baristaJobTargets.jobPostId })
+      .from(baristaJobTargets).where(inArray(baristaJobTargets.jobPostId, jobPostIds));
+    for (const row of targetRows) result.get(row.jobPostId)!.targetCount += 1;
+    return result;
+  }
+
+  private attachJobStats(row: BaristaJobPost, s: { total: number; pending: number; preselected: number; rejected: number; targetCount: number } | undefined): BaristaJobPostWithStats {
+    const stats = s ?? { total: 0, pending: 0, preselected: 0, rejected: 0, targetCount: 0 };
+    return {
+      ...row,
+      totalApplications: stats.total,
+      pendingApplications: stats.pending,
+      preselectedApplications: stats.preselected,
+      rejectedApplications: stats.rejected,
+      processedApplications: stats.total - stats.pending,
+      targetCount: stats.targetCount,
+    };
+  }
+
+  async getBaristaJobPostsForOwner(cafeOwnerId: number): Promise<BaristaJobPostWithStats[]> {
+    const rows = await db.select().from(baristaJobPosts).where(eq(baristaJobPosts.cafeOwnerId, cafeOwnerId)).orderBy(desc(baristaJobPosts.createdAt));
+    const statsMap = await this.computeBaristaJobStats(rows.map((r) => r.id));
+    return rows.map((r) => this.attachJobStats(r, statsMap.get(r.id)));
+  }
+
+  async getBaristaJobPostWithStats(id: number): Promise<BaristaJobPostWithStats | undefined> {
+    const row = await this.getBaristaJobPostById(id);
+    if (!row) return undefined;
+    const statsMap = await this.computeBaristaJobStats([id]);
+    return this.attachJobStats(row, statsMap.get(id));
+  }
+
+  // Automatic jobs eligible to every barista, UNION jobs this barista was specifically
+  // targeted for (MANUAL) — both filtered to PUBLISHED and not expired. `isTargeted`
+  // tells the client which kind this is so it can label manually-offered opportunities.
+  async getDiscoverableBaristaJobPosts(baristaUserId: number): Promise<(BaristaJobPost & { isTargeted: boolean })[]> {
+    const now = new Date();
+    const automatic = await db.select().from(baristaJobPosts).where(and(
+      eq(baristaJobPosts.status, "PUBLISHED"),
+      eq(baristaJobPosts.publicationMode, "AUTOMATIC"),
+    ));
+    const targetRows = await db.select({ jobPostId: baristaJobTargets.jobPostId }).from(baristaJobTargets).where(eq(baristaJobTargets.baristaUserId, baristaUserId));
+    const targetedIds = targetRows.map((t) => t.jobPostId);
+    const manual = targetedIds.length
+      ? await db.select().from(baristaJobPosts).where(and(
+          eq(baristaJobPosts.status, "PUBLISHED"),
+          eq(baristaJobPosts.publicationMode, "MANUAL"),
+          inArray(baristaJobPosts.id, targetedIds),
+        ))
+      : [];
+    const notExpired = (j: BaristaJobPost) => !j.expiresAt || new Date(j.expiresAt as any) > now;
+    return [
+      ...automatic.filter(notExpired).map((j) => ({ ...j, isTargeted: false })),
+      ...manual.filter(notExpired).map((j) => ({ ...j, isTargeted: true })),
+    ];
+  }
+
+  async addBaristaJobTarget(jobPostId: number, baristaUserId: number): Promise<BaristaJobTarget> {
+    const [created] = await db.insert(baristaJobTargets).values({ jobPostId, baristaUserId }).onConflictDoNothing().returning();
+    if (created) return created;
+    const [existing] = await db.select().from(baristaJobTargets).where(and(eq(baristaJobTargets.jobPostId, jobPostId), eq(baristaJobTargets.baristaUserId, baristaUserId)));
+    return existing!;
+  }
+
+  async getBaristaJobTargets(jobPostId: number): Promise<(BaristaJobTarget & { baristaName: string; baristaProfileImageUrl: string | null })[]> {
+    const rows = await db.select().from(baristaJobTargets).where(eq(baristaJobTargets.jobPostId, jobPostId)).orderBy(desc(baristaJobTargets.createdAt));
+    if (!rows.length) return [];
+    const userIds = rows.map((r) => r.baristaUserId);
+    const userRows = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl }).from(users).where(inArray(users.id, userIds));
+    const userMap = new Map(userRows.map((u) => [u.id, u]));
+    return rows.map((r) => ({ ...r, baristaName: userMap.get(r.baristaUserId)?.name ?? "—", baristaProfileImageUrl: userMap.get(r.baristaUserId)?.profileImageUrl ?? null }));
+  }
+
+  async isBaristaJobTargeted(jobPostId: number, baristaUserId: number): Promise<boolean> {
+    const [row] = await db.select({ id: baristaJobTargets.id }).from(baristaJobTargets).where(and(eq(baristaJobTargets.jobPostId, jobPostId), eq(baristaJobTargets.baristaUserId, baristaUserId)));
+    return !!row;
+  }
+
+  // ── Job applications ──
+  async createBaristaJobApplication(jobPostId: number, baristaUserId: number, message?: string | null): Promise<BaristaJobApplication> {
+    const [created] = await db.insert(baristaJobApplications).values({ jobPostId, baristaUserId, message: message?.trim() || null }).returning();
+    return created;
+  }
+
+  async getBaristaJobApplicationById(id: number): Promise<BaristaJobApplication | undefined> {
+    const [row] = await db.select().from(baristaJobApplications).where(eq(baristaJobApplications.id, id));
+    return row;
+  }
+
+  async hasBaristaAppliedToJob(jobPostId: number, baristaUserId: number): Promise<boolean> {
+    const [row] = await db.select({ id: baristaJobApplications.id }).from(baristaJobApplications).where(and(eq(baristaJobApplications.jobPostId, jobPostId), eq(baristaJobApplications.baristaUserId, baristaUserId)));
+    return !!row;
+  }
+
+  private async attachApplicationParties(rows: BaristaJobApplication[]): Promise<BaristaJobApplicationWithParties[]> {
+    if (!rows.length) return [];
+    const baristaIds = Array.from(new Set(rows.map((r) => r.baristaUserId)));
+    const jobIds = Array.from(new Set(rows.map((r) => r.jobPostId)));
+    const [baristaRows, jobRows, meetingRows] = await Promise.all([
+      db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl }).from(users).where(inArray(users.id, baristaIds)),
+      db.select().from(baristaJobPosts).where(inArray(baristaJobPosts.id, jobIds)),
+      db.select().from(baristaJobMeetings).where(inArray(baristaJobMeetings.applicationId, rows.map((r) => r.id))),
+    ]);
+    const baristaMap = new Map(baristaRows.map((u) => [u.id, u]));
+    const jobMap = new Map(jobRows.map((j) => [j.id, j]));
+    const meetingMap = new Map(meetingRows.map((m) => [m.applicationId, m]));
+    return rows.map((r) => ({
+      ...r,
+      baristaName: baristaMap.get(r.baristaUserId)?.name ?? "—",
+      baristaProfileImageUrl: baristaMap.get(r.baristaUserId)?.profileImageUrl ?? null,
+      jobTitle: jobMap.get(r.jobPostId)?.title ?? "—",
+      establishment: jobMap.get(r.jobPostId)?.establishment ?? "",
+      meeting: meetingMap.get(r.id) ?? null,
+    }));
+  }
+
+  async getBaristaJobApplicationsForJob(jobPostId: number): Promise<BaristaJobApplicationWithParties[]> {
+    const rows = await db.select().from(baristaJobApplications).where(eq(baristaJobApplications.jobPostId, jobPostId)).orderBy(desc(baristaJobApplications.createdAt));
+    return this.attachApplicationParties(rows);
+  }
+
+  async getBaristaJobApplicationsForBarista(baristaUserId: number): Promise<BaristaJobApplicationWithParties[]> {
+    const rows = await db.select().from(baristaJobApplications).where(eq(baristaJobApplications.baristaUserId, baristaUserId)).orderBy(desc(baristaJobApplications.createdAt));
+    return this.attachApplicationParties(rows);
+  }
+
+  async updateBaristaJobApplicationStatus(id: number, status: string): Promise<BaristaJobApplication | undefined> {
+    const [updated] = await db.update(baristaJobApplications).set({ status: status as any, updatedAt: new Date() }).where(eq(baristaJobApplications.id, id)).returning();
+    return updated;
+  }
+
+  // ── Job meetings ──
+  async upsertBaristaJobMeeting(applicationId: number, data: { scheduledAt: Date; notes?: string | null }): Promise<BaristaJobMeeting> {
+    const existing = await this.getBaristaJobMeetingByApplication(applicationId);
+    if (existing) {
+      const [updated] = await db.update(baristaJobMeetings)
+        .set({ scheduledAt: data.scheduledAt, notes: data.notes ?? null, status: "PROPOSED", updatedAt: new Date() })
+        .where(eq(baristaJobMeetings.id, existing.id)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(baristaJobMeetings).values({ applicationId, scheduledAt: data.scheduledAt, notes: data.notes ?? null }).returning();
+    return created;
+  }
+
+  async updateBaristaJobMeetingStatus(id: number, status: string): Promise<BaristaJobMeeting | undefined> {
+    const [updated] = await db.update(baristaJobMeetings).set({ status: status as any, updatedAt: new Date() }).where(eq(baristaJobMeetings.id, id)).returning();
+    return updated;
+  }
+
+  async getBaristaJobMeetingByApplication(applicationId: number): Promise<BaristaJobMeeting | undefined> {
+    const [row] = await db.select().from(baristaJobMeetings).where(eq(baristaJobMeetings.applicationId, applicationId));
+    return row;
   }
 
   // ── Requests ──

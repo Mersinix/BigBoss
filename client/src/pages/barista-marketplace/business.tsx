@@ -1,7 +1,8 @@
-import { Briefcase, ClipboardList, UserCheck } from "lucide-react";
+import { Briefcase, ClipboardList, Newspaper, UserCheck } from "lucide-react";
 import { SubTabSwitcher } from "@/components/account/sub-tab-switcher";
 import BaristaMarketplaceRequestsPage from "@/pages/barista-marketplace/requests";
 import BaristaMarketplaceMissionsPage from "@/pages/barista-marketplace/missions";
+import BaristaMarketplaceJobsPage from "@/pages/barista-marketplace/jobs";
 import BaristaProfilePage from "@/pages/barista-marketplace/profile";
 
 // Business tab — Demandes / Missions / Profil, each the account's own existing
@@ -20,6 +21,7 @@ export default function BaristaMarketplaceBusiness() {
         { key: "profile", label: "Profil", icon: UserCheck, content: <BaristaProfilePage /> },
         { key: "requests", label: "Demandes", icon: Briefcase, content: <BaristaMarketplaceRequestsPage /> },
         { key: "missions", label: "Missions", icon: ClipboardList, content: <BaristaMarketplaceMissionsPage /> },
+        { key: "jobs", label: "Offres", icon: Newspaper, content: <BaristaMarketplaceJobsPage /> },
       ]}
     />
   );

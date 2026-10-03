@@ -1,10 +1,77 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Heart, X, ChevronRight, Users, Zap, SlidersHorizontal, Check, Info, MapPin, Star } from "lucide-react";
+import { Heart, X, ChevronRight, Users, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Briefcase, Loader2 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { getAvatarUrl } from "@/lib/avatar";
-import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
+import { useMyBaristaJobs, useAddBaristaJobTarget, type BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
+
+// Manual job targeting — associates the barista currently shown with one of the
+// Coffee Owner's own MANUAL + PUBLISHED job posts (automatic jobs are already
+// visible to every barista, drafts aren't live yet). Only mounted while the
+// Fast Search dialog is open, so the owner's job list is fetched lazily.
+function BaristaJobTargetButton({ barista }: { barista: BaristaMarketplaceCard }) {
+  const { toast } = useToast();
+  const { data: myJobs = [], isLoading } = useMyBaristaJobs();
+  const addTarget = useAddBaristaJobTarget();
+
+  const eligibleJobs = useMemo(
+    () => myJobs.filter((j) => j.publicationMode === "MANUAL" && j.status === "PUBLISHED"),
+    [myJobs]
+  );
+  const disabled = isLoading || addTarget.isPending || eligibleJobs.length === 0;
+  const title = isLoading
+    ? "Chargement de vos offres…"
+    : eligibleJobs.length === 0
+      ? "Créez d'abord une offre en publication manuelle"
+      : "Associer à une offre d'emploi";
+
+  const pick = (jobId: number, jobTitle: string) => {
+    if (addTarget.isPending) return;
+    addTarget.mutate(
+      { jobId, baristaUserId: barista.userId },
+      {
+        onSuccess: () => toast({ title: "Barista associé à l'offre", description: `${barista.name} a été associé à l'offre « ${jobTitle} ».` }),
+        onError: (err: Error) => toast({ title: "Association impossible", description: err.message, variant: "destructive" }),
+      }
+    );
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild disabled={disabled}>
+        <button
+          className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"
+          disabled={disabled}
+          title={title}
+          aria-label={title}
+          data-testid="button-fastsearch-job-target"
+        >
+          {addTarget.isPending ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Briefcase className="w-4 h-4 text-white" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="left" align="center" className="z-[70] w-64 max-h-72 overflow-y-auto" data-testid="menu-fastsearch-job-target">
+        <DropdownMenuLabel>Associer à une offre d'emploi</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {eligibleJobs.map((job) => (
+          <DropdownMenuItem
+            key={job.id}
+            onSelect={() => pick(job.id, job.title)}
+            className="flex flex-col items-start gap-0.5"
+            data-testid={`menuitem-fastsearch-job-${job.id}`}
+          >
+            <span className="font-medium leading-tight">{job.title}</span>
+            <span className="text-xs text-muted-foreground truncate max-w-full">{job.establishment}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 // Fast Search — visually inspired by the Shop hero's Flash Mode
 // (client/src/components/flash-mode.tsx) per Part 30, but a fully independent
@@ -170,6 +237,7 @@ export function BaristaFastSearch({ open, onClose, baristas, onRecruit, onOpenDe
                 <Heart className={`w-5 h-5 transition-colors ${faved ? "fill-white text-white" : "text-white"}`} />
               </button>
             )}
+            {current && <BaristaJobTargetButton barista={current} />}
             {current && (
               <button
                 className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"

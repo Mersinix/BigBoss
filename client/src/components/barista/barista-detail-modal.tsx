@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useThemeStore } from "@/store/theme-store";
 import {
@@ -174,7 +173,6 @@ export function BaristaDetailModal({
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const fmt = useFormatCurrency();
   const [, navigate] = useLocation();
   const isDark = useThemeStore((s) => s.isDark);
   const LEVEL_COLORS = levelColors(isDark);
@@ -362,15 +360,17 @@ export function BaristaDetailModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
-                  <p className={`text-[11px] ${t.textMuted}`}>Tarif / jour</p>
-                  <p className="font-bold text-green-600">{fmt(card.dailyRateInCents)}</p>
-                </div>
+              <div className={`grid ${card.educationLevel ? "grid-cols-2" : "grid-cols-1"} gap-3 text-sm`}>
                 <div className={`p-3 rounded-xl ${t.sectionBg}`}>
                   <p className={`text-[11px] ${t.textMuted}`}>Expérience</p>
                   <p className={`font-bold ${t.textPrimary}`}>{card.experienceYears != null ? `${card.experienceYears} an${card.experienceYears > 1 ? "s" : ""}` : "Non renseignée"}</p>
                 </div>
+                {card.educationLevel && (
+                  <div className={`p-3 rounded-xl ${t.sectionBg}`}>
+                    <p className={`text-[11px] ${t.textMuted}`}>Niveau d'étude</p>
+                    <p className={`font-bold ${t.textPrimary}`}>{card.educationLevel}</p>
+                  </div>
+                )}
               </div>
 
               {card.skills.length > 0 && (
@@ -379,6 +379,17 @@ export function BaristaDetailModal({
                   <div className="flex flex-wrap gap-1.5">
                     {card.skills.map((s) => (
                       <Badge key={s} variant="outline" className={isDark ? "border-gray-700 text-gray-200" : ""}>{s}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {card.languages?.length > 0 && (
+                <div>
+                  <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Langue</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {card.languages.map((l) => (
+                      <Badge key={l} variant="outline" className={isDark ? "border-gray-700 text-gray-200" : ""}>{l}</Badge>
                     ))}
                   </div>
                 </div>

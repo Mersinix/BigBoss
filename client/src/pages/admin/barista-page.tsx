@@ -23,7 +23,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { DashboardHero, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AlertTriangle } from "lucide-react";
-import { useAdminBaristaReports, useResolveBaristaReport } from "@/hooks/use-barista-marketplace";
+import {
+  useAdminBaristaReports, useResolveBaristaReport,
+  useAdminBaristaEducationLevels, useCreateAdminBaristaEducationLevel, useUpdateAdminBaristaEducationLevel, useDeleteAdminBaristaEducationLevel,
+  useAdminBaristaLanguages, useCreateAdminBaristaLanguage, useUpdateAdminBaristaLanguage, useDeleteAdminBaristaLanguage,
+} from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
@@ -108,57 +112,164 @@ function MissionStatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className={MISSION_STATUS_COLORS[status] ?? ""}>{MISSION_STATUS_LABELS[status] ?? status}</Badge>;
 }
 
-// ── Skills taxonomy (mirrors Print's CategoryTaxonomy — flat list, same admin-managed
-// pattern already backing GET /api/barista/skills, just without an Admin UI until now) ──
+// ── Taxonomy list (mirrors Print's CategoryTaxonomy — flat list, same admin-managed
+// pattern already backing GET /api/barista/skills) — generalized so Niveau d'étude and
+// Langue (new, Part X) can reuse the exact same UI/behavior as Compétences instead of
+// three near-duplicate components. SkillsTaxonomy below is an unchanged thin wrapper
+// over this, so the existing Compétences tab's rendering/testids are byte-identical. ──
 
-function SkillsTaxonomy({ items, onRefresh }: { items: SkillItem[]; onRefresh: () => void }) {
+function TaxonomySection({ title, items, placeholder, testIdPrefix, create, update, remove, emptyLabel }: {
+  title: string;
+  items: SkillItem[];
+  placeholder: string;
+  testIdPrefix: string;
+  emptyLabel: string;
+  create: (name: string) => Promise<any>;
+  update: (id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }) => Promise<any>;
+  remove: (id: number) => Promise<any>;
+}) {
   const { toast } = useToast();
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
-  const create = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/barista/skills", { name: draft.trim() }),
-    onSuccess: () => { setDraft(""); onRefresh(); toast({ title: "Compétence ajoutée" }); },
-    onError: (e: any) => toast({ title: "Impossible d'ajouter", description: e.message, variant: "destructive" }),
-  });
-  const update = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/admin/barista/skills/${id}`, data),
-    onSuccess: () => { setEditing(null); onRefresh(); },
-    onError: () => toast({ title: "Mise à jour impossible", variant: "destructive" }),
-  });
-  const remove = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/barista/skills/${id}`),
-    onSuccess: onRefresh,
-    onError: () => toast({ title: "Suppression impossible", variant: "destructive" }),
-  });
+  const [pending, setPending] = useState(false);
+
+  const runCreate = async () => {
+    if (!draft.trim() || pending) return;
+    setPending(true);
+    try { await create(draft.trim()); setDraft(""); toast({ title: "Ajouté" }); }
+    catch (e: any) { toast({ title: "Impossible d'ajouter", description: e.message, variant: "destructive" }); }
+    finally { setPending(false); }
+  };
+  const runUpdate = async (id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }) => {
+    try { await update(id, data); setEditing(null); }
+    catch { toast({ title: "Mise à jour impossible", variant: "destructive" }); }
+  };
+  const runRemove = async (id: number) => {
+    try { await remove(id); }
+    catch { toast({ title: "Suppression impossible", variant: "destructive" }); }
+  };
+
   return (
     <Card>
-      <CardHeader className="pb-3"><CardTitle className="text-base">Compétences Barista</CardTitle></CardHeader>
+      <CardHeader className="pb-3"><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <div className="flex gap-2">
-          <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Ajouter une compétence" onKeyDown={(e) => e.key === "Enter" && draft.trim() && create.mutate()} data-testid="input-new-barista-skill" />
-          <Button size="sm" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate()} data-testid="button-add-barista-skill"><Plus className="h-4 w-4 mr-1" />Ajouter</Button>
+          <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder} onKeyDown={(e) => e.key === "Enter" && runCreate()} data-testid={`input-new-${testIdPrefix}`} />
+          <Button size="sm" disabled={!draft.trim() || pending} onClick={runCreate} data-testid={`button-add-${testIdPrefix}`}><Plus className="h-4 w-4 mr-1" />Ajouter</Button>
         </div>
-        {items.length === 0 ? <p className="text-sm text-muted-foreground">Aucune compétence.</p> : items.map((item) => (
-          <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2" data-testid={`row-barista-skill-${item.id}`}>
+        {items.length === 0 ? <p className="text-sm text-muted-foreground">{emptyLabel}</p> : items.map((item) => (
+          <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2" data-testid={`row-${testIdPrefix}-${item.id}`}>
             {editing === item.id ? (
               <Input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)} onKeyDown={(e) => {
-                if (e.key === "Enter" && editValue.trim()) update.mutate({ id: item.id, data: { name: editValue.trim() } });
+                if (e.key === "Enter" && editValue.trim()) runUpdate(item.id, { name: editValue.trim() });
                 if (e.key === "Escape") setEditing(null);
               }} />
             ) : <span className="flex-1 text-sm font-medium">{item.name}</span>}
             {item.isFrozen && <Badge variant="outline" className="text-xs text-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé</Badge>}
             {!item.isActive && <Badge variant="secondary" className="text-xs">Inactif</Badge>}
             {editing === item.id
-              ? <Button size="sm" onClick={() => editValue.trim() && update.mutate({ id: item.id, data: { name: editValue.trim() } })}>OK</Button>
+              ? <Button size="sm" onClick={() => editValue.trim() && runUpdate(item.id, { name: editValue.trim() })}>OK</Button>
               : <Button variant="ghost" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
-            <Button variant="ghost" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => update.mutate({ id: item.id, data: { isFrozen: !item.isFrozen } })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
-            <Button variant="ghost" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => update.mutate({ id: item.id, data: { isActive: !item.isActive } })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
-            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(item.id)} data-testid={`button-delete-barista-skill-${item.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => runUpdate(item.id, { isFrozen: !item.isFrozen })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
+            <Button variant="ghost" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => runUpdate(item.id, { isActive: !item.isActive })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
+            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => runRemove(item.id)} data-testid={`button-delete-${testIdPrefix}-${item.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+function SkillsTaxonomy({ items, onRefresh }: { items: SkillItem[]; onRefresh: () => void }) {
+  const { toast } = useToast();
+  const create = useMutation({
+    mutationFn: (name: string) => apiRequest("POST", "/api/admin/barista/skills", { name }),
+    onSuccess: onRefresh,
+  });
+  const update = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/admin/barista/skills/${id}`, data),
+    onSuccess: onRefresh,
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/barista/skills/${id}`),
+    onSuccess: onRefresh,
+  });
+  return (
+    <TaxonomySection
+      title="Compétences Barista"
+      items={items}
+      placeholder="Ajouter une compétence"
+      testIdPrefix="barista-skill"
+      emptyLabel="Aucune compétence."
+      create={(name) => create.mutateAsync(name)}
+      update={(id, data) => update.mutateAsync({ id, data })}
+      remove={(id) => remove.mutateAsync(id)}
+    />
+  );
+}
+
+// ── Niveau d'étude / Langue taxonomies (new) — same TaxonomySection UI as
+// Compétences above, self-fetching since they aren't part of the /api/admin/barista
+// aggregate (an independent Admin-managed resource, like skills already was before
+// this feature — except skills happens to also be echoed into that aggregate for the
+// public marketplace's own skill-filter dropdown, which education/language don't need). ──
+
+function EducationLevelsTaxonomy() {
+  const { data } = useAdminBaristaEducationLevels();
+  const create = useCreateAdminBaristaEducationLevel();
+  const update = useUpdateAdminBaristaEducationLevel();
+  const remove = useDeleteAdminBaristaEducationLevel();
+  return (
+    <TaxonomySection
+      title="Niveaux d'étude"
+      items={data ?? []}
+      placeholder="Ajouter un niveau d'étude"
+      testIdPrefix="barista-education-level"
+      emptyLabel="Aucun niveau d'étude."
+      create={(name) => create.mutateAsync(name)}
+      update={(id, patch) => update.mutateAsync({ id, ...patch })}
+      remove={(id) => remove.mutateAsync(id)}
+    />
+  );
+}
+
+function LanguagesTaxonomy() {
+  const { data } = useAdminBaristaLanguages();
+  const create = useCreateAdminBaristaLanguage();
+  const update = useUpdateAdminBaristaLanguage();
+  const remove = useDeleteAdminBaristaLanguage();
+  return (
+    <TaxonomySection
+      title="Langues"
+      items={data ?? []}
+      placeholder="Ajouter une langue"
+      testIdPrefix="barista-language"
+      emptyLabel="Aucune langue."
+      create={(name) => create.mutateAsync(name)}
+      update={(id, patch) => update.mutateAsync({ id, ...patch })}
+      remove={(id) => remove.mutateAsync(id)}
+    />
+  );
+}
+
+// Switcher dividing the "Compétences" tab into its three managed taxonomies —
+// additive wrapper, doesn't touch how any of the three lists themselves work.
+function CompetencesSwitcher({ skills, onRefreshSkills }: { skills: SkillItem[]; onRefreshSkills: () => void }) {
+  const [section, setSection] = useState<"skills" | "education" | "language">("skills");
+  return (
+    <div className="space-y-4">
+      <Tabs value={section} onValueChange={(v) => setSection(v as any)}>
+        <TabsList>
+          <TabsTrigger value="skills" data-testid="tab-barista-competences-skills">Compétences</TabsTrigger>
+          <TabsTrigger value="education" data-testid="tab-barista-competences-education">Niveau d'étude</TabsTrigger>
+          <TabsTrigger value="language" data-testid="tab-barista-competences-language">Langue</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {section === "skills" && <SkillsTaxonomy items={skills} onRefresh={onRefreshSkills} />}
+      {section === "education" && <EducationLevelsTaxonomy />}
+      {section === "language" && <LanguagesTaxonomy />}
+    </div>
   );
 }
 
@@ -823,9 +934,9 @@ export default function AdminBaristaPage() {
           </div>
         </TabsContent>
 
-        {/* ── Skills taxonomy ── */}
+        {/* ── Compétences / Niveau d'étude / Langue switcher ── */}
         <TabsContent value="skills" className="mt-4">
-          <SkillsTaxonomy items={data?.skills ?? []} onRefresh={refresh} />
+          <CompetencesSwitcher skills={data?.skills ?? []} onRefreshSkills={refresh} />
         </TabsContent>
       </Tabs>
 

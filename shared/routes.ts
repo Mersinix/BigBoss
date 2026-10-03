@@ -297,6 +297,8 @@ export const api = {
         certifications: z.array(z.string()).optional(),
         experienceYears: z.number().int().min(0).nullable().optional(),
         portfolioUrls: z.array(z.string()).optional(),
+        educationLevel: z.string().nullable().optional(),
+        languages: z.array(z.string()).optional(),
       }),
       responses: { 200: z.custom<any>() },
     },

@@ -1537,6 +1537,13 @@ export const baristaMarketplaceProfiles = pgTable("barista_marketplace_profiles"
   certifications: text("certifications").array().notNull().default([]),
   experienceYears: integer("experience_years"), // nullable — no fabricated default
   portfolioUrls: text("portfolio_urls").array().notNull().default([]),
+  // Niveau d'étude (single-select) / Langue (multi-select) — values are names
+  // from the Admin-managed baristaEducationLevels/baristaLanguages taxonomies
+  // below, stored the same way `skills` already stores Admin-managed skill
+  // names rather than ids. Nullable/empty-array-safe for existing profiles
+  // created before this feature.
+  educationLevel: text("education_level"),
+  languages: text("languages").array().notNull().default([]),
   // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
   // admin-only account freeze, distinct from the Barista's own isOnVacation toggle.
   isFrozen: boolean("is_frozen").notNull().default(false),
@@ -1690,6 +1697,143 @@ export type BaristaRequestWithParties = BaristaMarketplaceRequest & {
 export type BaristaMissionWithParties = BaristaMarketplaceMission & {
   cafeOwnerName: string;
   baristaName: string;
+};
+
+// Admin-managed Niveau d'étude / Langue taxonomies — same shape and CRUD
+// pattern as baristaSkills above (sibling tables, not a shared polymorphic
+// table, matching this schema's established convention of one small dedicated
+// taxonomy table per admin-managed picklist).
+export const baristaEducationLevels = pgTable("barista_education_levels", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type BaristaEducationLevel = typeof baristaEducationLevels.$inferSelect;
+
+export const baristaLanguages = pgTable("barista_languages", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type BaristaLanguage = typeof baristaLanguages.$inferSelect;
+
+// ── Barista Marketplace — Job posting system ────────────────────────────────
+// Coffee Owner job posts targeting Barista Marketplace users. Two publication
+// modes: AUTOMATIC (discoverable by every eligible barista) and MANUAL (visible
+// only to baristas the Coffee Owner explicitly targets, e.g. via the existing
+// Fast Search "Flash" component — see baristaJobTargets below). Distinct from
+// baristaMarketplaceRequests/Missions (a direct 1:1 recruitment conversation
+// already tied to a specific barista); a job post is a listing that can
+// receive many applications from different baristas.
+export const baristaJobPublicationModeEnum = pgEnum('barista_job_publication_mode', ['AUTOMATIC', 'MANUAL']);
+export const baristaJobStatusEnum = pgEnum('barista_job_status', ['DRAFT', 'PUBLISHED', 'CLOSED']);
+export const baristaJobApplicationStatusEnum = pgEnum('barista_job_application_status', [
+  'PENDING', 'PRESELECTED', 'INTERVIEW_SCHEDULED', 'ACCEPTED', 'REJECTED',
+]);
+export const baristaJobMeetingStatusEnum = pgEnum('barista_job_meeting_status', ['PROPOSED', 'CONFIRMED', 'CANCELLED']);
+
+export const baristaJobPosts = pgTable("barista_job_posts", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  title: text("title").notNull(),
+  establishment: text("establishment").notNull().default(""),
+  locationAddress: text("location_address").notNull().default(""),
+  openPositions: integer("open_positions").notNull().default(1),
+  // Multi-select, e.g. ['CDI','Temps plein'] — free-form strings, not an enum,
+  // so Admin/business needs can evolve the list without a migration.
+  employmentTypes: text("employment_types").array().notNull().default([]),
+  experienceRequired: text("experience_required").notNull().default(""), // free text, e.g. "0 à 1 an"
+  educationLevels: text("education_levels").array().notNull().default([]), // names from baristaEducationLevels
+  languages: text("languages").array().notNull().default([]), // names from baristaLanguages
+  remuneration: text("remuneration").notNull().default(""), // free text, or "Confidentiel"
+  description: text("description").notNull().default(""),
+  requirements: text("requirements").notNull().default(""),
+  expiresAt: timestamp("expires_at"),
+  publicationMode: baristaJobPublicationModeEnum("publication_mode").notNull().default('AUTOMATIC'),
+  status: baristaJobStatusEnum("status").notNull().default('DRAFT'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  cafeOwnerIdx: index("barista_job_posts_cafe_owner_idx").on(table.cafeOwnerId),
+  statusIdx: index("barista_job_posts_status_idx").on(table.status),
+}));
+export type BaristaJobPost = typeof baristaJobPosts.$inferSelect;
+export type InsertBaristaJobPost = typeof baristaJobPosts.$inferInsert;
+
+// Manual-publication targeting — which specific baristas a MANUAL job post is
+// visible to, set via the existing Fast Search "Flash" component (extended to
+// let the Coffee Owner associate the barista currently shown with one of their
+// own manual job posts). Unique pair prevents duplicate associations when the
+// same barista is targeted for the same job more than once.
+export const baristaJobTargets = pgTable("barista_job_targets", {
+  id: serial("id").primaryKey(),
+  jobPostId: integer("job_post_id").notNull(),
+  baristaUserId: integer("barista_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  jobBaristaUnique: uniqueIndex("barista_job_targets_job_barista_unique").on(table.jobPostId, table.baristaUserId),
+  jobPostIdx: index("barista_job_targets_job_post_idx").on(table.jobPostId),
+  baristaUserIdx: index("barista_job_targets_barista_user_idx").on(table.baristaUserId),
+}));
+export type BaristaJobTarget = typeof baristaJobTargets.$inferSelect;
+
+// One application per (job, barista) — re-applying to a job already applied to
+// is not supported, matching "prevent duplicate active applications" in the
+// simplest safe way (a rejected application is not re-opened by reapplying;
+// the Coffee Owner can still change its status).
+export const baristaJobApplications = pgTable("barista_job_applications", {
+  id: serial("id").primaryKey(),
+  jobPostId: integer("job_post_id").notNull(),
+  baristaUserId: integer("barista_user_id").notNull(),
+  message: text("message"),
+  status: baristaJobApplicationStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  jobBaristaUnique: uniqueIndex("barista_job_applications_job_barista_unique").on(table.jobPostId, table.baristaUserId),
+  jobPostIdx: index("barista_job_applications_job_post_idx").on(table.jobPostId),
+  baristaUserIdx: index("barista_job_applications_barista_user_idx").on(table.baristaUserId),
+  statusIdx: index("barista_job_applications_status_idx").on(table.status),
+}));
+export type BaristaJobApplication = typeof baristaJobApplications.$inferSelect;
+export type InsertBaristaJobApplication = typeof baristaJobApplications.$inferInsert;
+
+// Interview/meeting proposal tied to one application — a minimal new mechanism
+// since no meeting/appointment system already existed to extend (confirmed by
+// audit: no jobs/candidates/interviews tables anywhere in the codebase before
+// this feature).
+export const baristaJobMeetings = pgTable("barista_job_meetings", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id").notNull().unique(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  notes: text("notes"),
+  status: baristaJobMeetingStatusEnum("status").notNull().default('PROPOSED'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type BaristaJobMeeting = typeof baristaJobMeetings.$inferSelect;
+
+export type BaristaJobPostWithStats = BaristaJobPost & {
+  totalApplications: number;
+  pendingApplications: number;
+  preselectedApplications: number;
+  rejectedApplications: number;
+  processedApplications: number; // total - pending
+  targetCount: number; // MANUAL posts only — number of baristas targeted
+};
+
+export type BaristaJobApplicationWithParties = BaristaJobApplication & {
+  baristaName: string;
+  baristaProfileImageUrl: string | null;
+  jobTitle: string;
+  establishment: string;
+  meeting: BaristaJobMeeting | null;
 };
 
 // ── Barista Academy ──────────────────────────────────────────────────────────

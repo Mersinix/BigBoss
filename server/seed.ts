@@ -19,6 +19,8 @@ import {
   products,
   landingConfig,
   baristaSkills,
+  baristaEducationLevels,
+  baristaLanguages,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -335,6 +337,22 @@ export async function seedDatabase(): Promise<void> {
     ];
     await db.insert(baristaSkills).values(BARISTA_SPECIALTIES.map((name) => ({ name }))).onConflictDoNothing();
     console.log("✅ [seed] Barista Marketplace skills taxonomy initialized");
+  }
+
+  // ── Barista Marketplace education level / language taxonomies — same
+  // idempotent, ships-to-an-already-populated-database pattern as skills above.
+  const existingEducationLevels = await db.select().from(baristaEducationLevels).limit(1);
+  if (existingEducationLevels.length === 0) {
+    const EDUCATION_LEVELS = ["No Education", "Lycée", "Bac", "Bac +", "BTS", "BTP"];
+    await db.insert(baristaEducationLevels).values(EDUCATION_LEVELS.map((name) => ({ name }))).onConflictDoNothing();
+    console.log("✅ [seed] Barista Marketplace education level taxonomy initialized");
+  }
+
+  const existingLanguages = await db.select().from(baristaLanguages).limit(1);
+  if (existingLanguages.length === 0) {
+    const LANGUAGES = ["Français", "Anglais", "Espagnol", "Arabe", "Italien"];
+    await db.insert(baristaLanguages).values(LANGUAGES.map((name) => ({ name }))).onConflictDoNothing();
+    console.log("✅ [seed] Barista Marketplace language taxonomy initialized");
   }
 
   console.log("[seed] Database already populated — skipping seed");

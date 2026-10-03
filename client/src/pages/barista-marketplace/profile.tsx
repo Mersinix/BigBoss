@@ -9,6 +9,8 @@ import {
   useUpdateBaristaProfile,
   useUpdateBaristaAvailability,
   useBaristaSkills,
+  useBaristaEducationLevels,
+  useBaristaLanguages,
   useCreateBaristaWorkHistory,
   useUpdateBaristaWorkHistory,
   useDeleteBaristaWorkHistory,
@@ -36,6 +38,8 @@ import { PublicationStatusBadge } from "@/components/account/publication-status-
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<BaristaLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
+// UI-only sentinel for "no education level" (Radix Select can't use "") — mapped to null on save.
+const NO_EDUCATION = "__none__";
 
 export default function BaristaProfilePage() {
   const { user } = useAuth();
@@ -43,13 +47,16 @@ export default function BaristaProfilePage() {
   const fmt = useFormatCurrency();
   const { data, isLoading } = useMyBaristaProfile(user?.id ?? null);
   const { data: skillOptions = [] } = useBaristaSkills();
+  const { data: educationOptions = [] } = useBaristaEducationLevels();
+  const { data: languageOptions = [] } = useBaristaLanguages();
   const updateProfile = useUpdateBaristaProfile();
   const updateAvailability = useUpdateBaristaAvailability();
 
   const [level, setLevel] = useState<BaristaLevel>("BEGINNER");
   const [bio, setBio] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
-  const [rate, setRate] = useState("");
+  const [educationLevel, setEducationLevel] = useState<string | null>(null);
+  const [languages, setLanguages] = useState<string[]>([]);
   const [city, setCity] = useState("");
   const [visible, setVisible] = useState(true);
   const [onVacation, setOnVacation] = useState(false);
@@ -78,7 +85,8 @@ export default function BaristaProfilePage() {
     setLevel(data.profile.level);
     setBio(data.profile.bio ?? "");
     setSkills(data.profile.skills ?? []);
-    setRate(String((data.profile.dailyRateInCents ?? 0) / 100));
+    setEducationLevel(data.profile.educationLevel ?? null);
+    setLanguages(data.profile.languages ?? []);
     setCity(data.profile.city ?? "");
     setVisible(data.profile.marketplaceVisible);
     setOnVacation(data.profile.isOnVacation);
@@ -90,6 +98,9 @@ export default function BaristaProfilePage() {
 
   const toggleSkill = (name: string) => {
     setSkills((prev) => (prev.includes(name) ? prev.filter((s) => s !== name) : [...prev, name]));
+  };
+  const toggleLanguage = (name: string) => {
+    setLanguages((prev) => (prev.includes(name) ? prev.filter((l) => l !== name) : [...prev, name]));
   };
   const updateDayHours = (key: keyof OpeningHoursMap, patch: Partial<OpeningHoursMap[keyof OpeningHoursMap]>) => {
     setWeeklyHours((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -123,7 +134,7 @@ export default function BaristaProfilePage() {
     const derivedAvailableDays = WEEKLY_DAY_DEFS.filter((d) => !weeklyHours[d.key].closed).map((d) => d.short);
     const results = await Promise.allSettled([
       updateProfile.mutateAsync({
-        level, bio, skills, dailyRateInCents: Math.round(parseFloat(rate || "0") * 100), city, marketplaceVisible: visible,
+        level, bio, skills, educationLevel, languages, city, marketplaceVisible: visible,
         certifications, experienceYears: experienceYears.trim() === "" ? null : Number(experienceYears), portfolioUrls,
       }),
       updateAvailability.mutateAsync({ availableDays: derivedAvailableDays, isOnVacation: onVacation, isAvailable: !onVacation, weeklyHours }),
@@ -249,8 +260,20 @@ export default function BaristaProfilePage() {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Tarif journalier</label>
-            <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} data-testid="input-profile-rate" />
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Niveau d'étude</label>
+            <Select value={educationLevel ?? NO_EDUCATION} onValueChange={(v) => setEducationLevel(v === NO_EDUCATION ? null : v)}>
+              <SelectTrigger data-testid="select-profile-education-level"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_EDUCATION}>Non précisé</SelectItem>
+                {educationOptions.map((e) => (
+                  <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>
+                ))}
+                {/* Keep a saved value selectable even if Admin later deactivated it. */}
+                {educationLevel && !educationOptions.some((e) => e.name === educationLevel) && (
+                  <SelectItem value={educationLevel}>{educationLevel}</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
@@ -273,6 +296,27 @@ export default function BaristaProfilePage() {
                     className={skills.includes(skill.name) ? "bg-green-600 hover:bg-green-700 cursor-pointer" : "cursor-pointer"}
                   >
                     {skill.name}
+                  </Badge>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-2 block">Langue</label>
+            <div className="flex flex-wrap gap-1.5">
+              {languageOptions.map((lang) => (
+                <button
+                  key={lang.id}
+                  type="button"
+                  onClick={() => toggleLanguage(lang.name)}
+                  data-testid={`chip-language-${lang.id}`}
+                >
+                  <Badge
+                    variant={languages.includes(lang.name) ? "default" : "outline"}
+                    className={languages.includes(lang.name) ? "bg-green-600 hover:bg-green-700 cursor-pointer" : "cursor-pointer"}
+                  >
+                    {lang.name}
                   </Badge>
                 </button>
               ))}

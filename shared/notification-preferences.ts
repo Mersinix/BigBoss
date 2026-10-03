@@ -25,6 +25,7 @@ export type NotificationPrefKey =
   | "print_status"
   | "barista_requests"
   | "barista_missions"
+  | "barista_jobs"
   | "academy"
   | "marketing_requests"
   | "marketing_status"
@@ -55,6 +56,7 @@ export const NOTIFICATION_PREF_DEFS: Record<NotificationPrefKey, { label: string
   print_status: { label: "Suivi Print", group: "Services", description: "Statut de vos commandes d'impression." },
   barista_requests: { label: "Nouvelles demandes", group: "Services" },
   barista_missions: { label: "Missions", group: "Services" },
+  barista_jobs: { label: "Offres d'emploi", group: "Services", description: "Nouvelle opportunité ciblée, candidature, statut ou entretien." },
   academy: { label: "Academy", group: "Services" },
   marketing_requests: { label: "Nouvelles demandes", group: "Services" },
   marketing_status: { label: "Suivi Marketing", group: "Services", description: "Devis, changement de statut de projet, fin de projet." },
@@ -71,12 +73,12 @@ export const ROLE_NOTIFICATION_PREF_KEYS: Partial<Record<string, NotificationPre
   ADMIN: ["messages", "catalog", "shop_orders", "shop_stock", "shop_delivery", "accounts", "reports"],
   SUPER_ADMIN: ["messages", "catalog", "shop_orders", "shop_stock", "shop_delivery", "accounts", "reports"],
   SUPPLIER: ["messages", "reviews", "shop_orders", "shop_stock", "shop_delivery", "catalog", "stores"],
-  CAFE_OWNER: ["messages", "shop_orders", "shop_delivery", "maintenance_status", "print_status", "barista_missions", "academy", "marketing_status"],
+  CAFE_OWNER: ["messages", "shop_orders", "shop_delivery", "maintenance_status", "print_status", "barista_missions", "barista_jobs", "academy", "marketing_status"],
   DELIVERY_COMPANY: ["messages", "shop_delivery", "delivery_opportunities"],
   DRIVER: ["messages", "reviews", "shop_delivery", "delivery_opportunities"],
   PRINTER: ["messages", "reviews", "print_requests"],
   MAINTENANCE: ["messages", "reviews", "maintenance_requests"],
-  BARISTA_MARKETPLACE: ["barista_requests", "barista_missions", "messages", "academy", "reviews"],
+  BARISTA_MARKETPLACE: ["barista_requests", "barista_missions", "barista_jobs", "messages", "academy", "reviews"],
   BARISTA_ACADEMY: ["messages", "reviews", "academy"],
   MARKETING: ["messages", "reviews", "marketing_requests"],
 };

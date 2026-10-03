@@ -44,6 +44,7 @@ const BARISTA_EVENTS = [
   "barista_taxonomy_updated",
   "barista_favorite_updated",
   "admin_barista_report_created",
+  "barista_jobs_updated",
 ];
 const ACADEMY_EVENTS = [
   "academy_profile_updated",
@@ -442,6 +443,12 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/barista/reports"] });
             qc.invalidateQueries({ queryKey: ["/api/barista/reports/mine"] });
             qc.invalidateQueries({ queryKey: ["/api/barista-favorites"] });
+            qc.invalidateQueries({ queryKey: ["/api/barista/education-levels"] });
+            qc.invalidateQueries({ queryKey: ["/api/barista/languages"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/barista/education-levels"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/barista/languages"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/barista/jobs") });
+            qc.invalidateQueries({ queryKey: ["/api/barista/applications/mine"] });
             if (event === "barista_request_created" || event === "barista_request_status_changed") {
               invalidateMessagingQueries(qc);
             }

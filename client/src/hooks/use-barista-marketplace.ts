@@ -9,6 +9,8 @@ export type BaristaRequestStatus = "PENDING" | "DISCUSSION" | "ACCEPTED" | "REJE
 export type BaristaMissionStatus = "UPCOMING" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
 export type BaristaSkill = { id: number; name: string; isActive: boolean; isFrozen: boolean };
+export type BaristaEducationLevel = { id: number; name: string; isActive: boolean; isFrozen: boolean };
+export type BaristaLanguage = { id: number; name: string; isActive: boolean; isFrozen: boolean };
 
 export type BaristaWorkHistory = {
   id: number;
@@ -39,6 +41,10 @@ export type BaristaMarketplaceCard = {
   portfolioUrls: string[];
   dailyRateInCents: number;
   city: string;
+  // Niveau d'étude (single) / Langue (multi) — names from the Admin-managed
+  // taxonomies (Admin > Compétences), same storage convention as `skills`.
+  educationLevel?: string | null;
+  languages: string[];
   location: string;
   initials: string;
   availableDays: string[];
@@ -105,6 +111,79 @@ export type BaristaReview = {
   createdAt: string;
 };
 
+// ── Job posting system ──
+
+export type BaristaJobPublicationMode = "AUTOMATIC" | "MANUAL";
+export type BaristaJobStatus = "DRAFT" | "PUBLISHED" | "CLOSED";
+export type BaristaJobApplicationStatus = "PENDING" | "PRESELECTED" | "INTERVIEW_SCHEDULED" | "ACCEPTED" | "REJECTED";
+export type BaristaJobMeetingStatus = "PROPOSED" | "CONFIRMED" | "CANCELLED";
+
+export type BaristaJobPost = {
+  id: number;
+  cafeOwnerId: number;
+  title: string;
+  establishment: string;
+  locationAddress: string;
+  openPositions: number;
+  employmentTypes: string[];
+  experienceRequired: string;
+  educationLevels: string[];
+  languages: string[];
+  remuneration: string;
+  description: string;
+  requirements: string;
+  expiresAt: string | null;
+  publicationMode: BaristaJobPublicationMode;
+  status: BaristaJobStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BaristaJobPostWithStats = BaristaJobPost & {
+  totalApplications: number;
+  pendingApplications: number;
+  preselectedApplications: number;
+  rejectedApplications: number;
+  processedApplications: number;
+  targetCount: number;
+};
+
+export type BaristaJobMeeting = {
+  id: number;
+  applicationId: number;
+  scheduledAt: string;
+  notes: string | null;
+  status: BaristaJobMeetingStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BaristaJobApplication = {
+  id: number;
+  jobPostId: number;
+  baristaUserId: number;
+  message: string | null;
+  status: BaristaJobApplicationStatus;
+  createdAt: string;
+  updatedAt: string;
+  baristaName: string;
+  baristaProfileImageUrl: string | null;
+  jobTitle: string;
+  establishment: string;
+  meeting: BaristaJobMeeting | null;
+};
+
+export type BaristaJobTarget = {
+  id: number;
+  jobPostId: number;
+  baristaUserId: number;
+  createdAt: string;
+  baristaName: string;
+  baristaProfileImageUrl: string | null;
+};
+
+export type BaristaDiscoverableJob = BaristaJobPost & { isTargeted: boolean; hasApplied: boolean };
+
 export type BaristaRevenueSummary = {
   totalEarnedCents: number;
   completedMissions: number;
@@ -136,6 +215,22 @@ export function useBaristaSkills() {
   return useQuery<BaristaSkill[]>({
     queryKey: [api.barista.skills.path],
     queryFn: () => getJson(api.barista.skills.path),
+  });
+}
+
+// Niveau d'étude / Langue — Admin-managed taxonomies, same read shape as
+// useBaristaSkills (active, non-frozen options only).
+export function useBaristaEducationLevels() {
+  return useQuery<BaristaEducationLevel[]>({
+    queryKey: ["/api/barista/education-levels"],
+    queryFn: () => getJson("/api/barista/education-levels"),
+  });
+}
+
+export function useBaristaLanguages() {
+  return useQuery<BaristaLanguage[]>({
+    queryKey: ["/api/barista/languages"],
+    queryFn: () => getJson("/api/barista/languages"),
   });
 }
 
@@ -248,6 +343,7 @@ export function useUpdateBaristaProfile() {
     mutationFn: (data: {
       level?: BaristaLevel; bio?: string; skills?: string[]; dailyRateInCents?: number; city?: string; marketplaceVisible?: boolean;
       certifications?: string[]; experienceYears?: number | null; portfolioUrls?: string[];
+      educationLevel?: string | null; languages?: string[];
     }) => mutate("PATCH", api.barista.profile.path, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/barista/profile"] });
@@ -428,6 +524,226 @@ export function useDeleteAdminBaristaSkill() {
       qc.invalidateQueries({ queryKey: ["/api/admin/barista/skills"] });
       qc.invalidateQueries({ queryKey: [api.barista.skills.path] });
     },
+  });
+}
+
+// ── Admin Niveau d'étude taxonomy — same CRUD shape as admin skills above ──
+
+export function useAdminBaristaEducationLevels() {
+  return useQuery<BaristaEducationLevel[]>({
+    queryKey: ["/api/admin/barista/education-levels"],
+    queryFn: () => getJson("/api/admin/barista/education-levels"),
+  });
+}
+
+export function useCreateAdminBaristaEducationLevel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => mutate("POST", "/api/admin/barista/education-levels", { name }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/barista/education-levels"] });
+      qc.invalidateQueries({ queryKey: ["/api/barista/education-levels"] });
+    },
+  });
+}
+
+export function useUpdateAdminBaristaEducationLevel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; name?: string; isActive?: boolean; isFrozen?: boolean }) =>
+      mutate("PATCH", `/api/admin/barista/education-levels/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/barista/education-levels"] });
+      qc.invalidateQueries({ queryKey: ["/api/barista/education-levels"] });
+    },
+  });
+}
+
+export function useDeleteAdminBaristaEducationLevel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => mutate("DELETE", `/api/admin/barista/education-levels/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/barista/education-levels"] });
+      qc.invalidateQueries({ queryKey: ["/api/barista/education-levels"] });
+    },
+  });
+}
+
+// ── Admin Langue taxonomy — same CRUD shape as admin skills above ──
+
+export function useAdminBaristaLanguages() {
+  return useQuery<BaristaLanguage[]>({
+    queryKey: ["/api/admin/barista/languages"],
+    queryFn: () => getJson("/api/admin/barista/languages"),
+  });
+}
+
+export function useCreateAdminBaristaLanguage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => mutate("POST", "/api/admin/barista/languages", { name }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/barista/languages"] });
+      qc.invalidateQueries({ queryKey: ["/api/barista/languages"] });
+    },
+  });
+}
+
+export function useUpdateAdminBaristaLanguage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; name?: string; isActive?: boolean; isFrozen?: boolean }) =>
+      mutate("PATCH", `/api/admin/barista/languages/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/barista/languages"] });
+      qc.invalidateQueries({ queryKey: ["/api/barista/languages"] });
+    },
+  });
+}
+
+export function useDeleteAdminBaristaLanguage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => mutate("DELETE", `/api/admin/barista/languages/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/barista/languages"] });
+      qc.invalidateQueries({ queryKey: ["/api/barista/languages"] });
+    },
+  });
+}
+
+// ── Job posting system ──────────────────────────────────────────────────────
+// Coffee Owner job posts + Barista-side discovery/applications/meetings. See
+// shared/schema.ts baristaJobPosts for the full rationale. All mutations
+// invalidate "/api/barista/jobs" broadly (query-key prefix match) so every
+// list/detail view (owner's "mine", barista's "discover", applications,
+// meetings) stays in sync without each needing its own bespoke invalidation.
+
+export type BaristaJobPostInput = Partial<{
+  title: string; establishment: string; locationAddress: string; openPositions: number;
+  employmentTypes: string[]; experienceRequired: string; educationLevels: string[]; languages: string[];
+  remuneration: string; description: string; requirements: string; expiresAt: string | null;
+  publicationMode: BaristaJobPublicationMode; status: BaristaJobStatus;
+}>;
+
+function invalidateBaristaJobs(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["/api/barista/jobs"] });
+  qc.invalidateQueries({ queryKey: ["/api/barista/applications/mine"] });
+}
+
+export function useCreateBaristaJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: BaristaJobPostInput) => mutate<BaristaJobPost>("POST", "/api/barista/jobs", data),
+    onSuccess: () => invalidateBaristaJobs(qc),
+  });
+}
+
+export function useMyBaristaJobs() {
+  return useQuery<BaristaJobPostWithStats[]>({
+    queryKey: ["/api/barista/jobs/mine"],
+    queryFn: () => getJson("/api/barista/jobs/mine"),
+  });
+}
+
+export function useBaristaJobDetail(id: number | null) {
+  return useQuery<{ job: BaristaJobPostWithStats | BaristaJobPost; targets?: BaristaJobTarget[]; hasApplied?: boolean }>({
+    queryKey: ["/api/barista/jobs", id],
+    queryFn: () => getJson(`/api/barista/jobs/${id}`),
+    enabled: id != null,
+  });
+}
+
+export function useUpdateBaristaJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: BaristaJobPostInput & { id: number }) =>
+      mutate<BaristaJobPost>("PATCH", `/api/barista/jobs/${id}`, data),
+    onSuccess: () => invalidateBaristaJobs(qc),
+  });
+}
+
+// Manual targeting — called from the Coffee Owner's Fast Search ("Flash")
+// component to associate the barista currently shown with a MANUAL job post.
+export function useAddBaristaJobTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, baristaUserId }: { jobId: number; baristaUserId: number }) =>
+      mutate<BaristaJobTarget>("POST", `/api/barista/jobs/${jobId}/targets`, { baristaUserId }),
+    onSuccess: () => invalidateBaristaJobs(qc),
+  });
+}
+
+export function useBaristaJobTargets(jobId: number | null) {
+  return useQuery<BaristaJobTarget[]>({
+    queryKey: ["/api/barista/jobs", jobId, "targets"],
+    queryFn: () => getJson(`/api/barista/jobs/${jobId}/targets`),
+    enabled: jobId != null,
+  });
+}
+
+// ── Barista-side discovery & applications ──
+
+export function useDiscoverBaristaJobs() {
+  return useQuery<BaristaDiscoverableJob[]>({
+    queryKey: ["/api/barista/jobs/discover"],
+    queryFn: () => getJson("/api/barista/jobs/discover"),
+  });
+}
+
+export function useMyBaristaJobApplications() {
+  return useQuery<BaristaJobApplication[]>({
+    queryKey: ["/api/barista/applications/mine"],
+    queryFn: () => getJson("/api/barista/applications/mine"),
+  });
+}
+
+export function useApplyToBaristaJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, message }: { jobId: number; message?: string }) =>
+      mutate<BaristaJobApplication>("POST", `/api/barista/jobs/${jobId}/apply`, { message }),
+    onSuccess: () => invalidateBaristaJobs(qc),
+  });
+}
+
+// ── Coffee Owner candidate management ──
+
+export function useBaristaJobApplicationsForJob(jobId: number | null) {
+  return useQuery<BaristaJobApplication[]>({
+    queryKey: ["/api/barista/jobs", jobId, "applications"],
+    queryFn: () => getJson(`/api/barista/jobs/${jobId}/applications`),
+    enabled: jobId != null,
+  });
+}
+
+export function useUpdateBaristaJobApplicationStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: BaristaJobApplicationStatus }) =>
+      mutate<BaristaJobApplication>("PATCH", `/api/barista/applications/${id}/status`, { status }),
+    onSuccess: () => invalidateBaristaJobs(qc),
+  });
+}
+
+// ── Meetings ──
+
+export function useProposeBaristaJobMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ applicationId, scheduledAt, notes }: { applicationId: number; scheduledAt: string; notes?: string | null }) =>
+      mutate<BaristaJobMeeting>("POST", `/api/barista/applications/${applicationId}/meeting`, { scheduledAt, notes }),
+    onSuccess: () => invalidateBaristaJobs(qc),
+  });
+}
+
+export function useUpdateBaristaJobMeetingStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: "CONFIRMED" | "CANCELLED" }) =>
+      mutate<BaristaJobMeeting>("PATCH", `/api/barista/meetings/${id}`, { status }),
+    onSuccess: () => invalidateBaristaJobs(qc),
   });
 }
 

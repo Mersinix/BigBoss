@@ -38,18 +38,23 @@ import {
   Send,
   Zap,
   Ban,
+  Briefcase,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import {
   useBaristaProfiles,
   useBaristaSkills,
+  useBaristaEducationLevels,
+  useBaristaLanguages,
   useCreateBaristaRequest,
   type BaristaMarketplaceCard,
 } from "@/hooks/use-barista-marketplace";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { BaristaFastSearch } from "@/components/barista/barista-fast-search";
 import { BaristaBlacklistModal } from "@/components/barista/barista-blacklist-modal";
+import { JobManagementModal } from "@/components/barista/job-management-modal";
 
 // This page is now Marketplace Baristas ONLY — Barista Academy was split out
 // into its own independent page/service, client/src/pages/cafe/barista/barista-academy-page.tsx
@@ -330,13 +335,7 @@ function BaristaCard({
             is now the primary click target for it; the quick Message shortcut
             stays here since only Recruter was asked to move. */}
         <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div>
-              <p className={`text-[10px] ${t.textSubtle}`}>Tarif / jour</p>
-              <p className="font-bold text-sm text-green-600">
-                {fmt(barista.dailyRateInCents)}
-              </p>
-            </div>
+          <div className="flex items-center justify-end gap-2 flex-wrap">
             <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
               <Button
                 size="sm"
@@ -373,14 +372,19 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   const [baristaAvailability, setBaristaAvailability] = useState("");
   const [baristaSkill, setBaristaSkill] = useState("");
   const [baristaLocation, setBaristaLocation] = useState("");
+  const [baristaEducation, setBaristaEducation] = useState("");
+  const [baristaLanguages, setBaristaLanguages] = useState<string[]>([]);
 
   const [recruitTarget, setRecruitTarget] = useState<BaristaMarketplaceCard | null>(null);
   const [detailBaristaId, setDetailBaristaId] = useState<number | null>(null);
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
+  const [jobManagementOpen, setJobManagementOpen] = useState(false);
 
   const { data: profiles = [], isLoading: profilesLoading, isError: profilesError } = useBaristaProfiles();
   const { data: skillOptions = [] } = useBaristaSkills();
+  const { data: educationOptions = [] } = useBaristaEducationLevels();
+  const { data: languageOptions = [] } = useBaristaLanguages();
 
   // Hydrate favorite hearts from the database, mirroring maintenance-page.tsx's pattern.
   const { data: favoriteIds = EMPTY_IDS } = useQuery<number[]>({
@@ -416,6 +420,15 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
       list = list.filter(
         (b) => b.location.toLowerCase() === baristaLocation.toLowerCase()
       );
+    if (baristaEducation)
+      list = list.filter((b) => (b.educationLevel ?? "").toLowerCase() === baristaEducation.toLowerCase());
+    // Multiple selected languages use OR semantics (matches any one of them) —
+    // the same intuitive "has at least one of" convention as the Compétence
+    // filter above, just extended to multiple values at once.
+    if (baristaLanguages.length > 0)
+      list = list.filter((b) =>
+        b.languages?.some((lang) => baristaLanguages.some((sel) => sel.toLowerCase() === lang.toLowerCase()))
+      );
     return list;
   }, [
     profiles,
@@ -424,6 +437,8 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
     baristaAvailability,
     baristaSkill,
     baristaLocation,
+    baristaEducation,
+    baristaLanguages,
   ]);
 
   const allSkills = useMemo(
@@ -440,7 +455,9 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
     baristaLevel ||
     baristaAvailability ||
     baristaSkill ||
-    baristaLocation
+    baristaLocation ||
+    baristaEducation ||
+    baristaLanguages.length > 0
   );
 
   const canAct = !!user && user.role === "CAFE_OWNER" && accessLevel === "approved";
@@ -509,6 +526,17 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-green-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
               >
                 <Zap className="w-4 h-4" />
+              </button>
+            )}
+            {canAct && (
+              <button
+                onClick={() => setJobManagementOpen(true)}
+                aria-label="Offres d'emploi"
+                title="Offres d'emploi — publier et gérer"
+                data-testid="button-open-job-management"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isDark ? "bg-gray-800 hover:bg-gray-700 text-blue-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+              >
+                <Briefcase className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -627,6 +655,47 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   ))}
                 </SelectContent>
               </Select>
+              <Select
+                value={baristaEducation || "__all__"}
+                onValueChange={(v) => setBaristaEducation(v === "__all__" ? "" : v)}
+              >
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[140px] ${t.inputBg}`} data-testid="select-barista-education">
+                  <SelectValue placeholder="Niveau d'étude" />
+                </SelectTrigger>
+                <SelectContent className={t.selectContent}>
+                  <SelectItem value="__all__">Tous niveaux d'étude</SelectItem>
+                  {educationOptions.map((e) => (
+                    <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] inline-flex items-center justify-between gap-1.5 border ${t.inputBg}`}
+                    data-testid="select-barista-language"
+                  >
+                    {baristaLanguages.length > 0 ? `Langue (${baristaLanguages.length})` : "Langue"}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className={t.selectContent} align="start">
+                  {languageOptions.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Aucune langue configurée</div>
+                  ) : languageOptions.map((lang) => (
+                    <DropdownMenuCheckboxItem
+                      key={lang.id}
+                      checked={baristaLanguages.includes(lang.name)}
+                      onCheckedChange={(checked) =>
+                        setBaristaLanguages((prev) => checked ? [...prev, lang.name] : prev.filter((l) => l !== lang.name))
+                      }
+                      data-testid={`checkbox-barista-language-${lang.id}`}
+                    >
+                      {lang.name}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               {hasBaristaFilters && (
                 <button
                   onClick={() => {
@@ -635,6 +704,8 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                     setBaristaAvailability("");
                     setBaristaSkill("");
                     setBaristaLocation("");
+                    setBaristaEducation("");
+                    setBaristaLanguages([]);
                   }}
                   className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors"
                   data-testid="button-reset-barista-filters"
@@ -712,6 +783,8 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
       />
 
       <BaristaBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} />
+
+      <JobManagementModal open={jobManagementOpen} onClose={() => setJobManagementOpen(false)} />
     </div>
   );
 }

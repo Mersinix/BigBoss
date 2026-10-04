@@ -87,8 +87,8 @@ export function MarketingServiceDetailModal({
   const createReview = useCreateMarketingReview();
   const reportProvider = useReportMarketingProvider();
 
-  const faved = useFavorites((s) => (service ? !!s.marketing[service.marketingUserId] : false));
-  const toggleMarketing = useFavorites((s) => s.toggleMarketing);
+  const faved = useFavorites((s) => (service ? !!s.marketingServices[service.id] : false));
+  const toggleMarketingService = useFavorites((s) => s.toggleMarketingService);
 
   const [reviewProjectId, setReviewProjectId] = useState<number | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
@@ -181,11 +181,9 @@ export function MarketingServiceDetailModal({
               <div className="absolute top-3 right-3 flex gap-2">
                 <button
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
-                  onClick={() => { if (!readOnly) toggleMarketing({
-                    id: service.marketingUserId, name: service.agencyName, initials: service.agencyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
-                    type: PROVIDER_TYPE_LABELS[service.agencyProfileType] ?? service.agencyProfileType, rating: service.rating / 10,
-                    portfolioImages: heroImage ? [heroImage] : [], location: service.agencyLocation, available: service.agencyIsAvailable,
-                    profileImageUrl: service.agencyProfileImageUrl,
+                  onClick={() => { if (!readOnly) toggleMarketingService({
+                    id: service.id, name: service.category, agencyUserId: service.marketingUserId, agencyName: service.agencyName,
+                    rating: service.rating / 10, image: heroImage, location: service.agencyLocation, priceInCents: service.startingPriceInCents,
                   }); }}
                   data-testid={`button-fav-marketing-service-${service.id}`}
                 >

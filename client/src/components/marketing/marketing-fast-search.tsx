@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Heart, X, ChevronRight, Package, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Users } from "lucide-react";
+import { Heart, X, ChevronRight, Package, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Users, Eye } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import type { MarketingServiceCard } from "@/hooks/use-marketing";
@@ -25,9 +25,24 @@ export interface MarketingFastSearchProps {
   services: MarketingServiceCard[];
   onRequestQuote: (service: MarketingServiceCard) => void;
   onOpenDetail: (service: MarketingServiceCard) => void;
+  // Espace Marketing's own "Aperçu Flash" (see
+  // docs/flash_academy_marketing_print_mapping_audit.md) — reuses this exact
+  // component, with the SAME swipe/filter/detail chrome as the real Coffee
+  // Owner Fast Search, fed by the caller with the authenticated agency's own
+  // real PUBLISHED services (same /api/marketing/services mapping, filtered
+  // to this agency's own marketingUserId). Only the header label/badge
+  // change and the two mutating actions (Favorite, Demander un devis) are
+  // omitted — "Info" and the category/city filter stay fully functional
+  // since they're read-only. `onOpenOwnDetail`, if provided, is offered only
+  // in the empty state (no published services at all) as a fallback to the
+  // agency's own profile preview.
+  previewMode?: boolean;
+  onOpenOwnDetail?: () => void;
 }
 
-export function MarketingFastSearch({ open, onClose, services, onRequestQuote, onOpenDetail }: MarketingFastSearchProps) {
+export function MarketingFastSearch({
+  open, onClose, services, onRequestQuote, onOpenDetail, previewMode = false, onOpenOwnDetail,
+}: MarketingFastSearchProps) {
   const fmt = useFormatCurrency();
   const [idx, setIdx] = useState(0);
   const [heartAnim, setHeartAnim] = useState(false);
@@ -52,22 +67,18 @@ export function MarketingFastSearch({ open, onClose, services, onRequestQuote, o
 
   const current = filtered[idx] ?? null;
 
-  const faved = useFavorites((s) => (current ? !!s.marketing[current.marketingUserId] : false));
-  const toggleMarketing = useFavorites((s) => s.toggleMarketing);
+  const faved = useFavorites((s) => (current ? !!s.marketingServices[current.id] : false));
+  const toggleMarketingService = useFavorites((s) => s.toggleMarketingService);
 
   const triggerFavorite = useCallback(() => {
     if (!current) return;
-    const coverImage = current.imageUrl;
-    toggleMarketing({
-      id: current.marketingUserId, name: current.agencyName,
-      initials: current.agencyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
-      type: PROVIDER_TYPE_LABELS[current.agencyProfileType] ?? current.agencyProfileType,
-      rating: current.rating / 10, portfolioImages: coverImage ? [coverImage] : [],
-      location: current.agencyLocation, available: current.agencyIsAvailable, profileImageUrl: current.agencyProfileImageUrl,
+    toggleMarketingService({
+      id: current.id, name: current.category, agencyUserId: current.marketingUserId, agencyName: current.agencyName,
+      rating: current.rating / 10, image: current.imageUrl, location: current.agencyLocation, priceInCents: current.startingPriceInCents,
     });
     setHeartAnim(true);
     setTimeout(() => setHeartAnim(false), 800);
-  }, [current, toggleMarketing]);
+  }, [current, toggleMarketingService]);
 
   const goNext = useCallback(() => setIdx((i) => (i + 1) % Math.max(filtered.length, 1)), [filtered.length]);
   const goPrev = useCallback(() => setIdx((i) => (i === 0 ? Math.max(filtered.length - 1, 0) : i - 1)), [filtered.length]);
@@ -86,7 +97,7 @@ export function MarketingFastSearch({ open, onClose, services, onRequestQuote, o
           <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pt-4 pb-3 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-purple-400 fill-purple-400" />
-              <span className="text-white font-bold text-sm">Fast Search</span>
+              <span className="text-white font-bold text-sm">{previewMode ? "Aperçu Flash" : "Fast Search"}</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-white/60 text-xs">{filtered.length > 0 ? `${idx + 1} / ${filtered.length}` : "0 / 0"}</span>
@@ -95,6 +106,13 @@ export function MarketingFastSearch({ open, onClose, services, onRequestQuote, o
               </button>
             </div>
           </div>
+
+          {/* Mode aperçu badge — same convention as BaristaFastSearch/MaintenanceFastSearch. */}
+          {previewMode && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 bg-amber-500/90 backdrop-blur-sm text-white text-[11px] font-semibold px-3 py-1.5 rounded-full" data-testid="badge-marketing-fastsearch-preview">
+              <Eye className="w-3 h-3" /> Mode aperçu — Aperçu Flash
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top) + 60px)" }}>
@@ -109,10 +127,20 @@ export function MarketingFastSearch({ open, onClose, services, onRequestQuote, o
           {filtered.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
               <Package className="w-16 h-16 text-gray-600" />
-              <p className="text-white font-semibold">Aucun service ne correspond à ce filtre</p>
-              <button onClick={openFilter} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
-                Changer le filtre
-              </button>
+              <p className="text-white font-semibold">
+                {previewMode
+                  ? (services.length === 0 ? "Vous n'avez aucun service publié pour le moment" : "Aucun service ne correspond à ce filtre")
+                  : "Aucun service ne correspond à ce filtre"}
+              </p>
+              {hasActiveFilter ? (
+                <button onClick={openFilter} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
+                  Changer le filtre
+                </button>
+              ) : previewMode && onOpenOwnDetail && (
+                <button onClick={onOpenOwnDetail} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold" data-testid="button-fastsearch-own-profile">
+                  Voir mon profil
+                </button>
+              )}
             </div>
           ) : (
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
@@ -153,7 +181,10 @@ export function MarketingFastSearch({ open, onClose, services, onRequestQuote, o
             </div>
           )}
 
-          {/* Floating action buttons */}
+          {/* Floating action buttons — Filtrer/Info stay fully functional in
+              preview mode (read-only); Favorite/Demander un devis are
+              omitted since neither has a safe equivalent for an agency
+              previewing its own listing. */}
           <div className="absolute right-4 bottom-24 flex flex-col gap-4 z-20">
             <button
               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${hasActiveFilter ? "bg-purple-500" : "bg-white/20 backdrop-blur-sm"}`}
@@ -169,7 +200,7 @@ export function MarketingFastSearch({ open, onClose, services, onRequestQuote, o
                 <Info className="w-5 h-5 text-white" />
               </button>
             )}
-            {current && (
+            {!previewMode && current && (
               <button
                 className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${faved ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"}`}
                 onClick={triggerFavorite} data-testid="button-fastsearch-favorite"
@@ -177,7 +208,7 @@ export function MarketingFastSearch({ open, onClose, services, onRequestQuote, o
                 <Heart className={`w-5 h-5 transition-colors ${faved ? "fill-white text-white" : "text-white"}`} />
               </button>
             )}
-            {current && (
+            {!previewMode && current && (
               <button
                 className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center shadow-lg transition-all active:scale-90"
                 onClick={() => onRequestQuote(current)} data-testid="button-fastsearch-quote" title="Demander un devis"

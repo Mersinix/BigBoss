@@ -1992,10 +1992,17 @@ export type AcademySessionStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'CANCEL
 // maintenanceFavorites/marketingFavorites exactly (same shape, same
 // persistence pattern), but keyed by courseId rather than a provider id since
 // a Coffee Owner browses/saves individual formations, not the Academy itself.
+// Company (organisation) vs. item (course) favorites are independent rows,
+// mirroring marketingFavorites' existing marketingUserId(always)/serviceId
+// (sometimes) shape (docs/coffee_owner_favorites_marketplace_audit.md):
+// academyUserId is set on every row (which academy this favorite belongs
+// to), courseId is null for an organisation-level favorite and set for a
+// course-level favorite. Never set both NULL.
 export const academyFavorites = pgTable("academy_favorites", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
-  courseId: integer("course_id").notNull(),
+  academyUserId: integer("academy_user_id"),
+  courseId: integer("course_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -2485,14 +2492,16 @@ export const printCatalogItems = pgTable("print_catalog_items", {
   printerIdx: index("print_catalog_items_printer_idx").on(table.printerId),
 }));
 
-// Print favorites — mirrors maintenanceFavorites exactly (same shape, same
-// persistence pattern). References the catalog item (service/product), not
-// the printer account, since /print favorites one product at a time (see
-// use-favorites.ts's togglePrint, keyed by the catalog item id).
+// Print favorites — mirrors maintenanceFavorites' shape. Company (printer)
+// vs. item (catalog item) favorites are independent rows, same
+// printerId(always)/printItemId(sometimes-null) pattern as academyFavorites
+// above (docs/coffee_owner_favorites_marketplace_audit.md): printItemId null
+// = company-level favorite, set = product-level favorite.
 export const printFavorites = pgTable("print_favorites", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
-  printItemId: integer("print_item_id").notNull(),
+  printerId: integer("printer_id"),
+  printItemId: integer("print_item_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

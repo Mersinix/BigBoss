@@ -152,8 +152,8 @@ function StarRating({ rating }: { rating: number }) {
 // ── Product Card ──────────────────────────────────────────────────────────────
 
 function PrintProductCard({ card, onClick, isDark }: { card: PrintCatalogCard; onClick: () => void; isDark: boolean }) {
-  const faved = useFavorites((s) => !!s.print[String(card.id)]);
-  const togglePrint = useFavorites((s) => s.togglePrint);
+  const faved = useFavorites((s) => !!s.printProducts[String(card.id)]);
+  const togglePrint = useFavorites((s) => s.togglePrintProduct);
   const fmt = useFormatCurrency();
   const t = useTheme(isDark);
   const starRating = card.rating / 10;
@@ -436,10 +436,22 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
     queryKey: ["/api/print-favorites"],
     enabled: !!user && accessLevel === "approved",
   });
-  const syncPrint = useFavorites((s) => s.syncPrint);
+  const syncPrintProduct = useFavorites((s) => s.syncPrintProduct);
   useEffect(() => {
-    syncPrint(printFavoriteIds, cards);
-  }, [printFavoriteIds, cards, syncPrint]);
+    syncPrintProduct(printFavoriteIds, cards);
+  }, [printFavoriteIds, cards, syncPrintProduct]);
+
+  // Company (printer) favorites — independent of the product favorites above
+  // (docs/coffee_owner_favorites_marketplace_audit.md); derived from the same
+  // already-fetched catalog cards.
+  const { data: printCompanyFavoriteIds = EMPTY_IDS } = useQuery<number[]>({
+    queryKey: ["/api/print-favorites/companies"],
+    enabled: !!user && accessLevel === "approved",
+  });
+  const syncPrintCompany = useFavorites((s) => s.syncPrintCompany);
+  useEffect(() => {
+    syncPrintCompany(printCompanyFavoriteIds, cards);
+  }, [printCompanyFavoriteIds, cards, syncPrintCompany]);
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
@@ -593,11 +605,16 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
       </>
       )}
 
+      {/* Rendered before the Service/Company detail modals below
+          (docs/maintenance_print_nested_modal_audit.md) — so when "Info/
+          Détails" opens one of them, the detail dialog (mounted later in
+          the DOM) stacks visually above this one, and Fast Search stays
+          open underneath rather than being closed when Details opens. */}
       <PrintFastSearch
         open={fastSearchOpen}
         onClose={() => setFastSearchOpen(false)}
         cards={cards}
-        onOpenDetail={(card) => { setFastSearchOpen(false); setPreviewServiceId(card.id); }}
+        onOpenDetail={(card) => setPreviewServiceId(card.id)}
       />
       <PrintBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} printers={distinctPrinters} />
 

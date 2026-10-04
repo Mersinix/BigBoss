@@ -202,8 +202,8 @@ export function AcademyDetailModal({
   const createReview = useCreateAcademyReview();
   const reportAcademy = useReportAcademy();
 
-  const faved = useFavorites((s) => (courseId ? !!s.academy[courseId] : false));
-  const toggleAcademy = useFavorites((s) => s.toggleAcademy);
+  const faved = useFavorites((s) => (courseId ? !!s.academyCourses[courseId] : false));
+  const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
 
   const [reviewRegistrationId, setReviewRegistrationId] = useState<number | null>(null);
   const [reviewRating, setReviewRating] = useState(5);

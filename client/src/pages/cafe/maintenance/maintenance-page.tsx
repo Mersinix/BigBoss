@@ -758,6 +758,12 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
+      {/* Fast Search (docs/maintenance_print_nested_modal_audit.md) — rendered
+          FIRST so that when "Info/Détails" opens AgentDetailModal below, the
+          detail dialog (mounted later in the DOM) stacks visually above this
+          one instead of the other way around, and Fast Search simply stays
+          open underneath rather than being closed when Details opens. */}
+      <MaintenanceFastSearch open={fastSearchOpen} onClose={() => setFastSearchOpen(false)} providers={profiles} onOpenDetail={(agent) => openDetail(agent)} />
       <section className="relative pt-5 pb-12 px-5 overflow-hidden">
         {t.dk ? <><div className="absolute inset-0 bg-gray-900" /><div className="absolute inset-0 bg-gradient-to-br from-orange-900/25 via-gray-900 to-gray-900" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" /></> : <><div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600" /><div className="absolute inset-0 bg-black/10" /></>}
         {/* The global navbar theme control is the single Dark/Light toggle
@@ -848,9 +854,10 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
            <AgentDetailModal agent={selectedAgent} open={detailOpen} onClose={() => setDetailOpen(false)} onContact={contact} onReserve={(agent, data) => reserve.mutateAsync({ agent, data })} isDark={isDark} />
         </>
       )}
-      {/* Fast Search / Blacklist (Parts 20-22) — same `profiles` list, own
-          Maintenance-only components (no Barista data reused). */}
-      <MaintenanceFastSearch open={fastSearchOpen} onClose={() => setFastSearchOpen(false)} providers={profiles} onOpenDetail={(agent) => { setFastSearchOpen(false); openDetail(agent); }} />
+      {/* Blacklist (Parts 20-22) — same `profiles` list, own
+          Maintenance-only component (no Barista data reused). Fast Search
+          itself is rendered at the top of this component now — see the
+          comment there. */}
       <MaintenanceBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} />
     </div>
   );

@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   usePrintCompanyDetail, usePrintReviews, useCreatePrintReview, useReportPrinter, startPrintConversation,
 } from "@/hooks/use-print-marketplace";
+import { useFavorites } from "@/hooks/use-favorites";
 import type { PrintOrderWithParties, OpeningHoursMap } from "@shared/schema";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -17,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Flag, MessageCircle, X, Printer, Package, Globe, Tag, Clock, Image as ImageIcon, Zap,
+  Star, MapPin, Flag, MessageCircle, X, Printer, Package, Globe, Tag, Clock, Image as ImageIcon, Zap, Heart,
 } from "lucide-react";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
@@ -166,6 +167,8 @@ export function PrintCompanyDetailModal({
   };
   const { data, isLoading } = usePrintCompanyDetail(printerUserId);
   const card = data?.card;
+  const faved = useFavorites((s) => (card ? !!s.printCompanies[card.userId] : false));
+  const togglePrintCompany = useFavorites((s) => s.togglePrintCompany);
   const { data: reviews = [] } = usePrintReviews(printerUserId);
   const { data: myOrders = [] } = useQuery<PrintOrderWithParties[]>({
     queryKey: ["/api/print/orders"],
@@ -275,6 +278,17 @@ export function PrintCompanyDetailModal({
                 </Avatar>
               )}
               <div className="absolute top-3 right-3 flex gap-2">
+                <button
+                  className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
+                  onClick={() => { if (!readOnly) togglePrintCompany({
+                    id: card.userId, name: card.name, initials: card.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+                    type: "Imprimerie", rating: card.rating / 10, portfolioImages: card.portfolioImages, location: card.location,
+                    available: !card.isOnVacation, profileImageUrl: card.profileImageUrl,
+                  }); }}
+                  data-testid={`button-fav-print-company-${card.userId}`}
+                >
+                  <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
+                </button>
                 <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} data-testid="button-close-print-company-modal">
                   <X className="w-4 h-4 text-white" />
                 </button>

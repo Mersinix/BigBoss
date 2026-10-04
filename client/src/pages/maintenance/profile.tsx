@@ -20,12 +20,12 @@ import {
 } from "@/components/ui/select";
 import { Award, Wrench, MapPin, XCircle, X, Eye, Briefcase, Settings as SettingsIcon, Zap, Rocket } from "lucide-react";
 import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
+import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import Availability from "@/pages/maintenance/availability";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 
 // Portfolio cap — shared across every professional account's Profile → Portfolio
@@ -414,15 +414,18 @@ export default function Profile() {
         readOnly
       />
 
-      <FlashPreviewModal
+      {/* Aperçu Flash (docs/maintenance_flash_modal_audit.md) — the Coffee
+          Owner's real MaintenanceFastSearch, previewMode on, fed by this
+          account's own real card only (never the public roster of other
+          providers). "Info" closes this preview and reopens the existing
+          read-only AgentDetailModal above, rather than introducing a second
+          detail view. */}
+      <MaintenanceFastSearch
         open={flashPreviewOpen}
         onClose={() => setFlashPreviewOpen(false)}
-        name={profileData?.user?.name ?? ""}
-        typeLabel="Maintenance"
-        flashImageUrl={profileData?.user?.flashImageUrl}
-        profileImageUrl={profileData?.user?.profileImageUrl}
-        accentBgClass="bg-orange-500"
-        preview
+        providers={profileData?.card ? [profileData.card] : []}
+        onOpenDetail={() => { setFlashPreviewOpen(false); setPreviewOpen(true); }}
+        previewMode
       />
     </div>
   );

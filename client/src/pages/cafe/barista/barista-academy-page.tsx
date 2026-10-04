@@ -229,8 +229,8 @@ function TrainingCard({
 }) {
   const fmt = useFormatCurrency();
   const t = useTheme(isDark);
-  const faved = useFavorites((s) => !!s.academy[course.id]);
-  const toggleAcademy = useFavorites((s) => s.toggleAcademy);
+  const faved = useFavorites((s) => !!s.academyCourses[course.id]);
+  const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
 
   // First real image: the formation's own imageUrl if the Academy set one,
   // otherwise the Academy's public photo/logo, otherwise the existing
@@ -370,11 +370,24 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
     queryKey: ["/api/academy-favorites"],
     enabled: !!user && accessLevel === "approved",
   });
-  const syncAcademy = useFavorites((s) => s.syncAcademy);
+  const syncAcademy = useFavorites((s) => s.syncAcademyCourse);
   useEffect(() => {
     if (isLoading) return;
     syncAcademy(favoriteIds, courses);
   }, [favoriteIds, courses, isLoading, syncAcademy]);
+
+  // Organisation (academy) favorites — independent of the course favorites
+  // above (docs/coffee_owner_favorites_marketplace_audit.md); derived from
+  // the same already-fetched course cards.
+  const { data: organisationFavoriteIds = EMPTY_IDS } = useQuery<number[]>({
+    queryKey: ["/api/academy-favorites/organisations"],
+    enabled: !!user && accessLevel === "approved",
+  });
+  const syncAcademyOrganisation = useFavorites((s) => s.syncAcademyOrganisation);
+  useEffect(() => {
+    if (isLoading) return;
+    syncAcademyOrganisation(organisationFavoriteIds, courses);
+  }, [organisationFavoriteIds, courses, isLoading, syncAcademyOrganisation]);
 
   const handleEnroll = (course: AcademyCourseCard) => {
     if (!canAct) {

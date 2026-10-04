@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Heart, X, ChevronRight, Wrench, Zap, SlidersHorizontal, Check, Info, MapPin, Star } from "lucide-react";
+import { Heart, X, ChevronRight, Wrench, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Eye } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl } from "@/lib/avatar";
+import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 
 // Maintenance equivalent of BaristaFastSearch (Parts 20-21) — own component,
@@ -15,9 +15,15 @@ export interface MaintenanceFastSearchProps {
   onClose: () => void;
   providers: MaintenanceMarketplaceCard[];
   onOpenDetail: (agent: MaintenanceMarketplaceCard) => void;
+  // Espace Maintenance's own "Aperçu Flash" (see docs/maintenance_flash_modal_audit.md)
+  // — renders the exact same interface but disables the one mutation it has
+  // (Favorite) and swaps the header label/badge. The Coffee Owner's own
+  // integration (maintenance-page.tsx) never passes this, so its behavior is
+  // completely unchanged. Defaults to false.
+  previewMode?: boolean;
 }
 
-export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail }: MaintenanceFastSearchProps) {
+export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail, previewMode = false }: MaintenanceFastSearchProps) {
   const [idx, setIdx] = useState(0);
   const [heartAnim, setHeartAnim] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -38,11 +44,28 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail }
   useEffect(() => { setIdx(0); setHeartAnim(false); }, [filtered.length, open]);
   const current = filtered[idx] ?? null;
 
+  // Flash (URL) > Photo de profil (URL) — same shared priority as
+  // BaristaFastSearch (client/src/lib/avatar.ts). Applied in BOTH modes
+  // (docs/maintenance_flash_image_sync_audit.md) — the Coffee Owner's real
+  // Fast Search must show each provider's own Flash image too, not just the
+  // provider's own preview. The two-part root cause (the list endpoint
+  // never returned flashImageUrl, and this component never read it even
+  // when present) is fixed in server/storage.ts's getMaintenanceProfiles and
+  // here together.
+  const [flashFailed, setFlashFailed] = useState(false);
+  useEffect(() => { setFlashFailed(false); }, [current?.userId]);
+  const preferredImageUrl = getPreferredImageUrl(current?.flashImageUrl, current?.profileImageUrl);
+  const heroImageSrc = !flashFailed && preferredImageUrl ? preferredImageUrl : getAvatarUrl(current as any);
+
   const faved = useFavorites((s) => (current ? !!s.maintenance[current.userId] : false));
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
 
   const triggerFavorite = useCallback(() => {
-    if (!current) return;
+    // Preview mode never creates a real favorite — the server already
+    // rejects this for a non-Coffee-Owner session (POST
+    // /api/maintenance-favorites requires role CAFE_OWNER), but this is a
+    // client-side no-op too rather than relying on that alone.
+    if (!current || previewMode) return;
     toggleMaintenance({
       id: current.userId, name: current.name, initials: current.initials, specialty: current.specialty,
       categories: current.categories, skills: current.skills, location: current.location,
@@ -68,7 +91,7 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail }
           <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pt-4 pb-3 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-orange-400 fill-orange-400" />
-              <span className="text-white font-bold text-sm">Fast Search</span>
+              <span className="text-white font-bold text-sm">{previewMode ? "Aperçu Flash" : "Fast Search"}</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-white/60 text-xs">{filtered.length > 0 ? `${idx + 1} / ${filtered.length}` : "0 / 0"}</span>
@@ -77,6 +100,14 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail }
               </button>
             </div>
           </div>
+
+          {/* Mode aperçu badge — same visual convention as BaristaFastSearch's
+              own previewMode badge, reused rather than reinvented. */}
+          {previewMode && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 bg-amber-500/90 backdrop-blur-sm text-white text-[11px] font-semibold px-3 py-1.5 rounded-full" data-testid="badge-maintenance-fastsearch-preview">
+              <Eye className="w-3 h-3" /> Mode aperçu — Aperçu Flash
+            </div>
+          )}
 
           <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top) + 60px)" }}>
             {filtered.map((_, i) => (
@@ -95,7 +126,13 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail }
           ) : (
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
               <Avatar className="w-full h-full rounded-none">
-                <AvatarImage key={idx} src={getAvatarUrl(current as any)} alt={current!.name} className="object-cover" />
+                <AvatarImage
+                  key={`${idx}-${flashFailed}`}
+                  src={heroImageSrc}
+                  alt={current!.name}
+                  className="object-cover"
+                  onLoadingStatusChange={(status) => { if (status === "error" && !flashFailed && preferredImageUrl) setFlashFailed(true); }}
+                />
                 <AvatarFallback className="rounded-none bg-gradient-to-br from-orange-900 to-amber-950">
                   <span className="text-white/80 font-bold text-6xl">{current!.initials}</span>
                 </AvatarFallback>
@@ -147,8 +184,10 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail }
             )}
             {current && (
               <button
-                className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${faved ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"}`}
-                onClick={triggerFavorite} data-testid="button-maintenance-fastsearch-favorite"
+                className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${faved ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"} ${previewMode ? "opacity-40 cursor-not-allowed" : ""}`}
+                onClick={triggerFavorite} disabled={previewMode}
+                title={previewMode ? "Indisponible en mode aperçu" : undefined}
+                data-testid="button-maintenance-fastsearch-favorite"
               >
                 <Heart className={`w-5 h-5 transition-colors ${faved ? "fill-white text-white" : "text-white"}`} />
               </button>

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Heart, X, ChevronRight, GraduationCap, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Award } from "lucide-react";
+import { Heart, X, ChevronRight, GraduationCap, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Award, Eye } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import type { AcademyCourseCard } from "@/hooks/use-barista-academy";
-import { getAvatarUrl } from "@/lib/avatar";
+import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
 
 // Fast Search — mirrors BaristaFastSearch/MarketingFastSearch exactly: same
 // visual language/interaction, own state, own real data source (the same
@@ -16,9 +16,24 @@ export interface AcademyFastSearchProps {
   courses: AcademyCourseCard[];
   onEnroll: (course: AcademyCourseCard) => void;
   onOpenDetail: (course: AcademyCourseCard) => void;
+  // Espace Barista Academy's own "Aperçu Flash" (see
+  // docs/flash_academy_marketing_print_mapping_audit.md) — reuses this exact
+  // component, with the SAME swipe/filter/detail chrome as the real Coffee
+  // Owner Fast Search, fed by the caller with the authenticated academy's
+  // own real PUBLISHED courses (same /api/academy/courses mapping, filtered
+  // to this academy's own academyUserId — see the audit for why). Only the
+  // header label/badge change and the two mutating actions (Favorite,
+  // S'inscrire) are omitted — "Info" and the category/certification filter
+  // stay fully functional since they're read-only. `onOpenOwnDetail`, if
+  // provided, is offered only in the empty state (no published courses at
+  // all) as a fallback to the academy's own profile preview.
+  previewMode?: boolean;
+  onOpenOwnDetail?: () => void;
 }
 
-export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDetail }: AcademyFastSearchProps) {
+export function AcademyFastSearch({
+  open, onClose, courses, onEnroll, onOpenDetail, previewMode = false, onOpenOwnDetail,
+}: AcademyFastSearchProps) {
   const [idx, setIdx] = useState(0);
   const [heartAnim, setHeartAnim] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -40,8 +55,8 @@ export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDeta
 
   const current = filtered[idx] ?? null;
 
-  const faved = useFavorites((s) => (current ? !!s.academy[current.id] : false));
-  const toggleAcademy = useFavorites((s) => s.toggleAcademy);
+  const faved = useFavorites((s) => (current ? !!s.academyCourses[current.id] : false));
+  const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
 
   const triggerFavorite = useCallback(() => {
     if (!current) return;
@@ -58,6 +73,20 @@ export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDeta
   const goNext = useCallback(() => setIdx((i) => (i + 1) % Math.max(filtered.length, 1)), [filtered.length]);
   const goPrev = useCallback(() => setIdx((i) => (i === 0 ? Math.max(filtered.length - 1, 0) : i - 1)), [filtered.length]);
 
+  // Flash (URL) > Photo de profil (URL) — same shared priority as
+  // BaristaFastSearch/MaintenanceFastSearch (client/src/lib/avatar.ts).
+  // Only applied in previewMode, so normal Coffee-Owner browsing keeps its
+  // original hero-image behavior byte-identical (see
+  // docs/flash_academy_marketing_print_mapping_audit.md) — current.flashImageUrl
+  // is real (the academy's own Flash, joined onto every course card) but was
+  // never consulted here before this task.
+  const [previewFlashFailed, setPreviewFlashFailed] = useState(false);
+  useEffect(() => { setPreviewFlashFailed(false); }, [current?.id]);
+  const preferredImageUrl = previewMode ? getPreferredImageUrl(current?.flashImageUrl, current?.imageUrl || current?.academyProfileImageUrl) : null;
+  const heroImageSrc = previewMode
+    ? (!previewFlashFailed && preferredImageUrl ? preferredImageUrl : getAvatarUrl({ profileImageUrl: current?.imageUrl || current?.academyProfileImageUrl }))
+    : getAvatarUrl({ profileImageUrl: current?.imageUrl || current?.academyProfileImageUrl });
+
   const openFilter = () => { setPendingLevel(activeLevel); setPendingCert(activeCert); setFilterOpen(true); };
   const applyFilter = () => { setActiveLevel(pendingLevel); setActiveCert(pendingCert); setFilterOpen(false); };
   const hasActiveFilter = !!(activeLevel || activeCert);
@@ -72,7 +101,7 @@ export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDeta
           <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pt-4 pb-3 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-indigo-400 fill-indigo-400" />
-              <span className="text-white font-bold text-sm">Fast Search</span>
+              <span className="text-white font-bold text-sm">{previewMode ? "Aperçu Flash" : "Fast Search"}</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-white/60 text-xs">{filtered.length > 0 ? `${idx + 1} / ${filtered.length}` : "0 / 0"}</span>
@@ -81,6 +110,13 @@ export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDeta
               </button>
             </div>
           </div>
+
+          {/* Mode aperçu badge — same convention as BaristaFastSearch/MaintenanceFastSearch. */}
+          {previewMode && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 bg-amber-500/90 backdrop-blur-sm text-white text-[11px] font-semibold px-3 py-1.5 rounded-full" data-testid="badge-academy-fastsearch-preview">
+              <Eye className="w-3 h-3" /> Mode aperçu — Aperçu Flash
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top) + 60px)" }}>
@@ -95,18 +131,29 @@ export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDeta
           {filtered.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
               <GraduationCap className="w-16 h-16 text-gray-600" />
-              <p className="text-white font-semibold">Aucune formation ne correspond à ce filtre</p>
-              <button onClick={openFilter} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
-                Changer le filtre
-              </button>
+              <p className="text-white font-semibold">
+                {previewMode
+                  ? (courses.length === 0 ? "Vous n'avez aucune formation publiée pour le moment" : "Aucune formation ne correspond à ce filtre")
+                  : "Aucune formation ne correspond à ce filtre"}
+              </p>
+              {hasActiveFilter ? (
+                <button onClick={openFilter} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
+                  Changer le filtre
+                </button>
+              ) : previewMode && onOpenOwnDetail && (
+                <button onClick={onOpenOwnDetail} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold" data-testid="button-fastsearch-own-profile">
+                  Voir mon profil
+                </button>
+              )}
             </div>
           ) : (
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
               <img
                 key={idx}
-                src={getAvatarUrl({ profileImageUrl: current!.imageUrl || current!.academyProfileImageUrl })}
+                src={heroImageSrc}
                 alt={current!.title}
                 className="w-full h-full object-cover"
+                onError={() => { if (previewMode && !previewFlashFailed && preferredImageUrl) setPreviewFlashFailed(true); }}
               />
 
               <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none" />
@@ -137,7 +184,10 @@ export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDeta
             </div>
           )}
 
-          {/* Floating action buttons */}
+          {/* Floating action buttons — Filtrer/Info stay fully functional in
+              preview mode (read-only); Favorite/S'inscrire are omitted since
+              neither has a safe equivalent for a professional previewing
+              their own listing. */}
           <div className="absolute right-4 bottom-24 flex flex-col gap-4 z-20">
             <button
               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${hasActiveFilter ? "bg-indigo-500" : "bg-white/20 backdrop-blur-sm"}`}
@@ -153,7 +203,7 @@ export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDeta
                 <Info className="w-5 h-5 text-white" />
               </button>
             )}
-            {current && (
+            {!previewMode && current && (
               <button
                 className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${faved ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"}`}
                 onClick={triggerFavorite} data-testid="button-fastsearch-favorite"
@@ -161,7 +211,7 @@ export function AcademyFastSearch({ open, onClose, courses, onEnroll, onOpenDeta
                 <Heart className={`w-5 h-5 transition-colors ${faved ? "fill-white text-white" : "text-white"}`} />
               </button>
             )}
-            {current && (
+            {!previewMode && current && (
               <button
                 className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center shadow-lg transition-all active:scale-90"
                 onClick={() => onEnroll(current)} data-testid="button-fastsearch-enroll" title="S'inscrire"

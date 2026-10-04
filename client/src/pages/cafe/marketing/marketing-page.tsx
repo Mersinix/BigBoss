@@ -199,8 +199,8 @@ function ServiceCard({
 }) {
   const fmt = useFormatCurrency();
   const t = useTheme(isDark);
-  const faved = useFavorites((s) => !!s.marketing[service.marketingUserId]);
-  const toggleMarketing = useFavorites((s) => s.toggleMarketing);
+  const faved = useFavorites((s) => !!s.marketingServices[service.id]);
+  const toggleMarketingService = useFavorites((s) => s.toggleMarketingService);
 
   const coverImage = service.imageUrl;
 
@@ -214,12 +214,9 @@ function ServiceCard({
         className="absolute top-2 right-2 z-10 w-6 h-6 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
         onClick={(e) => {
           e.stopPropagation();
-          toggleMarketing({
-            id: service.marketingUserId, name: service.agencyName,
-            initials: service.agencyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
-            type: providerTypeLabel(service.agencyProfileType), rating: service.rating / 10,
-            portfolioImages: coverImage ? [coverImage] : [], location: service.agencyLocation,
-            available: service.agencyIsAvailable, profileImageUrl: service.agencyProfileImageUrl,
+          toggleMarketingService({
+            id: service.id, name: service.category, agencyUserId: service.marketingUserId, agencyName: service.agencyName,
+            rating: service.rating / 10, image: coverImage, location: service.agencyLocation, priceInCents: service.startingPriceInCents,
           });
         }}
         data-testid={`button-fav-marketing-service-${service.id}`}
@@ -318,10 +315,22 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
     queryKey: ["/api/marketing-favorites"],
     enabled: !!user && accessLevel === "approved",
   });
-  const syncMarketing = useFavorites((s) => s.syncMarketing);
+  const syncMarketing = useFavorites((s) => s.syncMarketingAgency);
   useEffect(() => {
     syncMarketing(favoriteIds, providers);
   }, [favoriteIds, providers, syncMarketing]);
+
+  // Service favorites — independent of the agency favorites above
+  // (docs/coffee_owner_favorites_marketplace_audit.md); derived from the same
+  // already-fetched services list.
+  const { data: serviceFavoriteIds = EMPTY_IDS } = useQuery<number[]>({
+    queryKey: ["/api/marketing-favorites/services"],
+    enabled: !!user && accessLevel === "approved",
+  });
+  const syncMarketingService = useFavorites((s) => s.syncMarketingService);
+  useEffect(() => {
+    syncMarketingService(serviceFavoriteIds, services);
+  }, [serviceFavoriteIds, services, syncMarketingService]);
 
   const allLocations = useMemo(() => Array.from(new Set(services.map((s) => s.agencyLocation).filter(Boolean))).sort(), [services]);
 

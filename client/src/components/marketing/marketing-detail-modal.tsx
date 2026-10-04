@@ -192,8 +192,8 @@ export function MarketingDetailModal({
   const createReview = useCreateMarketingReview();
   const reportProvider = useReportMarketingProvider();
 
-  const faved = useFavorites((s) => (marketingUserId ? !!s.marketing[marketingUserId] : false));
-  const toggleMarketing = useFavorites((s) => s.toggleMarketing);
+  const faved = useFavorites((s) => (marketingUserId ? !!s.marketingAgencies[marketingUserId] : false));
+  const toggleMarketing = useFavorites((s) => s.toggleMarketingAgency);
 
   const [reviewProjectId, setReviewProjectId] = useState<number | null>(null);
   const [reviewRating, setReviewRating] = useState(5);

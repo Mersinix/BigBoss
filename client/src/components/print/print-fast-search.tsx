@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Heart, X, ChevronRight, Package, Zap, SlidersHorizontal, Check, Info, Star } from "lucide-react";
+import { Heart, X, ChevronRight, Package, Zap, SlidersHorizontal, Check, Info, Star, Eye } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import type { PrintCatalogCard } from "@shared/schema";
@@ -16,9 +16,24 @@ export interface PrintFastSearchProps {
   onClose: () => void;
   cards: PrintCatalogCard[];
   onOpenDetail: (card: PrintCatalogCard) => void;
+  // Espace Imprimerie's own "Aperçu Flash" (see
+  // docs/flash_academy_marketing_print_mapping_audit.md) — reuses this exact
+  // component, with the SAME swipe/filter/detail chrome as the real Coffee
+  // Owner Fast Search, fed by the caller with the authenticated printing
+  // company's own real published catalog items (same
+  // /api/print/marketplace mapping, filtered server-side by its own
+  // `printerId` query param). Only the header label/badge change and the
+  // one mutating action (Favorite) is omitted — "Info" and the category
+  // filter stay fully functional since they're read-only. `onOpenOwnDetail`,
+  // if provided, is offered only in the empty state (no published catalog
+  // items at all) as a fallback to the company's own profile preview.
+  previewMode?: boolean;
+  onOpenOwnDetail?: () => void;
 }
 
-export function PrintFastSearch({ open, onClose, cards, onOpenDetail }: PrintFastSearchProps) {
+export function PrintFastSearch({
+  open, onClose, cards, onOpenDetail, previewMode = false, onOpenOwnDetail,
+}: PrintFastSearchProps) {
   const fmt = useFormatCurrency();
   const [idx, setIdx] = useState(0);
   const [heartAnim, setHeartAnim] = useState(false);
@@ -39,8 +54,8 @@ export function PrintFastSearch({ open, onClose, cards, onOpenDetail }: PrintFas
 
   const current = filtered[idx] ?? null;
 
-  const faved = useFavorites((s) => (current ? !!s.print[String(current.id)] : false));
-  const togglePrint = useFavorites((s) => s.togglePrint);
+  const faved = useFavorites((s) => (current ? !!s.printProducts[String(current.id)] : false));
+  const togglePrint = useFavorites((s) => s.togglePrintProduct);
 
   const triggerFavorite = useCallback(() => {
     if (!current) return;
@@ -71,7 +86,7 @@ export function PrintFastSearch({ open, onClose, cards, onOpenDetail }: PrintFas
           <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-4 pt-4 pb-3 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-blue-400 fill-blue-400" />
-              <span className="text-white font-bold text-sm">Fast Search</span>
+              <span className="text-white font-bold text-sm">{previewMode ? "Aperçu Flash" : "Fast Search"}</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-white/60 text-xs">{filtered.length > 0 ? `${idx + 1} / ${filtered.length}` : "0 / 0"}</span>
@@ -80,6 +95,13 @@ export function PrintFastSearch({ open, onClose, cards, onOpenDetail }: PrintFas
               </button>
             </div>
           </div>
+
+          {/* Mode aperçu badge — same convention as BaristaFastSearch/MaintenanceFastSearch. */}
+          {previewMode && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 bg-amber-500/90 backdrop-blur-sm text-white text-[11px] font-semibold px-3 py-1.5 rounded-full" data-testid="badge-print-fastsearch-preview">
+              <Eye className="w-3 h-3" /> Mode aperçu — Aperçu Flash
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 px-4" style={{ paddingTop: "calc(env(safe-area-inset-top) + 60px)" }}>
@@ -94,10 +116,20 @@ export function PrintFastSearch({ open, onClose, cards, onOpenDetail }: PrintFas
           {filtered.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
               <Package className="w-16 h-16 text-gray-600" />
-              <p className="text-white font-semibold">Aucun service PRINT ne correspond à ce filtre</p>
-              <button onClick={openFilter} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
-                Changer le filtre
-              </button>
+              <p className="text-white font-semibold">
+                {previewMode
+                  ? (cards.length === 0 ? "Vous n'avez aucun produit publié pour le moment" : "Aucun service PRINT ne correspond à ce filtre")
+                  : "Aucun service PRINT ne correspond à ce filtre"}
+              </p>
+              {hasActiveFilter ? (
+                <button onClick={openFilter} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
+                  Changer le filtre
+                </button>
+              ) : previewMode && onOpenOwnDetail && (
+                <button onClick={onOpenOwnDetail} className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold" data-testid="button-fastsearch-own-profile">
+                  Voir mon profil
+                </button>
+              )}
             </div>
           ) : (
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
@@ -137,7 +169,9 @@ export function PrintFastSearch({ open, onClose, cards, onOpenDetail }: PrintFas
             </div>
           )}
 
-          {/* Floating action buttons */}
+          {/* Floating action buttons — Filtrer/Info stay fully functional in
+              preview mode (read-only); Favorite is omitted since it has no
+              safe equivalent for a company previewing its own listing. */}
           <div className="absolute right-4 bottom-24 flex flex-col gap-4 z-20">
             <button
               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${hasActiveFilter ? "bg-blue-500" : "bg-white/20 backdrop-blur-sm"}`}
@@ -153,7 +187,7 @@ export function PrintFastSearch({ open, onClose, cards, onOpenDetail }: PrintFas
                 <Info className="w-5 h-5 text-white" />
               </button>
             )}
-            {current && (
+            {!previewMode && current && (
               <button
                 className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${faved ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"}`}
                 onClick={triggerFavorite} data-testid="button-fastsearch-favorite"

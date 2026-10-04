@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { FlashSearchPreviewModal } from "@/components/account/flash-search-preview-modal";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { useDriverDetails, useUpdateDriverProfile } from "@/hooks/use-driver-profile";
 import { useMyVehicle, useCreateMyVehicle, useUpdateMyVehicle, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
@@ -385,7 +385,7 @@ export default function DriverProfilePage() {
         readOnly
       />
 
-      <FlashPreviewModal
+      <FlashSearchPreviewModal
         open={flashPreviewOpen}
         onClose={() => setFlashPreviewOpen(false)}
         name={user?.name ?? ""}
@@ -393,7 +393,6 @@ export default function DriverProfilePage() {
         flashImageUrl={data?.flashImageUrl ?? user?.flashImageUrl}
         profileImageUrl={user?.profileImageUrl}
         accentBgClass="bg-blue-600"
-        preview
       />
     </div>
   );

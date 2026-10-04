@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,10 @@ import { Megaphone, Image as ImageIcon, X, Globe, Calendar, AlertCircle, Eye, Za
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import {
-  useMyMarketingProfile, useUpdateMarketingProfile, useUpdateMarketingAvailability, useMyMarketingServices,
+  useMyMarketingProfile, useUpdateMarketingProfile, useUpdateMarketingAvailability, useMyMarketingServices, useMarketingServices,
 } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
@@ -38,6 +38,19 @@ export default function MarketingProfilePage() {
   const { toast } = useToast();
   const { data, isLoading } = useMyMarketingProfile(user?.id ?? null);
   const { data: services = [] } = useMyMarketingServices();
+  // Aperçu Flash (docs/flash_academy_marketing_print_mapping_audit.md) — the
+  // same public, already-enriched MarketingServiceCard list (agencyName/
+  // agencyIsAvailable/rating/etc. already joined server-side) the Coffee
+  // Owner's own Fast Search reads, filtered client-side to this agency's own
+  // marketingUserId. Reuses the exact same mapping/visibility/publication
+  // rules (GET /api/marketing/services only ever returns published services
+  // from approved, marketplace-visible agencies) rather than
+  // re-implementing them.
+  const { data: publicServices = [] } = useMarketingServices();
+  const myPublishedServices = useMemo(
+    () => publicServices.filter((s) => s.marketingUserId === user?.id),
+    [publicServices, user?.id],
+  );
   const updateProfile = useUpdateMarketingProfile();
   const updateAvailability = useUpdateMarketingAvailability();
 
@@ -314,15 +327,22 @@ export default function MarketingProfilePage() {
         readOnly
       />
 
-      <FlashPreviewModal
+      {/* Aperçu Flash (docs/flash_academy_marketing_print_mapping_audit.md) —
+          the Coffee Owner's real MarketingFastSearch, previewMode on, fed by
+          this agency's own real PUBLISHED services (myPublishedServices,
+          above). "Info" opens the existing read-only
+          MarketingServiceDetailModal for that specific service (same as
+          Coffee Owner's own Info button); if there are no published
+          services at all, the empty state's "Voir mon profil" falls back to
+          the existing read-only MarketingDetailModal. */}
+      <MarketingFastSearch
         open={flashPreviewOpen}
         onClose={() => setFlashPreviewOpen(false)}
-        name={data?.user?.name ?? ""}
-        typeLabel="Marketing"
-        flashImageUrl={data?.user?.flashImageUrl}
-        profileImageUrl={data?.user?.profileImageUrl}
-        accentBgClass="bg-purple-600"
-        preview
+        services={myPublishedServices}
+        onRequestQuote={() => {}}
+        onOpenDetail={(service) => { setFlashPreviewOpen(false); setPreviewServiceId(service.id); }}
+        previewMode
+        onOpenOwnDetail={() => { setFlashPreviewOpen(false); setPreviewServiceId(null); setPreviewOpen(true); }}
       />
     </div>
   );

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { apiRequest } from "@/lib/queryClient";
 import type { MaintenanceMarketplaceCard, PrintCatalogCard } from "@shared/schema";
 import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
-import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
+import type { MarketingMarketplaceCard, MarketingServiceCard } from "@/hooks/use-marketing";
 import type { AcademyCourseCard } from "@/hooks/use-barista-academy";
 
 export interface ShopFavItem {
@@ -27,6 +27,20 @@ export interface PrintFavItem {
   category?: string;
 }
 
+// Company-level (printer) favorite — independent of PrintFavItem above
+// (docs/coffee_owner_favorites_marketplace_audit.md). Keyed by printerId.
+export interface PrintCompanyFavItem {
+  id: number;
+  name: string;
+  initials: string;
+  type: string;
+  rating: number;
+  portfolioImages: string[];
+  location?: string;
+  available?: boolean;
+  profileImageUrl?: string | null;
+}
+
 export interface AcademyFavItem {
   id: number;
   title: string;
@@ -40,6 +54,20 @@ export interface AcademyFavItem {
   // Real formation image (imageUrl) or Academy public photo fallback — without
   // this the Favorites entry had no image to show.
   imageUrl?: string | null;
+}
+
+// Company-level (academy organisation) favorite — independent of AcademyFavItem
+// above (docs/coffee_owner_favorites_marketplace_audit.md). Keyed by academyUserId.
+export interface AcademyOrgFavItem {
+  id: number;
+  name: string;
+  initials: string;
+  type: string;
+  rating: number;
+  portfolioImages: string[];
+  location?: string;
+  available?: boolean;
+  profileImageUrl?: string | null;
 }
 
 export interface BaristaMktFavItem {
@@ -71,6 +99,20 @@ export interface MarketingFavItem {
   profileImageUrl?: string | null;
 }
 
+// Service-level (Marketing) favorite — independent of MarketingFavItem (agency)
+// above (docs/coffee_owner_favorites_marketplace_audit.md). Keyed by serviceId;
+// carries the agency identity alongside since a service always belongs to one.
+export interface MarketingServiceFavItem {
+  id: number;
+  name: string;
+  agencyUserId: number;
+  agencyName: string;
+  rating: number;
+  image?: string | null;
+  location?: string;
+  priceInCents?: number;
+}
+
 export interface MaintenanceFavItem {
   id: number;
   name: string;
@@ -90,49 +132,67 @@ export interface MaintenanceFavItem {
 
 interface FavoritesStore {
   shop: Record<number, ShopFavItem>;
-  print: Record<string, PrintFavItem>;
-  academy: Record<number, AcademyFavItem>;
+  printProducts: Record<string, PrintFavItem>;
+  printCompanies: Record<number, PrintCompanyFavItem>;
+  academyCourses: Record<number, AcademyFavItem>;
+  academyOrganisations: Record<number, AcademyOrgFavItem>;
   baristaMarket: Record<number, BaristaMktFavItem>;
-  marketing: Record<number, MarketingFavItem>;
+  marketingAgencies: Record<number, MarketingFavItem>;
+  marketingServices: Record<number, MarketingServiceFavItem>;
   maintenance: Record<number, MaintenanceFavItem>;
   pack: Record<number, true>;
 
   toggleShop: (item: ShopFavItem) => void;
-  togglePrint: (item: PrintFavItem) => void;
-  toggleAcademy: (item: AcademyFavItem) => void;
+  togglePrintProduct: (item: PrintFavItem) => void;
+  togglePrintCompany: (item: PrintCompanyFavItem) => void;
+  toggleAcademyCourse: (item: AcademyFavItem) => void;
+  toggleAcademyOrganisation: (item: AcademyOrgFavItem) => void;
   toggleBaristaMarket: (item: BaristaMktFavItem) => void;
-  toggleMarketing: (item: MarketingFavItem) => void;
+  toggleMarketingAgency: (item: MarketingFavItem) => void;
+  toggleMarketingService: (item: MarketingServiceFavItem) => void;
   toggleMaintenance: (item: MaintenanceFavItem) => void;
   togglePack: (packId: number) => void;
 
   removeShop: (id: number) => void;
-  removePrint: (id: string) => void;
-  removeAcademy: (id: number) => void;
+  removePrintProduct: (id: string) => void;
+  removePrintCompany: (id: number) => void;
+  removeAcademyCourse: (id: number) => void;
+  removeAcademyOrganisation: (id: number) => void;
   removeBaristaMarket: (id: number) => void;
-  removeMarketing: (id: number) => void;
+  removeMarketingAgency: (id: number) => void;
+  removeMarketingService: (id: number) => void;
   removeMaintenance: (id: number) => void;
   removePack: (id: number) => void;
 
   hydrateShop: (items: ShopFavItem[]) => void;
   hydratePack: (ids: number[]) => void;
-  hydratePrint: (ids: number[]) => void;
-  syncPrint: (ids: number[], cards: PrintCatalogCard[]) => void;
+  hydratePrintProduct: (ids: number[]) => void;
+  syncPrintProduct: (ids: number[], cards: PrintCatalogCard[]) => void;
+  hydratePrintCompany: (ids: number[]) => void;
+  syncPrintCompany: (ids: number[], cards: PrintCatalogCard[]) => void;
   hydrateMaintenance: (ids: number[]) => void;
   syncMaintenance: (ids: number[], profiles: MaintenanceMarketplaceCard[]) => void;
   hydrateBaristaMarket: (ids: number[]) => void;
   syncBaristaMarket: (ids: number[], profiles: BaristaMarketplaceCard[]) => void;
-  hydrateMarketing: (ids: number[]) => void;
-  syncMarketing: (ids: number[], profiles: MarketingMarketplaceCard[]) => void;
-  hydrateAcademy: (ids: number[]) => void;
-  syncAcademy: (ids: number[], courses: AcademyCourseCard[]) => void;
+  hydrateMarketingAgency: (ids: number[]) => void;
+  syncMarketingAgency: (ids: number[], profiles: MarketingMarketplaceCard[]) => void;
+  hydrateMarketingService: (ids: number[]) => void;
+  syncMarketingService: (ids: number[], services: MarketingServiceCard[]) => void;
+  hydrateAcademyCourse: (ids: number[]) => void;
+  syncAcademyCourse: (ids: number[], courses: AcademyCourseCard[]) => void;
+  hydrateAcademyOrganisation: (ids: number[]) => void;
+  syncAcademyOrganisation: (ids: number[], courses: AcademyCourseCard[]) => void;
 }
 
 export const useFavorites = create<FavoritesStore>((set, get) => ({
   shop: {},
-  print: {},
-  academy: {},
+  printProducts: {},
+  printCompanies: {},
+  academyCourses: {},
+  academyOrganisations: {},
   baristaMarket: {},
-  marketing: {},
+  marketingAgencies: {},
+  marketingServices: {},
   maintenance: {},
   pack: {},
 
@@ -178,14 +238,14 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
     }
   },
 
-  togglePrint: (item) =>
+  togglePrintProduct: (item) =>
     (() => {
-      const wasFav = !!get().print[item.id];
+      const wasFav = !!get().printProducts[item.id];
       set((s) => {
-        const next = { ...s.print };
+        const next = { ...s.printProducts };
         if (wasFav) delete next[item.id];
         else next[item.id] = item;
-        return { print: next };
+        return { printProducts: next };
       });
       if (wasFav) {
         apiRequest("DELETE", `/api/print-favorites/${item.id}`).catch(() => {});
@@ -194,19 +254,51 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
       }
     })(),
 
-  toggleAcademy: (item) =>
+  togglePrintCompany: (item) =>
     (() => {
-      const wasFav = !!get().academy[item.id];
+      const wasFav = !!get().printCompanies[item.id];
       set((s) => {
-        const next = { ...s.academy };
+        const next = { ...s.printCompanies };
         if (wasFav) delete next[item.id];
         else next[item.id] = item;
-        return { academy: next };
+        return { printCompanies: next };
+      });
+      if (wasFav) {
+        apiRequest("DELETE", `/api/print-favorites/companies/${item.id}`).catch(() => {});
+      } else {
+        apiRequest("POST", "/api/print-favorites/companies", { printerId: item.id }).catch(() => {});
+      }
+    })(),
+
+  toggleAcademyCourse: (item) =>
+    (() => {
+      const wasFav = !!get().academyCourses[item.id];
+      set((s) => {
+        const next = { ...s.academyCourses };
+        if (wasFav) delete next[item.id];
+        else next[item.id] = item;
+        return { academyCourses: next };
       });
       if (wasFav) {
         apiRequest("DELETE", `/api/academy-favorites/${item.id}`).catch(() => {});
       } else {
         apiRequest("POST", "/api/academy-favorites", { courseId: item.id }).catch(() => {});
+      }
+    })(),
+
+  toggleAcademyOrganisation: (item) =>
+    (() => {
+      const wasFav = !!get().academyOrganisations[item.id];
+      set((s) => {
+        const next = { ...s.academyOrganisations };
+        if (wasFav) delete next[item.id];
+        else next[item.id] = item;
+        return { academyOrganisations: next };
+      });
+      if (wasFav) {
+        apiRequest("DELETE", `/api/academy-favorites/organisations/${item.id}`).catch(() => {});
+      } else {
+        apiRequest("POST", "/api/academy-favorites/organisations", { academyUserId: item.id }).catch(() => {});
       }
     })(),
 
@@ -226,19 +318,35 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
       }
     })(),
 
-  toggleMarketing: (item) =>
+  toggleMarketingAgency: (item) =>
     (() => {
-      const wasFav = !!get().marketing[item.id];
+      const wasFav = !!get().marketingAgencies[item.id];
       set((s) => {
-        const next = { ...s.marketing };
+        const next = { ...s.marketingAgencies };
         if (wasFav) delete next[item.id];
         else next[item.id] = item;
-        return { marketing: next };
+        return { marketingAgencies: next };
       });
       if (wasFav) {
         apiRequest("DELETE", `/api/marketing-favorites/${item.id}`).catch(() => {});
       } else {
         apiRequest("POST", "/api/marketing-favorites", { marketingUserId: item.id }).catch(() => {});
+      }
+    })(),
+
+  toggleMarketingService: (item) =>
+    (() => {
+      const wasFav = !!get().marketingServices[item.id];
+      set((s) => {
+        const next = { ...s.marketingServices };
+        if (wasFav) delete next[item.id];
+        else next[item.id] = item;
+        return { marketingServices: next };
+      });
+      if (wasFav) {
+        apiRequest("DELETE", `/api/marketing-favorites/services/${item.id}`).catch(() => {});
+      } else {
+        apiRequest("POST", "/api/marketing-favorites/services", { marketingUserId: item.agencyUserId, serviceId: item.id }).catch(() => {});
       }
     })(),
 
@@ -270,25 +378,31 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
       return { shop: next };
     }),
 
-  removePrint: (id) =>
+  removePrintProduct: (id) =>
     (() => {
-      set((s) => { const next = { ...s.print }; delete next[id]; return { print: next }; });
+      set((s) => { const next = { ...s.printProducts }; delete next[id]; return { printProducts: next }; });
       apiRequest("DELETE", `/api/print-favorites/${id}`).catch(() => {});
     })(),
 
-  hydratePrint: (ids) =>
+  removePrintCompany: (id) =>
+    (() => {
+      set((s) => { const next = { ...s.printCompanies }; delete next[id]; return { printCompanies: next }; });
+      apiRequest("DELETE", `/api/print-favorites/companies/${id}`).catch(() => {});
+    })(),
+
+  hydratePrintProduct: (ids) =>
     set((s) => {
-      const next = { ...s.print };
+      const next = { ...s.printProducts };
       for (const id of ids) {
         const key = String(id);
         if (!next[key]) {
           next[key] = { id: key, name: "Print", brand: "Imprimerie", price: 0, priceUnit: "unité", image: "" };
         }
       }
-      return { print: next };
+      return { printProducts: next };
     }),
 
-  syncPrint: (ids, cards) =>
+  syncPrintProduct: (ids, cards) =>
     set(() => {
       const cardMap = new Map(cards.map((card) => [card.id, card]));
       const next: Record<string, PrintFavItem> = {};
@@ -309,13 +423,55 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
           category: card.category,
         };
       }
-      return { print: next };
+      return { printProducts: next };
     }),
 
-  removeAcademy: (id) =>
+  hydratePrintCompany: (ids) =>
+    set((s) => {
+      const next = { ...s.printCompanies };
+      for (const id of ids) {
+        if (!next[id]) {
+          next[id] = { id, name: "Imprimerie", initials: "I", type: "Imprimerie", rating: 0, portfolioImages: [] };
+        }
+      }
+      return { printCompanies: next };
+    }),
+
+  // Derived from the already-fetched Print catalog cards (one row per unique
+  // printerId) — no separate "all printing companies" listing endpoint exists,
+  // same reasoning as syncAcademyOrganisation below.
+  syncPrintCompany: (ids, cards) =>
+    set(() => {
+      const byPrinter = new Map<number, PrintCatalogCard>();
+      for (const card of cards) if (!byPrinter.has(card.printerId)) byPrinter.set(card.printerId, card);
+      const next: Record<number, PrintCompanyFavItem> = {};
+      for (const id of ids) {
+        const card = byPrinter.get(id);
+        if (!card) continue;
+        next[id] = {
+          id,
+          name: card.printerName,
+          initials: card.printerName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+          type: "Imprimerie",
+          rating: card.rating / 10,
+          portfolioImages: [],
+          location: card.printerLocation,
+          profileImageUrl: card.printerImageUrl,
+        };
+      }
+      return { printCompanies: next };
+    }),
+
+  removeAcademyCourse: (id) =>
     (() => {
-      set((s) => { const next = { ...s.academy }; delete next[id]; return { academy: next }; });
+      set((s) => { const next = { ...s.academyCourses }; delete next[id]; return { academyCourses: next }; });
       apiRequest("DELETE", `/api/academy-favorites/${id}`).catch(() => {});
+    })(),
+
+  removeAcademyOrganisation: (id) =>
+    (() => {
+      set((s) => { const next = { ...s.academyOrganisations }; delete next[id]; return { academyOrganisations: next }; });
+      apiRequest("DELETE", `/api/academy-favorites/organisations/${id}`).catch(() => {});
     })(),
 
   removeBaristaMarket: (id) =>
@@ -324,10 +480,16 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
       apiRequest("DELETE", `/api/barista-favorites/${id}`).catch(() => {});
     })(),
 
-  removeMarketing: (id) =>
+  removeMarketingAgency: (id) =>
     (() => {
-      set((s) => { const next = { ...s.marketing }; delete next[id]; return { marketing: next }; });
+      set((s) => { const next = { ...s.marketingAgencies }; delete next[id]; return { marketingAgencies: next }; });
       apiRequest("DELETE", `/api/marketing-favorites/${id}`).catch(() => {});
+    })(),
+
+  removeMarketingService: (id) =>
+    (() => {
+      set((s) => { const next = { ...s.marketingServices }; delete next[id]; return { marketingServices: next }; });
+      apiRequest("DELETE", `/api/marketing-favorites/services/${id}`).catch(() => {});
     })(),
 
   removeMaintenance: (id) =>
@@ -420,18 +582,18 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
       return { baristaMarket: next };
     }),
 
-  hydrateMarketing: (ids) =>
+  hydrateMarketingAgency: (ids) =>
     set((s) => {
-      const next = { ...s.marketing };
+      const next = { ...s.marketingAgencies };
       for (const id of ids) {
         if (!next[id]) {
           next[id] = { id, name: "Marketing", initials: "M", type: "Agency", rating: 0, portfolioImages: [] };
         }
       }
-      return { marketing: next };
+      return { marketingAgencies: next };
     }),
 
-  syncMarketing: (ids, profiles) =>
+  syncMarketingAgency: (ids, profiles) =>
     set(() => {
       const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
       const next: Record<number, MarketingFavItem> = {};
@@ -450,21 +612,53 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
           profileImageUrl: profile.profileImageUrl,
         };
       }
-      return { marketing: next };
+      return { marketingAgencies: next };
     }),
 
-  hydrateAcademy: (ids) =>
+  hydrateMarketingService: (ids) =>
     set((s) => {
-      const next = { ...s.academy };
+      const next = { ...s.marketingServices };
+      for (const id of ids) {
+        if (!next[id]) {
+          next[id] = { id, name: "Service", agencyUserId: 0, agencyName: "Agency", rating: 0 };
+        }
+      }
+      return { marketingServices: next };
+    }),
+
+  syncMarketingService: (ids, services) =>
+    set(() => {
+      const serviceMap = new Map(services.map((service) => [service.id, service]));
+      const next: Record<number, MarketingServiceFavItem> = {};
+      for (const id of ids) {
+        const service = serviceMap.get(id);
+        if (!service) continue;
+        next[id] = {
+          id: service.id,
+          name: service.category,
+          agencyUserId: service.marketingUserId,
+          agencyName: service.agencyName,
+          rating: service.rating / 10,
+          image: service.imageUrl ?? service.agencyProfileImageUrl,
+          location: service.agencyLocation,
+          priceInCents: service.startingPriceInCents,
+        };
+      }
+      return { marketingServices: next };
+    }),
+
+  hydrateAcademyCourse: (ids) =>
+    set((s) => {
+      const next = { ...s.academyCourses };
       for (const id of ids) {
         if (!next[id]) {
           next[id] = { id, title: "Formation", provider: "Academy", duration: "", rating: 0, price: 0 };
         }
       }
-      return { academy: next };
+      return { academyCourses: next };
     }),
 
-  syncAcademy: (ids, courses) =>
+  syncAcademyCourse: (ids, courses) =>
     set(() => {
       const courseMap = new Map(courses.map((course) => [course.id, course]));
       const next: Record<number, AcademyFavItem> = {};
@@ -484,15 +678,54 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
           imageUrl: course.imageUrl ?? course.academyProfileImageUrl,
         };
       }
-      return { academy: next };
+      return { academyCourses: next };
+    }),
+
+  hydrateAcademyOrganisation: (ids) =>
+    set((s) => {
+      const next = { ...s.academyOrganisations };
+      for (const id of ids) {
+        if (!next[id]) {
+          next[id] = { id, name: "Académie", initials: "A", type: "Académie", rating: 0, portfolioImages: [] };
+        }
+      }
+      return { academyOrganisations: next };
+    }),
+
+  // Derived from the already-fetched Academy course cards (one row per unique
+  // academyUserId) — no separate "all academies" listing endpoint exists, the
+  // Academy marketplace browses by course, not by organisation.
+  syncAcademyOrganisation: (ids, courses) =>
+    set(() => {
+      const byAcademy = new Map<number, AcademyCourseCard>();
+      for (const course of courses) if (!byAcademy.has(course.academyUserId)) byAcademy.set(course.academyUserId, course);
+      const next: Record<number, AcademyOrgFavItem> = {};
+      for (const id of ids) {
+        const course = byAcademy.get(id);
+        if (!course) continue;
+        next[id] = {
+          id,
+          name: course.academyName,
+          initials: course.academyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+          type: "Académie",
+          rating: course.rating / 10,
+          portfolioImages: [],
+          location: course.academyLocation,
+          profileImageUrl: course.academyProfileImageUrl,
+        };
+      }
+      return { academyOrganisations: next };
     }),
 }));
 
 export const selectTotalFavCount = (s: FavoritesStore) =>
   Object.keys(s.shop).length +
-  Object.keys(s.print).length +
-  Object.keys(s.academy).length +
+  Object.keys(s.printProducts).length +
+  Object.keys(s.printCompanies).length +
+  Object.keys(s.academyCourses).length +
+  Object.keys(s.academyOrganisations).length +
   Object.keys(s.baristaMarket).length +
-  Object.keys(s.marketing).length +
+  Object.keys(s.marketingAgencies).length +
+  Object.keys(s.marketingServices).length +
   Object.keys(s.maintenance).length +
   Object.keys(s.pack).length;

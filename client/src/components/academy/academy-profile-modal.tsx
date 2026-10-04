@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useThemeStore } from "@/store/theme-store";
+import { useFavorites } from "@/hooks/use-favorites";
 import {
   useAcademyProfileDetail,
   useAcademyReviews,
@@ -19,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen, Image as ImageIcon, Zap,
+  Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen, Image as ImageIcon, Zap, Heart,
 } from "lucide-react";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
@@ -155,6 +156,8 @@ export function AcademyProfileModal({
   };
   const { data, isLoading } = useAcademyProfileDetail(academyUserId);
   const card = data?.card;
+  const faved = useFavorites((s) => (card ? !!s.academyOrganisations[card.userId] : false));
+  const toggleAcademyOrganisation = useFavorites((s) => s.toggleAcademyOrganisation);
   const { data: reviews = [] } = useAcademyReviews(academyUserId);
   const reportAcademy = useReportAcademy();
 
@@ -237,6 +240,17 @@ export function AcademyProfileModal({
                 </Avatar>
               )}
               <div className="absolute top-3 right-3 flex gap-2">
+                <button
+                  className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
+                  onClick={() => { if (!readOnly) toggleAcademyOrganisation({
+                    id: card.userId, name: card.name, initials: card.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+                    type: "Académie", rating: card.rating / 10, portfolioImages: card.portfolioImages, location: card.location,
+                    available: !card.isOnVacation, profileImageUrl: card.profileImageUrl,
+                  }); }}
+                  data-testid={`button-fav-academy-profile-${card.userId}`}
+                >
+                  <Heart className={`w-4 h-4 ${faved ? "fill-rose-400 text-rose-400" : "text-white"}`} />
+                </button>
                 <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center" onClick={handleClose} data-testid="button-close-academy-profile-modal">
                   <X className="w-4 h-4 text-white" />
                 </button>

@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
-import { useMyAcademyProfile, useUpdateAcademyProfile, useMyAcademyCourses } from "@/hooks/use-barista-academy";
+import { useMyAcademyProfile, useUpdateAcademyProfile, useMyAcademyCourses, useAcademyCourses } from "@/hooks/use-barista-academy";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
@@ -35,6 +35,21 @@ export default function AcademyProfilePage() {
   const { toast } = useToast();
   const { data, isLoading } = useMyAcademyProfile(user?.id ?? null);
   const { data: courses = [] } = useMyAcademyCourses();
+  // Aperçu Flash (docs/flash_academy_marketing_print_mapping_audit.md) — the
+  // same public, already-enriched AcademyCourseCard list (academyName/
+  // flashImageUrl/rating/etc. already joined server-side) the Coffee Owner's
+  // own Fast Search reads, filtered client-side to this academy's own
+  // academyUserId. This reuses the exact same mapping/visibility/publication
+  // rules (GET /api/academy/courses only ever returns published courses from
+  // approved, marketplace-visible academies) rather than re-implementing
+  // them — a course that wouldn't yet be visible to a real Coffee Owner
+  // (e.g. this academy's own GO-Live still pending) correctly won't appear
+  // here either.
+  const { data: publicCourses = [] } = useAcademyCourses();
+  const myPublishedCourses = useMemo(
+    () => publicCourses.filter((c) => c.academyUserId === user?.id),
+    [publicCourses, user?.id],
+  );
   const updateProfile = useUpdateAcademyProfile();
   const queryClient = useQueryClient();
   const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
@@ -254,15 +269,21 @@ export default function AcademyProfilePage() {
         readOnly
       />
 
-      <FlashPreviewModal
+      {/* Aperçu Flash (docs/flash_academy_marketing_print_mapping_audit.md) —
+          the Coffee Owner's real AcademyFastSearch, previewMode on, fed by
+          this academy's own real PUBLISHED courses (myPublishedCourses,
+          above). "Info" opens the existing read-only AcademyDetailModal for
+          that specific course (same as Coffee Owner's own Info button); if
+          there are no published courses at all, the empty state's "Voir mon
+          profil" falls back to the existing read-only AcademyProfileModal. */}
+      <AcademyFastSearch
         open={flashPreviewOpen}
         onClose={() => setFlashPreviewOpen(false)}
-        name={data?.user?.name ?? ""}
-        typeLabel="Académie"
-        flashImageUrl={data?.user?.flashImageUrl}
-        profileImageUrl={data?.user?.profileImageUrl}
-        accentBgClass="bg-indigo-600"
-        preview
+        courses={myPublishedCourses}
+        onEnroll={() => {}}
+        onOpenDetail={(course) => { setFlashPreviewOpen(false); setPreviewCourseId(course.id); }}
+        previewMode
+        onOpenOwnDetail={() => { setFlashPreviewOpen(false); setPreviewCourseId(null); setPreviewOpen(true); }}
       />
     </div>
   );

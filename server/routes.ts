@@ -2704,6 +2704,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── Print company (printer) favorites — independent of the product favorites
+  // above; printerId rows have printItemId NULL (docs/coffee_owner_favorites_marketplace_audit.md) ──
+
+  app.get("/api/print-favorites/companies", requireAuth, async (req: any, res) => {
+    res.json(await storage.getPrintCompanyFavoritesByUser(req.session.userId));
+  });
+
+  app.post("/api/print-favorites/companies", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const printerId = Number(req.body?.printerId);
+    if (!printerId) return res.status(400).json({ message: "printerId is required" });
+    await storage.addPrintCompanyFavorite(user.id, printerId);
+    broadcastToUsers([user.id], "print_company_favorite_updated", { printerId });
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete("/api/print-favorites/companies/:printerId", requireAuth, async (req: any, res) => {
+    await storage.removePrintCompanyFavorite(req.session.userId, Number(req.params.printerId));
+    broadcastToUsers([req.session.userId], "print_company_favorite_updated", { printerId: Number(req.params.printerId) });
+    res.json({ ok: true });
+  });
+
   // ── Barista Marketplace favorites — mirrors maintenance-favorites endpoint-for-endpoint ──
 
   app.get("/api/barista-favorites", requireAuth, async (req: any, res) => {
@@ -2745,6 +2768,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/marketing-favorites/:marketingUserId", requireAuth, async (req: any, res) => {
     await storage.removeMarketingFavorite(req.session.userId, Number(req.params.marketingUserId));
     broadcastToUsers([req.session.userId], "marketing_favorite_updated", { marketingUserId: Number(req.params.marketingUserId) });
+    res.json({ ok: true });
+  });
+
+  // ── Marketing service favorites — independent of the agency favorites above;
+  // serviceId rows are distinct from agency-only rows (docs/coffee_owner_favorites_marketplace_audit.md).
+  // This finally wires up marketingFavorites.serviceId, which existed in the
+  // schema but was never read/written before this task. ──
+
+  app.get("/api/marketing-favorites/services", requireAuth, async (req: any, res) => {
+    res.json(await storage.getMarketingServiceFavoritesByUser(req.session.userId));
+  });
+
+  app.post("/api/marketing-favorites/services", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const marketingUserId = Number(req.body?.marketingUserId);
+    const serviceId = Number(req.body?.serviceId);
+    if (!marketingUserId) return res.status(400).json({ message: "marketingUserId is required" });
+    if (!serviceId) return res.status(400).json({ message: "serviceId is required" });
+    await storage.addMarketingServiceFavorite(user.id, marketingUserId, serviceId);
+    broadcastToUsers([user.id], "marketing_service_favorite_updated", { serviceId });
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete("/api/marketing-favorites/services/:serviceId", requireAuth, async (req: any, res) => {
+    await storage.removeMarketingServiceFavorite(req.session.userId, Number(req.params.serviceId));
+    broadcastToUsers([req.session.userId], "marketing_service_favorite_updated", { serviceId: Number(req.params.serviceId) });
     res.json({ ok: true });
   });
 
@@ -3791,6 +3841,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/academy-favorites/:courseId", requireAuth, async (req: any, res) => {
     await storage.removeAcademyFavorite(req.session.userId, Number(req.params.courseId));
     broadcastToUsers([req.session.userId], "academy_favorite_updated", { courseId: Number(req.params.courseId) });
+    res.json({ ok: true });
+  });
+
+  // ── Academy organisation favorites — independent of the course favorites
+  // above; academyUserId rows have courseId NULL (docs/coffee_owner_favorites_marketplace_audit.md) ──
+
+  app.get("/api/academy-favorites/organisations", requireAuth, async (req: any, res) => {
+    res.json(await storage.getAcademyOrganisationFavoritesByUser(req.session.userId));
+  });
+
+  app.post("/api/academy-favorites/organisations", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const academyUserId = Number(req.body?.academyUserId);
+    if (!academyUserId) return res.status(400).json({ message: "academyUserId is required" });
+    await storage.addAcademyOrganisationFavorite(user.id, academyUserId);
+    broadcastToUsers([user.id], "academy_organisation_favorite_updated", { academyUserId });
+    res.status(201).json({ ok: true });
+  });
+
+  app.delete("/api/academy-favorites/organisations/:academyUserId", requireAuth, async (req: any, res) => {
+    await storage.removeAcademyOrganisationFavorite(req.session.userId, Number(req.params.academyUserId));
+    broadcastToUsers([req.session.userId], "academy_organisation_favorite_updated", { academyUserId: Number(req.params.academyUserId) });
     res.json({ ok: true });
   });
 

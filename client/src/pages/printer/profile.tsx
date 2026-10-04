@@ -18,9 +18,9 @@ import { PrintServiceDetailModal } from "@/components/print/print-service-detail
 import { BusinessProfileIdentityCard } from "@/components/settings/business-profile-identity-card";
 import { AccountAvailabilityCard } from "@/components/settings/account-availability-card";
 import { buildWeeklyHoursFallback } from "@/lib/weekly-hours";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
-import type { PrintCatalogItem, OpeningHoursMap } from "@shared/schema";
+import type { PrintCatalogItem, PrintCatalogCard, OpeningHoursMap } from "@shared/schema";
 
 const ACCENT = "bg-blue-600 hover:bg-blue-700 text-white";
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
@@ -42,6 +42,24 @@ export default function PrinterProfilePage() {
   const queryClient = useQueryClient();
   const { data, isLoading } = usePrintCompanyDetail(user?.id ?? null);
   const { data: catalog = [] } = useQuery<PrintCatalogItem[]>({ queryKey: ["/api/print/catalog"] });
+  // Aperçu Flash (docs/flash_academy_marketing_print_mapping_audit.md) — the
+  // same public, already-enriched PrintCatalogCard list (printerName/
+  // printerImageUrl/rating/etc. already joined server-side) the Coffee
+  // Owner's own Fast Search reads, reusing /api/print/marketplace's own
+  // existing `printerId` server-side filter (no client-side filtering
+  // needed — the endpoint already supports scoping to one printer). Reuses
+  // the exact same mapping/visibility/publication rules (only active items
+  // from approved, marketplace-visible printers are ever returned) rather
+  // than re-implementing them.
+  const { data: myPublishedCatalog = [] } = useQuery<PrintCatalogCard[]>({
+    queryKey: ["/api/print/marketplace", "mine", user?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/print/marketplace?printerId=${user!.id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load catalog");
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
   const updateProfile = useUpdatePrinterProfile();
 
   const [description, setDescription] = useState("");
@@ -289,15 +307,21 @@ export default function PrinterProfilePage() {
         readOnly
       />
 
-      <FlashPreviewModal
+      {/* Aperçu Flash (docs/flash_academy_marketing_print_mapping_audit.md) —
+          the Coffee Owner's real PrintFastSearch, previewMode on, fed by
+          this printing company's own real published catalog
+          (myPublishedCatalog, above). "Info" opens the existing read-only
+          PrintServiceDetailModal for that specific item (same as Coffee
+          Owner's own Info button); if there are no published items at all,
+          the empty state's "Voir mon profil" falls back to the existing
+          read-only PrintCompanyDetailModal. */}
+      <PrintFastSearch
         open={flashPreviewOpen}
         onClose={() => setFlashPreviewOpen(false)}
-        name={data?.user?.name ?? data?.card?.name ?? ""}
-        typeLabel="Imprimerie"
-        flashImageUrl={data?.user?.flashImageUrl ?? data?.card?.flashImageUrl}
-        profileImageUrl={data?.user?.profileImageUrl ?? data?.card?.profileImageUrl}
-        accentBgClass="bg-blue-600"
-        preview
+        cards={myPublishedCatalog}
+        onOpenDetail={(card) => { setFlashPreviewOpen(false); setPreviewServiceId(card.id); }}
+        previewMode
+        onOpenOwnDetail={() => { setFlashPreviewOpen(false); setPreviewServiceId(null); setPreviewOpen(true); }}
       />
     </div>
   );

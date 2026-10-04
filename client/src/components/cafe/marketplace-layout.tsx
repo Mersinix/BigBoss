@@ -57,16 +57,19 @@ import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { JobManagementModal } from "@/components/barista/job-management-modal";
 import { BaristaOffresList } from "@/components/cafe/barista-offres-list";
-import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
+import type { MarketingMarketplaceCard, MarketingServiceCard } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
+import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { QuoteRequestDialog as MarketingQuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
 import { useMarketingProjects, useCancelMarketingProject, useRespondToMarketingQuote, type MarketingProjectWithParties } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META } from "@/lib/marketing-project-status";
 import { useAcademyRegistrations, useUpdateAcademyRegistrationStatus, type AcademyRegistrationWithParties, type AcademyCourseCard } from "@/hooks/use-barista-academy";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
+import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { EnrollDialog as AcademyEnrollDialog } from "@/pages/cafe/barista/barista-academy-page";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
+import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 import { flattenOrders, topSuppliers, topProducts, FR_STATUS_LABEL } from "@/lib/marketplace-analytics";
 
 
@@ -1459,6 +1462,13 @@ function AccountPanel({
 // same as SHOP/MAINTENANCE/PRINT/MARKETING.
 type FavService = "SHOP" | "MAINTENANCE" | "PRINT" | "BARISTA_MARKETPLACE" | "BARISTA_ACADEMY" | "MARKETING";
 type ShopSubTab = "products" | "packs" | "stores";
+// Each of these three services splits favorited companies/providers from
+// favorited products/courses/services, independently favorited
+// (docs/coffee_owner_favorites_marketplace_audit.md) — mirrors the SHOP
+// sub-switcher above, same visual convention.
+type PrintSubTab = "companies" | "products";
+type AcademySubTab = "formations" | "organismes";
+type MarketingSubTab = "agences" | "services";
 
 const FAV_SERVICES: FavService[] = ["SHOP", "MAINTENANCE", "PRINT", "BARISTA_MARKETPLACE", "BARISTA_ACADEMY", "MARKETING"];
 const FAV_SERVICE_TO_KEY: Record<FavService, "MAINTENANCE" | "PRINTING" | "BARISTA_MARKETPLACE" | "BARISTA_ACADEMY" | "MARKETING" | null> = {
@@ -1495,6 +1505,9 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const toggle = useThemeStore((s) => s.toggle);
   const [activeService, setActiveService] = useState<FavService>("SHOP");
   const [shopTab, setShopTab] = useState<ShopSubTab>("products");
+  const [printSubTab, setPrintSubTab] = useState<PrintSubTab>("products");
+  const [academySubTab, setAcademySubTab] = useState<AcademySubTab>("formations");
+  const [marketingSubTab, setMarketingSubTab] = useState<MarketingSubTab>("agences");
   const [selectedMaintenanceAgent, setSelectedMaintenanceAgent] = useState<MaintenanceMarketplaceCard | null>(null);
   const [maintenanceDetailOpen, setMaintenanceDetailOpen] = useState(false);
   // Clicking a favorite Barista card opens the same comprehensive detail modal
@@ -1503,19 +1516,25 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   // Clicking a favorite Marketing card opens the same comprehensive detail
   // modal used on /marketing — no separate favorites-only Marketing view.
   const [detailMarketingId, setDetailMarketingId] = useState<number | null>(null);
+  const [detailMarketingServiceId, setDetailMarketingServiceId] = useState<number | null>(null);
   const [quoteMarketingProvider, setQuoteMarketingProvider] = useState<MarketingMarketplaceCard | null>(null);
   // Clicking a favorite Academy formation opens the same comprehensive detail
   // modal used on /academy — no separate favorites-only Academy view.
   const [detailAcademyCourseId, setDetailAcademyCourseId] = useState<number | null>(null);
+  const [detailAcademyOrgId, setDetailAcademyOrgId] = useState<number | null>(null);
   const [enrollAcademyTarget, setEnrollAcademyTarget] = useState<AcademyCourseCard | null>(null);
   // Clicking a favorite Print card opens the same comprehensive detail modal
   // used on /print — no separate favorites-only Print view.
   const [detailPrintId, setDetailPrintId] = useState<number | null>(null);
+  const [detailPrintCompanyId, setDetailPrintCompanyId] = useState<number | null>(null);
 
   const {
-    shop, print, academy, baristaMarket, marketing, maintenance, pack,
-    removeShop, removePrint, removeAcademy, removeBaristaMarket, removeMarketing, removeMaintenance, removePack,
-    syncMaintenance, syncBaristaMarket, syncMarketing, syncAcademy, syncPrint,
+    shop, printProducts, printCompanies, academyCourses, academyOrganisations,
+    baristaMarket, marketingAgencies, marketingServices, maintenance, pack,
+    removeShop, removePrintProduct, removePrintCompany, removeAcademyCourse, removeAcademyOrganisation,
+    removeBaristaMarket, removeMarketingAgency, removeMarketingService, removeMaintenance, removePack,
+    syncMaintenance, syncBaristaMarket, syncMarketingAgency, syncMarketingService,
+    syncAcademyCourse, syncAcademyOrganisation, syncPrintProduct, syncPrintCompany,
   } = useFavorites();
   const { stores, toggleStore: toggleStoreFav } = useStoreFavorites();
 
@@ -1588,22 +1607,51 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   });
   useEffect(() => {
     if (marketingFavoriteIds === undefined || marketingProfilesLoading) return;
-    syncMarketing(marketingFavoriteIds, marketingProfiles);
-  }, [marketingFavoriteIds, marketingProfiles, marketingProfilesLoading, syncMarketing]);
+    syncMarketingAgency(marketingFavoriteIds, marketingProfiles);
+  }, [marketingFavoriteIds, marketingProfiles, marketingProfilesLoading, syncMarketingAgency]);
+
+  // Marketing SERVICE favorites — independent of the agency favorites above
+  // (docs/coffee_owner_favorites_marketplace_audit.md).
+  const { data: marketingServiceFavoriteIds } = useQuery<number[]>({
+    queryKey: ["/api/marketing-favorites/services"],
+  });
+  const { data: marketingServiceCards = EMPTY_LIST, isLoading: marketingServiceCardsLoading } = useQuery<MarketingServiceCard[]>({
+    queryKey: ["/api/marketing/services"],
+    enabled: (marketingServiceFavoriteIds?.length ?? 0) > 0,
+  });
+  useEffect(() => {
+    if (marketingServiceFavoriteIds === undefined || marketingServiceCardsLoading) return;
+    syncMarketingService(marketingServiceFavoriteIds, marketingServiceCards);
+  }, [marketingServiceFavoriteIds, marketingServiceCards, marketingServiceCardsLoading, syncMarketingService]);
 
   // Favorites persist as Academy course (formation) IDs. Resolve them against
   // the live published courses, mirroring the Marketing favorites sync above.
   const { data: academyFavoriteIds } = useQuery<number[]>({
     queryKey: ["/api/academy-favorites"],
   });
-  const { data: academyCourses = EMPTY_LIST, isLoading: academyCoursesLoading } = useQuery<AcademyCourseCard[]>({
+  const { data: academyCourseCards = EMPTY_LIST, isLoading: academyCoursesLoading } = useQuery<AcademyCourseCard[]>({
     queryKey: ["/api/academy/courses"],
     enabled: (academyFavoriteIds?.length ?? 0) > 0,
   });
   useEffect(() => {
     if (academyFavoriteIds === undefined || academyCoursesLoading) return;
-    syncAcademy(academyFavoriteIds, academyCourses);
-  }, [academyFavoriteIds, academyCourses, academyCoursesLoading, syncAcademy]);
+    syncAcademyCourse(academyFavoriteIds, academyCourseCards);
+  }, [academyFavoriteIds, academyCourseCards, academyCoursesLoading, syncAcademyCourse]);
+
+  // Academy ORGANISATION favorites — independent of the course favorites above
+  // (docs/coffee_owner_favorites_marketplace_audit.md); derived from the same
+  // course cards (no separate "all academies" listing endpoint exists).
+  const { data: academyOrgFavoriteIds } = useQuery<number[]>({
+    queryKey: ["/api/academy-favorites/organisations"],
+  });
+  const { data: academyOrgCourseCards = EMPTY_LIST, isLoading: academyOrgCoursesLoading } = useQuery<AcademyCourseCard[]>({
+    queryKey: ["/api/academy/courses"],
+    enabled: (academyOrgFavoriteIds?.length ?? 0) > 0,
+  });
+  useEffect(() => {
+    if (academyOrgFavoriteIds === undefined || academyOrgCoursesLoading) return;
+    syncAcademyOrganisation(academyOrgFavoriteIds, academyOrgCourseCards);
+  }, [academyOrgFavoriteIds, academyOrgCourseCards, academyOrgCoursesLoading, syncAcademyOrganisation]);
 
   // Favorites persist as Print catalog item IDs. Resolve them against the live
   // marketplace cards, mirroring the Maintenance/Barista/Marketing/Academy
@@ -1617,8 +1665,23 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   });
   useEffect(() => {
     if (printFavoriteIds === undefined || printCardsLoading) return;
-    syncPrint(printFavoriteIds, printCards);
-  }, [printFavoriteIds, printCards, printCardsLoading, syncPrint]);
+    syncPrintProduct(printFavoriteIds, printCards);
+  }, [printFavoriteIds, printCards, printCardsLoading, syncPrintProduct]);
+
+  // Print COMPANY favorites — independent of the product favorites above
+  // (docs/coffee_owner_favorites_marketplace_audit.md); derived from the same
+  // catalog cards (no separate "all printing companies" listing endpoint exists).
+  const { data: printCompanyFavoriteIds } = useQuery<number[]>({
+    queryKey: ["/api/print-favorites/companies"],
+  });
+  const { data: printCompanyCards = EMPTY_LIST, isLoading: printCompanyCardsLoading } = useQuery<PrintCatalogCard[]>({
+    queryKey: ["/api/print/marketplace"],
+    enabled: (printCompanyFavoriteIds?.length ?? 0) > 0,
+  });
+  useEffect(() => {
+    if (printCompanyFavoriteIds === undefined || printCompanyCardsLoading) return;
+    syncPrintCompany(printCompanyFavoriteIds, printCompanyCards);
+  }, [printCompanyFavoriteIds, printCompanyCards, printCompanyCardsLoading, syncPrintCompany]);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1679,10 +1742,13 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
   const dividerColor = dk ? "bg-gray-800" : "bg-gray-100";
   const skeletonBg = dk ? "bg-gray-800" : "bg-gray-100";
 
-  const printItems = Object.values(print);
-  const academyItems = Object.values(academy);
+  const printProductItems = Object.values(printProducts);
+  const printCompanyItems = Object.values(printCompanies);
+  const academyCourseItems = Object.values(academyCourses);
+  const academyOrgItems = Object.values(academyOrganisations);
   const baristaItems = Object.values(baristaMarket);
-  const marketingItems = Object.values(marketing);
+  const marketingAgencyItems = Object.values(marketingAgencies);
+  const marketingServiceItems = Object.values(marketingServices);
   const maintenanceItems = Object.values(maintenance) as MaintenanceFavItem[];
 
   const renderEmpty = () => (
@@ -1754,6 +1820,69 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                 }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* PRINT sub-switcher — ENTREPRISES (companies) vs PRODUITS (catalog
+            items), independent favorites (docs/coffee_owner_favorites_marketplace_audit.md). */}
+        {activeService === "PRINT" && (
+          <div className={`flex gap-1 rounded-2xl p-1 mt-2.5 border ${subSwitcherBg}`}>
+            {([["companies", "Entreprises"], ["products", "Produits"]] as [PrintSubTab, string][]).map(([tab, label]) => (
+              <button
+                key={tab}
+                data-testid={`tab-fav-print-${tab}`}
+                onClick={() => setPrintSubTab(tab)}
+                className={`flex-1 py-1.5 text-[11px] font-semibold rounded-xl transition-all ${
+                  printSubTab === tab
+                    ? dk ? "bg-gray-700 text-blue-400 shadow-sm" : "bg-white text-blue-600 shadow-sm"
+                    : switcherInactive
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* BARISTA_ACADEMY sub-switcher — FORMATIONS (courses) vs ORGANISMES
+            (academies), independent favorites. */}
+        {activeService === "BARISTA_ACADEMY" && (
+          <div className={`flex gap-1 rounded-2xl p-1 mt-2.5 border ${subSwitcherBg}`}>
+            {([["formations", "Formations"], ["organismes", "Organismes"]] as [AcademySubTab, string][]).map(([tab, label]) => (
+              <button
+                key={tab}
+                data-testid={`tab-fav-academy-${tab}`}
+                onClick={() => setAcademySubTab(tab)}
+                className={`flex-1 py-1.5 text-[11px] font-semibold rounded-xl transition-all ${
+                  academySubTab === tab
+                    ? dk ? "bg-gray-700 text-indigo-400 shadow-sm" : "bg-white text-indigo-600 shadow-sm"
+                    : switcherInactive
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* MARKETING sub-switcher — AGENCES (providers) vs SERVICES (items),
+            independent favorites. */}
+        {activeService === "MARKETING" && (
+          <div className={`flex gap-1 rounded-2xl p-1 mt-2.5 border ${subSwitcherBg}`}>
+            {([["agences", "Agences"], ["services", "Services"]] as [MarketingSubTab, string][]).map(([tab, label]) => (
+              <button
+                key={tab}
+                data-testid={`tab-fav-marketing-${tab}`}
+                onClick={() => setMarketingSubTab(tab)}
+                className={`flex-1 py-1.5 text-[11px] font-semibold rounded-xl transition-all ${
+                  marketingSubTab === tab
+                    ? dk ? "bg-gray-700 text-purple-400 shadow-sm" : "bg-white text-purple-600 shadow-sm"
+                    : switcherInactive
+                }`}
+              >
+                {label}
               </button>
             ))}
           </div>
@@ -1916,14 +2045,15 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           )
         )}
 
-        {/* PRINT — same left-photo/right-info horizontal card design as the
-            BARISTA_ACADEMY favorites below (Part 25), mirroring the /academy
-            mapped-card visual language while keeping Print-specific info
-            (printer name, category, location + distance, price/unit). */}
-        {activeService === "PRINT" && (
-          printItems.length === 0 ? renderEmpty() : (
+        {/* PRINT — PRODUITS (catalog items). Same left-photo/right-info
+            horizontal card design as the BARISTA_ACADEMY favorites below
+            (Part 25), mirroring the /academy mapped-card visual language
+            while keeping Print-specific info (printer name, category,
+            location + distance, price/unit). */}
+        {activeService === "PRINT" && printSubTab === "products" && (
+          printProductItems.length === 0 ? renderEmpty() : (
             <div className="space-y-3">
-              {printItems.map((item) => (
+              {printProductItems.map((item) => (
                 <div
                   key={item.id}
                   role="button"
@@ -1968,7 +2098,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
-                      onClick={() => removePrint(item.id)}
+                      onClick={() => removePrintProduct(item.id)}
                       data-testid={`button-fav-remove-print-${item.id}`}
                       aria-label={`Remove ${item.name} from favorites`}
                     >
@@ -1981,13 +2111,71 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           )
         )}
 
-        {/* BARISTA — Academy. Same left-photo/right-info clickable layout as
-            BARISTA_MARKETPLACE below — mirrors the /academy card design (Part 10),
-            clicking opens the same AcademyDetailModal used on /academy (Part 9). */}
-        {activeService === "BARISTA_ACADEMY" && (
-          academyItems.length === 0 ? renderEmpty() : (
+        {/* PRINT — ENTREPRISES (printing companies) — independent favorite
+            bucket keyed by printerId (docs/coffee_owner_favorites_marketplace_audit.md). */}
+        {activeService === "PRINT" && printSubTab === "companies" && (
+          printCompanyItems.length === 0 ? renderEmpty() : (
             <div className="space-y-3">
-              {academyItems.map((item) => (
+              {printCompanyItems.map((item) => (
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailPrintCompanyId(item.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailPrintCompanyId(item.id); } }}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden cursor-pointer h-28 ${cardBg}`}
+                  data-testid={`row-fav-print-company-${item.id}`}
+                >
+                  <div className="w-2/5 shrink-0 relative">
+                    {item.portfolioImages?.[0] ? (
+                      <img src={item.portfolioImages[0]} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Avatar className="w-full h-full rounded-none">
+                        <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} className="object-cover" />
+                        <AvatarFallback className={`rounded-none font-bold text-xl ${dk ? "bg-blue-900 text-blue-300" : "bg-blue-100 text-blue-700"}`}>{item.initials}</AvatarFallback>
+                      </Avatar>
+                    )}
+                    {item.available != null && (
+                      <span
+                        className={`absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full border-2 border-white ${item.available ? "bg-green-500" : "bg-gray-300"}`}
+                        title={item.available ? "Disponible" : "Indisponible"}
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1 justify-center">
+                    <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.type}</p>
+                    {item.location && (
+                      <p className={`text-xs flex items-center gap-1 ${textMuted}`}>
+                        <MapPinIcon className="w-2.5 h-2.5 shrink-0" />{item.location}
+                      </p>
+                    )}
+                    <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); removePrintCompany(item.id); }}
+                      data-testid={`button-fav-remove-print-company-${item.id}`}
+                      aria-label={`Remove ${item.name} from favorites`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* BARISTA_ACADEMY — FORMATIONS (courses). Same left-photo/right-info
+            clickable layout as BARISTA_MARKETPLACE below — mirrors the
+            /academy card design (Part 10), clicking opens the same
+            AcademyDetailModal used on /academy (Part 9). */}
+        {activeService === "BARISTA_ACADEMY" && academySubTab === "formations" && (
+          academyCourseItems.length === 0 ? renderEmpty() : (
+            <div className="space-y-3">
+              {academyCourseItems.map((item) => (
                 <div
                   key={item.id}
                   role="button"
@@ -2028,9 +2216,66 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
-                      onClick={(e) => { e.stopPropagation(); removeAcademy(item.id); }}
+                      onClick={(e) => { e.stopPropagation(); removeAcademyCourse(item.id); }}
                       data-testid={`button-fav-remove-academy-${item.id}`}
                       aria-label={`Remove ${item.title} from favorites`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* BARISTA_ACADEMY — ORGANISMES (academy organisations) — independent
+            favorite bucket keyed by academyUserId (docs/coffee_owner_favorites_marketplace_audit.md). */}
+        {activeService === "BARISTA_ACADEMY" && academySubTab === "organismes" && (
+          academyOrgItems.length === 0 ? renderEmpty() : (
+            <div className="space-y-3">
+              {academyOrgItems.map((item) => (
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailAcademyOrgId(item.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailAcademyOrgId(item.id); } }}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden cursor-pointer h-28 ${cardBg}`}
+                  data-testid={`row-fav-academy-org-${item.id}`}
+                >
+                  <div className="w-2/5 shrink-0 relative">
+                    {item.portfolioImages?.[0] ? (
+                      <img src={item.portfolioImages[0]} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Avatar className="w-full h-full rounded-none">
+                        <AvatarImage src={getAvatarUrl(item as any)} alt={item.name} className="object-cover" />
+                        <AvatarFallback className={`rounded-none font-bold text-xl ${dk ? "bg-indigo-900 text-indigo-300" : "bg-indigo-100 text-indigo-700"}`}>{item.initials}</AvatarFallback>
+                      </Avatar>
+                    )}
+                    {item.available != null && (
+                      <span
+                        className={`absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full border-2 border-white ${item.available ? "bg-green-500" : "bg-gray-300"}`}
+                        title={item.available ? "Disponible" : "Indisponible"}
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1 justify-center">
+                    <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>{item.type}</p>
+                    {item.location && (
+                      <p className={`text-xs flex items-center gap-1 ${textMuted}`}>
+                        <MapPinIcon className="w-2.5 h-2.5 shrink-0" />{item.location}
+                      </p>
+                    )}
+                    <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                  </div>
+                  <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); removeAcademyOrganisation(item.id); }}
+                      data-testid={`button-fav-remove-academy-org-${item.id}`}
+                      aria-label={`Remove ${item.name} from favorites`}
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
                     </button>
@@ -2092,14 +2337,13 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           )
         )}
 
-        {/* MARKETING */}
-        {/* MARKETING — same left-photo/right-info Favorites layout as
-            MAINTENANCE above; clicking opens the same MarketingDetailModal
+        {/* MARKETING — AGENCES. Same left-photo/right-info Favorites layout
+            as MAINTENANCE above; clicking opens the same MarketingDetailModal
             used on /marketing (Part 11) — no separate favorites-only view. */}
-        {activeService === "MARKETING" && (
-          marketingItems.length === 0 ? renderEmpty() : (
+        {activeService === "MARKETING" && marketingSubTab === "agences" && (
+          marketingAgencyItems.length === 0 ? renderEmpty() : (
             <div className="space-y-3">
-              {marketingItems.map((item) => (
+              {marketingAgencyItems.map((item) => (
                 <div
                   key={item.id}
                   role="button"
@@ -2143,8 +2387,63 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
                   <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
-                      onClick={(event) => { event.stopPropagation(); removeMarketing(item.id); }}
+                      onClick={(event) => { event.stopPropagation(); removeMarketingAgency(item.id); }}
                       data-testid={`button-fav-remove-marketing-${item.id}`}
+                      aria-label={`Remove ${item.name} from favorites`}
+                    >
+                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* MARKETING — SERVICES — independent favorite bucket keyed by
+            serviceId (docs/coffee_owner_favorites_marketplace_audit.md);
+            clicking opens the same MarketingServiceDetailModal used on
+            /marketing. */}
+        {activeService === "MARKETING" && marketingSubTab === "services" && (
+          marketingServiceItems.length === 0 ? renderEmpty() : (
+            <div className="space-y-3">
+              {marketingServiceItems.map((item) => (
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailMarketingServiceId(item.id)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailMarketingServiceId(item.id); } }}
+                  className={`group flex items-stretch border rounded-2xl overflow-hidden cursor-pointer h-28 ${cardBg}`}
+                  data-testid={`row-fav-marketing-service-${item.id}`}
+                >
+                  <div className="w-2/5 shrink-0 relative">
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`w-full h-full flex items-center justify-center ${dk ? "bg-purple-950" : "bg-purple-100"}`}>
+                        <Megaphone className={`w-6 h-6 ${dk ? "text-purple-300" : "text-purple-500"}`} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1 justify-center">
+                    <p className={`font-semibold text-sm truncate ${textPrimary}`}>{item.name}</p>
+                    <p className={`text-xs truncate ${textMuted}`}>{item.agencyName}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] text-amber-400 flex items-center gap-0.5"><Star className="w-2.5 h-2.5 fill-amber-400" />{item.rating.toFixed(1)}</span>
+                      {item.location && (
+                        <span className={`text-[10px] flex items-center gap-0.5 ${textMuted}`}>
+                          <MapPinIcon className="w-2.5 h-2.5 shrink-0" />{item.location}
+                        </span>
+                      )}
+                    </div>
+                    {item.priceInCents != null && <p className="text-sm font-bold text-purple-600 mt-0.5">{fmt(item.priceInCents)}</p>}
+                  </div>
+                  <div className="flex items-start p-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); removeMarketingService(item.id); }}
+                      data-testid={`button-fav-remove-marketing-service-${item.id}`}
                       aria-label={`Remove ${item.name} from favorites`}
                     >
                       <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
@@ -2237,6 +2536,13 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
       />
       <MarketingQuoteRequestDialog provider={quoteMarketingProvider} onClose={() => setQuoteMarketingProvider(null)} />
 
+      <MarketingServiceDetailModal
+        serviceId={detailMarketingServiceId}
+        open={detailMarketingServiceId != null}
+        onClose={() => setDetailMarketingServiceId(null)}
+        onOpenAgency={(agencyUserId) => { setDetailMarketingServiceId(null); setDetailMarketingId(agencyUserId); }}
+      />
+
       <AcademyDetailModal
         courseId={detailAcademyCourseId}
         open={detailAcademyCourseId != null}
@@ -2245,10 +2551,24 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
       />
       <AcademyEnrollDialog course={enrollAcademyTarget} open={!!enrollAcademyTarget} onClose={() => setEnrollAcademyTarget(null)} isDark={dk} />
 
+      <AcademyProfileModal
+        academyUserId={detailAcademyOrgId}
+        open={detailAcademyOrgId != null}
+        onClose={() => setDetailAcademyOrgId(null)}
+        onOpenCourse={(courseId) => { setDetailAcademyOrgId(null); setDetailAcademyCourseId(courseId); }}
+      />
+
       <PrintServiceDetailModal
         serviceId={detailPrintId}
         open={detailPrintId != null}
         onClose={() => setDetailPrintId(null)}
+      />
+
+      <PrintCompanyDetailModal
+        printerUserId={detailPrintCompanyId}
+        open={detailPrintCompanyId != null}
+        onClose={() => setDetailPrintCompanyId(null)}
+        onOpenService={(serviceId) => { setDetailPrintCompanyId(null); setDetailPrintId(serviceId); }}
       />
     </div>
   );

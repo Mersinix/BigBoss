@@ -395,6 +395,9 @@ export interface IStorage {
   getPrintFavoritesByUser(userId: number): Promise<number[]>;
   addPrintFavorite(userId: number, printItemId: number): Promise<void>;
   removePrintFavorite(userId: number, printItemId: number): Promise<void>;
+  getPrintCompanyFavoritesByUser(userId: number): Promise<number[]>;
+  addPrintCompanyFavorite(userId: number, printerId: number): Promise<void>;
+  removePrintCompanyFavorite(userId: number, printerId: number): Promise<void>;
 
   // Barista Marketplace
   getBaristaSkills(activeOnly?: boolean): Promise<BaristaSkill[]>;
@@ -463,6 +466,9 @@ export interface IStorage {
   getAcademyFavoritesByUser(userId: number): Promise<number[]>;
   addAcademyFavorite(userId: number, courseId: number): Promise<void>;
   removeAcademyFavorite(userId: number, courseId: number): Promise<void>;
+  getAcademyOrganisationFavoritesByUser(userId: number): Promise<number[]>;
+  addAcademyOrganisationFavorite(userId: number, academyUserId: number): Promise<void>;
+  removeAcademyOrganisationFavorite(userId: number, academyUserId: number): Promise<void>;
   createAcademyReport(cafeOwnerId: number, academyUserId: number, reason: string): Promise<AcademyReport>;
   getAcademyReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(AcademyReport & { cafeOwnerName: string; academyName: string })[]>;
   getAcademyReportsByOwner(cafeOwnerId: number): Promise<(AcademyReport & { academyName: string; academyProfileImageUrl: string | null; academyLocation: string | null })[]>;
@@ -5890,6 +5896,15 @@ export class DatabaseStorage implements IStorage {
         name: user.name,
         phone: user.phone ?? null,
         profileImageUrl: user.profileImageUrl ?? null,
+        // Flash image sync fix (docs/maintenance_flash_image_sync_audit.md) —
+        // this field was missing from the Coffee Owner's own list endpoint,
+        // so MaintenanceFastSearch could never show a provider's Flash
+        // image: every card's flashImageUrl was silently undefined.
+        // getMaintenanceCard (the single-provider detail endpoint, used by
+        // this same provider's own self-preview) already included it — this
+        // just brings the list in line, mirroring the identical fix already
+        // applied to getBaristaMarketplaceProfiles.
+        flashImageUrl: user.flashImageUrl ?? null,
         location,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
         available,
@@ -7026,10 +7041,15 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  // Marketing favorites — agency (company) rows have serviceId NULL; service
+  // (item) rows have serviceId set (docs/coffee_owner_favorites_marketplace_audit.md,
+  // Section 4). These three methods are scoped to serviceId IS NULL so that
+  // favoriting/unfavoriting the agency never touches a Coffee Owner's separate
+  // service favorites for that same agency.
   async getMarketingFavoritesByUser(userId: number): Promise<number[]> {
     const rows = await db.select({ marketingUserId: marketingFavorites.marketingUserId })
       .from(marketingFavorites)
-      .where(eq(marketingFavorites.userId, userId));
+      .where(and(eq(marketingFavorites.userId, userId), isNull(marketingFavorites.serviceId)));
     return rows.map((row) => row.marketingUserId);
   }
 
@@ -7037,14 +7057,38 @@ export class DatabaseStorage implements IStorage {
     const [existing] = await db.select().from(marketingFavorites).where(and(
       eq(marketingFavorites.userId, userId),
       eq(marketingFavorites.marketingUserId, marketingUserId),
+      isNull(marketingFavorites.serviceId),
     ));
-    if (!existing) await db.insert(marketingFavorites).values({ userId, marketingUserId });
+    if (!existing) await db.insert(marketingFavorites).values({ userId, marketingUserId, serviceId: null });
   }
 
   async removeMarketingFavorite(userId: number, marketingUserId: number): Promise<void> {
     await db.delete(marketingFavorites).where(and(
       eq(marketingFavorites.userId, userId),
       eq(marketingFavorites.marketingUserId, marketingUserId),
+      isNull(marketingFavorites.serviceId),
+    ));
+  }
+
+  async getMarketingServiceFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select({ serviceId: marketingFavorites.serviceId })
+      .from(marketingFavorites)
+      .where(and(eq(marketingFavorites.userId, userId), isNotNull(marketingFavorites.serviceId)));
+    return rows.map((row) => row.serviceId as number);
+  }
+
+  async addMarketingServiceFavorite(userId: number, marketingUserId: number, serviceId: number): Promise<void> {
+    const [existing] = await db.select().from(marketingFavorites).where(and(
+      eq(marketingFavorites.userId, userId),
+      eq(marketingFavorites.serviceId, serviceId),
+    ));
+    if (!existing) await db.insert(marketingFavorites).values({ userId, marketingUserId, serviceId });
+  }
+
+  async removeMarketingServiceFavorite(userId: number, serviceId: number): Promise<void> {
+    await db.delete(marketingFavorites).where(and(
+      eq(marketingFavorites.userId, userId),
+      eq(marketingFavorites.serviceId, serviceId),
     ));
   }
 
@@ -7731,14 +7775,14 @@ export class DatabaseStorage implements IStorage {
     await db.delete(printSubCategoryTaxonomy).where(eq(printSubCategoryTaxonomy.id, id));
   }
 
-  // Print favorites — mirrors getMaintenanceFavoritesByUser/addMaintenanceFavorite/
-  // removeMaintenanceFavorite exactly, keyed by the catalog item (service), not
-  // the printer account.
+  // Print favorites — item (catalog item) rows have printItemId set; company
+  // (printer) favorites have printItemId NULL and printerId set instead
+  // (docs/coffee_owner_favorites_marketplace_audit.md, Section 4).
   async getPrintFavoritesByUser(userId: number): Promise<number[]> {
     const rows = await db.select({ printItemId: printFavorites.printItemId })
       .from(printFavorites)
-      .where(eq(printFavorites.userId, userId));
-    return rows.map((row) => row.printItemId);
+      .where(and(eq(printFavorites.userId, userId), isNotNull(printFavorites.printItemId)));
+    return rows.map((row) => row.printItemId as number);
   }
 
   async addPrintFavorite(userId: number, printItemId: number): Promise<void> {
@@ -7753,6 +7797,30 @@ export class DatabaseStorage implements IStorage {
     await db.delete(printFavorites).where(and(
       eq(printFavorites.userId, userId),
       eq(printFavorites.printItemId, printItemId),
+    ));
+  }
+
+  async getPrintCompanyFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select({ printerId: printFavorites.printerId })
+      .from(printFavorites)
+      .where(and(eq(printFavorites.userId, userId), isNull(printFavorites.printItemId), isNotNull(printFavorites.printerId)));
+    return rows.map((row) => row.printerId as number);
+  }
+
+  async addPrintCompanyFavorite(userId: number, printerId: number): Promise<void> {
+    const [existing] = await db.select().from(printFavorites).where(and(
+      eq(printFavorites.userId, userId),
+      eq(printFavorites.printerId, printerId),
+      isNull(printFavorites.printItemId),
+    ));
+    if (!existing) await db.insert(printFavorites).values({ userId, printerId, printItemId: null });
+  }
+
+  async removePrintCompanyFavorite(userId: number, printerId: number): Promise<void> {
+    await db.delete(printFavorites).where(and(
+      eq(printFavorites.userId, userId),
+      eq(printFavorites.printerId, printerId),
+      isNull(printFavorites.printItemId),
     ));
   }
 
@@ -9346,14 +9414,14 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // Academy favorites — mirrors getMaintenanceFavoritesByUser/add/remove, but
-  // keyed by courseId (a Coffee Owner saves individual formations, not the
-  // Academy provider itself).
+  // Academy favorites — course (item) rows have courseId set; organisation
+  // (academyUserId) favorites have courseId NULL and academyUserId set instead
+  // (docs/coffee_owner_favorites_marketplace_audit.md, Section 4).
   async getAcademyFavoritesByUser(userId: number): Promise<number[]> {
     const rows = await db.select({ courseId: academyFavorites.courseId })
       .from(academyFavorites)
-      .where(eq(academyFavorites.userId, userId));
-    return rows.map((row) => row.courseId);
+      .where(and(eq(academyFavorites.userId, userId), isNotNull(academyFavorites.courseId)));
+    return rows.map((row) => row.courseId as number);
   }
 
   async addAcademyFavorite(userId: number, courseId: number): Promise<void> {
@@ -9368,6 +9436,30 @@ export class DatabaseStorage implements IStorage {
     await db.delete(academyFavorites).where(and(
       eq(academyFavorites.userId, userId),
       eq(academyFavorites.courseId, courseId),
+    ));
+  }
+
+  async getAcademyOrganisationFavoritesByUser(userId: number): Promise<number[]> {
+    const rows = await db.select({ academyUserId: academyFavorites.academyUserId })
+      .from(academyFavorites)
+      .where(and(eq(academyFavorites.userId, userId), isNull(academyFavorites.courseId), isNotNull(academyFavorites.academyUserId)));
+    return rows.map((row) => row.academyUserId as number);
+  }
+
+  async addAcademyOrganisationFavorite(userId: number, academyUserId: number): Promise<void> {
+    const [existing] = await db.select().from(academyFavorites).where(and(
+      eq(academyFavorites.userId, userId),
+      eq(academyFavorites.academyUserId, academyUserId),
+      isNull(academyFavorites.courseId),
+    ));
+    if (!existing) await db.insert(academyFavorites).values({ userId, academyUserId, courseId: null });
+  }
+
+  async removeAcademyOrganisationFavorite(userId: number, academyUserId: number): Promise<void> {
+    await db.delete(academyFavorites).where(and(
+      eq(academyFavorites.userId, userId),
+      eq(academyFavorites.academyUserId, academyUserId),
+      isNull(academyFavorites.courseId),
     ));
   }
 

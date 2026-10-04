@@ -19,7 +19,7 @@ import { Building2, Award, MapPin, XCircle, X, Plus, Calendar, Zap, Eye, AlertCi
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { FlashSearchPreviewModal } from "@/components/account/flash-search-preview-modal";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { WEEKLY_DAY_DEFS, buildWeeklyHoursFallback } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -358,7 +358,7 @@ export default function DeliveryCompanyProfilePage() {
         readOnly
       />
 
-      <FlashPreviewModal
+      <FlashSearchPreviewModal
         open={flashPreviewOpen}
         onClose={() => setFlashPreviewOpen(false)}
         name={data?.user?.name ?? ""}
@@ -366,7 +366,6 @@ export default function DeliveryCompanyProfilePage() {
         flashImageUrl={data?.user?.flashImageUrl}
         profileImageUrl={data?.user?.profileImageUrl}
         accentBgClass="bg-teal-600"
-        preview
       />
     </div>
   );

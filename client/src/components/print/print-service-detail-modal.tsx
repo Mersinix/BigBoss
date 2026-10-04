@@ -85,8 +85,8 @@ export function PrintServiceDetailModal({
   const createReview = useCreatePrintReview();
   const reportPrinter = useReportPrinter();
 
-  const faved = useFavorites((s) => (service ? !!s.print[String(service.id)] : false));
-  const togglePrint = useFavorites((s) => s.togglePrint);
+  const faved = useFavorites((s) => (service ? !!s.printProducts[String(service.id)] : false));
+  const togglePrint = useFavorites((s) => s.togglePrintProduct);
 
   const [reviewOrderId, setReviewOrderId] = useState<number | null>(null);
   const [reviewRating, setReviewRating] = useState(5);

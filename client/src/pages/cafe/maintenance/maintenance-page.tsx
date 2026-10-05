@@ -8,7 +8,6 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
 import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
@@ -28,8 +27,8 @@ import {
 } from "@/components/ui/select";
 import {
   Wrench, Search, MapPin, Star, MessageCircle, SlidersHorizontal,
-  RotateCcw, X, Heart, Clock, Calendar, Shield, Zap, Award, Users,
-  Building2, User, Send, Flag, Navigation, Ban, Image as ImageIcon, ClipboardList,
+  RotateCcw, X, Heart, Clock, Shield, Zap, Award, Users,
+  Building2, User, Flag, Navigation, Ban, Image as ImageIcon, ClipboardList,
 } from "lucide-react";
 import { MaintenanceJobManagementModal } from "@/components/maintenance/maintenance-job-management-modal";
 import { MaintenanceJobTargetButton } from "@/components/maintenance/maintenance-job-target-button";
@@ -282,41 +281,25 @@ function MaintenanceAvailabilityModal({
 }
 
 export function AgentDetailModal({
-  agent, open, onClose, onContact, onReserve, isDark, readOnly = false,
+  agent, open, onClose, onContact, isDark, readOnly = false,
 }: {
   agent: MaintenanceMarketplaceCard | null;
   open: boolean;
   onClose: () => void;
   onContact: (agent: MaintenanceMarketplaceCard) => void;
-  // Returns a Promise so the "Demander une intervention" modal (rendered as its
-  // own sibling Dialog, same pattern as Signaler/Disponibilité below) knows
-  // when the request actually succeeded and can close only itself — the
-  // Detail Modal underneath (open/onClose, owned by the parent page) must
-  // never be touched by this.
-  onReserve: (agent: MaintenanceMarketplaceCard, data: MaintenanceReservationData) => Promise<unknown>;
   isDark: boolean;
   // Used by the Maintenance agent's own "preview my profile" (Eye icon on
   // Business → Profil): renders the exact same modal a Coffee Owner sees, but
-  // Favorite/Report/Contacter/Réserver/Avis become inert (no self-favorite,
-  // self-message, self-reservation, self-report, or self-review) — only
-  // Disponibilité stays functional, since it just displays the agent's own
-  // real saved availability.
+  // Favorite/Report/Contacter/Avis become inert (no self-favorite, self-
+  // message, self-report, or self-review), and Intervention targeting is
+  // hidden (see the icon row below) — only Disponibilité stays functional,
+  // since it just displays the agent's own real saved availability.
   readOnly?: boolean;
 }) {
   const fmt = useFormatCurrency();
   const t = useTheme(isDark);
   const queryClient = useQueryClient();
-  const [booking, setBooking] = useState(false);
-  const [sendingReservation, setSendingReservation] = useState(false);
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
   const { user } = useAuth();
-  const [location, setLocation] = useState(user?.locationAddress ?? "");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(agent?.categories?.[0] ?? "");
-  const [urgency, setUrgency] = useState("NORMAL");
-  const [contactPhone, setContactPhone] = useState("");
-  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   // Portfolio gallery — reuses the exact same lightbox already used by the
@@ -354,19 +337,6 @@ export function AgentDetailModal({
     },
   });
   useEffect(() => {
-    if (!booking) return;
-    setLocation(user?.locationAddress ?? "");
-    setContactPhone(user?.phone ?? "");
-    setCategory(agent?.categories?.[0] ?? agent?.skills?.[0] ?? "");
-  }, [booking, user?.locationAddress, user?.phone, agent?.userId]);
-  useEffect(() => {
-    setBooking(false);
-    setDate("");
-    setTime("");
-    setDescription("");
-    setLocation(user?.locationAddress ?? "");
-    setContactPhone(user?.phone ?? "");
-    setCategory(agent?.categories?.[0] ?? agent?.skills?.[0] ?? "");
     setReviewComment("");
     setReviewRating(5);
   }, [agent?.userId]);
@@ -512,57 +482,15 @@ export function AgentDetailModal({
              <div className={`${t.mutedBg} rounded-xl p-3`}><h3 className={`text-xs font-semibold mb-2 ${t.textMuted}`}>Zone d'intervention</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.coverageArea || agent.location || "—"}</div></div>
              {agent.portfolioImages.length > 0 && <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</h3><div className="grid grid-cols-4 gap-2">{agent.portfolioImages.map((image, i) => <button key={i} type="button" onClick={() => { setAlbumIndex(i); setAlbumOpen(true); }} className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`} data-testid={`button-portfolio-thumb-${i}`}><img src={image} alt={`Portfolio ${i + 1}`} className="w-full h-full object-cover" /></button>)}</div></div>}
             {/* Avis — moved into the dedicated Star-icon ReviewsModal (Phase 7),
-                no longer rendered inline here. "Réserver" opens a separate
-                modal (below, sibling to this Dialog) instead of expanding inline. */}
+                no longer rendered inline here. The old "Réserver" button/modal
+                was removed here (docs/maintenance_intervention_reservation_cleanup_audit.md
+                Section 4) — the Intervention action (corner icon above) is now
+                the only way to engage a Maintenance professional from this
+                modal; Contacter stays for messaging. */}
              <div className={`border-t ${t.border} pt-4 flex items-center justify-end gap-2`}>
                <Button variant="outline" onClick={() => { if (!readOnly) onContact(agent); }} className={`rounded-xl px-4 ${isDark ? "border-gray-700 text-gray-300" : "border-gray-200 text-gray-600"}`}><MessageCircle className="w-4 h-4 mr-1.5" />Contacter</Button>
-               <Button onClick={() => { if (!readOnly) setBooking(true); }} disabled={!agent.available} className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl px-5"><Calendar className="w-4 h-4 mr-1.5" />{agent.available ? "Réserver" : "Indisponible"}</Button>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-
-    {/* Demander une intervention — own modal, layered on top of the Detail
-        Modal instead of replacing its content inline (same sibling-Dialog
-        pattern as Signaler/Disponibilité below — the Detail Modal's own
-        open/onClose, owned by the parent page, is completely untouched by
-        this one opening or closing). Annuler and a successful Envoyer both
-        close only this Dialog; the Detail Modal underneath stays open. */}
-    <Dialog open={booking} onOpenChange={(v) => { if (!v && !sendingReservation) setBooking(false); }}>
-      <DialogContent className={`sm:max-w-lg ${isDark ? "bg-gray-900" : "bg-white"}`}>
-        <VisuallyHidden><DialogTitle>Demander une intervention — {agent.name}</DialogTitle></VisuallyHidden>
-        <div className="space-y-3">
-          <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Demander une intervention</h3>
-          <div className="grid grid-cols-2 gap-3"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <Select value={category} onValueChange={setCategory}><SelectTrigger className={t.inputBg}><SelectValue placeholder="Compétence" /></SelectTrigger><SelectContent className={t.selectContent}>{Array.from(new Set([...agent.categories, ...agent.skills])).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-            <Select value={urgency} onValueChange={setUrgency}><SelectTrigger className={t.inputBg}><SelectValue placeholder="Urgence" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="LOW">Faible</SelectItem><SelectItem value="NORMAL">Normale</SelectItem><SelectItem value="HIGH">Élevée</SelectItem><SelectItem value="URGENT">Urgente</SelectItem></SelectContent></Select>
-          </div>
-          <div className="flex gap-2"><Input className="flex-1" placeholder="Lieu d'intervention" value={location} onChange={(e) => setLocation(e.target.value)} /><Button type="button" variant="outline" onClick={() => setLocationPickerOpen(true)}><MapPin className="w-4 h-4" /></Button></div>
-          <Input placeholder="Téléphone pour cette intervention" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
-          <Input placeholder="Décrivez votre besoin" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setBooking(false)}>Annuler</Button>
-            <Button
-              disabled={!date || !category || sendingReservation}
-              onClick={async () => {
-                setSendingReservation(true);
-                try {
-                  await onReserve(agent, { date, time, location, description, category, urgency, contactPhone });
-                  setBooking(false);
-                } catch {
-                  // Error already toasted upstream — keep this modal open so the user can fix and retry.
-                } finally {
-                  setSendingReservation(false);
-                }
-              }}
-              className="bg-orange-600 hover:bg-orange-700 text-white"
-            >
-              <Send className="w-4 h-4 mr-1.5" />{sendingReservation ? "Envoi…" : "Envoyer la demande"}
-            </Button>
-          </div>
-          <LocationPickerModal open={locationPickerOpen} onClose={() => setLocationPickerOpen(false)} mode="delivery" title="Choisir le lieu de l'intervention" initialAddress={location} onConfirm={(picked: PickedLocation) => { setLocation(picked.address); setLocationPickerOpen(false); }} />
         </div>
       </DialogContent>
     </Dialog>
@@ -651,16 +579,6 @@ export function AgentDetailModal({
   );
 }
 
-export type MaintenanceReservationData = {
-  date: string;
-  time: string;
-  location: string;
-  description: string;
-  category: string;
-  urgency: string;
-  contactPhone: string;
-};
-
 export default function MaintenancePage({ comingSoon = false }: { comingSoon?: boolean }) {
   const { user } = useAuth();
   const accessLevel = useAccessLevel();
@@ -724,20 +642,6 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     if (filterLocation) list = list.filter((item) => item.location === filterLocation);
     return list;
   }, [profiles, search, filterCategory, filterType, filterAvailability, filterLocation]);
-  const reserve = useMutation({
-    mutationFn: ({ agent, data }: { agent: MaintenanceMarketplaceCard; data: MaintenanceReservationData }) =>
-      apiRequest("POST", "/api/maintenance/reservations", {
-        maintenanceUserId: agent.userId,
-        service: agent.jobTitle,
-        ...data,
-      }),
-    // The intervention request modal (its own Dialog, layered on top of the
-    // Detail Modal) closes itself once this promise resolves — the Detail
-    // Modal is a separate, parent-owned open/close state and must stay open,
-    // so this no longer touches setDetailOpen.
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] }); toast({ title: "Demande envoyée", description: "Le technicien pourra maintenant la confirmer." }); },
-    onError: (error: Error) => toast({ title: "Impossible d'envoyer la demande", description: error.message, variant: "destructive" }),
-  });
   const contact = async (agent: MaintenanceMarketplaceCard) => {
       try {
         const response = await apiRequest("POST", "/api/messages/conversations", {
@@ -852,7 +756,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
           <div className="max-w-7xl mx-auto px-4 py-8">
              {filtered.length === 0 ? <div className="flex flex-col items-center justify-center py-16 gap-3 text-center"><Wrench className={`w-12 h-12 ${t.textSubtle}`} /><p className={`font-semibold ${t.textPrimary}`}>Aucun technicien trouvé</p><p className={`text-sm ${t.textMuted}`}>{profiles.length === 0 ? "Aucun profil Maintenance publié pour le moment." : "Essayez d'ajuster vos filtres."}</p></div> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((agent) => <AgentCard key={agent.userId} agent={agent} onOpenDetail={openDetail} onContact={contact} isDark={isDark} />)}</div>}
           </div>
-           <AgentDetailModal agent={selectedAgent} open={detailOpen} onClose={() => setDetailOpen(false)} onContact={contact} onReserve={(agent, data) => reserve.mutateAsync({ agent, data })} isDark={isDark} />
+           <AgentDetailModal agent={selectedAgent} open={detailOpen} onClose={() => setDetailOpen(false)} onContact={contact} isDark={isDark} />
         </>
       )}
       {/* Blacklist (Parts 20-22) — same `profiles` list, own

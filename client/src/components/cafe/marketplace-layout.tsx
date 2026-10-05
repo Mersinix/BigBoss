@@ -47,7 +47,7 @@ import { useAccountOpenStore } from "@/store/account-open-store";
 import { ProductQuickViewModal } from "@/components/product-quick-view-modal";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import OrderDetailsModal from "@/components/cafe/order-details-modal";
-import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/maintenance/maintenance-page";
+import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
 import { NotificationModal } from "@/components/cafe/notification-modal";
 import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { useNotificationPreferences, useUpdateNotificationPreferences } from "@/hooks/use-notification-preferences";
@@ -156,26 +156,24 @@ function AccountPanel({
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"orders" | "reservations" | "dashboard" | "settings">(initialTab ?? "orders");
   // Dashboard service switcher (Part 15) — each section reuses the exact same
-  // queries already fetched below for Reservations (maintenanceReservations,
-  // baristaRequests/baristaMissions, academyRegistrations, marketingProjectsForOwner,
-  // printOrders) plus the existing SHOP `allOrders` — no duplicate data sources.
+  // queries already fetched below for Reservations (baristaRequests/baristaMissions,
+  // academyRegistrations, marketingProjectsForOwner, printOrders) plus the
+  // existing SHOP `allOrders` — no duplicate data sources.
   type DashboardService = "SHOP" | "MAINTENANCE" | "BARISTA" | "ACADEMY" | "MARKETING" | "PRINT";
   const [dashboardService, setDashboardService] = useState<DashboardService>("SHOP");
   const { isLoading: ordersLoading, sorted, byCategory, daily, listForTab, toggleFavorite, reorder, isReordering } = useCafeOrders();
   const [ordersSubTab, setOrdersSubTab] = useState<CafeOrderTabId>("today");
   const [ordersStatusFilter, setOrdersStatusFilter] = useState("ALL");
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
-  const { data: maintenanceReservations = [], isLoading: reservationsLoading } = useQuery<any[]>({
-    queryKey: ["/api/maintenance/reservations"],
-    enabled: !!user,
-  });
 
   // ── Reservations sub-switcher — Admin System Management is the single source
   // of truth for which of these appear and in what order (task requirement).
-  // Maintenance's query/rendering above is untouched; PRINT, Marketplace
-  // Baristas and Barista Academy all reuse their own existing, already
-  // owner-scoped endpoints; Marketing is intentionally empty until that
-  // module exists. ──
+  // Maintenance now shows only Interventions here (the old Réservations list/
+  // query/mutations were removed — docs/maintenance_intervention_reservation_cleanup_audit.md
+  // Section 5/11; historical reservation data/APIs are untouched, just no
+  // longer read from this component); PRINT, Marketplace Baristas and Barista
+  // Academy all reuse their own existing, already owner-scoped endpoints;
+  // Marketing is intentionally empty until that module exists. ──
   const { states: serviceStates } = useServiceStates();
   const { order: serviceOrder } = useServiceOrder();
   const { data: printOrders = [], isLoading: printOrdersLoading } = useQuery<PrintOrderWithParties[]>({
@@ -192,7 +190,6 @@ function AccountPanel({
   // and Admin → Services → Marketing read from. No duplicate data source.
   const { data: marketingProjectsForOwner = [], isLoading: marketingProjectsLoading } = useMarketingProjects();
   const [detailPrintOrder, setDetailPrintOrder] = useState<PrintOrderWithParties | null>(null);
-  const [detailMaintenanceReservation, setDetailMaintenanceReservation] = useState<any | null>(null);
   const [detailMarketingProjectId, setDetailMarketingProjectId] = useState<number | null>(null);
   const [detailAcademyRegistrationId, setDetailAcademyRegistrationId] = useState<number | null>(null);
 
@@ -215,10 +212,9 @@ function AccountPanel({
   const [baristaReservationTab, setBaristaReservationTab] = useState<"missions" | "offres">("missions");
   const [jobManagementJobId, setJobManagementJobId] = useState<number | null>(null);
   const [jobManagementOpen, setJobManagementOpen] = useState(false);
-  // Maintenance — Réservations/Interventions pill (docs/maintenance_interventions_implementation_audit.md
-  // Section 8). Defaults to "reservations" so the existing, unmodified
-  // reservation history stays the first thing shown — purely additive.
-  const [maintenanceReservationTab, setMaintenanceReservationTab] = useState<"reservations" | "interventions">("reservations");
+  // Maintenance — Interventions is now the only option shown here (the old
+  // Réservations/Interventions pill was removed — see
+  // docs/maintenance_intervention_reservation_cleanup_audit.md Section 5/11).
   const [maintenanceJobManagementJobId, setMaintenanceJobManagementJobId] = useState<number | null>(null);
   const [maintenanceJobManagementOpen, setMaintenanceJobManagementOpen] = useState(false);
 
@@ -248,30 +244,6 @@ function AccountPanel({
   const { isEnabled: isNotifCategoryEnabled } = useNotificationPreferences();
   const updateNotifPrefs = useUpdateNotificationPreferences();
   const fmt = useFormatCurrency();
-  const reservationStatus: Record<string, { label: string; color: string }> = {
-    PENDING: { label: "En attente", color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
-    CONFIRMED: { label: "Confirmée", color: "bg-blue-100 text-blue-800 border-blue-200" },
-    COMPLETED: { label: "Terminée", color: "bg-green-100 text-green-800 border-green-200" },
-    CANCELLED: { label: "Annulée", color: "bg-red-100 text-red-800 border-red-200" },
-    RESCHEDULE_PENDING: { label: "Modification à confirmer", color: "bg-purple-100 text-purple-800 border-purple-200" },
-    RESCHEDULE_REJECTED: { label: "Modification refusée", color: "bg-gray-100 text-gray-700 border-gray-200" },
-  };
-  const respondToReschedule = useMutation({
-    mutationFn: ({ id, accepted }: { id: number; accepted: boolean }) =>
-      apiRequest("PATCH", `/api/maintenance/reservations/${id}/reschedule-response`, { accepted }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
-    },
-  });
-  // Part 18 — Coffee Owner cancellation, only valid while still PENDING (server
-  // enforces this too via cancelMaintenanceReservationByOwner's WHERE clause).
-  const cancelMaintenanceReservation = useMutation({
-    mutationFn: (id: number) => apiRequest("PATCH", `/api/maintenance/reservations/${id}/cancel`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
-      setDetailMaintenanceReservation(null);
-    },
-  });
   const cancelMarketingProject = useCancelMarketingProject();
   const respondToMarketingQuote = useRespondToMarketingQuote();
   const updateAcademyRegistrationStatus = useUpdateAcademyRegistrationStatus();
@@ -607,30 +579,13 @@ function AccountPanel({
               </div>
             )}
 
-            {/* ── Maintenance — Réservations (existing, unchanged) / Interventions
-                (new job-posting system, mirrors the Barista Missions/Offres
-                pill above — docs/maintenance_interventions_implementation_audit.md
-                Section 8) pill switcher. ── */}
+            {/* ── Maintenance — now shows only Interventions (the old
+                Réservations tab/pill was removed from this location per
+                docs/maintenance_intervention_reservation_cleanup_audit.md
+                Section 5/11 — historical reservation data/APIs are untouched,
+                just no longer exposed here; Planning/Admin/review-eligibility
+                keep reading the same rows unchanged). ── */}
             {reservationsService === "maintenance" && (
-              <div className={`flex gap-1 rounded-2xl p-1 w-fit mb-3 ${switcherBg}`}>
-                <button
-                  onClick={() => setMaintenanceReservationTab("reservations")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${maintenanceReservationTab === "reservations" ? switcherActive : switcherInactive}`}
-                  data-testid="tab-maintenance-reservations-reservations"
-                >
-                  Réservations
-                </button>
-                <button
-                  onClick={() => setMaintenanceReservationTab("interventions")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${maintenanceReservationTab === "interventions" ? switcherActive : switcherInactive}`}
-                  data-testid="tab-maintenance-reservations-interventions"
-                >
-                  Interventions
-                </button>
-              </div>
-            )}
-
-            {reservationsService === "maintenance" && maintenanceReservationTab === "interventions" && (
               <MaintenanceInterventionsList
                 dk={dk}
                 cardBg={cardBg}
@@ -639,187 +594,6 @@ function AccountPanel({
                 onOpenJob={(id) => { setMaintenanceJobManagementJobId(id); setMaintenanceJobManagementOpen(true); }}
                 onCreateJob={() => { setMaintenanceJobManagementJobId(null); setMaintenanceJobManagementOpen(true); }}
               />
-            )}
-
-            {reservationsService === "maintenance" && maintenanceReservationTab === "reservations" && (
-              reservationsLoading ? (
-                <div className="space-y-3 pt-2">
-                  {[...Array(2)].map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-32 rounded-2xl animate-pulse ${
-                        dk ? "bg-gray-800" : "bg-gray-100"
-                      }`}
-                    />
-                  ))}
-                </div>
-              ) : maintenanceReservations.length === 0 ? (
-                <div className={`text-center py-16 ${textMuted}`}>
-                  <Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                  <p className={`font-medium text-sm ${textPrimary}`}>
-                    No maintenance reservations yet
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3 pt-2">
-                  {[...maintenanceReservations]
-                    .sort((a: any, b: any) => {
-                      const dateA = new Date(
-                        `${a.date}T${a.time || "00:00"}`
-                      ).getTime();
-
-                      const dateB = new Date(
-                        `${b.date}T${b.time || "00:00"}`
-                      ).getTime();
-
-                      return dateB - dateA; // Newest → Oldest
-                    })
-                    .map((reservation: any) => {
-                      const meta =
-                        reservationStatus[reservation.status] ??
-                        reservationStatus.PENDING;
-
-                      return (
-                        <div
-                          key={reservation.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setDetailMaintenanceReservation(reservation)}
-                          className={`w-full text-left border rounded-2xl p-4 space-y-3 cursor-pointer ${cardBg}`}
-                          data-testid={`card-reservation-maintenance-${reservation.id}`}
-                        >
-                          {/* Header */}
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p
-                                className={`font-semibold text-sm truncate ${textPrimary}`}
-                              >
-                                {reservation.maintenanceName ||
-                                  "Maintenance professional"}
-                              </p>
-
-                              <p className={`text-xs mt-0.5 ${textMuted}`}>
-                                {reservation.service} · {reservation.category || "—"}
-                              </p>
-                            </div>
-
-                            <span
-                              className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-xl border ${meta.color}`}
-                            >
-                              {meta.label}
-                            </span>
-                          </div>
-
-                          {/* Date / Time / Location */}
-                          <div
-                            className={`grid grid-cols-2 gap-2 text-xs ${textMuted}`}
-                          >
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-amber-500" />
-                              {reservation.date}
-                            </span>
-
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-amber-500" />
-                              {reservation.time || "—"}
-                            </span>
-
-                            <span className="flex items-center gap-1 col-span-2">
-                              <MapPin className="w-3 h-3 text-amber-500" />
-                              {reservation.location || "—"}
-                            </span>
-                          </div>
-
-                          {/* Urgency / Description */}
-                          <div
-                            className={`flex flex-wrap gap-2 text-[11px] ${textMuted}`}
-                          >
-                            <span>
-                              Urgence : {reservation.urgency || "NORMAL"}
-                            </span>
-
-                            {reservation.description && (
-                              <span className="truncate">
-                                · {reservation.description}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Reschedule Request */}
-                          {reservation.status === "RESCHEDULE_PENDING" &&
-                            reservation.proposedDate && (
-                              <div
-                                className={`rounded-xl border px-3 py-2 text-xs ${
-                                  dk
-                                    ? "bg-purple-900/20 border-purple-800 text-purple-300"
-                                    : "bg-purple-50 border-purple-100 text-purple-700"
-                                }`}
-                              >
-                                Le technicien propose le{" "}
-                                <strong>{reservation.proposedDate}</strong>
-                                {reservation.proposedTime
-                                  ? ` à ${reservation.proposedTime}`
-                                  : ""}
-                                .
-
-                                <div className="flex gap-2 mt-2">
-                                  <Button
-                                    size="sm"
-                                    className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white"
-                                    disabled={respondToReschedule.isPending}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      respondToReschedule.mutate({
-                                        id: reservation.id,
-                                        accepted: true,
-                                      });
-                                    }}
-                                  >
-                                    Confirmer modification
-                                  </Button>
-
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 rounded-xl border-red-200 text-red-600"
-                                    disabled={respondToReschedule.isPending}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      respondToReschedule.mutate({
-                                        id: reservation.id,
-                                        accepted: false,
-                                      });
-                                    }}
-                                  >
-                                    Rejeter modification
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-
-                          {/* Part 18 — cancellation only while still unconfirmed */}
-                          {reservation.status === "PENDING" && (
-                            <div className="pt-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 rounded-xl border-red-200 text-red-600 hover:bg-red-50"
-                                disabled={cancelMaintenanceReservation.isPending}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  cancelMaintenanceReservation.mutate(reservation.id);
-                                }}
-                                data-testid={`button-cancel-reservation-${reservation.id}`}
-                              >
-                                Annuler
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              )
             )}
 
             {/* ── PRINT — real orders from the same /api/print/orders endpoint the
@@ -1080,51 +854,6 @@ function AccountPanel({
                   </div>
                   {order.deliveryAddress && <div><p className={`text-xs ${textMuted}`}>Livraison</p><p className={textPrimary}>{order.deliveryAddress}</p></div>}
                   {order.notes && <div><p className={`text-xs ${textMuted}`}>Notes</p><p className={textPrimary}>{order.notes}</p></div>}
-                </div>
-              );
-            })()}
-          </DialogContent>
-        </Dialog>
-
-        {/* Maintenance reservation details (Part 19) — resolved live from the
-            same maintenanceReservations query, same status vocabulary/meta as
-            the card above. */}
-        <Dialog open={!!detailMaintenanceReservation} onOpenChange={(o) => !o && setDetailMaintenanceReservation(null)}>
-          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
-            <DialogTitle className={textPrimary}>Réservation Maintenance {detailMaintenanceReservation ? `#${detailMaintenanceReservation.id}` : ""}</DialogTitle>
-            <DialogDescription className="sr-only">Détails de la réservation Maintenance</DialogDescription>
-            {(() => {
-              const reservation = detailMaintenanceReservation
-                ? (maintenanceReservations.find((r: any) => r.id === detailMaintenanceReservation.id) ?? detailMaintenanceReservation)
-                : null;
-              if (!reservation) return null;
-              const meta = reservationStatus[reservation.status] ?? reservationStatus.PENDING;
-              return (
-                <div className="space-y-3 text-sm">
-                  <span className={`inline-block text-xs font-semibold px-2 py-1 rounded-xl border ${meta.color}`}>{meta.label}</span>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><p className={`text-xs ${textMuted}`}>Maintenance</p><p className={`font-medium ${textPrimary}`}>{reservation.maintenanceName || "—"}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Service / catégorie</p><p className={`font-medium ${textPrimary}`}>{reservation.service}{reservation.category ? ` · ${reservation.category}` : ""}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Date / heure</p><p className={textPrimary}>{reservation.date} {reservation.time || ""}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Urgence</p><p className={textPrimary}>{reservation.urgency || "NORMAL"}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Lieu</p><p className={textPrimary}>{reservation.location || "—"}</p></div>
-                    <div><p className={`text-xs ${textMuted}`}>Contact</p><p className={textPrimary}>{reservation.contactPhone || reservation.ownerPhone || "—"}</p></div>
-                  </div>
-                  {reservation.description && <div><p className={`text-xs ${textMuted}`}>Besoin</p><p className={textPrimary}>{reservation.description}</p></div>}
-                  {reservation.status === "PENDING" && (
-                    <div className={`pt-2 border-t flex justify-end ${borderClr}`}>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className={dk ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-red-200 text-red-600 hover:bg-red-50"}
-                        disabled={cancelMaintenanceReservation.isPending}
-                        onClick={() => cancelMaintenanceReservation.mutate(reservation.id)}
-                        data-testid="button-cancel-reservation-modal"
-                      >
-                        {cancelMaintenanceReservation.isPending ? "Annulation…" : "Annuler la réservation"}
-                      </Button>
-                    </div>
-                  )}
                 </div>
               );
             })()}
@@ -1759,22 +1488,6 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
       toast({ title: "Contact impossible", description: error instanceof Error ? error.message : "Veuillez réessayer.", variant: "destructive" });
     }
   };
-  const reserveMaintenance = useMutation({
-    mutationFn: ({ agent, data }: { agent: MaintenanceMarketplaceCard; data: MaintenanceReservationData }) =>
-      apiRequest("POST", "/api/maintenance/reservations", {
-        maintenanceUserId: agent.userId,
-        service: agent.jobTitle,
-        ...data,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] });
-      setMaintenanceDetailOpen(false);
-      setSelectedMaintenanceAgent(null);
-      toast({ title: "Demande envoyée", description: "Le technicien pourra maintenant la confirmer." });
-    },
-    onError: (error: Error) => toast({ title: "Impossible d'envoyer la demande", description: error.message, variant: "destructive" }),
-  });
-
   const visibleFavServices = sortServiceIds(FAV_SERVICES, serviceOrder).filter((s) => {
     const key = FAV_SERVICE_TO_KEY[s];
     return !key || serviceStates[key] !== "HIDDEN";
@@ -2568,7 +2281,6 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
           setSelectedMaintenanceAgent(null);
         }}
         onContact={contactMaintenance}
-        onReserve={(agent, data) => reserveMaintenance.mutateAsync({ agent, data })}
         isDark={dk}
       />
 

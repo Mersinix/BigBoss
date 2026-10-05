@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShieldAlert, MapPin, Calendar, Ban } from "lucide-react";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
-import { AgentDetailModal, type MaintenanceReservationData } from "@/pages/cafe/maintenance/maintenance-page";
+import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
 
 const STATUS_LABELS: Record<string, string> = { PENDING: "En attente", RESOLVED: "Résolu", DISMISSED: "Ignoré" };
 function statusColors(isDark: boolean): Record<string, string> {
@@ -32,7 +32,6 @@ type MyMaintenanceReport = {
 // else on /maintenance (no separate profile implementation).
 export function MaintenanceBlacklistModal({ open, onClose, isDark }: { open: boolean; onClose: () => void; isDark: boolean }) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const { data: reports = [], isLoading } = useQuery<MyMaintenanceReport[]>({ queryKey: ["/api/maintenance/reports/mine"], enabled: open });
   const { data: providers = [] } = useQuery<MaintenanceMarketplaceCard[]>({ queryKey: ["/api/maintenance/profiles"], enabled: open });
   const [detailAgent, setDetailAgent] = useState<MaintenanceMarketplaceCard | null>(null);
@@ -45,12 +44,6 @@ export function MaintenanceBlacklistModal({ open, onClose, isDark }: { open: boo
     rowHover: isDark ? "hover:bg-gray-800/60" : "hover:bg-gray-50",
   };
 
-  const reserve = useMutation({
-    mutationFn: ({ agent, data }: { agent: MaintenanceMarketplaceCard; data: MaintenanceReservationData }) =>
-      apiRequest("POST", "/api/maintenance/reservations", { maintenanceUserId: agent.userId, service: agent.jobTitle, ...data }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reservations"] }); setDetailAgent(null); toast({ title: "Demande envoyée" }); },
-    onError: (err: Error) => toast({ title: "Impossible d'envoyer la demande", description: err.message, variant: "destructive" }),
-  });
   const contact = async (agent: MaintenanceMarketplaceCard) => {
     try {
       await apiRequest("POST", "/api/messages/conversations", { targetUserId: agent.userId, service: "MAINTENANCE" });
@@ -121,7 +114,7 @@ export function MaintenanceBlacklistModal({ open, onClose, isDark }: { open: boo
         </DialogContent>
       </Dialog>
 
-      <AgentDetailModal agent={detailAgent} open={!!detailAgent} onClose={() => setDetailAgent(null)} onContact={contact} onReserve={(agent, data) => reserve.mutateAsync({ agent, data })} isDark={isDark} />
+      <AgentDetailModal agent={detailAgent} open={!!detailAgent} onClose={() => setDetailAgent(null)} onContact={contact} isDark={isDark} />
     </>
   );
 }

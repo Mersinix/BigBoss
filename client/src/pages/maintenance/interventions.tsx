@@ -301,6 +301,104 @@ function ListSkeleton() {
   return <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Status filter (Toutes / À venir / En cours / Terminées / Annulées) — mirrors
+// barista-marketplace/jobs.tsx's own StatusFilterTabs exactly (same labels,
+// same shared Tabs component, same "evaluated in order, each row lands in
+// exactly one bucket" rule), adapted to Maintenance's own, audited lifecycle
+// (docs/maintenance_intervention_reservation_cleanup_audit.md Section 10 —
+// read that section before changing this mapping):
+//
+// "Mes réponses" — each application lands in exactly ONE bucket:
+//   1. Terminées : REJECTED (a decided-and-declined response is closed).
+//   2. Terminées : ACCEPTED, linked reservation COMPLETED.
+//   3. Annulées  : ACCEPTED, linked reservation CANCELLED.
+//   4. À venir   : ACCEPTED, linked reservation CONFIRMED/RESCHEDULED/
+//                  RESCHEDULE_PENDING with a date strictly after today.
+//   5. En cours  : everything else still active — PENDING (not yet decided),
+//                  or ACCEPTED or whose reservation is PENDING (provider
+//                  hasn't confirmed it in Planning yet) or whose confirmed/
+//                  rescheduled date is today or earlier but not yet completed.
+//
+// "Interventions disponibles" — a discoverable listing has no lifecycle from
+// the provider's read-only viewpoint (the backend already hides CLOSED/
+// expired listings entirely), so, same shape as Barista's own discover list:
+//   - Terminées : hasApplied === true (the provider already acted on it).
+//   - À venir / En cours : not yet applied to and still open (expiresAt null
+//                  or in the future), split by scheduledDate vs. today (no
+//                  date set → shown under both).
+//   - Annulées  : no data can exist here → always an empty state.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type JobStatusFilter = "all" | "upcoming" | "ongoing" | "done" | "cancelled";
+
+const STATUS_FILTERS: { value: JobStatusFilter; label: string }[] = [
+  { value: "all", label: "Toutes" },
+  { value: "upcoming", label: "À venir" },
+  { value: "ongoing", label: "En cours" },
+  { value: "done", label: "Terminées" },
+  { value: "cancelled", label: "Annulées" },
+];
+
+type ApplicationBucket = Exclude<JobStatusFilter, "all">;
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+// scheduledDate/reservation.date are plain "YYYY-MM-DD" text — parse as local
+// midnight so a bare date never shifts by a day across timezones.
+function parseDay(value: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value);
+}
+
+function applicationBucket(app: MaintenanceJobApplicationWithParties, today: number): ApplicationBucket {
+  if (app.status === "REJECTED") return "done";
+  const reservation = app.reservation;
+  if (!reservation) return "ongoing"; // ACCEPTED but the link hasn't loaded/landed yet — defensive.
+  if (reservation.status === "COMPLETED") return "done";
+  if (reservation.status === "CANCELLED") return "cancelled";
+  if (reservation.status === "CONFIRMED" || reservation.status === "RESCHEDULED" || reservation.status === "RESCHEDULE_PENDING") {
+    const at = parseDay(reservation.date).getTime();
+    if (at > today) return "upcoming";
+  }
+  return "ongoing";
+}
+
+function jobMatchesFilter(job: MaintenanceDiscoverableJob, filter: JobStatusFilter, now: number, today: number): boolean {
+  if (filter === "all") return true;
+  if (filter === "cancelled") return false;
+  if (filter === "done") return job.hasApplied;
+  if (job.hasApplied) return false;
+  if (job.expiresAt && new Date(job.expiresAt as any).getTime() <= now) return false;
+  if (job.scheduledDate) {
+    const start = parseDay(job.scheduledDate).getTime();
+    return filter === "upcoming" ? start > today : start <= today;
+  }
+  return true;
+}
+
+function StatusFilterTabs({ value, onChange, counts, testIdPrefix }: {
+  value: JobStatusFilter;
+  onChange: (v: JobStatusFilter) => void;
+  counts: Record<JobStatusFilter, number>;
+  testIdPrefix: string;
+}) {
+  return (
+    <Tabs value={value} onValueChange={(v) => onChange(v as JobStatusFilter)}>
+      <TabsList className="flex-wrap h-auto">
+        {STATUS_FILTERS.map((f) => (
+          <TabsTrigger key={f.value} value={f.value} data-testid={`${testIdPrefix}-${f.value}`}>
+            {f.label} ({counts[f.value]})
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
+  );
+}
+
 /** Discoverable interventions, targeted first then most recent. */
 function useSortedDiscoverJobs() {
   const { data: jobs = [], isLoading } = useDiscoverMaintenanceJobs();
@@ -311,15 +409,38 @@ function useSortedDiscoverJobs() {
   return { jobs: sorted, isLoading };
 }
 
+const FILTERED_EMPTY_SUBTITLE = "Aucun élément ne correspond à ce filtre.";
+
 export default function MaintenanceInterventionsPage() {
   const { jobs, isLoading: jobsLoading } = useSortedDiscoverJobs();
   const { data: applications = [], isLoading: appsLoading } = useMyMaintenanceJobApplications();
   const [tab, setTab] = useState<"discover" | "applications">("discover");
+  const [discoverFilter, setDiscoverFilter] = useState<JobStatusFilter>("all");
+  const [applicationsFilter, setApplicationsFilter] = useState<JobStatusFilter>("all");
   const [detailJob, setDetailJob] = useState<MaintenanceDiscoverableJob | null>(null);
   const [applyJob, setApplyJob] = useState<MaintenanceDiscoverableJob | null>(null);
 
   const liveDetailJob = detailJob ? jobs.find((j) => j.id === detailJob.id) ?? detailJob : null;
   const openApply = (job: MaintenanceDiscoverableJob) => { setDetailJob(null); setApplyJob(job); };
+
+  const { discoverCounts, filteredJobs } = useMemo(() => {
+    const now = Date.now();
+    const today = startOfToday();
+    const c = {} as Record<JobStatusFilter, number>;
+    for (const f of STATUS_FILTERS) c[f.value] = jobs.filter((j) => jobMatchesFilter(j, f.value, now, today)).length;
+    return { discoverCounts: c, filteredJobs: jobs.filter((j) => jobMatchesFilter(j, discoverFilter, now, today)) };
+  }, [jobs, discoverFilter]);
+
+  const { applicationCounts, filteredApplications } = useMemo(() => {
+    const today = startOfToday();
+    const c: Record<JobStatusFilter, number> = { all: applications.length, upcoming: 0, ongoing: 0, done: 0, cancelled: 0 };
+    const buckets = new Map(applications.map((a) => [a.id, applicationBucket(a, today)]));
+    buckets.forEach((b) => { c[b] += 1; });
+    return {
+      applicationCounts: c,
+      filteredApplications: applicationsFilter === "all" ? applications : applications.filter((a) => buckets.get(a.id) === applicationsFilter),
+    };
+  }, [applications, applicationsFilter]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -340,22 +461,40 @@ export default function MaintenanceInterventionsPage() {
       </Tabs>
 
       {tab === "discover" ? (
-        jobsLoading ? (
-          <ListSkeleton />
-        ) : jobs.length === 0 ? (
-          <EmptyState title="Aucune intervention disponible" subtitle="Les interventions proposées par les cafés apparaîtront ici." />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {jobs.map((job) => <JobCard key={job.id} job={job} onOpen={setDetailJob} onApply={openApply} />)}
-          </div>
-        )
-      ) : appsLoading ? (
-        <ListSkeleton />
-      ) : applications.length === 0 ? (
-        <EmptyState title="Aucune réponse envoyée" subtitle="Répondez à une intervention pour suivre son avancement ici." />
+        <div className="flex flex-col gap-5">
+          <StatusFilterTabs value={discoverFilter} onChange={setDiscoverFilter} counts={discoverCounts} testIdPrefix="filter-maintenance-discover" />
+          {jobsLoading ? (
+            <ListSkeleton />
+          ) : filteredJobs.length === 0 ? (
+            jobs.length === 0 ? (
+              <EmptyState title="Aucune intervention disponible" subtitle="Les interventions proposées par les cafés apparaîtront ici." />
+            ) : discoverFilter === "cancelled" ? (
+              <EmptyState title="Aucun élément annulé" subtitle="Les interventions clôturées ou expirées n'apparaissent pas dans cette liste." />
+            ) : (
+              <EmptyState title="Aucun résultat" subtitle={FILTERED_EMPTY_SUBTITLE} />
+            )
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredJobs.map((job) => <JobCard key={job.id} job={job} onOpen={setDetailJob} onApply={openApply} />)}
+            </div>
+          )}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {applications.map((app) => <ApplicationCard key={app.id} application={app} />)}
+        <div className="flex flex-col gap-5">
+          <StatusFilterTabs value={applicationsFilter} onChange={setApplicationsFilter} counts={applicationCounts} testIdPrefix="filter-maintenance-applications" />
+          {appsLoading ? (
+            <ListSkeleton />
+          ) : filteredApplications.length === 0 ? (
+            applications.length === 0 ? (
+              <EmptyState title="Aucune réponse envoyée" subtitle="Répondez à une intervention pour suivre son avancement ici." />
+            ) : (
+              <EmptyState title="Aucun résultat" subtitle={FILTERED_EMPTY_SUBTITLE} />
+            )
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredApplications.map((app) => <ApplicationCard key={app.id} application={app} />)}
+            </div>
+          )}
         </div>
       )}
 

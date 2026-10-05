@@ -19,24 +19,170 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
+import { useMaintenanceJobTargets, useMaintenanceJobApplicationsForJob } from "@/hooks/use-maintenance-jobs";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { useThemeStore } from "@/store/theme-store";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 type TaxonomyItem = { id: number; name: string; icon?: string | null; isActive: boolean; isFrozen: boolean };
+// Admin read-only visibility into the Maintenance job-posting system
+// ("Interventions") — mirrors AdminJobPost in admin/barista-page.tsx, adapted
+// to Maintenance's simpler field set (no recordType/openPositions/employmentTypes/
+// educationLevels/languages/missionStartDate — see
+// docs/maintenance_intervention_reservation_cleanup_audit.md Section 11).
+type AdminMaintenanceJobPost = {
+  id: number; cafeOwnerId: number; title: string; establishment: string; locationAddress: string;
+  categories: string[]; urgency: string; description: string; requirements: string; contactPhone: string;
+  scheduledDate: string | null; scheduledTime: string | null; expiresAt: string | null;
+  publicationMode: "AUTOMATIC" | "MANUAL"; status: "DRAFT" | "PUBLISHED" | "CLOSED";
+  createdAt: string | null; updatedAt: string | null;
+  cafeOwnerName: string; totalApplications: number; pendingApplications: number;
+  acceptedApplications: number; rejectedApplications: number; targetCount: number;
+};
 type Overview = {
   stats: {
     totalAccounts: number; activeAccounts: number; availableAccounts: number;
     totalReservations: number; pendingReservations: number; completedReservations: number;
     cancelledReservations: number; reviewCount: number; averageRating: number;
+    totalInterventions: number; publishedInterventions: number; draftInterventions: number; closedInterventions: number;
+    totalInterventionApplications: number; pendingInterventionApplications: number;
+    acceptedInterventionApplications: number; rejectedInterventionApplications: number;
   };
   categories: { category: string; count: number }[];
   taxonomy: { competencies: TaxonomyItem[]; zones: TaxonomyItem[] };
   accounts: any[];
   reservations: any[];
   reviews: any[];
+  jobPosts: AdminMaintenanceJobPost[];
+  jobApplications: any[];
 };
+
+// Same labels/colors as the Coffee Owner's maintenance-job-management-modal.tsx
+// — Admin must read the exact same business states, never invent its own.
+const JOB_POST_STATUS_LABELS: Record<string, string> = { DRAFT: "Brouillon", PUBLISHED: "Publiée", CLOSED: "Clôturée" };
+const JOB_POST_STATUS_COLORS: Record<string, string> = {
+  DRAFT: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400",
+  PUBLISHED: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400",
+  CLOSED: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+};
+const PUBLICATION_MODE_LABELS: Record<string, string> = { AUTOMATIC: "Automatique", MANUAL: "Manuelle" };
+const URGENCY_LABELS: Record<string, string> = { LOW: "Faible", NORMAL: "Normale", HIGH: "Élevée", URGENT: "Urgente" };
+const APPLICATION_STATUS_LABELS: Record<string, string> = { PENDING: "En attente", ACCEPTED: "Acceptée", REJECTED: "Rejetée" };
+const APPLICATION_STATUS_COLORS: Record<string, string> = {
+  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+  ACCEPTED: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+  REJECTED: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
+};
+
+function JobPostStatusBadge({ status }: { status: string }) {
+  return <Badge variant="outline" className={JOB_POST_STATUS_COLORS[status] ?? ""}>{JOB_POST_STATUS_LABELS[status] ?? status}</Badge>;
+}
+
+function fmtPlainDate(value: string | null) {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value);
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ── Intervention detail — read-only, mirrors admin/barista-page.tsx's
+// JobPostDetail convention exactly ("No mutation path — Admin reviews the
+// same rows the Coffee Owner's own job-management modal already manages"),
+// extended with full Profils ciblés / Réponses sections per this task's own
+// explicit spec (Section 14) rather than Barista's leaner count-only badge —
+// uses the same live hooks the Coffee-Owner-facing modal already uses, now
+// readable by Admin too (server/routes.ts GET /api/maintenance/jobs/:id/targets
+// and /applications, both extended to allow isOwnerOrAdmin). ──
+
+function MaintenanceJobPostDetail({ jobPost, onClose }: { jobPost: AdminMaintenanceJobPost | null; onClose: () => void }) {
+  const { data: targets = [], isLoading: targetsLoading } = useMaintenanceJobTargets(jobPost && jobPost.publicationMode === "MANUAL" ? jobPost.id : null);
+  const { data: applications = [], isLoading: appsLoading } = useMaintenanceJobApplicationsForJob(jobPost?.id ?? null);
+  if (!jobPost) return null;
+  const expiry = fmtPlainDate(jobPost.expiresAt);
+  const scheduled = jobPost.scheduledDate ? `${fmtPlainDate(jobPost.scheduledDate)}${jobPost.scheduledTime ? ` à ${jobPost.scheduledTime}` : ""}` : null;
+  const created = fmtPlainDate(jobPost.createdAt);
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
+            <span className="flex-1 min-w-0 truncate">{jobPost.title}</span>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          <div className="flex flex-wrap gap-2">
+            <JobPostStatusBadge status={jobPost.status} />
+            <Badge variant="secondary" className="text-xs">{PUBLICATION_MODE_LABELS[jobPost.publicationMode] ?? jobPost.publicationMode}</Badge>
+            <Badge variant="outline" className="text-xs">{jobPost.totalApplications} réponse{jobPost.totalApplications > 1 ? "s" : ""}</Badge>
+            <Badge variant="outline" className="text-xs">{jobPost.pendingApplications} en attente</Badge>
+            <Badge variant="outline" className="text-xs">{jobPost.acceptedApplications} acceptée{jobPost.acceptedApplications > 1 ? "s" : ""}</Badge>
+            <Badge variant="outline" className="text-xs">{jobPost.rejectedApplications} rejetée{jobPost.rejectedApplications > 1 ? "s" : ""}</Badge>
+            {jobPost.publicationMode === "MANUAL" && (
+              <Badge variant="outline" className="text-xs">{jobPost.targetCount} profil{jobPost.targetCount > 1 ? "s" : ""} ciblé{jobPost.targetCount > 1 ? "s" : ""}</Badge>
+            )}
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div><p className="text-xs text-muted-foreground">Café / Coffee Owner</p><p className="font-medium">{jobPost.cafeOwnerName || "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Établissement</p><p className="font-medium">{jobPost.establishment || "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Localisation</p><p>{jobPost.locationAddress || "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Catégorie</p><p>{jobPost.categories.length ? jobPost.categories.join(", ") : "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Urgence</p><p>{URGENCY_LABELS[jobPost.urgency] ?? jobPost.urgency}</p></div>
+            <div><p className="text-xs text-muted-foreground">Date / heure</p><p>{scheduled ?? "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Téléphone de contact</p><p>{jobPost.contactPhone || "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Date d'expiration</p><p>{expiry ?? "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Mode de publication</p><p>{PUBLICATION_MODE_LABELS[jobPost.publicationMode] ?? jobPost.publicationMode}</p></div>
+            <div><p className="text-xs text-muted-foreground">Créée le</p><p>{created ?? "—"}</p></div>
+          </div>
+          <div><p className="text-xs text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{jobPost.description || "—"}</p></div>
+          <div><p className="text-xs text-muted-foreground">Exigences</p><p className="whitespace-pre-wrap">{jobPost.requirements || "—"}</p></div>
+
+          {jobPost.publicationMode === "MANUAL" && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-1.5">Profils ciblés ({targets.length})</p>
+              {targetsLoading ? <p className="text-xs text-muted-foreground">Chargement…</p> : targets.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Aucun profil ciblé.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {targets.map((t: any) => (
+                    <div key={t.id} className="flex items-center gap-2 rounded-full border pl-1 pr-3 py-1">
+                      <Avatar className="w-6 h-6">
+                        {t.maintenanceProfileImageUrl && <AvatarImage src={t.maintenanceProfileImageUrl} alt={t.maintenanceName} className="object-cover" />}
+                        <AvatarFallback className="bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400 text-[10px] font-bold">
+                          {t.maintenanceName.split(/\s+/).filter(Boolean).slice(0, 2).map((w: string) => w[0]?.toUpperCase() ?? "").join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs font-medium">{t.maintenanceName}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-1.5">Réponses ({applications.length})</p>
+            {appsLoading ? <p className="text-xs text-muted-foreground">Chargement…</p> : applications.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Aucune réponse pour le moment.</p>
+            ) : (
+              <div className="space-y-2">
+                {applications.map((app: any) => (
+                  <div key={app.id} className="rounded-lg border p-2.5 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{app.maintenanceName}</p>
+                      {app.message && <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">{app.message}</p>}
+                    </div>
+                    <Badge variant="secondary" className={`${APPLICATION_STATUS_COLORS[app.status] ?? ""} shrink-0`}>{APPLICATION_STATUS_LABELS[app.status] ?? app.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function Stars({ value }: { value: number }) {
   return <span className="inline-flex items-center gap-0.5 text-amber-500">
@@ -285,7 +431,6 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         onContact={() => {}}
-        onReserve={() => Promise.resolve()}
         isDark={isDark}
         readOnly
       />
@@ -460,6 +605,8 @@ export default function MaintenanceAdminPage() {
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<any | null>(null);
+  const [selectedJobPost, setSelectedJobPost] = useState<AdminMaintenanceJobPost | null>(null);
+  const [jobPostStatusFilter, setJobPostStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [accountSearchOpen, setAccountSearchOpen] = useState(false);
   const accountSearchInputRef = useRef<HTMLInputElement>(null);
@@ -481,6 +628,11 @@ export default function MaintenanceAdminPage() {
     const fresh = data?.reservations?.find((row: any) => row.id === selectedReservation.id);
     if (fresh && fresh !== selectedReservation) setSelectedReservation(fresh);
   }, [data?.reservations, selectedReservation?.id]);
+  useEffect(() => {
+    if (!selectedJobPost) return;
+    const fresh = data?.jobPosts?.find((row) => row.id === selectedJobPost.id);
+    if (fresh && fresh !== selectedJobPost) setSelectedJobPost(fresh);
+  }, [data?.jobPosts, selectedJobPost?.id]);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
     qc.invalidateQueries({ queryKey: ["/api/maintenance/categories"] });
@@ -514,6 +666,13 @@ export default function MaintenanceAdminPage() {
   const reservations = data?.reservations ?? [];
   const reservationsPagination = usePagination(reservations.length);
   const pageReservations = reservations.slice(reservationsPagination.start, reservationsPagination.end);
+  const jobPosts = useMemo(() => {
+    const rows = data?.jobPosts ?? [];
+    return jobPostStatusFilter === "all" ? rows : rows.filter((j) => j.status === jobPostStatusFilter);
+  }, [data?.jobPosts, jobPostStatusFilter]);
+  const jobPostsPagination = usePagination(jobPosts.length);
+  useEffect(() => { jobPostsPagination.resetPage(); }, [jobPostStatusFilter]);
+  const pageJobPosts = jobPosts.slice(jobPostsPagination.start, jobPostsPagination.end);
   const kpis = [
     ["Comptes Maintenance", stats?.totalAccounts ?? 0, Users], ["Actifs / approuvés", stats?.activeAccounts ?? 0, CheckCircle],
     ["Disponibles", stats?.availableAccounts ?? 0, Wrench], ["Réservations", stats?.totalReservations ?? 0, Calendar],
@@ -542,6 +701,7 @@ export default function MaintenanceAdminPage() {
           <TabsTrigger value="taxonomy" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Compétences & zones</TabsTrigger>
           <TabsTrigger value="accounts" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Comptes Maintenance</TabsTrigger>
           <TabsTrigger value="reservations" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Réservations récentes</TabsTrigger>
+          <TabsTrigger value="interventions" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Interventions</TabsTrigger>
         </TabsList>
       </div>
       <TabsContent value="taxonomy" className="mt-4 grid lg:grid-cols-2 gap-6">
@@ -628,9 +788,57 @@ export default function MaintenanceAdminPage() {
           itemLabel="réservations"
         />
       </TabsContent>
+      <TabsContent value="interventions" className="mt-4 space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Interventions publiées</p><p className="text-xl font-bold">{isLoading ? "…" : stats?.publishedInterventions ?? 0}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Réponses</p><p className="text-xl font-bold">{isLoading ? "…" : stats?.totalInterventionApplications ?? 0}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Acceptées</p><p className="text-xl font-bold">{isLoading ? "…" : stats?.acceptedInterventionApplications ?? 0}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">En attente</p><p className="text-xl font-bold">{isLoading ? "…" : stats?.pendingInterventionApplications ?? 0}</p></CardContent></Card>
+        </div>
+        <Select value={jobPostStatusFilter} onValueChange={setJobPostStatusFilter}>
+          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Statut" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les statuts</SelectItem>
+            <SelectItem value="DRAFT">Brouillon</SelectItem>
+            <SelectItem value="PUBLISHED">Publiée</SelectItem>
+            <SelectItem value="CLOSED">Clôturée</SelectItem>
+          </SelectContent>
+        </Select>
+        {jobPosts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune intervention.</CardContent></Card> : (
+          <div className="space-y-2">
+            {pageJobPosts.map((j) => (
+              <Card key={j.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedJobPost(j)} data-testid={`card-admin-maintenance-job-${j.id}`}>
+                <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold truncate">{j.title}</p>
+                      <JobPostStatusBadge status={j.status} />
+                      <Badge variant="secondary" className="text-xs">{PUBLICATION_MODE_LABELS[j.publicationMode] ?? j.publicationMode}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{j.establishment} · {j.cafeOwnerName}</p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0">{j.totalApplications} réponse{j.totalApplications > 1 ? "s" : ""}</Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+        <DataPagination
+          page={jobPostsPagination.page}
+          pageSize={jobPostsPagination.pageSize}
+          totalItems={jobPosts.length}
+          totalPages={jobPostsPagination.totalPages}
+          start={jobPostsPagination.start}
+          end={jobPostsPagination.end}
+          onPageChange={jobPostsPagination.setPage}
+          onPageSizeChange={jobPostsPagination.setPageSize}
+          itemLabel="interventions"
+        />
+      </TabsContent>
     </Tabs>
     <AccountDetail account={selectedAccount} onClose={() => setSelectedAccount(null)} onRefresh={refresh} />
     <AddMaintenanceAccountModal open={addAccountOpen} onClose={() => setAddAccountOpen(false)} onCreated={refresh} />
     <ReservationDetail reservation={selectedReservation} onClose={() => setSelectedReservation(null)} onRefresh={refresh} />
+    <MaintenanceJobPostDetail jobPost={selectedJobPost} onClose={() => setSelectedJobPost(null)} />
   </div>;
 }

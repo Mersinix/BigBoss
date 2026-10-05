@@ -2330,6 +2330,11 @@ export type MaintenanceJobApplicationWithParties = MaintenanceJobApplication & {
   maintenanceProfileImageUrl: string | null;
   jobTitle: string;
   establishment: string;
+  // Set once this application is ACCEPTED (see acceptMaintenanceJobApplication)
+  // — lets the provider-side status switcher classify a response by its real
+  // execution state (docs/maintenance_intervention_reservation_cleanup_audit.md
+  // Section 10) instead of guessing from the application's own status alone.
+  reservation: { id: number; status: string; date: string; time: string | null } | null;
 };
 
 // Entity-level report — a Coffee Owner flagging a Maintenance account itself,

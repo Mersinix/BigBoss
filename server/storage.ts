@@ -6366,6 +6366,15 @@ export class DatabaseStorage implements IStorage {
     const reservations = await db.select().from(maintenanceReservations);
     const reviews = await db.select().from(supplierProductReviews)
       .where(eq(supplierProductReviews.reviewType, "MAINTENANCE"));
+    // Job posting system ("Interventions") — same underlying maintenanceJobPosts/
+    // maintenanceJobApplications rows the Coffee Owner's own "Intervention"
+    // modal and the Maintenance professional's "Interventions" page read;
+    // read-only here, no parallel admin data source (mirrors
+    // getBaristaAdminOverview's identical jobPosts/jobApplications fold-in —
+    // see docs/maintenance_intervention_reservation_cleanup_audit.md).
+    const jobPostRows = await db.select().from(maintenanceJobPosts).orderBy(desc(maintenanceJobPosts.createdAt));
+    const jobApplicationRows = await db.select().from(maintenanceJobApplications);
+    const jobTargetRows = await db.select().from(maintenanceJobTargets);
     const allUsers = await db.select().from(users);
     const userMap = new Map(allUsers.map((user) => [user.id, user]));
     const categoryCounts = new Map<string, number>();
@@ -6373,6 +6382,27 @@ export class DatabaseStorage implements IStorage {
       categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
     }
     const averageRating = reviews.length ? reviews.reduce((sum, row) => sum + row.rating, 0) / reviews.length : 0;
+
+    const jobPosts = jobPostRows.map((j) => ({
+      ...j,
+      cafeOwnerName: userMap.get(j.cafeOwnerId)?.name ?? "—",
+      totalApplications: jobApplicationRows.filter((a) => a.jobPostId === j.id).length,
+      pendingApplications: jobApplicationRows.filter((a) => a.jobPostId === j.id && a.status === "PENDING").length,
+      acceptedApplications: jobApplicationRows.filter((a) => a.jobPostId === j.id && a.status === "ACCEPTED").length,
+      rejectedApplications: jobApplicationRows.filter((a) => a.jobPostId === j.id && a.status === "REJECTED").length,
+      targetCount: jobTargetRows.filter((t) => t.jobPostId === j.id).length,
+    }));
+    // Lightweight rows (no message/PII) for any future Analytics breakdown —
+    // same jobApplicationRows counted in `stats` below, just not pre-aggregated.
+    const jobApplications = jobApplicationRows.map((a) => ({
+      id: a.id,
+      jobPostId: a.jobPostId,
+      maintenanceUserId: a.maintenanceUserId,
+      status: a.status,
+      reservationId: a.reservationId,
+      createdAt: a.createdAt,
+    }));
+
     return {
       stats: {
         totalAccounts: accounts.length,
@@ -6384,6 +6414,14 @@ export class DatabaseStorage implements IStorage {
         cancelledReservations: reservations.filter((row) => row.status === "CANCELLED").length,
         reviewCount: reviews.length,
         averageRating,
+        totalInterventions: jobPostRows.length,
+        publishedInterventions: jobPostRows.filter((j) => j.status === "PUBLISHED").length,
+        draftInterventions: jobPostRows.filter((j) => j.status === "DRAFT").length,
+        closedInterventions: jobPostRows.filter((j) => j.status === "CLOSED").length,
+        totalInterventionApplications: jobApplicationRows.length,
+        pendingInterventionApplications: jobApplicationRows.filter((a) => a.status === "PENDING").length,
+        acceptedInterventionApplications: jobApplicationRows.filter((a) => a.status === "ACCEPTED").length,
+        rejectedInterventionApplications: jobApplicationRows.filter((a) => a.status === "REJECTED").length,
       },
       categories: Array.from(categoryCounts, ([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
       taxonomy,
@@ -6412,6 +6450,8 @@ export class DatabaseStorage implements IStorage {
         maintenanceName: userMap.get(review.maintenanceUserId ?? 0)?.name ?? "—",
         reviewerName: userMap.get(review.cafeId)?.name ?? review.cafeName,
       })),
+      jobPosts,
+      jobApplications,
     };
   }
 
@@ -6594,18 +6634,30 @@ export class DatabaseStorage implements IStorage {
     if (!rows.length) return [];
     const providerIds = Array.from(new Set(rows.map((r) => r.maintenanceUserId)));
     const jobIds = Array.from(new Set(rows.map((r) => r.jobPostId)));
-    const [providerRows, jobRows] = await Promise.all([
+    const reservationIds = rows.map((r) => r.reservationId).filter((id): id is number => id != null);
+    const [providerRows, jobRows, reservationRows] = await Promise.all([
       db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl }).from(users).where(inArray(users.id, providerIds)),
       db.select().from(maintenanceJobPosts).where(inArray(maintenanceJobPosts.id, jobIds)),
+      // Attached so the provider-side status switcher (Toutes/À venir/En
+      // cours/Terminées/Annulées) can classify an ACCEPTED response by its
+      // real execution state rather than guessing from the application's own
+      // PENDING/ACCEPTED/REJECTED status alone — see
+      // docs/maintenance_intervention_reservation_cleanup_audit.md Section 10.
+      reservationIds.length
+        ? db.select({ id: maintenanceReservations.id, status: maintenanceReservations.status, date: maintenanceReservations.date, time: maintenanceReservations.time })
+            .from(maintenanceReservations).where(inArray(maintenanceReservations.id, reservationIds))
+        : Promise.resolve([]),
     ]);
     const providerMap = new Map(providerRows.map((u) => [u.id, u]));
     const jobMap = new Map(jobRows.map((j) => [j.id, j]));
+    const reservationMap = new Map(reservationRows.map((r) => [r.id, r]));
     return rows.map((r) => ({
       ...r,
       maintenanceName: providerMap.get(r.maintenanceUserId)?.name ?? "—",
       maintenanceProfileImageUrl: providerMap.get(r.maintenanceUserId)?.profileImageUrl ?? null,
       jobTitle: jobMap.get(r.jobPostId)?.title ?? "—",
       establishment: jobMap.get(r.jobPostId)?.establishment ?? "",
+      reservation: r.reservationId != null ? (reservationMap.get(r.reservationId) ?? null) : null,
     }));
   }
 

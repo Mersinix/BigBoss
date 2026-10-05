@@ -1209,9 +1209,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/maintenance/jobs/:id/targets", requireApprovedCafeOwner, async (req: any, res) => {
+  // Admin read access mirrors GET /api/maintenance/jobs/:id's own
+  // isOwnerOrAdmin rule — needed so Admin's read-only intervention detail
+  // modal can show "Profils ciblés" (docs/maintenance_intervention_reservation_cleanup_audit.md
+  // Section 11, item 8), never granted to an unrelated Coffee Owner.
+  app.get("/api/maintenance/jobs/:id/targets", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
     const job = await storage.getMaintenanceJobPostById(Number(req.params.id));
-    if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Intervention not found" });
+    const isOwnerOrAdmin = !!job && (user.id === job.cafeOwnerId || ["ADMIN", "SUPER_ADMIN"].includes(user.role));
+    if (!job || !isOwnerOrAdmin) return res.status(404).json({ message: "Intervention not found" });
     try { res.json(await storage.getMaintenanceJobTargets(job.id)); }
     catch { res.status(500).json({ message: "Failed to load targets" }); }
   });
@@ -1254,9 +1261,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.get("/api/maintenance/jobs/:id/applications", requireApprovedCafeOwner, async (req: any, res) => {
+  // Admin read access mirrors GET /api/maintenance/jobs/:id's own
+  // isOwnerOrAdmin rule — needed so Admin's read-only intervention detail
+  // modal can show "Réponses" (docs/maintenance_intervention_reservation_cleanup_audit.md
+  // Section 11, item 8), never granted to an unrelated Coffee Owner.
+  app.get("/api/maintenance/jobs/:id/applications", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
     const job = await storage.getMaintenanceJobPostById(Number(req.params.id));
-    if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Intervention not found" });
+    const isOwnerOrAdmin = !!job && (user.id === job.cafeOwnerId || ["ADMIN", "SUPER_ADMIN"].includes(user.role));
+    if (!job || !isOwnerOrAdmin) return res.status(404).json({ message: "Intervention not found" });
     try { res.json(await storage.getMaintenanceJobApplicationsForJob(job.id)); }
     catch { res.status(500).json({ message: "Failed to load applications" }); }
   });

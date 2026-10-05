@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useThemeStore } from "@/store/theme-store";
 import { useAuth } from "@/hooks/use-auth";
-import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import { apiRequest } from "@/lib/queryClient";
@@ -118,7 +117,6 @@ function AgentCard({
   onContact: (agent: MaintenanceMarketplaceCard) => void;
   isDark: boolean;
 }) {
-  const fmt = useFormatCurrency();
   const t = useTheme(isDark);
   const favoriteId = agent.userId;
   const faved = useFavorites((s) => !!s.maintenance[favoriteId]);
@@ -179,11 +177,11 @@ function AgentCard({
         {/* Skills/certifications/actions intentionally removed from the card
             (Part 1) — the details modal already covers them; the marketplace
             card stays a compact summary, matching the Barista card's cleaner
-            hierarchy (reference only, Maintenance fields kept below). */}
-        <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <p className={`text-[10px] ${t.textSubtle}`}>Tarif / jour</p>
-          <p className="font-bold text-sm text-orange-600">{fmt(agent.dailyRateInCents)}</p>
-        </div>
+            hierarchy (reference only, Maintenance fields kept below). The
+            "Tarif / jour" tile that used to close this card was removed here
+            (docs/maintenance_pricing_admin_performance_audit.md Section 2) —
+            dailyRateInCents itself is preserved internally/Admin-managed, just
+            no longer shown to Coffee Owners. */}
       </div>
     </div>
   );
@@ -296,7 +294,6 @@ export function AgentDetailModal({
   // since it just displays the agent's own real saved availability.
   readOnly?: boolean;
 }) {
-  const fmt = useFormatCurrency();
   const t = useTheme(isDark);
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -445,15 +442,11 @@ export function AgentDetailModal({
               </div>
             </div>
 
-            {/* Tarif journalier + Expérience/Réponse — same 2-column boxed-tile
-                treatment as the Barista modal's Tarif/Expérience grid (Part 6),
-                adapted to Maintenance's own real fields (response time has no
-                Barista equivalent, kept as a third tile). */}
-            <div className="grid grid-cols-3 gap-3 text-sm">
-              <div className={`p-3 rounded-xl ${t.mutedBg}`}>
-                <p className={`text-[11px] ${t.textSubtle}`}>Tarif / jour</p>
-                <p className="font-bold text-orange-600">{fmt(agent.dailyRateInCents)}</p>
-              </div>
+            {/* Expérience/Réponse — same boxed-tile treatment as before; the
+                "Tarif / jour" tile that used to lead this row was removed here
+                (docs/maintenance_pricing_admin_performance_audit.md Section 2),
+                grid narrowed from 3 to 2 columns accordingly. */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
               <div className={`p-3 rounded-xl ${t.mutedBg}`}>
                 <p className={`text-[11px] ${t.textSubtle}`}>Expérience</p>
                 <p className={`font-bold ${t.textPrimary}`}>{agent.yearsExperience} ans</p>

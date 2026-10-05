@@ -1,5 +1,4 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useFormatCurrency } from "@/hooks/use-currency";
 import { useQuery } from "@tanstack/react-query";
 import { PublicProfilePreview } from "@/components/account/public-profile-preview";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,7 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 // representation.
 export default function MaintenanceProfilPublic() {
   const { user } = useAuth();
-  const fmt = useFormatCurrency();
   const { data, isLoading } = useQuery<{ user: any; profile: any }>({
     queryKey: ["/api/maintenance/profile", user?.id],
     queryFn: async () => {
@@ -42,7 +40,9 @@ export default function MaintenanceProfilPublic() {
         location: p?.coverageArea ?? null,
         description: p?.description ?? null,
         services: p?.skills ?? [],
-        pricingLabel: p?.dailyRateInCents ? `${fmt(p.dailyRateInCents)} / jour` : null,
+        // pricingLabel intentionally omitted — kept in sync with the real
+        // Coffee Owner-facing card/modal, which no longer shows the daily
+        // rate (docs/maintenance_pricing_admin_performance_audit.md Section 2).
         responseTime: p?.responseTime ?? null,
         phone: data.user?.phone ?? null,
         portfolioImages: p?.portfolioImages ?? [],

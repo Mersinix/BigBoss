@@ -4,10 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ClipboardList, Clock, CheckCircle2, XCircle, CalendarClock, Star, Wrench, MapPin,
+  ClipboardList, Clock, CheckCircle2, XCircle, CalendarClock, Star, Wrench, MapPin, Send, TrendingUp,
 } from "lucide-react";
 import type { MaintenanceReservationRow } from "@/pages/maintenance/planning";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { useMyMaintenanceJobApplications } from "@/hooks/use-maintenance-jobs";
 
 // Real Maintenance Performance > Dashboard — a genuine dashboard, not a reuse
 // of Planning's appointment list (Planning stays a separate, unchanged tab).
@@ -67,7 +68,11 @@ export default function MaintenanceDashboardOverview() {
     },
     enabled: !!user?.id,
   });
-  const isLoading = reservationsLoading || profileLoading;
+  // Additive Intervention/response metrics — same /api/maintenance/applications/mine
+  // query the Interventions tab's "Mes réponses" list already uses, so both stay
+  // in sync automatically (docs/maintenance_pricing_admin_performance_audit.md Section 9).
+  const { data: applications = [], isLoading: applicationsLoading } = useMyMaintenanceJobApplications();
+  const isLoading = reservationsLoading || profileLoading || applicationsLoading;
   const card = profileData?.card;
 
   const stats = useMemo(() => {
@@ -91,12 +96,23 @@ export default function MaintenanceDashboardOverview() {
     [reservations],
   );
 
+  const applicationStats = useMemo(() => {
+    const total = applications.length;
+    const pending = applications.filter((a) => a.status === "PENDING").length;
+    const accepted = applications.filter((a) => a.status === "ACCEPTED").length;
+    const acceptanceRate = total > 0 ? Math.round((accepted / total) * 100) : 0;
+    return { total, pending, accepted, acceptanceRate };
+  }, [applications]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-5">
         <Skeleton className="h-24 w-full rounded-2xl" />
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-2xl" />)}
         </div>
         <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
@@ -125,6 +141,14 @@ export default function MaintenanceDashboardOverview() {
         <StatTile label="Confirmées" value={stats.confirmed} icon={CalendarClock} tone="blue" />
         <StatTile label="Terminées" value={stats.completed} icon={CheckCircle2} tone="green" />
         <StatTile label="Annulées" value={stats.cancelled} icon={XCircle} tone="red" />
+      </div>
+
+      {/* Additive Intervention/response KPIs — built on top of the existing
+          reservation-based row above, not a replacement (see hook comment). */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <StatTile label="Réponses envoyées" value={applicationStats.total} icon={Send} tone="orange" />
+        <StatTile label="Réponses en attente" value={applicationStats.pending} icon={Clock} tone="amber" />
+        <StatTile label="Taux d'acceptation" value={`${applicationStats.acceptanceRate}%`} icon={TrendingUp} tone="green" />
       </div>
 
       {/* Next intervention */}

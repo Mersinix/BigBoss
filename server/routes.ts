@@ -804,12 +804,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       certifications: z.array(z.string()).optional(),
       yearsExperience: z.number().int().min(0).optional(),
       responseTime: z.string().optional(),
-      dailyRateInCents: z.number().int().min(0).optional(),
       description: z.string().optional(),
       portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
       coverageArea: z.string().optional(),
       marketplaceVisible: z.boolean().optional(),
     }).parse(req.body);
+    // dailyRateInCents is intentionally not in this self-service schema —
+    // the field is preserved internally/Admin-managed only (Admin >
+    // Maintenance > Comptes), not editable by the professional themselves
+    // (docs/maintenance_pricing_admin_performance_audit.md Section 5).
     const profile = await storage.upsertMaintenanceProfile(user.id, body);
     broadcast("maintenance_updated", { userId: user.id, kind: "profile" });
     res.json(profile);

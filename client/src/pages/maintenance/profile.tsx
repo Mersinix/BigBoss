@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useCurrency } from "@/hooks/use-currency";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -36,7 +35,6 @@ const MAX_PORTFOLIO_IMAGES = 4;
 
 export default function Profile() {
   const { user } = useAuth();
-  const currency = useCurrency();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isDark = useThemeStore((s) => s.isDark);
@@ -67,7 +65,6 @@ export default function Profile() {
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [agentType, setAgentType] = useState("Freelance");
-  const [dailyRate, setDailyRate] = useState("0");
   const [responseTime, setResponseTime] = useState("< 2h");
   const [certifications, setCertifications] = useState<string[]>([]);
   const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
@@ -84,7 +81,6 @@ export default function Profile() {
     setSelectedSpecialties(p.skills ?? []);
     setSelectedAreas(p.coverageArea ? p.coverageArea.split(",").map((v: string) => v.trim()).filter(Boolean) : []);
     setAgentType(p.profileType);
-    setDailyRate(String((p.dailyRateInCents ?? 0) / 100));
     setResponseTime(p.responseTime);
     setCertifications(p.certifications ?? []);
     setPortfolioImages(p.portfolioImages ?? []);
@@ -104,7 +100,7 @@ export default function Profile() {
     mutationFn: () => apiRequest("PATCH", "/api/maintenance/profile", {
       jobTitle, profileType: agentType, skills: selectedSpecialties,
       categories: selectedSpecialties, description: bio,
-      coverageArea: selectedAreas.join(", "), dailyRateInCents: Math.round((parseFloat(dailyRate) || 0) * 100),
+      coverageArea: selectedAreas.join(", "),
       responseTime,
       certifications, portfolioImages,
       yearsExperience: Math.max(0, parseInt(yearsExperience, 10) || 0),
@@ -206,23 +202,22 @@ export default function Profile() {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-gray-500 dark:text-gray-400">Tarif journalier ({currency})</Label>
-              <Input value={dailyRate} onChange={(e) => setDailyRate(e.target.value)} type="number" className="h-9 rounded-xl mt-0.5" />
-            </div>
-            <div>
-              <Label className="text-xs text-gray-500 dark:text-gray-400">Temps de réponse</Label>
-              <Select value={responseTime} onValueChange={setResponseTime}>
-                <SelectTrigger className="h-9 rounded-xl mt-0.5"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="< 1h">Moins de 1h</SelectItem>
-                  <SelectItem value="< 2h">Moins de 2h</SelectItem>
-                  <SelectItem value="< 4h">Moins de 4h</SelectItem>
-                  <SelectItem value="< 24h">Moins de 24h</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Tarif journalier removed here (docs/maintenance_pricing_admin_performance_audit.md
+              Section 2/3) — dailyRateInCents is preserved internally and
+              remains Admin-managed (Admin > Maintenance > Comptes), only this
+              self-service field is gone; "Temps de réponse" now stands alone,
+              matching the "Type" field's own single-field max-width pattern above. */}
+          <div className="max-w-[220px]">
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Temps de réponse</Label>
+            <Select value={responseTime} onValueChange={setResponseTime}>
+              <SelectTrigger className="h-9 rounded-xl mt-0.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="< 1h">Moins de 1h</SelectItem>
+                <SelectItem value="< 2h">Moins de 2h</SelectItem>
+                <SelectItem value="< 4h">Moins de 4h</SelectItem>
+                <SelectItem value="< 24h">Moins de 24h</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="text-xs text-gray-500 dark:text-gray-400">Biographie</Label>

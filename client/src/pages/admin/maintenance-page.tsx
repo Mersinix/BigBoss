@@ -14,7 +14,9 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import {
   Wrench, Users, Calendar, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
   Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image, Zap, Eye, X, Check,
+  TrendingUp, Send, ClipboardList,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -22,7 +24,7 @@ import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
 import { useMaintenanceJobTargets, useMaintenanceJobApplicationsForJob } from "@/hooks/use-maintenance-jobs";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
 import { useThemeStore } from "@/store/theme-store";
-import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { DashboardHero, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 type TaxonomyItem = { id: number; name: string; icon?: string | null; isActive: boolean; isFrozen: boolean };
@@ -48,6 +50,7 @@ type Overview = {
     totalInterventions: number; publishedInterventions: number; draftInterventions: number; closedInterventions: number;
     totalInterventionApplications: number; pendingInterventionApplications: number;
     acceptedInterventionApplications: number; rejectedInterventionApplications: number;
+    interventionsOngoing: number; interventionsCompleted: number; interventionsCancelled: number;
   };
   categories: { category: string; count: number }[];
   taxonomy: { competencies: TaxonomyItem[]; zones: TaxonomyItem[] };
@@ -77,6 +80,19 @@ const APPLICATION_STATUS_COLORS: Record<string, string> = {
 
 function JobPostStatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className={JOB_POST_STATUS_COLORS[status] ?? ""}>{JOB_POST_STATUS_LABELS[status] ?? status}</Badge>;
+}
+
+const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
+
+function monthBucketKeys(count: number) {
+  const now = new Date();
+  const keys: { key: string; label: string }[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    keys.push({ key, label: d.toLocaleDateString("fr-FR", { month: "short" }) });
+  }
+  return keys;
 }
 
 function fmtPlainDate(value: string | null) {
@@ -489,111 +505,12 @@ function AddMaintenanceAccountModal({ open, onClose, onCreated }: { open: boolea
   </Dialog>;
 }
 
-// Part 8-9 — reservation cards + details modal with EDIT / FREEZE / DELETE.
-function ReservationCard({ row, onClick }: { row: any; onClick: () => void }) {
-  return <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={onClick} data-testid={`card-maintenance-reservation-${row.id}`}>
-    <CardContent className="p-4 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0"><p className="font-semibold text-sm truncate">{row.service}</p><p className="text-xs text-muted-foreground">{row.category || "—"} · {row.urgency}</p></div>
-        <div className="flex items-center gap-1.5 shrink-0">{row.isFrozen && <Snowflake className="h-3.5 w-3.5 text-blue-600" />}<Badge variant="outline">{row.status}</Badge></div>
-      </div>
-      <div className="flex items-center gap-1 text-xs text-muted-foreground"><Calendar className="h-3 w-3" />{row.date} {row.time || ""}</div>
-      <div className="flex items-center justify-between text-xs">
-        <span className="truncate">Maintenance : <span className="font-medium text-foreground">{row.maintenanceName}</span></span>
-      </div>
-      <div className="text-xs truncate">Coffee Owner : <span className="font-medium">{row.cafeOwner}</span></div>
-      {row.location && <div className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" />{row.location}</div>}
-      {row.description && <p className="text-xs text-muted-foreground truncate">{row.description}</p>}
-    </CardContent>
-  </Card>;
-}
-
-const RESERVATION_STATUSES = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "RESCHEDULED", "RESCHEDULE_PENDING", "RESCHEDULE_REJECTED"];
-
-function ReservationDetail({ reservation, onClose, onRefresh }: { reservation: any | null; onClose: () => void; onRefresh: () => void }) {
-  const { toast } = useToast();
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<any>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const startEdit = () => {
-    setForm({ service: reservation.service, date: reservation.date, time: reservation.time ?? "", location: reservation.location ?? "", description: reservation.description ?? "", status: reservation.status });
-    setEditing(true);
-  };
-  const editMutation = useMutation({
-    mutationFn: () => apiRequest("PATCH", `/api/admin/maintenance/reservations/${reservation.id}`, form),
-    onSuccess: () => { setEditing(false); onRefresh(); toast({ title: "Réservation mise à jour" }); },
-    onError: (e: any) => toast({ title: "Mise à jour impossible", description: e.message, variant: "destructive" }),
-  });
-  const freezeMutation = useMutation({
-    mutationFn: (isFrozen: boolean) => apiRequest("PATCH", `/api/admin/maintenance/reservations/${reservation.id}/freeze`, { isFrozen }),
-    onSuccess: () => { onRefresh(); toast({ title: reservation.isFrozen ? "Réservation dégelée" : "Réservation gelée" }); },
-    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
-  });
-  const deleteMutation = useMutation({
-    mutationFn: () => apiRequest("DELETE", `/api/admin/maintenance/reservations/${reservation.id}`),
-    onSuccess: () => { onRefresh(); onClose(); toast({ title: "Réservation supprimée" }); },
-    onError: (e: any) => toast({ title: "Suppression impossible", description: e.message, variant: "destructive" }),
-  });
-
-  if (!reservation) return null;
-  return <Dialog open onOpenChange={(open) => !open && onClose()}>
-    {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
-        scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-      <DialogHeader><DialogTitle>Réservation #{reservation.id}</DialogTitle></DialogHeader>
-      {editing ? (
-        <div className="space-y-2">
-          <div><label className="text-xs text-muted-foreground">Service</label><Input value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} /></div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><label className="text-xs text-muted-foreground">Date</label><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
-            <div><label className="text-xs text-muted-foreground">Heure</label><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></div>
-          </div>
-          <div><label className="text-xs text-muted-foreground">Lieu</label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
-          <div><label className="text-xs text-muted-foreground">Besoin</label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div>
-            <label className="text-xs text-muted-foreground">Statut</label>
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{RESERVATION_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" onClick={() => setEditing(false)}>Annuler</Button>
-            <Button disabled={editMutation.isPending} onClick={() => editMutation.mutate()}>{editMutation.isPending ? "Enregistrement…" : "Enregistrer"}</Button>
-          </div>
-        </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 gap-3 text-sm">
-          <div className="sm:col-span-2 flex flex-wrap gap-2"><Badge variant="outline">{reservation.status}</Badge>{reservation.isFrozen && <Badge className="bg-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé</Badge>}</div>
-          <Info icon={Wrench} label="Service / catégorie" value={`${reservation.service}${reservation.category ? ` · ${reservation.category}` : ""}`} />
-          <Info icon={Zap} label="Urgence" value={reservation.urgency} />
-          <Info icon={Calendar} label="Date / heure" value={`${reservation.date} ${reservation.time || ""}`} />
-          <Info icon={MapPin} label="Lieu" value={reservation.location} />
-          <Info icon={Phone} label="Contact" value={reservation.ownerPhone || reservation.contactPhone} />
-          <Info icon={Briefcase} label="Maintenance" value={reservation.maintenanceName} />
-          <Info icon={Users} label="Coffee Owner" value={reservation.cafeOwner} />
-          <div className="sm:col-span-2"><p className="text-xs text-muted-foreground mb-1">Besoin</p><p className="whitespace-pre-wrap">{reservation.description || "—"}</p></div>
-          <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
-            <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-reservation"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>
-            <Button size="sm" variant="outline" disabled={freezeMutation.isPending} onClick={() => freezeMutation.mutate(!reservation.isFrozen)} data-testid="button-freeze-reservation">
-              <Snowflake className={`h-3.5 w-3.5 mr-1.5 ${reservation.isFrozen ? "text-blue-600" : ""}`} />{reservation.isFrozen ? "Dégeler" : "Freeze"}
-            </Button>
-            {!confirmDelete ? (
-              <Button size="sm" variant="outline" className="text-destructive border-destructive/40" onClick={() => setConfirmDelete(true)} data-testid="button-delete-reservation"><Trash2 className="h-3.5 w-3.5 mr-1.5" />Delete</Button>
-            ) : (
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/40 p-2">
-                <span className="text-xs text-destructive">Confirmer ?</span>
-                <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Annuler</Button>
-                <Button size="sm" variant="destructive" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate()} data-testid="button-confirm-delete-reservation">{deleteMutation.isPending ? "…" : "Confirmer"}</Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </DialogContent>
-  </Dialog>;
-}
+// The old reservation-list cards + Admin-only edit/freeze/delete detail modal
+// ("Réservations récentes" tab) were removed here
+// (docs/maintenance_pricing_admin_performance_audit.md Section 5/11) — the
+// backend routes (PATCH/DELETE /api/admin/maintenance/reservations/:id(/freeze))
+// and the underlying maintenanceReservations rows are fully preserved, this
+// only removes the dedicated browsing UI in favor of the Interventions tab.
 
 export default function MaintenanceAdminPage() {
   const { toast } = useToast();
@@ -601,12 +518,23 @@ export default function MaintenanceAdminPage() {
   useRealtime();
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
-  const [section, setSection] = useState("taxonomy");
+  // Default tab reordered to "accounts" (Comptes Maintenance → Interventions →
+  // Compétences & zones → Analytics — docs/maintenance_pricing_admin_performance_audit.md
+  // Section 6).
+  const [section, setSection] = useState("accounts");
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
-  const [selectedReservation, setSelectedReservation] = useState<any | null>(null);
   const [selectedJobPost, setSelectedJobPost] = useState<AdminMaintenanceJobPost | null>(null);
   const [jobPostStatusFilter, setJobPostStatusFilter] = useState("all");
+  // Interventions tab filters (Section 12 of the audit — only filters backed
+  // by real, already-fetched data, no extra queries).
+  const [jobPostSearch, setJobPostSearch] = useState("");
+  const [jobPostPublicationMode, setJobPostPublicationMode] = useState("all");
+  const [jobPostCategory, setJobPostCategory] = useState("all");
+  const [jobPostUrgency, setJobPostUrgency] = useState("all");
+  const [jobPostLocation, setJobPostLocation] = useState("all");
+  const [jobPostSearchOpen, setJobPostSearchOpen] = useState(false);
+  const jobPostSearchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [accountSearchOpen, setAccountSearchOpen] = useState(false);
   const accountSearchInputRef = useRef<HTMLInputElement>(null);
@@ -623,11 +551,6 @@ export default function MaintenanceAdminPage() {
     const freshAccount = data?.accounts?.find((account) => account.userId === selectedAccount.userId);
     if (freshAccount && freshAccount !== selectedAccount) setSelectedAccount(freshAccount);
   }, [data?.accounts, selectedAccount?.userId]);
-  useEffect(() => {
-    if (!selectedReservation) return;
-    const fresh = data?.reservations?.find((row: any) => row.id === selectedReservation.id);
-    if (fresh && fresh !== selectedReservation) setSelectedReservation(fresh);
-  }, [data?.reservations, selectedReservation?.id]);
   useEffect(() => {
     if (!selectedJobPost) return;
     const fresh = data?.jobPosts?.find((row) => row.id === selectedJobPost.id);
@@ -663,21 +586,75 @@ export default function MaintenanceAdminPage() {
   const accountsPagination = usePagination(accounts.length);
   useEffect(() => { accountsPagination.resetPage(); }, [search, status, availability, visibility, profileType, category, location, rating]);
   const pageAccounts = accounts.slice(accountsPagination.start, accountsPagination.end);
-  const reservations = data?.reservations ?? [];
-  const reservationsPagination = usePagination(reservations.length);
-  const pageReservations = reservations.slice(reservationsPagination.start, reservationsPagination.end);
+
+  // Interventions tab — filter options derived from already-fetched jobPosts,
+  // same comma-split-dropdown convention as the Comptes Maintenance tab above
+  // (Section 12 of the audit).
+  const jobPostFilterOptions = useMemo(() => {
+    const rows = data?.jobPosts ?? [];
+    return {
+      categories: Array.from(new Set(rows.flatMap((j) => j.categories ?? []))).sort(),
+      locations: Array.from(new Set(rows.flatMap((j) => (j.locationAddress || "").split(",").map((x) => x.trim()).filter(Boolean)))).sort(),
+    };
+  }, [data?.jobPosts]);
   const jobPosts = useMemo(() => {
     const rows = data?.jobPosts ?? [];
-    return jobPostStatusFilter === "all" ? rows : rows.filter((j) => j.status === jobPostStatusFilter);
-  }, [data?.jobPosts, jobPostStatusFilter]);
+    return rows.filter((j) => {
+      const haystack = [j.title, j.establishment, j.cafeOwnerName].join(" ").toLowerCase();
+      const zones = (j.locationAddress || "").split(",").map((x) => x.trim());
+      return (!jobPostSearch || haystack.includes(jobPostSearch.toLowerCase()))
+        && (jobPostStatusFilter === "all" || j.status === jobPostStatusFilter)
+        && (jobPostPublicationMode === "all" || j.publicationMode === jobPostPublicationMode)
+        && (jobPostCategory === "all" || j.categories.includes(jobPostCategory))
+        && (jobPostUrgency === "all" || j.urgency === jobPostUrgency)
+        && (jobPostLocation === "all" || zones.includes(jobPostLocation));
+    });
+  }, [data?.jobPosts, jobPostSearch, jobPostStatusFilter, jobPostPublicationMode, jobPostCategory, jobPostUrgency, jobPostLocation]);
   const jobPostsPagination = usePagination(jobPosts.length);
-  useEffect(() => { jobPostsPagination.resetPage(); }, [jobPostStatusFilter]);
+  useEffect(() => { jobPostsPagination.resetPage(); }, [jobPostSearch, jobPostStatusFilter, jobPostPublicationMode, jobPostCategory, jobPostUrgency, jobPostLocation]);
   const pageJobPosts = jobPosts.slice(jobPostsPagination.start, jobPostsPagination.end);
+
+  // ── Analytics tab — bucketed client-side from the full jobPosts/jobApplications
+  // lists, same approach admin/barista-page.tsx already uses (Section 9 of the
+  // audit). No revenue-based metric — Maintenance's job-posting system has no
+  // numeric price field (same reasoning Barista's own cleanup already applied). ──
+  const jobPostsByMonth = useMemo(() => {
+    const months = monthBucketKeys(6);
+    const byMonth = new Map<string, number>();
+    for (const j of data?.jobPosts ?? []) {
+      if (!j.createdAt) continue;
+      const d = new Date(j.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
+    }
+    return months.map(({ key, label }) => ({ month: label, count: byMonth.get(key) ?? 0 }));
+  }, [data?.jobPosts]);
+  const applicationsByMonth = useMemo(() => {
+    const months = monthBucketKeys(6);
+    const byMonth = new Map<string, number>();
+    for (const a of data?.jobApplications ?? []) {
+      if (!a.createdAt) continue;
+      const d = new Date(a.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      byMonth.set(key, (byMonth.get(key) ?? 0) + 1);
+    }
+    return months.map(({ key, label }) => ({ month: label, count: byMonth.get(key) ?? 0 }));
+  }, [data?.jobApplications]);
+  const acceptanceRate = stats && stats.totalInterventionApplications > 0
+    ? Math.round((stats.acceptedInterventionApplications / stats.totalInterventionApplications) * 100) : null;
+  // Non-revenue-based ranking — same "rank by rating instead of revenue"
+  // precedent already used by admin/barista-page.tsx's own Analytics tab.
+  const topRatedAccounts = useMemo(
+    () => (data?.accounts ?? []).filter((a) => a.reviewCount > 0).slice().sort((a, b) => b.rating - a.rating).slice(0, 5),
+    [data?.accounts],
+  );
+
   const kpis = [
     ["Comptes Maintenance", stats?.totalAccounts ?? 0, Users], ["Actifs / approuvés", stats?.activeAccounts ?? 0, CheckCircle],
-    ["Disponibles", stats?.availableAccounts ?? 0, Wrench], ["Réservations", stats?.totalReservations ?? 0, Calendar],
-    ["En attente", stats?.pendingReservations ?? 0, Clock], ["Terminées", stats?.completedReservations ?? 0, CheckCircle],
-    ["Annulées", stats?.cancelledReservations ?? 0, XCircle], ["Note moyenne", stats ? stats.averageRating.toFixed(1) : "0.0", Star],
+    ["Disponibles", stats?.availableAccounts ?? 0, Wrench], ["Interventions", stats?.totalInterventions ?? 0, Briefcase],
+    ["En attente", stats?.pendingInterventionApplications ?? 0, Clock], ["En cours", stats?.interventionsOngoing ?? 0, Timer],
+    ["Terminées", stats?.interventionsCompleted ?? 0, CheckCircle], ["Annulées", stats?.interventionsCancelled ?? 0, XCircle],
+    ["Note moyenne", stats ? stats.averageRating.toFixed(1) : "0.0", Star],
   ] as const;
   return <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
     <DashboardHero
@@ -698,10 +675,10 @@ export default function MaintenanceAdminPage() {
           bg-background/shadow-sm chip. */}
       <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
         <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
-          <TabsTrigger value="taxonomy" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Compétences & zones</TabsTrigger>
           <TabsTrigger value="accounts" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Comptes Maintenance</TabsTrigger>
-          <TabsTrigger value="reservations" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Réservations récentes</TabsTrigger>
           <TabsTrigger value="interventions" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Interventions</TabsTrigger>
+          <TabsTrigger value="taxonomy" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Compétences & zones</TabsTrigger>
+          <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Analytics</TabsTrigger>
         </TabsList>
       </div>
       <TabsContent value="taxonomy" className="mt-4 grid lg:grid-cols-2 gap-6">
@@ -770,24 +747,6 @@ export default function MaintenanceAdminPage() {
           itemLabel="comptes"
         />
       </TabsContent>
-      <TabsContent value="reservations" className="mt-4">
-        {reservations.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune réservation.</CardContent></Card> : (
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {pageReservations.map((row: any) => <ReservationCard key={row.id} row={row} onClick={() => setSelectedReservation(row)} />)}
-          </div>
-        )}
-        <DataPagination
-          page={reservationsPagination.page}
-          pageSize={reservationsPagination.pageSize}
-          totalItems={reservations.length}
-          totalPages={reservationsPagination.totalPages}
-          start={reservationsPagination.start}
-          end={reservationsPagination.end}
-          onPageChange={reservationsPagination.setPage}
-          onPageSizeChange={reservationsPagination.setPageSize}
-          itemLabel="réservations"
-        />
-      </TabsContent>
       <TabsContent value="interventions" className="mt-4 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Interventions publiées</p><p className="text-xl font-bold">{isLoading ? "…" : stats?.publishedInterventions ?? 0}</p></CardContent></Card>
@@ -795,16 +754,85 @@ export default function MaintenanceAdminPage() {
           <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Acceptées</p><p className="text-xl font-bold">{isLoading ? "…" : stats?.acceptedInterventionApplications ?? 0}</p></CardContent></Card>
           <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">En attente</p><p className="text-xl font-bold">{isLoading ? "…" : stats?.pendingInterventionApplications ?? 0}</p></CardContent></Card>
         </div>
-        <Select value={jobPostStatusFilter} onValueChange={setJobPostStatusFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Statut" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="DRAFT">Brouillon</SelectItem>
-            <SelectItem value="PUBLISHED">Publiée</SelectItem>
-            <SelectItem value="CLOSED">Clôturée</SelectItem>
-          </SelectContent>
-        </Select>
-        {jobPosts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune intervention.</CardContent></Card> : (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+          <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
+            {!jobPostSearchOpen && (
+              <button
+                type="button"
+                className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
+                onClick={() => { setJobPostSearchOpen(true); setTimeout(() => jobPostSearchInputRef.current?.focus(), 0); }}
+                aria-label="Ouvrir la recherche"
+                data-testid="button-open-maintenance-job-search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            )}
+            <div className={`${jobPostSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-48 sm:w-auto`}>
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                ref={jobPostSearchInputRef}
+                className="pl-9"
+                value={jobPostSearch}
+                onChange={(e) => setJobPostSearch(e.target.value)}
+                onBlur={() => { if (!jobPostSearch) setJobPostSearchOpen(false); }}
+                placeholder="Rechercher une intervention, un établissement, un café…"
+              />
+            </div>
+          </div>
+          <Select value={jobPostStatusFilter} onValueChange={setJobPostStatusFilter}>
+            <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les statuts</SelectItem>
+              <SelectItem value="DRAFT">Brouillon</SelectItem>
+              <SelectItem value="PUBLISHED">Publiée</SelectItem>
+              <SelectItem value="CLOSED">Clôturée</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={jobPostPublicationMode} onValueChange={setJobPostPublicationMode}>
+            <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Publication" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes publications</SelectItem>
+              <SelectItem value="AUTOMATIC">Automatique</SelectItem>
+              <SelectItem value="MANUAL">Manuelle</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={jobPostCategory} onValueChange={setJobPostCategory}>
+            <SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes catégories</SelectItem>
+              {jobPostFilterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={jobPostUrgency} onValueChange={setJobPostUrgency}>
+            <SelectTrigger className="w-[140px] shrink-0"><SelectValue placeholder="Urgence" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes urgences</SelectItem>
+              <SelectItem value="LOW">Faible</SelectItem>
+              <SelectItem value="NORMAL">Normale</SelectItem>
+              <SelectItem value="HIGH">Élevée</SelectItem>
+              <SelectItem value="URGENT">Urgente</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={jobPostLocation} onValueChange={setJobPostLocation}>
+            <SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Zone" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes les zones</SelectItem>
+              {jobPostFilterOptions.locations.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {(jobPostSearch || jobPostStatusFilter !== "all" || jobPostPublicationMode !== "all" || jobPostCategory !== "all" || jobPostUrgency !== "all" || jobPostLocation !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground shrink-0"
+              onClick={() => { setJobPostSearch(""); setJobPostStatusFilter("all"); setJobPostPublicationMode("all"); setJobPostCategory("all"); setJobPostUrgency("all"); setJobPostLocation("all"); }}
+              data-testid="button-clear-maintenance-job-filters"
+            >
+              <X className="w-3.5 h-3.5" /> Effacer
+            </Button>
+          )}
+        </div>
+        {jobPosts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune intervention correspondante.</CardContent></Card> : (
           <div className="space-y-2">
             {pageJobPosts.map((j) => (
               <Card key={j.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedJobPost(j)} data-testid={`card-admin-maintenance-job-${j.id}`}>
@@ -835,10 +863,63 @@ export default function MaintenanceAdminPage() {
           itemLabel="interventions"
         />
       </TabsContent>
+      <TabsContent value="analytics" className="mt-4 space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Interventions totales</p><p className="text-xl font-bold">{stats?.totalInterventions ?? 0}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Réponses totales</p><p className="text-xl font-bold">{stats?.totalInterventionApplications ?? 0}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">En attente</p><p className="text-xl font-bold text-amber-600">{stats?.pendingInterventionApplications ?? 0}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux d'acceptation</p><p className="text-xl font-bold text-green-600">{acceptanceRate != null ? `${acceptanceRate}%` : "—"}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Note moyenne</p><p className="text-xl font-bold">{stats && stats.reviewCount > 0 ? stats.averageRating.toFixed(1) : "—"}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Comptes actifs</p><p className="text-xl font-bold">{stats?.activeAccounts ?? 0}</p></CardContent></Card>
+        </div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <SectionCard title="Interventions par mois" icon={Briefcase}>
+            {jobPostsByMonth.every((h) => h.count === 0) ? <EmptyState message="Aucune donnée pour le moment." /> : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={jobPostsByMonth} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} />
+                  <Tooltip {...tooltipStyle} formatter={(v: any) => [`${v} interventions`, "Interventions"]} />
+                  <Bar dataKey="count" fill="#f97316" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </SectionCard>
+          <SectionCard title="Réponses par mois" icon={Send}>
+            {applicationsByMonth.every((h) => h.count === 0) ? <EmptyState message="Aucune donnée pour le moment." /> : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={applicationsByMonth} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} />
+                  <Tooltip {...tooltipStyle} formatter={(v: any) => [`${v} réponses`, "Réponses"]} />
+                  <Bar dataKey="count" fill="#fb923c" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </SectionCard>
+        </div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <SectionCard title="Réponses par statut" icon={ClipboardList}>
+            <div className="divide-y divide-border/40">
+              <div className="flex items-center justify-between gap-3 py-2"><span className="text-sm font-medium">{APPLICATION_STATUS_LABELS.PENDING}</span><span className="text-sm font-semibold">{stats?.pendingInterventionApplications ?? 0}</span></div>
+              <div className="flex items-center justify-between gap-3 py-2"><span className="text-sm font-medium">{APPLICATION_STATUS_LABELS.ACCEPTED}</span><span className="text-sm font-semibold">{stats?.acceptedInterventionApplications ?? 0}</span></div>
+              <div className="flex items-center justify-between gap-3 py-2"><span className="text-sm font-medium">{APPLICATION_STATUS_LABELS.REJECTED}</span><span className="text-sm font-semibold">{stats?.rejectedInterventionApplications ?? 0}</span></div>
+            </div>
+          </SectionCard>
+          <SectionCard title="Meilleurs comptes (par évaluation)" icon={Star}>
+            {topRatedAccounts.length === 0 ? <EmptyState message="Aucun compte évalué pour le moment." /> : (
+              <div className="divide-y divide-border/40">
+                {topRatedAccounts.map((a: any, i: number) => <RankRow key={a.userId} rank={i + 1} title={a.name} subtitle={`${a.reviewCount} avis`} value={(a.rating / 10).toFixed(1)} />)}
+              </div>
+            )}
+          </SectionCard>
+        </div>
+      </TabsContent>
     </Tabs>
     <AccountDetail account={selectedAccount} onClose={() => setSelectedAccount(null)} onRefresh={refresh} />
     <AddMaintenanceAccountModal open={addAccountOpen} onClose={() => setAddAccountOpen(false)} onCreated={refresh} />
-    <ReservationDetail reservation={selectedReservation} onClose={() => setSelectedReservation(null)} onRefresh={refresh} />
     <MaintenanceJobPostDetail jobPost={selectedJobPost} onClose={() => setSelectedJobPost(null)} />
   </div>;
 }

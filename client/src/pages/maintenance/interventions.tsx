@@ -19,6 +19,7 @@ import {
   AlertTriangle, Building2, Calendar, Clock, FileText, MapPin, MessageSquare, Phone, Send, Sparkles, Wrench,
 } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // Provider-side discovery/response page for the new Maintenance Interventions
 // system — mirrors barista-marketplace/jobs.tsx, simplified (no OFFER/MISSION
@@ -442,6 +443,19 @@ export default function MaintenanceInterventionsPage() {
     };
   }, [applications, applicationsFilter]);
 
+  // Pagination (Section 11 of the task) — same client-side usePagination/
+  // DataPagination pattern already used elsewhere in this app (e.g.
+  // admin/maintenance-page.tsx's own Interventions tab); resetPage is tied to
+  // the status filter so changing filters always lands back on page 1, and
+  // the filter/search state itself is untouched by paging.
+  const discoverPagination = usePagination(filteredJobs.length);
+  useEffect(() => { discoverPagination.resetPage(); }, [discoverFilter]);
+  const pageJobs = filteredJobs.slice(discoverPagination.start, discoverPagination.end);
+
+  const applicationsPagination = usePagination(filteredApplications.length);
+  useEffect(() => { applicationsPagination.resetPage(); }, [applicationsFilter]);
+  const pageApplications = filteredApplications.slice(applicationsPagination.start, applicationsPagination.end);
+
   return (
     <div className="flex flex-col gap-5">
       <DashboardHero
@@ -474,9 +488,22 @@ export default function MaintenanceInterventionsPage() {
               <EmptyState title="Aucun résultat" subtitle={FILTERED_EMPTY_SUBTITLE} />
             )
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredJobs.map((job) => <JobCard key={job.id} job={job} onOpen={setDetailJob} onApply={openApply} />)}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pageJobs.map((job) => <JobCard key={job.id} job={job} onOpen={setDetailJob} onApply={openApply} />)}
+              </div>
+              <DataPagination
+                page={discoverPagination.page}
+                pageSize={discoverPagination.pageSize}
+                totalItems={filteredJobs.length}
+                totalPages={discoverPagination.totalPages}
+                start={discoverPagination.start}
+                end={discoverPagination.end}
+                onPageChange={discoverPagination.setPage}
+                onPageSizeChange={discoverPagination.setPageSize}
+                itemLabel="interventions"
+              />
+            </>
           )}
         </div>
       ) : (
@@ -491,9 +518,22 @@ export default function MaintenanceInterventionsPage() {
               <EmptyState title="Aucun résultat" subtitle={FILTERED_EMPTY_SUBTITLE} />
             )
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredApplications.map((app) => <ApplicationCard key={app.id} application={app} />)}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pageApplications.map((app) => <ApplicationCard key={app.id} application={app} />)}
+              </div>
+              <DataPagination
+                page={applicationsPagination.page}
+                pageSize={applicationsPagination.pageSize}
+                totalItems={filteredApplications.length}
+                totalPages={applicationsPagination.totalPages}
+                start={applicationsPagination.start}
+                end={applicationsPagination.end}
+                onPageChange={applicationsPagination.setPage}
+                onPageSizeChange={applicationsPagination.setPageSize}
+                itemLabel="réponses"
+              />
+            </>
           )}
         </div>
       )}

@@ -4,15 +4,21 @@ import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Users } from "lucide-react";
+import { TrendingUp, Users, Send } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { SectionCard, RankRow, EmptyState } from "@/components/dashboard/dashboard-kit";
 import type { MaintenanceReservationRow } from "@/pages/maintenance/planning";
+import { useMyMaintenanceJobApplications, type MaintenanceJobApplicationStatus } from "@/hooks/use-maintenance-jobs";
 
 type MaintenanceRevenueSummary = { history: { month: string; totalCents: number; reservations: number }[] };
 
 const MONTH_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+const APPLICATION_STATUS_LABELS: Record<MaintenanceJobApplicationStatus, string> = {
+  PENDING: "En attente",
+  ACCEPTED: "Acceptée",
+  REJECTED: "Rejetée",
+};
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
 // Same background/border/radius as the Maintenance Dashboard reference
 // (dashboard-overview.tsx's StatTile/"Prochaine intervention" cards).
@@ -42,6 +48,9 @@ export default function MaintenanceAnalyticsPage() {
     queryKey: ["/api/maintenance/revenue"],
     enabled: user?.role === "MAINTENANCE",
   });
+  // Additive Intervention-response analytics — same query the Interventions
+  // tab's "Mes réponses" list uses (see dashboard-overview.tsx's own note).
+  const { data: applications = [] } = useMyMaintenanceJobApplications();
 
   const reservationsByMonth = useMemo(() => {
     const now = new Date();
@@ -77,6 +86,27 @@ export default function MaintenanceAnalyticsPage() {
   const avgRating = reviews.length > 0 ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length : 0;
   const categoriesUsed = new Set(reservations.map((r) => r.category).filter(Boolean)).size;
 
+  const applicationsByMonth = useMemo(() => {
+    const now = new Date();
+    const buckets: { month: string; applications: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const count = applications.filter((a) => {
+        const ad = new Date(a.createdAt ?? 0);
+        return ad.getFullYear() === d.getFullYear() && ad.getMonth() === d.getMonth();
+      }).length;
+      buckets.push({ month: MONTH_LABELS[d.getMonth()], applications: count });
+    }
+    return buckets;
+  }, [applications]);
+
+  const applicationsByStatus = useMemo(() => {
+    const counts: Record<MaintenanceJobApplicationStatus, number> = { PENDING: 0, ACCEPTED: 0, REJECTED: 0 };
+    for (const a of applications) counts[a.status] += 1;
+    return counts;
+  }, [applications]);
+  const acceptanceRate = applications.length > 0 ? Math.round((applicationsByStatus.ACCEPTED / applications.length) * 100) : 0;
+
   if (reservationsLoading) {
     return (
       <div className="flex flex-col gap-5">
@@ -105,6 +135,13 @@ export default function MaintenanceAnalyticsPage() {
         <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Note moyenne</p><p className="text-xl font-bold">{reviews.length > 0 ? avgRating.toFixed(1) : "—"}</p></CardContent></Card>
         <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Interventions totales</p><p className="text-xl font-bold">{reservations.length}</p></CardContent></Card>
         <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Catégories utilisées</p><p className="text-xl font-bold text-orange-600">{categoriesUsed}</p></CardContent></Card>
+      </div>
+
+      {/* Additive Intervention-response KPIs — built on top of the existing
+          reservation-based row above, not a replacement (see hooks note). */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Réponses envoyées</p><p className="text-xl font-bold">{applications.length}</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux d'acceptation</p><p className="text-xl font-bold text-green-600">{acceptanceRate}%</p></CardContent></Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -143,6 +180,34 @@ export default function MaintenanceAnalyticsPage() {
           </div>
         )}
       </SectionCard>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SectionCard title="Réponses aux interventions par mois" icon={Send} className={CARD_CLASS}>
+          {applicationsByMonth.every((h) => h.applications === 0) ? <EmptyState message="Aucune donnée pour le moment." /> : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={applicationsByMonth} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} />
+                <Tooltip {...tooltipStyle} formatter={(v: any) => [`${v} réponses`, "Réponses"]} />
+                <Bar dataKey="applications" fill="#f97316" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </SectionCard>
+        <SectionCard title="Réponses par statut" icon={Send} className={CARD_CLASS}>
+          {applications.length === 0 ? <EmptyState message="Aucune réponse pour le moment." /> : (
+            <div className="divide-y divide-border/40">
+              {(Object.keys(APPLICATION_STATUS_LABELS) as MaintenanceJobApplicationStatus[]).map((status) => (
+                <div key={status} className="flex items-center justify-between gap-3 py-2">
+                  <span className="text-sm font-medium text-foreground">{APPLICATION_STATUS_LABELS[status]}</span>
+                  <span className="text-sm font-semibold text-foreground">{applicationsByStatus[status]}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      </div>
     </div>
   );
 }

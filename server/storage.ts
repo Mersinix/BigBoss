@@ -6383,6 +6383,25 @@ export class DatabaseStorage implements IStorage {
     }
     const averageRating = reviews.length ? reviews.reduce((sum, row) => sum + row.rating, 0) / reviews.length : 0;
 
+    // "En cours/Terminées/Annulées" for the Admin KPI row — an ACCEPTED
+    // application's real-world state lives on its LINKED reservation, not on
+    // the application's own PENDING/ACCEPTED/REJECTED status (Maintenance's
+    // application lifecycle has no "en cours" of its own — see the prior
+    // consolidation audit's Section 10). Computed here from the exact same
+    // jobApplicationRows/reservations rows every other role-specific view
+    // already reads — never a separate hardcoded counter (docs/maintenance_pricing_admin_performance_audit.md
+    // Section 11).
+    const reservationById = new Map(reservations.map((r) => [r.id, r]));
+    const FINISHED_RESERVATION_STATUSES = new Set(["CONFIRMED", "RESCHEDULED", "RESCHEDULE_PENDING"]);
+    let interventionsOngoing = 0, interventionsCompleted = 0, interventionsCancelled = 0;
+    for (const app of jobApplicationRows) {
+      if (app.status !== "ACCEPTED") continue;
+      const reservation = app.reservationId != null ? reservationById.get(app.reservationId) : undefined;
+      if (!reservation || reservation.status === "PENDING" || FINISHED_RESERVATION_STATUSES.has(reservation.status)) interventionsOngoing += 1;
+      else if (reservation.status === "COMPLETED") interventionsCompleted += 1;
+      else if (reservation.status === "CANCELLED") interventionsCancelled += 1;
+    }
+
     const jobPosts = jobPostRows.map((j) => ({
       ...j,
       cafeOwnerName: userMap.get(j.cafeOwnerId)?.name ?? "—",
@@ -6422,6 +6441,9 @@ export class DatabaseStorage implements IStorage {
         pendingInterventionApplications: jobApplicationRows.filter((a) => a.status === "PENDING").length,
         acceptedInterventionApplications: jobApplicationRows.filter((a) => a.status === "ACCEPTED").length,
         rejectedInterventionApplications: jobApplicationRows.filter((a) => a.status === "REJECTED").length,
+        interventionsOngoing,
+        interventionsCompleted,
+        interventionsCancelled,
       },
       categories: Array.from(categoryCounts, ([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
       taxonomy,

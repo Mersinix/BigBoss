@@ -654,7 +654,6 @@ export default function MaintenanceAdminPage() {
     ["Disponibles", stats?.availableAccounts ?? 0, Wrench], ["Interventions", stats?.totalInterventions ?? 0, Briefcase],
     ["En attente", stats?.pendingInterventionApplications ?? 0, Clock], ["En cours", stats?.interventionsOngoing ?? 0, Timer],
     ["Terminées", stats?.interventionsCompleted ?? 0, CheckCircle], ["Annulées", stats?.interventionsCancelled ?? 0, XCircle],
-    ["Note moyenne", stats ? stats.averageRating.toFixed(1) : "0.0", Star],
   ] as const;
   return <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
     <DashboardHero

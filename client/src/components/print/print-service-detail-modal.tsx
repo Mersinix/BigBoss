@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Flag, Heart, MessageCircle, X, Printer, Package, Layers, ShoppingCart,
 } from "lucide-react";
+import { ReviewsModal } from "@/components/account/reviews-modal";
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -93,6 +94,7 @@ export function PrintServiceDetailModal({
   const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
 
   // Review eligibility mirrors the exact server rule (POST /api/print/reviews): one
@@ -185,6 +187,7 @@ export function PrintServiceDetailModal({
               </div>
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-print-service-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
+                <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-print-service-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
               </div>
             </div>
 
@@ -250,56 +253,10 @@ export function PrintServiceDetailModal({
                 </div>
               </button>
 
-              {/* Reviews — real order-based reviews, tied to the printer (not per-service),
-                  same data the Company modal shows. */}
-              <div>
-                <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Avis ({reviews.length})</p>
-                {reviews.length === 0 ? (
-                  <p className={`text-xs ${t.textMuted}`}>Aucun avis pour le moment.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {reviews.map((r) => (
-                      <div key={r.id} className={`p-2.5 rounded-lg text-sm ${t.sectionBgAlt}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-medium text-xs ${t.textPrimary}`}>{r.cafeOwnerName || r.cafeName}</span>
-                          <span className="flex items-center gap-0.5 text-amber-500 text-xs"><Star className="w-3 h-3 fill-amber-400" /> {r.rating}</span>
-                        </div>
-                        {r.comment && <p className={`text-xs mt-1 ${t.textMuted}`}>{r.comment}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!readOnly && eligibleOrders.length > 0 && (
-                  <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-                    {eligibleOrders.length > 1 && (
-                      <select
-                        className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-                        value={activeOrderId ?? ""}
-                        onChange={(e) => setReviewOrderId(Number(e.target.value))}
-                        data-testid="select-review-order"
-                      >
-                        {eligibleOrders.map((o) => (
-                          <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
-                        ))}
-                      </select>
-                    )}
-                    <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-                    <Textarea
-                      placeholder="Commentaire (facultatif)"
-                      rows={2}
-                      defaultValue={existingReview?.comment ?? ""}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      className={t.inputBg}
-                      data-testid="input-review-comment"
-                    />
-                    <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-submit-review">
-                      {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-                    </Button>
-                  </div>
-                )}
-              </div>
+              {/* Avis — moved into the dedicated Star-icon ReviewsModal, matching
+                  PrintCompanyDetailModal's own already-established pattern
+                  (docs/print_marketing_ui_synchronization_audit.md Section 5/6),
+                  no longer rendered inline here. */}
             </div>
 
             <div className={`p-5 sm:p-6 pt-0 flex flex-wrap gap-2 justify-end border-t mt-1 pt-4 ${t.border}`}>
@@ -320,11 +277,21 @@ export function PrintServiceDetailModal({
       </DialogContent>
     </Dialog>
 
+    {/* Signaler — same modal chrome as the Disponibilité modals (rounded-[2rem]
+        container, circular close button), close button on the right
+        (docs/print_marketing_ui_synchronization_audit.md Section 14-17). Content/
+        functionality unchanged. */}
     <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent className={`sm:max-w-md ${t.modalBg}`}>
+      <DialogContent className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}>
         <VisuallyHidden><DialogTitle>Signaler {service?.printerName ?? ""}</DialogTitle></VisuallyHidden>
-        <div className="space-y-2">
-          <p className={`text-sm font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {service?.printerName}</p>
+        <div className="px-5 pt-5 pb-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="w-8 h-8" />
+            <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {service?.printerName}</span>
+            <button onClick={() => { setReportModalOpen(false); setReportReason(""); }} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
           <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
           <div className="flex gap-2 justify-end pt-1">
             <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
@@ -335,6 +302,49 @@ export function PrintServiceDetailModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Avis — dedicated modal, opened via the Star icon. Same real order-based
+        reviews (usePrintReviews) and the same review form/mutation (submitReview)
+        as before, relocated out of the main modal's body, mirroring
+        PrintCompanyDetailModal's identical pattern. */}
+    <ReviewsModal
+      open={reviewsModalOpen}
+      onClose={() => setReviewsModalOpen(false)}
+      professionalName={service?.printerName ?? ""}
+      rating={(service?.rating ?? 0) / 10}
+      reviewCount={service?.reviewCount ?? reviews.length}
+      reviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
+      isDark={isDark}
+      reviewForm={!readOnly && eligibleOrders.length > 0 ? (
+        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
+          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
+          {eligibleOrders.length > 1 && (
+            <select
+              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+              value={activeOrderId ?? ""}
+              onChange={(e) => setReviewOrderId(Number(e.target.value))}
+              data-testid="select-review-order"
+            >
+              {eligibleOrders.map((o) => (
+                <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
+              ))}
+            </select>
+          )}
+          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
+          <Textarea
+            placeholder="Commentaire (facultatif)"
+            rows={2}
+            defaultValue={existingReview?.comment ?? ""}
+            onChange={(e) => setReviewComment(e.target.value)}
+            className={t.inputBg}
+            data-testid="input-review-comment"
+          />
+          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-submit-review">
+            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
+          </Button>
+        </div>
+      ) : undefined}
+    />
     </>
   );
 }

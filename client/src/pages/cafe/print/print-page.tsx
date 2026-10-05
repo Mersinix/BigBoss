@@ -91,12 +91,13 @@ function useTheme(isDark: boolean) {
 
 // ── Category Strip ────────────────────────────────────────────────────────────
 
-function PrintCategoryStrip({ categories, loading, selected, onSelect, isDark }: {
+function PrintCategoryStrip({ categories, loading, selected, onSelect, isDark, categoryIconByName }: {
   categories: string[];
   loading: boolean;
   selected: string;
   onSelect: (id: string) => void;
   isDark: boolean;
+  categoryIconByName: Map<string, string>;
 }) {
   const t = useTheme(isDark);
   return (
@@ -125,8 +126,8 @@ function PrintCategoryStrip({ categories, loading, selected, onSelect, isDark }:
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selected === cat ? t.switcherActive : t.switcherInactive}`}
                   data-testid={`button-print-cat-${cat}`}
                 >
-                  <span className="text-base leading-none">{printCategoryIcon(cat)}</span>
-                  <span className="max-w-[72px] truncate">{cat}</span>
+                  <span className="text-base leading-none">{printCategoryIcon(cat, categoryIconByName.get(cat))}</span>
+                  <span className="whitespace-nowrap">{cat}</span>
                 </button>
               </div>
             ))
@@ -151,7 +152,7 @@ function StarRating({ rating }: { rating: number }) {
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 
-function PrintProductCard({ card, onClick, isDark }: { card: PrintCatalogCard; onClick: () => void; isDark: boolean }) {
+function PrintProductCard({ card, onClick, isDark, categoryIconByName }: { card: PrintCatalogCard; onClick: () => void; isDark: boolean; categoryIconByName: Map<string, string> }) {
   const faved = useFavorites((s) => !!s.printProducts[String(card.id)]);
   const togglePrint = useFavorites((s) => s.togglePrintProduct);
   const fmt = useFormatCurrency();
@@ -173,7 +174,7 @@ function PrintProductCard({ card, onClick, isDark }: { card: PrintCatalogCard; o
         {card.category && (
           <div className="absolute top-2 left-2">
             <Badge className={`${isDark ? "bg-gray-800/90 text-gray-200" : "bg-white/90 text-gray-700"} backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2`}>
-              {printCategoryIcon(card.category)} {card.category}
+              {printCategoryIcon(card.category, categoryIconByName.get(card.category))} {card.category}
             </Badge>
           </div>
         )}
@@ -268,13 +269,14 @@ interface PrintFilters {
   deliveryTime: string;
 }
 
-function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark }: {
+function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark, subcategoryIconByName }: {
   cards: PrintCatalogCard[];
   filters: PrintFilters;
   onChange: (key: keyof PrintFilters, val: string) => void;
   onReset: () => void;
   categoryId: string;
   isDark: boolean;
+  subcategoryIconByName: Map<string, string>;
 }) {
   const t = useTheme(isDark);
   const hasActive = Object.values(filters).some(Boolean);
@@ -318,7 +320,10 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark 
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
               <SelectItem value="__all__">Toutes sous-catégories</SelectItem>
-              {subCategories.map((sc) => <SelectItem key={sc} value={sc}>{sc}</SelectItem>)}
+              {subCategories.map((sc) => {
+                const icon = subcategoryIconByName.get(sc);
+                return <SelectItem key={sc} value={sc}>{icon ? `${icon} ${sc}` : sc}</SelectItem>;
+              })}
             </SelectContent>
           </Select>
         )}
@@ -381,6 +386,24 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
     queryKey: ["/api/print/categories"],
     enabled: !comingSoon,
   });
+  // Admin-created category/subcategory icons — real source of truth
+  // (printCategoryTaxonomy.icon / printSubCategoryTaxonomy.icon), matched by
+  // name since the catalog's category/subCategory fields are plain text with
+  // no FK (docs/print_marketing_ui_synchronization_audit.md Section 1/11).
+  const { data: taxonomy } = useQuery<{ categories: { name: string; icon: string | null }[]; subcategories: { name: string; icon: string | null }[] }>({
+    queryKey: ["/api/print/taxonomy"],
+    enabled: !comingSoon,
+  });
+  const categoryIconByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of taxonomy?.categories ?? []) if (row.icon) map.set(row.name, row.icon);
+    return map;
+  }, [taxonomy?.categories]);
+  const subcategoryIconByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of taxonomy?.subcategories ?? []) if (row.icon && !map.has(row.name)) map.set(row.name, row.icon);
+    return map;
+  }, [taxonomy?.subcategories]);
 
   const urlParams = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
   const initialSearch = urlParams.get("q") ?? "";
@@ -544,6 +567,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           loading={categoriesLoading}
           selected={categoryId}
           isDark={isDark}
+          categoryIconByName={categoryIconByName}
           onSelect={(id) => {
             setCategoryId(id);
             resetFilters();
@@ -561,6 +585,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           onReset={resetFilters}
            categoryId={categoryId}
            isDark={isDark}
+           subcategoryIconByName={subcategoryIconByName}
         />
       </div>
 
@@ -597,6 +622,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
                 card={card}
                  onClick={() => setPreviewServiceId(card.id)}
                  isDark={isDark}
+                 categoryIconByName={categoryIconByName}
               />
             ))}
           </div>
@@ -622,17 +648,23 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           full-page item detail for a quick preview; the full page (with its file-upload/
           material/quantity/cart customization) stays fully intact, one click away via
           the modal's own "Commander" button. */}
+      {/* True nested-modal stacking (docs/print_marketing_ui_synchronization_audit.md
+          Section 3/4): opening the Company modal from inside the Service modal (or vice
+          versa) no longer nulls out the other's id — both stay mounted/open
+          simultaneously, so closing the nested one reveals the still-open parent with
+          its scroll position/selection/review state intact, instead of the old
+          close-then-reopen ping-pong. */}
       <PrintServiceDetailModal
         serviceId={previewServiceId}
         open={previewServiceId != null}
         onClose={() => setPreviewServiceId(null)}
-        onOpenCompany={(printerId) => { setPreviewServiceId(null); setPreviewCompanyId(printerId); }}
+        onOpenCompany={(printerId) => setPreviewCompanyId(printerId)}
       />
       <PrintCompanyDetailModal
         printerUserId={previewCompanyId}
         open={previewCompanyId != null}
         onClose={() => setPreviewCompanyId(null)}
-        onOpenService={(serviceId) => { setPreviewCompanyId(null); setPreviewServiceId(serviceId); }}
+        onOpenService={(serviceId) => setPreviewServiceId(serviceId)}
       />
     </div>
   );

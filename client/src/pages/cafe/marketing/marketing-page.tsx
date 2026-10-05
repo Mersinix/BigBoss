@@ -211,7 +211,7 @@ function ServiceCard({
       className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
     >
       <button
-        className="absolute top-2 right-2 z-10 w-6 h-6 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+        className={`absolute top-2 right-2 z-10 w-6 h-6 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-800/90" : "bg-white/90"}`}
         onClick={(e) => {
           e.stopPropagation();
           toggleMarketingService({
@@ -582,17 +582,19 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         onOpenDetail={(s) => setDetailServiceId(s.id)}
       />
 
-      {/* Service Details Modal (Part 1) — the new primary entry point from a mapped card.
+      {/* Service Details Modal (Part 1) — the primary entry point from a mapped card.
           Its "Agence" section hands agencyUserId back here (onOpenAgency) to open the
-          Agency Details Modal below, which in turn can hand a serviceId back
-          (onOpenService) to swap back to this same modal — same nested-navigation
-          ping-pong as Academy's Formation ↔ Académie modals. */}
+          Agency Details Modal below — true nested-modal stacking, not the old
+          close-then-reopen ping-pong
+          (docs/print_marketing_ui_synchronization_audit.md Section 3/4): both stay
+          mounted/open simultaneously, so closing the nested one reveals the
+          still-open parent with its scroll position/selection/review state intact. */}
       <MarketingServiceDetailModal
         serviceId={detailServiceId}
         open={detailServiceId != null}
         onClose={() => setDetailServiceId(null)}
         onRequestQuote={(p) => { setDetailServiceId(null); setQuoteProvider(p); }}
-        onOpenAgency={(agencyId) => { setDetailServiceId(null); setDetailAgencyId(agencyId); }}
+        onOpenAgency={(agencyId) => setDetailAgencyId(agencyId)}
       />
 
       <MarketingDetailModal
@@ -600,7 +602,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         open={detailAgencyId != null}
         onClose={() => setDetailAgencyId(null)}
         onRequestQuote={(p) => { setDetailAgencyId(null); setQuoteProvider(p); }}
-        onOpenService={(serviceId) => { setDetailAgencyId(null); setDetailServiceId(serviceId); }}
+        onOpenService={(serviceId) => setDetailServiceId(serviceId)}
       />
 
       <MarketingBlacklistModal

@@ -91,14 +91,14 @@ function BaristaAvailabilityModal({
         <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
           <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
             <div className="flex items-center justify-between mb-4">
-              <button onClick={onClose} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
-                <X className="w-4 h-4" />
-              </button>
+              <div className="w-8 h-8" />
               <div className="flex flex-col items-center gap-0.5">
                 <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>{baristaName}</span>
                 <span className={`text-[11px] font-medium ${textMuted}`}>Disponibilité</span>
               </div>
-              <div className="w-8 h-8" />
+              <button onClick={onClose} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <div className={`h-px w-full ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
           </div>
@@ -472,13 +472,21 @@ export function BaristaDetailModal({
       </DialogContent>
     </Dialog>
 
-    {/* Signaler — own modal (Part 17), same mutation/validation/success-error
-        behavior as before, just no longer an inline panel. */}
+    {/* Signaler — same modal chrome as the Disponibilité modal above (rounded-[2rem]
+        container, circular close button), close button on the right
+        (docs/print_marketing_ui_synchronization_audit.md Section 14-17). Content/
+        functionality unchanged. */}
     <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent className={`sm:max-w-md ${t.modalBg}`}>
+      <DialogContent className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}>
         <VisuallyHidden><DialogTitle>Signaler {card?.name ?? ""}</DialogTitle></VisuallyHidden>
-        <div className="space-y-2">
-          <p className={`text-sm font-medium ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card?.name}</p>
+        <div className="px-5 pt-5 pb-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="w-8 h-8" />
+            <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card?.name}</span>
+            <button onClick={() => { setReportModalOpen(false); setReportReason(""); }} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
           <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
           <div className="flex gap-2 justify-end pt-1">
             <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>

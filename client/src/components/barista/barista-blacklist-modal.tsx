@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShieldAlert, MapPin, Calendar, Ban } from "lucide-react";
+import { ShieldAlert, MapPin, Calendar, Ban, X } from "lucide-react";
 import { useMyBaristaReports, type BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { RecruitDialog } from "@/pages/cafe/barista/barista-page";
@@ -42,16 +42,29 @@ export function BaristaBlacklistModal({ open, onClose }: { open: boolean; onClos
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
+        {/* Header/close-button synchronized to the Maintenance Hero Signaler
+            modal's visual reference
+            (docs/coffee_owner_hero_signaler_modal_design_audit.md) — content/
+            data below unchanged. Scrollbar classes already matched. */}
+        <DialogContent className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
           <VisuallyHidden><DialogTitle>Baristas signalés</DialogTitle></VisuallyHidden>
-          <div className="flex items-center gap-2 mb-1">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? "bg-red-900/40" : "bg-red-100"}`}>
-              <Ban className={`w-4 h-4 ${isDark ? "text-red-400" : "text-red-600"}`} />
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? "bg-red-900/40" : "bg-red-100"}`}>
+                <Ban className={`w-4 h-4 ${isDark ? "text-red-400" : "text-red-600"}`} />
+              </div>
+              <div className="min-w-0">
+                <h2 className={`font-bold text-base ${t.textPrimary}`}>Baristas signalés</h2>
+                <p className={`text-xs ${t.textMuted}`}>Les baristas que vous avez personnellement signalés.</p>
+              </div>
             </div>
-            <div>
-              <h2 className={`font-bold text-base ${t.textPrimary}`}>Baristas signalés</h2>
-              <p className={`text-xs ${t.textMuted}`}>Les baristas que vous avez personnellement signalés.</p>
-            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
           {isLoading ? (

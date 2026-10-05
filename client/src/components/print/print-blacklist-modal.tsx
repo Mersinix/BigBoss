@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShieldAlert, MapPin, Calendar, Ban, Flag } from "lucide-react";
+import { ShieldAlert, MapPin, Calendar, Ban, Flag, X } from "lucide-react";
 import { useMyPrintReports, useReportPrinter } from "@/hooks/use-print-marketplace";
 import { useToast } from "@/hooks/use-toast";
 
@@ -71,23 +71,43 @@ export function PrintBlacklistModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto ${t.modalBg}`}>
+      {/* Header/close-button/scrollbar synchronized to the Maintenance Hero
+          Signaler modal's visual reference
+          (docs/coffee_owner_hero_signaler_modal_design_audit.md) — the
+          existing Signaler trigger/form below is untouched, just regrouped
+          with the new close button on the right, same as Maintenance. */}
+      <DialogContent className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
         <VisuallyHidden><DialogTitle>Imprimeurs signalés</DialogTitle></VisuallyHidden>
         <div className="flex items-center justify-between gap-2 mb-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? "bg-red-900/40" : "bg-red-100"}`}>
               <Ban className={`w-4 h-4 ${isDark ? "text-red-400" : "text-red-600"}`} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className={`font-bold text-base ${t.textPrimary}`}>Imprimeurs signalés</h2>
               <p className={`text-xs ${t.textMuted}`}>Les imprimeurs que vous avez personnellement signalés.</p>
             </div>
           </div>
-          {printers.length > 0 && (
-            <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => setFormOpen((v) => !v)} data-testid="button-open-print-report-form">
-              <Flag className="w-3.5 h-3.5" /> Signaler
-            </Button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {printers.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className={`gap-1.5 ${isDark ? "border-gray-600 text-gray-200 hover:bg-gray-800 hover:text-white" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                onClick={() => setFormOpen((v) => !v)}
+                data-testid="button-open-print-report-form"
+              >
+                <Flag className="w-3.5 h-3.5" /> Signaler
+              </Button>
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {formOpen && (

@@ -58,7 +58,12 @@ export function MaintenanceJobTargetButton({
   };
 
   return (
-    <DropdownMenu>
+    // modal={false} — this dropdown is opened from inside the Maintenance
+    // details Dialog; a *modal* DropdownMenu nested inside a modal Dialog
+    // causes the dropdown's own dismiss-on-select/dismiss-on-outside-click to
+    // also dismiss the parent Dialog (docs/coffee_owner_favorites_reporting_nested_modal_audit.md
+    // Section 11-13) — this is the standard fix for that Radix interaction.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild disabled={disabled}>
         <button
           className={className}

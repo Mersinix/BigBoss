@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { Star } from "lucide-react";
+import { Star, X } from "lucide-react";
 
 // Shared dedicated reviews modal (Phase 7) — the "Avis" block that used to
 // render inline inside each of the 7 professional Details Modals, now opened
@@ -28,17 +28,29 @@ export function ReviewsModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className={`sm:max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border-0 shadow-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
+      {/* Close button synchronized to the Hero Signaler modal's standardized
+          design (docs/coffee_owner_avis_close_icon_audit.md) — default shadcn
+          close hidden, replaced with the same circular button. */}
+      <DialogContent className={`sm:max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
         <DialogHeader>
           <VisuallyHidden><DialogTitle>Avis — {professionalName}</DialogTitle></VisuallyHidden>
-          <div className="flex items-center gap-2">
-            <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
-            <div>
-              <p className="font-bold text-base leading-tight">{professionalName}</p>
-              <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                {reviewCount > 0 ? `${Number(rating).toFixed(1)} · ${reviewCount} avis` : "Aucun avis pour le moment"}
-              </p>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Star className="w-5 h-5 fill-amber-400 text-amber-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-bold text-base leading-tight">{professionalName}</p>
+                <p className={`text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}>
+                  {reviewCount > 0 ? `${Number(rating).toFixed(1)} · ${reviewCount} avis` : "Aucun avis pour le moment"}
+                </p>
+              </div>
             </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </DialogHeader>
 

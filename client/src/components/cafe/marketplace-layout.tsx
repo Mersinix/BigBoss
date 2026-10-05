@@ -57,6 +57,8 @@ import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
 import { JobManagementModal } from "@/components/barista/job-management-modal";
 import { BaristaOffresList } from "@/components/cafe/barista-offres-list";
+import { MaintenanceInterventionsList } from "@/components/cafe/maintenance-interventions-list";
+import { MaintenanceJobManagementModal } from "@/components/maintenance/maintenance-job-management-modal";
 import type { MarketingMarketplaceCard, MarketingServiceCard } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
@@ -213,6 +215,12 @@ function AccountPanel({
   const [baristaReservationTab, setBaristaReservationTab] = useState<"missions" | "offres">("missions");
   const [jobManagementJobId, setJobManagementJobId] = useState<number | null>(null);
   const [jobManagementOpen, setJobManagementOpen] = useState(false);
+  // Maintenance — Réservations/Interventions pill (docs/maintenance_interventions_implementation_audit.md
+  // Section 8). Defaults to "reservations" so the existing, unmodified
+  // reservation history stays the first thing shown — purely additive.
+  const [maintenanceReservationTab, setMaintenanceReservationTab] = useState<"reservations" | "interventions">("reservations");
+  const [maintenanceJobManagementJobId, setMaintenanceJobManagementJobId] = useState<number | null>(null);
+  const [maintenanceJobManagementOpen, setMaintenanceJobManagementOpen] = useState(false);
 
   // Default to the first visible service, and if Admin hides the one currently
   // selected, hop to the next visible one — never leave the Coffee Owner on a
@@ -599,8 +607,41 @@ function AccountPanel({
               </div>
             )}
 
-            {/* ── Maintenance — UNCHANGED from the existing implementation ── */}
+            {/* ── Maintenance — Réservations (existing, unchanged) / Interventions
+                (new job-posting system, mirrors the Barista Missions/Offres
+                pill above — docs/maintenance_interventions_implementation_audit.md
+                Section 8) pill switcher. ── */}
             {reservationsService === "maintenance" && (
+              <div className={`flex gap-1 rounded-2xl p-1 w-fit mb-3 ${switcherBg}`}>
+                <button
+                  onClick={() => setMaintenanceReservationTab("reservations")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${maintenanceReservationTab === "reservations" ? switcherActive : switcherInactive}`}
+                  data-testid="tab-maintenance-reservations-reservations"
+                >
+                  Réservations
+                </button>
+                <button
+                  onClick={() => setMaintenanceReservationTab("interventions")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${maintenanceReservationTab === "interventions" ? switcherActive : switcherInactive}`}
+                  data-testid="tab-maintenance-reservations-interventions"
+                >
+                  Interventions
+                </button>
+              </div>
+            )}
+
+            {reservationsService === "maintenance" && maintenanceReservationTab === "interventions" && (
+              <MaintenanceInterventionsList
+                dk={dk}
+                cardBg={cardBg}
+                textPrimary={textPrimary}
+                textMuted={textMuted}
+                onOpenJob={(id) => { setMaintenanceJobManagementJobId(id); setMaintenanceJobManagementOpen(true); }}
+                onCreateJob={() => { setMaintenanceJobManagementJobId(null); setMaintenanceJobManagementOpen(true); }}
+              />
+            )}
+
+            {reservationsService === "maintenance" && maintenanceReservationTab === "reservations" && (
               reservationsLoading ? (
                 <div className="space-y-3 pt-2">
                   {[...Array(2)].map((_, i) => (
@@ -1097,6 +1138,15 @@ function AccountPanel({
           open={jobManagementOpen}
           onClose={() => { setJobManagementOpen(false); setJobManagementJobId(null); }}
           initialJobId={jobManagementJobId}
+        />
+
+        {/* Maintenance > Interventions — reuses the exact same job management
+            modal as /maintenance's "Intervention" hero icon, just deep-linked
+            to the clicked intervention when opened from here. */}
+        <MaintenanceJobManagementModal
+          open={maintenanceJobManagementOpen}
+          onClose={() => { setMaintenanceJobManagementOpen(false); setMaintenanceJobManagementJobId(null); }}
+          initialJobId={maintenanceJobManagementJobId}
         />
 
         {/* Marketing project details (Part 15) — resolved live from the same

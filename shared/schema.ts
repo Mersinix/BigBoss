@@ -2230,6 +2230,108 @@ export const maintenanceZones = pgTable("maintenance_zones", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ── Maintenance — Job posting system ("Interventions") ──────────────────────
+// Mirrors the Barista Marketplace job-posting system (baristaJobPosts/
+// baristaJobTargets/baristaJobApplications above) field-for-field, adapted to
+// Maintenance semantics. Deliberately simplified vs. the Barista reference:
+// no OFFER/MISSION record-type split (an intervention is one kind of
+// listing), and no meeting/interview sub-system — once the Coffee Owner
+// accepts a provider's application, that application is linked to a real
+// maintenanceReservations row (reservationId below), reusing the entire
+// existing reservation lifecycle/UI instead of duplicating it. An
+// intervention post (the listing) and a reservation (the actual scheduled
+// job) always stay two distinct, separately-displayed records — see
+// docs/maintenance_interventions_implementation_audit.md Section 4.
+export const maintenanceJobPublicationModeEnum = pgEnum('maintenance_job_publication_mode', ['AUTOMATIC', 'MANUAL']);
+export const maintenanceJobStatusEnum = pgEnum('maintenance_job_status', ['DRAFT', 'PUBLISHED', 'CLOSED']);
+export const maintenanceJobApplicationStatusEnum = pgEnum('maintenance_job_application_status', ['PENDING', 'ACCEPTED', 'REJECTED']);
+
+export const maintenanceJobPosts = pgTable("maintenance_job_posts", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  title: text("title").notNull(),
+  establishment: text("establishment").notNull().default(""),
+  locationAddress: text("location_address").notNull().default(""),
+  // Multi-select, free-form strings matching maintenanceCompetencies.name —
+  // displayed criteria for a provider to self-assess, not a server-side
+  // eligibility filter (mirrors Barista's employmentTypes/educationLevels).
+  categories: text("categories").array().notNull().default([]),
+  // Same LOW/NORMAL/HIGH/URGENT vocabulary as maintenanceReservations.urgency
+  // (plain text, not a pg enum, for the same reason that table isn't either).
+  urgency: text("urgency").notNull().default("NORMAL"),
+  description: text("description").notNull().default(""),
+  requirements: text("requirements").notNull().default(""),
+  contactPhone: text("contact_phone").notNull().default(""),
+  // Preferred intervention date/time — distinct from expiresAt (the
+  // application/publication deadline below), same distinction as Barista's
+  // missionStartDate/missionEndDate vs. its own expiresAt.
+  scheduledDate: text("scheduled_date"),
+  scheduledTime: text("scheduled_time"),
+  expiresAt: timestamp("expires_at"),
+  publicationMode: maintenanceJobPublicationModeEnum("publication_mode").notNull().default('AUTOMATIC'),
+  status: maintenanceJobStatusEnum("status").notNull().default('DRAFT'),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  cafeOwnerIdx: index("maintenance_job_posts_cafe_owner_idx").on(table.cafeOwnerId),
+  statusIdx: index("maintenance_job_posts_status_idx").on(table.status),
+}));
+export type MaintenanceJobPost = typeof maintenanceJobPosts.$inferSelect;
+export type InsertMaintenanceJobPost = typeof maintenanceJobPosts.$inferInsert;
+
+// Manual-publication targeting — which specific Maintenance professionals a
+// MANUAL job post is visible to, set via the shared MaintenanceJobTargetButton
+// (mounted in both MaintenanceFastSearch and the provider Details modal).
+// Unique pair prevents duplicate associations.
+export const maintenanceJobTargets = pgTable("maintenance_job_targets", {
+  id: serial("id").primaryKey(),
+  jobPostId: integer("job_post_id").notNull(),
+  maintenanceUserId: integer("maintenance_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  jobProviderUnique: uniqueIndex("maintenance_job_targets_job_provider_unique").on(table.jobPostId, table.maintenanceUserId),
+  jobPostIdx: index("maintenance_job_targets_job_post_idx").on(table.jobPostId),
+  providerIdx: index("maintenance_job_targets_provider_idx").on(table.maintenanceUserId),
+}));
+export type MaintenanceJobTarget = typeof maintenanceJobTargets.$inferSelect;
+
+// One application per (job, provider) — re-applying to a job already applied
+// to is not supported, same convention as baristaJobApplications. reservationId
+// is set once the Coffee Owner accepts this application (see Section 4/8 of
+// the audit doc) — null until then.
+export const maintenanceJobApplications = pgTable("maintenance_job_applications", {
+  id: serial("id").primaryKey(),
+  jobPostId: integer("job_post_id").notNull(),
+  maintenanceUserId: integer("maintenance_user_id").notNull(),
+  message: text("message"),
+  status: maintenanceJobApplicationStatusEnum("status").notNull().default('PENDING'),
+  reservationId: integer("reservation_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  jobProviderUnique: uniqueIndex("maintenance_job_applications_job_provider_unique").on(table.jobPostId, table.maintenanceUserId),
+  jobPostIdx: index("maintenance_job_applications_job_post_idx").on(table.jobPostId),
+  providerIdx: index("maintenance_job_applications_provider_idx").on(table.maintenanceUserId),
+  statusIdx: index("maintenance_job_applications_status_idx").on(table.status),
+}));
+export type MaintenanceJobApplication = typeof maintenanceJobApplications.$inferSelect;
+export type InsertMaintenanceJobApplication = typeof maintenanceJobApplications.$inferInsert;
+
+export type MaintenanceJobPostWithStats = MaintenanceJobPost & {
+  totalApplications: number;
+  pendingApplications: number;
+  acceptedApplications: number;
+  rejectedApplications: number;
+  targetCount: number;
+};
+
+export type MaintenanceJobApplicationWithParties = MaintenanceJobApplication & {
+  maintenanceName: string;
+  maintenanceProfileImageUrl: string | null;
+  jobTitle: string;
+  establishment: string;
+};
+
 // Entity-level report — a Coffee Owner flagging a Maintenance account itself,
 // mirroring baristaReports exactly (own table, own service scope — Part 23's
 // "service data separation": a Barista report must never appear in the

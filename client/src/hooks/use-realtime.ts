@@ -28,7 +28,7 @@ const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 const DELIVERY_ECOSYSTEM_EVENTS = ["vehicle_updated", "delivery_pricing_updated", "driver_review_created", "delivery_opportunity_updated"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
-const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created"];
+const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created", "maintenance_jobs_updated"];
 const DELIVERY_COMPANY_MARKETPLACE_EVENTS = ["delivery_company_profile_updated", "delivery_company_review_updated", "admin_delivery_company_report_created"];
 const DRIVER_PROFILE_EVENTS = ["driver_profile_updated"];
 const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated", "admin_print_report_created", "print_profile_updated", "print_favorite_updated"];
@@ -392,6 +392,10 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/maintenance/reports"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/reports/mine"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MAINTENANCE"] });
+            qc.invalidateQueries({ queryKey: ["/api/maintenance/jobs"] });
+            qc.invalidateQueries({ queryKey: ["/api/maintenance/jobs/mine"] });
+            qc.invalidateQueries({ queryKey: ["/api/maintenance/jobs/discover"] });
+            qc.invalidateQueries({ queryKey: ["/api/maintenance/applications/mine"] });
             invalidateMessagingQueries(qc);
           }
           if (DELIVERY_COMPANY_MARKETPLACE_EVENTS.includes(event)) {

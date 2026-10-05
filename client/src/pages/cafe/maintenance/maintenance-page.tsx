@@ -13,7 +13,6 @@ import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast
 import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { Button } from "@/components/ui/button";
@@ -30,8 +29,10 @@ import {
 import {
   Wrench, Search, MapPin, Star, MessageCircle, SlidersHorizontal,
   RotateCcw, X, Heart, Clock, Calendar, Shield, Zap, Award, Users,
-  Building2, User, Send, Flag, Navigation, Ban, Image as ImageIcon,
+  Building2, User, Send, Flag, Navigation, Ban, Image as ImageIcon, ClipboardList,
 } from "lucide-react";
+import { MaintenanceJobManagementModal } from "@/components/maintenance/maintenance-job-management-modal";
+import { MaintenanceJobTargetButton } from "@/components/maintenance/maintenance-job-target-button";
 
 // Stable shared reference for the favorites-id query default below — a fresh
 // `[]` literal there is a *different* array every render, which (while the
@@ -377,11 +378,11 @@ export function AgentDetailModal({
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
-  // Star (Phase 7) and Flash (Phase 3/5E) — two new icons alongside the
-  // existing Signaler/Disponibilité pair; both open their own dedicated modal
-  // instead of expanding inline, same pattern as Signaler/Disponibilité already do.
+  // Star (Phase 7) — new icon alongside the existing Signaler/Disponibilité
+  // pair; opens its own dedicated modal instead of expanding inline, same
+  // pattern as Signaler/Disponibilité already do. (The former Flash icon here
+  // was replaced by MaintenanceJobTargetButton — see the icon row below.)
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
-  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const { toast } = useToast();
   const submitReport = useMutation({
     mutationFn: () => {
@@ -439,11 +440,16 @@ export function AgentDetailModal({
               <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-maintenance-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
               <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-maintenance-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
               <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-maintenance-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
-              {/* Flash icon — Coffee Owner-facing only, never in the account's own
-                  read-only Aperçu preview (which has its own dedicated Flash
-                  preview button on Business → Profil instead). */}
-              {!readOnly && agent.flashImageUrl && (
-                <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-maintenance-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
+              {/* Intervention — Coffee Owner-facing only; replaces the former
+                  Flash action here (docs/maintenance_interventions_implementation_audit.md
+                  Section 10). Associates this specific provider with one of
+                  the owner's own MANUAL+PUBLISHED intervention posts. */}
+              {!readOnly && (
+                <MaintenanceJobTargetButton
+                  maintenanceUserId={agent.userId}
+                  maintenanceName={agent.name}
+                  className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"
+                />
               )}
             </div>
             <span className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${agent.available ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}>
@@ -641,18 +647,6 @@ export function AgentDetailModal({
       ) : undefined}
     />
 
-    {/* Flash (Phase 3/5E) — the real Coffee Owner-facing destination for the
-        Flash URL configured in Settings → Compte; same component the
-        account's own self-preview uses, not preview mode here. */}
-    <FlashPreviewModal
-      open={flashModalOpen}
-      onClose={() => setFlashModalOpen(false)}
-      name={agent.name}
-      typeLabel="Maintenance"
-      flashImageUrl={agent.flashImageUrl}
-      profileImageUrl={agent.profileImageUrl}
-      accentBgClass="bg-orange-500"
-    />
     </>
   );
 }
@@ -688,6 +682,8 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [jobManagementOpen, setJobManagementOpen] = useState(false);
+  const [jobManagementJobId, setJobManagementJobId] = useState<number | null>(null);
   const { data: profiles = [], isLoading: profilesLoading } = useQuery<MaintenanceMarketplaceCard[]>({ queryKey: ["/api/maintenance/profiles"] });
   const { data: categories = [] } = useQuery<string[]>({ queryKey: ["/api/maintenance/categories"] });
   const { data: taxonomy } = useQuery<{ competencies: { name: string; icon: string | null }[]; zones: any[] }>({ queryKey: ["/api/maintenance/taxonomy"] });
@@ -780,6 +776,11 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
               <Zap className="w-4 h-4" />
             </button>
           )}
+          {accessLevel === "approved" && (
+            <button onClick={() => { setJobManagementJobId(null); setJobManagementOpen(true); }} aria-label="Intervention" title="Intervention — publier et gérer" data-testid="button-open-maintenance-job-management" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-blue-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
+              <ClipboardList className="w-4 h-4" />
+            </button>
+          )}
         </div>
         <div className="relative max-w-3xl mx-auto text-center">
           <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}><Wrench className={`w-8 h-8 ${t.dk ? "text-amber-400" : "text-white"}`} /></div>
@@ -859,6 +860,11 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
           itself is rendered at the top of this component now — see the
           comment there. */}
       <MaintenanceBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} />
+      <MaintenanceJobManagementModal
+        open={jobManagementOpen}
+        onClose={() => setJobManagementOpen(false)}
+        initialJobId={jobManagementJobId}
+      />
     </div>
   );
 }

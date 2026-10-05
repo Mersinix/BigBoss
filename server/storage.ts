@@ -13,6 +13,7 @@ import {
   prospectCustomTypes, PROSPECT_TYPES,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
   maintenanceCompetencies, maintenanceZones, maintenanceReports,
+  maintenanceJobPosts, maintenanceJobTargets, maintenanceJobApplications,
   marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
   marketingServices, type MarketingService, type InsertMarketingService, type MarketingServiceCard,
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport, printFavorites,
@@ -76,6 +77,9 @@ import {
   type MaintenanceProfile, type InsertMaintenanceProfile, type MaintenanceMarketplaceCard, type OpeningHoursMap,
   type MaintenanceReservation, type InsertMaintenanceReservation,
   type MaintenanceCompetency, type MaintenanceZone,
+  type MaintenanceJobPost, type InsertMaintenanceJobPost, type MaintenanceJobPostWithStats,
+  type MaintenanceJobTarget, type MaintenanceJobApplication, type InsertMaintenanceJobApplication,
+  type MaintenanceJobApplicationWithParties,
   type PrintCatalogItem, type InsertPrintCatalogItem, type PrintCatalogCard,
   type PrintOrder, type InsertPrintOrder, type PrintOrderWithParties,
   type PrintCategoryTaxonomy, type PrintSubCategoryTaxonomy,
@@ -358,6 +362,25 @@ export interface IStorage {
   getMaintenanceFavoritesByUser(userId: number): Promise<number[]>;
   addMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
   removeMaintenanceFavorite(userId: number, maintenanceUserId: number): Promise<void>;
+
+  // Maintenance — Job posting system ("Interventions")
+  isMaintenanceProviderEligible(userId: number): Promise<boolean>;
+  createMaintenanceJobPost(cafeOwnerId: number, data: Partial<InsertMaintenanceJobPost>): Promise<MaintenanceJobPost>;
+  updateMaintenanceJobPost(id: number, cafeOwnerId: number, data: Partial<InsertMaintenanceJobPost>): Promise<MaintenanceJobPost | undefined>;
+  getMaintenanceJobPostById(id: number): Promise<MaintenanceJobPost | undefined>;
+  getMaintenanceJobPostsForOwner(cafeOwnerId: number): Promise<MaintenanceJobPostWithStats[]>;
+  getMaintenanceJobPostWithStats(id: number): Promise<MaintenanceJobPostWithStats | undefined>;
+  getDiscoverableMaintenanceJobPosts(maintenanceUserId: number): Promise<(MaintenanceJobPost & { isTargeted: boolean })[]>;
+  addMaintenanceJobTarget(jobPostId: number, maintenanceUserId: number): Promise<MaintenanceJobTarget>;
+  getMaintenanceJobTargets(jobPostId: number): Promise<(MaintenanceJobTarget & { maintenanceName: string; maintenanceProfileImageUrl: string | null })[]>;
+  isMaintenanceJobTargeted(jobPostId: number, maintenanceUserId: number): Promise<boolean>;
+  createMaintenanceJobApplication(jobPostId: number, maintenanceUserId: number, message?: string | null): Promise<MaintenanceJobApplication>;
+  getMaintenanceJobApplicationById(id: number): Promise<MaintenanceJobApplication | undefined>;
+  hasMaintenanceAppliedToJob(jobPostId: number, maintenanceUserId: number): Promise<boolean>;
+  getMaintenanceJobApplicationsForJob(jobPostId: number): Promise<MaintenanceJobApplicationWithParties[]>;
+  getMaintenanceJobApplicationsForProvider(maintenanceUserId: number): Promise<MaintenanceJobApplicationWithParties[]>;
+  rejectMaintenanceJobApplication(id: number): Promise<MaintenanceJobApplication | undefined>;
+  acceptMaintenanceJobApplication(id: number): Promise<{ application: MaintenanceJobApplication; reservation: MaintenanceReservation } | undefined>;
 
   // PRINT
   getPrintCatalogForPrinter(printerId: number): Promise<PrintCatalogItem[]>;
@@ -6412,6 +6435,223 @@ export class DatabaseStorage implements IStorage {
       eq(maintenanceFavorites.userId, userId),
       eq(maintenanceFavorites.maintenanceUserId, maintenanceUserId),
     ));
+  }
+
+  // ── Maintenance — Job posting system ("Interventions") — mirrors the
+  // Barista job-posting block (createBaristaJobPost etc.) field-for-field;
+  // see docs/maintenance_interventions_implementation_audit.md. ─────────────
+
+  // Same visibility gate as getMaintenanceProfiles (Section 4 of the audit
+  // doc) — reused here so job-post discovery/targeting never exposes an
+  // unapproved, suspended, vacationing, or marketplace-hidden provider.
+  async isMaintenanceProviderEligible(userId: number): Promise<boolean> {
+    const [row] = await db.select({ id: users.id })
+      .from(maintenanceProfiles)
+      .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
+      .where(and(
+        eq(maintenanceProfiles.userId, userId),
+        eq(users.role, "MAINTENANCE" as any),
+        eq(users.status, "approved"),
+        eq(maintenanceProfiles.marketplaceVisible, true),
+        eq(maintenanceProfiles.isOnVacation, false),
+        eq(maintenanceProfiles.isFrozen, false),
+        eq(maintenanceProfiles.publicationStatus, "APPROVED"),
+      ));
+    return !!row;
+  }
+
+  async createMaintenanceJobPost(cafeOwnerId: number, data: Partial<InsertMaintenanceJobPost>): Promise<MaintenanceJobPost> {
+    const { cafeOwnerId: _ignored, id: _id, createdAt: _c, updatedAt: _u, ...safe } = data as any;
+    const [created] = await db.insert(maintenanceJobPosts).values({ ...safe, cafeOwnerId }).returning();
+    return created;
+  }
+
+  async updateMaintenanceJobPost(id: number, cafeOwnerId: number, data: Partial<InsertMaintenanceJobPost>): Promise<MaintenanceJobPost | undefined> {
+    const { cafeOwnerId: _ignored, id: _id, createdAt: _c, updatedAt: _u, ...safe } = data as any;
+    const [updated] = await db.update(maintenanceJobPosts)
+      .set({ ...safe, updatedAt: new Date() })
+      .where(and(eq(maintenanceJobPosts.id, id), eq(maintenanceJobPosts.cafeOwnerId, cafeOwnerId)))
+      .returning();
+    return updated;
+  }
+
+  async getMaintenanceJobPostById(id: number): Promise<MaintenanceJobPost | undefined> {
+    const [row] = await db.select().from(maintenanceJobPosts).where(eq(maintenanceJobPosts.id, id));
+    return row;
+  }
+
+  private async computeMaintenanceJobStats(jobPostIds: number[]): Promise<Map<number, { total: number; pending: number; accepted: number; rejected: number; targetCount: number }>> {
+    const result = new Map<number, { total: number; pending: number; accepted: number; rejected: number; targetCount: number }>();
+    if (!jobPostIds.length) return result;
+    for (const id of jobPostIds) result.set(id, { total: 0, pending: 0, accepted: 0, rejected: 0, targetCount: 0 });
+    const appRows = await db.select({ jobPostId: maintenanceJobApplications.jobPostId, status: maintenanceJobApplications.status })
+      .from(maintenanceJobApplications).where(inArray(maintenanceJobApplications.jobPostId, jobPostIds));
+    for (const row of appRows) {
+      const s = result.get(row.jobPostId)!;
+      s.total += 1;
+      if (row.status === "PENDING") s.pending += 1;
+      else if (row.status === "ACCEPTED") s.accepted += 1;
+      else if (row.status === "REJECTED") s.rejected += 1;
+    }
+    const targetRows = await db.select({ jobPostId: maintenanceJobTargets.jobPostId })
+      .from(maintenanceJobTargets).where(inArray(maintenanceJobTargets.jobPostId, jobPostIds));
+    for (const row of targetRows) result.get(row.jobPostId)!.targetCount += 1;
+    return result;
+  }
+
+  private attachMaintenanceJobStats(row: MaintenanceJobPost, s: { total: number; pending: number; accepted: number; rejected: number; targetCount: number } | undefined): MaintenanceJobPostWithStats {
+    const stats = s ?? { total: 0, pending: 0, accepted: 0, rejected: 0, targetCount: 0 };
+    return {
+      ...row,
+      totalApplications: stats.total,
+      pendingApplications: stats.pending,
+      acceptedApplications: stats.accepted,
+      rejectedApplications: stats.rejected,
+      targetCount: stats.targetCount,
+    };
+  }
+
+  async getMaintenanceJobPostsForOwner(cafeOwnerId: number): Promise<MaintenanceJobPostWithStats[]> {
+    const rows = await db.select().from(maintenanceJobPosts).where(eq(maintenanceJobPosts.cafeOwnerId, cafeOwnerId)).orderBy(desc(maintenanceJobPosts.createdAt));
+    const statsMap = await this.computeMaintenanceJobStats(rows.map((r) => r.id));
+    return rows.map((r) => this.attachMaintenanceJobStats(r, statsMap.get(r.id)));
+  }
+
+  async getMaintenanceJobPostWithStats(id: number): Promise<MaintenanceJobPostWithStats | undefined> {
+    const row = await this.getMaintenanceJobPostById(id);
+    if (!row) return undefined;
+    const statsMap = await this.computeMaintenanceJobStats([id]);
+    return this.attachMaintenanceJobStats(row, statsMap.get(id));
+  }
+
+  // Automatic jobs eligible to every ELIGIBLE Maintenance provider (stricter
+  // than the Barista reference — see the audit doc Section 4 for why: an
+  // unapproved/suspended/hidden provider must never discover an intervention),
+  // UNION jobs this provider was specifically targeted for (MANUAL) — both
+  // filtered to PUBLISHED and not expired.
+  async getDiscoverableMaintenanceJobPosts(maintenanceUserId: number): Promise<(MaintenanceJobPost & { isTargeted: boolean })[]> {
+    const eligible = await this.isMaintenanceProviderEligible(maintenanceUserId);
+    if (!eligible) return [];
+    const now = new Date();
+    const automatic = await db.select().from(maintenanceJobPosts).where(and(
+      eq(maintenanceJobPosts.status, "PUBLISHED"),
+      eq(maintenanceJobPosts.publicationMode, "AUTOMATIC"),
+    ));
+    const targetRows = await db.select({ jobPostId: maintenanceJobTargets.jobPostId }).from(maintenanceJobTargets).where(eq(maintenanceJobTargets.maintenanceUserId, maintenanceUserId));
+    const targetedIds = targetRows.map((t) => t.jobPostId);
+    const manual = targetedIds.length
+      ? await db.select().from(maintenanceJobPosts).where(and(
+          eq(maintenanceJobPosts.status, "PUBLISHED"),
+          eq(maintenanceJobPosts.publicationMode, "MANUAL"),
+          inArray(maintenanceJobPosts.id, targetedIds),
+        ))
+      : [];
+    const notExpired = (j: MaintenanceJobPost) => !j.expiresAt || new Date(j.expiresAt as any) > now;
+    return [
+      ...automatic.filter(notExpired).map((j) => ({ ...j, isTargeted: false })),
+      ...manual.filter(notExpired).map((j) => ({ ...j, isTargeted: true })),
+    ];
+  }
+
+  async addMaintenanceJobTarget(jobPostId: number, maintenanceUserId: number): Promise<MaintenanceJobTarget> {
+    const [created] = await db.insert(maintenanceJobTargets).values({ jobPostId, maintenanceUserId }).onConflictDoNothing().returning();
+    if (created) return created;
+    const [existing] = await db.select().from(maintenanceJobTargets).where(and(eq(maintenanceJobTargets.jobPostId, jobPostId), eq(maintenanceJobTargets.maintenanceUserId, maintenanceUserId)));
+    return existing!;
+  }
+
+  async getMaintenanceJobTargets(jobPostId: number): Promise<(MaintenanceJobTarget & { maintenanceName: string; maintenanceProfileImageUrl: string | null })[]> {
+    const rows = await db.select().from(maintenanceJobTargets).where(eq(maintenanceJobTargets.jobPostId, jobPostId)).orderBy(desc(maintenanceJobTargets.createdAt));
+    if (!rows.length) return [];
+    const userIds = rows.map((r) => r.maintenanceUserId);
+    const userRows = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl }).from(users).where(inArray(users.id, userIds));
+    const userMap = new Map(userRows.map((u) => [u.id, u]));
+    return rows.map((r) => ({ ...r, maintenanceName: userMap.get(r.maintenanceUserId)?.name ?? "—", maintenanceProfileImageUrl: userMap.get(r.maintenanceUserId)?.profileImageUrl ?? null }));
+  }
+
+  async isMaintenanceJobTargeted(jobPostId: number, maintenanceUserId: number): Promise<boolean> {
+    const [row] = await db.select({ id: maintenanceJobTargets.id }).from(maintenanceJobTargets).where(and(eq(maintenanceJobTargets.jobPostId, jobPostId), eq(maintenanceJobTargets.maintenanceUserId, maintenanceUserId)));
+    return !!row;
+  }
+
+  // ── Job applications ──
+  async createMaintenanceJobApplication(jobPostId: number, maintenanceUserId: number, message?: string | null): Promise<MaintenanceJobApplication> {
+    const [created] = await db.insert(maintenanceJobApplications).values({ jobPostId, maintenanceUserId, message: message?.trim() || null }).returning();
+    return created;
+  }
+
+  async getMaintenanceJobApplicationById(id: number): Promise<MaintenanceJobApplication | undefined> {
+    const [row] = await db.select().from(maintenanceJobApplications).where(eq(maintenanceJobApplications.id, id));
+    return row;
+  }
+
+  async hasMaintenanceAppliedToJob(jobPostId: number, maintenanceUserId: number): Promise<boolean> {
+    const [row] = await db.select({ id: maintenanceJobApplications.id }).from(maintenanceJobApplications).where(and(eq(maintenanceJobApplications.jobPostId, jobPostId), eq(maintenanceJobApplications.maintenanceUserId, maintenanceUserId)));
+    return !!row;
+  }
+
+  private async attachMaintenanceApplicationParties(rows: MaintenanceJobApplication[]): Promise<MaintenanceJobApplicationWithParties[]> {
+    if (!rows.length) return [];
+    const providerIds = Array.from(new Set(rows.map((r) => r.maintenanceUserId)));
+    const jobIds = Array.from(new Set(rows.map((r) => r.jobPostId)));
+    const [providerRows, jobRows] = await Promise.all([
+      db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl }).from(users).where(inArray(users.id, providerIds)),
+      db.select().from(maintenanceJobPosts).where(inArray(maintenanceJobPosts.id, jobIds)),
+    ]);
+    const providerMap = new Map(providerRows.map((u) => [u.id, u]));
+    const jobMap = new Map(jobRows.map((j) => [j.id, j]));
+    return rows.map((r) => ({
+      ...r,
+      maintenanceName: providerMap.get(r.maintenanceUserId)?.name ?? "—",
+      maintenanceProfileImageUrl: providerMap.get(r.maintenanceUserId)?.profileImageUrl ?? null,
+      jobTitle: jobMap.get(r.jobPostId)?.title ?? "—",
+      establishment: jobMap.get(r.jobPostId)?.establishment ?? "",
+    }));
+  }
+
+  async getMaintenanceJobApplicationsForJob(jobPostId: number): Promise<MaintenanceJobApplicationWithParties[]> {
+    const rows = await db.select().from(maintenanceJobApplications).where(eq(maintenanceJobApplications.jobPostId, jobPostId)).orderBy(desc(maintenanceJobApplications.createdAt));
+    return this.attachMaintenanceApplicationParties(rows);
+  }
+
+  async getMaintenanceJobApplicationsForProvider(maintenanceUserId: number): Promise<MaintenanceJobApplicationWithParties[]> {
+    const rows = await db.select().from(maintenanceJobApplications).where(eq(maintenanceJobApplications.maintenanceUserId, maintenanceUserId)).orderBy(desc(maintenanceJobApplications.createdAt));
+    return this.attachMaintenanceApplicationParties(rows);
+  }
+
+  async rejectMaintenanceJobApplication(id: number): Promise<MaintenanceJobApplication | undefined> {
+    const [updated] = await db.update(maintenanceJobApplications).set({ status: "REJECTED", updatedAt: new Date() }).where(eq(maintenanceJobApplications.id, id)).returning();
+    return updated;
+  }
+
+  // Accepting an application creates the real, linked maintenanceReservations
+  // row (reusing the entire existing reservation lifecycle/UI rather than
+  // duplicating it — see the audit doc Section 4/8) and records the link on
+  // the application itself. The job post's own status is untouched here —
+  // the owner closes it explicitly, same as Barista.
+  async acceptMaintenanceJobApplication(id: number): Promise<{ application: MaintenanceJobApplication; reservation: MaintenanceReservation } | undefined> {
+    const application = await this.getMaintenanceJobApplicationById(id);
+    if (!application) return undefined;
+    const job = await this.getMaintenanceJobPostById(application.jobPostId);
+    if (!job) return undefined;
+    const reservation = await this.createMaintenanceReservation({
+      maintenanceUserId: application.maintenanceUserId,
+      cafeOwnerId: job.cafeOwnerId,
+      service: job.title,
+      date: job.scheduledDate || new Date().toISOString().slice(0, 10),
+      time: job.scheduledTime ?? null,
+      location: job.locationAddress,
+      description: job.description,
+      category: job.categories[0] ?? "",
+      urgency: job.urgency,
+      contactPhone: job.contactPhone,
+      status: "PENDING",
+    });
+    const [updated] = await db.update(maintenanceJobApplications)
+      .set({ status: "ACCEPTED", reservationId: reservation.id, updatedAt: new Date() })
+      .where(eq(maintenanceJobApplications.id, id))
+      .returning();
+    return { application: updated, reservation };
   }
 
   // ── Entity-level Maintenance reports (Coffee Owner "Blacklist", Part 22) —

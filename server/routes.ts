@@ -1056,6 +1056,270 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(updated);
   });
 
+  // ── Maintenance — Job posting system ("Interventions") ───────────────────
+  // Mirrors the Barista job-posting routes (POST /api/barista/jobs etc.)
+  // field-for-field — see docs/maintenance_interventions_implementation_audit.md.
+  // Visibility is enforced server-side on every read, never left to the
+  // frontend alone:
+  //   AUTOMATIC + PUBLISHED + not expired -> every ELIGIBLE Maintenance provider
+  //     (same gate as getMaintenanceProfiles: approved, marketplaceVisible,
+  //     not on vacation, not frozen, publicationStatus APPROVED)
+  //   MANUAL + PUBLISHED + not expired -> only providers targeted via
+  //     POST .../targets (MaintenanceJobTargetButton, mounted in Fast Search
+  //     and the provider Details modal)
+  //   DRAFT / CLOSED / expired -> only the owning Coffee Owner / Admin
+
+  const maintenanceJobPostBodySchema = z.object({
+    title: z.string().trim().min(1).max(200),
+    establishment: z.string().trim().max(200).optional(),
+    locationAddress: z.string().trim().max(300).optional(),
+    categories: z.array(z.string().max(60)).max(20).optional(),
+    urgency: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
+    scheduledDate: z.string().trim().max(20).optional().nullable(),
+    scheduledTime: z.string().trim().max(10).optional().nullable(),
+    contactPhone: z.string().trim().max(40).optional(),
+    description: z.string().trim().max(5000).optional(),
+    requirements: z.string().trim().max(5000).optional(),
+    expiresAt: z.string().optional().nullable(),
+    publicationMode: z.enum(["AUTOMATIC", "MANUAL"]).optional(),
+    status: z.enum(["DRAFT", "PUBLISHED", "CLOSED"]).optional(),
+  });
+
+  function normalizeMaintenanceJobPostBody(body: Partial<z.infer<typeof maintenanceJobPostBodySchema>>) {
+    const payload: any = { ...body };
+    if (body.expiresAt !== undefined) payload.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+    return payload;
+  }
+
+  app.post("/api/maintenance/jobs", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const body = maintenanceJobPostBodySchema.parse(req.body);
+      const user = await storage.getUser(req.session.userId!);
+      const payload = normalizeMaintenanceJobPostBody(body);
+      if (!payload.establishment) payload.establishment = user!.name;
+      if (!payload.locationAddress) payload.locationAddress = user!.locationAddress ?? "";
+      if (!payload.contactPhone) payload.contactPhone = user!.phone ?? "";
+      const job = await storage.createMaintenanceJobPost(user!.id, payload);
+      broadcast("maintenance_jobs_updated", { cafeOwnerId: user!.id });
+      res.status(201).json(job);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid intervention data" });
+    }
+  });
+
+  app.get("/api/maintenance/jobs/mine", requireApprovedCafeOwner, async (req: any, res) => {
+    try { res.json(await storage.getMaintenanceJobPostsForOwner(req.session.userId!)); }
+    catch { res.status(500).json({ message: "Failed to load interventions" }); }
+  });
+
+  // Provider-side discovery — automatic + published + not expired (eligible
+  // providers only), union manually-targeted + published + not expired for
+  // this provider specifically.
+  app.get("/api/maintenance/jobs/discover", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    try {
+      const jobs = await storage.getDiscoverableMaintenanceJobPosts(user.id);
+      const appliedRows = await storage.getMaintenanceJobApplicationsForProvider(user.id);
+      const appliedIds = new Set(appliedRows.map((a) => a.jobPostId));
+      res.json(jobs.map((j) => ({ ...j, hasApplied: appliedIds.has(j.id) })));
+    } catch { res.status(500).json({ message: "Failed to load intervention opportunities" }); }
+  });
+
+  app.get("/api/maintenance/applications/mine", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    try { res.json(await storage.getMaintenanceJobApplicationsForProvider(user.id)); }
+    catch { res.status(500).json({ message: "Failed to load applications" }); }
+  });
+
+  // Single job detail — visibility enforced per the rule above. Deliberately
+  // a requireAuth-gated GET (not public) so a guessed id from an
+  // unauthenticated or unrelated account never resolves a MANUAL job.
+  app.get("/api/maintenance/jobs/:id", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const job = await storage.getMaintenanceJobPostById(Number(req.params.id));
+    if (!job) return res.status(404).json({ message: "Intervention not found" });
+    const isOwnerOrAdmin = user.id === job.cafeOwnerId || ["ADMIN", "SUPER_ADMIN"].includes(user.role);
+    if (isOwnerOrAdmin) {
+      const withStats = await storage.getMaintenanceJobPostWithStats(job.id);
+      const targets = job.publicationMode === "MANUAL" ? await storage.getMaintenanceJobTargets(job.id) : [];
+      return res.json({ job: withStats, targets });
+    }
+    if (user.role !== "MAINTENANCE") return res.status(403).json({ message: "Forbidden" });
+    const eligible = await storage.isMaintenanceProviderEligible(user.id);
+    if (!eligible) return res.status(404).json({ message: "Intervention not found" });
+    const now = new Date();
+    const notExpired = !job.expiresAt || new Date(job.expiresAt as any) > now;
+    const visible = job.status === "PUBLISHED" && notExpired && (
+      job.publicationMode === "AUTOMATIC" || await storage.isMaintenanceJobTargeted(job.id, user.id)
+    );
+    if (!visible) return res.status(404).json({ message: "Intervention not found" });
+    const hasApplied = await storage.hasMaintenanceAppliedToJob(job.id, user.id);
+    res.json({ job, hasApplied });
+  });
+
+  app.patch("/api/maintenance/jobs/:id", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const body = maintenanceJobPostBodySchema.partial().parse(req.body);
+      const existing = await storage.getMaintenanceJobPostById(Number(req.params.id));
+      if (!existing || existing.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Intervention not found" });
+      const payload = normalizeMaintenanceJobPostBody(body);
+      const updated = await storage.updateMaintenanceJobPost(Number(req.params.id), req.session.userId!, payload);
+      if (!updated) return res.status(404).json({ message: "Intervention not found" });
+      broadcast("maintenance_jobs_updated", { cafeOwnerId: req.session.userId });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid intervention data" });
+    }
+  });
+
+  // Manual targeting — called from MaintenanceJobTargetButton when the Coffee
+  // Owner associates the provider currently shown with one of their own
+  // MANUAL intervention posts. Owner-only, and only for their own job; the
+  // target must be an eligible Maintenance provider, not merely role-matching.
+  app.post("/api/maintenance/jobs/:id/targets", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const { maintenanceUserId } = z.object({ maintenanceUserId: z.number().int().positive() }).parse(req.body);
+      const job = await storage.getMaintenanceJobPostById(Number(req.params.id));
+      if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Intervention not found" });
+      if (job.publicationMode !== "MANUAL") return res.status(400).json({ message: "Seules les interventions en publication manuelle peuvent être ciblées." });
+      const target = await storage.getUser(maintenanceUserId);
+      if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Maintenance provider not found" });
+      if (!(await storage.isMaintenanceProviderEligible(maintenanceUserId))) {
+        return res.status(400).json({ message: "Ce professionnel n'est pas éligible (profil non approuvé ou masqué)." });
+      }
+      const row = await storage.addMaintenanceJobTarget(job.id, maintenanceUserId);
+      await notify({
+        userId: maintenanceUserId,
+        service: "MAINTENANCE", type: "maintenance_job_targeted", priority: "INFO",
+        title: "Nouvelle intervention proposée",
+        message: `${job.establishment || "Un établissement"} vous propose l'intervention "${job.title}".`,
+        entityType: "maintenance_job_post", entityId: job.id,
+        prefKey: "maintenance_jobs",
+        dedupeKey: `maintenance:job_targeted:${job.id}:${maintenanceUserId}`,
+      });
+      res.status(201).json(row);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  app.get("/api/maintenance/jobs/:id/targets", requireApprovedCafeOwner, async (req: any, res) => {
+    const job = await storage.getMaintenanceJobPostById(Number(req.params.id));
+    if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Intervention not found" });
+    try { res.json(await storage.getMaintenanceJobTargets(job.id)); }
+    catch { res.status(500).json({ message: "Failed to load targets" }); }
+  });
+
+  // ── Applications ──
+  app.post("/api/maintenance/jobs/:id/apply", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user || user.role !== "MAINTENANCE") return res.status(403).json({ message: "Maintenance access required" });
+    try {
+      const { message } = z.object({ message: z.string().max(2000).optional() }).parse(req.body);
+      const job = await storage.getMaintenanceJobPostById(Number(req.params.id));
+      if (!job) return res.status(404).json({ message: "Intervention not found" });
+      if (!(await storage.isMaintenanceProviderEligible(user.id))) return res.status(403).json({ message: "Forbidden" });
+      const now = new Date();
+      const notExpired = !job.expiresAt || new Date(job.expiresAt as any) > now;
+      if (job.status !== "PUBLISHED" || !notExpired) return res.status(400).json({ message: "Cette intervention n'accepte plus de réponses." });
+      const eligible = job.publicationMode === "AUTOMATIC" || await storage.isMaintenanceJobTargeted(job.id, user.id);
+      if (!eligible) return res.status(403).json({ message: "Forbidden" });
+      if (await storage.hasMaintenanceAppliedToJob(job.id, user.id)) {
+        return res.status(400).json({ message: "Vous avez déjà répondu à cette intervention." });
+      }
+      const application = await storage.createMaintenanceJobApplication(job.id, user.id, message);
+      broadcast("maintenance_jobs_updated", { cafeOwnerId: job.cafeOwnerId });
+      await notify({
+        userId: job.cafeOwnerId,
+        service: "MAINTENANCE", type: "maintenance_job_application_received", priority: "INFO",
+        title: "Nouvelle réponse à votre intervention",
+        message: `${user.name} a répondu à "${job.title}".`,
+        entityType: "maintenance_job_application", entityId: application.id,
+        prefKey: "maintenance_jobs",
+        dedupeKey: `maintenance:job_application_created:${application.id}`,
+      });
+      res.status(201).json(application);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      if (err instanceof Error && /duplicate key|unique/i.test(err.message)) {
+        return res.status(400).json({ message: "Vous avez déjà répondu à cette intervention." });
+      }
+      res.status(400).json({ message: "Invalid application" });
+    }
+  });
+
+  app.get("/api/maintenance/jobs/:id/applications", requireApprovedCafeOwner, async (req: any, res) => {
+    const job = await storage.getMaintenanceJobPostById(Number(req.params.id));
+    if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Intervention not found" });
+    try { res.json(await storage.getMaintenanceJobApplicationsForJob(job.id)); }
+    catch { res.status(500).json({ message: "Failed to load applications" }); }
+  });
+
+  // Accepting creates the real, linked maintenanceReservations row (see
+  // storage.acceptMaintenanceJobApplication) and fires the exact same
+  // notify/broadcast pattern the existing POST /api/maintenance/reservations
+  // route already fires, so the new reservation appears instantly in both
+  // parties' existing, unmodified Réservations/Planning views.
+  app.patch("/api/maintenance/applications/:id/status", requireApprovedCafeOwner, async (req: any, res) => {
+    try {
+      const { status } = z.object({ status: z.enum(["ACCEPTED", "REJECTED"]) }).parse(req.body);
+      const application = await storage.getMaintenanceJobApplicationById(Number(req.params.id));
+      if (!application) return res.status(404).json({ message: "Application not found" });
+      const job = await storage.getMaintenanceJobPostById(application.jobPostId);
+      if (!job || job.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Application not found" });
+      if (application.status !== "PENDING") return res.status(400).json({ message: "Cette réponse a déjà été traitée." });
+      const user = await storage.getUser(req.session.userId!);
+
+      if (status === "REJECTED") {
+        const updated = await storage.rejectMaintenanceJobApplication(application.id);
+        broadcast("maintenance_jobs_updated", { cafeOwnerId: job.cafeOwnerId });
+        broadcastToUsers([application.maintenanceUserId], "maintenance_jobs_updated", {});
+        await notify({
+          userId: application.maintenanceUserId,
+          service: "MAINTENANCE", type: "maintenance_job_application_status_changed", priority: "INFO",
+          title: "Réponse déclinée",
+          message: `Votre réponse pour "${job.title}" n'a pas été retenue.`,
+          entityType: "maintenance_job_application", entityId: application.id,
+          prefKey: "maintenance_jobs",
+          dedupeKey: `maintenance:job_application_status:${application.id}:REJECTED`,
+        });
+        return res.json(updated);
+      }
+
+      const result = await storage.acceptMaintenanceJobApplication(application.id);
+      if (!result) return res.status(404).json({ message: "Application not found" });
+      const { application: updatedApplication, reservation } = result;
+      await storage.refreshMaintenanceMessagingState(reservation.id);
+      broadcast("maintenance_jobs_updated", { cafeOwnerId: job.cafeOwnerId });
+      broadcastToUsers([application.maintenanceUserId], "maintenance_jobs_updated", {});
+      broadcast("maintenance_reservation_updated", { reservationId: reservation.id });
+      broadcastToUsers([job.cafeOwnerId, application.maintenanceUserId], "maintenance_reservation_updated", { reservationId: reservation.id });
+      broadcastToUsers([job.cafeOwnerId, application.maintenanceUserId], "conversation_updated", {
+        service: "MAINTENANCE",
+        reservationId: reservation.id,
+      });
+      await notify({
+        userId: application.maintenanceUserId,
+        service: "MAINTENANCE", type: "maintenance_job_application_status_changed", priority: "SUCCESS",
+        title: "Réponse acceptée",
+        message: `${user!.name} a accepté votre réponse pour "${job.title}". Une intervention a été créée.`,
+        entityType: "maintenance_reservation", entityId: reservation.id,
+        prefKey: "maintenance_jobs",
+        dedupeKey: `maintenance:job_application_status:${application.id}:ACCEPTED`,
+      });
+      res.json(updatedApplication);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
   app.get("/api/maintenance/reviews/:maintenanceUserId", async (req, res) => {
     try {
       res.json(await storage.getMaintenanceReviews(Number(req.params.maintenanceUserId)));

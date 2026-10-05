@@ -4,6 +4,7 @@ import { Heart, X, ChevronRight, Wrench, Zap, SlidersHorizontal, Check, Info, Ma
 import { useFavorites } from "@/hooks/use-favorites";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
+import { MaintenanceJobTargetButton } from "@/components/maintenance/maintenance-job-target-button";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 
 // Maintenance equivalent of BaristaFastSearch (Parts 20-21) — own component,
@@ -191,6 +192,17 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail, 
               >
                 <Heart className={`w-5 h-5 transition-colors ${faved ? "fill-white text-white" : "text-white"}`} />
               </button>
+            )}
+            {/* Intervention targeting — same MaintenanceJobTargetButton as the
+                provider Details modal (docs/maintenance_interventions_implementation_audit.md
+                Section 6); disabled in previewMode like Favorite above, since
+                a non-Coffee-Owner session would 403. */}
+            {current && !previewMode && (
+              <MaintenanceJobTargetButton
+                maintenanceUserId={current.userId}
+                maintenanceName={current.name}
+                className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"
+              />
             )}
           </div>
 

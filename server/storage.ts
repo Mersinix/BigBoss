@@ -17,7 +17,7 @@ import {
   marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
   marketingServices, type MarketingService, type InsertMarketingService, type MarketingServiceCard,
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport, printFavorites,
-  printerProfiles, type PrinterProfile, type InsertPrinterProfile, type PrintCompanyCard,
+  printerProfiles, type PrinterProfile, type InsertPrinterProfile, type PrintCompanyCard, type PrintCompanyListCard,
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
   accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
@@ -93,7 +93,7 @@ import {
   type BaristaJobTarget, type BaristaJobApplication, type InsertBaristaJobApplication,
   type BaristaJobApplicationWithParties, type BaristaJobMeeting,
   type MaintenanceReport, type InsertMaintenanceReport,
-  type MarketingProfile, type InsertMarketingProfile, type MarketingMarketplaceCard,
+  type MarketingProfile, type InsertMarketingProfile, type MarketingMarketplaceCard, type MarketingCompanyListCard,
   type MarketingProject, type InsertMarketingProject,
   type MarketingReport, type InsertMarketingReport, type MarketingCategory,
   type BaristaRequestStatus, type BaristaMissionStatus,
@@ -336,6 +336,8 @@ export interface IStorage {
   getMaintenanceCategories(): Promise<string[]>;
   getMaintenanceProfile(userId: number): Promise<MaintenanceProfile>;
   upsertMaintenanceProfile(userId: number, updates: Partial<InsertMaintenanceProfile>): Promise<MaintenanceProfile>;
+  bulkUpdateMaintenanceOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
+  setMaintenanceAutoApprove(userId: number, autoApprove: boolean): Promise<MaintenanceProfile>;
   getMaintenanceReservationsForProvider(userId: number): Promise<(MaintenanceReservation & { cafeOwner: string; ownerPhone: string | null })[]>;
   getMaintenanceReservationsForOwner(userId: number): Promise<(MaintenanceReservation & { maintenanceName: string })[]>;
   getMaintenanceRevenueSummary(maintenanceUserId: number): Promise<{
@@ -414,7 +416,10 @@ export interface IStorage {
   upsertPrintReview(data: { printerId: number; printOrderId: number; cafeId: number; rating: number; comment?: string | null; cafeName: string }): Promise<{ review: SupplierProductReview; isUpdate: boolean }>;
   getPrinterProfile(userId: number): Promise<PrinterProfile>;
   upsertPrinterProfile(userId: number, updates: Partial<InsertPrinterProfile>): Promise<PrinterProfile>;
+  bulkUpdatePrinterOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
+  setPrinterAutoApprove(userId: number, autoApprove: boolean): Promise<PrinterProfile>;
   getPrintCompanyCard(userId: number): Promise<PrintCompanyCard | undefined>;
+  getPrintCompanyCards(viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<PrintCompanyListCard[]>;
   getPrintFavoritesByUser(userId: number): Promise<number[]>;
   addPrintFavorite(userId: number, printItemId: number): Promise<void>;
   removePrintFavorite(userId: number, printItemId: number): Promise<void>;
@@ -429,6 +434,8 @@ export interface IStorage {
   deleteBaristaSkill(id: number): Promise<void>;
   getBaristaMarketplaceProfile(userId: number): Promise<BaristaMarketplaceProfile>;
   upsertBaristaMarketplaceProfile(userId: number, updates: Partial<InsertBaristaMarketplaceProfile>): Promise<BaristaMarketplaceProfile>;
+  bulkUpdateBaristaOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
+  setBaristaAutoApprove(userId: number, autoApprove: boolean): Promise<BaristaMarketplaceProfile>;
   getBaristaMarketplaceProfiles(filters?: { search?: string; level?: string; skill?: string; city?: string; available?: boolean }): Promise<BaristaMarketplaceCard[]>;
   getBaristaMarketplaceCard(userId: number): Promise<BaristaMarketplaceCard | undefined>;
   getBaristaRequestsForBarista(userId: number): Promise<BaristaRequestWithParties[]>;
@@ -479,6 +486,8 @@ export interface IStorage {
   // Barista Academy
   getAcademyProfile(userId: number): Promise<AcademyProfile>;
   upsertAcademyProfile(userId: number, updates: Partial<InsertAcademyProfile>): Promise<AcademyProfile>;
+  bulkUpdateAcademyOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
+  setAcademyAutoApprove(userId: number, autoApprove: boolean): Promise<AcademyProfile>;
   getAcademyCoursesForAcademy(academyUserId: number): Promise<AcademyCourse[]>;
   getAcademyCourseById(id: number): Promise<AcademyCourse | undefined>;
   createAcademyCourse(academyUserId: number, data: Partial<InsertAcademyCourse>): Promise<AcademyCourse>;
@@ -5938,6 +5947,11 @@ export class DatabaseStorage implements IStorage {
       } as MaintenanceMarketplaceCard;
     });
 
+    // Admin's drag-and-drop reorder (maintenanceProfiles.displayOrder) is the single source
+    // of truth for this list's order too — mirrors getVisibleStores()'s role for Supplier Stores.
+    // No Maintenance Store exists; the order lives directly on this profile row.
+    cards.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.userId - b.userId);
+
     const query = filters?.search?.trim().toLowerCase();
     return cards.filter((card) => {
       if (query) {
@@ -6022,6 +6036,20 @@ export class DatabaseStorage implements IStorage {
       .where(eq(maintenanceProfiles.id, current.id))
       .returning();
     return updated;
+  }
+
+  /** Admin MAINTENANCE drag-and-drop — mirrors bulkUpdateStoreOrder's independent-per-row
+   *  pattern, applied directly to the professional's own profile row (no Store). */
+  async bulkUpdateMaintenanceOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(async ({ id, displayOrder }) => {
+      await this.getMaintenanceProfile(id); // lazy-create the row if it doesn't exist yet
+      await db.update(maintenanceProfiles).set({ displayOrder, updatedAt: new Date() }).where(eq(maintenanceProfiles.userId, id));
+    }));
+  }
+
+  /** Admin MAINTENANCE Auto Approve — mirrors setStoreAutoApprove, applied to the profile. */
+  async setMaintenanceAutoApprove(userId: number, autoApprove: boolean): Promise<MaintenanceProfile> {
+    return this.upsertMaintenanceProfile(userId, { autoApprove });
   }
 
   async getMaintenanceReservationsForProvider(userId: number): Promise<(MaintenanceReservation & { cafeOwner: string; ownerPhone: string | null })[]> {
@@ -6454,6 +6482,7 @@ export class DatabaseStorage implements IStorage {
         email: user.email,
         phone: user.phone,
         profileImageUrl: user.profileImageUrl,
+        coverImageUrl: user.coverImageUrl ?? null,
         status: user.status,
         location: user.locationAddress ?? profile.coverageArea,
         available: profile.isAvailable && !profile.isOnVacation,
@@ -7157,6 +7186,70 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  /** Lightweight "Marketing Store" list — one card per visible Agency with at
+   *  least one published service, mirrors getPrintCompanyCards()'s role for
+   *  Print Stores (docs/marketing_store_mapping_audit.md). Reuses the exact
+   *  same visibility gate getMarketingProfiles/getPublishedMarketingServices
+   *  already use. */
+  async getMarketingCompanyCards(viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<MarketingCompanyListCard[]> {
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const serviceRows = await db.select({ marketingUserId: marketingServices.marketingUserId })
+      .from(marketingServices)
+      .innerJoin(users, eq(marketingServices.marketingUserId, users.id))
+      .where(and(
+        eq(marketingServices.isPublished, true),
+        eq(users.role, "MARKETING" as any),
+        eq(users.status, "approved"),
+      ));
+    const countByAgency = new Map<number, number>();
+    for (const row of serviceRows) countByAgency.set(row.marketingUserId, (countByAgency.get(row.marketingUserId) ?? 0) + 1);
+    const agencyIds = Array.from(countByAgency.keys());
+    if (agencyIds.length === 0) return [];
+
+    const [profileRows, userRows, statsMap] = await Promise.all([
+      db.select().from(marketingProfiles).where(inArray(marketingProfiles.userId, agencyIds)),
+      db.select().from(users).where(inArray(users.id, agencyIds)),
+      this.computeMarketingReviewStats(agencyIds),
+    ]);
+    const profileByUser = new Map(profileRows.map((p) => [p.userId, p]));
+    const userById = new Map(userRows.map((u) => [u.id, u]));
+
+    const cards: MarketingCompanyListCard[] = [];
+    for (const agencyId of agencyIds) {
+      const user = userById.get(agencyId);
+      const profile = profileByUser.get(agencyId);
+      if (!user || !profile) continue;
+      if (!profile.marketplaceVisible || profile.isFrozen || profile.publicationStatus !== "APPROVED") continue;
+      const stats = statsMap.get(agencyId);
+      const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+      const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+      cards.push({
+        userId: user.id,
+        name: user.name,
+        profileImageUrl: user.profileImageUrl ?? null,
+        coverImageUrl: user.coverImageUrl ?? null,
+        flashImageUrl: user.flashImageUrl ?? null,
+        location: this.formatPublicLocation(user),
+        phone: user.phone ?? null,
+        description: profile.description,
+        websiteUrl: profile.websiteUrl ?? null,
+        marketplaceVisible: profile.marketplaceVisible,
+        weeklyHours: profile.weeklyHours ?? null,
+        isOnVacation: profile.isOnVacation,
+        rating: stats?.rating ?? 0,
+        reviewCount: stats?.reviewCount ?? 0,
+        portfolioImages: profile.portfolioImages ?? [],
+        categories: profile.categories ?? [],
+        serviceCount: countByAgency.get(agencyId) ?? 0,
+        distanceKm,
+      });
+    }
+    // Admin's drag-and-drop reorder (marketingProfiles.displayOrder) is the single source
+    // of truth for Store-card order here too — mirrors getVisibleStores()'s role for Supplier Stores.
+    cards.sort((a, b) => (profileByUser.get(a.userId)?.displayOrder ?? 0) - (profileByUser.get(b.userId)?.displayOrder ?? 0) || a.userId - b.userId);
+    return cards;
+  }
+
   async upsertMarketingProfile(userId: number, updates: Partial<InsertMarketingProfile>): Promise<MarketingProfile> {
     const current = await this.getMarketingProfile(userId);
     const [updated] = await db.update(marketingProfiles)
@@ -7164,6 +7257,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(marketingProfiles.id, current.id))
       .returning();
     return updated;
+  }
+
+  /** Admin MARKETING drag-and-drop — mirrors bulkUpdateStoreOrder's independent-per-row pattern. */
+  async bulkUpdateMarketingOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(async ({ id, displayOrder }) => {
+      await this.getMarketingProfile(id); // lazy-create the row if it doesn't exist yet
+      await db.update(marketingProfiles).set({ displayOrder, updatedAt: new Date() }).where(eq(marketingProfiles.userId, id));
+    }));
+  }
+
+  /** Admin MARKETING Auto Approve — mirrors setStoreAutoApprove. */
+  async setMarketingAutoApprove(userId: number, autoApprove: boolean): Promise<MarketingProfile> {
+    return this.upsertMarketingProfile(userId, { autoApprove });
   }
 
   // Marketing favorites — mirrors getMaintenanceFavoritesByUser/add/remove exactly.
@@ -7667,6 +7773,7 @@ export class DatabaseStorage implements IStorage {
         email: user.email,
         phone: user.phone,
         profileImageUrl: user.profileImageUrl,
+        coverImageUrl: user.coverImageUrl,
         status: user.status,
         location: user.locationAddress,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
@@ -8354,6 +8461,19 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  /** Admin PRINT drag-and-drop — mirrors bulkUpdateStoreOrder's independent-per-row pattern. */
+  async bulkUpdatePrinterOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(async ({ id, displayOrder }) => {
+      await this.getPrinterProfile(id); // lazy-create the row if it doesn't exist yet
+      await db.update(printerProfiles).set({ displayOrder, updatedAt: new Date() }).where(eq(printerProfiles.userId, id));
+    }));
+  }
+
+  /** Admin PRINT Auto Approve — mirrors setStoreAutoApprove. */
+  async setPrinterAutoApprove(userId: number, autoApprove: boolean): Promise<PrinterProfile> {
+    return this.upsertPrinterProfile(userId, { autoApprove });
+  }
+
   /** Company-level card for the printing company itself — Espace Imprimerie's own
    *  Business → Profil → Aperçu, the Coffee Owner's Service modal "Imprimerie"
    *  section, and Admin PRINT's company view all read this SAME derivation (no
@@ -8403,6 +8523,77 @@ export class DatabaseStorage implements IStorage {
       categories: mapping.categories,
       services,
     };
+  }
+
+  /** Lightweight "Print Store" list — one card per visible Printer company
+   *  with at least one active service, mirroring getVisibleStores()'s role
+   *  for Supplier Stores (docs/print_store_mapping_audit.md). Reuses the
+   *  exact same visibility gate as getPrintMarketplaceCards (approved PRINTER
+   *  role, marketplaceVisible && publicationStatus==='APPROVED'), batched
+   *  into a handful of queries — no per-printer getPrinterProfile/
+   *  getPrinterCategoryMapping calls. */
+  async getPrintCompanyCards(viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<PrintCompanyListCard[]> {
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const rows = await db.select({ printerId: printCatalogItems.printerId })
+      .from(printCatalogItems)
+      .innerJoin(users, eq(printCatalogItems.printerId, users.id))
+      .where(and(
+        eq(printCatalogItems.isActive, true),
+        eq(users.role, "PRINTER" as any),
+        eq(users.status, "approved"),
+      ));
+    const countByPrinter = new Map<number, number>();
+    for (const row of rows) countByPrinter.set(row.printerId, (countByPrinter.get(row.printerId) ?? 0) + 1);
+    const printerIds = Array.from(countByPrinter.keys());
+    if (printerIds.length === 0) return [];
+
+    const [profileRows, userRows, statsMap] = await Promise.all([
+      db.select().from(printerProfiles).where(inArray(printerProfiles.userId, printerIds)),
+      db.select().from(users).where(inArray(users.id, printerIds)),
+      this.computePrintReviewStats(printerIds),
+    ]);
+    const profileByUser = new Map(profileRows.map((p) => [p.userId, p]));
+    const userById = new Map(userRows.map((u) => [u.id, u]));
+
+    const cards: PrintCompanyListCard[] = [];
+    for (const printerId of printerIds) {
+      const user = userById.get(printerId);
+      if (!user) continue;
+      const profile = profileByUser.get(printerId);
+      // No profile row yet defaults to visible (same lazy-create convention as
+      // getPrintMarketplaceCards's hiddenPrinterIds) — a printer with no
+      // profile row shouldn't vanish from this list.
+      const marketplaceVisible = profile?.marketplaceVisible ?? true;
+      const publicationStatus = profile?.publicationStatus ?? "APPROVED";
+      if (!marketplaceVisible || publicationStatus !== "APPROVED") continue;
+      const stats = statsMap.get(printerId);
+      const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+      const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+      cards.push({
+        userId: user.id,
+        name: user.name,
+        profileImageUrl: user.profileImageUrl ?? null,
+        coverImageUrl: user.coverImageUrl ?? null,
+        flashImageUrl: user.flashImageUrl ?? null,
+        location: this.formatPublicLocation(user),
+        phone: user.phone ?? null,
+        description: profile?.description ?? "",
+        websiteUrl: profile?.websiteUrl ?? null,
+        marketplaceVisible,
+        weeklyHours: profile?.weeklyHours ?? null,
+        isOnVacation: profile?.isOnVacation ?? false,
+        rating: stats?.rating ?? 0,
+        reviewCount: stats?.reviewCount ?? 0,
+        portfolioImages: profile?.portfolioImages ?? [],
+        categories: user.printCategories ?? [],
+        serviceCount: countByPrinter.get(printerId) ?? 0,
+        distanceKm,
+      });
+    }
+    // Admin's drag-and-drop reorder (printerProfiles.displayOrder) is the single source
+    // of truth for Store-card order here too — mirrors getVisibleStores()'s role for Supplier Stores.
+    cards.sort((a, b) => (profileByUser.get(a.userId)?.displayOrder ?? 0) - (profileByUser.get(b.userId)?.displayOrder ?? 0) || a.userId - b.userId);
+    return cards;
   }
 
   /** Admin moderation — toggle any printer's catalog item, no ownership check.
@@ -8455,6 +8646,7 @@ export class DatabaseStorage implements IStorage {
         email: printer.email,
         phone: printer.phone,
         profileImageUrl: printer.profileImageUrl,
+        coverImageUrl: printer.coverImageUrl,
         status: printer.status,
         location: printer.locationAddress ?? "",
         createdAt: printer.createdAt,
@@ -8466,6 +8658,8 @@ export class DatabaseStorage implements IStorage {
         // to show the status badge + Approve/Reject block, same as Maintenance.
         publicationStatus: profile?.publicationStatus ?? "DRAFT",
         publicationRejectionReason: profile?.publicationRejectionReason ?? null,
+        displayOrder: profile?.displayOrder ?? 0,
+        autoApprove: profile?.autoApprove ?? false,
         activeServiceCount: items.filter((i) => i.isActive).length,
         totalServiceCount: items.length,
         totalOrders: orders.length,
@@ -8611,6 +8805,20 @@ export class DatabaseStorage implements IStorage {
       .where(eq(baristaMarketplaceProfiles.id, current.id))
       .returning();
     return updated;
+  }
+
+  /** Admin BARISTA drag-and-drop — mirrors bulkUpdateStoreOrder's independent-per-row
+   *  pattern, applied directly to the professional's own profile row (no Store). */
+  async bulkUpdateBaristaOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(async ({ id, displayOrder }) => {
+      await this.getBaristaMarketplaceProfile(id); // lazy-create the row if it doesn't exist yet
+      await db.update(baristaMarketplaceProfiles).set({ displayOrder, updatedAt: new Date() }).where(eq(baristaMarketplaceProfiles.userId, id));
+    }));
+  }
+
+  /** Admin BARISTA Auto Approve — mirrors setStoreAutoApprove, applied to the profile. */
+  async setBaristaAutoApprove(userId: number, autoApprove: boolean): Promise<BaristaMarketplaceProfile> {
+    return this.upsertBaristaMarketplaceProfile(userId, { autoApprove });
   }
 
   // ── Work history ("Cafés précédents / Expérience") — own table, own CRUD, exactly like
@@ -8788,6 +8996,11 @@ export class DatabaseStorage implements IStorage {
         distanceKm,
       } as BaristaMarketplaceCard;
     });
+
+    // Admin's drag-and-drop reorder (baristaMarketplaceProfiles.displayOrder) is the single
+    // source of truth for this list's order too — mirrors getVisibleStores()'s role for
+    // Supplier Stores. No Barista Store exists; the order lives directly on this profile row.
+    cards.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.userId - b.userId);
 
     const query = filters?.search?.trim().toLowerCase();
     return cards.filter((card) => {
@@ -9451,6 +9664,7 @@ export class DatabaseStorage implements IStorage {
         email: u.email,
         phone: u.phone ?? null,
         profileImageUrl: u.profileImageUrl ?? null,
+        coverImageUrl: u.coverImageUrl ?? null,
         status: u.status,
         level: profile?.level ?? "BEGINNER",
         city: profile?.city || u.locationAddress || "",
@@ -9466,6 +9680,8 @@ export class DatabaseStorage implements IStorage {
         // show the status badge and the Approve/Reject controls.
         publicationStatus: profile?.publicationStatus ?? "DRAFT",
         publicationRejectionReason: profile?.publicationRejectionReason ?? null,
+        displayOrder: profile?.displayOrder ?? 0,
+        autoApprove: profile?.autoApprove ?? false,
         available,
         dailyRateInCents: profile?.dailyRateInCents ?? 0,
         rating: stats?.rating ?? 0,
@@ -9595,6 +9811,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(academyProfiles.id, current.id))
       .returning();
     return updated;
+  }
+
+  /** Admin ACADEMY drag-and-drop — mirrors bulkUpdateStoreOrder's independent-per-row pattern. */
+  async bulkUpdateAcademyOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(async ({ id, displayOrder }) => {
+      await this.getAcademyProfile(id); // lazy-create the row if it doesn't exist yet
+      await db.update(academyProfiles).set({ displayOrder, updatedAt: new Date() }).where(eq(academyProfiles.userId, id));
+    }));
+  }
+
+  /** Admin ACADEMY Auto Approve — mirrors setStoreAutoApprove. */
+  async setAcademyAutoApprove(userId: number, autoApprove: boolean): Promise<AcademyProfile> {
+    return this.upsertAcademyProfile(userId, { autoApprove });
   }
 
   // ── Courses ("Formations") ──
@@ -9902,6 +10131,73 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  /** Lightweight "Academy Store" list — one card per visible Academy with at
+   *  least one published course, mirrors getPrintCompanyCards()'s role for
+   *  Print Stores (docs/academy_store_mapping_audit.md). Reuses the exact
+   *  same visibility gate getPublishedAcademyCourses already uses. No
+   *  `websiteUrl` — academyProfiles has no such column. */
+  async getAcademyCompanyCards(viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<{
+    userId: number; name: string; profileImageUrl: string | null; coverImageUrl: string | null; flashImageUrl: string | null;
+    location: string; phone: string | null; description: string; marketplaceVisible: boolean;
+    weeklyHours: OpeningHoursMap | null; isOnVacation: boolean; rating: number; reviewCount: number;
+    portfolioImages: string[]; courseCount: number; distanceKm?: number | null;
+  }[]> {
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const courseRows = await db.select({ academyUserId: academyCourses.academyUserId })
+      .from(academyCourses)
+      .innerJoin(users, eq(academyCourses.academyUserId, users.id))
+      .where(and(
+        eq(academyCourses.isPublished, true),
+        eq(users.role, "BARISTA_ACADEMY" as any),
+        eq(users.status, "approved"),
+      ));
+    const countByAcademy = new Map<number, number>();
+    for (const row of courseRows) countByAcademy.set(row.academyUserId, (countByAcademy.get(row.academyUserId) ?? 0) + 1);
+    const academyIds = Array.from(countByAcademy.keys());
+    if (academyIds.length === 0) return [];
+
+    const [profileRows, userRows, statsMap] = await Promise.all([
+      db.select().from(academyProfiles).where(inArray(academyProfiles.userId, academyIds)),
+      db.select().from(users).where(inArray(users.id, academyIds)),
+      this.computeAcademyReviewStats(academyIds),
+    ]);
+    const profileByUser = new Map(profileRows.map((p) => [p.userId, p]));
+    const userById = new Map(userRows.map((u) => [u.id, u]));
+
+    const cards: Awaited<ReturnType<typeof this.getAcademyCompanyCards>> = [];
+    for (const academyId of academyIds) {
+      const user = userById.get(academyId);
+      const profile = profileByUser.get(academyId);
+      if (!user || !profile) continue;
+      if (profile.marketplaceVisible === false || profile.isFrozen || profile.publicationStatus !== "APPROVED") continue;
+      const stats = statsMap.get(academyId);
+      const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+      const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+      cards.push({
+        userId: user.id,
+        name: user.name,
+        profileImageUrl: user.profileImageUrl ?? null,
+        coverImageUrl: user.coverImageUrl ?? null,
+        flashImageUrl: user.flashImageUrl ?? null,
+        location: this.formatPublicLocation(user),
+        phone: user.phone ?? null,
+        description: profile.description,
+        marketplaceVisible: profile.marketplaceVisible,
+        weeklyHours: profile.weeklyHours ?? null,
+        isOnVacation: profile.isOnVacation,
+        rating: stats?.rating ?? 0,
+        reviewCount: stats?.reviewCount ?? 0,
+        portfolioImages: profile.portfolioImages ?? [],
+        courseCount: countByAcademy.get(academyId) ?? 0,
+        distanceKm,
+      });
+    }
+    // Admin's drag-and-drop reorder (academyProfiles.displayOrder) is the single source
+    // of truth for Store-card order here too — mirrors getVisibleStores()'s role for Supplier Stores.
+    cards.sort((a, b) => (profileByUser.get(a.userId)?.displayOrder ?? 0) - (profileByUser.get(b.userId)?.displayOrder ?? 0) || a.userId - b.userId);
+    return cards;
+  }
+
   async createAcademySession(academyUserId: number, data: { courseId: number; startDate: string; endDate?: string | null; capacity?: number | null }): Promise<AcademyCourseSession> {
     const course = await this.getAcademyCourseById(data.courseId);
     if (!course || course.academyUserId !== academyUserId) throw new Error("Course not found");
@@ -10180,6 +10476,7 @@ export class DatabaseStorage implements IStorage {
         email: u.email,
         phone: u.phone ?? null,
         profileImageUrl: u.profileImageUrl ?? null,
+        coverImageUrl: u.coverImageUrl ?? null,
         status: u.status,
         description: profile?.description ?? "",
         location: u.locationAddress ?? "",
@@ -10189,6 +10486,8 @@ export class DatabaseStorage implements IStorage {
         // to show the status badge + Approve/Reject block, same as Maintenance/Printer.
         publicationStatus: profile?.publicationStatus ?? "DRAFT",
         publicationRejectionReason: profile?.publicationRejectionReason ?? null,
+        displayOrder: profile?.displayOrder ?? 0,
+        autoApprove: profile?.autoApprove ?? false,
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
         courseCount: ownCourses.length,

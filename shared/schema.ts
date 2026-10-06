@@ -1547,6 +1547,12 @@ export const baristaMarketplaceProfiles = pgTable("barista_marketplace_profiles"
   // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
   // admin-only account freeze, distinct from the Barista's own isOnVacation toggle.
   isFrozen: boolean("is_frozen").notNull().default(false),
+  // Admin BARISTA drag-and-drop order — mirrors supplierStores.displayOrder; also drives
+  // the Coffee Owner /barista professional-card order (single source of truth, see getBaristaMarketplaceProfiles).
+  displayOrder: integer("display_order").notNull().default(0),
+  // Admin BARISTA per-account Auto Approve — mirrors supplierStores.autoApprove; when true,
+  // this account's own profile edits never reset publicationStatus back to PENDING.
+  autoApprove: boolean("auto_approve").notNull().default(false),
   // GO Live publication workflow — see driverProfiles for the full rationale comment.
   publicationStatus: text("publication_status").notNull().default("DRAFT"),
   publicationSubmittedAt: timestamp("publication_submitted_at"),
@@ -1892,6 +1898,12 @@ export const academyProfiles = pgTable("academy_profiles", {
   // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
   // admin-only account freeze, distinct from the Academy's own isOnVacation toggle.
   isFrozen: boolean("is_frozen").notNull().default(false),
+  // Admin ACADEMY drag-and-drop order — mirrors supplierStores.displayOrder; also drives
+  // the Coffee Owner /academy Store-card order (single source of truth, see getAcademyCompanyCards).
+  displayOrder: integer("display_order").notNull().default(0),
+  // Admin ACADEMY per-account Auto Approve — mirrors supplierStores.autoApprove; when true,
+  // this account's own profile edits never reset publicationStatus back to PENDING.
+  autoApprove: boolean("auto_approve").notNull().default(false),
   // GO Live publication workflow — see driverProfiles for the full rationale comment.
   publicationStatus: text("publication_status").notNull().default("DRAFT"),
   publicationSubmittedAt: timestamp("publication_submitted_at"),
@@ -2154,6 +2166,12 @@ export const maintenanceProfiles = pgTable("maintenance_profiles", {
   // freeze can't be silently undone by the account itself, mirroring the
   // isFrozen convention already used on maintenanceCompetencies/-Zones above.
   isFrozen: boolean("is_frozen").notNull().default(false),
+  // Admin MAINTENANCE drag-and-drop order — mirrors supplierStores.displayOrder; also drives
+  // the Coffee Owner /maintenance professional-card order (single source of truth, see getMaintenanceProfiles).
+  displayOrder: integer("display_order").notNull().default(0),
+  // Admin MAINTENANCE per-account Auto Approve — mirrors supplierStores.autoApprove; when true,
+  // this account's own profile edits never reset publicationStatus back to PENDING.
+  autoApprove: boolean("auto_approve").notNull().default(false),
   rating: integer("rating").notNull().default(0),
   reviewCount: integer("review_count").notNull().default(0),
   // GO Live publication workflow — admin review of PROFILE CONTENT, distinct
@@ -2394,6 +2412,12 @@ export const marketingProfiles = pgTable("marketing_profiles", {
   // Admin-only override — distinct from marketplaceVisible, same convention as
   // maintenanceProfiles.isFrozen (a freeze can't be silently undone by the account itself).
   isFrozen: boolean("is_frozen").notNull().default(false),
+  // Admin MARKETING drag-and-drop order — mirrors supplierStores.displayOrder; also drives
+  // the Coffee Owner /marketing Store-card order (single source of truth, see getMarketingCompanyCards).
+  displayOrder: integer("display_order").notNull().default(0),
+  // Admin MARKETING per-account Auto Approve — mirrors supplierStores.autoApprove; when true,
+  // this account's own profile edits never reset publicationStatus back to PENDING.
+  autoApprove: boolean("auto_approve").notNull().default(false),
   rating: integer("rating").notNull().default(0), // x10 convention, e.g. 47 = 4.7
   reviewCount: integer("review_count").notNull().default(0),
   // GO Live publication workflow — see maintenanceProfiles for the full rationale comment.
@@ -2542,6 +2566,30 @@ export type MarketingMarketplaceCard = MarketingProfile & {
   initials: string;
   distanceKm?: number | null;
 };
+/** Lightweight "Marketing Store" list card — one per visible Agency with at
+ *  least one published service, mirrors PrintCompanyListCard's role for
+ *  /marketing's browsable Store section (docs/marketing_store_mapping_audit.md).
+ *  Omits the heavy `services` array in favor of a cheap `serviceCount`. */
+export type MarketingCompanyListCard = {
+  userId: number;
+  name: string;
+  profileImageUrl: string | null;
+  coverImageUrl: string | null;
+  flashImageUrl: string | null;
+  location: string;
+  phone: string | null;
+  description: string;
+  websiteUrl: string | null;
+  marketplaceVisible: boolean;
+  weeklyHours: OpeningHoursMap | null;
+  isOnVacation: boolean;
+  rating: number;
+  reviewCount: number;
+  portfolioImages: string[];
+  categories: string[];
+  serviceCount: number;
+  distanceKm?: number | null;
+};
 
 /** Public marketplace card shown on Coffee Owner /marketing — one per published
  *  SERVICE (mirrors AcademyCourseCard exactly: a course/formation card carrying
@@ -2637,6 +2685,12 @@ export const printerProfiles = pgTable("printer_profiles", {
   // isFrozen convention already used on maintenanceProfiles/marketingProfiles above —
   // admin-only account freeze, distinct from the Printer's own isOnVacation toggle.
   isFrozen: boolean("is_frozen").notNull().default(false),
+  // Admin PRINT drag-and-drop order — mirrors supplierStores.displayOrder; also drives
+  // the Coffee Owner /print Store-card order (single source of truth, see getPrintCompanyCards).
+  displayOrder: integer("display_order").notNull().default(0),
+  // Admin PRINT per-account Auto Approve — mirrors supplierStores.autoApprove; when true,
+  // this account's own profile edits never reset publicationStatus back to PENDING.
+  autoApprove: boolean("auto_approve").notNull().default(false),
   // GO Live publication workflow — see maintenanceProfiles for the full rationale comment.
   publicationStatus: text("publication_status").notNull().default("DRAFT"),
   publicationSubmittedAt: timestamp("publication_submitted_at"),
@@ -3367,6 +3421,15 @@ export type PrintCompanyCard = {
   categories: string[];
   services: PrintCatalogCard[];
 };
+/** Lightweight "Print Store" list card — one per visible Printer company, used
+ *  by the Coffee Owner /print marketplace's browsable Store section (mirrors
+ *  the Supplier `StoreCard`'s role for /products, but reuses PrintCompanyCard's
+ *  existing fields rather than a second storefront table — see
+ *  docs/print_store_mapping_audit.md). Omits `services` (the heavy per-item
+ *  array) in favor of a cheap `serviceCount`, since the list view only needs a
+ *  count — selecting a card filters the existing marketplace grid by
+ *  printerId, it doesn't need the full service payload twice. */
+export type PrintCompanyListCard = Omit<PrintCompanyCard, "services"> & { serviceCount: number; distanceKm?: number | null };
 
 export type Promotion = typeof promotions.$inferSelect;
 export type InsertPromotion = z.infer<typeof insertPromotionSchema>;

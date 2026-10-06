@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
@@ -12,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   GraduationCap, Users, CheckCircle, XCircle, Star, Search,
   MapPin, Phone, Mail, Calendar, TrendingUp, Wallet, Clock, ClipboardList, BookOpen, Award, CalendarDays, Eye,
-  Pencil, Trash2, Snowflake, X, Check,
+  Pencil, Trash2, Snowflake, X, Check, Zap, GripVertical, RefreshCw,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
@@ -38,8 +39,10 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 type AdminAcademy = {
   userId: number; name: string; email: string; phone: string | null; profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   status: string; description: string; location: string; marketplaceVisible: boolean; isFrozen: boolean;
   publicationStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED"; publicationRejectionReason?: string | null;
+  displayOrder?: number; autoApprove?: boolean;
   rating: number; reviewCount: number; courseCount: number; publishedCourseCount: number;
   registrationCount: number; completedRegistrationCount: number; revenueCents: number;
   createdAt: string | null; initials: string;
@@ -143,26 +146,46 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
     onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
     onError: (e: any) => toast({ title: "Suppression impossible", description: e.message, variant: "destructive" }),
   });
+  const autoApproveMutation = useMutation({
+    mutationFn: (autoApprove: boolean) => apiRequest("PATCH", `/api/admin/academy/accounts/${academy!.userId}/auto-approve`, { autoApprove }),
+    onSuccess: () => { onRefresh(); toast({ title: "Auto Approve mis à jour" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
 
   if (!academy) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        {/* Cover header — visually synchronized with the existing Preview Detail modal
+            (AcademyProfileModal's own cover + close/preview buttons), see
+            docs/service_card_reorder_and_detail_modal_audit.md Part 3. */}
+        <div className="w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden bg-gray-100 dark:bg-gray-800">
+          {academy.coverImageUrl ? (
+            <img src={academy.coverImageUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-violet-700">
+              <GraduationCap className="w-16 h-16 text-white" />
+            </div>
+          )}
+          <div className="absolute top-3 right-3 flex gap-2">
+            <button type="button" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform" onClick={() => setProfileOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-academy-marketplace">
+              <Eye className="w-4 h-4 text-white" />
+            </button>
+            <button type="button" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform" onClick={onClose} aria-label="Close" data-testid="button-close-academy-detail">
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        </div>
+        <div className="p-5 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{academy.initials}</AvatarFallback></Avatar>
             <span className="flex-1">{academy.name}</span>
-            {/* Same synchronized Academy Profile Details modal reused by the Academy's own
-                Eye preview and the Coffee Owner "click Académie" flow (Part 38-39) — read-only
-                here, Admin's approval/moderation controls stay on the card outside this dialog. */}
-            <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setProfileOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-academy-marketplace">
-              <Eye className="w-3.5 h-3.5" />
-            </Button>
           </DialogTitle>
         </DialogHeader>
-        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+        <div className="grid sm:grid-cols-2 gap-4 text-sm mt-4">
           <div className="sm:col-span-2 flex flex-wrap gap-2">
             <Badge variant="outline">{academy.status}</Badge>
             <Badge variant={academy.publishedCourseCount > 0 ? "default" : "secondary"}>{academy.publishedCourseCount > 0 ? "Formations actives" : "Aucune formation publiée"}</Badge>
@@ -226,6 +249,23 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
             </div>
           )}
 
+          <div className="sm:col-span-2 flex items-center justify-between rounded-xl border p-3 bg-muted/30">
+            <div>
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-500" />Auto Approve
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Lorsqu'activé, cette académie peut modifier son profil sans nécessiter une nouvelle validation Admin.
+              </p>
+            </div>
+            <Switch
+              checked={academy.autoApprove ?? false}
+              onCheckedChange={(v) => autoApproveMutation.mutate(v)}
+              disabled={autoApproveMutation.isPending}
+              data-testid={`switch-auto-approve-academy-${academy.userId}`}
+            />
+          </div>
+
           <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
             {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-academy-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}
             <Button size="sm" variant="outline" disabled={freezeMutation.isPending} onClick={() => freezeMutation.mutate(!academy.isFrozen)} data-testid="button-freeze-academy-account">
@@ -245,6 +285,7 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
               </div>
             )}
           </div>
+        </div>
         </div>
       </DialogContent>
       <AcademyProfileModal
@@ -280,6 +321,11 @@ export default function AdminAcademyPage() {
   const [academySearchOpen, setAcademySearchOpen] = useState(false);
   const academySearchInputRef = useRef<HTMLInputElement>(null);
 
+  // Drag-and-drop order (mirrors admin/stores-page.tsx's StoreCard pattern) — persisted
+  // via displayOrder, which also drives the Coffee Owner /academy Store-card order.
+  const [academyOrderedIds, setAcademyOrderedIds] = useState<number[] | null>(null);
+  const academyDragIdRef = useRef<number | null>(null);
+
   const [courseSearch, setCourseSearch] = useState("");
   const [courseStatus, setCourseStatus] = useState("all");
   const [courseSearchOpen, setCourseSearchOpen] = useState(false);
@@ -314,6 +360,16 @@ export default function AdminAcademyPage() {
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
+  const academyBulkOrderMutation = useMutation({
+    mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", "/api/admin/academy/accounts/bulk-order", { orders }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/academy"] });
+      qc.invalidateQueries({ queryKey: ["/api/academy/companies"] });
+      toast({ title: "Ordre enregistré" });
+    },
+    onError: () => toast({ title: "Échec de l'enregistrement de l'ordre", variant: "destructive" }),
+  });
+
   const stats = data?.stats;
   const kpis = [
     ["Académies", stats?.totalAcademies ?? 0, Users],
@@ -327,14 +383,47 @@ export default function AdminAcademyPage() {
   ] as const;
 
   // ── Académies tab ──
-  const academies = useMemo(() => (data?.academies ?? []).filter((a) => {
+  // Use academyOrderedIds (optimistic, after a drag) when available, otherwise fall
+  // back to server order (displayOrder) — mirrors admin/stores-page.tsx exactly.
+  const sortedAcademies = useMemo(() => {
+    const all = data?.academies ?? [];
+    return academyOrderedIds
+      ? [...all].sort((a, b) => academyOrderedIds.indexOf(a.userId) - academyOrderedIds.indexOf(b.userId))
+      : [...all].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [data?.academies, academyOrderedIds]);
+  const academies = useMemo(() => sortedAcademies.filter((a) => {
     const haystack = [a.name, a.email, a.location].join(" ").toLowerCase();
     return (!academySearch || haystack.includes(academySearch.toLowerCase()))
       && (academyStatus === "all" || a.status === academyStatus);
-  }), [data?.academies, academySearch, academyStatus]);
+  }), [sortedAcademies, academySearch, academyStatus]);
   const academiesPagination = usePagination(academies.length);
   useEffect(() => { academiesPagination.resetPage(); }, [academySearch, academyStatus]);
   const pageAcademies = academies.slice(academiesPagination.start, academiesPagination.end);
+
+  // Drag handlers — identical shape to admin/stores-page.tsx's handleDragStart/Over/Drop.
+  const handleAcademyDragStart = (e: React.DragEvent, id: number) => {
+    academyDragIdRef.current = id;
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleAcademyDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleAcademyDrop = (e: React.DragEvent, targetId: number) => {
+    e.preventDefault();
+    const fromId = academyDragIdRef.current;
+    if (fromId === null || fromId === targetId) return;
+    const base = academyOrderedIds ?? sortedAcademies.map((a) => a.userId);
+    const from = base.indexOf(fromId);
+    const to = base.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...base];
+    next.splice(from, 1);
+    next.splice(to, 0, fromId);
+    setAcademyOrderedIds(next);
+    academyBulkOrderMutation.mutate(next.map((id, idx) => ({ id, displayOrder: idx })));
+    academyDragIdRef.current = null;
+  };
 
   // ── Formations tab ──
   const courses = useMemo(() => (data?.courses ?? []).filter((c) => {
@@ -509,26 +598,62 @@ export default function AdminAcademyPage() {
           </div>
           {academies.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune académie correspondante.</CardContent></Card> : (
             <>
+            {academyBulkOrderMutation.isPending && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <RefreshCw className="w-3 h-3 animate-spin" />Enregistrement de l'ordre…
+              </span>
+            )}
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {pageAcademies.map((academy) => (
-                <Card key={academy.userId} className="hover:shadow-md transition-shadow" data-testid={`card-academy-${academy.userId}`}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedAcademy(academy)}>
-                      <Avatar><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{academy.initials}</AvatarFallback></Avatar>
-                      <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{academy.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{academy.location || "—"}</p></div>
-                      <span className={`h-2.5 w-2.5 rounded-full mt-1 ${academy.publishedCourseCount > 0 ? "bg-green-500" : "bg-gray-300"}`} />
+              {pageAcademies.map((academy) => {
+                const borderColor = academy.publicationStatus === "APPROVED" ? "border-indigo-400" : academy.publicationStatus === "REJECTED" ? "border-red-400" : "border-border";
+                return (
+                <div
+                  key={academy.userId}
+                  draggable
+                  onDragStart={(e) => handleAcademyDragStart(e, academy.userId)}
+                  onDragOver={handleAcademyDragOver}
+                  onDrop={(e) => handleAcademyDrop(e, academy.userId)}
+                  className={`relative bg-card rounded-2xl border-2 ${borderColor} shadow-sm overflow-hidden hover:shadow-md transition-shadow group select-none`}
+                  data-testid={`card-academy-${academy.userId}`}
+                >
+                  <div className="absolute top-2 right-2 z-10">
+                    <span className={`w-2.5 h-2.5 rounded-full block shadow-sm border border-white/60 ${academy.marketplaceVisible ? "bg-emerald-500" : "bg-gray-400"}`} title={academy.marketplaceVisible ? "Visible" : "Masquée"} />
+                  </div>
+                  <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                    <div className="w-6 h-6 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <GripVertical className="w-3.5 h-3.5 text-white" />
                     </div>
-                    <div className="flex flex-wrap gap-1"><Badge variant="outline" className="text-xs">{academy.status}</Badge><Badge variant="secondary" className="text-xs">{academy.publishedCourseCount} formation(s)</Badge><Badge variant="secondary" className="text-xs">{academy.registrationCount} inscription(s)</Badge></div>
+                  </div>
+                  <div className="aspect-[16/9] bg-muted overflow-hidden cursor-pointer" onClick={() => setSelectedAcademy(academy)}>
+                    {academy.coverImageUrl ? (
+                      <img src={academy.coverImageUrl} alt={academy.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><GraduationCap className="w-10 h-10 text-muted-foreground/40" /></div>
+                    )}
+                  </div>
+                  <CardContent className="p-4 space-y-3 cursor-pointer" onClick={() => setSelectedAcademy(academy)}>
+                    <div className="flex items-start gap-3 -mt-9">
+                      <Avatar className="border-2 border-background shadow-sm"><AvatarImage src={getAvatarUrl(academy)} alt={academy.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{academy.initials}</AvatarFallback></Avatar>
+                      <div className="min-w-0 flex-1 mt-5"><h3 className="font-semibold truncate">{academy.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{academy.location || "—"}</p></div>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="outline" className="text-xs">{academy.status}</Badge>
+                      <PublicationStatusBadge status={academy.publicationStatus ?? "DRAFT"} />
+                      <Badge variant="secondary" className="text-xs">{academy.publishedCourseCount} formation(s)</Badge>
+                      {academy.autoApprove && <span className="flex items-center gap-1 text-[11px] text-amber-600"><Zap className="w-3 h-3" />Auto</span>}
+                    </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{fmt(academy.revenueCents)}</span><span>{academy.reviewCount > 0 ? `★ ${(academy.rating / 10).toFixed(1)}` : "Aucun avis"}</span></div>
+                  </CardContent>
+                  <div className="px-4 pb-4">
                     {academy.status !== "approved" && (
                       <Button size="sm" className="w-full h-7 text-xs" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: academy.userId, status: "approved" })} data-testid={`button-approve-academy-${academy.userId}`}>Approuver</Button>
                     )}
                     {academy.status === "approved" && (
                       <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: academy.userId, status: "rejected" })} data-testid={`button-suspend-academy-${academy.userId}`}>Suspendre</Button>
                     )}
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                </div>
+              );})}
             </div>
             <DataPagination
               page={academiesPagination.page}

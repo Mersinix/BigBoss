@@ -42,7 +42,7 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
 // MaintenanceAvailabilityModal/AcademyProfileAvailabilityModal), fed by the printing
 // company's real weekly opening hours (printerProfiles.weeklyHours/isOnVacation, edited
 // in Settings → Disponibilité).
-function PrintCompanyAvailabilityModal({
+export function PrintCompanyAvailabilityModal({
   open, onClose, companyName, weeklyHours, isDark,
 }: {
   open: boolean;

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,7 +15,7 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import {
   Wrench, Users, Calendar, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
   Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image, Zap, Eye, X, Check,
-  TrendingUp, Send, ClipboardList,
+  TrendingUp, Send, ClipboardList, GripVertical, RefreshCw,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
@@ -332,20 +333,43 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
     onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
     onError: (e: any) => toast({ title: "Suppression impossible", description: e.message, variant: "destructive" }),
   });
+  const autoApproveMutation = useMutation({
+    mutationFn: (autoApprove: boolean) => apiRequest("PATCH", `/api/admin/maintenance/accounts/${account.userId}/auto-approve`, { autoApprove }),
+    onSuccess: () => { onRefresh(); toast({ title: "Auto Approve mis à jour" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
 
   if (!account) return null;
   return <Dialog open onOpenChange={(open) => !open && onClose()}>
     {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
         scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      {/* Cover header — visually synchronized with the existing Preview Detail modal
+          (AgentDetailModal's own cover + close/preview buttons), see
+          docs/service_card_reorder_and_detail_modal_audit.md Part 3. */}
+      <div className="w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden bg-gray-100 dark:bg-gray-800">
+        {account.coverImageUrl ? (
+          <img src={account.coverImageUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-600 to-amber-700">
+            <Wrench className="w-16 h-16 text-white" />
+          </div>
+        )}
+        <div className="absolute top-3 right-3 flex gap-2">
+          <button type="button" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-maintenance-marketplace">
+            <Eye className="w-4 h-4 text-white" />
+          </button>
+          <button type="button" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform" onClick={onClose} aria-label="Close" data-testid="button-close-maintenance-account-detail">
+            <X className="w-4 h-4 text-white" />
+          </button>
+        </div>
+      </div>
+      <div className="p-5 sm:p-6">
       <DialogHeader><DialogTitle className="flex items-center gap-3">
         <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400 font-bold">{account.initials}</AvatarFallback></Avatar>
         <span className="flex-1">{account.name}</span>
-        <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-maintenance-marketplace">
-          <Eye className="w-3.5 h-3.5" />
-        </Button>
       </DialogTitle></DialogHeader>
-      <div className="grid sm:grid-cols-2 gap-4 text-sm">
+      <div className="grid sm:grid-cols-2 gap-4 text-sm mt-4">
         <div className="sm:col-span-2 flex flex-wrap gap-2">
           <Badge variant="outline">{account.status}</Badge><Badge variant="secondary">{account.profileType}</Badge>
           <Badge className={account.marketplaceVisible ? "bg-green-600" : ""}>{account.marketplaceVisible ? "Visible marketplace" : "Masqué"}</Badge>
@@ -422,6 +446,23 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
           </div>
         )}
 
+        <div className="sm:col-span-2 flex items-center justify-between rounded-xl border p-3 bg-muted/30">
+          <div>
+            <p className="text-sm font-medium flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-amber-500" />Auto Approve
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Lorsqu'activé, ce professionnel de maintenance peut modifier son profil sans nécessiter une nouvelle validation Admin.
+            </p>
+          </div>
+          <Switch
+            checked={account.autoApprove ?? false}
+            onCheckedChange={(v) => autoApproveMutation.mutate(v)}
+            disabled={autoApproveMutation.isPending}
+            data-testid={`switch-auto-approve-maintenance-${account.userId}`}
+          />
+        </div>
+
         <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
           {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-maintenance-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}
           <Button size="sm" variant="outline" disabled={freezeMutation.isPending} onClick={() => freezeMutation.mutate(!account.isFrozen)} data-testid="button-freeze-maintenance-account">
@@ -441,6 +482,7 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
             </div>
           )}
         </div>
+      </div>
       </div>
       <AgentDetailModal
         agent={previewData?.card ?? null}
@@ -538,6 +580,12 @@ export default function MaintenanceAdminPage() {
   const [search, setSearch] = useState("");
   const [accountSearchOpen, setAccountSearchOpen] = useState(false);
   const accountSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Drag-and-drop order (mirrors admin/stores-page.tsx's StoreCard pattern) — persisted
+  // via displayOrder directly on maintenanceProfiles (no Store), which also drives
+  // the Coffee Owner /maintenance professional-card order.
+  const [accountOrderedIds, setAccountOrderedIds] = useState<number[] | null>(null);
+  const accountDragIdRef = useRef<number | null>(null);
   const [status, setStatus] = useState("all");
   const [availability, setAvailability] = useState("all");
   const [visibility, setVisibility] = useState("all");
@@ -561,6 +609,16 @@ export default function MaintenanceAdminPage() {
     qc.invalidateQueries({ queryKey: ["/api/maintenance/categories"] });
     qc.invalidateQueries({ queryKey: ["/api/maintenance/taxonomy"] });
   };
+
+  const accountBulkOrderMutation = useMutation({
+    mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", "/api/admin/maintenance/accounts/bulk-order", { orders }),
+    onSuccess: () => {
+      refresh();
+      qc.invalidateQueries({ queryKey: ["/api/maintenance/profiles"] });
+      toast({ title: "Ordre enregistré" });
+    },
+    onError: () => toast({ title: "Échec de l'enregistrement de l'ordre", variant: "destructive" }),
+  });
   const stats = data?.stats;
   const filterOptions = useMemo(() => {
     const accounts = data?.accounts ?? [];
@@ -570,7 +628,15 @@ export default function MaintenanceAdminPage() {
       locations: Array.from(new Set(accounts.flatMap((a) => (a.coverageArea || a.location || "").split(",").map((x: string) => x.trim()).filter(Boolean)))).sort(),
     };
   }, [data?.accounts]);
-  const accounts = useMemo(() => (data?.accounts ?? []).filter((a) => {
+  // Use accountOrderedIds (optimistic, after a drag) when available, otherwise fall
+  // back to server order (displayOrder) — mirrors admin/stores-page.tsx exactly.
+  const sortedAccounts = useMemo(() => {
+    const all = data?.accounts ?? [];
+    return accountOrderedIds
+      ? [...all].sort((a, b) => accountOrderedIds.indexOf(a.userId) - accountOrderedIds.indexOf(b.userId))
+      : [...all].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [data?.accounts, accountOrderedIds]);
+  const accounts = useMemo(() => sortedAccounts.filter((a) => {
     const haystack = [a.name, a.jobTitle, a.location, a.coverageArea, ...(a.categories ?? []), ...(a.skills ?? [])].join(" ").toLowerCase();
     const zones = (a.coverageArea || a.location || "").split(",").map((x: string) => x.trim());
     const accountRating = (a.rating ?? 0) / 10;
@@ -582,10 +648,35 @@ export default function MaintenanceAdminPage() {
       && (category === "all" || [...(a.categories ?? []), ...(a.skills ?? [])].includes(category))
       && (location === "all" || zones.includes(location))
       && (rating === "all" || (rating === "rated" ? accountRating > 0 : accountRating >= Number(rating)));
-  }), [data?.accounts, search, status, availability, visibility, profileType, category, location, rating]);
+  }), [sortedAccounts, search, status, availability, visibility, profileType, category, location, rating]);
   const accountsPagination = usePagination(accounts.length);
   useEffect(() => { accountsPagination.resetPage(); }, [search, status, availability, visibility, profileType, category, location, rating]);
   const pageAccounts = accounts.slice(accountsPagination.start, accountsPagination.end);
+
+  // Drag handlers — identical shape to admin/stores-page.tsx's handleDragStart/Over/Drop.
+  const handleAccountDragStart = (e: React.DragEvent, id: number) => {
+    accountDragIdRef.current = id;
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleAccountDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleAccountDrop = (e: React.DragEvent, targetId: number) => {
+    e.preventDefault();
+    const fromId = accountDragIdRef.current;
+    if (fromId === null || fromId === targetId) return;
+    const base = accountOrderedIds ?? sortedAccounts.map((a) => a.userId);
+    const from = base.indexOf(fromId);
+    const to = base.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...base];
+    next.splice(from, 1);
+    next.splice(to, 0, fromId);
+    setAccountOrderedIds(next);
+    accountBulkOrderMutation.mutate(next.map((id, idx) => ({ id, displayOrder: idx })));
+    accountDragIdRef.current = null;
+  };
 
   // Interventions tab — filter options derived from already-fetched jobPosts,
   // same comma-split-dropdown convention as the Comptes Maintenance tab above
@@ -733,7 +824,60 @@ export default function MaintenanceAdminPage() {
             </Button>
           )}
         </div>
-        {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{pageAccounts.map((account) => <Card key={account.userId} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedAccount(account)}><CardContent className="p-4 space-y-3"><div className="flex items-start gap-3"><Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400 font-bold">{account.initials}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.jobTitle}</p></div><span className={`h-2.5 w-2.5 rounded-full mt-1 ${account.available ? "bg-green-500" : "bg-gray-300 dark:bg-gray-600"}`} /></div><div className="flex flex-wrap gap-1"><Badge variant="secondary" className="text-xs">{account.profileType}</Badge><Badge variant="outline" className="text-xs">{account.status}</Badge><span className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{account.location || "—"}</span></div><div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis · {account.yearsExperience} ans exp.</span></div><div className="flex flex-wrap gap-1">{(account.skills ?? []).slice(0, 4).map((x: string) => <span key={x} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{x}</span>)}</div></CardContent></Card>)}</div>}
+        {accounts.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun compte correspondant.</CardContent></Card> : (<>
+          {accountBulkOrderMutation.isPending && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1 mb-3">
+              <RefreshCw className="w-3 h-3 animate-spin" />Enregistrement de l'ordre…
+            </span>
+          )}
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {pageAccounts.map((account) => {
+              const borderColor = account.publicationStatus === "APPROVED" ? "border-orange-400" : account.publicationStatus === "REJECTED" ? "border-red-400" : "border-border";
+              return (
+                <div
+                  key={account.userId}
+                  draggable
+                  onDragStart={(e) => handleAccountDragStart(e, account.userId)}
+                  onDragOver={handleAccountDragOver}
+                  onDrop={(e) => handleAccountDrop(e, account.userId)}
+                  className={`relative bg-card rounded-2xl border-2 ${borderColor} shadow-sm overflow-hidden hover:shadow-md transition-shadow group select-none`}
+                  data-testid={`card-maintenance-account-${account.userId}`}
+                >
+                  <div className="absolute top-2 right-2 z-10">
+                    <span className={`w-2.5 h-2.5 rounded-full block shadow-sm border border-white/60 ${account.available ? "bg-emerald-500" : "bg-gray-400"}`} title={account.available ? "Disponible" : "Indisponible"} />
+                  </div>
+                  <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                    <div className="w-6 h-6 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <GripVertical className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  </div>
+                  <div className="aspect-[16/9] bg-muted overflow-hidden cursor-pointer" onClick={() => setSelectedAccount(account)}>
+                    {account.coverImageUrl ? (
+                      <img src={account.coverImageUrl} alt={account.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><Wrench className="w-10 h-10 text-muted-foreground/40" /></div>
+                    )}
+                  </div>
+                  <CardContent className="p-4 space-y-3 cursor-pointer" onClick={() => setSelectedAccount(account)}>
+                    <div className="flex items-start gap-3 -mt-9">
+                      <Avatar className="border-2 border-background shadow-sm"><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400 font-bold">{account.initials}</AvatarFallback></Avatar>
+                      <div className="min-w-0 flex-1 mt-5"><h3 className="font-semibold truncate">{account.name}</h3><p className="text-xs text-muted-foreground truncate">{account.jobTitle}</p></div>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="secondary" className="text-xs">{account.profileType}</Badge>
+                      <Badge variant="outline" className="text-xs">{account.status}</Badge>
+                      <PublicationStatusBadge status={account.publicationStatus ?? "DRAFT"} />
+                      {account.autoApprove && <span className="flex items-center gap-1 text-[11px] text-amber-600"><Zap className="w-3 h-3" />Auto</span>}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" />{account.location || "—"}</div>
+                    <div className="flex items-center justify-between text-xs"><Stars value={account.rating} /><span className="text-muted-foreground">{account.reviewCount} avis · {account.yearsExperience} ans exp.</span></div>
+                    <div className="flex flex-wrap gap-1">{(account.skills ?? []).slice(0, 4).map((x: string) => <span key={x} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{x}</span>)}</div>
+                  </CardContent>
+                </div>
+              );
+            })}
+          </div>
+        </>)}
         <DataPagination
           page={accountsPagination.page}
           pageSize={accountsPagination.pageSize}

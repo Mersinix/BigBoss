@@ -36,7 +36,7 @@ const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant"
 // weekly opening hours (academyProfiles.weeklyHours/isOnVacation, edited in Settings →
 // Disponibilité) — distinct from the per-course session picker (academyCourseSessions),
 // which keeps its own separate availability icon on the per-formation AcademyDetailModal.
-function AcademyProfileAvailabilityModal({
+export function AcademyProfileAvailabilityModal({
   open, onClose, academyName, weeklyHours, isDark,
 }: {
   open: boolean;

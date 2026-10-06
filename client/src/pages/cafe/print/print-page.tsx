@@ -16,12 +16,13 @@ import {
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
-import type { PrintCatalogCard } from "@shared/schema";
+import type { PrintCatalogCard, PrintCompanyListCard } from "@shared/schema";
 import { printCategoryIcon } from "@/lib/print-category-icons";
 import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
+import { formatDistance } from "@/lib/distance";
 
 // Stable shared references for "data not fetched/disabled yet" useQuery
 // defaults — a fresh `[]` literal in a destructuring default is a *different*
@@ -33,6 +34,7 @@ import { PrintCompanyDetailModal } from "@/components/print/print-company-detail
 // depth exceeded". One shared reference lets the dependency settle.
 const EMPTY_PRINT_CARDS: PrintCatalogCard[] = [];
 const EMPTY_IDS: number[] = [];
+const EMPTY_PRINT_COMPANIES: PrintCompanyListCard[] = [];
 
 // ── Production time buckets ─────────────────────────────────────────────────
 // The real schema only has a numeric productionTimeDays (no free-text delivery
@@ -134,6 +136,132 @@ function PrintCategoryStrip({ categories, loading, selected, onSelect, isDark, c
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Print Store card/section ──────────────────────────────────────────────────
+// Mirrors browse-products.tsx's StoreCardTile/StoresSection (the Coffee Owner
+// /products reference) — same card shape/positioning, adapted to the real
+// Print provider data (GET /api/print/companies, docs/print_store_mapping_audit.md).
+// Selecting a card navigates to a dedicated Print Store page
+// (/print/stores/:printerId, print-store-detail-page.tsx) — the /print
+// equivalent of /products' own /stores/:storeId navigation
+// (docs/print_store_details_page_audit.md).
+
+function PrintStoreCardTile({ company, onClick, isDark }: {
+  company: PrintCompanyListCard;
+  onClick: () => void;
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
+  const faved = useFavorites((s) => !!s.printCompanies[company.userId]);
+  const togglePrintCompany = useFavorites((s) => s.togglePrintCompany);
+
+  return (
+    <div
+      data-testid={`card-print-store-${company.userId}`}
+      className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
+      onClick={onClick}
+    >
+      <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
+        {company.coverImageUrl ? (
+          <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center"><Printer className={`w-10 h-10 ${t.textSubtle}`} /></div>
+        )}
+        <button
+          className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePrintCompany({
+              id: company.userId, name: company.name, initials: company.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
+              type: "Imprimerie", rating: company.rating / 10, portfolioImages: company.portfolioImages, location: company.location,
+              available: !company.isOnVacation, profileImageUrl: company.profileImageUrl,
+            });
+          }}
+          data-testid={`button-fav-print-store-${company.userId}`}
+        >
+          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
+        </button>
+      </div>
+      <div className="p-3 flex gap-3 relative z-20">
+        <div className={`w-11 h-11 rounded-xl border-2 -mt-8 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
+          {company.profileImageUrl ? (
+            <img src={company.profileImageUrl} alt={company.name} className="w-full h-full object-cover" />
+          ) : (
+            <Printer className={`w-4 h-4 ${t.textMuted}`} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0 pt-1">
+          <h3 className={`font-bold text-sm leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
+          {company.description && <p className={`text-xs line-clamp-1 mt-0.5 ${t.textMuted}`}>{company.description}</p>}
+          <div className={`flex items-center gap-3 text-[11px] mt-1.5 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
+            <span className="flex items-center gap-1"><Package className="w-3 h-3" />{company.serviceCount} service{company.serviceCount !== 1 ? "s" : ""}</span>
+            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3 h-3" />{formatDistance(company.distanceKm)}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrintStoresSection({ companies, categoryId, onSelect, isDark }: {
+  companies: PrintCompanyListCard[];
+  categoryId: string;
+  onSelect: (printerId: number) => void;
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
+  const [expanded, setExpanded] = useState(false);
+  const INITIAL_LIMIT = 5;
+
+  const filtered = useMemo(() => {
+    if (!categoryId) return companies;
+    return companies.filter((c) => c.categories.some((cat) => cat.toLowerCase() === categoryId.toLowerCase()));
+  }, [companies, categoryId]);
+
+  if (!filtered.length) return null;
+  const showToggle = filtered.length > INITIAL_LIMIT;
+  const visible = expanded ? filtered : filtered.slice(0, INITIAL_LIMIT);
+
+  const renderTile = (company: PrintCompanyListCard) => (
+    <PrintStoreCardTile
+      key={company.userId}
+      company={company}
+      onClick={() => onSelect(company.userId)}
+      isDark={isDark}
+    />
+  );
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className={`font-bold text-lg ${t.textPrimary}`}>Imprimeries</h2>
+          <p className={`text-xs mt-0.5 ${t.textMuted}`}>{filtered.length} imprimerie{filtered.length !== 1 ? "s" : ""}</p>
+        </div>
+        {showToggle && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`text-xs font-semibold h-8 px-3 ${isDark ? "text-gray-300 hover:text-white hover:bg-gray-800" : "text-gray-600 hover:text-gray-900"}`}
+            onClick={() => setExpanded((e) => !e)}
+            data-testid="button-toggle-print-stores"
+          >
+            {expanded ? "Voir moins" : `Voir plus (${filtered.length - INITIAL_LIMIT}+)`}
+          </Button>
+        )}
+      </div>
+      {expanded ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
+          {visible.map(renderTile)}
+        </div>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+          {visible.map((company) => <div key={company.userId} className="shrink-0 w-52 sm:w-60">{renderTile(company)}</div>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -386,6 +514,10 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
     queryKey: ["/api/print/categories"],
     enabled: !comingSoon,
   });
+  const { data: printCompanies = EMPTY_PRINT_COMPANIES, isLoading: printCompaniesLoading } = useQuery<PrintCompanyListCard[]>({
+    queryKey: ["/api/print/companies"],
+    enabled: !comingSoon,
+  });
   // Admin-created category/subcategory icons — real source of truth
   // (printCategoryTaxonomy.icon / printSubCategoryTaxonomy.icon), matched by
   // name since the catalog's category/subCategory fields are plain text with
@@ -590,6 +722,14 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
       </div>
 
        <div className="max-w-7xl mx-auto px-4 py-8">
+        {!printCompaniesLoading && (
+          <PrintStoresSection
+            companies={printCompanies}
+            categoryId={categoryId}
+            onSelect={(printerId) => navigate(`/print/stores/${printerId}`)}
+            isDark={isDark}
+          />
+        )}
         <div className="mb-4">
            <h1 className={`font-bold text-lg ${t.textPrimary}`}>
             {categoryId || "Services d'impression"}

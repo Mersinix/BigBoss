@@ -269,6 +269,24 @@ export type AcademyProfileCard = {
   courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
 };
 
+/** Lightweight "Academy Store" list card — one per visible Academy with at
+ *  least one published course, mirrors PrintCompanyListCard's role for
+ *  /academy's browsable Store section (docs/academy_store_mapping_audit.md).
+ *  No `websiteUrl` — academyProfiles has no such column. */
+export type AcademyCompanyListCard = {
+  userId: number; name: string; profileImageUrl: string | null; coverImageUrl: string | null; flashImageUrl: string | null;
+  location: string; phone: string | null; description: string; marketplaceVisible: boolean;
+  weeklyHours: OpeningHoursMap | null; isOnVacation: boolean; rating: number; reviewCount: number;
+  portfolioImages: string[]; courseCount: number; distanceKm?: number | null;
+};
+
+export function useAcademyCompanies() {
+  return useQuery<AcademyCompanyListCard[]>({
+    queryKey: ["/api/academy/companies"],
+    queryFn: () => getJson("/api/academy/companies"),
+  });
+}
+
 // Same query key/route as useMyAcademyProfile — the server sanitizes the payload down to
 // {card} for non-self/non-admin viewers (see GET /api/academy/profile/:userId), so this is
 // the exact same cache entry, never a second profile fetch/representation.

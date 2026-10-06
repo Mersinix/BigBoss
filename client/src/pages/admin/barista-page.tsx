@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Coffee, Users, CheckCircle, Star, Plus, Pencil, Trash2, Snowflake, Search,
   MapPin, Phone, Mail, Calendar, CalendarClock, TrendingUp, Wallet, Clock, ClipboardList, Briefcase, Award, Eye, X, Check, Send,
+  Zap, GripVertical, RefreshCw,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { apiRequest } from "@/lib/queryClient";
@@ -59,10 +61,12 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 type SkillItem = { id: number; name: string; isActive: boolean; isFrozen: boolean };
 type AdminBarista = {
   userId: number; name: string; email: string; phone: string | null; profileImageUrl: string | null;
+  coverImageUrl?: string | null;
   status: string; level: string; city: string; location: string; bio: string; skills: string[];
   availableDays: string[]; isAvailable: boolean; isOnVacation: boolean; marketplaceVisible: boolean; isFrozen: boolean;
   available: boolean; dailyRateInCents: number; rating: number; reviewCount: number;
   publicationStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED"; publicationRejectionReason?: string | null;
+  displayOrder?: number; autoApprove?: boolean;
   jobApplicationCount: number; acceptedJobApplicationCount: number;
   createdAt: string | null; initials: string;
 };
@@ -340,23 +344,46 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
     onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
     onError: (e: any) => toast({ title: "Suppression impossible", description: e.message, variant: "destructive" }),
   });
+  const autoApproveMutation = useMutation({
+    mutationFn: (autoApprove: boolean) => apiRequest("PATCH", `/api/admin/barista/accounts/${barista!.userId}/auto-approve`, { autoApprove }),
+    onSuccess: () => { onRefresh(); toast({ title: "Auto Approve mis à jour" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
 
   if (!barista) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        {/* Cover header — visually synchronized with the existing Preview Detail modal
+            (BaristaDetailModal's own cover + close/preview buttons), see
+            docs/service_card_reorder_and_detail_modal_audit.md Part 3. */}
+        <div className="w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden bg-gray-100 dark:bg-gray-800">
+          {barista.coverImageUrl ? (
+            <img src={barista.coverImageUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-600 to-violet-700">
+              <Coffee className="w-16 h-16 text-white" />
+            </div>
+          )}
+          <div className="absolute top-3 right-3 flex gap-2">
+            <button type="button" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-barista-marketplace">
+              <Eye className="w-4 h-4 text-white" />
+            </button>
+            <button type="button" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform" onClick={onClose} aria-label="Close" data-testid="button-close-barista-detail">
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        </div>
+        <div className="p-5 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{barista.initials}</AvatarFallback></Avatar>
             <span className="flex-1">{barista.name}</span>
-            <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-barista-marketplace">
-              <Eye className="w-3.5 h-3.5" />
-            </Button>
           </DialogTitle>
         </DialogHeader>
-        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+        <div className="grid sm:grid-cols-2 gap-4 text-sm mt-4">
           <div className="sm:col-span-2 flex flex-wrap gap-2">
             <Badge variant="outline">{barista.status}</Badge>
             <Badge className={LEVEL_COLORS[barista.level] ?? ""} variant="outline">{LEVEL_LABELS[barista.level] ?? barista.level}</Badge>
@@ -439,6 +466,23 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
             </div>
           )}
 
+          <div className="sm:col-span-2 flex items-center justify-between rounded-xl border p-3 bg-muted/30">
+            <div>
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-500" />Auto Approve
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Lorsqu'activé, ce barista peut modifier son profil sans nécessiter une nouvelle validation Admin.
+              </p>
+            </div>
+            <Switch
+              checked={barista.autoApprove ?? false}
+              onCheckedChange={(v) => autoApproveMutation.mutate(v)}
+              disabled={autoApproveMutation.isPending}
+              data-testid={`switch-auto-approve-barista-${barista.userId}`}
+            />
+          </div>
+
           <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
             {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-barista-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}
             <Button size="sm" variant="outline" disabled={freezeMutation.isPending} onClick={() => freezeMutation.mutate(!barista.isFrozen)} data-testid="button-freeze-barista-account">
@@ -458,6 +502,7 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
               </div>
             )}
           </div>
+        </div>
         </div>
       </DialogContent>
       <BaristaDetailModal
@@ -567,6 +612,12 @@ export default function AdminBaristaPage() {
   const [baristaSearchOpen, setBaristaSearchOpen] = useState(false);
   const baristaSearchInputRef = useRef<HTMLInputElement>(null);
 
+  // Drag-and-drop order (mirrors admin/stores-page.tsx's StoreCard pattern) — persisted
+  // via displayOrder directly on baristaMarketplaceProfiles (no Store), which also
+  // drives the Coffee Owner /barista professional-card order.
+  const [baristaOrderedIds, setBaristaOrderedIds] = useState<number[] | null>(null);
+  const baristaDragIdRef = useRef<number | null>(null);
+
   // ── Offres & Missions (emploi) — the single job-posting interface this page
   // now has (mission-workflow cleanup). A top-level recordType switcher plus
   // status filter and title/café search, mirroring the Baristas tab's own
@@ -585,6 +636,16 @@ export default function AdminBaristaPage() {
     qc.invalidateQueries({ queryKey: ["/api/admin/barista"] });
     qc.invalidateQueries({ queryKey: ["/api/barista/skills"] });
   };
+
+  const baristaBulkOrderMutation = useMutation({
+    mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", "/api/admin/barista/accounts/bulk-order", { orders }),
+    onSuccess: () => {
+      refresh();
+      qc.invalidateQueries({ queryKey: ["/api/barista/profiles"] });
+      toast({ title: "Ordre enregistré" });
+    },
+    onError: () => toast({ title: "Échec de l'enregistrement de l'ordre", variant: "destructive" }),
+  });
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => apiRequest("PATCH", `/api/admin/users/${id}/status`, { status }),
@@ -610,16 +671,49 @@ export default function AdminBaristaPage() {
   ] as const;
 
   // ── Baristas tab ──
-  const baristas = useMemo(() => (data?.baristas ?? []).filter((b) => {
+  // Use baristaOrderedIds (optimistic, after a drag) when available, otherwise fall
+  // back to server order (displayOrder) — mirrors admin/stores-page.tsx exactly.
+  const sortedBaristas = useMemo(() => {
+    const all = data?.baristas ?? [];
+    return baristaOrderedIds
+      ? [...all].sort((a, b) => baristaOrderedIds.indexOf(a.userId) - baristaOrderedIds.indexOf(b.userId))
+      : [...all].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [data?.baristas, baristaOrderedIds]);
+  const baristas = useMemo(() => sortedBaristas.filter((b) => {
     const haystack = [b.name, b.email, b.location, b.skills.join(" ")].join(" ").toLowerCase();
     return (!baristaSearch || haystack.includes(baristaSearch.toLowerCase()))
       && (baristaStatus === "all" || b.status === baristaStatus)
       && (baristaLevel === "all" || b.level === baristaLevel);
-  }), [data?.baristas, baristaSearch, baristaStatus, baristaLevel]);
+  }), [sortedBaristas, baristaSearch, baristaStatus, baristaLevel]);
 
   const baristaPagination = usePagination(baristas.length);
   useEffect(() => { baristaPagination.resetPage(); }, [baristaSearch, baristaStatus, baristaLevel]);
   const baristaPageItems = baristas.slice(baristaPagination.start, baristaPagination.end);
+
+  // Drag handlers — identical shape to admin/stores-page.tsx's handleDragStart/Over/Drop.
+  const handleBaristaDragStart = (e: React.DragEvent, id: number) => {
+    baristaDragIdRef.current = id;
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleBaristaDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleBaristaDrop = (e: React.DragEvent, targetId: number) => {
+    e.preventDefault();
+    const fromId = baristaDragIdRef.current;
+    if (fromId === null || fromId === targetId) return;
+    const base = baristaOrderedIds ?? sortedBaristas.map((b) => b.userId);
+    const from = base.indexOf(fromId);
+    const to = base.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...base];
+    next.splice(from, 1);
+    next.splice(to, 0, fromId);
+    setBaristaOrderedIds(next);
+    baristaBulkOrderMutation.mutate(next.map((id, idx) => ({ id, displayOrder: idx })));
+    baristaDragIdRef.current = null;
+  };
 
   // ── Offres & Missions (emploi) tab ──
   const jobPostsFiltered = useMemo(() => (data?.jobPosts ?? []).filter((j) => j.recordType === jobPostRecordType).filter((j) => {
@@ -796,21 +890,51 @@ export default function AdminBaristaPage() {
               </Button>
             )}
           </div>
-          {baristas.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun barista correspondant.</CardContent></Card> : (
+          {baristas.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun barista correspondant.</CardContent></Card> : (<>
+            {baristaBulkOrderMutation.isPending && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1 mb-3">
+                <RefreshCw className="w-3 h-3 animate-spin" />Enregistrement de l'ordre…
+              </span>
+            )}
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {baristaPageItems.map((barista) => (
-                <Card key={barista.userId} className="hover:shadow-md transition-shadow" data-testid={`card-barista-${barista.userId}`}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedBarista(barista)}>
-                      <Avatar><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{barista.initials}</AvatarFallback></Avatar>
-                      <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{barista.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{barista.location || "—"}</p></div>
-                      <span className={`h-2.5 w-2.5 rounded-full mt-1 ${barista.available ? "bg-green-500" : "bg-gray-300"}`} />
+              {baristaPageItems.map((barista) => {
+                const borderColor = barista.publicationStatus === "APPROVED" ? "border-indigo-400" : barista.publicationStatus === "REJECTED" ? "border-red-400" : "border-border";
+                return (
+                <div
+                  key={barista.userId}
+                  draggable
+                  onDragStart={(e) => handleBaristaDragStart(e, barista.userId)}
+                  onDragOver={handleBaristaDragOver}
+                  onDrop={(e) => handleBaristaDrop(e, barista.userId)}
+                  className={`relative bg-card rounded-2xl border-2 ${borderColor} shadow-sm overflow-hidden hover:shadow-md transition-shadow group select-none`}
+                  data-testid={`card-barista-${barista.userId}`}
+                >
+                  <div className="absolute top-2 right-2 z-10">
+                    <span className={`w-2.5 h-2.5 rounded-full block shadow-sm border border-white/60 ${barista.available ? "bg-emerald-500" : "bg-gray-400"}`} title={barista.available ? "Disponible" : "Indisponible"} />
+                  </div>
+                  <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                    <div className="w-6 h-6 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <GripVertical className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  </div>
+                  <div className="aspect-[16/9] bg-muted overflow-hidden cursor-pointer" onClick={() => setSelectedBarista(barista)}>
+                    {barista.coverImageUrl ? (
+                      <img src={barista.coverImageUrl} alt={barista.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><Coffee className="w-10 h-10 text-muted-foreground/40" /></div>
+                    )}
+                  </div>
+                  <CardContent className="p-4 space-y-3 cursor-pointer" onClick={() => setSelectedBarista(barista)}>
+                    <div className="flex items-start gap-3 -mt-9">
+                      <Avatar className="border-2 border-background shadow-sm"><AvatarImage src={getAvatarUrl(barista)} alt={barista.name} /><AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-400 font-bold">{barista.initials}</AvatarFallback></Avatar>
+                      <div className="min-w-0 flex-1 mt-5"><h3 className="font-semibold truncate">{barista.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{barista.location || "—"}</p></div>
                     </div>
                     <div className="flex flex-wrap gap-1">
                       <Badge variant="outline" className="text-xs">{barista.status}</Badge>
                       <Badge className={`text-xs ${LEVEL_COLORS[barista.level] ?? ""}`} variant="outline">{LEVEL_LABELS[barista.level] ?? barista.level}</Badge>
+                      <PublicationStatusBadge status={barista.publicationStatus ?? "DRAFT"} />
                       {!barista.marketplaceVisible && <Badge variant="secondary" className="text-xs">Masqué</Badge>}
-                      <Badge variant="secondary" className="text-xs">{barista.jobApplicationCount} candidature(s)</Badge>
+                      {barista.autoApprove && <span className="flex items-center gap-1 text-[11px] text-amber-600"><Zap className="w-3 h-3" />Auto</span>}
                     </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{fmt(barista.dailyRateInCents)}/jour</span><span>{barista.reviewCount > 0 ? `★ ${(barista.rating / 10).toFixed(1)}` : "Aucun avis"}</span></div>
                     {barista.status !== "approved" && (
@@ -820,10 +944,10 @@ export default function AdminBaristaPage() {
                       <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10" disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: barista.userId, status: "rejected" })} data-testid={`button-suspend-barista-${barista.userId}`}>Suspendre</Button>
                     )}
                   </CardContent>
-                </Card>
-              ))}
+                </div>
+              );})}
             </div>
-          )}
+          </>)}
           <DataPagination
             page={baristaPagination.page}
             pageSize={baristaPagination.pageSize}

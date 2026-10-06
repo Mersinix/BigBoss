@@ -35,9 +35,12 @@ import OrdersPage from "@/pages/shared/orders-page";
 import PrintPage from "@/pages/cafe/print/print-page";
 import PrintDetailPage from "@/pages/cafe/print/print-detail-page";
 import PrintOrdersPage from "@/pages/cafe/print/print-orders-page";
+import PrintStoreDetailPage from "@/pages/cafe/print/print-store-detail-page";
 import BaristaPage from "@/pages/cafe/barista/barista-page";
 import BaristaAcademyPage from "@/pages/cafe/barista/barista-academy-page";
+import AcademyStoreDetailPage from "@/pages/cafe/barista/academy-store-detail-page";
 import MarketingPage from "@/pages/cafe/marketing/marketing-page";
+import MarketingStoreDetailPage from "@/pages/cafe/marketing/marketing-store-detail-page";
 import SupplierMessagesPage from "@/pages/supplier/messages-page";
 import AdminMessagesPage from "@/pages/admin/messages-page";
 import DeliveryMessagesPage from "@/pages/delivery/messages-page";
@@ -631,12 +634,21 @@ function Router() {
         )}
       </Route>
       {/* Registered before /print/:productId — wouter matches routes in declaration
-          order, and the param route would otherwise greedily swallow "orders" as if
-          it were a productId. */}
+          order, and the param route would otherwise greedily swallow "orders"/"stores"
+          as if it were a productId. */}
       <Route path="/print/orders">
         {() => (
           <MarketplaceLayout>
             <GatedServiceRoute service="PRINTING" component={PrintOrdersPage} />
+          </MarketplaceLayout>
+        )}
+      </Route>
+      {/* Print Store detail page — the /print equivalent of /stores/:storeId
+          (docs/print_store_details_page_audit.md). */}
+      <Route path="/print/stores/:printerId">
+        {() => (
+          <MarketplaceLayout>
+            <GatedServiceRoute service="PRINTING" component={PrintStoreDetailPage} />
           </MarketplaceLayout>
         )}
       </Route>
@@ -664,10 +676,32 @@ function Router() {
           </MarketplaceLayout>
         )}
       </Route>
+      {/* Academy Store detail page — the /academy equivalent of /stores/:storeId,
+          /print/stores/:printerId and /marketing/stores/:agencyId
+          (docs/academy_store_mapping_audit.md). */}
+      <Route path="/academy/stores/:academyUserId">
+        {() => (
+          <MarketplaceLayout>
+            <GatedServiceRoute service="BARISTA_ACADEMY" component={AcademyStoreDetailPage} />
+          </MarketplaceLayout>
+        )}
+      </Route>
       <Route path="/academy">
         {() => (
           <MarketplaceLayout>
             <GatedServiceRoute service="BARISTA_ACADEMY" component={BaristaAcademyPage} />
+          </MarketplaceLayout>
+        )}
+      </Route>
+      {/* Marketing Store detail page — the /marketing equivalent of
+          /stores/:storeId and /print/stores/:printerId
+          (docs/marketing_store_mapping_audit.md). Registered before /marketing
+          itself is irrelevant here since there's no /marketing/:param route to
+          conflict with, but kept adjacent for readability. */}
+      <Route path="/marketing/stores/:agencyId">
+        {() => (
+          <MarketplaceLayout>
+            <GatedServiceRoute service="MARKETING" component={MarketingStoreDetailPage} />
           </MarketplaceLayout>
         )}
       </Route>

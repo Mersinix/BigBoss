@@ -54,7 +54,7 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
 // Availability modal — same structure/scrollbar/today-highlight treatment as
 // BaristaAvailabilityModal (client/src/components/barista/barista-detail-modal.tsx),
 // fed by marketingProfiles.weeklyHours (same OpeningHoursMap shape, reused not duplicated).
-function MarketingAvailabilityModal({
+export function MarketingAvailabilityModal({
   open, onClose, providerName, weeklyHours, isDark,
 }: {
   open: boolean;

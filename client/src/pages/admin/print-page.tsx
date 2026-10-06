@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Printer, Users, ShoppingBag, Package, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
   Trash2, Snowflake, Search, MapPin, Phone, Mail, Calendar, TrendingUp, Layers, Percent, Wallet, Eye, X, Check,
+  Zap, GripVertical, RefreshCw,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { PublicationStatusBadge } from "@/components/account/publication-status-badge";
@@ -289,23 +290,46 @@ function PrinterAccountDetail({ account, onClose, onRefresh, onOpenService }: {
     onSuccess: () => { onRefresh(); onClose(); toast({ title: "Compte supprimé" }); },
     onError: (e: any) => toast({ title: "Suppression impossible", description: e.message, variant: "destructive" }),
   });
+  const autoApproveMutation = useMutation({
+    mutationFn: (autoApprove: boolean) => apiRequest("PATCH", `/api/admin/print/accounts/${account.userId}/auto-approve`, { autoApprove }),
+    onSuccess: () => { onRefresh(); toast({ title: "Auto Approve mis à jour" }); },
+    onError: (e: any) => toast({ title: "Action impossible", description: e.message, variant: "destructive" }),
+  });
 
   if (!account) return null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        {/* Cover header — visually synchronized with the existing Preview Detail modal
+            (PrintCompanyDetailModal's own cover + close/preview buttons), see
+            docs/service_card_reorder_and_detail_modal_audit.md Part 3. */}
+        <div className="w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden bg-gray-100 dark:bg-gray-800">
+          {account.coverImageUrl ? (
+            <img src={account.coverImageUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-cyan-700">
+              <Printer className="w-16 h-16 text-white" />
+            </div>
+          )}
+          <div className="absolute top-3 right-3 flex gap-2">
+            <button type="button" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-print-marketplace">
+              <Eye className="w-4 h-4 text-white" />
+            </button>
+            <button type="button" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform" onClick={onClose} aria-label="Close" data-testid="button-close-print-account-detail">
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        </div>
+        <div className="p-5 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <Avatar><AvatarImage src={getAvatarUrl(account)} alt={account.name} /><AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 font-bold">{account.initials}</AvatarFallback></Avatar>
             <span className="flex-1">{account.name}</span>
-            <Button type="button" variant="ghost" size="icon" className="absolute right-12 top-4 h-8 w-8 rounded-full" onClick={() => setPreviewOpen(true)} title="Aperçu marketplace" aria-label="Aperçu marketplace" data-testid="button-preview-print-marketplace">
-              <Eye className="w-3.5 h-3.5" />
-            </Button>
           </DialogTitle>
         </DialogHeader>
-        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+        <div className="grid sm:grid-cols-2 gap-4 text-sm mt-4">
           <div className="sm:col-span-2 flex flex-wrap gap-2">
             <Badge variant="outline">{account.status}</Badge>
             <Badge className={account.marketplaceVisible ? "bg-green-600" : ""}>{account.marketplaceVisible ? "Visible marketplace" : "Masqué"}</Badge>
@@ -370,6 +394,23 @@ function PrinterAccountDetail({ account, onClose, onRefresh, onOpenService }: {
             </div>
           )}
 
+          <div className="sm:col-span-2 flex items-center justify-between rounded-xl border p-3 bg-muted/30">
+            <div>
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-500" />Auto Approve
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Lorsqu'activé, ce compte imprimerie peut modifier son profil sans nécessiter une nouvelle validation Admin.
+              </p>
+            </div>
+            <Switch
+              checked={account.autoApprove ?? false}
+              onCheckedChange={(v) => autoApproveMutation.mutate(v)}
+              disabled={autoApproveMutation.isPending}
+              data-testid={`switch-auto-approve-print-${account.userId}`}
+            />
+          </div>
+
           <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
             {!editing && <Button size="sm" variant="outline" onClick={startEdit} data-testid="button-edit-print-account"><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</Button>}
             <Button size="sm" variant="outline" disabled={freezeMutation.isPending} onClick={() => freezeMutation.mutate(!account.isFrozen)} data-testid="button-freeze-print-account">
@@ -389,6 +430,7 @@ function PrinterAccountDetail({ account, onClose, onRefresh, onOpenService }: {
               </div>
             )}
           </div>
+        </div>
         </div>
       </DialogContent>
       <PrintCompanyDetailModal
@@ -424,6 +466,11 @@ export default function AdminPrintPage() {
   const [printerStatus, setPrinterStatus] = useState("all");
   const [printerSearchOpen, setPrinterSearchOpen] = useState(false);
   const printerSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Drag-and-drop order (mirrors admin/stores-page.tsx's StoreCard pattern) — persisted
+  // via displayOrder, which also drives the Coffee Owner /print Store-card order.
+  const [printerOrderedIds, setPrinterOrderedIds] = useState<number[] | null>(null);
+  const printerDragIdRef = useRef<number | null>(null);
 
   const [serviceSearch, setServiceSearch] = useState("");
   const [serviceCategory, setServiceCategory] = useState("all");
@@ -463,6 +510,12 @@ export default function AdminPrintPage() {
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
+  const printerBulkOrderMutation = useMutation({
+    mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", "/api/admin/print/accounts/bulk-order", { orders }),
+    onSuccess: () => { refresh(); qc.invalidateQueries({ queryKey: ["/api/print/companies"] }); toast({ title: "Ordre enregistré" }); },
+    onError: () => toast({ title: "Échec de l'enregistrement de l'ordre", variant: "destructive" }),
+  });
+
   const stats = data?.stats;
   const kpis = [
     ["Imprimeurs", stats?.totalPrinters ?? 0, Users],
@@ -476,14 +529,47 @@ export default function AdminPrintPage() {
   ] as const;
 
   // ── Printers tab ──
-  const printers = useMemo(() => (data?.printers ?? []).filter((p) => {
+  // Use printerOrderedIds (optimistic, after a drag) when available, otherwise fall
+  // back to server order (displayOrder) — mirrors admin/stores-page.tsx exactly.
+  const sortedPrinters = useMemo(() => {
+    const all = data?.printers ?? [];
+    return printerOrderedIds
+      ? [...all].sort((a, b) => printerOrderedIds.indexOf(a.userId) - printerOrderedIds.indexOf(b.userId))
+      : [...all].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  }, [data?.printers, printerOrderedIds]);
+  const printers = useMemo(() => sortedPrinters.filter((p) => {
     const haystack = [p.name, p.email, p.location].join(" ").toLowerCase();
     return (!printerSearch || haystack.includes(printerSearch.toLowerCase()))
       && (printerStatus === "all" || p.status === printerStatus);
-  }), [data?.printers, printerSearch, printerStatus]);
+  }), [sortedPrinters, printerSearch, printerStatus]);
   const printersPagination = usePagination(printers.length);
   useEffect(() => { printersPagination.resetPage(); }, [printerSearch, printerStatus]);
   const pagePrinters = printers.slice(printersPagination.start, printersPagination.end);
+
+  // Drag handlers — identical shape to admin/stores-page.tsx's handleDragStart/Over/Drop.
+  const handlePrinterDragStart = (e: React.DragEvent, id: number) => {
+    printerDragIdRef.current = id;
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handlePrinterDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handlePrinterDrop = (e: React.DragEvent, targetId: number) => {
+    e.preventDefault();
+    const fromId = printerDragIdRef.current;
+    if (fromId === null || fromId === targetId) return;
+    const base = printerOrderedIds ?? sortedPrinters.map((p) => p.userId);
+    const from = base.indexOf(fromId);
+    const to = base.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...base];
+    next.splice(from, 1);
+    next.splice(to, 0, fromId);
+    setPrinterOrderedIds(next);
+    printerBulkOrderMutation.mutate(next.map((id, idx) => ({ id, displayOrder: idx })));
+    printerDragIdRef.current = null;
+  };
 
   // ── Services (catalog) tab — every catalog item across every printer,
   // including inactive ones (Admin needs to see/moderate those too, unlike the
@@ -668,27 +754,63 @@ export default function AdminPrintPage() {
               </Button>
             )}
           </div>
+          {printerBulkOrderMutation.isPending && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <RefreshCw className="w-3 h-3 animate-spin" />Enregistrement de l'ordre…
+            </span>
+          )}
           {printers.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun imprimeur correspondant.</CardContent></Card> : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {pagePrinters.map((printer) => (
-                <Card key={printer.userId} className="hover:shadow-md transition-shadow" data-testid={`card-printer-${printer.userId}`}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedPrinterAccount(printer)}>
-                      <Avatar><AvatarImage src={getAvatarUrl(printer)} alt={printer.name} /><AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 font-bold">{printer.initials}</AvatarFallback></Avatar>
-                      <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{printer.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{printer.location || "—"}</p></div>
-                      <span className={`h-2.5 w-2.5 rounded-full mt-1 ${printer.activeServiceCount > 0 ? "bg-green-500" : "bg-gray-300"}`} />
+              {pagePrinters.map((printer) => {
+                const borderColor = printer.publicationStatus === "APPROVED" ? "border-blue-400" : printer.publicationStatus === "REJECTED" ? "border-red-400" : "border-border";
+                return (
+                <div
+                  key={printer.userId}
+                  draggable
+                  onDragStart={(e) => handlePrinterDragStart(e, printer.userId)}
+                  onDragOver={handlePrinterDragOver}
+                  onDrop={(e) => handlePrinterDrop(e, printer.userId)}
+                  className={`relative bg-card rounded-2xl border-2 ${borderColor} shadow-sm overflow-hidden hover:shadow-md transition-shadow group select-none`}
+                  data-testid={`card-printer-${printer.userId}`}
+                >
+                  <div className="absolute top-2 right-2 z-10">
+                    <span className={`w-2.5 h-2.5 rounded-full block shadow-sm border border-white/60 ${printer.marketplaceVisible && !printer.isOnVacation ? "bg-emerald-500" : "bg-gray-400"}`} title={printer.marketplaceVisible && !printer.isOnVacation ? "Visible" : "Masqué"} />
+                  </div>
+                  <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                    <div className="w-6 h-6 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <GripVertical className="w-3.5 h-3.5 text-white" />
                     </div>
-                    <div className="flex flex-wrap gap-1"><Badge variant="outline" className="text-xs">{printer.status}</Badge><Badge variant="secondary" className="text-xs">{printer.activeServiceCount} service(s)</Badge><Badge variant="secondary" className="text-xs">{printer.totalOrders} commande(s)</Badge></div>
+                  </div>
+                  <div className="aspect-[16/9] bg-muted overflow-hidden cursor-pointer" onClick={() => setSelectedPrinterAccount(printer)}>
+                    {printer.coverImageUrl ? (
+                      <img src={printer.coverImageUrl} alt={printer.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><Printer className="w-10 h-10 text-muted-foreground/40" /></div>
+                    )}
+                  </div>
+                  <CardContent className="p-4 space-y-3 cursor-pointer" onClick={() => setSelectedPrinterAccount(printer)}>
+                    <div className="flex items-start gap-3 -mt-9">
+                      <Avatar className="border-2 border-background shadow-sm"><AvatarImage src={getAvatarUrl(printer)} alt={printer.name} /><AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 font-bold">{printer.initials}</AvatarFallback></Avatar>
+                      <div className="min-w-0 flex-1 mt-5"><h3 className="font-semibold truncate">{printer.name}</h3><p className="text-xs text-muted-foreground truncate flex items-center gap-1"><MapPin className="h-3 w-3" />{printer.location || "—"}</p></div>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="outline" className="text-xs">{printer.status}</Badge>
+                      <PublicationStatusBadge status={printer.publicationStatus ?? "DRAFT"} />
+                      <Badge variant="secondary" className="text-xs">{printer.activeServiceCount} service(s)</Badge>
+                      {printer.autoApprove && <span className="flex items-center gap-1 text-[11px] text-amber-600"><Zap className="w-3 h-3" />Auto</span>}
+                    </div>
                     <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{fmt(printer.revenueCents)}</span><span>{printer.reviewCount > 0 ? `★ ${(printer.rating / 10).toFixed(1)}` : "Aucun avis"}</span></div>
+                  </CardContent>
+                  <div className="px-4 pb-4">
                     {printer.status !== "approved" && (
                       <Button size="sm" className="w-full h-7 text-xs" disabled={printerStatusMutation.isPending} onClick={() => printerStatusMutation.mutate({ id: printer.userId, status: "approved" })} data-testid={`button-approve-printer-${printer.userId}`}>Approuver</Button>
                     )}
                     {printer.status === "approved" && (
                       <Button size="sm" variant="outline" className="w-full h-7 text-xs border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10" disabled={printerStatusMutation.isPending} onClick={() => printerStatusMutation.mutate({ id: printer.userId, status: "rejected" })} data-testid={`button-suspend-printer-${printer.userId}`}>Suspendre</Button>
                     )}
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                </div>
+              );})}
             </div>
           )}
           <DataPagination

@@ -39,12 +39,13 @@ import {
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import {
-  useAcademyCourses, useAcademyCourseSessions, useCreateAcademyRegistration,
-  type AcademyCourseCard, type AcademyCourseLevel,
+  useAcademyCourses, useAcademyCourseSessions, useCreateAcademyRegistration, useAcademyCompanies,
+  type AcademyCourseCard, type AcademyCourseLevel, type AcademyCompanyListCard,
 } from "@/hooks/use-barista-academy";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
 import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-modal";
+import { formatDistance } from "@/lib/distance";
 
 // Barista Academy — split out of the former combined /barista page into its
 // own independent page/service (route /academy). This is now backed by REAL
@@ -209,6 +210,122 @@ export function EnrollDialog({ course, open, onClose, isDark }: { course: Academ
   );
 }
 
+// ── Academy Store card/section ──────────────────────────────────────────────
+// Mirrors print-page.tsx's PrintStoreCardTile/PrintStoresSection (itself
+// mirroring browse-products.tsx's StoreCardTile/StoresSection) — same card
+// shape/positioning, adapted to real Academy data
+// (GET /api/academy/companies, docs/academy_store_mapping_audit.md).
+// Selecting a card navigates to a dedicated Academy Store page
+// (/academy/stores/:academyUserId) — the existing per-course AcademyDetailModal
+// path is untouched, both continue to exist for their respective purposes.
+
+function AcademyStoreCardTile({ company, onClick, isDark }: {
+  company: AcademyCompanyListCard;
+  onClick: () => void;
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
+  const faved = useFavorites((s) => !!s.academyOrganisations[company.userId]);
+  const toggleAcademyOrganisation = useFavorites((s) => s.toggleAcademyOrganisation);
+
+  return (
+    <div
+      data-testid={`card-academy-store-${company.userId}`}
+      className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
+      onClick={onClick}
+    >
+      <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
+        {company.coverImageUrl ? (
+          <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center"><GraduationCap className={`w-10 h-10 ${t.textSubtle}`} /></div>
+        )}
+        <button
+          className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleAcademyOrganisation({
+              id: company.userId, name: company.name,
+              initials: company.name.split(/\s+/).filter(Boolean).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase(),
+              type: "Académie", rating: company.rating / 10, portfolioImages: company.portfolioImages,
+              location: company.location, available: !company.isOnVacation, profileImageUrl: company.profileImageUrl,
+            });
+          }}
+          data-testid={`button-fav-academy-store-${company.userId}`}
+        >
+          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
+        </button>
+      </div>
+      <div className="p-3 flex gap-3 relative z-20">
+        <div className={`w-11 h-11 rounded-xl border-2 -mt-8 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
+          {company.profileImageUrl ? (
+            <img src={company.profileImageUrl} alt={company.name} className="w-full h-full object-cover" />
+          ) : (
+            <GraduationCap className={`w-4 h-4 ${t.textMuted}`} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0 pt-1">
+          <h3 className={`font-bold text-sm leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
+          {company.description && <p className={`text-xs line-clamp-1 mt-0.5 ${t.textMuted}`}>{company.description}</p>}
+          <div className={`flex items-center gap-3 text-[11px] mt-1.5 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
+            <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3" />{company.courseCount} formation{company.courseCount !== 1 ? "s" : ""}</span>
+            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3 h-3" />{formatDistance(company.distanceKm)}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AcademyStoresSection({ companies, onSelect, isDark }: {
+  companies: AcademyCompanyListCard[];
+  onSelect: (academyUserId: number) => void;
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
+  const [expanded, setExpanded] = useState(false);
+  const INITIAL_LIMIT = 5;
+
+  if (!companies.length) return null;
+  const showToggle = companies.length > INITIAL_LIMIT;
+  const visible = expanded ? companies : companies.slice(0, INITIAL_LIMIT);
+
+  const renderTile = (company: AcademyCompanyListCard) => (
+    <AcademyStoreCardTile key={company.userId} company={company} onClick={() => onSelect(company.userId)} isDark={isDark} />
+  );
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className={`font-bold text-lg ${t.textPrimary}`}>Académies</h2>
+          <p className={`text-xs mt-0.5 ${t.textMuted}`}>{companies.length} académie{companies.length !== 1 ? "s" : ""}</p>
+        </div>
+        {showToggle && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`text-xs font-semibold h-8 px-3 ${isDark ? "text-gray-300 hover:text-white hover:bg-gray-800" : "text-gray-600 hover:text-gray-900"}`}
+            onClick={() => setExpanded((e) => !e)}
+            data-testid="button-toggle-academy-stores"
+          >
+            {expanded ? "Voir moins" : `Voir plus (${companies.length - INITIAL_LIMIT}+)`}
+          </Button>
+        )}
+      </div>
+      {expanded ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
+          {visible.map(renderTile)}
+        </div>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+          {visible.map((company) => <div key={company.userId} className="shrink-0 w-52 sm:w-60">{renderTile(company)}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Training Card ─────────────────────────────────────────────────────────────
 // Barista marketplace card as the visual/UX reference (Part 3): left = photo,
 // right = info, whole card is the click target opening the details modal.
@@ -357,6 +474,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
     level: trainingLevel || undefined,
     certification: trainingCert || undefined,
   });
+  const { data: academyCompanies = [] } = useAcademyCompanies();
 
   const filteredTraining = useMemo(() => courses, [courses]);
   const hasTrainingFilters = !!(trainingSearch || trainingLevel || trainingCert);
@@ -557,6 +675,21 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Académies (Store section) — rendered after the filters bar, same
+              organizational order as /print's Imprimeries and /marketing's
+              Agences (docs/academy_print_marketing_store_synchronization_audit.md
+              Section 10-13). */}
+          <AcademyStoresSection
+            companies={academyCompanies}
+            onSelect={(academyUserId) => navigate(`/academy/stores/${academyUserId}`)}
+            isDark={isDark}
+          />
+
+          <div className="mb-4">
+            <h2 className={`font-bold text-lg ${t.textPrimary}`}>Formations</h2>
+            <p className={`text-sm mt-0.5 ${t.textMuted}`}>{filteredTraining.length} formation{filteredTraining.length !== 1 ? "s" : ""} disponible{filteredTraining.length !== 1 ? "s" : ""}</p>
           </div>
 
           {isLoading ? (

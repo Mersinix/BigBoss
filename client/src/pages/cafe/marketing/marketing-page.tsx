@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import marketingHeroImg from "@assets/image_1780681027926.png";
-import { useSearch } from "wouter";
+import { useSearch, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useThemeStore } from "@/store/theme-store";
 import { useToast } from "@/hooks/use-toast";
@@ -41,13 +41,16 @@ import {
   useMarketingServices,
   useMarketingTaxonomy,
   useCreateMarketingProject,
+  useMarketingCompanies,
   type MarketingMarketplaceCard,
   type MarketingServiceCard,
 } from "@/hooks/use-marketing";
+import type { MarketingCompanyListCard } from "@shared/schema";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { MarketingBlacklistModal } from "@/components/marketing/marketing-blacklist-modal";
+import { formatDistance } from "@/lib/distance";
 
 // ── Access helper (mirrors browse-products + barista-page pattern) ────────────
 
@@ -110,6 +113,129 @@ const PROVIDER_TYPE_COLORS: Record<string, string> = {
 };
 function providerTypeLabel(type: string) { return PROVIDER_TYPE_LABELS[type] ?? type; }
 function providerTypeColor(type: string) { return PROVIDER_TYPE_COLORS[type] ?? "bg-gray-100 text-gray-700"; }
+
+// ── Marketing Store card/section ────────────────────────────────────────────
+// Mirrors print-page.tsx's PrintStoreCardTile/PrintStoresSection (itself
+// mirroring browse-products.tsx's StoreCardTile/StoresSection) — same card
+// shape/positioning, adapted to real Marketing agency data
+// (GET /api/marketing/companies, docs/marketing_store_mapping_audit.md).
+// Selecting a card navigates to a dedicated Marketing Store page
+// (/marketing/stores/:agencyId) — the existing "Agence" Details-modal path
+// from a Service card is untouched, both continue to exist for their
+// respective purposes.
+
+function MarketingStoreCardTile({ company, onClick, isDark }: {
+  company: MarketingCompanyListCard;
+  onClick: () => void;
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
+  const faved = useFavorites((s) => !!s.marketingAgencies[company.userId]);
+  const toggleMarketingAgency = useFavorites((s) => s.toggleMarketingAgency);
+
+  return (
+    <div
+      data-testid={`card-marketing-store-${company.userId}`}
+      className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
+      onClick={onClick}
+    >
+      <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
+        {company.coverImageUrl ? (
+          <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center"><Megaphone className={`w-10 h-10 ${t.textSubtle}`} /></div>
+        )}
+        <button
+          className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleMarketingAgency({
+              id: company.userId, name: company.name,
+              initials: company.name.split(/\s+/).filter(Boolean).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase(),
+              type: "Agence", rating: company.rating / 10, portfolioImages: company.portfolioImages,
+              location: company.location, available: !company.isOnVacation, profileImageUrl: company.profileImageUrl,
+            });
+          }}
+          data-testid={`button-fav-marketing-store-${company.userId}`}
+        >
+          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
+        </button>
+      </div>
+      <div className="p-3 flex gap-3 relative z-20">
+        <div className={`w-11 h-11 rounded-xl border-2 -mt-8 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
+          {company.profileImageUrl ? (
+            <img src={company.profileImageUrl} alt={company.name} className="w-full h-full object-cover" />
+          ) : (
+            <Megaphone className={`w-4 h-4 ${t.textMuted}`} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0 pt-1">
+          <h3 className={`font-bold text-sm leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
+          {company.description && <p className={`text-xs line-clamp-1 mt-0.5 ${t.textMuted}`}>{company.description}</p>}
+          <div className={`flex items-center gap-3 text-[11px] mt-1.5 ${isDark ? "text-purple-400" : "text-purple-600"}`}>
+            <span className="flex items-center gap-1"><Users className="w-3 h-3" />{company.serviceCount} service{company.serviceCount !== 1 ? "s" : ""}</span>
+            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3 h-3" />{formatDistance(company.distanceKm)}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MarketingStoresSection({ companies, categoryId, onSelect, isDark }: {
+  companies: MarketingCompanyListCard[];
+  categoryId: string;
+  onSelect: (agencyId: number) => void;
+  isDark: boolean;
+}) {
+  const t = useTheme(isDark);
+  const [expanded, setExpanded] = useState(false);
+  const INITIAL_LIMIT = 5;
+
+  const filtered = useMemo(() => {
+    if (!categoryId) return companies;
+    return companies.filter((c) => c.categories.some((cat: string) => cat.toLowerCase() === categoryId.toLowerCase()));
+  }, [companies, categoryId]);
+
+  if (!filtered.length) return null;
+  const showToggle = filtered.length > INITIAL_LIMIT;
+  const visible = expanded ? filtered : filtered.slice(0, INITIAL_LIMIT);
+
+  const renderTile = (company: MarketingCompanyListCard) => (
+    <MarketingStoreCardTile key={company.userId} company={company} onClick={() => onSelect(company.userId)} isDark={isDark} />
+  );
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className={`font-bold text-lg ${t.textPrimary}`}>Agences</h2>
+          <p className={`text-xs mt-0.5 ${t.textMuted}`}>{filtered.length} agence{filtered.length !== 1 ? "s" : ""}</p>
+        </div>
+        {showToggle && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`text-xs font-semibold h-8 px-3 ${isDark ? "text-gray-300 hover:text-white hover:bg-gray-800" : "text-gray-600 hover:text-gray-900"}`}
+            onClick={() => setExpanded((e) => !e)}
+            data-testid="button-toggle-marketing-stores"
+          >
+            {expanded ? "Voir moins" : `Voir plus (${filtered.length - INITIAL_LIMIT}+)`}
+          </Button>
+        )}
+      </div>
+      {expanded ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
+          {visible.map(renderTile)}
+        </div>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+          {visible.map((company) => <div key={company.userId} className="shrink-0 w-52 sm:w-60">{renderTile(company)}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Star Rating ───────────────────────────────────────────────────────────────
 
@@ -279,6 +405,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
   const { settings: heroActions } = useHeroActionSettings();
+  const [, navigate] = useLocation();
 
   const searchStr = useSearch();
   const initialService = new URLSearchParams(searchStr).get("service") ?? "";
@@ -297,6 +424,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const [blacklistOpen, setBlacklistOpen] = useState(false);
 
   const { data: taxonomy = [] } = useMarketingTaxonomy();
+  const { data: marketingCompanies = [] } = useMarketingCompanies();
   // /marketing now maps one card per published SERVICE (Agency → Multiple Services),
   // mirroring Academy's /academy (one card per formation, not per academy).
   const { data: services = [], isLoading } = useMarketingServices({
@@ -525,6 +653,12 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        <MarketingStoresSection
+          companies={marketingCompanies}
+          categoryId={selectedService}
+          onSelect={(agencyId) => navigate(`/marketing/stores/${agencyId}`)}
+          isDark={isDark}
+        />
         <section>
           {selectedService && (
             <div className="flex items-center gap-2 mb-4">

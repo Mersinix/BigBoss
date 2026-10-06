@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { OpeningHoursMap } from "@shared/schema";
+import type { OpeningHoursMap, MarketingCompanyListCard } from "@shared/schema";
 
 // Mirrors use-barista-academy.ts / use-barista-marketplace.ts exactly, adapted
 // to Marketing semantics: a public provider profile (like Maintenance/Barista,
@@ -150,6 +150,13 @@ export function useMarketingProfiles(filters?: { search?: string; category?: str
   return useQuery<MarketingMarketplaceCard[]>({
     queryKey: ["/api/marketing/profiles", qs],
     queryFn: () => getJson(`/api/marketing/profiles${qs ? `?${qs}` : ""}`),
+  });
+}
+
+export function useMarketingCompanies() {
+  return useQuery<MarketingCompanyListCard[]>({
+    queryKey: ["/api/marketing/companies"],
+    queryFn: () => getJson("/api/marketing/companies"),
   });
 }
 

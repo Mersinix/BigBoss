@@ -34,6 +34,8 @@ import {
   type NotificationPriority,
   PROSPECT_STATUSES, PROSPECT_TYPES,
   baristaJobMeetings,
+  type InsertPrinterProfile, type InsertAcademyProfile, type InsertMarketingProfile,
+  type InsertMaintenanceProfile, type InsertBaristaMarketplaceProfile,
 } from "@shared/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 
@@ -813,7 +815,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // the field is preserved internally/Admin-managed only (Admin >
     // Maintenance > Comptes), not editable by the professional themselves
     // (docs/maintenance_pricing_admin_performance_audit.md Section 5).
-    const profile = await storage.upsertMaintenanceProfile(user.id, body);
+    // Auto Approve gating (docs/admin_maintenance_barista_professional_cards_order_autapprove_audit.md) —
+    // mirrors upsertSupplierStore's identityChanged reset, but placed here (the
+    // self-service route) rather than inside upsertMaintenanceProfile, since Admin's own
+    // edit route (PATCH /api/admin/maintenance/accounts/:userId) also calls
+    // upsertMaintenanceProfile and must never trigger its own re-review.
+    const currentProfile = await storage.getMaintenanceProfile(user.id);
+    const identityChanged = body.description !== undefined && body.description !== currentProfile.description;
+    const extra: Partial<InsertMaintenanceProfile> =
+      identityChanged && !currentProfile.autoApprove && (currentProfile.publicationStatus === "APPROVED" || currentProfile.publicationStatus === "REJECTED")
+        ? { publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null }
+        : {};
+    const profile = await storage.upsertMaintenanceProfile(user.id, { ...body, ...extra });
     broadcast("maintenance_updated", { userId: user.id, kind: "profile" });
     res.json(profile);
   });
@@ -1436,6 +1449,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // "Marketing Stores" browsable list for /marketing — mirrors GET /api/print/companies'
+  // own public, no-auth convention (docs/marketing_store_mapping_audit.md).
+  app.get("/api/marketing/companies", async (req: any, res) => {
+    try {
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
+      res.json(await storage.getMarketingCompanyCards(viewerLocation));
+    } catch { res.status(500).json({ message: "Failed to load Marketing companies" }); }
+  });
+
   app.get("/api/marketing/categories", async (_req, res) => {
     try {
       res.json(await storage.getMarketingCategories());
@@ -1482,7 +1508,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       websiteUrl: z.union([z.string().trim().url(), z.literal("")]).optional().transform((v) => (v === "" ? null : v)),
       marketplaceVisible: z.boolean().optional(),
     }).parse(req.body);
-    const profile = await storage.upsertMarketingProfile(user.id, body);
+    // Auto Approve gating (docs/admin_service_store_cards_order_autapprove_audit.md) —
+    // mirrors upsertSupplierStore's identityChanged reset, but placed here (the
+    // self-service route) rather than inside upsertMarketingProfile, since Admin's own
+    // edit route (PATCH /api/admin/marketing/accounts/:userId) also calls
+    // upsertMarketingProfile and must never trigger its own re-review.
+    const currentProfile = await storage.getMarketingProfile(user.id);
+    const identityChanged = (
+      (body.description !== undefined && body.description !== currentProfile.description) ||
+      (body.websiteUrl !== undefined && (body.websiteUrl ?? null) !== (currentProfile.websiteUrl ?? null))
+    );
+    const extra: Partial<InsertMarketingProfile> =
+      identityChanged && !currentProfile.autoApprove && (currentProfile.publicationStatus === "APPROVED" || currentProfile.publicationStatus === "REJECTED")
+        ? { publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null }
+        : {};
+    const profile = await storage.upsertMarketingProfile(user.id, { ...body, ...extra });
     broadcast("marketing_updated", { userId: user.id, kind: "profile" });
     res.json(profile);
   });
@@ -2002,6 +2042,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // "Print Stores" browsable list for /print — mirrors GET /api/stores' own
+  // public, no-auth convention (docs/print_store_mapping_audit.md).
+  app.get("/api/print/companies", async (req: any, res) => {
+    try {
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
+      res.json(await storage.getPrintCompanyCards(viewerLocation));
+    } catch { res.status(500).json({ message: "Failed to load PRINT companies" }); }
+  });
+
   app.get("/api/print/marketplace/:id", async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -2142,7 +2195,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           thursday: dayHoursSchema, friday: dayHoursSchema, saturday: dayHoursSchema, sunday: dayHoursSchema,
         }).optional(),
       }).parse(req.body);
-      const profile = await storage.upsertPrinterProfile(user.id, body);
+      // Auto Approve gating (docs/admin_service_store_cards_order_autapprove_audit.md) —
+      // mirrors upsertSupplierStore's identityChanged reset, but placed here (the
+      // self-service route) rather than inside upsertPrinterProfile, since Admin's own
+      // edit route (PATCH /api/admin/print/accounts/:userId) also calls upsertPrinterProfile
+      // and must never trigger its own re-review.
+      const currentProfile = await storage.getPrinterProfile(user.id);
+      const identityChanged = (
+        (body.description !== undefined && body.description !== currentProfile.description) ||
+        (body.websiteUrl !== undefined && (body.websiteUrl ?? null) !== (currentProfile.websiteUrl ?? null))
+      );
+      const extra: Partial<InsertPrinterProfile> =
+        identityChanged && !currentProfile.autoApprove && (currentProfile.publicationStatus === "APPROVED" || currentProfile.publicationStatus === "REJECTED")
+          ? { publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null }
+          : {};
+      const profile = await storage.upsertPrinterProfile(user.id, { ...body, ...extra });
       broadcast("print_profile_updated", { printerId: user.id, kind: "profile" });
       res.json(profile);
     } catch (err) {
@@ -2431,6 +2498,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── Admin Print account actions — same edit/freeze pattern as
   // /api/admin/maintenance/accounts above (Marketing/Maintenance reference). ──
+  // Registered BEFORE the /:userId route below: both paths share the same shape
+  // (/api/admin/print/accounts/<segment>), so if bulk-order were registered after,
+  // Express would match it against :userId first (userId="bulk-order" → NaN → DB
+  // error → generic 400 "Invalid account data") and this handler would never run —
+  // see docs/service_card_reorder_and_detail_modal_audit.md Part 1.
+  app.patch("/api/admin/print/accounts/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdatePrinterOrder(orders);
+      broadcast("print_profile_updated", { kind: "bulk_order" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/admin/print/accounts/:userId", requireAdmin, async (req, res) => {
     try {
       const userId = Number(req.params.userId);
@@ -2473,6 +2555,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: "Invalid request" });
     }
+  });
+
+  app.patch("/api/admin/print/accounts/:userId/auto-approve", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "PRINTER") return res.status(404).json({ message: "Printer account not found" });
+      const autoApprove = Boolean(req.body?.autoApprove);
+      const profile = await storage.setPrinterAutoApprove(userId, autoApprove);
+      broadcast("print_profile_updated", { printerId: userId, kind: "auto_approve" });
+      res.json(profile);
+    } catch { res.status(500).json({ message: "Error" }); }
   });
 
   app.get("/api/admin/maintenance", requireAdmin, async (_req, res) => {
@@ -2565,6 +2659,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // self-service PATCH /api/maintenance/profile calls); FREEZE toggles the new
   // admin-only isFrozen flag; DELETE reuses the existing generic user deletion
   // (storage.deleteUser) rather than a Maintenance-specific one. ──────────────
+  // Registered BEFORE the /:userId route below — see Print's identical comment above
+  // and docs/service_card_reorder_and_detail_modal_audit.md Part 1.
+  app.patch("/api/admin/maintenance/accounts/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateMaintenanceOrder(orders);
+      broadcast("maintenance_updated", { kind: "bulk_order" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/admin/maintenance/accounts/:userId", requireAdmin, async (req, res) => {
     try {
       const userId = Number(req.params.userId);
@@ -2615,6 +2721,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: "Invalid request" });
     }
+  });
+
+  app.patch("/api/admin/maintenance/accounts/:userId/auto-approve", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Maintenance account not found" });
+      const autoApprove = Boolean(req.body?.autoApprove);
+      const profile = await storage.setMaintenanceAutoApprove(userId, autoApprove);
+      broadcast("maintenance_updated", { userId, kind: "auto_approve" });
+      res.json(profile);
+    } catch { res.status(500).json({ message: "Error" }); }
   });
 
   // ── Admin Maintenance reservation actions (Part 8-9) ────────────────────────
@@ -2716,6 +2834,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Failed to delete category" }); }
   });
 
+  // Registered BEFORE the /:userId route below — see Print's identical comment above
+  // and docs/service_card_reorder_and_detail_modal_audit.md Part 1.
+  app.patch("/api/admin/marketing/accounts/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateMarketingOrder(orders);
+      broadcast("marketing_updated", { kind: "bulk_order" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/admin/marketing/accounts/:userId", requireAdmin, async (req, res) => {
     try {
       const userId = Number(req.params.userId);
@@ -2761,6 +2891,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(400).json({ message: "Invalid request" });
     }
+  });
+
+  app.patch("/api/admin/marketing/accounts/:userId/auto-approve", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "MARKETING") return res.status(404).json({ message: "Marketing account not found" });
+      const autoApprove = Boolean(req.body?.autoApprove);
+      const profile = await storage.setMarketingAutoApprove(userId, autoApprove);
+      broadcast("marketing_updated", { userId, kind: "auto_approve" });
+      res.json(profile);
+    } catch { res.status(500).json({ message: "Error" }); }
   });
 
   app.patch("/api/admin/marketing/projects/:id", requireAdmin, async (req, res) => {
@@ -3164,7 +3306,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         educationLevel: z.string().max(120).nullable().optional(),
         languages: z.array(z.string().max(60)).optional(),
       }).parse(req.body);
-      const profile = await storage.upsertBaristaMarketplaceProfile(user.id, body);
+      // Auto Approve gating (docs/admin_maintenance_barista_professional_cards_order_autapprove_audit.md) —
+      // mirrors upsertSupplierStore's identityChanged reset, but placed here (the
+      // self-service route) rather than inside upsertBaristaMarketplaceProfile, since
+      // Admin's own edit route (PATCH /api/admin/barista/accounts/:userId) also calls
+      // upsertBaristaMarketplaceProfile and must never trigger its own re-review.
+      const currentProfile = await storage.getBaristaMarketplaceProfile(user.id);
+      const identityChanged = body.bio !== undefined && body.bio !== currentProfile.bio;
+      const extra: Partial<InsertBaristaMarketplaceProfile> =
+        identityChanged && !currentProfile.autoApprove && (currentProfile.publicationStatus === "APPROVED" || currentProfile.publicationStatus === "REJECTED")
+          ? { publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null }
+          : {};
+      const profile = await storage.upsertBaristaMarketplaceProfile(user.id, { ...body, ...extra });
       broadcast("barista_profile_updated", { userId: user.id, kind: "profile" });
       res.json(profile);
     } catch (err) {
@@ -3999,6 +4152,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── Admin Barista Marketplace account actions — same edit/freeze pattern as
   // /api/admin/maintenance/accounts (Marketing/Maintenance reference). ──────────
+  // Registered BEFORE the /:userId route below — see Print's identical comment above
+  // and docs/service_card_reorder_and_detail_modal_audit.md Part 1.
+  app.patch("/api/admin/barista/accounts/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateBaristaOrder(orders);
+      broadcast("barista_profile_updated", { kind: "bulk_order" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/admin/barista/accounts/:userId", requireAdmin, async (req, res) => {
     try {
       const userId = Number(req.params.userId);
@@ -4045,6 +4210,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.patch("/api/admin/barista/accounts/:userId/auto-approve", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Barista account not found" });
+      const autoApprove = Boolean(req.body?.autoApprove);
+      const profile = await storage.setBaristaAutoApprove(userId, autoApprove);
+      broadcast("barista_profile_updated", { userId, kind: "auto_approve" });
+      res.json(profile);
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
+
   // ── Barista Academy ──────────────────────────────────────────────────────────
   // Mirrors the Barista Marketplace route section above endpoint-for-endpoint,
   // adapted to Academy semantics (courses/formations, sessions, registrations
@@ -4067,6 +4245,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error(err);
       res.status(500).json({ message: "Failed to load Academy courses" });
     }
+  });
+
+  // "Academy Stores" browsable list for /academy — mirrors GET /api/print/companies'
+  // own public, no-auth convention (docs/academy_store_mapping_audit.md).
+  app.get("/api/academy/companies", async (req: any, res) => {
+    try {
+      let viewerLocation: { lat: string | null; lng: string | null } | null = null;
+      if (req.session?.userId) {
+        const viewer = await storage.getUser(req.session.userId);
+        if (viewer) viewerLocation = { lat: viewer.locationLat, lng: viewer.locationLng };
+      }
+      res.json(await storage.getAcademyCompanyCards(viewerLocation));
+    } catch { res.status(500).json({ message: "Failed to load Academy companies" }); }
   });
 
   app.get("/api/academy/courses/:id", async (req: any, res) => {
@@ -4217,7 +4408,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           thursday: dayHoursSchema, friday: dayHoursSchema, saturday: dayHoursSchema, sunday: dayHoursSchema,
         }).optional(),
       }).parse(req.body);
-      const profile = await storage.upsertAcademyProfile(user.id, body);
+      // Auto Approve gating (docs/admin_service_store_cards_order_autapprove_audit.md) —
+      // mirrors upsertSupplierStore's identityChanged reset, but placed here (the
+      // self-service route) rather than inside upsertAcademyProfile, since Admin's own
+      // edit route (PATCH /api/admin/academy/accounts/:userId) also calls upsertAcademyProfile
+      // and must never trigger its own re-review.
+      const currentProfile = await storage.getAcademyProfile(user.id);
+      const identityChanged = body.description !== undefined && body.description !== currentProfile.description;
+      const extra: Partial<InsertAcademyProfile> =
+        identityChanged && !currentProfile.autoApprove && (currentProfile.publicationStatus === "APPROVED" || currentProfile.publicationStatus === "REJECTED")
+          ? { publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null }
+          : {};
+      const profile = await storage.upsertAcademyProfile(user.id, { ...body, ...extra });
       broadcast("academy_profile_updated", { userId: user.id, kind: "profile" });
       res.json(profile);
     } catch (err) {
@@ -4537,6 +4739,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── Admin Academy account actions — same edit/freeze pattern as
   // /api/admin/maintenance/accounts (Marketing/Maintenance reference). ──────────
+  // Registered BEFORE the /:userId route below — see Print's identical comment above
+  // and docs/service_card_reorder_and_detail_modal_audit.md Part 1.
+  app.patch("/api/admin/academy/accounts/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateAcademyOrder(orders);
+      broadcast("academy_profile_updated", { kind: "bulk_order" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/admin/academy/accounts/:userId", requireAdmin, async (req, res) => {
     try {
       const userId = Number(req.params.userId);
@@ -4579,6 +4793,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(400).json({ message: "Invalid request" });
     }
   });
+
+  app.patch("/api/admin/academy/accounts/:userId/auto-approve", requireAdmin, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const target = await storage.getUser(userId);
+      if (!target || target.role !== "BARISTA_ACADEMY") return res.status(404).json({ message: "Academy account not found" });
+      const autoApprove = Boolean(req.body?.autoApprove);
+      const profile = await storage.setAcademyAutoApprove(userId, autoApprove);
+      broadcast("academy_profile_updated", { userId, kind: "auto_approve" });
+      res.json(profile);
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
 
   // ── Favorites (shop/product favorites, persisted per-user) ─────────────────
 

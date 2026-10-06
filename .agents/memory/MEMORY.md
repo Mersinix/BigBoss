@@ -11,3 +11,4 @@
 - [Catalog realtime synchronization](catalog-realtime-synchronization.md) — supplier catalog changes need both a server broadcast and explicit client invalidation for marketplace detail/promotion query families.
 - [Maintenance taxonomy provisioning](maintenance-taxonomy-provisioning.md) — Maintenance admin taxonomy tables must exist in the Helium DB before taxonomy/profile synchronization endpoints can serve data.
 - [Supplier category ordering](supplier-category-order.md) — Supplier Categories and Store mapped categories share one persisted mapping order.
+- [Workflow orphan process recovery](workflow-orphan-process.md) — A failed Start application task can leave its prior server alive and holding the webview and Vite ports.

@@ -2520,10 +2520,20 @@ export const marketingFavorites = pgTable("marketing_favorites", {
 export const marketingServices = pgTable("marketing_services", {
   id: serial("id").primaryKey(),
   marketingUserId: integer("marketing_user_id").notNull(),
+  // The service's own real title (e.g. "Campagne Google Ads Premium"), distinct from
+  // `category` below — existing rows default to "" (empty), and every display site
+  // falls back to `category` when title is blank, so pre-existing services never
+  // show a blank/fabricated title (docs/marketing_service_grid_and_title_synchronization_audit.md).
+  title: text("title").notNull().default(""),
   category: text("category").notNull(), // from marketingCategoryTaxonomy, same taxonomy — never a second one
   startingPriceInCents: integer("starting_price_in_cents").notNull().default(0),
   responseTime: text("response_time").notNull().default("< 24h"),
   description: text("description").notNull().default(""),
+  // What exactly is included in the offer (itemized list, deliverables, etc.) — distinct
+  // from `description`. Additive/backward-compatible exactly like `title` above: existing
+  // rows default to "" and every display site only renders this section when non-empty,
+  // never a fabricated placeholder (docs/marketing_services_offer_details_admin_audit.md).
+  offerDetails: text("offer_details").notNull().default(""),
   imageUrl: text("image_url"),
   isPublished: boolean("is_published").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -2583,6 +2593,7 @@ export type MarketingCompanyListCard = {
   marketplaceVisible: boolean;
   weeklyHours: OpeningHoursMap | null;
   isOnVacation: boolean;
+  profileType: string;
   rating: number;
   reviewCount: number;
   portfolioImages: string[];

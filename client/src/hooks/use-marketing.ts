@@ -51,10 +51,12 @@ export type MarketingMarketplaceCard = MarketingProfile & {
 export type MarketingService = {
   id: number;
   marketingUserId: number;
+  title: string;
   category: string;
   startingPriceInCents: number;
   responseTime: string;
   description: string;
+  offerDetails: string;
   imageUrl: string | null;
   isPublished: boolean;
   createdAt: string;

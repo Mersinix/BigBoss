@@ -145,7 +145,7 @@ export function MarketingFastSearch({
           ) : (
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
               {current!.imageUrl ? (
-                <img key={idx} src={current!.imageUrl} alt={current!.category} className="w-full h-full object-cover" />
+                <img key={idx} src={current!.imageUrl} alt={current!.title?.trim() || current!.category} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900 to-violet-950">
                   <span className="text-white/80 font-bold text-6xl">{current!.agencyName.slice(0, 2).toUpperCase()}</span>
@@ -164,8 +164,9 @@ export function MarketingFastSearch({
                       <Star className="w-3 h-3 fill-amber-300 text-amber-300" /> {(current!.rating / 10).toFixed(1)}
                     </span>
                   )}
+                  <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">{current!.category}</span>
                 </div>
-                <h2 className="text-white font-bold text-xl leading-tight mb-1" data-testid="text-fastsearch-name">{current!.category}</h2>
+                <h2 className="text-white font-bold text-xl leading-tight mb-1" data-testid="text-fastsearch-name">{current!.title?.trim() || current!.category}</h2>
                 <p className="text-white/70 text-xs mb-2">{current!.agencyName}</p>
                 {current!.agencyLocation && (
                   <p className="text-white/70 text-xs flex items-center gap-1 mb-2"><MapPin className="w-3 h-3" /> {current!.agencyLocation}{current!.distanceKm != null && <> · {current!.distanceKm} km</>}</p>

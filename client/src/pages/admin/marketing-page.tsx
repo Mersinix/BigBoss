@@ -614,6 +614,60 @@ export default function MarketingAdminPage() {
   const projects = data?.projects ?? [];
   const projectsPagination = usePagination(projects.length);
   const pageProjects = projects.slice(projectsPagination.start, projectsPagination.end);
+
+  // ── Services Marketing tab — derived entirely from data.accounts[].services, the
+  // same real rows already fetched for the Comptes Marketing tab (getMarketingAdminOverview
+  // already embeds each agency's own services array) — no new endpoint/dataset
+  // (docs/marketing_services_offer_details_admin_audit.md Section E). ──
+  const allServices = useMemo(() => {
+    const rows: any[] = [];
+    for (const account of data?.accounts ?? []) {
+      for (const service of account.services ?? []) {
+        rows.push({
+          ...service,
+          agencyUserId: account.userId,
+          agencyName: account.name,
+          agencyProfileType: account.profileType,
+          agencyMarketplaceVisible: account.marketplaceVisible,
+          agencyIsAvailable: !!account.isAvailable && !account.isOnVacation,
+          agencyRating: account.rating ?? 0,
+        });
+      }
+    }
+    return rows;
+  }, [data?.accounts]);
+
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [serviceCategory, setServiceCategory] = useState("all");
+  const [serviceAgency, setServiceAgency] = useState("all");
+  const [serviceStatus, setServiceStatus] = useState("all");
+  const [serviceAvailability, setServiceAvailability] = useState("all");
+  const [serviceRating, setServiceRating] = useState("all");
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
+
+  const serviceFilterOptions = useMemo(() => ({
+    categories: Array.from(new Set(allServices.map((s) => s.category))).sort(),
+    agencies: Array.from(new Set(allServices.map((s) => s.agencyName))).sort(),
+  }), [allServices]);
+
+  const filteredServicesList = useMemo(() => allServices.filter((s) => {
+    const haystack = [s.title, s.description, s.category, s.agencyName].join(" ").toLowerCase();
+    const rating = (s.agencyRating ?? 0) / 10;
+    return (!serviceSearch || haystack.includes(serviceSearch.toLowerCase()))
+      && (serviceCategory === "all" || s.category === serviceCategory)
+      && (serviceAgency === "all" || s.agencyName === serviceAgency)
+      && (serviceStatus === "all" || (serviceStatus === "published" ? s.isPublished : !s.isPublished))
+      && (serviceAvailability === "all" || (serviceAvailability === "available" ? s.agencyIsAvailable : !s.agencyIsAvailable))
+      && (serviceRating === "all" || (serviceRating === "rated" ? rating > 0 : rating >= Number(serviceRating)));
+  }), [allServices, serviceSearch, serviceCategory, serviceAgency, serviceStatus, serviceAvailability, serviceRating]);
+
+  const servicesPagination = usePagination(filteredServicesList.length);
+  useEffect(() => { servicesPagination.resetPage(); }, [serviceSearch, serviceCategory, serviceAgency, serviceStatus, serviceAvailability, serviceRating]);
+  const pageServicesList = filteredServicesList.slice(servicesPagination.start, servicesPagination.end);
+  const hasServiceFilters = !!(serviceSearch || serviceCategory !== "all" || serviceAgency !== "all" || serviceStatus !== "all" || serviceAvailability !== "all" || serviceRating !== "all");
+  const resetServiceFilters = () => {
+    setServiceSearch(""); setServiceCategory("all"); setServiceAgency("all"); setServiceStatus("all"); setServiceAvailability("all"); setServiceRating("all");
+  };
   const kpis = [
     ["Comptes Marketing", stats?.totalAccounts ?? 0, Users], ["Actifs / approuvés", stats?.activeAccounts ?? 0, CheckCircle],
     ["Visibles marketplace", stats?.visibleAccounts ?? 0, Megaphone], ["Projets", stats?.totalProjects ?? 0, Briefcase],
@@ -643,9 +697,10 @@ export default function MarketingAdminPage() {
           bg-background/shadow-sm chip. */}
       <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
         <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
-          <TabsTrigger value="taxonomy" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Catégories de services</TabsTrigger>
           <TabsTrigger value="accounts" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Comptes Marketing</TabsTrigger>
+          <TabsTrigger value="services" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Services Marketing</TabsTrigger>
           <TabsTrigger value="projects" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Projets récents</TabsTrigger>
+          <TabsTrigger value="taxonomy" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Catégories de services</TabsTrigger>
         </TabsList>
       </div>
       <TabsContent value="taxonomy" className="mt-4 grid lg:grid-cols-2 gap-6">
@@ -761,6 +816,97 @@ export default function MarketingAdminPage() {
           itemLabel="comptes"
         />
       </TabsContent>
+      <TabsContent value="services" className="mt-4 space-y-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+          <div className="relative shrink-0 sm:flex-1 sm:min-w-[200px]">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              value={serviceSearch}
+              onChange={(e) => setServiceSearch(e.target.value)}
+              placeholder="Rechercher un service, une agence…"
+              data-testid="input-search-marketing-services"
+            />
+          </div>
+          <Select value={serviceCategory} onValueChange={setServiceCategory}>
+            <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Toutes catégories</SelectItem>{serviceFilterOptions.categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={serviceAgency} onValueChange={setServiceAgency}>
+            <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-agency"><SelectValue placeholder="Agence" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Toutes agences</SelectItem>{serviceFilterOptions.agencies.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={serviceStatus} onValueChange={setServiceStatus}>
+            <SelectTrigger className="w-[150px] shrink-0" data-testid="select-service-filter-status"><SelectValue placeholder="Statut" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Tous statuts</SelectItem><SelectItem value="published">Publié</SelectItem><SelectItem value="draft">Brouillon</SelectItem></SelectContent>
+          </Select>
+          <Select value={serviceAvailability} onValueChange={setServiceAvailability}>
+            <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-availability"><SelectValue placeholder="Disponibilité" /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Toutes disponibilités</SelectItem><SelectItem value="available">Agence disponible</SelectItem><SelectItem value="unavailable">Agence indisponible</SelectItem></SelectContent>
+          </Select>
+          <Select value={serviceRating} onValueChange={setServiceRating}>
+            <SelectTrigger className="w-[130px] shrink-0" data-testid="select-service-filter-rating"><SelectValue placeholder="Note" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes notes</SelectItem>
+              <SelectItem value="rated">Avec avis</SelectItem>
+              <SelectItem value="4.5">4.5+</SelectItem>
+              <SelectItem value="4.7">4.7+</SelectItem>
+              <SelectItem value="4.9">4.9+</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasServiceFilters && (
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={resetServiceFilters} data-testid="button-clear-service-filters">
+              <X className="w-3.5 h-3.5" /> Effacer
+            </Button>
+          )}
+        </div>
+
+        {filteredServicesList.length === 0 ? (
+          <Card><CardContent className="p-12 text-center text-muted-foreground">
+            {allServices.length === 0 ? "Aucun service Marketing pour le moment." : "Aucun service ne correspond à ces filtres."}
+          </CardContent></Card>
+        ) : (
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {pageServicesList.map((service) => (
+              <Card key={service.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedServiceId(service.id)} data-testid={`card-admin-marketing-service-${service.id}`}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+                      {service.imageUrl ? <img src={service.imageUrl} alt={service.title || service.category} className="w-full h-full object-cover" /> : <Megaphone className="w-5 h-5 text-muted-foreground" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-sm truncate">{service.title?.trim() || service.category}</h3>
+                      <p className="text-xs text-muted-foreground truncate">{service.agencyName}</p>
+                    </div>
+                    <span className={`h-2.5 w-2.5 rounded-full mt-1 shrink-0 ${service.isPublished ? "bg-green-500" : "bg-gray-300"}`} title={service.isPublished ? "Publié" : "Brouillon"} />
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{service.description || "Aucune description"}</p>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant="secondary" className="text-xs">{service.category}</Badge>
+                    <Badge variant="outline" className="text-xs">{service.isPublished ? "Publié" : "Brouillon"}</Badge>
+                    {!service.agencyIsAvailable && <Badge variant="outline" className="text-xs text-muted-foreground">Agence indisponible</Badge>}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{service.responseTime}</span>
+                    <span className="font-bold text-sm text-fuchsia-600">{fmt(service.startingPriceInCents)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+        <DataPagination
+          page={servicesPagination.page}
+          pageSize={servicesPagination.pageSize}
+          totalItems={filteredServicesList.length}
+          totalPages={servicesPagination.totalPages}
+          start={servicesPagination.start}
+          end={servicesPagination.end}
+          onPageChange={servicesPagination.setPage}
+          onPageSizeChange={servicesPagination.setPageSize}
+          itemLabel="services"
+        />
+      </TabsContent>
       <TabsContent value="projects" className="mt-4">
         {!projects.length ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun projet.</CardContent></Card> : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -783,5 +929,8 @@ export default function MarketingAdminPage() {
     <AccountDetail account={selectedAccount} onClose={() => setSelectedAccount(null)} onRefresh={refresh} />
     <AddMarketingAccountModal open={addAccountOpen} onClose={() => setAddAccountOpen(false)} onCreated={refresh} />
     <ProjectDetail project={selectedProject} onClose={() => setSelectedProject(null)} onRefresh={refresh} />
+    {/* Services Marketing — reuses the existing Coffee-Owner-facing Service Details
+        modal (readOnly), never a second Admin-only detail architecture. */}
+    <MarketingServiceDetailModal serviceId={selectedServiceId} open={selectedServiceId != null} onClose={() => setSelectedServiceId(null)} readOnly />
   </div>;
 }

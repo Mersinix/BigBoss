@@ -7236,6 +7236,7 @@ export class DatabaseStorage implements IStorage {
         marketplaceVisible: profile.marketplaceVisible,
         weeklyHours: profile.weeklyHours ?? null,
         isOnVacation: profile.isOnVacation,
+        profileType: profile.profileType,
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
         portfolioImages: profile.portfolioImages ?? [],

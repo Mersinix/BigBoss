@@ -1587,10 +1587,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // /api/academy/courses/:id) exactly, same self-scoped CRUD + public list/detail shape. ──
 
   const marketingServiceInputSchema = z.object({
+    title: z.string().max(160).optional(),
     category: z.string().min(1).optional(),
     startingPriceInCents: z.number().int().min(0).optional(),
     responseTime: z.string().optional(),
     description: z.string().optional(),
+    offerDetails: z.string().max(4000).optional(),
     imageUrl: z.string().optional().nullable(),
     isPublished: z.boolean().optional(),
   });

@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Navigation, Flag, Heart, MessageCircle, X, Megaphone, Layers,
+  Star, MapPin, Navigation, Flag, Heart, MessageCircle, X, Megaphone, Layers, ListChecks,
 } from "lucide-react";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 
@@ -163,7 +163,7 @@ export function MarketingServiceDetailModal({
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
       <DialogContent className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
-        <VisuallyHidden><DialogTitle>{service?.category ?? "Service"}</DialogTitle></VisuallyHidden>
+        <VisuallyHidden><DialogTitle>{service?.title?.trim() || service?.category || "Service"}</DialogTitle></VisuallyHidden>
         {isLoading || !service ? (
           <div className="p-6 space-y-4">
             <Skeleton className={`h-24 w-full rounded-2xl ${isDark ? "bg-gray-800" : ""}`} />
@@ -204,8 +204,11 @@ export function MarketingServiceDetailModal({
             <div className="p-5 sm:p-6 space-y-5">
               <div>
                 <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <h2 className={`font-bold text-xl leading-tight ${t.textPrimary}`}>{service.category}</h2>
-                  <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${isDark ? "bg-purple-900/50 text-purple-300" : "bg-purple-100 text-purple-700"}`}>{PROVIDER_TYPE_LABELS[service.agencyProfileType] ?? service.agencyProfileType}</Badge>
+                  <h2 className={`font-bold text-xl leading-tight ${t.textPrimary}`}>{service.title?.trim() || service.category}</h2>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Badge variant="secondary" className="text-[10px] border-0 px-1.5">{service.category}</Badge>
+                    <Badge className={`text-[10px] border-0 px-1.5 ${isDark ? "bg-purple-900/50 text-purple-300" : "bg-purple-100 text-purple-700"}`}>{PROVIDER_TYPE_LABELS[service.agencyProfileType] ?? service.agencyProfileType}</Badge>
+                  </div>
                 </div>
                 {service.description && <p className={`text-sm leading-relaxed mt-1.5 ${t.textMuted}`}>{service.description}</p>}
                 <div className={`flex items-center gap-3 mt-2.5 text-xs flex-wrap ${t.textMuted}`}>
@@ -214,6 +217,15 @@ export function MarketingServiceDetailModal({
                   {service.distanceKm != null && <span className="flex items-center gap-1"><Navigation className="w-3 h-3" /> {service.distanceKm} km</span>}
                 </div>
               </div>
+
+              {/* Offer details — real, agency-entered content only, never shown when empty
+                  (docs/marketing_services_offer_details_admin_audit.md). */}
+              {service.offerDetails?.trim() && (
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
+                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ListChecks className="w-3.5 h-3.5" /> Détails de l'offre</p>
+                  <p className={`text-sm whitespace-pre-wrap ${t.textPrimary}`}>{service.offerDetails}</p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className={`p-3 rounded-xl ${t.sectionBg}`}>

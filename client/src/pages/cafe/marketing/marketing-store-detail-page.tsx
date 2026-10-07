@@ -3,12 +3,13 @@ import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useThemeStore } from "@/store/theme-store";
 import { useFavorites } from "@/hooks/use-favorites";
-import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
 import {
   useMarketingProfileDetail, useMarketingReviews, useCreateMarketingReview, useReportMarketingProvider,
-  useMarketingProjects,
+  useMarketingProjects, useMarketingTaxonomy,
 } from "@/hooks/use-marketing";
+import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
+import { resolveMarketingCategoryIcon } from "@/lib/marketing-category-icon";
 import { MarketingAvailabilityModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
@@ -21,7 +22,8 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
   Megaphone, ChevronLeft, Heart, Sun, Moon, Star, MapPin, Users, Clock, Flag, X,
 } from "lucide-react";
-import type { MarketingMarketplaceCard, MarketingService } from "@/hooks/use-marketing";
+import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
+import { formatDistance } from "@/lib/distance";
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -65,40 +67,6 @@ function useTheme(isDark: boolean) {
   };
 }
 
-function StoreServiceCard({ service, onClick, isDark }: { service: MarketingService; onClick: () => void; isDark: boolean }) {
-  const t = useTheme(isDark);
-  const fmt = useFormatCurrency();
-
-  return (
-    <div
-      data-testid={`card-store-marketing-service-${service.id}`}
-      className={`group cursor-pointer rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
-      onClick={onClick}
-    >
-      <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {service.imageUrl ? (
-          <img src={service.imageUrl} alt={service.category} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"><Megaphone className={`w-10 h-10 ${t.textSubtle}`} /></div>
-        )}
-      </div>
-      <div className="p-3 flex-1 flex flex-col gap-2">
-        <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-purple-600 transition-colors ${t.textPrimary}`}>{service.category}</h3>
-        {service.description && <p className={`text-xs line-clamp-2 ${t.textMuted}`}>{service.description}</p>}
-        <div className={`mt-auto pt-2 border-t ${t.border} flex items-center justify-between`}>
-          <div>
-            <p className={`text-[10px] ${t.textSubtle}`}>À partir de</p>
-            <p className="font-bold text-sm text-purple-600">{fmt(service.startingPriceInCents)}</p>
-          </div>
-          <div className={`flex items-center gap-1 text-[11px] ${t.textSubtle}`}>
-            <Clock className="w-3 h-3" />
-            <span>{service.responseTime}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function MarketingStoreDetailPage() {
   const [, params] = useRoute("/marketing/stores/:agencyId");
@@ -116,6 +84,13 @@ export default function MarketingStoreDetailPage() {
 
   const faved = useFavorites((s) => (card ? !!s.marketingAgencies[card.userId] : false));
   const toggleMarketingAgency = useFavorites((s) => s.toggleMarketingAgency);
+  const favoritedServiceIds = useFavorites((s) => s.marketingServices);
+  const toggleMarketingService = useFavorites((s) => s.toggleMarketingService);
+
+  // Same taxonomy + shared resolver /marketing's own category filter and mapped
+  // service cards use — never a second icon mapping
+  // (docs/marketing_cards_final_layout_synchronization_audit.md).
+  const { data: taxonomy = [] } = useMarketingTaxonomy();
 
   const [categoryId, setCategoryId] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
@@ -297,7 +272,7 @@ export default function MarketingStoreDetailPage() {
             <h1 className={`font-extrabold text-xl leading-tight truncate ${t.textPrimary}`} data-testid="text-marketing-store-name">{card.name}</h1>
             <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1 ${isDark ? "text-purple-400" : "text-purple-600"}`}>
               <span className="flex items-center gap-1"><Users className="w-3 h-3" />{services.length} service{services.length !== 1 ? "s" : ""}</span>
-              {card.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{card.location}</span>}
+              {card.distanceKm != null && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{formatDistance(card.distanceKm)}</span>}
             </div>
           </div>
         </div>
@@ -314,7 +289,7 @@ export default function MarketingStoreDetailPage() {
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${categoryId === "" ? t.switcherActive : t.switcherInactive}`}
                   data-testid="button-marketing-store-cat-all"
                 >
-                  <span className="text-base leading-none"><Megaphone className="w-4 h-4" /></span>
+                  <span className="text-base leading-none">📢</span>
                   <span>Tout</span>
                 </button>
               </div>
@@ -325,6 +300,7 @@ export default function MarketingStoreDetailPage() {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${categoryId === cat ? t.switcherActive : t.switcherInactive}`}
                     data-testid={`button-marketing-store-cat-${cat}`}
                   >
+                    <span className="text-base leading-none">{resolveMarketingCategoryIcon(cat, taxonomy)}</span>
                     <span className="whitespace-nowrap">{cat}</span>
                   </button>
                 </div>
@@ -350,9 +326,30 @@ export default function MarketingStoreDetailPage() {
             {categoryId && <Button size="sm" variant="outline" onClick={() => setCategoryId("")}>Effacer le filtre</Button>}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map((service) => (
-              <StoreServiceCard key={service.id} service={service} onClick={() => setPreviewServiceId(service.id)} isDark={isDark} />
+              <MarketingMappedServiceCard
+                key={service.id}
+                id={service.id}
+                title={service.title?.trim() || service.category}
+                category={service.category}
+                description={service.description}
+                imageUrl={service.imageUrl}
+                startingPriceInCents={service.startingPriceInCents}
+                agencyName={card.name}
+                agencyProfileImageUrl={card.profileImageUrl}
+                agencyIsAvailable={!card.isOnVacation}
+                rating={card.rating}
+                reviewCount={card.reviewCount}
+                categoryIcon={resolveMarketingCategoryIcon(service.category, taxonomy)}
+                isFavorited={!!favoritedServiceIds[service.id]}
+                onToggleFavorite={() => toggleMarketingService({
+                  id: service.id, name: service.category, agencyUserId: card.userId, agencyName: card.name,
+                  rating: card.rating / 10, image: service.imageUrl, location: card.location, priceInCents: service.startingPriceInCents,
+                })}
+                onClick={() => setPreviewServiceId(service.id)}
+                isDark={isDark}
+              />
             ))}
           </div>
         )}

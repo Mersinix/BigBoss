@@ -48,9 +48,11 @@ import {
 import type { MarketingCompanyListCard } from "@shared/schema";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
+import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { MarketingBlacklistModal } from "@/components/marketing/marketing-blacklist-modal";
 import { formatDistance } from "@/lib/distance";
+import { resolveMarketingCategoryIcon } from "@/lib/marketing-category-icon";
 
 // ── Access helper (mirrors browse-products + barista-page pattern) ────────────
 
@@ -98,13 +100,6 @@ function useTheme(isDark: boolean) {
   };
 }
 
-// Emoji icon per known default category — falls back to the taxonomy's own
-// `icon` field (admin-set) or a generic 📢 for anything else, so a new
-// Admin-added category never breaks the strip.
-const CATEGORY_ICON_FALLBACK: Record<string, string> = {
-  Website: "🌐", SEO: "🔍", Ads: "📢", Social: "📱", "Vidéo": "🎥", Photo: "📸", Branding: "🎨",
-};
-
 const PROVIDER_TYPE_LABELS: Record<string, string> = {
   Agency: "Agence", Freelancer: "Freelancer", Studio: "Studio",
 };
@@ -139,14 +134,23 @@ function MarketingStoreCardTile({ company, onClick, isDark }: {
       className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
       onClick={onClick}
     >
+      {/* Image area — ~1.5× the previous card's scale (grid/scroll-item sizing
+          handled by the parent MarketingStoresSection, see its own comment)
+          (docs/marketing_cards_final_layout_synchronization_audit.md). */}
       <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
         {company.coverImageUrl ? (
           <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"><Megaphone className={`w-10 h-10 ${t.textSubtle}`} /></div>
+          <div className="w-full h-full flex items-center justify-center"><Megaphone className={`w-14 h-14 ${t.textSubtle}`} /></div>
         )}
+
+        {/* Agency type — top-left badge over the image, real profileType (Agency/Freelancer/Studio) */}
+        <span className="absolute top-3 left-3 max-w-[62%] truncate bg-black/55 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+          {providerTypeLabel(company.profileType)}
+        </span>
+
         <button
-          className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          className="absolute top-3 right-3 w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
             e.stopPropagation();
             toggleMarketingAgency({
@@ -158,23 +162,32 @@ function MarketingStoreCardTile({ company, onClick, isDark }: {
           }}
           data-testid={`button-fav-marketing-store-${company.userId}`}
         >
-          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
+          <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
         </button>
+
+        {/* Avis — bottom-right overlay, real rating/reviewCount, same reviewCount>0 gate used on every other Store hero */}
+        {company.reviewCount > 0 && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/55 backdrop-blur-sm rounded-full px-2.5 py-1">
+            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <span className="text-xs font-bold text-white">{(company.rating / 10).toFixed(1)}</span>
+            <span className="text-[11px] text-white/70">({company.reviewCount} avis)</span>
+          </div>
+        )}
       </div>
-      <div className="p-3 flex gap-3 relative z-20">
-        <div className={`w-11 h-11 rounded-xl border-2 -mt-8 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
+      <div className="p-4 flex gap-4 relative z-20">
+        <div className={`w-16 h-16 rounded-xl border-2 -mt-12 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
           {company.profileImageUrl ? (
             <img src={company.profileImageUrl} alt={company.name} className="w-full h-full object-cover" />
           ) : (
-            <Megaphone className={`w-4 h-4 ${t.textMuted}`} />
+            <Megaphone className={`w-6 h-6 ${t.textMuted}`} />
           )}
         </div>
-        <div className="flex-1 min-w-0 pt-1">
-          <h3 className={`font-bold text-sm leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
-          {company.description && <p className={`text-xs line-clamp-1 mt-0.5 ${t.textMuted}`}>{company.description}</p>}
-          <div className={`flex items-center gap-3 text-[11px] mt-1.5 ${isDark ? "text-purple-400" : "text-purple-600"}`}>
-            <span className="flex items-center gap-1"><Users className="w-3 h-3" />{company.serviceCount} service{company.serviceCount !== 1 ? "s" : ""}</span>
-            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3 h-3" />{formatDistance(company.distanceKm)}</span>}
+        <div className="flex-1 min-w-0 pt-1.5">
+          <h3 className={`font-bold text-base leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
+          {company.description && <p className={`text-sm line-clamp-1 mt-1 ${t.textMuted}`}>{company.description}</p>}
+          <div className={`flex items-center gap-3 text-xs mt-2 ${isDark ? "text-purple-400" : "text-purple-600"}`}>
+            <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{company.serviceCount} service{company.serviceCount !== 1 ? "s" : ""}</span>
+            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3.5 h-3.5" />{formatDistance(company.distanceKm)}</span>}
           </div>
         </div>
       </div>
@@ -225,12 +238,15 @@ function MarketingStoresSection({ companies, categoryId, onSelect, isDark }: {
         )}
       </div>
       {expanded ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
+        // ~1.5× the previous agency card size means fewer columns at every
+        // breakpoint (was 2/3/4/4/4) so each card gets genuinely more room,
+        // not just bigger text inside the same slot.
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-4">
           {visible.map(renderTile)}
         </div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-          {visible.map((company) => <div key={company.userId} className="shrink-0 w-52 sm:w-60">{renderTile(company)}</div>)}
+        <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+          {visible.map((company) => <div key={company.userId} className="shrink-0 w-72 sm:w-80">{renderTile(company)}</div>)}
         </div>
       )}
     </div>
@@ -318,82 +334,39 @@ function ServiceCard({
   service,
   onOpenDetail,
   isDark,
+  categoryIcon,
 }: {
   service: MarketingServiceCard;
   onOpenDetail: (s: MarketingServiceCard) => void;
   isDark: boolean;
+  // Resolved by the parent via lib/marketing-category-icon.ts — never a second icon mapping.
+  categoryIcon: string;
 }) {
-  const fmt = useFormatCurrency();
-  const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.marketingServices[service.id]);
   const toggleMarketingService = useFavorites((s) => s.toggleMarketingService);
 
-  const coverImage = service.imageUrl;
-
   return (
-    <div
-      data-testid={`card-service-${service.id}`}
+    <MarketingMappedServiceCard
+      id={service.id}
+      title={service.title?.trim() || service.category}
+      category={service.category}
+      description={service.description}
+      imageUrl={service.imageUrl}
+      startingPriceInCents={service.startingPriceInCents}
+      agencyName={service.agencyName}
+      agencyProfileImageUrl={service.agencyProfileImageUrl}
+      agencyIsAvailable={service.agencyIsAvailable}
+      rating={service.rating}
+      reviewCount={service.reviewCount}
+      categoryIcon={categoryIcon}
+      isFavorited={faved}
+      onToggleFavorite={() => toggleMarketingService({
+        id: service.id, name: service.category, agencyUserId: service.marketingUserId, agencyName: service.agencyName,
+        rating: service.rating / 10, image: service.imageUrl, location: service.agencyLocation, priceInCents: service.startingPriceInCents,
+      })}
       onClick={() => onOpenDetail(service)}
-      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
-    >
-      <button
-        className={`absolute top-2 right-2 z-10 w-6 h-6 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleMarketingService({
-            id: service.id, name: service.category, agencyUserId: service.marketingUserId, agencyName: service.agencyName,
-            rating: service.rating / 10, image: coverImage, location: service.agencyLocation, priceInCents: service.startingPriceInCents,
-          });
-        }}
-        data-testid={`button-fav-marketing-service-${service.id}`}
-      >
-        <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
-      </button>
-
-      {/* Left — photo (the service's own image, agency photo fallback) */}
-      <div className="w-2/5 shrink-0 relative">
-        {coverImage ? (
-          <img src={coverImage} alt={service.category} className="w-full h-full object-cover" />
-        ) : (
-          <Avatar className="w-full h-full rounded-none">
-            <AvatarImage src={service.agencyProfileImageUrl ?? undefined} alt={service.agencyName} className="object-cover" />
-            <AvatarFallback className="rounded-none bg-purple-100 text-purple-700 font-bold text-2xl">
-              {service.agencyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-        )}
-        <span
-          className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${service.agencyIsAvailable ? "bg-green-500" : "bg-gray-300"}`}
-          title={service.agencyIsAvailable ? "Disponible" : "Indisponible"}
-        />
-      </div>
-
-      {/* Right — information */}
-      <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
-        <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-purple-600 transition-colors pr-5 ${t.textPrimary}`}>
-          {service.category}
-        </h3>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={`text-[10px] border-0 px-1.5 ${providerTypeColor(service.agencyProfileType)}`}>{service.agencyName}</Badge>
-          {service.agencyLocation && (
-            <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
-              <MapPin className="w-2.5 h-2.5" />{service.agencyLocation}
-              {service.distanceKm != null && <> · {service.distanceKm} km</>}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <StarRating rating={service.rating / 10} isDark={isDark} />
-          <span className="text-[11px] text-gray-400">({service.reviewCount} avis)</span>
-        </div>
-
-        <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <p className={`text-[10px] ${t.textSubtle}`}>À partir de</p>
-          <p className="font-bold text-sm text-purple-600">{fmt(service.startingPriceInCents)}</p>
-        </div>
-      </div>
-    </div>
+      isDark={isDark}
+    />
   );
 }
 
@@ -467,6 +440,15 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
     const min = parseFloat(filterRating) * 10;
     return services.filter((s) => s.rating >= min);
   }, [services, filterRating]);
+
+  // Resolved via the one shared lib/marketing-category-icon.ts helper — reused
+  // here, by the filter strip below, and by the Store Details page, so no page
+  // ever invents a second icon mapping.
+  const categoryIconByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const cat of taxonomy) map.set(cat.name, resolveMarketingCategoryIcon(cat.name, taxonomy));
+    return map;
+  }, [taxonomy]);
 
   const hasFilters = !!(selectedService || search || filterRating || filterLocation || filterType);
 
@@ -573,7 +555,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                     data-testid={`button-service-cat-${cat.name}`}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selectedService === cat.name ? t.switcherActive : t.switcherInactive}`}
                   >
-                    <span className="text-base leading-none">{cat.icon || CATEGORY_ICON_FALLBACK[cat.name] || "📢"}</span>
+                    <span className="text-base leading-none">{categoryIconByName.get(cat.name)}</span>
                     <span className="max-w-[72px] truncate">{cat.name}</span>
                   </button>
                 </div>
@@ -660,6 +642,11 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
           isDark={isDark}
         />
         <section>
+          <div className="mb-4">
+            <h2 className={`font-bold text-lg ${t.textPrimary}`}>Services Marketing</h2>
+            <p className={`text-sm mt-0.5 ${t.textMuted}`}>{filteredServices.length} service{filteredServices.length !== 1 ? "s" : ""} disponible{filteredServices.length !== 1 ? "s" : ""}</p>
+          </div>
+
           {selectedService && (
             <div className="flex items-center gap-2 mb-4">
               <span className={`text-xs ${t.textMuted}`}>Service filtré :</span>
@@ -675,7 +662,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
           )}
 
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {[...Array(8)].map((_, i) => <div key={i} className={`h-36 rounded-2xl animate-pulse ${t.mutedBg}`} />)}
             </div>
           ) : filteredServices.length === 0 ? (
@@ -686,13 +673,14 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               <Button size="sm" variant="outline" onClick={resetFilters} data-testid="button-reset-empty">Réinitialiser les filtres</Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredServices.map((service) => (
                 <ServiceCard
                   key={service.id}
                   service={service}
                   onOpenDetail={(s) => setDetailServiceId(s.id)}
                   isDark={isDark}
+                  categoryIcon={categoryIconByName.get(service.category) ?? resolveMarketingCategoryIcon(service.category, taxonomy)}
                 />
               ))}
             </div>

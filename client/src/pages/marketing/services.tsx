@@ -18,11 +18,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Megaphone, Plus, Pencil, Trash2, Clock, Eye, EyeOff } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { resolveMarketingCategoryIcon } from "@/lib/marketing-category-icon";
 
 type ServiceFormState = {
-  category: string; startingPrice: string; responseTime: string; description: string; imageUrl: string;
+  title: string; category: string; startingPrice: string; responseTime: string; description: string; offerDetails: string; imageUrl: string;
 };
-const EMPTY_FORM: ServiceFormState = { category: "", startingPrice: "", responseTime: "< 24h", description: "", imageUrl: "" };
+const EMPTY_FORM: ServiceFormState = { title: "", category: "", startingPrice: "", responseTime: "< 24h", description: "", offerDetails: "", imageUrl: "" };
 
 function ServiceFormDialog({ service, onClose }: { service: MarketingService | "new" | null; onClose: () => void }) {
   const { toast } = useToast();
@@ -35,10 +36,12 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
   useEffect(() => {
     if (service && service !== "new") {
       setForm({
+        title: service.title ?? "",
         category: service.category,
         startingPrice: String((service.startingPriceInCents ?? 0) / 100),
         responseTime: service.responseTime,
         description: service.description,
+        offerDetails: service.offerDetails ?? "",
         imageUrl: service.imageUrl ?? "",
       });
     } else if (service === "new") {
@@ -50,15 +53,21 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
   const isPending = create.isPending || update.isPending;
 
   const save = () => {
+    if (!form.title.trim()) {
+      toast({ title: "Titre requis", variant: "destructive" });
+      return;
+    }
     if (!form.category.trim()) {
       toast({ title: "Catégorie requise", variant: "destructive" });
       return;
     }
     const payload = {
+      title: form.title.trim(),
       category: form.category,
       startingPriceInCents: Math.round((parseFloat(form.startingPrice) || 0) * 100),
       responseTime: form.responseTime,
       description: form.description,
+      offerDetails: form.offerDetails,
       imageUrl: form.imageUrl.trim() || null,
     };
     const onDone = {
@@ -76,6 +85,10 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <DialogHeader><DialogTitle>{isNew ? "Nouveau service" : "Modifier le service"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Titre</label>
+            <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Ex : Campagne Google Ads Premium" data-testid="input-service-title" />
+          </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Catégorie</label>
             <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
@@ -102,6 +115,10 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
             <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={4} placeholder="Décrivez ce service précisément (ex : Création et gestion de campagnes publicitaires...)" data-testid="input-service-description" />
           </div>
           <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Détails de l'offre</label>
+            <Textarea value={form.offerDetails} onChange={(e) => setForm((f) => ({ ...f, offerDetails: e.target.value }))} rows={4} placeholder="Ce qui est inclus dans cette offre (ex : 8h de tournage, photographe professionnel, photos retouchées, livraison sous 48h...)" data-testid="input-service-offer-details" />
+          </div>
+          <div>
             <label className="text-xs text-muted-foreground mb-1 block">Image du service (URL)</label>
             <Input value={form.imageUrl} onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))} placeholder="https://…" data-testid="input-service-image" />
             {form.imageUrl && <img src={form.imageUrl} alt="Aperçu" className="h-24 w-full rounded-xl object-cover bg-muted mt-2" onError={(e) => ((e.target as HTMLImageElement).style.opacity = "0.2")} />}
@@ -126,6 +143,7 @@ export default function MarketingServicesPage() {
   const { toast } = useToast();
   const fmt = useFormatCurrency();
   const { data: services = [], isLoading } = useMyMarketingServices();
+  const { data: taxonomy = [] } = useMarketingTaxonomy();
   const update = useUpdateMarketingService();
   const remove = useDeleteMarketingService();
   const [editing, setEditing] = useState<MarketingService | "new" | null>(null);
@@ -169,7 +187,7 @@ export default function MarketingServicesPage() {
       />
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-72 w-full rounded-2xl" />)}</div>
       ) : services.length === 0 ? (
         <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
@@ -180,31 +198,53 @@ export default function MarketingServicesPage() {
         </Card>
       ) : (
         <>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {pageServices.map((service) => (
-            <Card key={service.id} data-testid={`card-service-${service.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
-              <CardContent className="p-5 flex flex-col gap-3">
-                <button type="button" onClick={() => setPreviewServiceId(service.id)} className="text-left" data-testid={`button-preview-service-${service.id}`}>
+            // Image-on-top layout + category/status badges mirror the Coffee Owner
+            // /marketing mapped service card's visual language (MarketingMappedServiceCard),
+            // while keeping this page's own real management actions below
+            // (docs/marketing_services_offer_details_admin_audit.md Section B — no agency
+            // badge/Avis here since this is the agency managing its own listing, and no
+            // per-service rating is fetched by this page's own data source).
+            <Card key={service.id} data-testid={`card-service-${service.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl overflow-hidden flex flex-col">
+              <button type="button" onClick={() => setPreviewServiceId(service.id)} className="text-left" data-testid={`button-preview-service-${service.id}`}>
+                <div className="relative aspect-[4/3] bg-gray-50 dark:bg-gray-700 overflow-hidden">
+                  {service.imageUrl ? (
+                    <img src={service.imageUrl} alt={service.title?.trim() || service.category} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center"><Megaphone className="w-10 h-10 text-muted-foreground/40" /></div>
+                  )}
+                  {/* Status — bottom-left dot, same visual language as the Coffee Owner
+                      card's availability dot, repurposed here to mean "published" */}
+                  <span
+                    className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${service.isPublished ? "bg-green-500" : "bg-gray-300"}`}
+                    title={service.isPublished ? "Publié" : "Brouillon"}
+                  />
+                  {/* Category — bottom-right badge, same taxonomy icon resolver as /marketing */}
+                  <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full">
+                    <span className="text-xs leading-none">{resolveMarketingCategoryIcon(service.category, taxonomy)}</span>{service.category}
+                  </span>
+                </div>
+                <CardContent className="p-4 pb-0 flex flex-col gap-1.5">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-sm truncate">{service.category}</h3>
+                    <h3 className="font-semibold text-sm truncate">{service.title?.trim() || service.category}</h3>
                     <Badge className={`text-[10px] shrink-0 border-0 px-1.5 ${service.isPublished ? "bg-green-600" : "bg-gray-400"}`}>
                       {service.isPublished ? <Eye className="w-3 h-3 mr-1" /> : <EyeOff className="w-3 h-3 mr-1" />}
                       {service.isPublished ? "Publié" : "Brouillon"}
                     </Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{service.description || "Aucune description"}</p>
-                </button>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{service.responseTime}</span>
-                </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{service.description || "Aucune description"}</p>
+                </CardContent>
+              </button>
+              <CardContent className="p-4 pt-3 flex flex-col gap-3 mt-auto">
                 <div className="flex items-center justify-between pt-2 border-t border-border/50">
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Prix de départ</p>
-                    <p className="font-bold text-sm text-fuchsia-600">{fmt(service.startingPriceInCents)}</p>
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />{service.responseTime}</p>
+                    <p className="font-bold text-sm text-fuchsia-600 mt-0.5">{fmt(service.startingPriceInCents)}</p>
                   </div>
                   <Switch checked={service.isPublished} onCheckedChange={() => togglePublish(service)} disabled={update.isPending} data-testid={`switch-publish-service-${service.id}`} />
                 </div>
-                <div className="flex gap-2 justify-end">
+                <div className="flex gap-2 justify-end flex-wrap">
                   <Button size="sm" variant="outline" onClick={() => setPreviewServiceId(service.id)} data-testid={`button-preview-service-action-${service.id}`}>
                     <Eye className="w-3.5 h-3.5 mr-1" />Aperçu
                   </Button>

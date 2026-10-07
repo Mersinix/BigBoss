@@ -213,7 +213,7 @@ export default function AcademyCoursesPage() {
       />
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-72 w-full rounded-2xl" />)}</div>
       ) : courses.length === 0 ? (
         <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
@@ -224,27 +224,45 @@ export default function AcademyCoursesPage() {
         </Card>
       ) : (
         <>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {pageCourses.map((course) => (
-            <Card key={course.id} data-testid={`card-course-${course.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
-              <CardContent className="p-5 flex flex-col gap-3">
-                {/* Clicking the formation itself opens the same Formation details modal
-                    Coffee Owners see (Part 12) — read-only here, since the Academy is
-                    viewing its own listing rather than a Coffee Owner browsing it. */}
-                <button type="button" onClick={() => setPreviewCourseId(course.id)} className="text-left" data-testid={`button-preview-course-${course.id}`}>
+            // Image-on-top + category/status badges mirror the Coffee Owner /academy
+            // mapped formation card's visual language (AcademyMappedCourseCard), while
+            // keeping this page's own real management actions below — same principle
+            // already applied to Espace Marketing → Business → Services
+            // (docs/academy_formations_management_marketing_synchronization_audit.md).
+            <Card key={course.id} data-testid={`card-course-${course.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl overflow-hidden flex flex-col">
+              <button type="button" onClick={() => setPreviewCourseId(course.id)} className="text-left" data-testid={`button-preview-course-${course.id}`}>
+                <div className="relative aspect-[4/3] bg-gray-50 dark:bg-gray-700 overflow-hidden">
+                  {course.imageUrl ? (
+                    <img src={course.imageUrl} alt={course.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-10 h-10 text-muted-foreground/40" /></div>
+                  )}
+                  <span
+                    className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${course.isPublished ? "bg-green-500" : "bg-gray-300"}`}
+                    title={course.isPublished ? "Publiée" : "Brouillon"}
+                  />
+                  {course.category && (
+                    <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full">
+                      <BookOpen className="w-3 h-3" />{course.category}
+                    </span>
+                  )}
+                </div>
+                <CardContent className="p-4 pb-0 flex flex-col gap-1.5">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-sm truncate">{course.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{course.description || "Aucune description"}</p>
-                    </div>
+                    <h3 className="font-semibold text-sm truncate">{course.title}</h3>
                     <Badge className={`text-[10px] shrink-0 border-0 px-1.5 ${LEVEL_COLORS[course.level]}`}>{LEVEL_LABELS[course.level]}</Badge>
                   </div>
-                </button>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  {course.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{course.duration}</span>}
-                  {course.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{course.location}</span>}
-                  {course.hasCertification && <span className="flex items-center gap-1 text-amber-600"><Award className="w-3 h-3" />Certifiante</span>}
-                </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{course.description || "Aucune description"}</p>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    {course.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{course.duration}</span>}
+                    {course.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{course.location}</span>}
+                    {course.hasCertification && <span className="flex items-center gap-1 text-amber-600"><Award className="w-3 h-3" />Certifiante</span>}
+                  </div>
+                </CardContent>
+              </button>
+              <CardContent className="p-4 pt-3 flex flex-col gap-3 mt-auto">
                 <div className="flex items-center justify-between pt-2 border-t border-border/50">
                   <div>
                     <p className="text-[10px] text-muted-foreground">Prix</p>
@@ -258,7 +276,10 @@ export default function AcademyCoursesPage() {
                     <Switch checked={course.isPublished} onCheckedChange={() => togglePublish(course)} disabled={update.isPending} data-testid={`switch-publish-${course.id}`} />
                   </div>
                 </div>
-                <div className="flex gap-2 justify-end">
+                <div className="flex gap-2 justify-end flex-wrap">
+                  <Button size="sm" variant="outline" onClick={() => setPreviewCourseId(course.id)} data-testid={`button-preview-course-action-${course.id}`}>
+                    <Eye className="w-3.5 h-3.5 mr-1" />Aperçu
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => setEditing(course)} data-testid={`button-edit-course-${course.id}`}>
                     <Pencil className="w-3.5 h-3.5 mr-1" />Modifier
                   </Button>

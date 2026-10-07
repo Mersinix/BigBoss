@@ -51,6 +51,7 @@ type AdminCourse = {
   id: number; academyUserId: number; title: string; description: string; level: string;
   priceInCents: number; duration: string; hasCertification: boolean; category: string; location: string;
   trainingMode: string; capacity: number | null; isPublished: boolean; createdAt: string | null;
+  imageUrl: string | null;
   academyName: string;
 };
 type AdminRegistration = {
@@ -328,6 +329,8 @@ export default function AdminAcademyPage() {
 
   const [courseSearch, setCourseSearch] = useState("");
   const [courseStatus, setCourseStatus] = useState("all");
+  const [courseCategory, setCourseCategory] = useState("all");
+  const [courseAcademy, setCourseAcademy] = useState("all");
   const [courseSearchOpen, setCourseSearchOpen] = useState(false);
   const courseSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -425,15 +428,28 @@ export default function AdminAcademyPage() {
     academyDragIdRef.current = null;
   };
 
-  // ── Formations tab ──
+  // ── Formations tab — filters mirror Admin Marketing's "Services Marketing" tab
+  // (search/category/agency/status), built from the same real data this tab already
+  // fetches (data.courses), no new endpoint/dataset
+  // (docs/academy_formations_management_marketing_synchronization_audit.md). ──
+  const courseFilterOptions = useMemo(() => {
+    const all = data?.courses ?? [];
+    return {
+      categories: Array.from(new Set(all.map((c) => c.category).filter(Boolean))).sort(),
+      academies: Array.from(new Set(all.map((c) => c.academyName).filter(Boolean))).sort(),
+    };
+  }, [data?.courses]);
   const courses = useMemo(() => (data?.courses ?? []).filter((c) => {
     const haystack = [c.title, c.description, c.academyName, c.category].join(" ").toLowerCase();
     return (!courseSearch || haystack.includes(courseSearch.toLowerCase()))
-      && (courseStatus === "all" || (courseStatus === "published" ? c.isPublished : !c.isPublished));
-  }), [data?.courses, courseSearch, courseStatus]);
+      && (courseStatus === "all" || (courseStatus === "published" ? c.isPublished : !c.isPublished))
+      && (courseCategory === "all" || c.category === courseCategory)
+      && (courseAcademy === "all" || c.academyName === courseAcademy);
+  }), [data?.courses, courseSearch, courseStatus, courseCategory, courseAcademy]);
   const coursesPagination = usePagination(courses.length);
-  useEffect(() => { coursesPagination.resetPage(); }, [courseSearch, courseStatus]);
+  useEffect(() => { coursesPagination.resetPage(); }, [courseSearch, courseStatus, courseCategory, courseAcademy]);
   const pageCourses = courses.slice(coursesPagination.start, coursesPagination.end);
+  const hasCourseFilters = !!(courseSearch || courseStatus !== "all" || courseCategory !== "all" || courseAcademy !== "all");
 
   // ── Inscriptions tab ──
   const registrations = useMemo(() => (data?.registrations ?? []).filter((r) => {
@@ -698,12 +714,20 @@ export default function AdminAcademyPage() {
                 />
               </div>
             </div>
+            <Select value={courseCategory} onValueChange={setCourseCategory}>
+              <SelectTrigger className="w-[160px] shrink-0" data-testid="select-course-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Toutes catégories</SelectItem>{courseFilterOptions.categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={courseAcademy} onValueChange={setCourseAcademy}>
+              <SelectTrigger className="w-[160px] shrink-0" data-testid="select-course-filter-academy"><SelectValue placeholder="Académie" /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Toutes académies</SelectItem>{courseFilterOptions.academies.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+            </Select>
             <Select value={courseStatus} onValueChange={setCourseStatus}>
               <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Toutes</SelectItem><SelectItem value="published">Publiées</SelectItem><SelectItem value="draft">Brouillons</SelectItem></SelectContent>
             </Select>
-            {(courseSearch || courseStatus !== "all") && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setCourseSearch(""); setCourseStatus("all"); }} data-testid="button-clear-courses-filters">
+            {hasCourseFilters && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setCourseSearch(""); setCourseStatus("all"); setCourseCategory("all"); setCourseAcademy("all"); }} data-testid="button-clear-courses-filters">
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
             )}
@@ -712,12 +736,24 @@ export default function AdminAcademyPage() {
             <>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
               {pageCourses.map((c) => (
-                <Card key={c.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedCourseId(c.id)} data-testid={`card-course-${c.id}`}>
+                // Image-on-top + category/status badges mirror Admin Marketing's
+                // "Services Marketing" card (docs/academy_formations_management_marketing_synchronization_audit.md).
+                <Card key={c.id} className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden" onClick={() => setSelectedCourseId(c.id)} data-testid={`card-course-${c.id}`}>
+                  <div className="relative aspect-[16/9] bg-muted overflow-hidden">
+                    {c.imageUrl ? <img src={c.imageUrl} alt={c.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-8 h-8 text-muted-foreground/40" /></div>}
+                    <span className={`absolute bottom-2 left-2 h-2.5 w-2.5 rounded-full border-2 border-white ${c.isPublished ? "bg-green-500" : "bg-gray-300"}`} title={c.isPublished ? "Publiée" : "Brouillon"} />
+                    {c.category && (
+                      <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full">
+                        <GraduationCap className="w-3 h-3" />{c.category}
+                      </span>
+                    )}
+                  </div>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0"><h3 className="font-semibold truncate">{c.title}</h3><p className="text-xs text-muted-foreground truncate">{c.academyName}</p></div>
                       <Badge variant={c.isPublished ? "default" : "secondary"} className="text-xs shrink-0">{c.isPublished ? "Publiée" : "Brouillon"}</Badge>
                     </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{c.description || "Aucune description"}</p>
                     <div className="flex flex-wrap gap-1">
                       <Badge variant="outline" className={`text-xs ${LEVEL_COLORS[c.level] ?? ""}`}>{LEVEL_LABELS[c.level] ?? c.level}</Badge>
                       {c.hasCertification && <Badge variant="secondary" className="text-xs flex items-center gap-1"><Award className="h-3 w-3" />Certifiante</Badge>}

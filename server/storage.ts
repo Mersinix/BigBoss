@@ -9915,6 +9915,7 @@ export class DatabaseStorage implements IStorage {
         flashImageUrl: user.flashImageUrl ?? null,
         academyDescription: profile?.description ?? "",
         academyPhone: user.phone ?? null,
+        academyIsAvailable: profile ? !profile.isOnVacation : true,
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
         distanceKm,
@@ -9952,6 +9953,7 @@ export class DatabaseStorage implements IStorage {
       flashImageUrl: row.user.flashImageUrl ?? null,
       academyDescription: row.profile?.description ?? "",
       academyPhone: row.user.phone ?? null,
+      academyIsAvailable: row.profile ? !row.profile.isOnVacation : true,
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
       distanceKm,
@@ -10083,14 +10085,17 @@ export class DatabaseStorage implements IStorage {
    *  the Academy's own Eye preview (Part 43's "one details modal per entity type"). Never a
    *  duplicate profile: built from the exact same academyProfiles/users/academyCourses/
    *  academyCourseSessions/supplierProductReviews rows every other Academy surface reads. */
-  async getAcademyProfileCard(userId: number): Promise<{
+  async getAcademyProfileCard(userId: number, viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<{
     userId: number; name: string; profileImageUrl: string | null; coverImageUrl: string | null; flashImageUrl: string | null; location: string; phone: string | null;
     description: string; marketplaceVisible: boolean; weeklyHours: OpeningHoursMap | null; isOnVacation: boolean;
-    rating: number; reviewCount: number; portfolioImages: string[];
+    rating: number; reviewCount: number; portfolioImages: string[]; distanceKm?: number | null;
     courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
   } | undefined> {
     const user = await this.getUser(userId);
     if (!user || user.role !== 'BARISTA_ACADEMY') return undefined;
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+    const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
     const [profile, allCourses, stats, allSessions] = await Promise.all([
       this.getAcademyProfile(userId),
       this.getAcademyCoursesForAcademy(userId),
@@ -10106,6 +10111,7 @@ export class DatabaseStorage implements IStorage {
       flashImageUrl: user.flashImageUrl ?? null,
       academyDescription: profile.description,
       academyPhone: user.phone ?? null,
+      academyIsAvailable: !profile.isOnVacation,
       rating: stats.get(userId)?.rating ?? 0,
       reviewCount: stats.get(userId)?.reviewCount ?? 0,
     }));
@@ -10127,6 +10133,7 @@ export class DatabaseStorage implements IStorage {
       rating: stats.get(userId)?.rating ?? 0,
       reviewCount: stats.get(userId)?.reviewCount ?? 0,
       portfolioImages: profile.portfolioImages ?? [],
+      distanceKm,
       courses,
       upcomingSessions,
     };

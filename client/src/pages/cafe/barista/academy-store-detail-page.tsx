@@ -20,6 +20,8 @@ import {
   GraduationCap, ChevronLeft, Heart, Sun, Moon, Star, MapPin, Award, Clock, Flag, X,
 } from "lucide-react";
 import type { AcademyCourseCard, AcademyCourseLevel } from "@/hooks/use-barista-academy";
+import { AcademyMappedCourseCard } from "@/components/academy/academy-mapped-course-card";
+import { formatDistance } from "@/lib/distance";
 
 // Coffee Owner /academy's dedicated Store page — the /academy equivalent of
 // /stores/:storeId, /print/stores/:printerId and /marketing/stores/:agencyId
@@ -59,59 +61,6 @@ function useTheme(isDark: boolean) {
   };
 }
 
-function StoreCourseCard({ course, onClick, isDark }: { course: AcademyCourseCard; onClick: () => void; isDark: boolean }) {
-  const t = useTheme(isDark);
-  const fmt = useFormatCurrency();
-  const faved = useFavorites((s) => !!s.academyCourses[course.id]);
-  const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
-
-  return (
-    <div
-      data-testid={`card-store-academy-course-${course.id}`}
-      className={`group cursor-pointer rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
-      onClick={onClick}
-    >
-      <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {course.imageUrl ? (
-          <img src={course.imageUrl} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"><GraduationCap className={`w-10 h-10 ${t.textSubtle}`} /></div>
-        )}
-        {course.hasCertification && (
-          <span className="absolute bottom-2 left-2 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/90 text-amber-900">
-            <Award className="w-2.5 h-2.5" /> Certifié
-          </span>
-        )}
-        <button
-          className={`absolute top-2 right-2 w-7 h-7 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleAcademy({
-              id: course.id, title: course.title, provider: course.academyName, duration: course.duration,
-              rating: course.rating / 10, price: course.priceInCents, level: course.level,
-              location: course.location || course.academyLocation, hasCertification: course.hasCertification,
-              imageUrl: course.imageUrl || course.academyProfileImageUrl,
-            });
-          }}
-          data-testid={`button-fav-store-academy-${course.id}`}
-        >
-          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
-        </button>
-      </div>
-      <div className="p-3 flex-1 flex flex-col gap-2">
-        <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-indigo-600 transition-colors ${t.textPrimary}`}>{course.title}</h3>
-        <Badge className={`text-[10px] border-0 px-1.5 w-fit ${LEVEL_COLORS[course.level]}`}>{LEVEL_LABELS[course.level]}</Badge>
-        <div className={`mt-auto pt-2 border-t ${t.border} flex items-center justify-between`}>
-          <p className="font-bold text-sm text-indigo-600">{fmt(course.priceInCents)}</p>
-          <div className={`flex items-center gap-1 text-[11px] ${t.textSubtle}`}>
-            <Clock className="w-3 h-3" />
-            <span>{course.duration}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function AcademyStoreDetailPage() {
   const [, params] = useRoute("/academy/stores/:academyUserId");
@@ -128,6 +77,8 @@ export default function AcademyStoreDetailPage() {
 
   const faved = useFavorites((s) => (card ? !!s.academyOrganisations[card.userId] : false));
   const toggleAcademyOrganisation = useFavorites((s) => s.toggleAcademyOrganisation);
+  const favoritedCourses = useFavorites((s) => s.academyCourses);
+  const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
 
   const [levelId, setLevelId] = useState<AcademyCourseLevel | "">("");
   const [infoOpen, setInfoOpen] = useState(false);
@@ -176,8 +127,8 @@ export default function AcademyStoreDetailPage() {
     return (
       <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
         <div className={`h-64 w-full animate-pulse ${t.skeletonBg}`} />
-        <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {[...Array(10)].map((_, i) => <div key={i} className={`h-56 rounded-2xl animate-pulse ${t.skeletonBg}`} />)}
+        <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[...Array(10)].map((_, i) => <div key={i} className={`h-72 rounded-2xl animate-pulse ${t.skeletonBg}`} />)}
         </div>
       </div>
     );
@@ -288,7 +239,7 @@ export default function AcademyStoreDetailPage() {
             <h1 className={`font-extrabold text-xl leading-tight truncate ${t.textPrimary}`} data-testid="text-academy-store-name">{card.name}</h1>
             <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1 ${isDark ? "text-indigo-400" : "text-indigo-600"}`}>
               <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3" />{courses.length} formation{courses.length !== 1 ? "s" : ""}</span>
-              {card.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{card.location}</span>}
+              {card.distanceKm != null && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{formatDistance(card.distanceKm)}</span>}
             </div>
           </div>
         </div>
@@ -341,10 +292,39 @@ export default function AcademyStoreDetailPage() {
             {levelId && courses.length > 0 && <Button size="sm" variant="outline" onClick={() => setLevelId("")}>Effacer le filtre</Button>}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {filtered.map((course) => (
-              <StoreCourseCard key={course.id} course={course} onClick={() => setPreviewCourseId(course.id)} isDark={isDark} />
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filtered.map((course) => {
+              const coverImage = course.imageUrl || course.academyProfileImageUrl;
+              return (
+                <AcademyMappedCourseCard
+                  key={course.id}
+                  id={course.id}
+                  title={course.title}
+                  category={course.category}
+                  description={course.description}
+                  imageUrl={coverImage}
+                  priceInCents={course.priceInCents}
+                  academyName={course.academyName}
+                  academyProfileImageUrl={course.academyProfileImageUrl}
+                  academyIsAvailable={course.academyIsAvailable}
+                  rating={course.rating}
+                  reviewCount={course.reviewCount}
+                  levelLabel={LEVEL_LABELS[course.level]}
+                  levelColorClass={LEVEL_COLORS[course.level]}
+                  hasCertification={course.hasCertification}
+                  duration={course.duration}
+                  isFavorited={!!favoritedCourses[course.id]}
+                  onToggleFavorite={() => toggleAcademy({
+                    id: course.id, title: course.title, provider: course.academyName, duration: course.duration,
+                    rating: course.rating / 10, price: course.priceInCents, level: course.level,
+                    location: course.location || course.academyLocation, hasCertification: course.hasCertification,
+                    imageUrl: coverImage,
+                  })}
+                  onClick={() => setPreviewCourseId(course.id)}
+                  isDark={isDark}
+                />
+              );
+            })}
           </div>
         )}
       </div>

@@ -237,18 +237,14 @@ function MarketingStoresSection({ companies, categoryId, onSelect, isDark }: {
           </Button>
         )}
       </div>
-      {expanded ? (
-        // ~1.5× the previous agency card size means fewer columns at every
-        // breakpoint (was 2/3/4/4/4) so each card gets genuinely more room,
-        // not just bigger text inside the same slot.
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-4">
-          {visible.map(renderTile)}
-        </div>
-      ) : (
-        <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-          {visible.map((company) => <div key={company.userId} className="shrink-0 w-72 sm:w-80">{renderTile(company)}</div>)}
-        </div>
-      )}
+      {/* Same grid/breakpoints as the Services Marketing grid below (grid-cols-1
+          sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4) so Agency cards share the exact
+          same column width — docs/marketing_agency_4_column_grid_audit.md. Applies to
+          both the collapsed (first 5) and expanded ("Voir plus") states; no separate
+          horizontal-scroll/fixed-width mode anymore. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {visible.map(renderTile)}
+      </div>
     </div>
   );
 }

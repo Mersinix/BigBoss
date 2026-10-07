@@ -45,6 +45,7 @@ import {
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
 import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-modal";
+import { AcademyMappedCourseCard } from "@/components/academy/academy-mapped-course-card";
 import { formatDistance } from "@/lib/distance";
 
 // Barista Academy — split out of the former combined /barista page into its
@@ -234,14 +235,27 @@ function AcademyStoreCardTile({ company, onClick, isDark }: {
       className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
       onClick={onClick}
     >
+      {/* Image area — same ~1.5× scale/visual language as Marketing's agency card
+          (MarketingStoreCardTile), grid/scroll-item sizing handled by the parent
+          AcademyStoresSection — docs/academy_marketing_design_synchronization_audit.md. */}
       <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
         {company.coverImageUrl ? (
           <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"><GraduationCap className={`w-10 h-10 ${t.textSubtle}`} /></div>
+          <div className="w-full h-full flex items-center justify-center"><GraduationCap className={`w-14 h-14 ${t.textSubtle}`} /></div>
         )}
+
+        {/* Organization type — top-left badge over the image. Academy has no
+            per-account "type" field the way Marketing has Agency/Freelancer/Studio
+            (confirmed via schema audit); "Académie" is the same fixed, real
+            descriptor already used by this exact card's own favorite-toggle call
+            below, not a fabricated per-record value. */}
+        <span className="absolute top-3 left-3 bg-black/55 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+          Académie
+        </span>
+
         <button
-          className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          className="absolute top-3 right-3 w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
             e.stopPropagation();
             toggleAcademyOrganisation({
@@ -253,23 +267,32 @@ function AcademyStoreCardTile({ company, onClick, isDark }: {
           }}
           data-testid={`button-fav-academy-store-${company.userId}`}
         >
-          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
+          <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
         </button>
+
+        {/* Avis — bottom-right overlay, real rating/reviewCount, same reviewCount>0 gate used everywhere else */}
+        {company.reviewCount > 0 && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/55 backdrop-blur-sm rounded-full px-2.5 py-1">
+            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <span className="text-xs font-bold text-white">{(company.rating / 10).toFixed(1)}</span>
+            <span className="text-[11px] text-white/70">({company.reviewCount} avis)</span>
+          </div>
+        )}
       </div>
-      <div className="p-3 flex gap-3 relative z-20">
-        <div className={`w-11 h-11 rounded-xl border-2 -mt-8 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
+      <div className="p-4 flex gap-4 relative z-20">
+        <div className={`w-16 h-16 rounded-xl border-2 -mt-12 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
           {company.profileImageUrl ? (
             <img src={company.profileImageUrl} alt={company.name} className="w-full h-full object-cover" />
           ) : (
-            <GraduationCap className={`w-4 h-4 ${t.textMuted}`} />
+            <GraduationCap className={`w-6 h-6 ${t.textMuted}`} />
           )}
         </div>
-        <div className="flex-1 min-w-0 pt-1">
-          <h3 className={`font-bold text-sm leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
-          {company.description && <p className={`text-xs line-clamp-1 mt-0.5 ${t.textMuted}`}>{company.description}</p>}
-          <div className={`flex items-center gap-3 text-[11px] mt-1.5 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
-            <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3" />{company.courseCount} formation{company.courseCount !== 1 ? "s" : ""}</span>
-            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3 h-3" />{formatDistance(company.distanceKm)}</span>}
+        <div className="flex-1 min-w-0 pt-1.5">
+          <h3 className={`font-bold text-base leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
+          {company.description && <p className={`text-sm line-clamp-1 mt-1 ${t.textMuted}`}>{company.description}</p>}
+          <div className={`flex items-center gap-3 text-xs mt-2 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
+            <span className="flex items-center gap-1"><GraduationCap className="w-3.5 h-3.5" />{company.courseCount} formation{company.courseCount !== 1 ? "s" : ""}</span>
+            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3.5 h-3.5" />{formatDistance(company.distanceKm)}</span>}
           </div>
         </div>
       </div>
@@ -313,15 +336,12 @@ function AcademyStoresSection({ companies, onSelect, isDark }: {
           </Button>
         )}
       </div>
-      {expanded ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
-          {visible.map(renderTile)}
-        </div>
-      ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-          {visible.map((company) => <div key={company.userId} className="shrink-0 w-52 sm:w-60">{renderTile(company)}</div>)}
-        </div>
-      )}
+      {/* Same grid/breakpoints as the Formations grid below, mirroring Marketing's
+          Agency-card/Service-card grid unification (same column width, no separate
+          horizontal-scroll/fixed-width mode) — docs/academy_marketing_design_synchronization_audit.md. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {visible.map(renderTile)}
+      </div>
     </div>
   );
 }
@@ -344,106 +364,37 @@ function TrainingCard({
   onOpenDetail: (course: AcademyCourseCard) => void;
   isDark: boolean;
 }) {
-  const fmt = useFormatCurrency();
-  const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.academyCourses[course.id]);
   const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
-
-  // First real image: the formation's own imageUrl if the Academy set one,
-  // otherwise the Academy's public photo/logo, otherwise the existing
-  // platform-safe avatar fallback (Part 4) — never a fabricated image.
   const coverImage = course.imageUrl || course.academyProfileImageUrl;
 
   return (
-    <div
-      data-testid={`card-training-${course.id}`}
+    <AcademyMappedCourseCard
+      id={course.id}
+      title={course.title}
+      category={course.category}
+      description={course.description}
+      imageUrl={coverImage}
+      priceInCents={course.priceInCents}
+      academyName={course.academyName}
+      academyProfileImageUrl={course.academyProfileImageUrl}
+      academyIsAvailable={course.academyIsAvailable}
+      rating={course.rating}
+      reviewCount={course.reviewCount}
+      levelLabel={LEVEL_LABELS[course.level]}
+      levelColorClass={LEVEL_COLORS[course.level]}
+      hasCertification={course.hasCertification}
+      duration={course.duration}
+      isFavorited={faved}
+      onToggleFavorite={() => toggleAcademy({
+        id: course.id, title: course.title, provider: course.academyName, duration: course.duration,
+        rating: course.rating / 10, price: course.priceInCents, level: course.level,
+        location: course.location || course.academyLocation, hasCertification: course.hasCertification,
+        imageUrl: coverImage,
+      })}
       onClick={() => onOpenDetail(course)}
-      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
-    >
-      <button
-        className={`absolute top-2 right-2 z-10 w-6 h-6 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleAcademy({
-            id: course.id,
-            title: course.title,
-            provider: course.academyName,
-            duration: course.duration,
-            rating: course.rating / 10,
-            price: course.priceInCents,
-            level: course.level,
-            location: course.location || course.academyLocation,
-            hasCertification: course.hasCertification,
-            imageUrl: coverImage,
-          });
-        }}
-        data-testid={`button-fav-academy-${course.id}`}
-      >
-        <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
-      </button>
-
-      {/* Left — photo (formation/Academy image, existing avatar fallback) */}
-      <div className="w-2/5 shrink-0 relative">
-        <Avatar className="w-full h-full rounded-none">
-          <AvatarImage src={getAvatarUrl({ profileImageUrl: coverImage })} alt={course.title} className="object-cover" />
-          <AvatarFallback className="rounded-none bg-indigo-100 flex items-center justify-center">
-            <GraduationCap className="w-8 h-8 text-indigo-500" />
-          </AvatarFallback>
-        </Avatar>
-        {course.hasCertification && (
-          <span className="absolute bottom-2 left-2 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/90 text-amber-900">
-            <Award className="w-2.5 h-2.5" /> Certifié
-          </span>
-        )}
-      </div>
-
-      {/* Right — information */}
-      <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
-        <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-indigo-600 transition-colors pr-5 ${t.textPrimary}`}>
-          {course.title}
-        </h3>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={`text-[10px] border-0 px-1.5 ${LEVEL_COLORS[course.level]}`}>
-            {LEVEL_LABELS[course.level]}
-          </Badge>
-          {(course.academyLocation || course.location) && (
-            <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
-              <MapPin className="w-2.5 h-2.5" />
-              {course.academyLocation || course.location}
-              {course.distanceKm != null && <> · {course.distanceKm} km</>}
-            </span>
-          )}
-        </div>
-
-        <p className={`text-xs font-medium truncate ${t.textMuted}`}>{course.academyName}</p>
-
-        <div className="flex items-center gap-2">
-          {course.reviewCount > 0 ? (
-            <>
-              <StarRating rating={course.rating / 10} isDark={isDark} />
-              <span className="text-[11px] text-gray-400">({course.reviewCount})</span>
-            </>
-          ) : (
-            <span className="text-[11px] text-gray-400">Aucun avis</span>
-          )}
-          {course.duration && (
-            <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
-              <Clock className="w-2.5 h-2.5" />
-              {course.duration}
-            </span>
-          )}
-        </div>
-
-        {/* S'inscrire moved into the details modal (Part 4) — the card itself
-            is now the sole click target, mirroring the Barista mapped card. */}
-        <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <p className={`text-[10px] ${t.textSubtle}`}>Prix</p>
-          <p className="font-bold text-sm text-indigo-600">
-            {fmt(course.priceInCents)}
-          </p>
-        </div>
-      </div>
-    </div>
+      isDark={isDark}
+    />
   );
 }
 
@@ -693,9 +644,9 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className={`h-36 rounded-2xl border animate-pulse ${t.cardBg}`} />
+                <div key={i} className={`h-72 rounded-2xl border animate-pulse ${t.cardBg}`} />
               ))}
             </div>
           ) : filteredTraining.length === 0 ? (
@@ -709,7 +660,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredTraining.map((course) => (
                 <TrainingCard
                   key={course.id}

@@ -4387,11 +4387,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // modal) only ever gets the sanitized public `card` — same convention as every other
     // service's profile route (Barista/Maintenance/Marketing/Delivery Company).
     if (!isSelfOrAdmin) {
-      const card = await storage.getAcademyProfileCard(targetUserId);
+      const card = await storage.getAcademyProfileCard(targetUserId, { lat: viewer.locationLat, lng: viewer.locationLng });
       if (!card) return res.status(404).json({ message: "Not found" });
       return res.json({ card });
     }
-    const card = await storage.getAcademyProfileCard(targetUserId);
+    const card = await storage.getAcademyProfileCard(targetUserId, { lat: viewer.locationLat, lng: viewer.locationLng });
     res.json({ user: target, profile: await storage.getAcademyProfile(targetUserId), card });
   });
 

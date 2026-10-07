@@ -2068,6 +2068,7 @@ export type AcademyCourseCard = AcademyCourse & {
   flashImageUrl: string | null;
   academyDescription: string;
   academyPhone: string | null;
+  academyIsAvailable: boolean;
   rating: number; // 0-50, i.e. x10
   reviewCount: number;
   distanceKm?: number | null;

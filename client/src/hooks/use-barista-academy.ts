@@ -38,6 +38,7 @@ export type AcademyCourseCard = AcademyCourse & {
   flashImageUrl?: string | null;
   academyDescription: string;
   academyPhone: string | null;
+  academyIsAvailable: boolean;
   rating: number; // x10, e.g. 47 = 4.7
   reviewCount: number;
   distanceKm?: number | null;
@@ -265,7 +266,7 @@ export function useMyAcademyProfile(userId: number | null) {
 export type AcademyProfileCard = {
   userId: number; name: string; profileImageUrl: string | null; coverImageUrl?: string | null; flashImageUrl?: string | null; location: string; phone: string | null;
   description: string; marketplaceVisible: boolean; weeklyHours: OpeningHoursMap | null; isOnVacation: boolean;
-  rating: number; reviewCount: number; portfolioImages: string[];
+  rating: number; reviewCount: number; portfolioImages: string[]; distanceKm?: number | null;
   courses: AcademyCourseCard[]; upcomingSessions: AcademyCourseSessionWithCourse[];
 };
 

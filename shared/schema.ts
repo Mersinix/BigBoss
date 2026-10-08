@@ -1931,6 +1931,11 @@ export const academyCourses = pgTable("academy_courses", {
   capacity: integer("capacity"), // nullable = unlimited
   imageUrl: text("image_url"),
   isPublished: boolean("is_published").notNull().default(false),
+  // "Détails de la formation" — same free-text, academy-entered convention as
+  // marketingServices.offerDetails (docs/service_details_offer_details_and_desktop_navbar_audit.md),
+  // distinct from the short `description`, never shown when empty. notNull/default("")
+  // keeps existing rows valid with no migration risk.
+  formationDetails: text("formation_details").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -2148,6 +2153,10 @@ export const maintenanceProfiles = pgTable("maintenance_profiles", {
   responseTime: text("response_time").notNull().default("< 24h"),
   dailyRateInCents: integer("daily_rate_in_cents").notNull().default(0),
   description: text("description").notNull().default(""),
+  // "Détails de Service" — longer, structured info distinct from the short
+  // `description` blurb (docs/service_details_offer_details_and_desktop_navbar_audit.md),
+  // same free-text/never-shown-when-empty convention as marketingServices.offerDetails.
+  serviceDetails: text("service_details").notNull().default(""),
   portfolioImages: text("portfolio_images").array().notNull().default([]),
   coverageArea: text("coverage_area").notNull().default(""),
   workingDays: text("working_days").array().notNull().default([]),
@@ -2653,6 +2662,10 @@ export const printCatalogItems = pgTable("print_catalog_items", {
   productionTimeDays: integer("production_time_days").notNull().default(3),
   materials: text("materials").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
+  // "Détails de l'offre" — same free-text, admin/provider-entered convention as
+  // marketingServices.offerDetails (docs/service_details_offer_details_and_desktop_navbar_audit.md),
+  // never shown when empty. notNull/default("") keeps existing rows valid with no migration risk.
+  offerDetails: text("offer_details").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -3394,6 +3407,7 @@ export type PrintCatalogCard = PrintCatalogItem & {
   printerPhone: string | null;
   printerImageUrl: string | null;
   printerLocation: string;
+  printerIsAvailable: boolean;
   rating: number; // 0-50 (x10), mirrors maintenanceProfiles/baristaMarketplaceProfiles convention
   reviewCount: number;
   distanceKm?: number | null;
@@ -3432,6 +3446,7 @@ export type PrintCompanyCard = {
   portfolioImages: string[];
   categories: string[];
   services: PrintCatalogCard[];
+  distanceKm?: number | null;
 };
 /** Lightweight "Print Store" list card — one per visible Printer company, used
  *  by the Coffee Owner /print marketplace's browsable Store section (mirrors

@@ -22,6 +22,8 @@ import {
   Printer, ChevronLeft, Heart, Sun, Moon, Star, MapPin, Package, Clock, Flag, X,
 } from "lucide-react";
 import type { PrintCatalogCard, PrintOrderWithParties } from "@shared/schema";
+import { PrintMappedServiceCard } from "@/components/print/print-mapped-service-card";
+import { formatDistance } from "@/lib/distance";
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -62,77 +64,6 @@ function useTheme(isDark: boolean) {
   };
 }
 
-function StoreServiceCard({ card, onClick, isDark }: { card: PrintCatalogCard; onClick: () => void; isDark: boolean }) {
-  const t = useTheme(isDark);
-  const fmt = useFormatCurrency();
-  const faved = useFavorites((s) => !!s.printProducts[String(card.id)]);
-  const togglePrint = useFavorites((s) => s.togglePrintProduct);
-  const starRating = card.rating / 10;
-
-  return (
-    <div
-      data-testid={`card-store-print-${card.id}`}
-      className={`group cursor-pointer rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
-      onClick={onClick}
-    >
-      <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {card.imageUrl ? (
-          <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"><Package className={`w-10 h-10 ${t.textSubtle}`} /></div>
-        )}
-        {card.category && (
-          <div className="absolute top-2 left-2">
-            <Badge className={`${isDark ? "bg-gray-800/90 text-gray-200" : "bg-white/90 text-gray-700"} backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2`}>
-              {printCategoryIcon(card.category)} {card.category}
-            </Badge>
-          </div>
-        )}
-        <button
-          className={`absolute top-2 right-2 w-7 h-7 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            togglePrint({
-              id: String(card.id), name: card.name, brand: card.printerName, price: card.priceInCents, priceUnit: card.unit,
-              image: card.imageUrl ?? "", location: card.printerLocation, distanceKm: card.distanceKm,
-              rating: card.rating / 10, reviewCount: card.reviewCount, category: card.category,
-            });
-          }}
-          data-testid={`button-fav-store-print-${card.id}`}
-        >
-          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
-        </button>
-      </div>
-      <div className="p-3 flex-1 flex flex-col gap-2">
-        <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors ${t.textPrimary}`}>{card.name}</h3>
-        <div className="flex items-center gap-1.5">
-          {card.reviewCount > 0 ? (
-            <>
-              <span className="flex items-center gap-0.5">
-                {[1, 2, 3, 4, 5].map((s) => <span key={s} className={`text-[11px] ${s <= Math.round(starRating) ? "text-amber-400" : "text-gray-200"}`}>★</span>)}
-              </span>
-              <span className={`text-[11px] ${t.textSubtle}`}>({card.reviewCount})</span>
-            </>
-          ) : (
-            <span className={`text-[11px] ${t.textSubtle}`}>Aucun avis</span>
-          )}
-        </div>
-        <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-[10px] ${t.textSubtle}`}>À partir de</p>
-              <p className="font-bold text-sm text-blue-600">{fmt(card.priceInCents)}<span className={`text-[10px] font-normal ${t.textSubtle}`}>/{card.unit}</span></p>
-            </div>
-            <div className={`flex items-center gap-1 text-[11px] ${t.textSubtle}`}>
-              <Clock className="w-3 h-3" />
-              <span>{card.productionTimeDays}j</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function PrintStoreDetailPage() {
   const [, params] = useRoute("/print/stores/:printerId");
@@ -150,6 +81,8 @@ export default function PrintStoreDetailPage() {
 
   const faved = useFavorites((s) => (card ? !!s.printCompanies[card.userId] : false));
   const togglePrintCompany = useFavorites((s) => s.togglePrintCompany);
+  const favedProducts = useFavorites((s) => s.printProducts);
+  const togglePrintProduct = useFavorites((s) => s.togglePrintProduct);
 
   const [categoryId, setCategoryId] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
@@ -230,8 +163,8 @@ export default function PrintStoreDetailPage() {
     return (
       <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
         <div className={`h-64 w-full animate-pulse ${t.skeletonBg}`} />
-        <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {[...Array(10)].map((_, i) => <div key={i} className={`h-56 rounded-2xl animate-pulse ${t.skeletonBg}`} />)}
+        <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, i) => <div key={i} className={`h-56 rounded-2xl animate-pulse ${t.skeletonBg}`} />)}
         </div>
       </div>
     );
@@ -341,7 +274,11 @@ export default function PrintStoreDetailPage() {
             <h1 className={`font-extrabold text-xl leading-tight truncate ${t.textPrimary}`} data-testid="text-print-store-name">{card.name}</h1>
             <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
               <span className="flex items-center gap-1"><Package className="w-3 h-3" />{services.length} service{services.length !== 1 ? "s" : ""}</span>
-              {card.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{card.location}</span>}
+              {card.distanceKm != null ? (
+                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{formatDistance(card.distanceKm)}</span>
+              ) : card.location ? (
+                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{card.location}</span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -395,9 +332,34 @@ export default function PrintStoreDetailPage() {
             {categoryId && <Button size="sm" variant="outline" onClick={() => setCategoryId("")}>Effacer le filtre</Button>}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map((service) => (
-              <StoreServiceCard key={service.id} card={service} onClick={() => setPreviewServiceId(service.id)} isDark={isDark} />
+              <PrintMappedServiceCard
+                key={service.id}
+                id={service.id}
+                name={service.name}
+                category={service.category}
+                description={service.description}
+                imageUrl={service.imageUrl}
+                priceInCents={service.priceInCents}
+                unit={service.unit}
+                minQuantity={service.minQuantity}
+                productionTimeDays={service.productionTimeDays}
+                printerName={card.name}
+                printerImageUrl={card.profileImageUrl}
+                printerIsAvailable={service.printerIsAvailable}
+                rating={service.rating}
+                reviewCount={service.reviewCount}
+                categoryIcon={printCategoryIcon(service.category, categoryIconByName.get(service.category))}
+                isFavorited={!!favedProducts[String(service.id)]}
+                onToggleFavorite={() => togglePrintProduct({
+                  id: String(service.id), name: service.name, brand: card.name, price: service.priceInCents, priceUnit: service.unit,
+                  image: service.imageUrl ?? "", location: card.location, distanceKm: card.distanceKm,
+                  rating: service.rating / 10, reviewCount: service.reviewCount, category: service.category,
+                })}
+                onClick={() => setPreviewServiceId(service.id)}
+                isDark={isDark}
+              />
             ))}
           </div>
         )}

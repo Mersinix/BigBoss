@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Star, MapPin, Clock, Flag, Heart, MessageCircle, X, Printer, Package, Layers, ShoppingCart,
+  Star, MapPin, Clock, Flag, Heart, MessageCircle, X, Printer, Package, Layers, ShoppingCart, ListChecks,
 } from "lucide-react";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 
@@ -209,6 +209,32 @@ export function PrintServiceDetailModal({
                 </div>
               </div>
 
+              {/* Imprimerie — immediately after the service identity
+                  (docs/service_details_offer_details_and_desktop_navbar_audit.md):
+                  Service → Imprimerie → Prix/Délai → Détails de l'offre. Clicking
+                  opens the same real PRINT Company Details Modal used everywhere a
+                  printing company is shown (Business → Profil → Aperçu, Admin PRINT). */}
+              <button
+                type="button"
+                onClick={() => onOpenCompany?.(service.printerId)}
+                className={`w-full text-left p-3 rounded-xl border transition-colors ${t.border} ${isDark ? "hover:border-blue-600" : "hover:border-blue-300"} ${t.sectionBgAlt}`}
+                data-testid="button-open-print-company"
+              >
+                <p className={`text-xs font-semibold mb-2 flex items-center gap-1 ${t.textMuted}`}><Layers className="w-3.5 h-3.5" /> Imprimerie</p>
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-10 h-10 shrink-0">
+                    <AvatarImage src={getAvatarUrl({ profileImageUrl: service.printerImageUrl })} alt={service.printerName} />
+                    <AvatarFallback className={`font-bold text-sm ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+                      <Printer className="w-4 h-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{service.printerName}</p>
+                    {service.printerLocation && <p className={`text-xs flex items-center gap-1 ${t.textMuted}`}><MapPin className="w-3 h-3" /> {service.printerLocation}</p>}
+                  </div>
+                </div>
+              </button>
+
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className={`p-3 rounded-xl ${t.sectionBg}`}>
                   <p className={`text-[11px] ${t.textMuted}`}>Prix</p>
@@ -230,28 +256,15 @@ export function PrintServiceDetailModal({
                 )}
               </div>
 
-              {/* Imprimerie — clicking opens the same real PRINT Company Details Modal used
-                  everywhere a printing company is shown (Business → Profil → Aperçu, Admin PRINT). */}
-              <button
-                type="button"
-                onClick={() => onOpenCompany?.(service.printerId)}
-                className={`w-full text-left p-3 rounded-xl border transition-colors ${t.border} ${isDark ? "hover:border-blue-600" : "hover:border-blue-300"} ${t.sectionBgAlt}`}
-                data-testid="button-open-print-company"
-              >
-                <p className={`text-xs font-semibold mb-2 flex items-center gap-1 ${t.textMuted}`}><Layers className="w-3.5 h-3.5" /> Imprimerie</p>
-                <div className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10 shrink-0">
-                    <AvatarImage src={getAvatarUrl({ profileImageUrl: service.printerImageUrl })} alt={service.printerName} />
-                    <AvatarFallback className={`font-bold text-sm ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
-                      <Printer className="w-4 h-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{service.printerName}</p>
-                    {service.printerLocation && <p className={`text-xs flex items-center gap-1 ${t.textMuted}`}><MapPin className="w-3 h-3" /> {service.printerLocation}</p>}
-                  </div>
+              {/* Offer details — real, printer-entered content only, never shown when
+                  empty, same convention as marketingServices.offerDetails. Last section,
+                  after Imprimerie and Prix/Délai. */}
+              {service.offerDetails?.trim() && (
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
+                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ListChecks className="w-3.5 h-3.5" /> Détails de l'offre</p>
+                  <p className={`text-sm whitespace-pre-wrap ${t.textPrimary}`}>{service.offerDetails}</p>
                 </div>
-              </button>
+              )}
 
               {/* Avis — moved into the dedicated Star-icon ReviewsModal, matching
                   PrintCompanyDetailModal's own already-established pattern

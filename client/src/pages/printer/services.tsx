@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
-import { Plus, Pencil, Trash2, Printer, X, Layers, Eye, Clock, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Printer, X, Layers, Eye, EyeOff, Clock, Package } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Link } from "wouter";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
@@ -26,6 +26,7 @@ import { PrintCompanyDetailModal } from "@/components/print/print-company-detail
 type FormState = {
   name: string;
   description: string;
+  offerDetails: string;
   imageUrl: string;
   category: string;
   subCategory: string;
@@ -38,7 +39,7 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  name: "", description: "", imageUrl: "", category: "", subCategory: "",
+  name: "", description: "", offerDetails: "", imageUrl: "", category: "", subCategory: "",
   price: "", unit: "unité", minQuantity: "1", productionTimeDays: "3",
   materials: [], isActive: true,
 };
@@ -47,6 +48,7 @@ function toFormState(item: PrintCatalogItem): FormState {
   return {
     name: item.name,
     description: item.description,
+    offerDetails: item.offerDetails ?? "",
     imageUrl: item.imageUrl ?? "",
     category: item.category,
     subCategory: item.subCategory,
@@ -117,6 +119,7 @@ function ServiceFormDialog({
   const buildPayload = () => ({
     name: form.name.trim(),
     description: form.description.trim(),
+    offerDetails: form.offerDetails.trim(),
     imageUrl: form.imageUrl.trim() || null,
     category: form.category.trim(),
     subCategory: form.subCategory.trim(),
@@ -181,8 +184,15 @@ function ServiceFormDialog({
             <Textarea value={form.description} onChange={set("description")} rows={3} placeholder="Détails du service…" />
           </div>
           <div className="space-y-1.5">
+            <Label>Détails de l'offre</Label>
+            <Textarea data-testid="input-service-offer-details" value={form.offerDetails} onChange={set("offerDetails")} rows={4} placeholder="Ce qui est inclus, spécifications, conditions…" />
+          </div>
+          <div className="space-y-1.5">
             <Label>Image (URL)</Label>
             <Input type="url" value={form.imageUrl} onChange={set("imageUrl")} placeholder="https://…" />
+            {form.imageUrl.trim() && (
+              <img src={form.imageUrl} alt="Aperçu" className="h-24 rounded-lg object-cover border border-border/50 mt-1" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+            )}
           </div>
           {mappedCategories.length === 0 ? (
             <div className="rounded-xl border border-amber-300/50 bg-amber-500/5 p-3 flex items-center justify-between gap-3 flex-wrap">
@@ -347,33 +357,40 @@ export default function PrinterServices() {
         <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {pageCatalog.map((item) => (
-            <Card key={item.id} data-testid={`card-service-${item.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
-              <CardContent className="p-0 flex flex-col">
+            <Card key={item.id} data-testid={`card-service-${item.id}`} className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl overflow-hidden flex flex-col">
                 <button type="button" className="text-left" onClick={() => setPreviewServiceId(item.id)} data-testid={`button-preview-service-${item.id}`}>
-                  <div className="w-full aspect-[16/9] rounded-t-2xl overflow-hidden bg-secondary flex items-center justify-center">
+                  <div className="relative aspect-[4/3] bg-gray-50 dark:bg-gray-700 overflow-hidden">
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
                     ) : (
-                      <Package className="w-8 h-8 text-muted-foreground" />
+                      <div className="w-full h-full flex items-center justify-center"><Package className="w-10 h-10 text-muted-foreground/40" /></div>
+                    )}
+                    <span className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${item.isActive ? "bg-green-500" : "bg-gray-300"}`} title={item.isActive ? "Actif" : "Inactif"} />
+                    {item.category && (
+                      <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full">
+                        {printCategoryIcon(item.category)} {item.category}
+                      </span>
                     )}
                   </div>
                 </button>
-                <div className="p-4 flex flex-col gap-2.5">
+                <CardContent className="p-4 pb-0 flex flex-col gap-1.5">
                   <div className="flex items-start justify-between gap-2">
                     <button type="button" className="text-left min-w-0" onClick={() => setPreviewServiceId(item.id)}>
-                      <p className="font-semibold text-sm truncate">{item.name}</p>
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {printCategoryIcon(item.category)} {item.category}{item.subCategory ? ` · ${item.subCategory}` : ""}
-                      </p>
+                      <h3 className="font-semibold text-sm truncate">{item.name}</h3>
+                      {item.subCategory && <p className="text-xs text-muted-foreground truncate mt-0.5">{printSubCategoryIcon(item.subCategory)} {item.subCategory}</p>}
                     </button>
-                    <Badge variant="outline" className={`shrink-0 text-[10px] ${item.isActive ? "bg-green-100 text-green-700 border-green-200" : "bg-muted text-muted-foreground"}`}>
+                    <Badge className={`text-[10px] shrink-0 border-0 px-1.5 ${item.isActive ? "bg-green-600" : "bg-gray-400"}`}>
+                      {item.isActive ? <Eye className="w-3 h-3 mr-1" /> : <EyeOff className="w-3 h-3 mr-1" />}
                       {item.isActive ? "Actif" : "Inactif"}
                     </Badge>
                   </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{item.description || "Aucune description"}</p>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{item.productionTimeDays} j</span>
                     <span>Min. {item.minQuantity} {item.unit}(s)</span>
                   </div>
+                </CardContent>
+                <CardContent className="p-4 pt-3 flex flex-col gap-3 mt-auto">
                   <div className="flex items-center justify-between pt-2 border-t border-border/50">
                     <p className="font-bold text-sm text-primary">{fmt(item.priceInCents)}<span className="text-[10px] font-normal text-muted-foreground">/{item.unit}</span></p>
                     <Switch
@@ -394,8 +411,7 @@ export default function PrinterServices() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
-                </div>
-              </CardContent>
+                </CardContent>
             </Card>
           ))}
         </div>

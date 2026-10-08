@@ -18,6 +18,7 @@ type ActionKey = "messages" | "notifications" | "avis" | "settings";
 export function AccountHeaderActions({
   messagesPath, reviewsPath, settingsPath, notificationService, notificationViewAllPath, accentLinkTextClass,
   order = ["messages", "notifications", "avis", "settings"],
+  testIdSuffix = "",
 }: {
   messagesPath: string;
   reviewsPath: string;
@@ -29,6 +30,13 @@ export function AccountHeaderActions({
   accentLinkTextClass: string;
   // Which of the 4 icons to render, and in what order.
   order?: ActionKey[];
+  // Appended to each cell's data-testid (e.g. "-desktop") so a second, visually
+  // hidden copy of this component (the desktop-only reordered block in
+  // professional-account-shell.tsx) never collides with the mobile block's own
+  // testids in the live DOM — both render simultaneously, only one is hidden
+  // via CSS. Left empty for the original/mobile call sites, which keep their
+  // exact original testids.
+  testIdSuffix?: string;
 }) {
   const render: Record<ActionKey, React.ReactNode> = {
     messages: (
@@ -37,7 +45,7 @@ export function AccountHeaderActions({
           aria-label="Messages"
           title="Messagerie"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors"
-          data-testid="button-header-messages"
+          data-testid={`button-header-messages${testIdSuffix}`}
         >
           <MessageCircle className="w-4 h-4" />
         </a>
@@ -49,6 +57,7 @@ export function AccountHeaderActions({
         service={notificationService}
         viewAllPath={notificationViewAllPath}
         linkTextClass={accentLinkTextClass}
+        testIdSuffix={testIdSuffix}
       />
     ),
     avis: (
@@ -57,7 +66,7 @@ export function AccountHeaderActions({
           aria-label="Avis"
           title="Avis"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors"
-          data-testid="button-header-reviews"
+          data-testid={`button-header-reviews${testIdSuffix}`}
         >
           <Star className="w-4 h-4" />
         </a>
@@ -69,7 +78,7 @@ export function AccountHeaderActions({
           aria-label="Paramètres"
           title="Paramètres"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors"
-          data-testid="button-header-settings"
+          data-testid={`button-header-settings${testIdSuffix}`}
         >
           <Settings className="w-4 h-4" />
         </a>

@@ -135,13 +135,17 @@ export function ProfessionalAccountShell({
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header — one unified layout at every breakpoint (mobile/tablet/desktop):
-          identity on the left (brand logo, dominant "BigBossCoffee" wordmark,
-          secondary service name, account name), icon-only actions on the right. Icon
-          size (w-9 h-9 / w-4 h-4) is the same size this app's desktop row previously
-          used. Below sm, the icon grid wraps into the required 2-row x 3-col
-          arrangement (grid-cols-3); at sm and up it's a single row of 6
-          (sm:grid-cols-6) — same 6 elements/order, no separate desktop-only markup. */}
+      {/* Header — identity on the left (brand logo, dominant "BigBossCoffee"
+          wordmark, secondary service name, account name), icon-only actions on
+          the right. Icon size (w-9 h-9 / w-4 h-4) unchanged. Mobile (below sm)
+          keeps its EXACT original 2-row x 3-col grid/order — untouched, see the
+          first action block below. Desktop (sm and up) uses a SEPARATE block
+          with the reordered single row of 6
+          (docs/service_details_offer_details_and_desktop_navbar_audit.md):
+          Message → Notification → Avis → Mode clair → Paramètres → Déconnexion,
+          Déconnexion rightmost. Two responsive-gated blocks instead of one
+          shared block, specifically so the desktop reorder can never leak into
+          mobile. */}
       <div className={`bg-gradient-to-r ${gradientClass} px-4 py-3 sm:py-4`}>
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
@@ -154,7 +158,9 @@ export function ProfessionalAccountShell({
               <p className={`text-[11px] sm:text-xs truncate ${subtitleTextClass}`}>{user?.name}</p>
             </div>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 shrink-0">
+
+          {/* Mobile (below sm) — unchanged: Paramètres, Mode clair, Déconnexion, Message, Notification, Avis. */}
+          <div className="grid grid-cols-3 gap-1 shrink-0 sm:hidden">
             <AccountHeaderActions
               messagesPath={messagesPath}
               reviewsPath={reviewsPath}
@@ -194,6 +200,51 @@ export function ProfessionalAccountShell({
               accentLinkTextClass={activeTextClass}
               order={["messages", "notifications", "avis"]}
             />
+          </div>
+
+          {/* Desktop (sm and up) — Message → Notification → Avis → Mode clair → Paramètres → Déconnexion. */}
+          <div className="hidden sm:grid sm:grid-cols-6 gap-1 shrink-0">
+            <AccountHeaderActions
+              messagesPath={messagesPath}
+              reviewsPath={reviewsPath}
+              settingsPath={settingsPath}
+              notificationService={notificationService}
+              notificationViewAllPath={`${communicationPath}?tab=notifications`}
+              accentLinkTextClass={activeTextClass}
+              order={["messages", "notifications", "avis"]}
+              testIdSuffix="-desktop"
+            />
+            {toggleAllowed && (
+              <button
+                onClick={() => toggleDark()}
+                aria-label="Changer de thème"
+                title={effectiveDark ? "Mode clair" : "Mode sombre"}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors"
+                data-testid={`button-${testIdPrefix}-theme-toggle-desktop`}
+              >
+                {effectiveDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            )}
+            <AccountHeaderActions
+              messagesPath={messagesPath}
+              reviewsPath={reviewsPath}
+              settingsPath={settingsPath}
+              notificationService={notificationService}
+              notificationViewAllPath={`${communicationPath}?tab=notifications`}
+              accentLinkTextClass={activeTextClass}
+              order={["settings"]}
+              testIdSuffix="-desktop"
+            />
+            <button
+              onClick={() => logout()}
+              disabled={isLoggingOut}
+              aria-label="Se déconnecter"
+              title="Se déconnecter"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors disabled:opacity-60"
+              data-testid={`button-${testIdPrefix}-logout-desktop`}
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>

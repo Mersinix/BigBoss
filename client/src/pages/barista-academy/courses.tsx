@@ -25,12 +25,12 @@ const LEVEL_COLORS: Record<AcademyCourseLevel, string> = {
 };
 
 type CourseFormState = {
-  title: string; description: string; level: AcademyCourseLevel; price: string; duration: string;
+  title: string; description: string; formationDetails: string; level: AcademyCourseLevel; price: string; duration: string;
   hasCertification: boolean; category: string; location: string; trainingMode: string; capacity: string; imageUrl: string;
 };
 
 const EMPTY_FORM: CourseFormState = {
-  title: "", description: "", level: "BEGINNER", price: "", duration: "", hasCertification: false,
+  title: "", description: "", formationDetails: "", level: "BEGINNER", price: "", duration: "", hasCertification: false,
   category: "", location: "", trainingMode: "Présentiel", capacity: "", imageUrl: "",
 };
 
@@ -43,7 +43,7 @@ function CourseFormDialog({ course, onClose }: { course: AcademyCourse | null | 
   useEffect(() => {
     if (course && course !== "new") {
       setForm({
-        title: course.title, description: course.description, level: course.level,
+        title: course.title, description: course.description, formationDetails: course.formationDetails ?? "", level: course.level,
         price: String(course.priceInCents / 100), duration: course.duration,
         hasCertification: course.hasCertification, category: course.category, location: course.location,
         trainingMode: course.trainingMode, capacity: course.capacity != null ? String(course.capacity) : "",
@@ -62,6 +62,7 @@ function CourseFormDialog({ course, onClose }: { course: AcademyCourse | null | 
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
+      formationDetails: form.formationDetails.trim(),
       level: form.level,
       priceInCents: Math.round(parseFloat(form.price || "0") * 100),
       duration: form.duration.trim(),
@@ -99,6 +100,10 @@ function CourseFormDialog({ course, onClose }: { course: AcademyCourse | null | 
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Description</label>
             <Textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} data-testid="input-course-description" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Détails de la formation</label>
+            <Textarea value={form.formationDetails} onChange={(e) => setForm((f) => ({ ...f, formationDetails: e.target.value }))} rows={4} placeholder="Programme, prérequis, matériel fourni, certification…" data-testid="input-course-formation-details" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

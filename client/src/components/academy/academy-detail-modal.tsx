@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Award, MessageCircle,
-  Flag, Heart, X, GraduationCap, Layers, Users, Calendar, Zap,
+  Flag, Heart, X, GraduationCap, Layers, Users, Calendar, Zap, ListChecks,
 } from "lucide-react";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
@@ -355,6 +355,34 @@ export function AcademyDetailModal({
                 {course.description && <p className={`text-sm leading-relaxed mt-2.5 ${t.textMuted}`}>{course.description}</p>}
               </div>
 
+              {/* Academy — immediately after the formation identity
+                  (docs/service_details_offer_details_and_desktop_navbar_audit.md):
+                  Formation → Académie → Prix/Catégorie → Détails de la formation.
+                  Clicking opens the Academy Profile Details modal (Part 14), the same
+                  synchronized representation reused everywhere an Academy is shown
+                  (Eye preview, Admin card). */}
+              <button
+                type="button"
+                onClick={() => setAcademyProfileOpen(true)}
+                className={`w-full text-left p-3 rounded-xl border transition-colors ${t.border} ${isDark ? "hover:border-indigo-600" : "hover:border-indigo-300"} ${t.sectionBgAlt}`}
+                data-testid="button-open-academy-profile"
+              >
+                <p className={`text-xs font-semibold mb-2 flex items-center gap-1 ${t.textMuted}`}><Layers className="w-3.5 h-3.5" /> Académie</p>
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-10 h-10 shrink-0">
+                    <AvatarImage src={getAvatarUrl({ profileImageUrl: course.academyProfileImageUrl })} alt={course.academyName} />
+                    <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-sm">
+                      {course.academyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{course.academyName}</p>
+                    {course.academyLocation && <p className={`text-xs flex items-center gap-1 ${t.textMuted}`}><MapPin className="w-3 h-3" /> {course.academyLocation}</p>}
+                  </div>
+                </div>
+                {course.academyDescription && <p className={`text-xs mt-2.5 leading-relaxed ${t.textMuted}`}>{course.academyDescription}</p>}
+              </button>
+
               {/* Formation */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className={`p-3 rounded-xl ${t.sectionBg}`}>
@@ -379,30 +407,15 @@ export function AcademyDetailModal({
                 )}
               </div>
 
-              {/* Academy — clicking opens the Academy Profile Details modal (Part 14),
-                  the same synchronized representation reused everywhere an Academy is
-                  shown (Eye preview, Admin card). */}
-              <button
-                type="button"
-                onClick={() => setAcademyProfileOpen(true)}
-                className={`w-full text-left p-3 rounded-xl border transition-colors ${t.border} ${isDark ? "hover:border-indigo-600" : "hover:border-indigo-300"} ${t.sectionBgAlt}`}
-                data-testid="button-open-academy-profile"
-              >
-                <p className={`text-xs font-semibold mb-2 flex items-center gap-1 ${t.textMuted}`}><Layers className="w-3.5 h-3.5" /> Académie</p>
-                <div className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10 shrink-0">
-                    <AvatarImage src={getAvatarUrl({ profileImageUrl: course.academyProfileImageUrl })} alt={course.academyName} />
-                    <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-sm">
-                      {course.academyName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{course.academyName}</p>
-                    {course.academyLocation && <p className={`text-xs flex items-center gap-1 ${t.textMuted}`}><MapPin className="w-3 h-3" /> {course.academyLocation}</p>}
-                  </div>
+              {/* Détails de la formation — real, academy-entered content only, never
+                  shown when empty, same convention as marketingServices.offerDetails.
+                  Last section, after Académie and Prix/Catégorie. */}
+              {course.formationDetails?.trim() && (
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
+                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ListChecks className="w-3.5 h-3.5" /> Détails de la formation</p>
+                  <p className={`text-sm whitespace-pre-wrap ${t.textPrimary}`}>{course.formationDetails}</p>
                 </div>
-                {course.academyDescription && <p className={`text-xs mt-2.5 leading-relaxed ${t.textMuted}`}>{course.academyDescription}</p>}
-              </button>
+              )}
 
               {/* Avis — moved into the dedicated Star-icon ReviewsModal (Phase 7),
                   no longer rendered inline here (list + existing review form). */}

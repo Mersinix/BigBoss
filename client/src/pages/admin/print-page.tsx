@@ -475,6 +475,11 @@ export default function AdminPrintPage() {
   const [serviceSearch, setServiceSearch] = useState("");
   const [serviceCategory, setServiceCategory] = useState("all");
   const [serviceStatus, setServiceStatus] = useState("all");
+  // Provider/availability/rating filters — mirrors Admin Marketing's Services tab
+  // (agency/availability/rating Selects), docs/print_services_management_marketing_synchronization_audit.md.
+  const [servicePrinter, setServicePrinter] = useState("all");
+  const [serviceAvailability, setServiceAvailability] = useState("all");
+  const [serviceRating, setServiceRating] = useState("all");
   const [serviceSearchOpen, setServiceSearchOpen] = useState(false);
   const serviceSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -576,15 +581,25 @@ export default function AdminPrintPage() {
   // public marketplace endpoint which only ever returns active items). ──
   const serviceFilterOptions = useMemo(() => ({
     categories: Array.from(new Set((data?.catalogItems ?? []).map((i) => i.category).filter(Boolean))).sort(),
+    printers: Array.from(new Set((data?.catalogItems ?? []).map((i) => i.printerName))).sort(),
   }), [data?.catalogItems]);
   const services = useMemo(() => (data?.catalogItems ?? []).filter((i) => {
     const haystack = [i.name, i.description, i.printerName, i.category, i.subCategory].join(" ").toLowerCase();
+    const rating = (i.printerRating ?? 0) / 10;
     return (!serviceSearch || haystack.includes(serviceSearch.toLowerCase()))
       && (serviceCategory === "all" || i.category === serviceCategory)
-      && (serviceStatus === "all" || (serviceStatus === "active" ? i.isActive : !i.isActive));
-  }), [data?.catalogItems, serviceSearch, serviceCategory, serviceStatus]);
+      && (servicePrinter === "all" || i.printerName === servicePrinter)
+      && (serviceStatus === "all" || (serviceStatus === "active" ? i.isActive : !i.isActive))
+      && (serviceAvailability === "all" || (serviceAvailability === "available" ? i.printerIsAvailable : !i.printerIsAvailable))
+      && (serviceRating === "all" || (serviceRating === "rated" ? rating > 0 : rating >= Number(serviceRating)));
+  }), [data?.catalogItems, serviceSearch, serviceCategory, servicePrinter, serviceStatus, serviceAvailability, serviceRating]);
+  const hasServiceFilters = !!serviceSearch || serviceCategory !== "all" || servicePrinter !== "all" || serviceStatus !== "all" || serviceAvailability !== "all" || serviceRating !== "all";
+  const resetServiceFilters = () => {
+    setServiceSearch(""); setServiceCategory("all"); setServicePrinter("all");
+    setServiceStatus("all"); setServiceAvailability("all"); setServiceRating("all");
+  };
   const servicesPagination = usePagination(services.length);
-  useEffect(() => { servicesPagination.resetPage(); }, [serviceSearch, serviceCategory, serviceStatus]);
+  useEffect(() => { servicesPagination.resetPage(); }, [serviceSearch, serviceCategory, servicePrinter, serviceStatus, serviceAvailability, serviceRating]);
   const pageServices = services.slice(servicesPagination.start, servicesPagination.end);
 
   // ── Orders tab ──
@@ -855,37 +870,68 @@ export default function AdminPrintPage() {
               </div>
             </div>
             <Select value={serviceCategory} onValueChange={setServiceCategory}>
-              <SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+              <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Toutes catégories</SelectItem>{serviceFilterOptions.categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
+            <Select value={servicePrinter} onValueChange={setServicePrinter}>
+              <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-printer"><SelectValue placeholder="Imprimerie" /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Toutes imprimeries</SelectItem>{serviceFilterOptions.printers.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+            </Select>
             <Select value={serviceStatus} onValueChange={setServiceStatus}>
-              <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectTrigger className="w-[150px] shrink-0" data-testid="select-service-filter-status"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Tous statuts</SelectItem><SelectItem value="active">Actif</SelectItem><SelectItem value="inactive">Inactif</SelectItem></SelectContent>
             </Select>
-            {(serviceSearch || serviceCategory !== "all" || serviceStatus !== "all") && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setServiceSearch(""); setServiceCategory("all"); setServiceStatus("all"); }} data-testid="button-clear-services-filters">
+            <Select value={serviceAvailability} onValueChange={setServiceAvailability}>
+              <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-availability"><SelectValue placeholder="Disponibilité" /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Toutes disponibilités</SelectItem><SelectItem value="available">Imprimerie disponible</SelectItem><SelectItem value="unavailable">Imprimerie indisponible</SelectItem></SelectContent>
+            </Select>
+            <Select value={serviceRating} onValueChange={setServiceRating}>
+              <SelectTrigger className="w-[130px] shrink-0" data-testid="select-service-filter-rating"><SelectValue placeholder="Note" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes notes</SelectItem>
+                <SelectItem value="rated">Avec avis</SelectItem>
+                <SelectItem value="4.5">4.5+</SelectItem>
+                <SelectItem value="4.7">4.7+</SelectItem>
+                <SelectItem value="4.9">4.9+</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasServiceFilters && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={resetServiceFilters} data-testid="button-clear-services-filters">
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
             )}
           </div>
-          {services.length === 0 ? <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun service correspondant.</CardContent></Card> : (
+          {services.length === 0 ? (
+            <Card><CardContent className="p-12 text-center text-muted-foreground">
+              {(data?.catalogItems ?? []).length === 0 ? "Aucun service PRINT pour le moment." : "Aucun service ne correspond à ces filtres."}
+            </CardContent></Card>
+          ) : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
               {pageServices.map((item) => (
-                <Card key={item.id} className="hover:shadow-md transition-shadow" data-testid={`card-service-${item.id}`}>
+                <Card key={item.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedServiceId(item.id)} data-testid={`card-service-${item.id}`}>
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSelectedServiceId(item.id)}>
-                      <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
-                        <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <div className="flex items-start gap-3">
+                      <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+                        {item.imageUrl ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" /> : <Package className="w-5 h-5 text-muted-foreground" />}
                       </div>
-                      <div className="min-w-0 flex-1"><h3 className="font-semibold truncate">{item.name}</h3><p className="text-xs text-muted-foreground truncate">{item.printerName}</p></div>
-                      <Badge variant={item.isActive ? "default" : "secondary"} className="text-xs shrink-0">{item.isActive ? "Actif" : "Inactif"}</Badge>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-sm truncate">{item.name}</h3>
+                        <p className="text-xs text-muted-foreground truncate">{item.printerName}</p>
+                      </div>
+                      <span className={`h-2.5 w-2.5 rounded-full mt-1 shrink-0 ${item.isActive ? "bg-green-500" : "bg-gray-300"}`} title={item.isActive ? "Actif" : "Inactif"} />
                     </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{item.description || "Aucune description"}</p>
                     <div className="flex flex-wrap gap-1">
-                      <Badge variant="outline" className="text-xs">{item.category || "—"}</Badge>
-                      <Badge variant="secondary" className="text-xs">Min. {item.minQuantity}</Badge>
+                      <Badge variant="secondary" className="text-xs">{printCategoryIcon(item.category)} {item.category || "—"}</Badge>
+                      {item.subCategory && <Badge variant="outline" className="text-xs">{item.subCategory}</Badge>}
+                      <Badge variant="outline" className="text-xs">{item.isActive ? "Actif" : "Inactif"}</Badge>
+                      {!item.printerIsAvailable && <Badge variant="outline" className="text-xs text-muted-foreground">Imprimerie indisponible</Badge>}
                     </div>
-                    <p className="text-sm font-semibold">{fmt(item.priceInCents)} <span className="text-xs font-normal text-muted-foreground">/ {item.unit}</span></p>
-                    <div className="flex items-center justify-between pt-1 border-t" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Min. {item.minQuantity} {item.unit}(s)</span>
+                      <span className="font-bold text-sm text-blue-600">{fmt(item.priceInCents)} <span className="text-xs font-normal text-muted-foreground">/ {item.unit}</span></span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t" onClick={(e) => e.stopPropagation()}>
                       <span className="text-xs text-muted-foreground">Actif sur le marketplace</span>
                       <Switch
                         checked={item.isActive}

@@ -807,6 +807,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       yearsExperience: z.number().int().min(0).optional(),
       responseTime: z.string().optional(),
       description: z.string().optional(),
+      serviceDetails: z.string().max(4000).optional(),
       portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
       coverageArea: z.string().optional(),
       marketplaceVisible: z.boolean().optional(),
@@ -821,7 +822,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // edit route (PATCH /api/admin/maintenance/accounts/:userId) also calls
     // upsertMaintenanceProfile and must never trigger its own re-review.
     const currentProfile = await storage.getMaintenanceProfile(user.id);
-    const identityChanged = body.description !== undefined && body.description !== currentProfile.description;
+    const identityChanged =
+      (body.description !== undefined && body.description !== currentProfile.description) ||
+      (body.serviceDetails !== undefined && body.serviceDetails !== currentProfile.serviceDetails);
     const extra: Partial<InsertMaintenanceProfile> =
       identityChanged && !currentProfile.autoApprove && (currentProfile.publicationStatus === "APPROVED" || currentProfile.publicationStatus === "REJECTED")
         ? { publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null }
@@ -1976,6 +1979,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         productionTimeDays: z.number().int().min(0).default(3),
         materials: z.array(z.string()).default([]),
         isActive: z.boolean().default(true),
+        offerDetails: z.string().max(4000).default(""),
       }).parse(req.body);
       const taxonomyError = await validatePrintTaxonomySelection(user.id, body.category, body.subCategory);
       if (taxonomyError) return res.status(400).json({ message: taxonomyError });
@@ -2004,6 +2008,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         productionTimeDays: z.number().int().min(0).optional(),
         materials: z.array(z.string()).optional(),
         isActive: z.boolean().optional(),
+        offerDetails: z.string().max(4000).optional(),
       }).parse(req.body);
       const taxonomyError = await validatePrintTaxonomySelection(user.id, body.category, body.subCategory);
       if (taxonomyError) return res.status(400).json({ message: taxonomyError });
@@ -2175,7 +2180,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const target = await storage.getUser(targetUserId);
     if (!target || target.role !== "PRINTER") return res.status(404).json({ message: "Not found" });
     const isSelfOrAdmin = viewer.id === targetUserId || ["ADMIN", "SUPER_ADMIN"].includes(viewer.role);
-    const card = await storage.getPrintCompanyCard(targetUserId);
+    const card = await storage.getPrintCompanyCard(targetUserId, { lat: viewer.locationLat, lng: viewer.locationLng });
     if (!card) return res.status(404).json({ message: "Not found" });
     if (!isSelfOrAdmin) return res.json({ card });
     res.json({ user: target, profile: await storage.getPrinterProfile(targetUserId), card });
@@ -4484,6 +4489,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     trainingMode: z.string().max(60).optional(),
     capacity: z.number().int().min(1).optional().nullable(),
     imageUrl: z.string().max(2000).optional().nullable(),
+    formationDetails: z.string().max(4000).optional(),
   });
 
   app.post("/api/academy/courses", requireAuth, async (req: any, res) => {

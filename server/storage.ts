@@ -7916,15 +7916,16 @@ export class DatabaseStorage implements IStorage {
     // only an explicit false here hides its otherwise-active services.
     // GO Live (Phase 5E) — a printer not yet approved for publication is excluded
     // here too, one more AND-gate alongside the existing marketplaceVisible opt-out.
-    const hiddenPrinterIds = printerIds.length
-      ? new Set(
-          (await db.select({ userId: printerProfiles.userId, marketplaceVisible: printerProfiles.marketplaceVisible, publicationStatus: printerProfiles.publicationStatus })
-            .from(printerProfiles)
-            .where(inArray(printerProfiles.userId, printerIds)))
-            .filter((p) => !p.marketplaceVisible || p.publicationStatus !== "APPROVED")
-            .map((p) => p.userId),
-        )
-      : new Set<number>();
+    const profileRows = printerIds.length
+      ? await db.select({ userId: printerProfiles.userId, marketplaceVisible: printerProfiles.marketplaceVisible, publicationStatus: printerProfiles.publicationStatus, isOnVacation: printerProfiles.isOnVacation })
+          .from(printerProfiles)
+          .where(inArray(printerProfiles.userId, printerIds))
+      : [];
+    const hiddenPrinterIds = new Set(
+      profileRows.filter((p) => !p.marketplaceVisible || p.publicationStatus !== "APPROVED").map((p) => p.userId),
+    );
+    // No profile row yet defaults to available, same lazy-create convention used everywhere else.
+    const vacationByPrinter = new Map(profileRows.map((p) => [p.userId, p.isOnVacation]));
 
     const viewerPos = filters?.viewerLocation ? this.parseLatLng(filters.viewerLocation) : null;
 
@@ -7940,6 +7941,7 @@ export class DatabaseStorage implements IStorage {
         printerPhone: printer.phone ?? null,
         printerImageUrl: printer.profileImageUrl ?? null,
         printerLocation: this.formatPublicLocation(printer),
+        printerIsAvailable: !(vacationByPrinter.get(printer.id) ?? false),
         rating: stats?.rating ?? 0,
         reviewCount: stats?.reviewCount ?? 0,
         distanceKm,
@@ -7975,12 +7977,14 @@ export class DatabaseStorage implements IStorage {
     const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
     const providerPos = this.parseLatLng({ lat: row.printer.locationLat, lng: row.printer.locationLng });
     const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
+    const profile = await this.getPrinterProfile(row.printer.id);
     return {
       ...row.item,
       printerName: row.printer.name,
       printerPhone: row.printer.phone ?? null,
       printerImageUrl: row.printer.profileImageUrl ?? null,
       printerLocation: this.formatPublicLocation(row.printer),
+      printerIsAvailable: !profile.isOnVacation,
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
       distanceKm,
@@ -7999,12 +8003,14 @@ export class DatabaseStorage implements IStorage {
       .where(eq(printCatalogItems.id, id));
     if (!row) return undefined;
     const stats = (await this.computePrintReviewStats([row.printer.id])).get(row.printer.id);
+    const profile = await this.getPrinterProfile(row.printer.id);
     return {
       ...row.item,
       printerName: row.printer.name,
       printerPhone: row.printer.phone ?? null,
       printerImageUrl: row.printer.profileImageUrl ?? null,
       printerLocation: this.formatPublicLocation(row.printer),
+      printerIsAvailable: !profile.isOnVacation,
       rating: stats?.rating ?? 0,
       reviewCount: stats?.reviewCount ?? 0,
     };
@@ -8481,7 +8487,7 @@ export class DatabaseStorage implements IStorage {
    *  separate/duplicate company representation). `services` reuses the exact
    *  PrintCatalogCard shape getPrintMarketplaceCards already returns, filtered to
    *  this printer's active items — one synchronized service list everywhere. */
-  async getPrintCompanyCard(userId: number): Promise<PrintCompanyCard | undefined> {
+  async getPrintCompanyCard(userId: number, viewerLocation?: { lat: string | null; lng: string | null } | null): Promise<PrintCompanyCard | undefined> {
     const user = await this.getUser(userId);
     if (!user || user.role !== 'PRINTER') return undefined;
     const [profile, items, mapping, stats] = await Promise.all([
@@ -8502,9 +8508,13 @@ export class DatabaseStorage implements IStorage {
       printerPhone: user.phone ?? null,
       printerImageUrl: user.profileImageUrl ?? null,
       printerLocation: this.formatPublicLocation(user),
+      printerIsAvailable: !profile.isOnVacation,
       rating: activeStats?.rating ?? 0,
       reviewCount: activeStats?.reviewCount ?? 0,
     }));
+    const viewerPos = viewerLocation ? this.parseLatLng(viewerLocation) : null;
+    const providerPos = this.parseLatLng({ lat: user.locationLat, lng: user.locationLng });
+    const distanceKm = viewerPos && providerPos ? Math.round(this.haversineKm(viewerPos, providerPos) * 10) / 10 : null;
     return {
       userId: user.id,
       name: user.name,
@@ -8523,6 +8533,7 @@ export class DatabaseStorage implements IStorage {
       portfolioImages: profile.portfolioImages ?? [],
       categories: mapping.categories,
       services,
+      distanceKm,
     };
   }
 
@@ -8685,10 +8696,25 @@ export class DatabaseStorage implements IStorage {
       printerName: r.printerId ? (userMap.get(r.printerId)?.name ?? "—") : "—",
     }));
 
+    // Enriched with the same per-printer rating/availability/visibility already
+    // computed above for the `printers` tab (reviewStats/profileMap) — mirrors
+    // Admin Marketing's Services tab, which attaches agencyRating/agencyIsAvailable/
+    // agencyMarketplaceVisible per service (docs/print_services_management_marketing_synchronization_audit.md).
     const catalogItems = catalogRows
       .slice()
       .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
-      .map((item) => ({ ...item, printerName: userMap.get(item.printerId)?.name ?? "—" }));
+      .map((item) => {
+        const printerStats = reviewStats.get(item.printerId);
+        const printerProfile = profileMap.get(item.printerId);
+        return {
+          ...item,
+          printerName: userMap.get(item.printerId)?.name ?? "—",
+          printerRating: printerStats ? Math.round((printerStats.sum / printerStats.count) * 10) : 0,
+          printerReviewCount: printerStats?.count ?? 0,
+          printerIsAvailable: !(printerProfile?.isOnVacation ?? false),
+          printerMarketplaceVisible: printerProfile?.marketplaceVisible ?? true,
+        };
+      });
 
     const deliveredOrders = orderRows.filter((o) => o.status === "DELIVERED");
     const totalRevenueCents = deliveredOrders.reduce((s, o) => s + o.totalInCents, 0);

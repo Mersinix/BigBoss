@@ -26,6 +26,7 @@ export type AcademyCourse = {
   capacity: number | null;
   imageUrl: string | null;
   isPublished: boolean;
+  formationDetails: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -330,6 +331,7 @@ export type AcademyCourseInput = {
   trainingMode?: string;
   capacity?: number | null;
   imageUrl?: string | null;
+  formationDetails?: string;
 };
 
 export function useCreateAcademyCourse() {

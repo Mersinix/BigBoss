@@ -22,6 +22,7 @@ import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
+import { PrintMappedServiceCard } from "@/components/print/print-mapped-service-card";
 import { formatDistance } from "@/lib/distance";
 
 // Stable shared references for "data not fetched/disabled yet" useQuery
@@ -164,14 +165,26 @@ function PrintStoreCardTile({ company, onClick, isDark }: {
       className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
       onClick={onClick}
     >
+      {/* Image area — same ~1.5× scale/visual language as Marketing's agency card
+          (MarketingStoreCardTile), grid/scroll-item sizing handled by the parent
+          PrintStoresSection — docs/print_marketing_design_synchronization_audit.md. */}
       <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
         {company.coverImageUrl ? (
           <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"><Printer className={`w-10 h-10 ${t.textSubtle}`} /></div>
+          <div className="w-full h-full flex items-center justify-center"><Printer className={`w-14 h-14 ${t.textSubtle}`} /></div>
         )}
+
+        {/* Imprimerie type — top-left badge over the image. Print has no per-account
+            "type" field (confirmed via schema audit); "Imprimerie" is the same fixed,
+            real descriptor already used by this exact card's own favorite-toggle call
+            below, not a fabricated per-record value. */}
+        <span className="absolute top-3 left-3 bg-black/55 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+          Imprimerie
+        </span>
+
         <button
-          className="absolute top-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+          className="absolute top-3 right-3 w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
             e.stopPropagation();
             togglePrintCompany({
@@ -182,23 +195,32 @@ function PrintStoreCardTile({ company, onClick, isDark }: {
           }}
           data-testid={`button-fav-print-store-${company.userId}`}
         >
-          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
+          <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
         </button>
+
+        {/* Avis — bottom-right overlay, real rating/reviewCount, same reviewCount>0 gate used everywhere else */}
+        {company.reviewCount > 0 && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/55 backdrop-blur-sm rounded-full px-2.5 py-1">
+            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <span className="text-xs font-bold text-white">{(company.rating / 10).toFixed(1)}</span>
+            <span className="text-[11px] text-white/70">({company.reviewCount} avis)</span>
+          </div>
+        )}
       </div>
-      <div className="p-3 flex gap-3 relative z-20">
-        <div className={`w-11 h-11 rounded-xl border-2 -mt-8 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
+      <div className="p-4 flex gap-4 relative z-20">
+        <div className={`w-16 h-16 rounded-xl border-2 -mt-12 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
           {company.profileImageUrl ? (
             <img src={company.profileImageUrl} alt={company.name} className="w-full h-full object-cover" />
           ) : (
-            <Printer className={`w-4 h-4 ${t.textMuted}`} />
+            <Printer className={`w-6 h-6 ${t.textMuted}`} />
           )}
         </div>
-        <div className="flex-1 min-w-0 pt-1">
-          <h3 className={`font-bold text-sm leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
-          {company.description && <p className={`text-xs line-clamp-1 mt-0.5 ${t.textMuted}`}>{company.description}</p>}
-          <div className={`flex items-center gap-3 text-[11px] mt-1.5 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
-            <span className="flex items-center gap-1"><Package className="w-3 h-3" />{company.serviceCount} service{company.serviceCount !== 1 ? "s" : ""}</span>
-            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3 h-3" />{formatDistance(company.distanceKm)}</span>}
+        <div className="flex-1 min-w-0 pt-1.5">
+          <h3 className={`font-bold text-base leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
+          {company.description && <p className={`text-sm line-clamp-1 mt-1 ${t.textMuted}`}>{company.description}</p>}
+          <div className={`flex items-center gap-3 text-xs mt-2 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
+            <span className="flex items-center gap-1"><Package className="w-3.5 h-3.5" />{company.serviceCount} service{company.serviceCount !== 1 ? "s" : ""}</span>
+            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3.5 h-3.5" />{formatDistance(company.distanceKm)}</span>}
           </div>
         </div>
       </div>
@@ -253,15 +275,13 @@ function PrintStoresSection({ companies, categoryId, onSelect, isDark }: {
           </Button>
         )}
       </div>
-      {expanded ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
-          {visible.map(renderTile)}
-        </div>
-      ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-          {visible.map((company) => <div key={company.userId} className="shrink-0 w-52 sm:w-60">{renderTile(company)}</div>)}
-        </div>
-      )}
+      {/* Same grid/breakpoints as the Services d'impression grid below, mirroring
+          Marketing's Agency-card/Service-card grid unification (same column width,
+          no separate horizontal-scroll/fixed-width mode) —
+          docs/print_marketing_design_synchronization_audit.md. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {visible.map(renderTile)}
+      </div>
     </div>
   );
 }
@@ -283,89 +303,33 @@ function StarRating({ rating }: { rating: number }) {
 function PrintProductCard({ card, onClick, isDark, categoryIconByName }: { card: PrintCatalogCard; onClick: () => void; isDark: boolean; categoryIconByName: Map<string, string> }) {
   const faved = useFavorites((s) => !!s.printProducts[String(card.id)]);
   const togglePrint = useFavorites((s) => s.togglePrintProduct);
-  const fmt = useFormatCurrency();
-  const t = useTheme(isDark);
-  const starRating = card.rating / 10;
 
   return (
-    <div
-      data-testid={`card-print-${card.id}`}
-      className={`group cursor-pointer rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col ${t.cardBg}`}
+    <PrintMappedServiceCard
+      id={card.id}
+      name={card.name}
+      category={card.category}
+      description={card.description}
+      imageUrl={card.imageUrl}
+      priceInCents={card.priceInCents}
+      unit={card.unit}
+      minQuantity={card.minQuantity}
+      productionTimeDays={card.productionTimeDays}
+      printerName={card.printerName}
+      printerImageUrl={card.printerImageUrl}
+      printerIsAvailable={card.printerIsAvailable}
+      rating={card.rating}
+      reviewCount={card.reviewCount}
+      categoryIcon={printCategoryIcon(card.category, categoryIconByName.get(card.category))}
+      isFavorited={faved}
+      onToggleFavorite={() => togglePrint({
+        id: String(card.id), name: card.name, brand: card.printerName, price: card.priceInCents, priceUnit: card.unit,
+        image: card.imageUrl ?? "", location: card.printerLocation, distanceKm: card.distanceKm,
+        rating: card.rating / 10, reviewCount: card.reviewCount, category: card.category,
+      })}
       onClick={onClick}
-    >
-      <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {card.imageUrl ? (
-          <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"><Package className={`w-10 h-10 ${t.textSubtle}`} /></div>
-        )}
-        {card.category && (
-          <div className="absolute top-2 left-2">
-            <Badge className={`${isDark ? "bg-gray-800/90 text-gray-200" : "bg-white/90 text-gray-700"} backdrop-blur-sm text-[10px] font-semibold shadow-sm border-0 px-2`}>
-              {printCategoryIcon(card.category, categoryIconByName.get(card.category))} {card.category}
-            </Badge>
-          </div>
-        )}
-        <button
-          className={`absolute top-2 right-2 w-7 h-7 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            togglePrint({
-              id: String(card.id),
-              name: card.name,
-              brand: card.printerName,
-              price: card.priceInCents,
-              priceUnit: card.unit,
-              image: card.imageUrl ?? "",
-              location: card.printerLocation,
-              distanceKm: card.distanceKm,
-              rating: card.rating / 10,
-              reviewCount: card.reviewCount,
-              category: card.category,
-            });
-          }}
-          data-testid={`button-fav-print-${card.id}`}
-        >
-          <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
-        </button>
-      </div>
-      <div className="p-3 flex-1 flex flex-col gap-2">
-        <h3 className={`font-bold text-sm leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors ${t.textPrimary}`}>{card.name}</h3>
-        {card.printerName && <p className={`text-xs font-medium ${t.textMuted}`}>{card.printerName}</p>}
-        {card.printerLocation && (
-          <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}>
-            <MapPin className="w-2.5 h-2.5" />
-            {card.printerLocation}
-            {card.distanceKm != null && <> · {card.distanceKm} km</>}
-          </span>
-        )}
-        <div className="flex items-center gap-1.5">
-          {card.reviewCount > 0 ? (
-            <>
-              <StarRating rating={starRating} />
-              <span className={`text-[11px] ${t.textSubtle}`}>({card.reviewCount})</span>
-            </>
-          ) : (
-            <span className={`text-[11px] ${t.textSubtle}`}>Aucun avis</span>
-          )}
-        </div>
-        <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-[10px] ${t.textSubtle}`}>À partir de</p>
-              <p className="font-bold text-sm text-blue-600">{fmt(card.priceInCents)}<span className={`text-[10px] font-normal ${t.textSubtle}`}>/{card.unit}</span></p>
-            </div>
-              <div className={`flex items-center gap-1 text-[11px] ${t.textSubtle}`}>
-              <Clock className="w-3 h-3" />
-              <span>{card.productionTimeDays}j</span>
-            </div>
-          </div>
-          {card.minQuantity > 1 && (
-            <p className={`text-[10px] mt-1 ${t.textSubtle}`}>Min. {card.minQuantity} {card.unit}s</p>
-          )}
-        </div>
-      </div>
-    </div>
+      isDark={isDark}
+    />
   );
 }
 
@@ -738,7 +702,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 10 }).map((_, i) => (
               <PrintProductCardSkeleton key={i} isDark={isDark} />
             ))}
@@ -755,7 +719,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map((card) => (
               <PrintProductCard
                 key={card.id}

@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl } from "@/lib/avatar";
+import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
+import { formatDistance } from "@/lib/distance";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
@@ -27,7 +28,7 @@ import {
 import {
   Wrench, Search, MapPin, Star, MessageCircle, SlidersHorizontal,
   RotateCcw, X, Heart, Clock, Shield, Zap, Award, Users,
-  Building2, User, Flag, Navigation, Ban, Image as ImageIcon, ClipboardList,
+  Building2, User, Flag, Navigation, Ban, Image as ImageIcon, ClipboardList, ListChecks,
 } from "lucide-react";
 import { MaintenanceJobManagementModal } from "@/components/maintenance/maintenance-job-management-modal";
 import { MaintenanceJobTargetButton } from "@/components/maintenance/maintenance-job-target-button";
@@ -110,11 +111,12 @@ function StarRating({ agent, isDark = false }: { agent: MaintenanceMarketplaceCa
 }
 
 function AgentCard({
-  agent, onOpenDetail, onContact, isDark,
+  agent, onOpenDetail, onContact, categoryIcons, isDark,
 }: {
   agent: MaintenanceMarketplaceCard;
   onOpenDetail: (agent: MaintenanceMarketplaceCard) => void;
   onContact: (agent: MaintenanceMarketplaceCard) => void;
+  categoryIcons: Map<string, string>;
   isDark: boolean;
 }) {
   const t = useTheme(isDark);
@@ -122,63 +124,93 @@ function AgentCard({
   const faved = useFavorites((s) => !!s.maintenance[favoriteId]);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
   const TypeIcon = TYPE_ICONS[agent.profileType] ?? User;
+  const primaryCategory = agent.categories[0];
+  // Hero image — same real Flash → Profil → fallback priority already used by
+  // MaintenanceFastSearch (client/src/components/maintenance/maintenance-fast-search.tsx),
+  // now also applied here since this card's image IS the professional's own
+  // identity photo (no separate per-service image, unlike Marketing's card).
+  const heroImageSrc = getPreferredImageUrl(agent.flashImageUrl, agent.profileImageUrl) ?? undefined;
 
-  // Wide card (Part 16) — left half = photo, right half = information, same
-  // dimensions/visual-hierarchy concept as the /barista card redesign (visual
-  // reference only — all data/logic below stays Maintenance-specific).
+  // Vertical card (docs/maintenance_barista_mapped_cards_marketing_design_audit.md)
+  // — same visual grammar as MarketingMappedServiceCard (image with overlay
+  // badges → title → description → footer), adapted to a professional-based
+  // card (no Store/Service split exists for Maintenance): the top-left badge
+  // that would show the provider name on a Marketing service card instead
+  // shows the professional's type, since the title below already is the
+  // professional's own name/identity.
   return (
     <div
       data-testid={`card-maintenance-${agent.userId}`}
-      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
+      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col cursor-pointer ${t.cardBg}`}
       onClick={() => onOpenDetail(agent)}
     >
-      <button
-        className={`absolute top-2 right-2 z-10 w-6 h-6 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
-        onClick={(event) => {
-          event.stopPropagation();
-          toggleMaintenance({
-            id: favoriteId, name: agent.name, initials: agent.initials,
-            specialty: agent.specialty, categories: agent.categories, skills: agent.skills,
-            location: agent.location, rating: Number(ratingValue(agent)) || 0,
-            available: agent.available, profileImageUrl: agent.profileImageUrl,
-          });
-        }}
-        data-testid={`button-fav-maintenance-${agent.userId}`}
-      >
-        <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
-      </button>
-
-      <div className="w-2/5 shrink-0 relative">
+      <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
         <Avatar className="w-full h-full rounded-none">
-          <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />
+          <AvatarImage src={heroImageSrc} alt={agent.name} className="object-cover group-hover:scale-105 transition-transform duration-300" />
           <AvatarFallback className="rounded-none bg-orange-100 text-orange-700 font-bold text-2xl">{agent.initials}</AvatarFallback>
         </Avatar>
+
+        {/* Type — top-left badge over the image (was a plain body Badge, moved here to match Marketing's overlay badge slot) */}
+        <span className="absolute top-2 left-2 max-w-[62%] truncate flex items-center gap-1 bg-black/55 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full">
+          <TypeIcon className="w-2.5 h-2.5" />{agent.profileType}
+        </span>
+
+        {/* Favorite — top-right, same mapped-marketplace favorite style/behavior everywhere */}
+        <button
+          className={`absolute top-2 right-2 z-10 w-6 h-6 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            toggleMaintenance({
+              id: favoriteId, name: agent.name, initials: agent.initials,
+              specialty: agent.specialty, categories: agent.categories, skills: agent.skills,
+              location: agent.location, rating: Number(ratingValue(agent)) || 0,
+              available: agent.available, profileImageUrl: agent.profileImageUrl,
+            });
+          }}
+          data-testid={`button-fav-maintenance-${agent.userId}`}
+        >
+          <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+        </button>
+
+        {/* Availability — bottom-left dot over the image, real agent.available state */}
         <span
           className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${agent.available ? "bg-green-500" : "bg-gray-300"}`}
           title={agent.available ? "Disponible" : "Indisponible"}
         />
+
+        {/* Category — bottom-right badge, real admin-managed Maintenance category + icon (same taxonomy/icon source as the filter strip) */}
+        {primaryCategory && (
+          <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full">
+            <span className="text-xs leading-none">{categoryIcons.get(primaryCategory) ?? DEFAULT_CATEGORY_ICON}</span>{primaryCategory}
+          </span>
+        )}
       </div>
 
-      <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
-        <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-orange-600 transition-colors pr-5 ${t.textPrimary}`}>{agent.name}</h3>
-        <p className={`text-[11px] truncate ${t.textMuted}`}>{agent.jobTitle}</p>
+      <div className="p-3 flex-1 flex flex-col gap-1.5">
+        <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-orange-600 transition-colors ${t.textPrimary}`}>{agent.name}</h3>
+        <p className={`text-xs truncate ${t.textMuted}`}>{agent.jobTitle}</p>
+        {agent.description && <p className={`text-xs line-clamp-2 ${isDark ? "text-gray-400" : "text-gray-500"}`}>{agent.description}</p>}
+
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={`text-[10px] border-0 px-1.5 flex items-center gap-0.5 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>
-            <TypeIcon className="w-2.5 h-2.5" />{agent.profileType}
-          </Badge>
-          <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}><MapPin className="w-2.5 h-2.5" />{agent.location || "—"}{agent.distanceKm != null && <> · {agent.distanceKm} km</>}</span>
+          <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}>
+            <MapPin className="w-2.5 h-2.5" />{agent.distanceKm != null ? formatDistance(agent.distanceKm) : (agent.location || "—")}
+          </span>
           <span className={`flex items-center gap-0.5 text-[11px] ${t.textSubtle}`}><Zap className="w-2.5 h-2.5" />{agent.responseTime}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <StarRating agent={agent} isDark={isDark} />
-          <span className={`text-[11px] ${t.textSubtle}`}>({agent.reviewCount} avis)</span>
-          <span className={`text-[11px] ${t.textSubtle}`}>· {agent.yearsExperience} ans exp.</span>
+
+        <div className={`mt-auto pt-2 border-t ${t.border}`}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1">
+              <StarRating agent={agent} isDark={isDark} />
+              <span className={`text-[11px] ${t.textSubtle}`}>({agent.reviewCount})</span>
+            </span>
+            <span className={`text-[11px] ${t.textSubtle}`}>{agent.yearsExperience} ans exp.</span>
+          </div>
         </div>
-        {/* Skills/certifications/actions intentionally removed from the card
+        {/* Skills/certifications/actions intentionally kept out of the card
             (Part 1) — the details modal already covers them; the marketplace
-            card stays a compact summary, matching the Barista card's cleaner
-            hierarchy (reference only, Maintenance fields kept below). The
-            "Tarif / jour" tile that used to close this card was removed here
+            card stays a compact summary. The "Tarif / jour" tile that used to
+            close this card was removed here
             (docs/maintenance_pricing_admin_performance_audit.md Section 2) —
             dailyRateInCents itself is preserved internally/Admin-managed, just
             no longer shown to Coffee Owners. */}
@@ -461,6 +493,13 @@ export function AgentDetailModal({
                 Barista modal uses (Part 3/5/8-10) — content stays Maintenance's
                 own real data throughout. */}
             <div><h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>À propos</h3><p className={`text-sm leading-relaxed ${t.textMuted}`}>{agent.description || "Aucune description disponible."}</p></div>
+            {/* Détails de Service — real, professional-entered content only, never
+                shown when empty, same convention as marketingServices.offerDetails
+                (docs/service_details_offer_details_and_desktop_navbar_audit.md).
+                Distinct from the short "À propos" blurb above. */}
+            {agent.serviceDetails?.trim() && (
+              <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ListChecks className="w-3.5 h-3.5" /> Détails de Service</h3><p className={`text-sm leading-relaxed whitespace-pre-wrap ${t.textMuted}`}>{agent.serviceDetails}</p></div>
+            )}
             {/* Categories + skills deduplicated into one set — the same union
                 already used by the booking form's Select below, so a taxonomy
                 name stored in both arrays no longer renders as two identical
@@ -752,7 +791,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
             </div>
           </div>
           <div className="max-w-7xl mx-auto px-4 py-8">
-             {filtered.length === 0 ? <div className="flex flex-col items-center justify-center py-16 gap-3 text-center"><Wrench className={`w-12 h-12 ${t.textSubtle}`} /><p className={`font-semibold ${t.textPrimary}`}>Aucun technicien trouvé</p><p className={`text-sm ${t.textMuted}`}>{profiles.length === 0 ? "Aucun profil Maintenance publié pour le moment." : "Essayez d'ajuster vos filtres."}</p></div> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((agent) => <AgentCard key={agent.userId} agent={agent} onOpenDetail={openDetail} onContact={contact} isDark={isDark} />)}</div>}
+             {filtered.length === 0 ? <div className="flex flex-col items-center justify-center py-16 gap-3 text-center"><Wrench className={`w-12 h-12 ${t.textSubtle}`} /><p className={`font-semibold ${t.textPrimary}`}>Aucun technicien trouvé</p><p className={`text-sm ${t.textMuted}`}>{profiles.length === 0 ? "Aucun profil Maintenance publié pour le moment." : "Essayez d'ajuster vos filtres."}</p></div> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">{filtered.map((agent) => <AgentCard key={agent.userId} agent={agent} onOpenDetail={openDetail} onContact={contact} categoryIcons={categoryIcons} isDark={isDark} />)}</div>}
           </div>
            <AgentDetailModal agent={selectedAgent} open={detailOpen} onClose={() => setDetailOpen(false)} onContact={contact} isDark={isDark} />
         </>

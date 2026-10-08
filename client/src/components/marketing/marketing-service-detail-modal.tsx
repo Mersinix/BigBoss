@@ -218,28 +218,12 @@ export function MarketingServiceDetailModal({
                 </div>
               </div>
 
-              {/* Offer details — real, agency-entered content only, never shown when empty
-                  (docs/marketing_services_offer_details_admin_audit.md). */}
-              {service.offerDetails?.trim() && (
-                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
-                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ListChecks className="w-3.5 h-3.5" /> Détails de l'offre</p>
-                  <p className={`text-sm whitespace-pre-wrap ${t.textPrimary}`}>{service.offerDetails}</p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
-                  <p className={`text-[11px] ${t.textMuted}`}>Prix de départ</p>
-                  <p className="font-bold text-purple-600">{fmt(service.startingPriceInCents)}</p>
-                </div>
-                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
-                  <p className={`text-[11px] ${t.textMuted}`}>Temps de réponse</p>
-                  <p className={`font-bold ${t.textPrimary}`}>{service.responseTime}</p>
-                </div>
-              </div>
-
-              {/* Agence — clicking opens the Marketing Agency Details Modal (Part 2), the same
-                  synchronized representation reused everywhere an agency is shown. */}
+              {/* Agence — immediately after the service identity
+                  (docs/service_details_offer_details_and_desktop_navbar_audit.md):
+                  Service → Agence → Prix/Temps de réponse → Détails de l'offre.
+                  Clicking opens the Marketing Agency Details Modal (Part 2), the
+                  same synchronized representation reused everywhere an agency is
+                  shown. */}
               <button
                 type="button"
                 onClick={() => onOpenAgency?.(service.marketingUserId)}
@@ -261,6 +245,27 @@ export function MarketingServiceDetailModal({
                 </div>
                 {service.agencyDescription && <p className={`text-xs mt-2.5 leading-relaxed ${t.textMuted}`}>{service.agencyDescription}</p>}
               </button>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
+                  <p className={`text-[11px] ${t.textMuted}`}>Prix de départ</p>
+                  <p className="font-bold text-purple-600">{fmt(service.startingPriceInCents)}</p>
+                </div>
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
+                  <p className={`text-[11px] ${t.textMuted}`}>Temps de réponse</p>
+                  <p className={`font-bold ${t.textPrimary}`}>{service.responseTime}</p>
+                </div>
+              </div>
+
+              {/* Offer details — real, agency-entered content only, never shown when empty
+                  (docs/marketing_services_offer_details_admin_audit.md). Now the LAST
+                  section, after Agence and Prix/Temps de réponse. */}
+              {service.offerDetails?.trim() && (
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
+                  <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ListChecks className="w-3.5 h-3.5" /> Détails de l'offre</p>
+                  <p className={`text-sm whitespace-pre-wrap ${t.textPrimary}`}>{service.offerDetails}</p>
+                </div>
+              )}
 
               {/* Avis — moved into the dedicated Star-icon ReviewsModal, matching
                   MarketingDetailModal's own already-established pattern

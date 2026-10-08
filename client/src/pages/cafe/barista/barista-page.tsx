@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl } from "@/lib/avatar";
+import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
+import { formatDistance } from "@/lib/distance";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
@@ -264,79 +265,97 @@ function BaristaCard({
   const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.baristaMarket[barista.userId]);
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
+  const primarySkill = barista.skills[0];
+  // Hero image — same real Flash → Profil → fallback priority already used by
+  // BaristaFastSearch, now also applied here since this card's image IS the
+  // professional's own identity photo (no separate per-service image, unlike
+  // Marketing's card).
+  const heroImageSrc = getPreferredImageUrl(barista.flashImageUrl, barista.profileImageUrl) ?? undefined;
 
-  // Wide card (Part 23): left half = photo, right half = information. Same
-  // visual language (colors/badges/icons) as before, just laid out horizontally
-  // instead of the previous small-avatar-on-top layout.
+  // Vertical card (docs/maintenance_barista_mapped_cards_marketing_design_audit.md)
+  // — same visual grammar as MarketingMappedServiceCard (image with overlay
+  // badges → title → description → footer), adapted to a professional-based
+  // card (no Store/Service split exists for Barista): the top-left badge that
+  // would show the provider name on a Marketing service card instead shows
+  // the professional's level, since the title below already is the
+  // professional's own name/identity.
   return (
     <div
       data-testid={`card-barista-${barista.userId}`}
       onClick={() => onOpenDetail(barista)}
-      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex cursor-pointer ${t.cardBg}`}
+      className={`group relative rounded-2xl border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden flex flex-col cursor-pointer ${t.cardBg}`}
     >
-      <button
-        className={`absolute top-2 right-2 z-10 w-6 h-6 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleBaristaMarket({
-            id: barista.userId,
-            name: barista.name,
-            initials: barista.initials,
-            skills: barista.skills,
-            location: barista.location,
-            rating: barista.rating / 10,
-            available: barista.available,
-            profileImageUrl: barista.profileImageUrl,
-          });
-        }}
-        data-testid={`button-fav-barista-${barista.userId}`}
-      >
-        <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
-      </button>
-
-      {/* Left half — photo, real profile picture with existing avatar fallback */}
-      <div className="w-2/5 shrink-0 relative">
+      <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
         <Avatar className="w-full h-full rounded-none">
-          <AvatarImage src={getAvatarUrl(barista as any)} alt={barista.name} className="object-cover" />
+          <AvatarImage src={heroImageSrc} alt={barista.name} className="object-cover group-hover:scale-105 transition-transform duration-300" />
           <AvatarFallback className="rounded-none bg-green-100 text-green-700 font-bold text-2xl">
             {barista.initials}
           </AvatarFallback>
         </Avatar>
+
+        {/* Level — top-left badge over the image (was a plain body Badge, moved here to match Marketing's overlay badge slot) */}
+        <span className={`absolute top-2 left-2 max-w-[62%] truncate text-[10px] font-semibold px-2 py-1 rounded-full border-0 ${BARISTA_LEVEL_COLORS[barista.level]}`}>
+          {BARISTA_LEVEL_LABELS[barista.level]}
+        </span>
+
+        {/* Favorite — top-right, same mapped-marketplace favorite style/behavior everywhere */}
+        <button
+          className={`absolute top-2 right-2 z-10 w-6 h-6 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform ${isDark ? "bg-gray-700/90" : "bg-white/90"}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleBaristaMarket({
+              id: barista.userId,
+              name: barista.name,
+              initials: barista.initials,
+              skills: barista.skills,
+              location: barista.location,
+              rating: barista.rating / 10,
+              available: barista.available,
+              profileImageUrl: barista.profileImageUrl,
+            });
+          }}
+          data-testid={`button-fav-barista-${barista.userId}`}
+        >
+          <Heart className={`w-3 h-3 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-gray-400"}`} />
+        </button>
+
+        {/* Availability — bottom-left dot over the image, real barista.available state */}
         <span
           className={`absolute bottom-2 left-2 w-2.5 h-2.5 rounded-full border-2 border-white ${barista.available ? "bg-green-500" : "bg-gray-300"}`}
           title={barista.available ? "Disponible" : "Indisponible"}
         />
+
+        {/* Skill — bottom-right badge, real primary skill (same data already used in Fast Search's skill chips) */}
+        {primarySkill && (
+          <span className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full">
+            {primarySkill}
+          </span>
+        )}
       </div>
 
-      {/* Right half — information */}
-      <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
-        <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-green-600 transition-colors pr-5 ${t.textPrimary}`}>
+      <div className="p-3 flex-1 flex flex-col gap-1.5">
+        <h3 className={`font-bold text-sm leading-tight truncate group-hover:text-green-600 transition-colors ${t.textPrimary}`}>
           {barista.name}
         </h3>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={`text-[10px] border-0 px-1.5 ${BARISTA_LEVEL_COLORS[barista.level]}`}>
-            {BARISTA_LEVEL_LABELS[barista.level]}
-          </Badge>
-          {barista.location && (
-            <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
-              <MapPin className="w-2.5 h-2.5" />
-              {barista.location}
-              {barista.distanceKm != null && <> · {barista.distanceKm} km</>}
-            </span>
-          )}
-        </div>
+        {barista.bio && <p className={`text-xs line-clamp-2 ${isDark ? "text-gray-400" : "text-gray-500"}`}>{barista.bio}</p>}
 
-        <div className="flex items-center gap-2">
-          <StarRating rating={barista.rating / 10} isDark={isDark} />
-          <span className="text-[11px] text-gray-400">({barista.reviewCount} avis)</span>
-        </div>
+        {barista.location && (
+          <span className="flex items-center gap-0.5 text-[11px] text-gray-400">
+            <MapPin className="w-2.5 h-2.5" />
+            {barista.distanceKm != null ? formatDistance(barista.distanceKm) : barista.location}
+          </span>
+        )}
 
         {/* Recruter moved into the details modal (Part 6/8) — the card itself
             is now the primary click target for it; the quick Message shortcut
             stays here since only Recruter was asked to move. */}
         <div className={`mt-auto pt-2 border-t ${t.border}`}>
-          <div className="flex items-center justify-end gap-2 flex-wrap">
-            <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1">
+              <StarRating rating={barista.rating / 10} isDark={isDark} />
+              <span className="text-[11px] text-gray-400">({barista.reviewCount})</span>
+            </span>
+            <div onClick={(e) => e.stopPropagation()}>
               <Button
                 size="sm"
                 variant="outline"
@@ -730,11 +749,9 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
           </div>
 
           {profilesLoading ? (
-            // ~2x the previous card width (Part 23-24): fewer columns per breakpoint,
-            // 1 per row on mobile.
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-36 rounded-2xl" />
+                <Skeleton key={i} className="h-80 rounded-2xl" />
               ))}
             </div>
           ) : profilesError ? (
@@ -750,7 +767,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
               <p className="text-sm text-gray-400">Essayez d'ajuster vos filtres.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {filteredBaristas.map((barista) => (
                  <BaristaCard
                   key={barista.userId}

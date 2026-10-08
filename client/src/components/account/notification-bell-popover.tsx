@@ -13,13 +13,18 @@ import type { NotificationService } from "@shared/schema";
 // notification marks it read and opens the account's Communication →
 // Notifications tab (via `viewAllPath`, which already carries ?tab=notifications).
 export function NotificationBellPopover({
-  service, viewAllPath, linkTextClass,
+  service, viewAllPath, linkTextClass, testIdSuffix = "",
 }: {
   service: NotificationService;
   viewAllPath: string;
   // Full Tailwind class string for the "Voir toutes les notifications" link,
   // e.g. "text-fuchsia-600 dark:text-fuchsia-400" (passed whole, never interpolated).
   linkTextClass: string;
+  // Appended to this component's data-testids — see AccountHeaderActions'
+  // identical prop for why (a second, CSS-hidden copy of this popover renders
+  // in the desktop-only header block, and must never collide with the
+  // mobile block's own testids in the live DOM).
+  testIdSuffix?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [, navigate] = useLocation();
@@ -40,7 +45,7 @@ export function NotificationBellPopover({
           type="button"
           aria-label="Notifications"
           className="relative w-9 h-9 rounded-xl flex items-center justify-center text-white hover:bg-white/15 transition-colors"
-          data-testid="button-header-notifications"
+          data-testid={`button-header-notifications${testIdSuffix}`}
         >
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
@@ -78,7 +83,7 @@ export function NotificationBellPopover({
                 className={`w-full text-left flex items-start gap-2.5 px-4 py-3 border-b last:border-0 border-gray-50 dark:border-gray-700/40 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40 ${
                   n.isRead ? "" : "bg-amber-50/60 dark:bg-amber-500/5"
                 }`}
-                data-testid={`header-notification-${n.id}`}
+                data-testid={`header-notification-${n.id}${testIdSuffix}`}
               >
                 <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${NOTIFICATION_PRIORITY_DOT[n.priority]}`} />
                 <div className="min-w-0 flex-1">
@@ -94,7 +99,7 @@ export function NotificationBellPopover({
           type="button"
           onClick={goToAll}
           className={`w-full text-center text-xs font-semibold py-3 border-t border-gray-100 dark:border-gray-700/60 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors ${linkTextClass}`}
-          data-testid="button-view-all-notifications"
+          data-testid={`button-view-all-notifications${testIdSuffix}`}
         >
           Voir toutes les notifications
         </button>

@@ -62,6 +62,7 @@ export default function Profile() {
   // from Settings → Compte.
   const [jobTitle, setJobTitle] = useState("Technicien de maintenance");
   const [bio, setBio] = useState("");
+  const [serviceDetails, setServiceDetails] = useState("");
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [agentType, setAgentType] = useState("Freelance");
@@ -78,6 +79,7 @@ export default function Profile() {
     const p = profileData.profile;
     setJobTitle(p.jobTitle);
     setBio(p.description);
+    setServiceDetails(p.serviceDetails ?? "");
     setSelectedSpecialties(p.skills ?? []);
     setSelectedAreas(p.coverageArea ? p.coverageArea.split(",").map((v: string) => v.trim()).filter(Boolean) : []);
     setAgentType(p.profileType);
@@ -99,7 +101,7 @@ export default function Profile() {
   const saveProfileMutation = useMutation({
     mutationFn: () => apiRequest("PATCH", "/api/maintenance/profile", {
       jobTitle, profileType: agentType, skills: selectedSpecialties,
-      categories: selectedSpecialties, description: bio,
+      categories: selectedSpecialties, description: bio, serviceDetails,
       coverageArea: selectedAreas.join(", "),
       responseTime,
       certifications, portfolioImages,
@@ -222,6 +224,17 @@ export default function Profile() {
           <div>
             <Label className="text-xs text-gray-500 dark:text-gray-400">Biographie</Label>
             <Textarea value={bio} onChange={(e) => setBio(e.target.value)} className="rounded-xl mt-0.5 resize-none" rows={3} />
+          </div>
+          <div>
+            <Label className="text-xs text-gray-500 dark:text-gray-400">Détails de Service</Label>
+            <Textarea
+              value={serviceDetails}
+              onChange={(e) => setServiceDetails(e.target.value)}
+              className="rounded-xl mt-0.5 resize-none"
+              rows={4}
+              placeholder="Matériel utilisé, conditions d'intervention, garanties…"
+              data-testid="input-maintenance-service-details"
+            />
           </div>
         </CardContent>
       </Card>

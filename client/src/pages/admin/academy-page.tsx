@@ -751,7 +751,7 @@ export default function AdminAcademyPage() {
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0"><h3 className="font-semibold truncate">{c.title}</h3><p className="text-xs text-muted-foreground truncate">{c.academyName}</p></div>
-                      <Badge variant={c.isPublished ? "default" : "secondary"} className="text-xs shrink-0">{c.isPublished ? "Publiée" : "Brouillon"}</Badge>
+                      <Badge variant={c.isPublished ? "outline" : "secondary"} className="text-xs shrink-0">{c.isPublished ? "Publiée" : "Brouillon"}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2">{c.description || "Aucune description"}</p>
                     <div className="flex flex-wrap gap-1">

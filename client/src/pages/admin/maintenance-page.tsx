@@ -774,7 +774,7 @@ export default function MaintenanceAdminPage() {
       <TabsContent value="taxonomy" className="mt-4 grid lg:grid-cols-2 gap-6">
         <TaxonomyList title="Compétences demandées" kind="competencies" items={data?.taxonomy?.competencies ?? []} onRefresh={refresh} />
         <TaxonomyList title="Zone d'intervention" kind="zones" items={data?.taxonomy?.zones ?? []} onRefresh={refresh} />
-        <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-base">Demandes par compétence</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{(data?.categories ?? []).map((row) => <Badge key={row.category} variant="secondary">{row.category} · {row.count}</Badge>)}</CardContent></Card>
+        <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-base">Demandes par compétence</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{(data?.categories ?? []).map((row) => <Badge key={row.category} variant="outline">{row.category} · {row.count}</Badge>)}</CardContent></Card>
       </TabsContent>
       <TabsContent value="accounts" className="mt-4 space-y-4">
         <div className="flex justify-end">

@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import type { Promotion, PromotionType, PromotionStatus } from "@shared/schema";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // ── API helpers ─────────────────────────────────────────────────────────────
@@ -879,6 +880,10 @@ export default function PromotionsPage() {
   const hasFilters = !!search || filterStatus !== "ALL" || filterType !== "ALL";
   const clearFilters = () => { setSearch(""); setFilterStatus("ALL"); setFilterType("ALL"); };
 
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [search, filterStatus, filterType, filtered.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pagePromos = filtered.slice(pagination.start, pagination.end);
+
   const kpiItems = [
     { label: "Active", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />, color: "bg-green-50 dark:bg-green-500/10" },
     { label: "Paused", value: stats?.paused ?? promos.filter(p => getEffectiveStatus(p) === 'PAUSED').length, icon: <Pause className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />, color: "bg-yellow-50 dark:bg-yellow-500/10" },
@@ -1010,7 +1015,7 @@ export default function PromotionsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(p => (
+          {pagePromos.map(p => (
             <PromotionCard
               key={p.id}
               promo={p}
@@ -1022,6 +1027,20 @@ export default function PromotionsPage() {
             />
           ))}
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="promotions"
+        />
       )}
 
       {/* Create / Edit Dialog — thin scrollbar treatment, same thumb/track/hover

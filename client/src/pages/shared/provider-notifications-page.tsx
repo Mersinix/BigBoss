@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Bell, CheckCheck } from "lucide-react";
-import type { NotificationService } from "@shared/schema";
+import type { Notification, NotificationService } from "@shared/schema";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
+import { resolveNotificationPath } from "@/lib/notification-navigation";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
@@ -40,6 +42,7 @@ const ROLE_ACCENT: Partial<Record<string, { gradientClass: string; iconBgClass: 
 
 export default function ProviderNotificationsPage() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const service = user ? ROLE_TO_SERVICE[user.role] : undefined;
   const accent = (user && ROLE_ACCENT[user.role]) || {};
   // Server caps `limit` at 200 (see GET /api/notifications) — the largest batch it'll
@@ -66,6 +69,12 @@ export default function ProviderNotificationsPage() {
   const pagination = usePagination(filtered.length);
   useEffect(() => { pagination.resetPage(); }, [preset, custom.from, custom.to]);
   const pageNotifications = filtered.slice(pagination.start, pagination.end);
+
+  const handleNotificationClick = (n: Notification) => {
+    if (!n.isRead) markRead.mutate(n.id);
+    const path = user ? resolveNotificationPath(n, user.role) : null;
+    if (path) navigate(path);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -96,7 +105,7 @@ export default function ProviderNotificationsPage() {
           pageNotifications.map((n) => (
             <button
               key={n.id}
-              onClick={() => !n.isRead && markRead.mutate(n.id)}
+              onClick={() => handleNotificationClick(n)}
               className={`w-full flex items-start gap-3 px-4 py-3.5 text-left border-b border-gray-100 dark:border-gray-700/50 last:border-0 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40 ${
                 n.isRead ? "" : "bg-amber-50 dark:bg-amber-500/5"
               }`}

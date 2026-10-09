@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Download, Eye, EyeOff, Megaphone, MessageSquare, Trash2, Users } from "lucide-react";
 import { MessagesPanel } from "@/components/messages/messages-panel";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { ConversationSummary, EligibleContact } from "@shared/schema";
 
 const MESSAGE_SERVICES = ["SHOP", "MAINTENANCE", "BARISTA", "ACADEMY", "PRINT", "MARKETING"] as const;
@@ -187,6 +188,10 @@ function AllConversationsTab() {
   const allSelected = allConvs.length > 0 && allConvs.every(conv => selectedIds.has(conv.id));
   const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(allConvs.map(conv => conv.id)));
 
+  const pagination = usePagination(allConvs.length);
+  useEffect(() => { pagination.resetPage(); }, [service, allConvs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageConvs = allConvs.slice(pagination.start, pagination.end);
+
   return (
     <div>
       <div className="border-b px-4 pt-3">
@@ -233,7 +238,7 @@ function AllConversationsTab() {
           <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p>No {service} conversations yet</p>
         </div>
-      ) : <div className="divide-y">{allConvs.map(conv => {
+      ) : <div className="divide-y">{pageConvs.map(conv => {
         const displayName = (conv.title ?? conv.otherParticipants.map(p => p.name).join(", ")) || "Unknown";
         const hiddenParticipants = conv.otherParticipants.filter(p => p.hiddenAt);
         const allHidden = conv.otherParticipants.length > 0 && hiddenParticipants.length === conv.otherParticipants.length;
@@ -292,6 +297,21 @@ function AllConversationsTab() {
           </div>
         );
       })}</div>}
+      {allConvs.length > 0 && (
+        <div className="px-4 py-3 border-t">
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={allConvs.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="conversations"
+          />
+        </div>
+      )}
     </div>
   );
 }

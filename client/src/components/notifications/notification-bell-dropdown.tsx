@@ -1,9 +1,15 @@
+import { useMemo, useState } from "react";
 import { Bell } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead, useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
+import { resolveNotificationPath } from "@/lib/notification-navigation";
+import { NotificationDateFilter, filterNotificationsByDate } from "@/components/notifications/notification-date-filter";
+import type { DateRangePreset } from "@/lib/marketplace-analytics";
+import type { Notification } from "@shared/schema";
 
 /**
  * Bell + quick-glance dropdown for every account rendered inside DashboardLayout
@@ -13,11 +19,31 @@ import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notific
  * boundary, so it intentionally does NOT use isDark ternaries).
  */
 export function NotificationBellDropdown({ notificationsHref }: { notificationsHref?: string }) {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  // "Aujourd'hui" is the default preset for a fresh filtering session (task
+  // requirement); "" = no preset active (custom date typed instead).
+  const [datePreset, setDatePreset] = useState<DateRangePreset | "">("today");
+  const [customDate, setCustomDate] = useState("");
   const { data: countData } = useUnreadNotificationCount();
-  const { data: notifications = [] } = useNotifications(undefined, { limit: 8 });
+  // Server caps `limit` at 200 — fetch that full batch so every preset
+  // (including "Cette année") has a real dataset to filter, same convention
+  // as ProviderNotificationsPage's own date filter.
+  const { data: notifications = [] } = useNotifications(undefined, { limit: 200 });
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const unread = countData?.count ?? 0;
+
+  const filtered = useMemo(
+    () => filterNotificationsByDate(notifications, datePreset, customDate),
+    [notifications, datePreset, customDate],
+  );
+
+  const handleClick = (n: Notification) => {
+    if (!n.isRead) markRead.mutate(n.id);
+    const path = user ? resolveNotificationPath(n, user.role) : null;
+    if (path) navigate(path);
+  };
 
   return (
     <Popover>
@@ -43,14 +69,25 @@ export function NotificationBellDropdown({ notificationsHref }: { notificationsH
             </Button>
           )}
         </div>
-        <div className="max-h-96 overflow-y-auto">
-          {notifications.length === 0 ? (
-            <div className="text-center text-muted-foreground text-sm py-8">Aucune nouvelle notification</div>
+        <div className="px-4 py-2 border-b border-border/50">
+          <NotificationDateFilter
+            preset={datePreset}
+            onPresetChange={(p) => { setDatePreset(p); setCustomDate(""); }}
+            customDate={customDate}
+            onCustomDateChange={(d) => { setCustomDate(d); setDatePreset(""); }}
+            testIdPrefix="bell"
+          />
+        </div>
+        <div className="max-h-96 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+          {filtered.length === 0 ? (
+            <div className="text-center text-muted-foreground text-sm py-8">
+              {datePreset || customDate ? "Aucune notification sur cette période" : "Aucune nouvelle notification"}
+            </div>
           ) : (
-            notifications.map((n) => (
+            filtered.map((n) => (
               <button
                 key={n.id}
-                onClick={() => !n.isRead && markRead.mutate(n.id)}
+                onClick={() => handleClick(n)}
                 className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border/30 last:border-0 transition-colors hover:bg-secondary/50 ${n.isRead ? "" : "bg-primary/5"}`}
               >
                 <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${NOTIFICATION_PRIORITY_DOT[n.priority]}`} />

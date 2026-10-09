@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useAuth } from "@/hooks/use-auth";
 import { useNotifications, useUnreadNotificationCount, useMarkNotificationRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
-import type { NotificationService } from "@shared/schema";
+import { resolveNotificationPath } from "@/lib/notification-navigation";
+import type { Notification, NotificationService } from "@shared/schema";
 
 // Header notification bell — reused by every professional account shell.
 // Reuses the exact same data layer as the Coffee Owner NotificationModal and
@@ -28,6 +30,7 @@ export function NotificationBellPopover({
 }) {
   const [open, setOpen] = useState(false);
   const [, navigate] = useLocation();
+  const { user } = useAuth();
   const { data: notifications = [] } = useNotifications(service, { limit: 5 });
   const { data: unreadData } = useUnreadNotificationCount(service);
   const unreadCount = unreadData?.count ?? 0;
@@ -36,6 +39,16 @@ export function NotificationBellPopover({
   const goToAll = () => {
     setOpen(false);
     navigate(viewAllPath);
+  };
+
+  // Clicking a notification goes straight to its real related page/tab when one is
+  // resolvable (docs/notification_date_filter_pagination_navigation_audit.md);
+  // otherwise falls back to the existing "Voir tout" behavior rather than a broken link.
+  const handleNotificationClick = (n: Notification) => {
+    if (!n.isRead) markRead.mutate(n.id);
+    const path = user ? resolveNotificationPath(n, user.role) : null;
+    setOpen(false);
+    navigate(path ?? viewAllPath);
   };
 
   return (
@@ -76,10 +89,7 @@ export function NotificationBellPopover({
               <button
                 key={n.id}
                 type="button"
-                onClick={() => {
-                  if (!n.isRead) markRead.mutate(n.id);
-                  goToAll();
-                }}
+                onClick={() => handleNotificationClick(n)}
                 className={`w-full text-left flex items-start gap-2.5 px-4 py-3 border-b last:border-0 border-gray-50 dark:border-gray-700/40 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40 ${
                   n.isRead ? "" : "bg-amber-50/60 dark:bg-amber-500/5"
                 }`}

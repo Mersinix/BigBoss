@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Calendar, Clock, Globe, Plus, UserCheck, Users, Wrench } from "lucide-react";
 import { useMyMaintenanceJobs, type MaintenanceJobPostWithStats, type MaintenanceJobStatus, type MaintenanceJobPublicationMode } from "@/hooks/use-maintenance-jobs";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const JOB_STATUS_LABELS: Record<MaintenanceJobStatus, string> = { DRAFT: "Brouillon", PUBLISHED: "Publiée", CLOSED: "Clôturée" };
 function jobStatusColors(dk: boolean): Record<MaintenanceJobStatus, string> {
@@ -41,6 +43,10 @@ export function MaintenanceInterventionsList({
   const { data: jobs = [], isLoading } = useMyMaintenanceJobs();
   const statusColors = jobStatusColors(dk);
 
+  const pagination = usePagination(jobs.length);
+  useEffect(() => { pagination.resetPage(); }, [jobs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageJobs = jobs.slice(pagination.start, pagination.end);
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -69,7 +75,7 @@ export function MaintenanceInterventionsList({
         </div>
       ) : (
         <div className="space-y-3">
-          {jobs.map((job: MaintenanceJobPostWithStats) => {
+          {pageJobs.map((job: MaintenanceJobPostWithStats) => {
             const ModeIcon = job.publicationMode === "MANUAL" ? UserCheck : Globe;
             const expiry = fmtDate(job.expiresAt as any);
             const scheduled = fmtPlainDate(job.scheduledDate);
@@ -97,6 +103,21 @@ export function MaintenanceInterventionsList({
             );
           })}
         </div>
+      )}
+
+      {jobs.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={jobs.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="interventions"
+          isDark={dk}
+        />
       )}
     </div>
   );

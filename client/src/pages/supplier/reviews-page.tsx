@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SupplierProductReview } from "@shared/schema";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 function Stars({ rating }: { rating: number }) {
@@ -199,6 +200,10 @@ export default function ReviewsPage() {
   const isLoading = activeTab === "products" ? loadingProduct : loadingSupplier;
   const reviews = activeTab === "products" ? filteredProductReviews : supplierReviews;
 
+  const pagination = usePagination(reviews.length);
+  useEffect(() => { pagination.resetPage(); }, [activeTab, categoryFilter, subCategoryFilter, reviews.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageReviews = reviews.slice(pagination.start, pagination.end);
+
   // Stats
   const productAvg = productReviews.length
     ? (productReviews.reduce((s, r) => s + r.rating, 0) / productReviews.length).toFixed(1)
@@ -372,10 +377,24 @@ export default function ReviewsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {reviews.map((r) => (
+          {pageReviews.map((r) => (
             <ReviewCard key={r.id} review={r as any} onReport={setReportTarget} />
           ))}
         </div>
+      )}
+
+      {reviews.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={reviews.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="reviews"
+        />
       )}
 
       {/* Report dialog */}

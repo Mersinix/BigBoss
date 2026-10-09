@@ -24,6 +24,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { CategoryWithCount, SupplierCategoryMapping, SubCategoryWithDetails, CatalogSuggestion } from "@shared/schema";
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
 
@@ -255,7 +256,7 @@ function MyCategoriesSection({ modalOpen, setModalOpen }: { modalOpen: boolean; 
 
   const removeCategory = useMutation({
     mutationFn: (categoryId: number) => apiRequest("DELETE", `/api/supplier/categories/${categoryId}`),
-    onSuccess: () => { invalidateCategoryMappingSync(qc); invalidateMarketplace(qc); toast({ title: "Category removed" }); },
+    onSuccess: () => { invalidateCategoryMappingSync(qc); invalidateMarketplace(qc); toast({ title: "Category removed" }); pagination.resetPage(); },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
@@ -276,6 +277,13 @@ function MyCategoriesSection({ modalOpen, setModalOpen }: { modalOpen: boolean; 
   // Show all categories the supplier has selected — no product-based filtering here.
   // The supplier selects categories first, then adds products under them.
   const filteredMappings = orderedMappings;
+
+  // Drag-and-drop reordering (onDrop below) already resolves positions by
+  // `category.id` via findIndex against the full `orderedMappings` array, not by
+  // rendered index — so paginating which rows DISPLAY doesn't affect reordering.
+  const pagination = usePagination(filteredMappings.length);
+  useEffect(() => { pagination.resetPage(); }, [filteredMappings.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageMappings = filteredMappings.slice(pagination.start, pagination.end);
 
   const handleSelectCategory = (id: number) => {
     setSelectedCategory(id);
@@ -334,7 +342,7 @@ function MyCategoriesSection({ modalOpen, setModalOpen }: { modalOpen: boolean; 
         </Card>
       ) : (
         <div className="space-y-4">
-           {filteredMappings.map(mapping => (
+           {pageMappings.map(mapping => (
             <CategoryMappingCard
               key={mapping.category.id}
               mapping={mapping}
@@ -364,6 +372,19 @@ function MyCategoriesSection({ modalOpen, setModalOpen }: { modalOpen: boolean; 
             />
           ))}
           <Button variant="outline" onClick={() => setModalOpen(true)} className="gap-2" data-testid="button-manage-categories"><Plus className="w-4 h-4" />Manage Category Selection</Button>
+          {filteredMappings.length > 0 && (
+            <DataPagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              totalItems={filteredMappings.length}
+              totalPages={pagination.totalPages}
+              start={pagination.start}
+              end={pagination.end}
+              onPageChange={pagination.setPage}
+              onPageSizeChange={pagination.setPageSize}
+              itemLabel="catégories"
+            />
+          )}
         </div>
       )}
 
@@ -423,11 +444,15 @@ function CategoryRequestsSection() {
   const remove = useMutation({
     mutationFn: ({ type, id }: { type: string; id: number }) =>
       apiRequest("DELETE", `/api/supplier/catalog-suggestions/${type}/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/supplier/catalog-suggestions"] }); toast({ title: "Suggestion deleted" }); setDeleteTarget(null); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/supplier/catalog-suggestions"] }); toast({ title: "Suggestion deleted" }); setDeleteTarget(null); pagination.resetPage(); },
     onError: () => toast({ title: "Error deleting", variant: "destructive" }),
   });
 
   const filtered = suggestions.filter(s => s.type === activeType);
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [activeType, filtered.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageSuggestions = filtered.slice(pagination.start, pagination.end);
 
   const openCreate = () => {
     setEditing(null);
@@ -526,7 +551,7 @@ function CategoryRequestsSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(s => (
+              {pageSuggestions.map(s => (
                 <TableRow key={s.id} data-testid={`row-suggestion-${s.id}`}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -565,6 +590,20 @@ function CategoryRequestsSection() {
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="suggestions"
+        />
       )}
 
       {/* Create / Edit Dialog */}

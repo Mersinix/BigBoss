@@ -53,6 +53,7 @@ export function DataPagination({
   page, pageSize, totalItems, totalPages, start, end,
   onPageChange, onPageSizeChange,
   itemLabel = "résultats",
+  isDark,
 }: {
   page: number;
   pageSize: PageSize;
@@ -63,6 +64,16 @@ export function DataPagination({
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: PageSize) => void;
   itemLabel?: string;
+  // Only needed by callers that do NOT sit under a real Tailwind `.dark`
+  // ancestor class (i.e. the isDark-prop/ternary convention used by Coffee
+  // Owner's own pages — see client/src/components/cafe/notification-modal.tsx).
+  // Every other consumer of this component already renders under a real
+  // `.dark` class (Admin/Supplier's DashboardLayout, the 7 professional
+  // account shells), so the shadcn Select's own bg-popover/bg-background
+  // CSS-variable tokens already flip correctly there and this prop should be
+  // left unset — passing it explicitly only where it's actually needed avoids
+  // double-styling a context that already works.
+  isDark?: boolean;
 }) {
   const isCustom = !(PAGE_SIZE_PRESETS as readonly number[]).includes(pageSize);
   const [customOpen, setCustomOpen] = useState(false);
@@ -78,12 +89,12 @@ export function DataPagination({
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
-      <p className="text-xs text-muted-foreground order-2 sm:order-1">
+      <p className={`text-xs order-2 sm:order-1 ${isDark ? "text-gray-400" : "text-muted-foreground"}`}>
         {start + 1}–{end} sur {totalItems} {itemLabel}
       </p>
 
       <div className="flex items-center gap-3 flex-wrap order-1 sm:order-2">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className={`flex items-center gap-1.5 text-xs ${isDark ? "text-gray-400" : "text-muted-foreground"}`}>
           <span className="hidden sm:inline">Par page</span>
           <Select
             value={isCustom ? "CUSTOM" : String(pageSize)}
@@ -92,8 +103,13 @@ export function DataPagination({
               onPageSizeChange(Number(v));
             }}
           >
-            <SelectTrigger className="w-[4.75rem] h-8 text-xs" data-testid="select-page-size"><SelectValue /></SelectTrigger>
-            <SelectContent>
+            <SelectTrigger
+              className={`w-[4.75rem] h-8 text-xs ${isDark ? "bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700" : ""}`}
+              data-testid="select-page-size"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className={isDark ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white" : undefined}>
               {PAGE_SIZE_PRESETS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
               <SelectItem value="CUSTOM">{isCustom ? `${pageSize} (custom)` : "Custom…"}</SelectItem>
             </SelectContent>
@@ -104,18 +120,26 @@ export function DataPagination({
                 type="number" min={1} max={1000} value={customInput}
                 onChange={(e) => setCustomInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") applyCustom(); }}
-                className="w-16 h-8 text-xs"
+                className={`w-16 h-8 text-xs ${isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : ""}`}
                 autoFocus
                 data-testid="input-custom-page-size"
               />
-              <Button size="sm" className="h-8 text-xs px-2" onClick={applyCustom} data-testid="button-apply-custom-page-size">OK</Button>
+              <Button
+                size="sm"
+                className={`h-8 text-xs px-2 ${isDark ? "bg-gray-700 text-white hover:bg-gray-600 border-gray-600" : ""}`}
+                onClick={applyCustom}
+                data-testid="button-apply-custom-page-size"
+              >
+                OK
+              </Button>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-1">
           <Button
-            size="icon" variant="outline" className="h-8 w-8"
+            size="icon" variant="outline"
+            className={`h-8 w-8 ${isDark ? "bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-40 disabled:text-gray-500" : ""}`}
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
             aria-label="Page précédente"
@@ -127,13 +151,13 @@ export function DataPagination({
           <div className="flex items-center gap-1">
             {buildPageWindow(page, totalPages).map((p, i) =>
               p === "ellipsis" ? (
-                <span key={`e-${i}`} className="px-1.5 text-xs text-muted-foreground">…</span>
+                <span key={`e-${i}`} className={`px-1.5 text-xs ${isDark ? "text-gray-500" : "text-muted-foreground"}`}>…</span>
               ) : (
                 <Button
                   key={p}
                   size="sm"
                   variant={p === page ? "default" : "ghost"}
-                  className="h-8 w-8 p-0 text-xs"
+                  className={`h-8 w-8 p-0 text-xs ${isDark ? (p === page ? "bg-blue-600 text-white hover:bg-blue-500 border-blue-600" : "text-gray-300 hover:bg-gray-700 hover:text-white") : ""}`}
                   onClick={() => onPageChange(p)}
                   data-testid={`button-page-${p}`}
                 >
@@ -144,7 +168,8 @@ export function DataPagination({
           </div>
 
           <Button
-            size="icon" variant="outline" className="h-8 w-8"
+            size="icon" variant="outline"
+            className={`h-8 w-8 ${isDark ? "bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-40 disabled:text-gray-500" : ""}`}
             disabled={page >= totalPages}
             onClick={() => onPageChange(page + 1)}
             aria-label="Page suivante"
@@ -154,7 +179,7 @@ export function DataPagination({
           </Button>
         </div>
 
-        <span className="text-xs text-muted-foreground hidden md:inline">Page {page} / {totalPages}</span>
+        <span className={`text-xs hidden md:inline ${isDark ? "text-gray-400" : "text-muted-foreground"}`}>Page {page} / {totalPages}</span>
       </div>
     </div>
   );

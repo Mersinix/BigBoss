@@ -17,6 +17,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount, CatalogSuggestion, AdminSupplierCategoryOverview, SupplierCategoryMapping } from "@shared/schema";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -136,6 +137,9 @@ function CategoriesTab() {
     [cats]
   );
 
+  const pagination = usePagination(sortedCats.length);
+  useEffect(() => { pagination.resetPage(); }, [sortedCats.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const moveCategory = async (idx: number, dir: "up" | "down") => {
     const targetIdx = dir === "up" ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= sortedCats.length || reordering) return;
@@ -185,7 +189,12 @@ function CategoriesTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedCats.map((c, idx) => (
+              {sortedCats.map((c, idx) => {
+                // Reorder up/down (moveCategory) operates on the GLOBAL index within
+                // sortedCats, so idx must stay computed from the full array — only
+                // which ROWS render is limited to the current page window.
+                if (idx < pagination.start || idx >= pagination.end) return null;
+                return (
                 <TableRow key={c.id} data-testid={`row-category-${c.id}`} className={!c.isActive ? "opacity-60" : ""}>
                   <TableCell>
                     <div className="flex gap-1">
@@ -210,13 +219,28 @@ function CategoriesTab() {
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{c.createdBy || "—"}</TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
               {cats.length === 0 && (
                 <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No categories yet. Add one to get started.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {sortedCats.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={sortedCats.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="categories"
+        />
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -1083,13 +1107,13 @@ function CategoryRequestsSection() {
 
   const approveMutation = useMutation({
     mutationFn: (id: number) => apiRequest("PATCH", `/api/admin/users/${id}/approve`, {}),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/users"] }); toast({ title: "Approuvé" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/users"] }); toast({ title: "Approuvé" }); pagination.resetPage(); },
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const rejectMutation = useMutation({
     mutationFn: (id: number) => apiRequest("PATCH", `/api/admin/users/${id}/reject`, {}),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/users"] }); toast({ title: "Rejeté" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/users"] }); toast({ title: "Rejeté" }); pagination.resetPage(); },
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
@@ -1106,6 +1130,10 @@ function CategoryRequestsSection() {
     filtered = filtered.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   }
   const pendingCount = usersToShow.filter(u => u.status === "pending").length;
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [search, roleFilter, filtered.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageFiltered = filtered.slice(pagination.start, pagination.end);
 
   useEffect(() => {
     if (didAutoExpand.current || mappingsLoading) return;
@@ -1196,7 +1224,7 @@ function CategoryRequestsSection() {
             <div className="text-center py-12 text-muted-foreground"><Tag className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-sm">Aucun résultat trouvé.</p></div>
           ) : (
             <div className="divide-y divide-border/40">
-              {filtered.map(u => {
+              {pageFiltered.map(u => {
                 const displayCats = getDisplayCategories(u);
                 const isSupplier = u.role === 'SUPPLIER';
                 const supplierId = Number(u.id);
@@ -1285,6 +1313,19 @@ function CategoryRequestsSection() {
           )}
         </CardContent>
       </Card>
+      {filtered.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="prestataires"
+        />
+      )}
       {editUser && (
         <CategoryEditModalInline
           user={editUser}
@@ -1333,6 +1374,7 @@ function SupplierCategoriesSection() {
       qc.invalidateQueries({ queryKey: ["/api/sizes"] });
       qc.invalidateQueries({ queryKey: ["/api/brands"] });
       toast({ title: "Suggestion approved", description: "The item is now active in the catalog." });
+      pagination.resetPage();
     },
     onError: () => toast({ title: "Error approving", variant: "destructive" }),
   });
@@ -1347,7 +1389,7 @@ function SupplierCategoriesSection() {
   const remove = useMutation({
     mutationFn: ({ type, id }: { type: string; id: number }) =>
       apiRequest("DELETE", `/api/admin/catalog-suggestions/${type}/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/catalog-suggestions"] }); toast({ title: "Deleted" }); setDeleteTarget(null); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/catalog-suggestions"] }); toast({ title: "Deleted" }); setDeleteTarget(null); pagination.resetPage(); },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
@@ -1356,6 +1398,10 @@ function SupplierCategoriesSection() {
   if (statusFilter !== "all") filtered = filtered.filter(s => s.status === statusFilter);
 
   const pendingCount = suggestions.filter(s => s.status === 'PENDING').length;
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [typeFilter, statusFilter, filtered.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageSuggestions = filtered.slice(pagination.start, pagination.end);
 
   const openEdit = (s: CatalogSuggestion) => {
     setEditTarget(s);
@@ -1435,7 +1481,7 @@ function SupplierCategoriesSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(s => (
+              {pageSuggestions.map(s => (
                 <TableRow key={`${s.type}-${s.id}`} data-testid={`row-suggestion-${s.type}-${s.id}`}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -1475,6 +1521,20 @@ function SupplierCategoriesSection() {
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {filtered.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="suggestions"
+        />
       )}
 
       {/* Edit Dialog */}

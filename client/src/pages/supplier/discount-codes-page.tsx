@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 } from "@/hooks/use-discount-codes";
 import type { DiscountCode } from "@shared/schema";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 type EffectiveStatus = "Active" | "Inactive" | "Expired" | "Limit Reached";
@@ -75,6 +76,10 @@ export default function DiscountCodesPage() {
   const updateMut = useUpdateDiscountCode();
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
+
+  const pagination = usePagination(codes.length);
+  useEffect(() => { pagination.resetPage(); }, [codes.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageCodes = codes.slice(pagination.start, pagination.end);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingCode, setEditingCode] = useState<DiscountCode | null>(null);
@@ -216,7 +221,7 @@ export default function DiscountCodesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {codes.map((c) => {
+                {pageCodes.map((c) => {
                   const status = getEffectiveStatus(c);
                   return (
                     <TableRow key={c.id}>
@@ -240,6 +245,21 @@ export default function DiscountCodesPage() {
                 })}
               </TableBody>
             </Table>
+          )}
+          {codes.length > 0 && (
+            <div className="pt-3">
+              <DataPagination
+                page={pagination.page}
+                pageSize={pagination.pageSize}
+                totalItems={codes.length}
+                totalPages={pagination.totalPages}
+                start={pagination.start}
+                end={pagination.end}
+                onPageChange={pagination.setPage}
+                onPageSizeChange={pagination.setPageSize}
+                itemLabel="codes"
+              />
+            </div>
           )}
         </CardContent>
       </Card>

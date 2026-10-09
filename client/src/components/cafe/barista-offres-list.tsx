@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Briefcase, Calendar, CalendarClock, Globe, Plus, UserCheck, Users } from "lucide-react";
 import { useMyBaristaJobs, type BaristaJobPostWithStats, type BaristaJobStatus, type BaristaJobPublicationMode, type BaristaJobRecordType } from "@/hooks/use-barista-marketplace";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 const JOB_STATUS_LABELS: Record<BaristaJobStatus, string> = { DRAFT: "Brouillon", PUBLISHED: "Publiée", CLOSED: "Clôturée" };
 function jobStatusColors(dk: boolean): Record<BaristaJobStatus, string> {
@@ -47,6 +49,14 @@ export function BaristaOffresList({
   const isMission = recordType === "MISSION";
   const noun = isMission ? "mission" : "offre";
 
+  // Independent pagination for Missions vs Offres — this same component instance
+  // is reused for both (recordType just changes which job set it fetches), so
+  // reset to page 1 whenever recordType switches rather than carrying over a
+  // stale page number from the other list.
+  const pagination = usePagination(jobs.length);
+  useEffect(() => { pagination.resetPage(); }, [recordType, jobs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageJobs = jobs.slice(pagination.start, pagination.end);
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -75,7 +85,7 @@ export function BaristaOffresList({
         </div>
       ) : (
         <div className="space-y-3">
-          {jobs.map((job: BaristaJobPostWithStats) => {
+          {pageJobs.map((job: BaristaJobPostWithStats) => {
             const ModeIcon = job.publicationMode === "MANUAL" ? UserCheck : Globe;
             const expiry = fmtDate(job.expiresAt);
             const missionStart = fmtPlainDate(job.missionStartDate);
@@ -106,6 +116,21 @@ export function BaristaOffresList({
             );
           })}
         </div>
+      )}
+
+      {jobs.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={jobs.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel={isMission ? "missions" : "offres"}
+          isDark={dk}
+        />
       )}
     </div>
   );

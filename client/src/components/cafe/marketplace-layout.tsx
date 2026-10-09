@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { useCafeOrders, CAFE_ORDER_STATUS_META, CAFE_ORDER_STATUS_FILTER_OPTS, type CafeOrderTabId } from "@/hooks/use-cafe-orders";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { deriveOrderStatus, getSupplierStatusEntries, orderMatchesStatus } from "@/lib/order-status";
 import { getEffectiveDate } from "@/lib/order-date";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -166,6 +167,19 @@ function AccountPanel({
   const [ordersStatusFilter, setOrdersStatusFilter] = useState("ALL");
   const { data: allOrders = [], isLoading: dashLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
 
+  // Independent pagination per Orders sub-tab (Today/Planifiées/Daily/Anciennes) —
+  // hooks must be called unconditionally, so this lives at the top level rather
+  // than inside the conditionally-invoked `activeTab === "orders"` IIFE below,
+  // mirroring notification-modal.tsx's pageByTab pattern.
+  const ordersBaseList = listForTab(ordersSubTab);
+  const ordersFiltered = ordersBaseList.filter((o) => orderMatchesStatus(o, ordersStatusFilter));
+  const [ordersPageByTab, setOrdersPageByTab] = useState<Partial<Record<CafeOrderTabId, number>>>({});
+  const ordersPagination = usePagination(ordersFiltered.length);
+  useEffect(() => { ordersPagination.setPage(ordersPageByTab[ordersSubTab] ?? 1); }, [ordersSubTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setOrdersPageByTab((m) => ({ ...m, [ordersSubTab]: ordersPagination.page })); }, [ordersPagination.page]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setOrdersPageByTab({}); ordersPagination.resetPage(); }, [ordersStatusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ordersPageItems = ordersFiltered.slice(ordersPagination.start, ordersPagination.end);
+
   // ── Reservations sub-switcher — Admin System Management is the single source
   // of truth for which of these appear and in what order (task requirement).
   // Maintenance now shows only Interventions here (the old Réservations list/
@@ -192,6 +206,25 @@ function AccountPanel({
   const [detailPrintOrder, setDetailPrintOrder] = useState<PrintOrderWithParties | null>(null);
   const [detailMarketingProjectId, setDetailMarketingProjectId] = useState<number | null>(null);
   const [detailAcademyRegistrationId, setDetailAcademyRegistrationId] = useState<number | null>(null);
+
+  // Independent pagination for each Reservations section (PRINT/Marketing/Academy
+  // are rendered as plain conditional JSX below, not a hook-calling closure, so
+  // these must be declared unconditionally here — same reasoning as Orders above).
+  // Sorted once here so the slice fed to <DataPagination> matches what renders.
+  const printOrdersSorted = [...printOrders].sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime());
+  const printPagination = usePagination(printOrdersSorted.length);
+  useEffect(() => { printPagination.resetPage(); }, [printOrdersSorted.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const printPageItems = printOrdersSorted.slice(printPagination.start, printPagination.end);
+
+  const marketingProjectsSorted = [...marketingProjectsForOwner].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const marketingPagination = usePagination(marketingProjectsSorted.length);
+  useEffect(() => { marketingPagination.resetPage(); }, [marketingProjectsSorted.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const marketingPageItems = marketingProjectsSorted.slice(marketingPagination.start, marketingPagination.end);
+
+  const academyRegistrationsSorted = [...academyRegistrations].sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime());
+  const academyPagination = usePagination(academyRegistrationsSorted.length);
+  useEffect(() => { academyPagination.resetPage(); }, [academyRegistrationsSorted.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const academyPageItems = academyRegistrationsSorted.slice(academyPagination.start, academyPagination.end);
 
   const RESERVATION_SERVICE_TABS: { key: string; orderId: MarketplaceServiceId; stateKey: ServiceKey; label: string; icon: any }[] = [
     { key: "maintenance", orderId: "MAINTENANCE", stateKey: "MAINTENANCE", label: "Maintenance", icon: Wrench },
@@ -422,10 +455,9 @@ function AccountPanel({
             { id: "daily", label: "Daily", icon: Star, count: daily.length },
             { id: "old", label: "Anciennes", icon: Archive, count: byCategory.ANCIENNE.length },
           ];
-          const baseList = listForTab(ordersSubTab);
-          // At least one sub-order matching the selected status is enough — see
-          // lib/order-status.ts orderMatchesStatus.
-          const filtered = baseList.filter((o) => orderMatchesStatus(o, ordersStatusFilter));
+          // Computed at the top level (ordersFiltered/ordersPageItems/ordersPagination)
+          // so the pagination hook can be called unconditionally — see there for details.
+          const filtered = ordersFiltered;
           return (
             <div className="space-y-3 pt-2">
               <div className={`flex gap-1 rounded-2xl p-1 overflow-x-auto ${switcherBg}`} style={{ scrollbarWidth: "none" }}>
@@ -476,7 +508,7 @@ function AccountPanel({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filtered.map((order: any) => {
+                  {ordersPageItems.map((order: any) => {
                     const displayStatus = deriveOrderStatus(order);
                     const meta = CAFE_ORDER_STATUS_META[displayStatus] ?? CAFE_ORDER_STATUS_META.PENDING;
                     const Icon = meta.icon;
@@ -556,10 +588,25 @@ function AccountPanel({
                   })}
                 </div>
               )}
+
+              {filtered.length > 0 && (
+                <DataPagination
+                  page={ordersPagination.page}
+                  pageSize={ordersPagination.pageSize}
+                  totalItems={filtered.length}
+                  totalPages={ordersPagination.totalPages}
+                  start={ordersPagination.start}
+                  end={ordersPagination.end}
+                  onPageChange={ordersPagination.setPage}
+                  onPageSizeChange={ordersPagination.setPageSize}
+                  itemLabel="commandes"
+                  isDark={dk}
+                />
+              )}
             </div>
           );
         })()}
-       
+
         {/* MAINTENANCE RESERVATIONS */}
         {activeTab === "reservations" && visibleReservationTabs.length > 0 && (
           <div className="space-y-3 pt-2">
@@ -609,10 +656,9 @@ function AccountPanel({
                   <p className={`font-medium text-sm ${textPrimary}`}>Aucune commande PRINT pour le moment</p>
                 </div>
               ) : (
+                <>
                 <div className="space-y-3">
-                  {[...printOrders]
-                    .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime())
-                    .map((order) => {
+                  {printPageItems.map((order) => {
                       const meta = PRINT_ORDER_STATUS_META[order.status as keyof typeof PRINT_ORDER_STATUS_META] ?? PRINT_ORDER_STATUS_META.PENDING;
                       return (
                         <button
@@ -636,6 +682,19 @@ function AccountPanel({
                       );
                     })}
                 </div>
+                <DataPagination
+                  page={printPagination.page}
+                  pageSize={printPagination.pageSize}
+                  totalItems={printOrdersSorted.length}
+                  totalPages={printPagination.totalPages}
+                  start={printPagination.start}
+                  end={printPagination.end}
+                  onPageChange={printPagination.setPage}
+                  onPageSizeChange={printPagination.setPageSize}
+                  itemLabel="commandes"
+                  isDark={dk}
+                />
+                </>
               )
             )}
 
@@ -691,10 +750,9 @@ function AccountPanel({
                   <p className={`font-medium text-sm ${textPrimary}`}>Aucune activité Marketing pour le moment</p>
                 </div>
               ) : (
+                <>
                 <div className="space-y-3">
-                  {[...marketingProjectsForOwner]
-                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                    .map((project) => {
+                  {marketingPageItems.map((project) => {
                       const meta = MARKETING_PROJECT_STATUS_META[project.status] ?? MARKETING_PROJECT_STATUS_META.PENDING;
                       return (
                         <div
@@ -759,6 +817,19 @@ function AccountPanel({
                       );
                     })}
                 </div>
+                <DataPagination
+                  page={marketingPagination.page}
+                  pageSize={marketingPagination.pageSize}
+                  totalItems={marketingProjectsSorted.length}
+                  totalPages={marketingPagination.totalPages}
+                  start={marketingPagination.start}
+                  end={marketingPagination.end}
+                  onPageChange={marketingPagination.setPage}
+                  onPageSizeChange={marketingPagination.setPageSize}
+                  itemLabel="projets"
+                  isDark={dk}
+                />
+                </>
               )
             )}
 
@@ -776,10 +847,9 @@ function AccountPanel({
                   <p className={`font-medium text-sm ${textPrimary}`}>Aucune inscription Academy pour le moment</p>
                 </div>
               ) : (
+                <>
                 <div className="space-y-3">
-                  {[...academyRegistrations]
-                    .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime())
-                    .map((registration) => {
+                  {academyPageItems.map((registration) => {
                       const meta = academyRegistrationStatusMeta[registration.status] ?? academyRegistrationStatusMeta.PENDING;
                       return (
                         <div
@@ -814,6 +884,19 @@ function AccountPanel({
                       );
                     })}
                 </div>
+                <DataPagination
+                  page={academyPagination.page}
+                  pageSize={academyPagination.pageSize}
+                  totalItems={academyRegistrationsSorted.length}
+                  totalPages={academyPagination.totalPages}
+                  start={academyPagination.start}
+                  end={academyPagination.end}
+                  onPageChange={academyPagination.setPage}
+                  onPageSizeChange={academyPagination.setPageSize}
+                  itemLabel="inscriptions"
+                  isDark={dk}
+                />
+                </>
               )
             )}
           </div>

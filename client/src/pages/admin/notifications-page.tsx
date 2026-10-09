@@ -1,18 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useFormatCurrency } from "@/hooks/use-currency";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bell, ShoppingBag, Users, AlertCircle, CheckCheck } from "lucide-react";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
+import { resolveNotificationPath } from "@/lib/notification-navigation";
+import type { Notification } from "@shared/schema";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function NotificationsPage() {
   const { data: orders = [] } = useQuery<any[]>({ queryKey: ["/api/orders"] });
   const fmt = useFormatCurrency();
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
@@ -24,11 +31,23 @@ export default function NotificationsPage() {
 
   // Real, persisted platform-level notifications (Part 3: "Upgrade it where
   // necessary so Admin notifications become part of the same synchronized
-  // notification architecture as the rest of the application").
-  const { data: notifications = [], isLoading } = useNotifications("ADMIN", { limit: 50 });
+  // notification architecture as the rest of the application"). Server caps
+  // `limit` at 200 (see GET /api/notifications) — fetched once, paginated
+  // client-side, same convention as every other list page in this app.
+  const { data: notifications = [], isLoading } = useNotifications("ADMIN", { limit: 200 });
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const pagination = usePagination(notifications.length);
+  useEffect(() => { pagination.resetPage(); }, [notifications.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageNotifications = notifications.slice(pagination.start, pagination.end);
+
+  const handleNotificationClick = (n: Notification) => {
+    if (!n.isRead) markRead.mutate(n.id);
+    const path = user ? resolveNotificationPath(n, user.role) : null;
+    if (path) navigate(path);
+  };
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
@@ -132,10 +151,10 @@ export default function NotificationsPage() {
             <div className="text-center text-muted-foreground py-10">Aucune nouvelle notification</div>
           ) : (
             <div className="space-y-3">
-              {notifications.map((n) => (
+              {pageNotifications.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => !n.isRead && markRead.mutate(n.id)}
+                  onClick={() => handleNotificationClick(n)}
                   className={`w-full flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4 p-3 rounded-lg border text-left transition-colors ${n.isRead ? "border-border/50" : "border-primary/30 bg-primary/5"}`}
                   data-testid={`notification-${n.id}`}
                 >
@@ -152,6 +171,21 @@ export default function NotificationsPage() {
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+          {notifications.length > 0 && (
+            <div className="pt-3">
+              <DataPagination
+                page={pagination.page}
+                pageSize={pagination.pageSize}
+                totalItems={notifications.length}
+                totalPages={pagination.totalPages}
+                start={pagination.start}
+                end={pagination.end}
+                onPageChange={pagination.setPage}
+                onPageSizeChange={pagination.setPageSize}
+                itemLabel="notifications"
+              />
             </div>
           )}
         </CardContent>

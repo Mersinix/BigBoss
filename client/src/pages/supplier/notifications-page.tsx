@@ -1,21 +1,39 @@
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bell, AlertTriangle, ShoppingBag } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
+import { resolveNotificationPath } from "@/lib/notification-navigation";
+import type { Notification } from "@shared/schema";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function SupplierNotificationsPage() {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
   // Real, persisted SHOP-service notifications — orders, low stock, deliveries.
   // No mock data (this page previously seeded a static fakeNotifications array).
-  const { data: notifications = [], isLoading } = useNotifications("SHOP", { limit: 50 });
+  // Server caps `limit` at 200 — fetched once, paginated client-side.
+  const { data: notifications = [], isLoading } = useNotifications("SHOP", { limit: 200 });
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
+
+  const pagination = usePagination(notifications.length);
+  useEffect(() => { pagination.resetPage(); }, [notifications.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageNotifications = notifications.slice(pagination.start, pagination.end);
+
+  const handleNotificationClick = (n: Notification) => {
+    if (!n.isRead) markRead.mutate(n.id);
+    const path = user ? resolveNotificationPath(n, user.role) : null;
+    if (path) navigate(path);
+  };
 
   const unread = notifications.filter((n) => !n.isRead).length;
   const stockAlerts = notifications.filter((n) => n.type === "low_stock" || n.type === "out_of_stock").length;
@@ -88,11 +106,11 @@ export default function SupplierNotificationsPage() {
           {!isLoading && notifications.length === 0 ? (
             <div className="text-center text-muted-foreground py-10">Aucune nouvelle notification</div>
           ) : (
-            notifications.map((n) => (
+            pageNotifications.map((n) => (
               <button
                 key={n.id}
                 data-testid={`button-notif-${n.id}`}
-                onClick={() => !n.isRead && markRead.mutate(n.id)}
+                onClick={() => handleNotificationClick(n)}
                 className={`w-full flex items-start gap-4 p-4 rounded-lg text-left transition-colors border ${
                   n.isRead ? "border-border/30 bg-transparent" : "border-primary/20 bg-primary/5"
                 }`}
@@ -110,6 +128,21 @@ export default function SupplierNotificationsPage() {
                 </div>
               </button>
             ))
+          )}
+          {notifications.length > 0 && (
+            <div className="pt-3">
+              <DataPagination
+                page={pagination.page}
+                pageSize={pagination.pageSize}
+                totalItems={notifications.length}
+                totalPages={pagination.totalPages}
+                start={pagination.start}
+                end={pagination.end}
+                onPageChange={pagination.setPage}
+                onPageSizeChange={pagination.setPageSize}
+                itemLabel="notifications"
+              />
+            </div>
           )}
         </CardContent>
       </Card>

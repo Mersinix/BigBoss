@@ -1,16 +1,24 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { X, CheckCheck, Bell } from "lucide-react";
 import type { Notification, NotificationService } from "@shared/schema";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
 import { useAccountOpenStore } from "@/store/account-open-store";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { NotificationDateFilter, filterNotificationsByDate } from "@/components/notifications/notification-date-filter";
+import type { DateRangePreset } from "@/lib/marketplace-analytics";
 
 type TabId = "ALL" | NotificationService;
 
+// "Admin" tab removed from this Coffee Owner-facing view
+// (docs/notification_date_filter_pagination_navigation_audit.md) — ADMIN-service
+// notifications a Coffee Owner legitimately receives (e.g. their own account
+// status change) still show under "Tous"; only the dedicated tab chip is gone.
+// No notification records are deleted, and the Admin role's own notification
+// system/tabs are untouched.
 const SERVICE_TABS: { id: TabId; label: string }[] = [
   { id: "ALL", label: "Tous" },
-  { id: "ADMIN", label: "Admin" },
   { id: "SHOP", label: "SHOP" },
   { id: "PRINT", label: "PRINT" },
   { id: "MAINTENANCE", label: "Maintenance" },
@@ -24,7 +32,7 @@ const SERVICE_TABS: { id: TabId; label: string }[] = [
 // panel to a specific tab/order) — never a new routing system, and never a
 // broken link: entity types we can't deep-link to still land on a sensible tab.
 function openRelatedEntity(n: Notification, close: () => void) {
-  const { openWithOrder, openWithTab } = useAccountOpenStore.getState();
+  const { openWithOrder, openWithTab, openChat } = useAccountOpenStore.getState();
   close();
   if (n.entityType === "order" && n.entityId != null) {
     openWithOrder(n.entityId);
@@ -34,21 +42,39 @@ function openRelatedEntity(n: Notification, close: () => void) {
     openWithTab("orders");
     return;
   }
-  if (["maintenance_reservation", "barista_request", "barista_mission", "academy_registration", "print_order"].includes(n.entityType ?? "")) {
+  if (["maintenance_reservation", "barista_request", "barista_mission", "academy_registration", "print_order", "marketing_project"].includes(n.entityType ?? "")) {
     openWithTab("reservations");
+    return;
+  }
+  // Chat deep-link only covers the two services the Account panel's own chat
+  // overlay already knows how to open (see marketplace-layout.tsx) — other
+  // services' message notifications fall through to a no-op rather than a
+  // broken chat state, same "no invented destination" rule as everywhere else.
+  if (n.entityType === "conversation" && (n.service === "SHOP" || n.service === "MAINTENANCE") && n.entityId != null) {
+    openChat(n.service, n.entityId);
     return;
   }
 }
 
 export function NotificationModal({ open, onOpenChange, isDark }: { open: boolean; onOpenChange: (v: boolean) => void; isDark: boolean }) {
   const [tab, setTab] = useState<TabId>("ALL");
-  const { data: notifications = [], isLoading } = useNotifications(undefined, { limit: 100 });
+  // "Aujourd'hui" is the default preset for a fresh filtering session (task
+  // requirement); "" = no preset active (custom date typed instead).
+  const [datePreset, setDatePreset] = useState<DateRangePreset | "">("today");
+  const [customDate, setCustomDate] = useState("");
+  // Server caps `limit` at 200 — fetch that full batch so every preset
+  // (including "Cette année") has a real dataset to filter.
+  const { data: notifications = [], isLoading } = useNotifications(undefined, { limit: 200 });
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
-  const filtered = useMemo(
+  const tabFiltered = useMemo(
     () => (tab === "ALL" ? notifications : notifications.filter((n) => n.service === tab)),
     [notifications, tab],
+  );
+  const filtered = useMemo(
+    () => filterNotificationsByDate(tabFiltered, datePreset, customDate),
+    [tabFiltered, datePreset, customDate],
   );
   const unreadByService = useMemo(() => {
     const map: Partial<Record<TabId, number>> = { ALL: 0 };
@@ -59,6 +85,18 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
     }
     return map;
   }, [notifications]);
+
+  // Independent pagination per tab (Part 5/7): one usePagination instance driven by
+  // the CURRENT tab's filtered count, with each tab's own page number persisted in
+  // `pageByTab` so switching tabs restores exactly where that tab was left, rather
+  // than all tabs sharing one page counter. Changing the date filter resets every
+  // tab back to page 1, since it shifts every tab's result set at once.
+  const [pageByTab, setPageByTab] = useState<Partial<Record<TabId, number>>>({});
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.setPage(pageByTab[tab] ?? 1); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPageByTab((m) => ({ ...m, [tab]: pagination.page })); }, [pagination.page]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPageByTab({}); pagination.resetPage(); }, [datePreset, customDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageNotifications = filtered.slice(pagination.start, pagination.end);
 
   const handleNotificationClick = (n: Notification) => {
     if (!n.isRead) markRead.mutate(n.id);
@@ -109,8 +147,16 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
           })}
         </div>
 
-        {(unreadByService[tab] ?? 0) > 0 && (
-          <div className="flex justify-end px-4 pt-2">
+        <div className="flex items-center justify-between gap-2 px-4 pt-2 flex-wrap">
+          <NotificationDateFilter
+            preset={datePreset}
+            onPresetChange={(p) => { setDatePreset(p); setCustomDate(""); }}
+            customDate={customDate}
+            onCustomDateChange={(d) => { setCustomDate(d); setDatePreset(""); }}
+            isDark={isDark}
+            testIdPrefix="modal"
+          />
+          {(unreadByService[tab] ?? 0) > 0 && (
             <button
               onClick={() => markAllRead.mutate(tab === "ALL" ? undefined : tab)}
               className={`flex items-center gap-1 text-xs font-medium ${isDark ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"}`}
@@ -118,14 +164,16 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
             >
               <CheckCheck className="w-3.5 h-3.5" /> Tout marquer comme lu
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="overflow-y-auto max-h-[60vh] px-2 py-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           {!isLoading && filtered.length === 0 ? (
-            <div className={`text-center py-14 text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>Aucune nouvelle notification</div>
+            <div className={`text-center py-14 text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>
+              {datePreset || customDate ? "Aucune notification sur cette période" : "Aucune nouvelle notification"}
+            </div>
           ) : (
-            filtered.map((n) => (
+            pageNotifications.map((n) => (
               <button
                 key={n.id}
                 onClick={() => handleNotificationClick(n)}
@@ -146,6 +194,23 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
             ))
           )}
         </div>
+
+        {filtered.length > 0 && (
+          <div className={`px-4 py-2 border-t ${isDark ? "border-gray-800" : "border-gray-100"}`}>
+            <DataPagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              totalItems={filtered.length}
+              totalPages={pagination.totalPages}
+              start={pagination.start}
+              end={pagination.end}
+              onPageChange={pagination.setPage}
+              onPageSizeChange={pagination.setPageSize}
+              itemLabel="notifications"
+              isDark={isDark}
+            />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

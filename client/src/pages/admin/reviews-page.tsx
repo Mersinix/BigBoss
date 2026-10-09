@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 function Stars({ rating }: { rating: number }) {
@@ -91,6 +92,10 @@ export default function AdminReviewsPage() {
 
   const displayed = showReportedOnly ? reviews.filter((r: any) => !!r.reportedAt) : reviews;
   const reportedCount = reviews.filter((r: any) => !!r.reportedAt && !r.resolvedAt).length;
+
+  const pagination = usePagination(displayed.length);
+  useEffect(() => { pagination.resetPage(); }, [activeTab, showReportedOnly, displayed.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageReviews = displayed.slice(pagination.start, pagination.end);
 
   const avg = reviews.length ? (reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length).toFixed(1) : "—";
 
@@ -231,7 +236,7 @@ export default function AdminReviewsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {displayed.map((r: any) => {
+          {pageReviews.map((r: any) => {
             const isReported = !!r.reportedAt;
             const isResolved = !!r.resolvedAt;
             const target = targetLine(r);
@@ -307,6 +312,20 @@ export default function AdminReviewsPage() {
             );
           })}
         </div>
+      )}
+
+      {displayed.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={displayed.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="reviews"
+        />
       )}
 
       {/* Delete confirmation */}

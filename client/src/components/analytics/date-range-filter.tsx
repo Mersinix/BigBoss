@@ -31,9 +31,9 @@ export function DateRangeFilter({
       </Select>
       {preset === "custom" && (
         <div className="flex items-center gap-1.5">
-          <Input type="date" value={custom.from} onChange={(e) => onCustomChange({ ...custom, from: e.target.value })} className="w-[9.5rem]" />
+          <Input type="date" value={custom.from} onChange={(e) => onCustomChange({ ...custom, from: e.target.value })} className="w-[9.5rem] dark:[color-scheme:dark]" />
           <span className="text-xs text-muted-foreground">→</span>
-          <Input type="date" value={custom.to} onChange={(e) => onCustomChange({ ...custom, to: e.target.value })} className="w-[9.5rem]" />
+          <Input type="date" value={custom.to} onChange={(e) => onCustomChange({ ...custom, to: e.target.value })} className="w-[9.5rem] dark:[color-scheme:dark]" />
         </div>
       )}
     </div>

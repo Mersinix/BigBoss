@@ -216,3 +216,118 @@ builders de liste — vérifié directement, pas supposé.
 - `npm run build` — succès (2812 modules, contre 2809 avant — les deux nouveaux fichiers).
 - Aucun navigateur disponible dans cet environnement — pas de vérification visuelle réelle du
   rendu clair/sombre ni du comportement de repli sur une image cassée en conditions réelles.
+
+---
+
+# Analyse — Aligner Espace Barista Marketplace → Académie sur Coffee Owner `/academy`
+
+Tâche distincte, scope séparé des deux ci-dessus.
+
+## 1. Implémentation Coffee Owner `/academy` (référence)
+
+Fichier : `client/src/pages/cafe/barista/barista-academy-page.tsx` (page unique, pas d'onglets) :
+
+- **Académies** — `AcademyStoresSection`/`AcademyStoreCardTile` (jusqu'à présent définis
+  localement, non exportés), alimentées par `useAcademyCompanies()` →
+  `GET /api/academy/companies` (déjà sans restriction de rôle). Clic → navigation vers
+  `/academy/stores/:academyUserId` (page dédiée) côté Coffee Owner — mais le composant
+  réellement utilisé pour afficher le détail d'une académie (y compris la liste de ses
+  formations, via `onOpenCourse`) est `AcademyProfileModal`
+  (`components/academy/academy-profile-modal.tsx`), déjà conçu comme une **modale**
+  autonome, réutilisée ailleurs (Admin, aperçu de l'Académie elle-même) — pas besoin de
+  nouvelle route pour en bénéficier.
+- **Formations** — grille de `TrainingCard` → `AcademyMappedCourseCard` (déjà un composant
+  partagé exporté, `components/academy/academy-mapped-course-card.tsx`), alimentée par
+  `useAcademyCourses({ search, level, certification })` — **exactement le même hook que
+  Barista Marketplace utilise déjà aujourd'hui**. Clic → `AcademyDetailModal`
+  (`components/academy/academy-detail-modal.tsx`, niveau COURS, distinct de
+  `AcademyProfileModal` qui est niveau COMPTE).
+- **Inscription** — `AcademyDetailModal`'s bouton "S'inscrire" → `EnrollDialog` (défini
+  localement dans `barista-academy-page.tsx`, non exporté) → `useCreateAcademyRegistration()`
+  → `POST /api/academy/registrations`.
+- **Fast Search** — `AcademyFastSearch` (`components/academy/academy-fast-search.tsx`),
+  niveau cours, alimentée par la même liste `courses`.
+- **Détection "déjà inscrit"** — calculée dans `AcademyDetailModal` via
+  `useAcademyRegistrations()` (pas sur la carte elle-même ; la carte mappée Coffee Owner n'a
+  pas cet indicateur non plus — fidèle à la référence, je ne l'invente pas pour Barista).
+
+## 2. Implémentation Barista Marketplace → Académie (état actuel)
+
+Fichier : `client/src/pages/barista-marketplace/academy.tsx` — page à onglets (`Formations` /
+`Mes Formations`), déjà alimentée par les **mêmes hooks exacts** que Coffee Owner
+(`useAcademyCourses`, `useCreateAcademyRegistration`, `useAcademyRegistrations`,
+`useUpdateAcademyRegistrationStatus`, `useCreateAcademyReview`, etc., tous dans
+`@/hooks/use-barista-academy`) — mais :
+- Aucune découverte au niveau académie (pas de `AcademyStoresSection` équivalent).
+- Cartes de formation génériques (`Card`/`CardContent` ad hoc), pas `AcademyMappedCourseCard`.
+- Un seul `EnrollDialog` combinant détail + formulaire d'inscription (alors que la référence
+  sépare détail (`AcademyDetailModal`) et inscription (`EnrollDialog`) en deux étapes).
+- `Mes Formations`/`RegistrationDetail` : déjà corrects, scope-és à l'utilisateur authentifié
+  via `useAcademyRegistrations()` (qui route déjà vers `getAcademyRegistrationsForBarista`
+  côté serveur, confirmé dans `server/routes.ts`) — **à préserver tel quel**.
+
+## 3. Confirmation : aucun changement backend nécessaire
+
+`server/routes.ts` :
+- `GET /api/academy/registrations` bascule déjà explicitement sur
+  `storage.getAcademyRegistrationsForBarista(user.id)` quand `user.role === "BARISTA_MARKETPLACE"`.
+- `POST /api/academy/registrations` (`requireApprovedAcademyRegistrant`, qui autorise déjà
+  `CAFE_OWNER` **et** `BARISTA_MARKETPLACE`) fixe déjà `participantType` correctement selon
+  le rôle.
+- `GET /api/academy/companies`, `GET /api/academy/courses/:id`, `GET /api/academy/profile/:userId`,
+  `/api/academy-favorites*` : aucun n'est restreint à un rôle spécifique au-delà de
+  `requireAuth`/visibilité-publique.
+
+Tout l'écosystème Academy a donc déjà été conçu générique multi-rôle — confirmé en lisant le
+code serveur, pas supposé.
+
+## 4. Seul écart réel trouvé
+
+`AcademyDetailModal` et `AcademyProfileModal` codent en dur `navigate("/cafe/messages?...")`
+dans leur `handleMessage` — correct pour Coffee Owner, faux pour un Barista (qui doit atterrir
+sur `/barista-marketplace/messages`). C'est le seul point nécessitant une modification de ces
+deux composants partagés.
+
+## 5. Stratégie d'implémentation minimale
+
+1. **Extraire** `AcademyStoreCardTile`/`AcademyStoresSection` de `barista-academy-page.tsx`
+   vers un nouveau fichier partagé `components/academy/academy-stores-section.tsx` (export,
+   déplacement mécanique — zéro changement de comportement pour Coffee Owner). Autorisé
+   explicitement par la consigne ("create a shared component ... without changing the Coffee
+   Owner page's current appearance or behavior").
+2. **Exporter** `EnrollDialog` de `barista-academy-page.tsx` (ajout du mot-clé `export`) pour
+   le réutiliser depuis Barista Marketplace — il est déjà générique (ne dépend d'aucune donnée
+   spécifique à Coffee Owner).
+3. **Ajouter un prop optionnel** `messagesBasePath` (défaut `"/cafe/messages"`, donc
+   zéro changement pour tout appelant existant) à `AcademyDetailModal` et
+   `AcademyProfileModal`, utilisé à la place du chemin codé en dur.
+4. **Réécrire** `pages/barista-marketplace/academy.tsx`'s `FormationsTab` pour :
+   - Afficher `AcademyStoresSection` (académies) au-dessus de la grille de formations.
+   - Remplacer les cartes de formation ad hoc par `AcademyMappedCourseCard` (via un petit
+     wrapper local, miroir de `TrainingCard`).
+   - Clic sur une académie → `AcademyProfileModal` (modale, pas de nouvelle route) avec
+     `messagesBasePath="/barista-marketplace/messages"`.
+   - Clic sur une formation → `AcademyDetailModal` (même prop), dont le bouton "S'inscrire"
+     ouvre le `EnrollDialog` réimporté (désormais exporté) de `barista-academy-page.tsx`.
+   - Supprimer l'ancien `EnrollDialog` local, désormais redondant.
+   - Conserver la barre de recherche/filtres, la pagination (`usePagination`/`DataPagination`)
+     et les onglets Formations/Mes Formations existants tels quels.
+5. **Ne pas toucher** à `MesFormationsTab`/`RegistrationDetail` — déjà corrects et scope-és.
+
+## 6. Risques de régression et garde-fous
+
+- `AcademyDetailModal`/`AcademyProfileModal` lisent leur propre état sombre/clair via
+  `useThemeStore` directement (pas de prop `isDark` requis) — sûrs à réutiliser tels quels
+  dans Barista Marketplace sans aucune adaptation du mécanisme de thème.
+- `EnrollDialog` (Coffee Owner) prend `isDark` en prop — Barista Marketplace devra appeler
+  `useThemeStore((s) => s.isDark)` une fois dans sa page et le transmettre.
+- Le système de favoris (`useFavorites`, `/api/academy-favorites*`) est déjà générique
+  (`requireAuth` seulement) — réutilisable sans changement.
+- Aucune migration de schéma, aucun nouvel endpoint, aucun changement de permission.
+
+## 7. Tests prévus
+
+- `npx tsc --noEmit`, `npm run build`.
+- Relecture manuelle de chaque fichier modifié pour confirmer que le comportement Coffee
+  Owner (page/modales/navigation) reste identique.
+- Aucun navigateur disponible dans cet environnement — pas de test de clic réel.

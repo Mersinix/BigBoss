@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useFormatCurrency } from "@/hooks/use-currency";
 import baristaHeroImg from "@assets/8d80708f-be87-4e8d-8805-f60e3c292914-1000x562.5-rjZKXkudAsN4bH_1780680229193.jpg";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -9,12 +8,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
   Select,
   SelectContent,
@@ -31,23 +27,21 @@ import {
   RotateCcw,
   CheckCircle,
   GraduationCap,
-  Heart,
-  MapPin,
-  Send,
   Zap,
   Ban,
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import {
-  useAcademyCourses, useAcademyCourseSessions, useCreateAcademyRegistration, useAcademyCompanies,
-  type AcademyCourseCard, type AcademyCourseLevel, type AcademyCompanyListCard,
+  useAcademyCourses, useAcademyCompanies,
+  type AcademyCourseCard, type AcademyCourseLevel,
 } from "@/hooks/use-barista-academy";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
 import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-modal";
 import { AcademyMappedCourseCard } from "@/components/academy/academy-mapped-course-card";
-import { formatDistance } from "@/lib/distance";
+import { AcademyStoresSection } from "@/components/academy/academy-stores-section";
+import { EnrollDialog } from "@/components/academy/academy-enroll-dialog";
 
 // Barista Academy — split out of the former combined /barista page into its
 // own independent page/service (route /academy). This is now backed by REAL
@@ -114,241 +108,20 @@ function StarRating({ rating, isDark = false }: { rating: number; isDark?: boole
 
 // ── Enrollment dialog ─────────────────────────────────────────────────────────
 
-export function EnrollDialog({ course, open, onClose, isDark }: { course: AcademyCourseCard | null; open: boolean; onClose: () => void; isDark: boolean }) {
-  const t = useTheme(isDark);
-  const fmt = useFormatCurrency();
-  const { toast } = useToast();
-  const createRegistration = useCreateAcademyRegistration();
-  const { data: sessions = [] } = useAcademyCourseSessions(course?.id ?? null);
-  const [sessionId, setSessionId] = useState<string>("");
-  const [participantCount, setParticipantCount] = useState("1");
-  const [notes, setNotes] = useState("");
-
-  useEffect(() => {
-    if (open && course) {
-      setSessionId("");
-      setParticipantCount("1");
-      setNotes("");
-    }
-  }, [open, course?.id]);
-
-  if (!course) return null;
-
-  const submit = () => {
-    createRegistration.mutate(
-      {
-        courseId: course.id,
-        sessionId: sessionId ? Number(sessionId) : null,
-        participantCount: Math.max(1, parseInt(participantCount, 10) || 1),
-        notes: notes.trim() || undefined,
-      },
-      {
-        onSuccess: () => {
-          toast({ title: "Inscription envoyée", description: `${course.academyName} confirmera votre inscription à "${course.title}".` });
-          onClose();
-        },
-        onError: (error: Error) => {
-          toast({ title: "Inscription impossible", description: error.message, variant: "destructive" });
-        },
-      },
-    );
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
-      <DialogContent className={`sm:max-w-md rounded-2xl border-0 shadow-2xl ${t.cardBg} ${t.textPrimary}`}>
-        <VisuallyHidden><DialogTitle>S'inscrire à {course.title}</DialogTitle></VisuallyHidden>
-        <div className="space-y-3">
-          <div>
-            <h2 className={`font-bold text-base leading-tight ${t.textPrimary}`}>{course.title}</h2>
-            <p className={`text-xs ${t.textMuted}`}>{course.academyName} · {fmt(course.priceInCents)} / participant</p>
-          </div>
-          {sessions.length > 0 && (
-            <div>
-              <label className={`text-xs font-medium mb-1 block ${t.textMuted}`}>Session</label>
-              <Select value={sessionId} onValueChange={setSessionId}>
-                <SelectTrigger className={t.inputBg} data-testid="select-enroll-session"><SelectValue placeholder="Choisir une session (optionnel)" /></SelectTrigger>
-                <SelectContent className={t.selectContent}>
-                  {sessions.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.startDate}{s.endDate ? ` → ${s.endDate}` : ""}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div>
-            <label className={`text-xs font-medium mb-1 block ${t.textMuted}`}>Nombre de participants</label>
-            <Input type="number" min={1} value={participantCount} onChange={(e) => setParticipantCount(e.target.value)} className={t.inputBg} data-testid="input-enroll-participants" />
-          </div>
-          <Textarea
-            placeholder="Message pour l'académie (optionnel)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            className={t.inputBg}
-            data-testid="input-enroll-notes"
-          />
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className={isDark ? "border-gray-700 text-gray-200 hover:bg-gray-700 hover:text-white" : "border-gray-200 text-gray-700 hover:bg-gray-50"}
-            >
-              Annuler
-            </Button>
-            <Button
-              disabled={createRegistration.isPending}
-              onClick={submit}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
-              data-testid="button-submit-enroll"
-            >
-              <Send className="w-4 h-4 mr-1.5" />
-              {createRegistration.isPending ? "Envoi…" : "S'inscrire"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+// EnrollDialog moved to components/academy/academy-enroll-dialog.tsx (analyse.md
+// "Aligner Espace Barista Marketplace → Académie sur Coffee Owner /academy") so Barista
+// Marketplace can reuse it instead of a duplicated implementation. Re-exported here so
+// no other existing import of `EnrollDialog` from this page breaks.
+export { EnrollDialog };
 
 // ── Academy Store card/section ──────────────────────────────────────────────
-// Mirrors print-page.tsx's PrintStoreCardTile/PrintStoresSection (itself
-// mirroring browse-products.tsx's StoreCardTile/StoresSection) — same card
-// shape/positioning, adapted to real Academy data
-// (GET /api/academy/companies, docs/academy_store_mapping_audit.md).
-// Selecting a card navigates to a dedicated Academy Store page
+// Extracted to components/academy/academy-stores-section.tsx (analyse.md
+// "Aligner Espace Barista Marketplace → Académie sur Coffee Owner /academy")
+// so Barista Marketplace can reuse the exact same academy-discovery card/
+// section instead of a duplicated implementation. Behavior unchanged here —
+// Selecting a card still navigates to a dedicated Academy Store page
 // (/academy/stores/:academyUserId) — the existing per-course AcademyDetailModal
 // path is untouched, both continue to exist for their respective purposes.
-
-function AcademyStoreCardTile({ company, onClick, isDark }: {
-  company: AcademyCompanyListCard;
-  onClick: () => void;
-  isDark: boolean;
-}) {
-  const t = useTheme(isDark);
-  const faved = useFavorites((s) => !!s.academyOrganisations[company.userId]);
-  const toggleAcademyOrganisation = useFavorites((s) => s.toggleAcademyOrganisation);
-  // Photo de profil is the card's primary image; Cover then Flash are tried in
-  // order if it's missing or fails to load (analyse.md image-mapping task).
-  const cardImage = useFallbackImage([company.profileImageUrl, company.coverImageUrl, company.flashImageUrl], company.userId);
-
-  return (
-    <div
-      data-testid={`card-academy-store-${company.userId}`}
-      className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
-      onClick={onClick}
-    >
-      {/* Image area — same ~1.5× scale/visual language as Marketing's agency card
-          (MarketingStoreCardTile), grid/scroll-item sizing handled by the parent
-          AcademyStoresSection — docs/academy_marketing_design_synchronization_audit.md. */}
-      <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {cardImage.src ? (
-          <img src={cardImage.src} onError={cardImage.onError} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"><GraduationCap className={`w-14 h-14 ${t.textSubtle}`} /></div>
-        )}
-
-        {/* Organization type — top-left badge over the image. Academy has no
-            per-account "type" field the way Marketing has Agency/Freelancer/Studio
-            (confirmed via schema audit); "Académie" is the same fixed, real
-            descriptor already used by this exact card's own favorite-toggle call
-            below, not a fabricated per-record value. */}
-        <span className="absolute top-3 left-3 bg-black/55 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-          Académie
-        </span>
-
-        <button
-          className="absolute top-3 right-3 w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleAcademyOrganisation({
-              id: company.userId, name: company.name,
-              initials: company.name.split(/\s+/).filter(Boolean).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase(),
-              type: "Académie", rating: company.rating / 10, portfolioImages: company.portfolioImages,
-              location: company.location, available: !company.isOnVacation, profileImageUrl: company.profileImageUrl,
-            });
-          }}
-          data-testid={`button-fav-academy-store-${company.userId}`}
-        >
-          <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
-        </button>
-
-        {/* Avis — bottom-right overlay, real rating/reviewCount, same reviewCount>0 gate used everywhere else */}
-        {company.reviewCount > 0 && (
-          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/55 backdrop-blur-sm rounded-full px-2.5 py-1">
-            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-            <span className="text-xs font-bold text-white">{(company.rating / 10).toFixed(1)}</span>
-            <span className="text-[11px] text-white/70">({company.reviewCount} avis)</span>
-          </div>
-        )}
-      </div>
-      <div className="p-4 flex gap-4 relative z-20">
-        <div className={`w-16 h-16 rounded-xl border-2 -mt-12 overflow-hidden shrink-0 flex items-center justify-center ${isDark ? "bg-gray-700 border-gray-800" : "bg-white border-white shadow-sm"}`}>
-          {company.profileImageUrl ? (
-            <img src={company.profileImageUrl} alt={company.name} className="w-full h-full object-cover" />
-          ) : (
-            <GraduationCap className={`w-6 h-6 ${t.textMuted}`} />
-          )}
-        </div>
-        <div className="flex-1 min-w-0 pt-1.5">
-          <h3 className={`font-bold text-base leading-tight truncate ${t.textPrimary}`}>{company.name}</h3>
-          {company.description && <p className={`text-sm line-clamp-1 mt-1 ${t.textMuted}`}>{company.description}</p>}
-          <div className={`flex items-center gap-3 text-xs mt-2 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
-            <span className="flex items-center gap-1"><GraduationCap className="w-3.5 h-3.5" />{company.courseCount} formation{company.courseCount !== 1 ? "s" : ""}</span>
-            {company.distanceKm != null && <span className="flex items-center gap-1 text-current"><MapPin className="w-3.5 h-3.5" />{formatDistance(company.distanceKm)}</span>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AcademyStoresSection({ companies, onSelect, isDark }: {
-  companies: AcademyCompanyListCard[];
-  onSelect: (academyUserId: number) => void;
-  isDark: boolean;
-}) {
-  const t = useTheme(isDark);
-  const [expanded, setExpanded] = useState(false);
-  const INITIAL_LIMIT = 5;
-
-  if (!companies.length) return null;
-  const showToggle = companies.length > INITIAL_LIMIT;
-  const visible = expanded ? companies : companies.slice(0, INITIAL_LIMIT);
-
-  const renderTile = (company: AcademyCompanyListCard) => (
-    <AcademyStoreCardTile key={company.userId} company={company} onClick={() => onSelect(company.userId)} isDark={isDark} />
-  );
-
-  return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className={`font-bold text-lg ${t.textPrimary}`}>Académies</h2>
-          <p className={`text-xs mt-0.5 ${t.textMuted}`}>{companies.length} académie{companies.length !== 1 ? "s" : ""}</p>
-        </div>
-        {showToggle && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className={`text-xs font-semibold h-8 px-3 ${isDark ? "text-gray-300 hover:text-white hover:bg-gray-800" : "text-gray-600 hover:text-gray-900"}`}
-            onClick={() => setExpanded((e) => !e)}
-            data-testid="button-toggle-academy-stores"
-          >
-            {expanded ? "Voir moins" : `Voir plus (${companies.length - INITIAL_LIMIT}+)`}
-          </Button>
-        )}
-      </div>
-      {/* Same grid/breakpoints as the Formations grid below, mirroring Marketing's
-          Agency-card/Service-card grid unification (same column width, no separate
-          horizontal-scroll/fixed-width mode) — docs/academy_marketing_design_synchronization_audit.md. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {visible.map(renderTile)}
-      </div>
-    </div>
-  );
-}
 
 // ── Training Card ─────────────────────────────────────────────────────────────
 // Barista marketplace card as the visual/UX reference (Part 3): left = photo,

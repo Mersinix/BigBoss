@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/use-auth";
+import { useThemeStore } from "@/store/theme-store";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import {
-  useAcademyCourses, useAcademyCourseSessions, useCreateAcademyRegistration,
-  useAcademyRegistrations, useUpdateAcademyRegistrationStatus,
+  useAcademyCourses, useAcademyCompanies, useAcademyRegistrations, useUpdateAcademyRegistrationStatus,
   useCreateAcademyReview, useAcademyReviewForRegistration,
-  startAcademyConversation,
   type AcademyCourseCard, type AcademyCourseLevel, type AcademyRegistrationWithParties, type AcademyRegistrationStatus,
 } from "@/hooks/use-barista-academy";
+import { useFavorites } from "@/hooks/use-favorites";
 import { Card, CardContent } from "@/components/ui/card";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { Button } from "@/components/ui/button";
@@ -21,10 +19,15 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  GraduationCap, Search, Clock, Award, MapPin, Star, Users, Calendar,
-  CheckCircle, Send, RotateCcw, SlidersHorizontal, BookOpen, MessageCircle, X,
+  GraduationCap, Search, Star, Calendar,
+  RotateCcw, SlidersHorizontal, BookOpen, X,
 } from "lucide-react";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { AcademyMappedCourseCard } from "@/components/academy/academy-mapped-course-card";
+import { AcademyStoresSection } from "@/components/academy/academy-stores-section";
+import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
+import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
+import { EnrollDialog } from "@/components/academy/academy-enroll-dialog";
 
 // Personal Academy workspace for the Barista — reuses the EXACT SAME Academy
 // ecosystem as Coffee Owner /academy, the Academy Account and Admin Academy:
@@ -32,9 +35,15 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 // for "Mes Formations" and enrollment. No duplicate formation/registration
 // tables — a Barista's registration is the same academyRegistrations row a
 // Coffee Owner's is, just with participantType='BARISTA_MARKETPLACE' (see
-// shared/schema.ts). Design deliberately follows the Barista Marketplace
-// account's own Card-based pattern (mirrors requests.tsx/missions.tsx), not
-// the public /academy marketing page.
+// shared/schema.ts).
+//
+// Formations discovery/detail/enrollment now reuses Coffee Owner /academy's own
+// components directly (AcademyStoresSection, AcademyMappedCourseCard,
+// AcademyDetailModal, AcademyProfileModal, EnrollDialog) instead of a separate,
+// drifting implementation — analyse.md "Aligner Espace Barista Marketplace →
+// Académie sur Coffee Owner /academy". Mes Formations keeps its own existing,
+// Barista-specific enrollment-history card/dialog, unchanged — Coffee Owner has
+// no equivalent page to match there.
 
 const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 const LEVEL_COLORS: Record<AcademyCourseLevel, string> = {
@@ -52,140 +61,67 @@ function StatusBadge({ status }: { status: AcademyRegistrationStatus }) {
   return <Badge variant="secondary" className={REGISTRATION_STATUS_COLORS[status]}>{REGISTRATION_STATUS_LABELS[status]}</Badge>;
 }
 
-// ── Enrollment dialog ─────────────────────────────────────────────────────────
+// ── Training Card ─────────────────────────────────────────────────────────────
+// Same wrapper as Coffee Owner /academy's own TrainingCard — maps a course onto
+// the shared AcademyMappedCourseCard, reusing the exact same favorites store.
 
-function EnrollDialog({ course, alreadyRegistered, onClose }: { course: AcademyCourseCard | null; alreadyRegistered: boolean; onClose: () => void }) {
-  const fmt = useFormatCurrency();
-  const { toast } = useToast();
-  const [, navigate] = useLocation();
-  const createRegistration = useCreateAcademyRegistration();
-  const { data: sessions = [] } = useAcademyCourseSessions(course?.id ?? null);
-  const [sessionId, setSessionId] = useState<string>("");
-  const [notes, setNotes] = useState("");
-  const [messaging, setMessaging] = useState(false);
-
-  useEffect(() => {
-    if (course) { setSessionId(""); setNotes(""); }
-  }, [course?.id]);
-
-  if (!course) return null;
-
-  // "Message" (Part 13) — opens the existing discussion with this Academy
-  // (service='ACADEMY'), reusing the exact same conversation system as everywhere
-  // else; no separate Barista↔Academy message table.
-  const handleMessage = async () => {
-    setMessaging(true);
-    try {
-      const res = await startAcademyConversation(course.academyUserId);
-      navigate(`/barista-marketplace/messages?service=ACADEMY&conversationId=${res.conversation.id}`);
-      onClose();
-    } catch (err: any) {
-      toast({ title: "Contact impossible", description: err?.message ?? "Veuillez réessayer.", variant: "destructive" });
-    } finally {
-      setMessaging(false);
-    }
-  };
-
-  const submit = () => {
-    createRegistration.mutate(
-      { courseId: course.id, sessionId: sessionId ? Number(sessionId) : null, participantCount: 1, notes: notes.trim() || undefined },
-      {
-        onSuccess: () => {
-          toast({ title: "Inscription envoyée", description: `${course.academyName} confirmera votre inscription à "${course.title}".` });
-          onClose();
-        },
-        onError: (error: Error) => toast({ title: "Inscription impossible", description: error.message, variant: "destructive" }),
-      },
-    );
-  };
+function TrainingCard({
+  course, isEnrolled, onOpenDetail, isDark,
+}: {
+  course: AcademyCourseCard;
+  isEnrolled: boolean;
+  onOpenDetail: (course: AcademyCourseCard) => void;
+  isDark: boolean;
+}) {
+  const faved = useFavorites((s) => !!s.academyCourses[course.id]);
+  const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
+  const coverImage = course.imageUrl || course.academyProfileImageUrl;
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent hideClose className="max-w-lg">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-enroll-dialog">
-          <X className="w-4 h-4" />
-        </button>
-        <DialogHeader><DialogTitle>{course.title}</DialogTitle></DialogHeader>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <GraduationCap className="h-4 w-4 shrink-0" />{course.academyName}
-            {course.academyLocation && <span className="flex items-center gap-1 ml-2"><MapPin className="h-3 w-3" />{course.academyLocation}</span>}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge className={LEVEL_COLORS[course.level]} variant="outline">{LEVEL_LABELS[course.level]}</Badge>
-            {course.hasCertification && <Badge variant="outline" className="text-amber-600 border-amber-200"><Award className="h-3 w-3 mr-1" />Certifiante</Badge>}
-            {course.duration && <Badge variant="outline"><Clock className="h-3 w-3 mr-1" />{course.duration}</Badge>}
-            {course.trainingMode && <Badge variant="outline">{course.trainingMode}</Badge>}
-          </div>
-          {course.description && <p className="text-muted-foreground whitespace-pre-wrap">{course.description}</p>}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            {course.reviewCount > 0 ? (
-              <span className="flex items-center gap-1 text-amber-500"><Star className="h-3.5 w-3.5 fill-current" />{(course.rating / 10).toFixed(1)} ({course.reviewCount} avis)</span>
-            ) : <span>Aucun avis</span>}
-            {course.capacity != null && <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />Capacité {course.capacity}</span>}
-          </div>
-          <div className="pt-2 border-t border-border/50 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Prix</span>
-            <span className="font-bold text-indigo-600">{fmt(course.priceInCents)}</span>
-          </div>
-
-          {alreadyRegistered ? (
-            <div className="rounded-xl bg-secondary/40 p-3 text-center text-sm">
-              <CheckCircle className="h-5 w-5 mx-auto mb-1.5 text-green-600" />
-              Vous êtes déjà inscrit à cette formation.
-            </div>
-          ) : (
-            <>
-              {sessions.length > 0 && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Session</label>
-                  <Select value={sessionId} onValueChange={setSessionId}>
-                    <SelectTrigger data-testid="select-enroll-session"><SelectValue placeholder="Choisir une session (optionnel)" /></SelectTrigger>
-                    <SelectContent>
-                      {sessions.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.startDate}{s.endDate ? ` → ${s.endDate}` : ""}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <Textarea placeholder="Message pour l'académie (optionnel)" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} data-testid="input-enroll-notes" />
-            </>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{alreadyRegistered ? "Fermer" : "Annuler"}</Button>
-          {/* Messaging is only eligible once a registration exists (server-side rule,
-              see storage.ts's isAcademyCustomerRole/academyRegistrations check) — the
-              same rule the Coffee Owner side of Academy is subject to, so the button
-              is only offered once that's true rather than presenting an action that
-              would 403. */}
-          {alreadyRegistered && (
-            <Button variant="outline" onClick={handleMessage} disabled={messaging} className="gap-1.5" data-testid="button-message-academy">
-              <MessageCircle className="w-4 h-4" />{messaging ? "…" : "Message"}
-            </Button>
-          )}
-          {!alreadyRegistered && (
-            <Button disabled={createRegistration.isPending} onClick={submit} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-submit-enroll">
-              <Send className="w-4 h-4 mr-1.5" />{createRegistration.isPending ? "Envoi…" : "S'inscrire"}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <AcademyMappedCourseCard
+      id={course.id}
+      title={course.title}
+      category={course.category}
+      description={course.description}
+      imageUrl={coverImage}
+      priceInCents={course.priceInCents}
+      academyName={course.academyName}
+      academyProfileImageUrl={course.academyProfileImageUrl}
+      academyIsAvailable={course.academyIsAvailable}
+      rating={course.rating}
+      reviewCount={course.reviewCount}
+      levelLabel={LEVEL_LABELS[course.level]}
+      levelColorClass={LEVEL_COLORS[course.level]}
+      hasCertification={course.hasCertification}
+      duration={course.duration}
+      isFavorited={faved}
+      onToggleFavorite={() => toggleAcademy({
+        id: course.id, title: course.title, provider: course.academyName, duration: course.duration,
+        rating: course.rating / 10, price: course.priceInCents, level: course.level,
+        location: course.location || course.academyLocation, hasCertification: course.hasCertification,
+        imageUrl: coverImage,
+      })}
+      onClick={() => onOpenDetail(course)}
+      isDark={isDark}
+      isEnrolled={isEnrolled}
+    />
   );
 }
 
 // ── Formations (discovery) tab ─────────────────────────────────────────────────
 
-function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistrations: AcademyRegistrationWithParties[]; onGoToMyFormations: () => void }) {
-  const fmt = useFormatCurrency();
+function FormationsTab({ myRegistrations, onGoToMyFormations, isDark }: { myRegistrations: AcademyRegistrationWithParties[]; onGoToMyFormations: () => void; isDark: boolean }) {
   const [search, setSearch] = useState("");
   const [level, setLevel] = useState("");
   const [certification, setCertification] = useState("");
-  const [target, setTarget] = useState<AcademyCourseCard | null>(null);
+  const [detailCourseId, setDetailCourseId] = useState<number | null>(null);
+  const [profileAcademyId, setProfileAcademyId] = useState<number | null>(null);
+  const [enrollTarget, setEnrollTarget] = useState<AcademyCourseCard | null>(null);
 
   const { data: courses = [], isLoading } = useAcademyCourses({
     search: search || undefined, level: level || undefined, certification: certification || undefined,
   });
+  const { data: academyCompanies = [] } = useAcademyCompanies();
 
   const registeredCourseIds = useMemo(
     () => new Set(myRegistrations.filter((r) => r.status !== "CANCELLED").map((r) => r.courseId)),
@@ -198,6 +134,11 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
   const pagination = usePagination(courses.length);
   useEffect(() => { pagination.resetPage(); }, [search, level, certification]);
   const pageCourses = courses.slice(pagination.start, pagination.end);
+
+  const handleEnroll = (course: AcademyCourseCard) => {
+    setDetailCourseId(null);
+    setEnrollTarget(course);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -233,8 +174,17 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
         </div>
       </div>
 
+      {/* Académies (discovery) — same shared section/card as Coffee Owner /academy,
+          clicking opens the same AcademyProfileModal (Formations associated with
+          that academy), not a new route. */}
+      <AcademyStoresSection
+        companies={academyCompanies}
+        onSelect={(academyUserId) => setProfileAcademyId(academyUserId)}
+        isDark={isDark}
+      />
+
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-2xl" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-72 w-full rounded-2xl" />)}</div>
       ) : courses.length === 0 ? (
         <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
           <CardContent className="py-16 text-center">
@@ -245,39 +195,16 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
         </Card>
       ) : (
         <>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {pageCourses.map((course) => {
-            const registered = registeredCourseIds.has(course.id);
-            return (
-              <Card key={course.id} className="hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl" onClick={() => setTarget(course)} data-testid={`card-formation-${course.id}`}>
-                <CardContent className="p-5 flex flex-col gap-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-sm truncate">{course.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1"><GraduationCap className="h-3 w-3" />{course.academyName}</p>
-                    </div>
-                    <Badge className={`text-[10px] shrink-0 border-0 px-1.5 ${LEVEL_COLORS[course.level]}`}>{LEVEL_LABELS[course.level]}</Badge>
-                  </div>
-                  {course.description && <p className="text-xs text-muted-foreground line-clamp-2">{course.description}</p>}
-                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                    {course.reviewCount > 0 ? (
-                      <span className="flex items-center gap-1 text-amber-500"><Star className="w-3 h-3 fill-current" />{(course.rating / 10).toFixed(1)} ({course.reviewCount})</span>
-                    ) : <span>Aucun avis</span>}
-                    {course.duration && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{course.duration}</span>}
-                    {course.hasCertification && <span className="flex items-center gap-1 text-amber-600"><Award className="w-3 h-3" />Certifiante</span>}
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                    <p className="font-bold text-sm text-indigo-600">{fmt(course.priceInCents)}</p>
-                    {registered ? (
-                      <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50">Déjà inscrit</Badge>
-                    ) : (
-                      <Button size="sm" className="h-7 text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3" data-testid={`button-enroll-${course.id}`}>S'inscrire</Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {pageCourses.map((course) => (
+            <TrainingCard
+              key={course.id}
+              course={course}
+              isEnrolled={registeredCourseIds.has(course.id)}
+              onOpenDetail={(c) => setDetailCourseId(c.id)}
+              isDark={isDark}
+            />
+          ))}
         </div>
         <DataPagination
           page={pagination.page}
@@ -293,7 +220,24 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
         </>
       )}
 
-      <EnrollDialog course={target} alreadyRegistered={!!target && registeredCourseIds.has(target.id)} onClose={() => setTarget(null)} />
+      <AcademyDetailModal
+        courseId={detailCourseId}
+        open={detailCourseId != null}
+        onClose={() => setDetailCourseId(null)}
+        onEnroll={handleEnroll}
+        messagesBasePath="/barista-marketplace/messages"
+      />
+
+      <AcademyProfileModal
+        academyUserId={profileAcademyId}
+        open={profileAcademyId != null}
+        onClose={() => setProfileAcademyId(null)}
+        onOpenCourse={(courseId) => { setProfileAcademyId(null); setDetailCourseId(courseId); }}
+        messagesBasePath="/barista-marketplace/messages"
+      />
+
+      <EnrollDialog course={enrollTarget} open={!!enrollTarget} onClose={() => setEnrollTarget(null)} isDark={isDark} />
+
       {registeredCourseIds.size > 0 && (
         <button onClick={onGoToMyFormations} className="text-xs text-indigo-600 hover:underline self-start" data-testid="link-goto-my-formations">
           Voir mes formations →
@@ -306,7 +250,6 @@ function FormationsTab({ myRegistrations, onGoToMyFormations }: { myRegistration
 // ── Mes Formations tab ────────────────────────────────────────────────────────
 
 function RegistrationDetail({ registration, onClose }: { registration: AcademyRegistrationWithParties | null; onClose: () => void }) {
-  const { user } = useAuth();
   const { toast } = useToast();
   const fmt = useFormatCurrency();
   const updateStatus = useUpdateAcademyRegistrationStatus();
@@ -464,6 +407,7 @@ function MesFormationsTab({ registrations, isLoading, onGoToFormations }: { regi
 
 export default function BaristaAcademyMarketplacePage() {
   const [tab, setTab] = useState<"formations" | "mine">("formations");
+  const isDark = useThemeStore((s) => s.isDark);
   const { data: registrations = [], isLoading: registrationsLoading } = useAcademyRegistrations();
 
   return (
@@ -485,7 +429,7 @@ export default function BaristaAcademyMarketplacePage() {
       </Tabs>
 
       {tab === "formations" ? (
-        <FormationsTab myRegistrations={registrations} onGoToMyFormations={() => setTab("mine")} />
+        <FormationsTab myRegistrations={registrations} onGoToMyFormations={() => setTab("mine")} isDark={isDark} />
       ) : (
         <MesFormationsTab registrations={registrations} isLoading={registrationsLoading} onGoToFormations={() => setTab("formations")} />
       )}

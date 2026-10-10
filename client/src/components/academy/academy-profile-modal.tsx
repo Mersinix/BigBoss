@@ -132,7 +132,7 @@ export function AcademyProfileAvailabilityModal({
 // route/cache the self-editor and Admin overview already use) — no separate
 // profile system.
 export function AcademyProfileModal({
-  academyUserId, open, onClose, onOpenCourse, readOnly = false,
+  academyUserId, open, onClose, onOpenCourse, readOnly = false, messagesBasePath = "/cafe/messages",
 }: {
   academyUserId: number | null;
   open: boolean;
@@ -142,6 +142,10 @@ export function AcademyProfileModal({
   // used elsewhere (Part 16 "keep modal behavior clean and consistent").
   onOpenCourse?: (courseId: number) => void;
   readOnly?: boolean;
+  // Omitted by every existing caller so they keep navigating to /cafe/messages exactly
+  // as before; Barista Marketplace passes "/barista-marketplace/messages" instead
+  // (analyse.md "Aligner Espace Barista Marketplace → Académie sur Coffee Owner /academy").
+  messagesBasePath?: string;
 }) {
   const { toast } = useToast();
   const fmt = useFormatCurrency();
@@ -188,7 +192,7 @@ export function AcademyProfileModal({
     setMessaging(true);
     try {
       const res = await startAcademyConversation(card.userId);
-      navigate(`/cafe/messages?service=ACADEMY&conversationId=${res.conversation.id}`);
+      navigate(`${messagesBasePath}?service=ACADEMY&conversationId=${res.conversation.id}`);
       handleClose();
     } catch (err: any) {
       toast({ title: "Contact impossible", description: err?.message ?? "Veuillez réessayer.", variant: "destructive" });

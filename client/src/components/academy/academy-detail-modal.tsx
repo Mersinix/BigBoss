@@ -162,6 +162,7 @@ export function AcademyDetailModal({
   onClose,
   onEnroll,
   readOnly = false,
+  messagesBasePath = "/cafe/messages",
 }: {
   courseId: number | null;
   open: boolean;
@@ -174,6 +175,12 @@ export function AcademyDetailModal({
   // stays functional, and the "Académie" section still opens the real
   // AcademyProfileModal (also read-only there).
   readOnly?: boolean;
+  // Omitted by every existing caller (Admin, Coffee Owner, Academy's own
+  // preview) so they keep navigating to /cafe/messages exactly as before;
+  // Barista Marketplace passes "/barista-marketplace/messages" instead
+  // (analyse.md "Aligner Espace Barista Marketplace → Académie sur Coffee
+  // Owner /academy").
+  messagesBasePath?: string;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -256,7 +263,7 @@ export function AcademyDetailModal({
     setMessaging(true);
     try {
       const res = await startAcademyConversation(course.academyUserId);
-      navigate(`/cafe/messages?service=ACADEMY&conversationId=${res.conversation.id}`);
+      navigate(`${messagesBasePath}?service=ACADEMY&conversationId=${res.conversation.id}`);
       handleClose();
     } catch (err: any) {
       toast({ title: "Contact impossible", description: err?.message ?? "Veuillez réessayer.", variant: "destructive" });
@@ -536,6 +543,7 @@ export function AcademyDetailModal({
       onClose={() => setAcademyProfileOpen(false)}
       onOpenCourse={(newCourseId) => { setNavCourseId(newCourseId); setAcademyProfileOpen(false); }}
       readOnly={readOnly}
+      messagesBasePath={messagesBasePath}
     />
     </>
   );

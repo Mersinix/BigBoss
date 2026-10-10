@@ -33,12 +33,17 @@ export type AcademyMappedCourseCardProps = {
   onToggleFavorite: () => void;
   onClick: () => void;
   isDark: boolean;
+  // Optional — omitted by Coffee Owner's own TrainingCard (no equivalent concept there),
+  // so its appearance is unchanged. Barista Marketplace passes this to satisfy "a clear
+  // indication when the barista is already enrolled" (analyse.md "Aligner Espace Barista
+  // Marketplace → Académie sur Coffee Owner /academy").
+  isEnrolled?: boolean;
 };
 
 export function AcademyMappedCourseCard({
   id, title, category, description, imageUrl, priceInCents, academyName, academyProfileImageUrl,
   academyIsAvailable, rating, reviewCount, levelLabel, levelColorClass, hasCertification, duration,
-  isFavorited, onToggleFavorite, onClick, isDark,
+  isFavorited, onToggleFavorite, onClick, isDark, isEnrolled = false,
 }: AcademyMappedCourseCardProps) {
   const fmt = useFormatCurrency();
   const cardBg = isDark ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100";
@@ -121,7 +126,14 @@ export function AcademyMappedCourseCard({
               <span className="text-[11px] text-gray-400">({reviewCount})</span>
             </span>
           </div>
-          <p className="font-bold text-sm text-indigo-600">{fmt(priceInCents)}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-bold text-sm text-indigo-600">{fmt(priceInCents)}</p>
+            {isEnrolled && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isDark ? "bg-green-900/40 text-green-300" : "bg-green-100 text-green-700"}`}>
+                Déjà inscrit
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -4,13 +4,14 @@ const TABS = [
   { label: "Delivery Status", href: "/supplier/delivery-status" },
   { label: "My Deliveries", href: "/delivery/my-deliveries" },
   { label: "Drivers", href: "/delivery/drivers" },
+  { label: "Véhicules", href: "/delivery/vehicles" },
 ];
 
 /**
- * Tab switcher shared by the three Supplier delivery pages. Each tab is a real route (per the
- * existing routing conventions — /delivery/my-deliveries and /delivery/drivers already exist
- * for Delivery Company and are extended, not duplicated, for Supplier), so the active tab is
- * simply "whichever route we're on".
+ * Tab switcher shared by the four Supplier delivery pages. Each tab is a real route (per the
+ * existing routing conventions — /delivery/my-deliveries, /delivery/drivers, and
+ * /delivery/vehicles already exist for Delivery Company and are extended, not duplicated,
+ * for Supplier), so the active tab is simply "whichever route we're on".
  */
 export default function SupplierDeliveryTabs() {
   const [location] = useLocation();

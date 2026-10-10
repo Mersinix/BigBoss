@@ -50,6 +50,7 @@ import DeliveryCompanyBusiness from "@/pages/delivery/business";
 import DriverDeliveriesPage from "@/pages/delivery/driver-deliveries-page";
 import SupplierMyDeliveriesPage from "@/pages/supplier/my-deliveries-page";
 import SupplierDeliveryDriversPage from "@/pages/supplier/delivery-drivers-page";
+import SupplierVehiclesPage from "@/pages/supplier/vehicles-page";
 import { DriverAccountShell } from "@/components/layout/driver-account-shell";
 import { DeliveryCompanyAccountShell } from "@/components/layout/delivery-company-account-shell";
 import DeliveryCommunication from "@/pages/delivery/communication";
@@ -261,6 +262,11 @@ function DriversRoute() {
   const { user } = useAuth();
   if (user?.role === "SUPPLIER") return <SupplierDeliveryDriversPage />;
   return <Redirect to="/delivery/business?tab=drivers" />;
+}
+function VehiclesRoute() {
+  const { user } = useAuth();
+  if (user?.role === "SUPPLIER") return <SupplierVehiclesPage />;
+  return <Redirect to="/delivery/business?tab=vehicles" />;
 }
 
 // /driver/deliveries redirects into Business → Livraisons, but preserves the page's own
@@ -838,7 +844,9 @@ function Router() {
       <Route path="/delivery/drivers">
         {() => (<DeliveryCompanyOrDashboardLayout><ProtectedRoute component={DriversRoute} allowedRoles={["DELIVERY_COMPANY", "SUPPLIER"]} requireApproved /></DeliveryCompanyOrDashboardLayout>)}
       </Route>
-      <Route path="/delivery/vehicles">{() => <Redirect to="/delivery/business?tab=vehicles" />}</Route>
+      <Route path="/delivery/vehicles">
+        {() => (<DeliveryCompanyOrDashboardLayout><ProtectedRoute component={VehiclesRoute} allowedRoles={["DELIVERY_COMPANY", "SUPPLIER"]} requireApproved /></DeliveryCompanyOrDashboardLayout>)}
+      </Route>
       <Route path="/delivery/settings">
         {() => (<DeliveryCompanyAccountShell><ProtectedRoute component={DeliveryCompanySettingsPage} allowedRoles={["DELIVERY_COMPANY"]} requireApproved /></DeliveryCompanyAccountShell>)}
       </Route>

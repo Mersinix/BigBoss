@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -187,6 +188,9 @@ export function MarketingDetailModal({
   };
   const { data, isLoading } = useMarketingProfileDetail(marketingUserId);
   const card = data?.card;
+  // Cover is the detail modal's primary hero image; Photo de profil then Flash
+  // are tried in order if it's missing or fails to load (analyse.md image-mapping task).
+  const coverImage = useFallbackImage([card?.coverImageUrl, card?.profileImageUrl, card?.flashImageUrl], marketingUserId);
   const { data: reviews = [] } = useMarketingReviews(marketingUserId);
   const { data: projects = [] } = useMarketingProjects();
   const createReview = useCreateMarketingReview();
@@ -286,18 +290,24 @@ export function MarketingDetailModal({
             {/* Header image — real profile picture with existing avatar fallback,
                 same treatment/position as Barista's modal. */}
             <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-              {/* Cover (Part 4) — banner background when set, logo demoted to a small
-                  corner badge; falls back to the existing full-banner avatar otherwise. */}
-              {card.coverImageUrl ? (
-                <img src={card.coverImageUrl} alt="" className="w-full h-full object-cover" />
+              {/* Cover (Part 4) — when set (or Profile/Flash fall back in, see
+                  analyse.md image-mapping task), shown as the banner background with
+                  the logo demoted to a small corner badge; falls back to the existing
+                  initials treatment only when all three image URLs are missing or
+                  fail to load. */}
+              {coverImage.src ? (
+                <img src={coverImage.src} onError={coverImage.onError} alt="" className="w-full h-full object-cover" />
               ) : (
                 <Avatar className="w-full h-full rounded-none">
-                  <AvatarImage src={getAvatarUrl(card as any)} alt={card.name} className="object-cover" />
                   <AvatarFallback className="rounded-none bg-gradient-to-br from-purple-600 to-violet-700">
                     <span className="text-white font-bold text-6xl">{card.initials}</span>
                   </AvatarFallback>
                 </Avatar>
               )}
+              {/* Small corner logo badge — kept tied to the raw coverImageUrl field
+                  (not the resolved fallback) so it only appears when the banner is
+                  genuinely showing a distinct Cover image, never a redundant repeat
+                  of the same Photo de profil already filling the banner. */}
               {card.coverImageUrl && (
                 <Avatar className="absolute top-3 left-3 w-11 h-11 rounded-xl border-2 border-white/80 shadow-md">
                   <AvatarImage src={getAvatarUrl(card as any)} alt={card.name} className="object-cover" />
@@ -527,6 +537,7 @@ export function MarketingDetailModal({
       name={card?.name ?? ""}
       typeLabel="Marketing"
       flashImageUrl={card?.flashImageUrl}
+      coverImageUrl={card?.coverImageUrl}
       profileImageUrl={card?.profileImageUrl}
       accentBgClass="bg-purple-600"
     />

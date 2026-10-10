@@ -441,7 +441,7 @@ export default function MarketingStoreDetailPage() {
         onRequestQuote={(p) => { setPreviewServiceId(null); setQuoteProvider(p); }}
       />
 
-      <QuoteRequestDialog provider={quoteProvider} onClose={() => setQuoteProvider(null)} />
+      <QuoteRequestDialog provider={quoteProvider} onClose={() => setQuoteProvider(null)} isDark={isDark} />
     </div>
   );
 }

@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
+import { getAvatarUrl } from "@/lib/avatar";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { formatDistance } from "@/lib/distance";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -125,11 +126,9 @@ function AgentCard({
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
   const TypeIcon = TYPE_ICONS[agent.profileType] ?? User;
   const primaryCategory = agent.categories[0];
-  // Hero image — same real Flash → Profil → fallback priority already used by
-  // MaintenanceFastSearch (client/src/components/maintenance/maintenance-fast-search.tsx),
-  // now also applied here since this card's image IS the professional's own
-  // identity photo (no separate per-service image, unlike Marketing's card).
-  const heroImageSrc = getPreferredImageUrl(agent.flashImageUrl, agent.profileImageUrl) ?? undefined;
+  // Photo de profil is the card's primary image; Cover then Flash are tried in
+  // order if it's missing or fails to load (analyse.md image-mapping task).
+  const heroImage = useFallbackImage([agent.profileImageUrl, agent.coverImageUrl, agent.flashImageUrl], agent.userId);
 
   // Vertical card (docs/maintenance_barista_mapped_cards_marketing_design_audit.md)
   // — same visual grammar as MarketingMappedServiceCard (image with overlay
@@ -146,7 +145,12 @@ function AgentCard({
     >
       <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
         <Avatar className="w-full h-full rounded-none">
-          <AvatarImage src={heroImageSrc} alt={agent.name} className="object-cover group-hover:scale-105 transition-transform duration-300" />
+          <AvatarImage
+            src={heroImage.src ?? undefined}
+            alt={agent.name}
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            onLoadingStatusChange={(status) => { if (status === "error") heroImage.onError(); }}
+          />
           <AvatarFallback className="rounded-none bg-orange-100 text-orange-700 font-bold text-2xl">{agent.initials}</AvatarFallback>
         </Avatar>
 
@@ -371,6 +375,9 @@ export function AgentDetailModal({
   }, [agent?.userId]);
   const faved = useFavorites((s) => agent ? !!s.maintenance[agent.userId] : false);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
+  // Cover is the detail modal's primary hero image; Photo de profil then Flash
+  // are tried in order if it's missing or fails to load (analyse.md image-mapping task).
+  const coverImage = useFallbackImage([agent?.coverImageUrl, agent?.profileImageUrl, agent?.flashImageUrl], agent?.userId);
   // Signaler (Part 11) now opens its own separate Dialog instead of an inline
   // collapsible panel inside the main modal — same mutation/validation/
   // success-error behavior, just presented in its own modal.
@@ -409,18 +416,24 @@ export function AgentDetailModal({
               Barista Details Modal reference: full-width banner instead of a
               small avatar, favorite/report/close overlaid on the image. */}
           <div className={`relative w-full h-56 sm:h-72 shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
-            {/* Cover (Part 4) — banner background when set, logo demoted to a small
-                corner badge; falls back to the existing full-banner avatar otherwise. */}
-            {agent.coverImageUrl ? (
-              <img src={agent.coverImageUrl} alt="" className="w-full h-full object-cover" />
+            {/* Cover (Part 4) — when set (or Profile/Flash fall back in, see
+                analyse.md image-mapping task), shown as the banner background with
+                the logo demoted to a small corner badge; falls back to the existing
+                initials treatment only when all three image URLs are missing or
+                fail to load. */}
+            {coverImage.src ? (
+              <img src={coverImage.src} onError={coverImage.onError} alt="" className="w-full h-full object-cover" />
             ) : (
               <Avatar className="w-full h-full rounded-none">
-                <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />
                 <AvatarFallback className="rounded-none bg-gradient-to-br from-orange-500 to-amber-600">
                   <span className="text-white font-bold text-6xl">{agent.initials}</span>
                 </AvatarFallback>
               </Avatar>
             )}
+            {/* Small corner logo badge — kept tied to the raw coverImageUrl field
+                (not the resolved fallback) so it only appears when the banner is
+                genuinely showing a distinct Cover image, never a redundant repeat
+                of the same Photo de profil already filling the banner. */}
             {agent.coverImageUrl && (
               <Avatar className="absolute top-3 left-3 w-11 h-11 rounded-xl border-2 border-white/80 shadow-md">
                 <AvatarImage src={getAvatarUrl(agent as any)} alt={agent.name} className="object-cover" />

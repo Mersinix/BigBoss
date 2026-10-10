@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
+import { getAvatarUrl } from "@/lib/avatar";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { formatDistance } from "@/lib/distance";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -266,11 +267,9 @@ function BaristaCard({
   const faved = useFavorites((s) => !!s.baristaMarket[barista.userId]);
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
   const primarySkill = barista.skills[0];
-  // Hero image — same real Flash → Profil → fallback priority already used by
-  // BaristaFastSearch, now also applied here since this card's image IS the
-  // professional's own identity photo (no separate per-service image, unlike
-  // Marketing's card).
-  const heroImageSrc = getPreferredImageUrl(barista.flashImageUrl, barista.profileImageUrl) ?? undefined;
+  // Photo de profil is the card's primary image; Cover then Flash are tried in
+  // order if it's missing or fails to load (analyse.md image-mapping task).
+  const heroImage = useFallbackImage([barista.profileImageUrl, barista.coverImageUrl, barista.flashImageUrl], barista.userId);
 
   // Vertical card (docs/maintenance_barista_mapped_cards_marketing_design_audit.md)
   // — same visual grammar as MarketingMappedServiceCard (image with overlay
@@ -287,7 +286,12 @@ function BaristaCard({
     >
       <div className={`relative aspect-[4/3] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
         <Avatar className="w-full h-full rounded-none">
-          <AvatarImage src={heroImageSrc} alt={barista.name} className="object-cover group-hover:scale-105 transition-transform duration-300" />
+          <AvatarImage
+            src={heroImage.src ?? undefined}
+            alt={barista.name}
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            onLoadingStatusChange={(status) => { if (status === "error") heroImage.onError(); }}
+          />
           <AvatarFallback className="rounded-none bg-green-100 text-green-700 font-bold text-2xl">
             {barista.initials}
           </AvatarFallback>

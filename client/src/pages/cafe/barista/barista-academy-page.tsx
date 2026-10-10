@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
@@ -228,6 +229,9 @@ function AcademyStoreCardTile({ company, onClick, isDark }: {
   const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.academyOrganisations[company.userId]);
   const toggleAcademyOrganisation = useFavorites((s) => s.toggleAcademyOrganisation);
+  // Photo de profil is the card's primary image; Cover then Flash are tried in
+  // order if it's missing or fails to load (analyse.md image-mapping task).
+  const cardImage = useFallbackImage([company.profileImageUrl, company.coverImageUrl, company.flashImageUrl], company.userId);
 
   return (
     <div
@@ -239,8 +243,8 @@ function AcademyStoreCardTile({ company, onClick, isDark }: {
           (MarketingStoreCardTile), grid/scroll-item sizing handled by the parent
           AcademyStoresSection — docs/academy_marketing_design_synchronization_audit.md. */}
       <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {company.coverImageUrl ? (
-          <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        {cardImage.src ? (
+          <img src={cardImage.src} onError={cardImage.onError} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full flex items-center justify-center"><GraduationCap className={`w-14 h-14 ${t.textSubtle}`} /></div>
         )}

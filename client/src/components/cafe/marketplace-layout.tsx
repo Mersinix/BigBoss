@@ -2379,7 +2379,7 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
         onClose={() => setDetailMarketingId(null)}
         onRequestQuote={(p) => { setDetailMarketingId(null); setQuoteMarketingProvider(p); }}
       />
-      <MarketingQuoteRequestDialog provider={quoteMarketingProvider} onClose={() => setQuoteMarketingProvider(null)} />
+      <MarketingQuoteRequestDialog provider={quoteMarketingProvider} onClose={() => setQuoteMarketingProvider(null)} isDark={isDark} />
 
       <MarketingServiceDetailModal
         serviceId={detailMarketingServiceId}

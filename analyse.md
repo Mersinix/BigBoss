@@ -115,3 +115,104 @@ générique et sécurisé.
   relecture des fichiers modifiés pour confirmer qu'aucun comportement Delivery Company n'a
   changé, que l'onglet Supplier apparaît et route correctement, et que la Dialog d'ajout de
   véhicule utilise le bouton de fermeture déjà standardisé.
+
+---
+
+# Analyse — Synchronisation des images (Profil / Cover / Flash) avec l'interface Coffee Owner
+
+Tâche distincte, scope séparé du Véhicules ci-dessus. Trois sous-audits en parallèle
+(Academy+Barista, Marketing+Print, Delivery+Chauffeur+Maintenance) ont établi les faits
+ci-dessous avant toute modification.
+
+## 1. Où vivent les trois champs
+
+Les trois champs sont génériques sur `users` (`shared/schema.ts`) pour tous les rôles
+professionnels : `profileImageUrl`, `coverImageUrl`, `flashImageUrl`. Édités via
+Paramètres → Compte, même convention partout — confirmé, aucun changement nécessaire ici.
+
+## 2. Quels contextes Coffee Owner existent réellement, par type de compte
+
+| Type | (A) Carte mappée | (B) Cover du détail | (C) Hero Fast Search |
+|---|---|---|---|
+| Barista Academy | `AcademyStoreCardTile` (`pages/cafe/barista/barista-academy-page.tsx`) | `AcademyProfileModal` (`components/academy/academy-profile-modal.tsx`) | **N'existe pas au niveau compte** — `AcademyFastSearch` est au niveau cours (`courseId`), pas académie. Non inventé, conformément à la consigne. |
+| Barista Marketplace | `BaristaCard` (`pages/cafe/barista/barista-page.tsx`) | `BaristaDetailModal` (`components/barista/barista-detail-modal.tsx`) | `BaristaFastSearch` (`components/barista/barista-fast-search.tsx`) — seul type avec un vrai Fast Search au niveau compte |
+| Espace Livraison | — | existe en code (`delivery-company-detail-modal.tsx`) mais **jamais ouvert par un Coffee Owner** (aucun import sous `pages/cafe/**`) | n'existe pas |
+| Espace Chauffeur | — | n'existe pas pour Coffee Owner (aucun fichier sous `pages/cafe/**` ne référence un chauffeur) | n'existe pas |
+| Maintenance | `AgentCard` (`pages/cafe/maintenance/maintenance-page.tsx`) | `AgentDetailModal` (même fichier) | `MaintenanceFastSearch` (`components/maintenance/maintenance-fast-search.tsx`) |
+| Marketing | `MarketingStoreCardTile` (`pages/cafe/marketing/marketing-page.tsx`) | `MarketingDetailModal` (`components/marketing/marketing-detail-modal.tsx`) | Pas de Fast Search compte-niveau (`marketing-fast-search.tsx` est service-niveau) — l'équivalent réel est `FlashPreviewModal`, ouvert via le bouton éclair du détail modal |
+| Imprimerie | `PrintStoreCardTile` (`pages/cafe/print/print-page.tsx`) | `PrintCompanyDetailModal` (`components/print/print-company-detail-modal.tsx`) | Idem Marketing — `FlashPreviewModal` via le bouton éclair |
+
+**Espace Livraison et Espace Chauffeur sont hors scope** : aucune des trois surfaces n'est
+jamais atteinte par un Coffee Owner. Confirmé par grep des importeurs, pas supposé. Aucun
+écran n'a été inventé pour eux, conformément à la consigne.
+
+## 3. Écart serveur trouvé (avant modification)
+
+Deux endpoints "liste" (alimentant le contexte A) omettaient `coverImageUrl` dans l'objet
+carte construit côté serveur, alors que leur TYPE TypeScript le déclarait déjà et que leur
+endpoint "détail" (singulier) l'incluait déjà — exactement le même type de régression déjà
+corrigé une fois pour `flashImageUrl` (voir `docs/flash_image_sync_audit.md`) :
+- `storage.getMaintenanceProfiles()` (`server/storage.ts`) — `coverImageUrl` jamais assigné.
+- `storage.getBaristaMarketplaceProfiles()` (`server/storage.ts`) — même lacune.
+
+Académie, Marketing et Print avaient déjà les trois champs correctement assignés dans leurs
+builders de liste — vérifié directement, pas supposé.
+
+## 4. Stratégie d'implémentation
+
+- **`client/src/lib/avatar.ts`** — ajout de 3 fonctions pures nommées par contexte
+  (`getCardImageUrl`, `getDetailCoverImageUrl`, `getFastSearchImageUrl`), chacune encapsulant
+  l'ordre de priorité exact de la consigne. `getPreferredImageUrl` (2 arguments, Flash→Profil)
+  n'est pas modifiée — toujours utilisée ailleurs sans changement de comportement.
+- **`client/src/hooks/use-fallback-image.ts`** (nouveau) — hook générique `useFallbackImage`
+  qui essaie chaque URL candidate dans l'ordre, avance au suivant sur échec de chargement
+  (`onError`), déduplique les URL répétées (pas de boucle), et retombe sur `null` une fois les
+  trois épuisées — l'appelant garde alors son propre placeholder existant. Réutilisé partout
+  plutôt que ré-implémenté par composant.
+- **Cartes mappées (Academy/Barista/Marketing/Maintenance/Print)** — l'image principale
+  utilise désormais `useFallbackImage([profil, cover, flash])`. Le petit badge logo secondaire
+  (Academy/Marketing/Print — design à deux images préexistant) reste câblé sur le champ brut
+  `coverImageUrl` (pas la valeur résolue), pour ne jamais dupliquer la même photo de profil
+  deux fois quand Cover est vide et que Profil comble la bannière.
+- **Covers des détails** — `useFallbackImage([cover, profil, flash])`, même traitement.
+- **Fast Search / Flash hero** — `BaristaFastSearch` et `MaintenanceFastSearch` migrés de leur
+  ancien système `flashFailed` (booléen, 2 valeurs) vers le hook partagé avec `[flash, cover,
+  profil]`. `FlashPreviewModal` (partagé par ~10 surfaces, dont le Zap du détail Marketing/
+  Print) reçoit un nouveau prop optionnel `coverImageUrl` — omis par tous les appelants sauf
+  Marketing/Print, donc comportement inchangé pour toutes les autres (préviews "Aperçu Flash"
+  propres de chaque compte, hors scope Coffee Owner).
+
+## 5. Fichiers modifiés/créés
+
+| Fichier | Changement |
+|---|---|
+| `server/storage.ts` | Ajout de `coverImageUrl` dans `getMaintenanceProfiles` et `getBaristaMarketplaceProfiles` |
+| `client/src/lib/avatar.ts` | +3 fonctions (`getCardImageUrl`, `getDetailCoverImageUrl`, `getFastSearchImageUrl`) et leur base commune `pickImageUrl` |
+| `client/src/hooks/use-fallback-image.ts` | Nouveau hook partagé |
+| `client/src/pages/cafe/barista/barista-academy-page.tsx` | `AcademyStoreCardTile` → Profil primaire |
+| `client/src/components/academy/academy-profile-modal.tsx` | Cover → Profil → Flash |
+| `client/src/pages/cafe/barista/barista-page.tsx` | `BaristaCard` → Profil primaire |
+| `client/src/components/barista/barista-detail-modal.tsx` | Cover → Profil → Flash |
+| `client/src/components/barista/barista-fast-search.tsx` | Flash → Cover → Profil |
+| `client/src/pages/cafe/marketing/marketing-page.tsx` | `MarketingStoreCardTile` → Profil primaire |
+| `client/src/components/marketing/marketing-detail-modal.tsx` | Cover → Profil → Flash |
+| `client/src/pages/cafe/print/print-page.tsx` | `PrintStoreCardTile` → Profil primaire |
+| `client/src/components/print/print-company-detail-modal.tsx` | Cover → Profil → Flash |
+| `client/src/pages/cafe/maintenance/maintenance-page.tsx` | `AgentCard` → Profil primaire ; `AgentDetailModal` Cover → Profil → Flash |
+| `client/src/components/maintenance/maintenance-fast-search.tsx` | Flash → Cover → Profil |
+| `client/src/components/account/flash-preview-modal.tsx` | +prop optionnel `coverImageUrl`, inséré dans la chaîne Flash → Cover → Profil |
+
+## 6. Rétrocompatibilité
+
+- Aucun changement de schéma, aucune nouvelle route, aucun comportement de sauvegarde modifié.
+- `getPreferredImageUrl` (signature à 2 arguments) n'a pas été touchée.
+- `FlashPreviewModal` : tous les appelants hors Marketing/Print n'ont pas changé de
+  comportement (prop optionnel omis → `undefined` → ignoré par le hook).
+- Espace Livraison, Espace Chauffeur, Admin, Supplier : aucun fichier modifié.
+
+## 7. Tests exécutés
+
+- `npx tsc --noEmit` — exit 0.
+- `npm run build` — succès (2812 modules, contre 2809 avant — les deux nouveaux fichiers).
+- Aucun navigateur disponible dans cet environnement — pas de vérification visuelle réelle du
+  rendu clair/sombre ni du comportement de repli sur une image cassée en conditions réelles.

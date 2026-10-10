@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { X, Zap, Eye } from "lucide-react";
-import { normalizeImageUrl, getPreferredImageUrl } from "@/lib/avatar";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 
 // Shared "Flash" highlight — a single full-bleed image (Settings → Compte's
 // new "Flash (URL)" field) shown in a lightweight story-style card, reused
@@ -17,36 +16,30 @@ import { normalizeImageUrl, getPreferredImageUrl } from "@/lib/avatar";
 // Missing/broken images fall back to the account's own profile photo, then to
 // a plain placeholder — never a blank/broken-image box.
 export function FlashPreviewModal({
-  open, onClose, name, typeLabel, flashImageUrl, profileImageUrl, accentBgClass, preview,
+  open, onClose, name, typeLabel, flashImageUrl, coverImageUrl, profileImageUrl, accentBgClass, preview,
 }: {
   open: boolean;
   onClose: () => void;
   name: string;
   typeLabel?: string | null;
   flashImageUrl?: string | null;
+  // Optional — omitted by every caller except Marketing/Print's Coffee-Owner-
+  // facing detail modals (analyse.md image-mapping task), so every other
+  // existing caller's behavior (Flash then Photo de profil only) is unchanged.
+  coverImageUrl?: string | null;
   profileImageUrl?: string | null;
   // Full Tailwind class string, passed whole (never interpolated) so
   // Tailwind's JIT scanner sees the literal class — e.g. "bg-fuchsia-600".
   accentBgClass: string;
   preview?: boolean;
 }) {
-  // Shared Flash (URL) > Photo de profil (URL) priority (getPreferredImageUrl,
-  // see client/src/lib/avatar.ts and flash_image_sync_audit.md) — identical to
-  // BaristaFastSearch's own selection logic. `fallback` is kept as its own
-  // normalized value (not just folded into the priority call) because the
-  // retry step below needs to name it explicitly: "if what just failed wasn't
-  // already the photo, and a photo exists, retry with it."
-  const primary = normalizeImageUrl(flashImageUrl);
-  const fallback = normalizeImageUrl(profileImageUrl);
-  // Flash (URL) takes priority; if it's unset OR fails to actually load, fall
-  // through to Photo de profil (URL); if that's also unset/broken, show the
-  // plain placeholder below — never a blank/broken-image box.
-  const [imgSrc, setImgSrc] = useState<string | null>(getPreferredImageUrl(flashImageUrl, profileImageUrl));
-  const [triedFallback, setTriedFallback] = useState(false);
-  useEffect(() => {
-    setImgSrc(getPreferredImageUrl(flashImageUrl, profileImageUrl));
-    setTriedFallback(false);
-  }, [primary, fallback]);
+  // Flash (URL) takes priority; Cover then Photo de profil are tried in order
+  // if it's unset OR fails to actually load; if all three are unset/broken,
+  // show the plain placeholder below — never a blank/broken-image box.
+  const heroImage = useFallbackImage(
+    [flashImageUrl, coverImageUrl, profileImageUrl],
+    `${flashImageUrl}|${coverImageUrl}|${profileImageUrl}`,
+  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -70,22 +63,12 @@ export function FlashPreviewModal({
 
           {/* Image */}
           <div className="relative flex-1 bg-gray-900 overflow-hidden">
-            {imgSrc ? (
+            {heroImage.src ? (
               <img
-                src={imgSrc}
+                src={heroImage.src}
                 alt={name}
                 className="w-full h-full object-cover"
-                onError={() => {
-                  // Primary (Flash) image failed — try the profile photo once;
-                  // if that was already what failed, or there's nothing left,
-                  // drop to the placeholder instead of a broken-image box.
-                  if (!triedFallback && imgSrc !== fallback && fallback) {
-                    setTriedFallback(true);
-                    setImgSrc(fallback);
-                  } else {
-                    setImgSrc(null);
-                  }
-                }}
+                onError={heroImage.onError}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">

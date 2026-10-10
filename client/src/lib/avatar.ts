@@ -35,3 +35,46 @@ export function getPreferredImageUrl(
 ): string | null {
   return normalizeImageUrl(flashImageUrl) ?? normalizeImageUrl(profileImageUrl);
 }
+
+// Generic "first valid URL" picker underlying the three context-specific wrappers
+// below (analyse.md — Coffee Owner image-mapping task). Each Coffee Owner display
+// context has its own primary field plus a fixed fallback order across the other
+// two; this is the one place that order is expressed, so the three contexts can't
+// silently drift apart. Kept separate from getPreferredImageUrl above (not a
+// signature change to it) so every existing 2-argument caller is unaffected.
+function pickImageUrl(...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    const normalized = normalizeImageUrl(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+// Coffee Owner mapped card (one card per professional account in a browse list) —
+// Photo de profil first, then Cover, then Flash.
+export function getCardImageUrl(
+  profileImageUrl?: string | null,
+  coverImageUrl?: string | null,
+  flashImageUrl?: string | null,
+): string | null {
+  return pickImageUrl(profileImageUrl, coverImageUrl, flashImageUrl);
+}
+
+// Coffee Owner account detail modal's cover/hero banner — Cover first, then Photo
+// de profil, then Flash.
+export function getDetailCoverImageUrl(
+  coverImageUrl?: string | null,
+  profileImageUrl?: string | null,
+  flashImageUrl?: string | null,
+): string | null {
+  return pickImageUrl(coverImageUrl, profileImageUrl, flashImageUrl);
+}
+
+// Coffee Owner Fast Search hero — Flash first, then Cover, then Photo de profil.
+export function getFastSearchImageUrl(
+  flashImageUrl?: string | null,
+  coverImageUrl?: string | null,
+  profileImageUrl?: string | null,
+): string | null {
+  return pickImageUrl(flashImageUrl, coverImageUrl, profileImageUrl);
+}

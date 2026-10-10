@@ -18,6 +18,7 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import type { PrintCatalogCard, PrintCompanyListCard } from "@shared/schema";
 import { printCategoryIcon } from "@/lib/print-category-icons";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
@@ -158,6 +159,9 @@ function PrintStoreCardTile({ company, onClick, isDark }: {
   const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.printCompanies[company.userId]);
   const togglePrintCompany = useFavorites((s) => s.togglePrintCompany);
+  // Photo de profil is the card's primary image; Cover then Flash are tried in
+  // order if it's missing or fails to load (analyse.md image-mapping task).
+  const cardImage = useFallbackImage([company.profileImageUrl, company.coverImageUrl, company.flashImageUrl], company.userId);
 
   return (
     <div
@@ -169,8 +173,8 @@ function PrintStoreCardTile({ company, onClick, isDark }: {
           (MarketingStoreCardTile), grid/scroll-item sizing handled by the parent
           PrintStoresSection — docs/print_marketing_design_synchronization_audit.md. */}
       <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {company.coverImageUrl ? (
-          <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        {cardImage.src ? (
+          <img src={cardImage.src} onError={cardImage.onError} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full flex items-center justify-center"><Printer className={`w-14 h-14 ${t.textSubtle}`} /></div>
         )}

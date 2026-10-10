@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import {
   Select,
@@ -127,6 +128,9 @@ function MarketingStoreCardTile({ company, onClick, isDark }: {
   const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.marketingAgencies[company.userId]);
   const toggleMarketingAgency = useFavorites((s) => s.toggleMarketingAgency);
+  // Photo de profil is the card's primary image; Cover then Flash are tried in
+  // order if it's missing or fails to load (analyse.md image-mapping task).
+  const cardImage = useFallbackImage([company.profileImageUrl, company.coverImageUrl, company.flashImageUrl], company.userId);
 
   return (
     <div
@@ -138,8 +142,8 @@ function MarketingStoreCardTile({ company, onClick, isDark }: {
           handled by the parent MarketingStoresSection, see its own comment)
           (docs/marketing_cards_final_layout_synchronization_audit.md). */}
       <div className={`relative aspect-[16/9] overflow-hidden ${isDark ? "bg-gray-700" : "bg-gray-50"}`}>
-        {company.coverImageUrl ? (
-          <img src={company.coverImageUrl} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        {cardImage.src ? (
+          <img src={cardImage.src} onError={cardImage.onError} alt={company.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full flex items-center justify-center"><Megaphone className={`w-14 h-14 ${t.textSubtle}`} /></div>
         )}
@@ -262,7 +266,8 @@ function StarRating({ rating, isDark = false }: { rating: number; isDark?: boole
 
 // ── Quote request modal — real POST /api/marketing/projects, not a dead button ──
 
-export function QuoteRequestDialog({ provider, onClose }: { provider: MarketingMarketplaceCard | null; onClose: () => void }) {
+export function QuoteRequestDialog({ provider, onClose, isDark }: { provider: MarketingMarketplaceCard | null; onClose: () => void; isDark: boolean }) {
+  const t = useTheme(isDark);
   const { toast } = useToast();
   const createProject = useCreateMarketingProject();
   const [service, setService] = useState("");
@@ -287,28 +292,34 @@ export function QuoteRequestDialog({ provider, onClose }: { provider: MarketingM
 
   return (
     <Dialog open={!!provider} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Demander un devis</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">
+      <DialogContent className={`sm:max-w-md rounded-2xl border-0 shadow-2xl ${t.cardBg} ${t.textPrimary}`}>
+        <DialogHeader><DialogTitle className={isDark ? " text-gray-200 hover:text-white" : " text-gray-700 "}>Demander un devis</DialogTitle></DialogHeader>
+        <p className={`text-sm ${t.textMuted}`}>
           Décrivez votre besoin à {provider?.name}. Vous recevrez une réponse et un devis directement dans vos notifications.
         </p>
         {categories.length > 0 && (
           <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground font-medium">Service concerné</label>
+            <label className={`text-xs font-medium ${t.textMuted}`}>Service concerné</label>
             <Select value={selectedService} onValueChange={setService}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className={t.inputBg}><SelectValue /></SelectTrigger>
+              <SelectContent className={t.selectContent}>
                 {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         )}
         <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground font-medium">Détails de votre demande</label>
-          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Décrivez votre projet, vos objectifs, votre budget approximatif…" />
+          <label className={`text-xs font-medium ${t.textMuted}`}>Détails de votre demande</label>
+          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Décrivez votre projet, vos objectifs, votre budget approximatif…" className={t.inputBg} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className={isDark ? "border-gray-700 text-gray-200 hover:bg-gray-700 hover:text-white" : "border-gray-200 text-gray-700 hover:bg-gray-50"}
+          >
+            Annuler
+          </Button>
           <Button disabled={!selectedService || createProject.isPending} onClick={submit} className="bg-purple-600 hover:bg-purple-700 text-white">
             {createProject.isPending ? "Envoi…" : "Envoyer la demande"}
           </Button>
@@ -729,7 +740,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         onRequestQuote={(p) => setQuoteProvider(p)}
       />
 
-      <QuoteRequestDialog provider={quoteProvider} onClose={() => setQuoteProvider(null)} />
+      <QuoteRequestDialog provider={quoteProvider} onClose={() => setQuoteProvider(null)} isDark={isDark} />
     </div>
   );
 }

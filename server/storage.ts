@@ -5937,6 +5937,9 @@ export class DatabaseStorage implements IStorage {
         // just brings the list in line, mirroring the identical fix already
         // applied to getBaristaMarketplaceProfiles.
         flashImageUrl: user.flashImageUrl ?? null,
+        // Same gap as above, for the Coffee Owner detail modal's Cover image
+        // (analyse.md — image-mapping task) — getMaintenanceCard already had it.
+        coverImageUrl: user.coverImageUrl ?? null,
         location,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
         available,
@@ -9014,6 +9017,9 @@ export class DatabaseStorage implements IStorage {
         // profile photo. getBaristaMarketplaceCard (the single-barista detail
         // endpoint) already included it — this just brings the list in line.
         flashImageUrl: user.flashImageUrl ?? null,
+        // Same gap as above, for the Coffee Owner mapped card's Cover fallback
+        // (analyse.md — image-mapping task) — getBaristaMarketplaceCard already had it.
+        coverImageUrl: user.coverImageUrl ?? null,
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
         location: profile.city || this.formatPublicLocation(user),
         available,

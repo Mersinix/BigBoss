@@ -3,7 +3,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Heart, X, ChevronRight, Wrench, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Eye } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
+import { DEFAULT_AVATAR_URL } from "@/lib/avatar";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { MaintenanceJobTargetButton } from "@/components/maintenance/maintenance-job-target-button";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 
@@ -45,18 +46,14 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail, 
   useEffect(() => { setIdx(0); setHeartAnim(false); }, [filtered.length, open]);
   const current = filtered[idx] ?? null;
 
-  // Flash (URL) > Photo de profil (URL) — same shared priority as
-  // BaristaFastSearch (client/src/lib/avatar.ts). Applied in BOTH modes
-  // (docs/maintenance_flash_image_sync_audit.md) — the Coffee Owner's real
-  // Fast Search must show each provider's own Flash image too, not just the
-  // provider's own preview. The two-part root cause (the list endpoint
-  // never returned flashImageUrl, and this component never read it even
-  // when present) is fixed in server/storage.ts's getMaintenanceProfiles and
-  // here together.
-  const [flashFailed, setFlashFailed] = useState(false);
-  useEffect(() => { setFlashFailed(false); }, [current?.userId]);
-  const preferredImageUrl = getPreferredImageUrl(current?.flashImageUrl, current?.profileImageUrl);
-  const heroImageSrc = !flashFailed && preferredImageUrl ? preferredImageUrl : getAvatarUrl(current as any);
+  // Flash (URL) is the Fast Search hero's primary image; Cover then Photo de
+  // profil are tried in order if it's missing or fails to load (analyse.md
+  // image-mapping task — supersedes the former 2-way Flash/Profile-only chain).
+  // Applied in BOTH modes (docs/maintenance_flash_image_sync_audit.md) — the
+  // Coffee Owner's real Fast Search must show each provider's own Flash image
+  // too, not just the provider's own preview.
+  const heroImage = useFallbackImage([current?.flashImageUrl, current?.coverImageUrl, current?.profileImageUrl], current?.userId);
+  const heroImageSrc = heroImage.src ?? DEFAULT_AVATAR_URL;
 
   const faved = useFavorites((s) => (current ? !!s.maintenance[current.userId] : false));
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
@@ -128,11 +125,11 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail, 
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
               <Avatar className="w-full h-full rounded-none">
                 <AvatarImage
-                  key={`${idx}-${flashFailed}`}
+                  key={`${idx}-${heroImageSrc}`}
                   src={heroImageSrc}
                   alt={current!.name}
                   className="object-cover"
-                  onLoadingStatusChange={(status) => { if (status === "error" && !flashFailed && preferredImageUrl) setFlashFailed(true); }}
+                  onLoadingStatusChange={(status) => { if (status === "error") heroImage.onError(); }}
                 />
                 <AvatarFallback className="rounded-none bg-gradient-to-br from-orange-900 to-amber-950">
                   <span className="text-white/80 font-bold text-6xl">{current!.initials}</span>

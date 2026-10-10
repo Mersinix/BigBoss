@@ -3,7 +3,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Heart, X, ChevronRight, Users, Zap, SlidersHorizontal, Check, Info, MapPin, Star, Eye, Briefcase } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl, getPreferredImageUrl } from "@/lib/avatar";
+import { DEFAULT_AVATAR_URL } from "@/lib/avatar";
+import { useFallbackImage } from "@/hooks/use-fallback-image";
 import type { BaristaMarketplaceCard } from "@/hooks/use-barista-marketplace";
 import { BaristaJobTargetButton } from "@/components/barista/barista-job-target-button";
 
@@ -55,19 +56,11 @@ export function BaristaFastSearch({ open, onClose, baristas, onOpenDetail, previ
 
   const current = filtered[idx] ?? null;
 
-  // Flash (URL) is the "Fast Search" hero image when set and loadable;
-  // Photo de profil (URL) is the fallback — shared priority logic
-  // (getPreferredImageUrl, see client/src/lib/avatar.ts and
-  // flash_image_sync_audit.md) with FlashPreviewModal, so what a Coffee Owner
-  // sees here always matches what the Barista configured as Flash. (The
-  // actual data gap that made these two silently disagree was the public
-  // barista list missing flashImageUrl server-side — fixed in
-  // getBaristaMarketplaceProfiles; this component's own logic was already
-  // correct once that field is present.)
-  const [flashFailed, setFlashFailed] = useState(false);
-  useEffect(() => { setFlashFailed(false); }, [current?.userId]);
-  const preferredImageUrl = getPreferredImageUrl(current?.flashImageUrl, current?.profileImageUrl);
-  const heroImageSrc = !flashFailed && preferredImageUrl ? preferredImageUrl : getAvatarUrl(current as any);
+  // Flash (URL) is the Fast Search hero's primary image; Cover then Photo de
+  // profil are tried in order if it's missing or fails to load (analyse.md
+  // image-mapping task — supersedes the former 2-way Flash/Profile-only chain).
+  const heroImage = useFallbackImage([current?.flashImageUrl, current?.coverImageUrl, current?.profileImageUrl], current?.userId);
+  const heroImageSrc = heroImage.src ?? DEFAULT_AVATAR_URL;
 
   const faved = useFavorites((s) => (current ? !!s.baristaMarket[current.userId] : false));
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
@@ -152,16 +145,15 @@ export function BaristaFastSearch({ open, onClose, baristas, onOpenDetail, previ
           ) : (
             <div className="relative flex-1 bg-gray-900 overflow-hidden">
               {/* Same Avatar/AvatarImage/AvatarFallback pattern used everywhere
-                  else in the app, fed by heroImageSrc (Flash (URL) first, Photo
-                  de profil (URL) if Flash is unset/fails to load, the app's
-                  existing default avatar/initials beyond that). */}
+                  else in the app, fed by heroImageSrc (Flash → Cover → Photo de
+                  profil, the app's existing default avatar/initials beyond that). */}
               <Avatar className="w-full h-full rounded-none">
                 <AvatarImage
-                  key={`${idx}-${flashFailed}`}
+                  key={`${idx}-${heroImageSrc}`}
                   src={heroImageSrc}
                   alt={current!.name}
                   className="object-cover"
-                  onLoadingStatusChange={(status) => { if (status === "error" && !flashFailed && preferredImageUrl) setFlashFailed(true); }}
+                  onLoadingStatusChange={(status) => { if (status === "error") heroImage.onError(); }}
                 />
                 <AvatarFallback className="rounded-none bg-gradient-to-br from-green-900 to-emerald-950">
                   <span className="text-white/80 font-bold text-6xl">{current!.initials}</span>

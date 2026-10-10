@@ -258,7 +258,10 @@ function SearchDialog({ open, onClose, onComplete, prospectTypes }: { open: bool
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent hideClose className="sm:max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-search-dialog">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-primary" />
@@ -436,7 +439,10 @@ function AddProspectDialog({ open, onClose, onSaved, prospectTypes }: { open: bo
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent hideClose className="sm:max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-add-prospect-dialog">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>Add Prospect Manually</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <div><Label>Business Name *</Label><Input className="mt-1" value={form.businessName} onChange={e => set("businessName", e.target.value)} /></div>
@@ -742,9 +748,9 @@ function ProspectSheet({ prospect, open, onClose, onSaved, prospectTypes }: {
                 outside the Tabs component (Phase 10). Edit mode keeps its own
                 explicit Save/Cancel, so closing mid-edit via this button discards
                 unsaved changes exactly like Cancel already does (no silent save). */}
-            <Button size="sm" variant="ghost" className="shrink-0 h-7 w-7 p-0" onClick={onClose} aria-label="Close" data-testid="button-close-prospect-sheet">
+            <button type="button" className="shrink-0 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-prospect-sheet">
               <X className="w-4 h-4" />
-            </Button>
+            </button>
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {prospectView.prospectType && <Badge variant="outline" className="text-[10px]">{prospectTypes.find(t => t.key === prospectView.prospectType)?.label ?? TYPE_LABELS[prospectView.prospectType] ?? prospectView.prospectType}</Badge>}
@@ -965,7 +971,10 @@ function TypeManagementModal({ open, onClose, prospectTypes }: { open: boolean; 
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent hideClose className="sm:max-w-md">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-manage-prospect-types">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle className="flex items-center gap-2"><Tag className="w-4 h-4 text-primary" />Manage Prospect Types</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div>
@@ -1084,7 +1093,10 @@ function CreateAccountModal({ prospect, type, open, onClose }: { prospect: Prosp
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent hideClose className="sm:max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-create-account-modal">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle className="flex items-center gap-2"><config.icon className="w-4 h-4 text-primary" />Create {config.label} Account</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           {prospect.accountMatch && prospect.accountMatch.status !== "NONE" && (

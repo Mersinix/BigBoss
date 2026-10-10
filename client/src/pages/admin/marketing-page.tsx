@@ -364,7 +364,10 @@ function AddMarketingAccountModal({ open, onClose, onCreated }: { open: boolean;
   });
   const valid = form.name.trim().length >= 2 && form.email.includes("@") && form.password.length >= 6;
   return <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-    <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+    <DialogContent hideClose className="max-w-md max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-add-marketing-account">
+        <X className="w-4 h-4" />
+      </button>
       <DialogHeader><DialogTitle>Ajouter un compte Marketing</DialogTitle></DialogHeader>
       <div className="space-y-3">
         <div><label className="text-xs text-muted-foreground">Nom / Agence</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-add-marketing-name" /></div>
@@ -447,7 +450,10 @@ function ProjectDetail({ project, onClose, onRefresh }: { project: any | null; o
   return <Dialog open onOpenChange={(open) => !open && onClose()}>
     {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
         scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+    <DialogContent hideClose className="max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-marketing-project-detail">
+        <X className="w-4 h-4" />
+      </button>
       <DialogHeader><DialogTitle>Projet #{project.id}</DialogTitle></DialogHeader>
       {editing ? (
         <div className="space-y-2">

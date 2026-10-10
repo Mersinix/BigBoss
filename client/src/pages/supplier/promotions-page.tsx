@@ -509,7 +509,10 @@ function PromotionAssignmentDialog({
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent hideClose className="max-w-2xl max-h-[90vh] flex flex-col">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-promotion-assignment">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="w-5 h-5 text-amber-600" />
@@ -1046,7 +1049,10 @@ export default function PromotionsPage() {
       {/* Create / Edit Dialog — thin scrollbar treatment, same thumb/track/hover
           classes used elsewhere in the app, not a new scrollbar style. */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <DialogContent hideClose className="max-w-xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setFormOpen(false)} aria-label="Close" data-testid="button-close-promotion-dialog">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader>
             <DialogTitle>{editingPromo ? "Edit Promotion" : "Create Promotion"}</DialogTitle>
           </DialogHeader>

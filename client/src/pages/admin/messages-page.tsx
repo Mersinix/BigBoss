@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Download, Eye, EyeOff, Megaphone, MessageSquare, Trash2, Users } from "lucide-react";
+import { Download, Eye, EyeOff, Megaphone, MessageSquare, Trash2, Users, X } from "lucide-react";
 import { MessagesPanel } from "@/components/messages/messages-panel";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
@@ -70,8 +70,12 @@ function BroadcastDialog({ contacts, onClose }: { contacts: EligibleContact[]; o
     <Dialog open onOpenChange={o => !o && onClose()}>
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-broadcast-dialog">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle><Megaphone className="w-4 h-4 inline mr-2" />Create Broadcast</DialogTitle></DialogHeader>
+        
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label>Broadcast title</Label>
@@ -363,7 +367,7 @@ export default function AdminMessagesPage() {
                 </div>
               </Tabs>
             </div>
-            {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service={myService} />}
+            {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service={myService} standardizedCloseButton />}
           </div>
         </TabsContent>
 

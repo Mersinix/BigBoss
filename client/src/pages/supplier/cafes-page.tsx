@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Coffee, Plus, Search, MapPin, Phone, Mail, ShoppingBag, Wallet, Loader2, Sparkles } from "lucide-react";
+import { Coffee, Plus, Search, MapPin, Phone, Mail, ShoppingBag, Wallet, Loader2, Sparkles, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
@@ -35,7 +35,10 @@ function AddCafeModal({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose(); } }}>
-      <DialogContent>
+      <DialogContent hideClose>
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { reset(); onClose(); }} aria-label="Close" data-testid="button-close-add-cafe">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>Ajouter un café</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <Input placeholder="Nom du café" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} data-testid="input-new-cafe-name" />
@@ -69,7 +72,10 @@ function CafeDetailModal({ cafe, onClose }: { cafe: SupplierCafe | null; onClose
   const fmt = useFormatCurrency();
   return (
     <Dialog open={cafe !== null} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent hideClose className="sm:max-w-md">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-cafe-detail">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Coffee className="w-5 h-5 text-primary" />Détails du café

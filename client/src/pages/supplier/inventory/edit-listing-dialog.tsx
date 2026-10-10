@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { InventoryItem, InventoryVariantItem } from "@shared/schema";
@@ -97,7 +98,10 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className={hasVariants ? "max-w-2xl" : undefined} data-testid="dialog-edit-listing">
+      <DialogContent hideClose className={hasVariants ? "max-w-2xl" : undefined} data-testid="dialog-edit-listing">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-edit-inventory-listing">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle>Edit Inventory Details — {item.productName}</DialogTitle>
         </DialogHeader>

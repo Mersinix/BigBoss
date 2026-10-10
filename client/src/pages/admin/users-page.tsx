@@ -226,7 +226,10 @@ function UserDetailDialog({
     <Dialog open={open} onOpenChange={v => { if (!v) { setConfirmDelete(false); onClose(); } }}>
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent hideClose className="sm:max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setConfirmDelete(false); onClose(); }} aria-label="Close" data-testid="button-close-user-detail">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 flex-wrap">
             <Avatar className="w-9 h-9">
@@ -520,7 +523,10 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
           <Plus className="w-4 h-4" /> Add User
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent hideClose className="sm:max-w-md max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setOpen(false); reset(); }} aria-label="Close" data-testid="button-close-add-user">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>Ajouter un utilisateur</DialogTitle></DialogHeader>
         <div className="space-y-4 mt-2">
 
@@ -921,7 +927,10 @@ export default function UsersPage() {
       {/* Delete confirmation dialog */}
       {deletingUser && (
         <Dialog open={!!deletingUser} onOpenChange={() => setDeletingUser(null)}>
-          <DialogContent className="sm:max-w-sm">
+          <DialogContent hideClose className="sm:max-w-sm">
+            <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setDeletingUser(null)} aria-label="Close" data-testid="button-close-delete-user">
+              <X className="w-4 h-4" />
+            </button>
             <DialogHeader><DialogTitle>Supprimer "{deletingUser.name}" ?</DialogTitle></DialogHeader>
             <p className="text-sm text-muted-foreground">
               Cette action est irréversible. L'utilisateur et toutes ses données seront définitivement supprimés.

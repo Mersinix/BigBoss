@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { X } from "lucide-react";
 import type { InventoryItem, InventoryVariantItem } from "@shared/schema";
 
 const REASONS = ["Restock", "Damaged goods", "Manual recount", "Sample given out", "Correction", "Other"];
@@ -48,7 +49,10 @@ export function AdjustStockDialog({ item, variant, onClose }: { item: InventoryI
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent data-testid="dialog-adjust-stock">
+      <DialogContent hideClose data-testid="dialog-adjust-stock">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-adjust-stock">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Layers, AlertTriangle } from "lucide-react";
+import { Minus, Plus, Layers, AlertTriangle, X } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
 import { useSupplierCancelItems } from "@/hooks/use-orders";
@@ -108,7 +108,10 @@ export default function SupplierCancelItemsModal({
 
   return (
     <Dialog open={!!subOrder} onOpenChange={(v) => { if (!v) { setSelection({}); onClose(); } }}>
-      <DialogContent className={`max-w-lg w-[calc(100%-2rem)] rounded-3xl border-0 shadow-2xl ${t.dk ? "bg-gray-900" : "bg-white"}`}>
+      <DialogContent hideClose className={`max-w-lg w-[calc(100%-2rem)] rounded-3xl border-0 shadow-2xl ${t.dk ? "bg-gray-900" : "bg-white"}`}>
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setSelection({}); onClose(); }} aria-label="Close" data-testid="button-close-cancel-items">
+          <X className="w-4 h-4" />
+        </button>
         <DialogTitle className={t.textPrimary}>Annuler des articles</DialogTitle>
         {subOrder && (
           <>

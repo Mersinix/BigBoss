@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/format";
-import { ArrowUp, ArrowDown, Equal } from "lucide-react";
+import { ArrowUp, ArrowDown, Equal, X } from "lucide-react";
 import type { InventoryAdjustmentWithVariant, InventoryItem } from "@shared/schema";
 
 const TYPE_META: Record<string, { icon: JSX.Element; cls: string }> = {
@@ -24,7 +24,10 @@ export function StockHistoryDialog({ item, onClose }: { item: InventoryItem; onC
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg" data-testid="dialog-stock-history">
+      <DialogContent hideClose className="max-w-lg" data-testid="dialog-stock-history">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-stock-history">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle>Stock History — {item.productName}</DialogTitle>
         </DialogHeader>

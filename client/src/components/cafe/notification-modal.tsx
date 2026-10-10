@@ -114,7 +114,7 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
           </h2>
           <button
             onClick={() => onOpenChange(false)}
-            className={`p-1.5 rounded-full transition-colors ${isDark ? "hover:bg-gray-800 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
+            className={`p-1.5 rounded-full transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
             data-testid="button-close-notifications"
           >
             <X className="w-4 h-4" />

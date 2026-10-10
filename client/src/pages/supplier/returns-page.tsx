@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RotateCcw, CheckCircle, Clock, XCircle, AlertCircle, Loader2, Box } from "lucide-react";
+import { RotateCcw, CheckCircle, Clock, XCircle, AlertCircle, Loader2, Box, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderReturnRow } from "@/hooks/use-orders";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
@@ -74,7 +74,10 @@ function ReviewModal({
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-lg rounded-2xl">
+      <DialogContent hideClose className="sm:max-w-lg rounded-2xl">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => onClose()} aria-label="Close" data-testid="button-close-return-review">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RotateCcw className="w-4 h-4 text-amber-500" />

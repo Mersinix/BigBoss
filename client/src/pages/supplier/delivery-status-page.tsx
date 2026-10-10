@@ -119,7 +119,10 @@ export function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDe
   const [view, setView] = useState<"choose" | "browse">("choose");
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent hideClose>
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-dispatch-dialog">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>Comment livrer cette commande ?</DialogTitle></DialogHeader>
         <p className="text-sm text-muted-foreground">
           Commande #{delivery.orderId} · {delivery.cafe.name}
@@ -414,7 +417,10 @@ export default function SupplierDeliveryStatusPage() {
       {dispatchTarget && <DispatchDialog delivery={dispatchTarget} onClose={() => setDispatchTarget(null)} />}
 
       <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTarget(null); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setViewTarget(null)} aria-label="Close" data-testid="button-close-delivery-detail">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>
           {viewTarget && <DeliveryDetails delivery={viewTarget} viewerRole="SUPPLIER" />}
         </DialogContent>

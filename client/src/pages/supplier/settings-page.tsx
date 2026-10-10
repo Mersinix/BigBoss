@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getAvatarUrl } from "@/lib/avatar";
-import { User, CreditCard, MapPin, Building2, FileText, Landmark, Lock, LogOut } from "lucide-react";
+import { User, CreditCard, MapPin, Building2, FileText, Landmark, Lock, LogOut, X } from "lucide-react";
 import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
 import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
@@ -40,7 +40,10 @@ function CompanyDetailsModal({ open, onClose, user }: { open: boolean; onClose: 
   };
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md rounded-2xl">
+      <DialogContent hideClose className="sm:max-w-md rounded-2xl">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-company-details">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Informations de l'entreprise</DialogTitle></DialogHeader>
         <div className="space-y-3 mt-2">
           <div className="space-y-1.5"><Label>Nom de l'entreprise</Label><Input data-testid="input-company-name" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></div>
@@ -79,7 +82,10 @@ function LegalTaxModal({ open, onClose, user }: { open: boolean; onClose: () => 
   };
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md rounded-2xl">
+      <DialogContent hideClose className="sm:max-w-md rounded-2xl">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-legal-tax">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle className="flex items-center gap-2"><FileText className="w-4 h-4" /> Informations légales & fiscales</DialogTitle></DialogHeader>
         <div className="space-y-3 mt-2">
           <div className="space-y-1.5"><Label>Forme juridique</Label><Input data-testid="input-legal-form" value={form.legalForm} onChange={(e) => setForm({ ...form, legalForm: e.target.value })} placeholder="SARL, SA, SUARL..." /></div>
@@ -118,7 +124,10 @@ function BankingModal({ open, onClose, user }: { open: boolean; onClose: () => v
   };
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md rounded-2xl">
+      <DialogContent hideClose className="sm:max-w-md rounded-2xl">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-banking">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle className="flex items-center gap-2"><Landmark className="w-4 h-4" /> Coordonnées bancaires</DialogTitle></DialogHeader>
         <div className="space-y-3 mt-2">
           <div className="space-y-1.5"><Label>Nom de la banque</Label><Input data-testid="input-bank-name" value={form.bankName} onChange={(e) => setForm({ ...form, bankName: e.target.value })} placeholder="BNA, Attijari, BH..." /></div>

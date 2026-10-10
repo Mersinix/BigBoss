@@ -37,7 +37,10 @@ function ActiveToggle({ active, onChange }: { active: boolean; onChange: (v: boo
 function DeleteConfirm({ open, onClose, onConfirm, name, warning }: { open: boolean; onClose: () => void; onConfirm: () => void; name: string; warning?: string }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent hideClose className="sm:max-w-sm">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-delete-confirm">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>Delete "{name}"?</DialogTitle></DialogHeader>
         <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
         {warning && <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-md px-3 py-2">{warning}</p>}
@@ -244,7 +247,10 @@ function CategoriesTab() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent hideClose className="sm:max-w-md">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setDialogOpen(false)} aria-label="Close" data-testid="button-close-category-dialog">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>{editing ? "Edit Category" : "New Category"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-1">
             <div className="grid grid-cols-3 gap-3">
@@ -428,7 +434,10 @@ function SubCategoriesTab() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent hideClose className="sm:max-w-md">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setDialogOpen(false)} aria-label="Close" data-testid="button-close-subcategory-dialog">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>{editing ? "Edit Sub-category" : "New Sub-category"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-1">
             <div className="space-y-1.5">
@@ -710,7 +719,10 @@ function TaxonomyCrudTab({
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={v => { setDialogOpen(v); if (!v) { setEditing(null); resetForm(); } }}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent hideClose className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setDialogOpen(false); setEditing(null); resetForm(); }} aria-label="Close" data-testid="button-close-flavor-size-brand-dialog">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>{editing ? `Edit ${title}` : `New ${title}`}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-1">
             {/* Category picklist */}
@@ -891,7 +903,10 @@ function CategoryEditModalInline({ user, open, onClose, supplierCatIds }: { user
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent hideClose className="sm:max-w-lg">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-category-edit-modal">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle className="flex items-center gap-2"><Tag className="w-4 h-4" />Modifier les catégories — {user.name}</DialogTitle></DialogHeader>
         <div className="mt-3 space-y-4">
           {user.role === 'SUPPLIER' ? (
@@ -1540,7 +1555,10 @@ function SupplierCategoriesSection() {
       {/* Edit Dialog */}
       {editTarget && (
         <Dialog open={!!editTarget} onOpenChange={() => setEditTarget(null)}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent hideClose className="sm:max-w-md">
+            <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setEditTarget(null)} aria-label="Close" data-testid="button-close-edit-suggestion">
+              <X className="w-4 h-4" />
+            </button>
             <DialogHeader><DialogTitle>Edit Suggestion</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-1">
               <div className="grid grid-cols-3 gap-3">

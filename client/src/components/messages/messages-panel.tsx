@@ -18,6 +18,7 @@ export function MessagesPanel({
   service,
   initialConversationId = null,
   className,
+  standardizedCloseButton = false,
 }: {
   currentUserId: number;
   showRoleIndicator?: boolean;
@@ -27,6 +28,10 @@ export function MessagesPanel({
   // Delivery/Driver's own card-styling unification pass, so Supplier/Admin/Academy
   // keep their exact current look.
   className?: string;
+  // Opt-in only — forwarded to ConversationList's "Nouvelle conversation" dialog.
+  // Omitted by every caller except Admin, so Supplier/Delivery keep their current
+  // shadcn-default close button unchanged.
+  standardizedCloseButton?: boolean;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -125,6 +130,7 @@ export function MessagesPanel({
             showRoleIndicator={showRoleIndicator}
             eligibleContacts={contacts}
             onNewConversation={(uid) => newConvMutation.mutate(uid)}
+            standardizedCloseButton={standardizedCloseButton}
           />
         </div>
 

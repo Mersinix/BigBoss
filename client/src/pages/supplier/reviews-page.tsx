@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Star, Loader2, Package, Store, Flag } from "lucide-react";
+import { Star, Loader2, Package, Store, Flag, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SupplierProductReview } from "@shared/schema";
@@ -47,7 +47,10 @@ function ReportDialog({ open, onClose, reviewId }: { open: boolean; onClose: () 
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { setReason(""); onClose(); } }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent hideClose className="sm:max-w-md">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setReason(""); onClose(); }} aria-label="Close" data-testid="button-close-report-dialog">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle>Report Inappropriate Review</DialogTitle>
         </DialogHeader>

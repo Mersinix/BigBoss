@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, Plus, Search } from "lucide-react";
+import { MessageCircle, Plus, Search, X } from "lucide-react";
 import type { ConversationSummary, EligibleContact } from "@shared/schema";
 import { getAvatarUrl } from "@/lib/avatar";
 import { useState } from "react";
@@ -47,6 +47,10 @@ export function ConversationList({
   eligibleContacts,
   onNewConversation,
   emptyText = "Aucune conversation pour le moment",
+  // Opt-in only — Admin passes this to match its own standardized close-button
+  // reference (Prospecting detail modal); Supplier/Delivery omit it and keep
+  // their current shadcn-default close button unchanged.
+  standardizedCloseButton = false,
 }: {
   conversations: ConversationSummary[];
   activeId?: number | null;
@@ -56,6 +60,7 @@ export function ConversationList({
   eligibleContacts?: EligibleContact[];
   onNewConversation?: (targetUserId: number) => void;
   emptyText?: string;
+  standardizedCloseButton?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [newConvOpen, setNewConvOpen] = useState(false);
@@ -153,7 +158,12 @@ export function ConversationList({
       {/* New conversation dialog */}
       {onNewConversation && (
         <Dialog open={newConvOpen} onOpenChange={setNewConvOpen}>
-          <DialogContent>
+          <DialogContent hideClose={standardizedCloseButton}>
+            {standardizedCloseButton && (
+              <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setNewConvOpen(false)} aria-label="Close" data-testid="button-close-new-conversation">
+                <X className="w-4 h-4" />
+              </button>
+            )}
             <DialogHeader>
               <DialogTitle>Nouvelle conversation</DialogTitle>
             </DialogHeader>

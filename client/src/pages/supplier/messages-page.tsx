@@ -10,7 +10,7 @@ export default function SupplierMessagesPage() {
         title="Messages"
         subtitle="Chat with your café customers and support."
       />
-      {user && <MessagesPanel currentUserId={user.id} showRoleIndicator />}
+      {user && <MessagesPanel currentUserId={user.id} showRoleIndicator standardizedCloseButton />}
     </div>
   );
 }

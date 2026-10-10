@@ -12,7 +12,7 @@ import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit"
 import { formatDate } from "@/lib/format";
 import { buildPrintInvoiceRows, PRINT_INVOICE_STATUS_META, type PrintInvoiceRow, type PrintInvoiceStatus } from "@/lib/print-financial-rows";
 import { PRINT_ORDER_STATUS_META } from "@/lib/print-order-status";
-import { FileText, DollarSign, Clock, Search, Calendar } from "lucide-react";
+import { FileText, DollarSign, Clock, Search, Calendar, X } from "lucide-react";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 function InvoiceDetailDialog({ row, onClose }: { row: PrintInvoiceRow | null; onClose: () => void }) {
@@ -20,7 +20,10 @@ function InvoiceDetailDialog({ row, onClose }: { row: PrintInvoiceRow | null; on
   if (!row) return null;
   return (
     <Dialog open={!!row} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent hideClose className="sm:max-w-md">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-invoice-detail">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>Facture {row.invoiceNumber}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="flex items-center justify-between">

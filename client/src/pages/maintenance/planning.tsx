@@ -17,6 +17,7 @@ import {
   MapPin,
   Phone,
   Navigation,
+  X,
 } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
@@ -261,7 +262,10 @@ export default function Planning() {
       )}
 
       <Dialog open={rescheduleTarget !== null} onOpenChange={(open) => { if (!open) setRescheduleTarget(null); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent hideClose className="sm:max-w-md">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setRescheduleTarget(null)} aria-label="Close" data-testid="button-close-reschedule">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader>
             <DialogTitle>Proposer une nouvelle date</DialogTitle>
           </DialogHeader>

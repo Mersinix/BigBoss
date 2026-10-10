@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Truck, Plus, Loader2, Search, Phone, User as UserIcon } from "lucide-react";
+import { Truck, Plus, Loader2, Search, Phone, User as UserIcon, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getAvatarUrl } from "@/lib/avatar";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
@@ -231,7 +231,10 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent hideClose>
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setOpen(false)} aria-label="Close" data-testid="button-close-add-driver">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>Ajouter un chauffeur</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <Input placeholder="Nom complet" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} data-testid="input-new-driver-name" />

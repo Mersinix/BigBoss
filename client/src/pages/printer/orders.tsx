@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
 import { formatDate } from "@/lib/format";
 import { PRINT_ORDER_STATUS_META, PRINT_ORDER_NEXT_ACTIONS, PRINT_ORDER_STATUSES } from "@/lib/print-order-status";
-import { Search, ClipboardList, MapPin, Phone, Calendar, User, Package } from "lucide-react";
+import { Search, ClipboardList, MapPin, Phone, Calendar, User, Package, X } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
@@ -38,9 +38,12 @@ function OrderDetailDialog({
     <Dialog open={!!order} onOpenChange={(v) => { if (!v) onClose(); }}>
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent hideClose className="sm:max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-print-order-detail">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 flex-wrap">
+          <DialogTitle className="flex items-center gap-2 flex-wrap pr-8">
             Commande #{String(order.id).padStart(5, "0")}
             <StatusBadge status={order.status} />
           </DialogTitle>

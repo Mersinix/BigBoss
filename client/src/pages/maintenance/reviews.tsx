@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Star, Flag } from "lucide-react";
+import { Star, Flag, X } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { DateRangeFilter } from "@/components/analytics/date-range-filter";
@@ -115,7 +115,10 @@ export default function Reviews() {
         })}
       </CardContent>
       <Dialog open={reportId !== null} onOpenChange={(open) => { if (!open) { setReportId(null); setReason(""); } }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent hideClose className="sm:max-w-md">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setReportId(null); setReason(""); }} aria-label="Close" data-testid="button-close-report-review">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>Signaler cet avis</DialogTitle></DialogHeader>
           <Textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Expliquez le motif du signalement…" rows={4} />
           <DialogFooter>

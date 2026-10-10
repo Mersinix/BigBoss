@@ -20,7 +20,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Building2, Calendar, CalendarClock, Clock, FileText, GraduationCap, Languages, MapPin, MessageSquare,
-  Newspaper, Send, Sparkles, Users, Wallet,
+  Newspaper, Send, Sparkles, Users, Wallet, X,
 } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
@@ -199,11 +199,14 @@ function JobCard({ job, onOpen, onApply }: { job: BaristaDiscoverableJob; onOpen
 function JobDetailDialog({ job, onClose, onApply }: { job: BaristaDiscoverableJob | null; onClose: () => void; onApply: (job: BaristaDiscoverableJob) => void }) {
   return (
     <Dialog open={!!job} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-400 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600 [&::-webkit-scrollbar-thumb]:rounded-full" data-testid="dialog-job-detail">
+      <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-400 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600 [&::-webkit-scrollbar-thumb]:rounded-full" data-testid="dialog-job-detail">
         {job && (
           <>
+            <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-icon-job-detail">
+              <X className="w-4 h-4" />
+            </button>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 flex-wrap">
+              <DialogTitle className="flex items-center gap-2 flex-wrap pr-8">
                 {job.title}
                 {job.isTargeted && (
                   <Badge variant="secondary" className={TARGETED_BADGE}>
@@ -277,7 +280,10 @@ function ApplyDialog({ job, onClose }: { job: BaristaDiscoverableJob | null; onC
 
   return (
     <Dialog open={!!job} onOpenChange={(o) => !o && !apply.isPending && onClose()}>
-      <DialogContent className="max-w-md" data-testid="dialog-apply-job">
+      <DialogContent hideClose className="max-w-md" data-testid="dialog-apply-job">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-apply-job">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader>
           <DialogTitle>Postuler</DialogTitle>
           <DialogDescription>{job ? `${job.title} — ${job.establishment}` : ""}</DialogDescription>

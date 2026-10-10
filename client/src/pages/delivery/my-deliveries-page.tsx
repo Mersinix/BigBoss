@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, Store, ArrowRight, Truck } from "lucide-react";
+import { MapPin, Store, ArrowRight, Truck, X } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -214,7 +214,10 @@ export default function MyDeliveriesPage() {
       <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) { setViewTarget(null); setRedispatchId(null); } }}>
         {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
             scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setViewTarget(null); setRedispatchId(null); }} aria-label="Close" data-testid="button-close-delivery-detail">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>
           {viewTarget && (
             <DeliveryDetails

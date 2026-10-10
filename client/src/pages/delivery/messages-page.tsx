@@ -36,7 +36,7 @@ export default function DeliveryMessagesPage() {
           </Button>
         ) : undefined}
       />
-      {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service="SHOP" initialConversationId={conversationId ? Number(conversationId) : null} className={CARD_CLASS} />}
+      {user && <MessagesPanel currentUserId={user.id} showRoleIndicator service="SHOP" initialConversationId={conversationId ? Number(conversationId) : null} className={CARD_CLASS} standardizedCloseButton />}
     </div>
   );
 }

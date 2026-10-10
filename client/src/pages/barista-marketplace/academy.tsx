@@ -22,7 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   GraduationCap, Search, Clock, Award, MapPin, Star, Users, Calendar,
-  CheckCircle, Send, RotateCcw, SlidersHorizontal, BookOpen, MessageCircle,
+  CheckCircle, Send, RotateCcw, SlidersHorizontal, BookOpen, MessageCircle, X,
 } from "lucide-react";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
@@ -101,7 +101,10 @@ function EnrollDialog({ course, alreadyRegistered, onClose }: { course: AcademyC
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent hideClose className="max-w-lg">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-enroll-dialog">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>{course.title}</DialogTitle></DialogHeader>
         <div className="space-y-3 text-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -333,7 +336,10 @@ function RegistrationDetail({ registration, onClose }: { registration: AcademyRe
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent hideClose className="max-w-lg">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-registration-detail">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>{registration.courseTitle}</DialogTitle></DialogHeader>
         <div className="grid sm:grid-cols-2 gap-4 text-sm">
           <div className="sm:col-span-2"><StatusBadge status={registration.status} /></div>

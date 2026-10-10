@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BookOpen, Plus, Pencil, Trash2, Award, Clock, MapPin, Eye, EyeOff } from "lucide-react";
+import { BookOpen, Plus, Pencil, Trash2, Award, Clock, MapPin, Eye, EyeOff, X } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
@@ -90,7 +90,10 @@ function CourseFormDialog({ course, onClose }: { course: AcademyCourse | null | 
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+      <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-course-form">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>{isNew ? "Nouvelle formation" : "Modifier la formation"}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { MapPin, Store, ArrowRight, Package } from "lucide-react";
+import { MapPin, Store, ArrowRight, Package, X } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails from "@/components/delivery/delivery-details";
@@ -117,7 +117,10 @@ export default function AvailableDeliveriesPage() {
       <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTarget(null); }}>
         {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
             scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setViewTarget(null)} aria-label="Close" data-testid="button-close-delivery-detail">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>
           {viewTarget && (
             <DeliveryDetails

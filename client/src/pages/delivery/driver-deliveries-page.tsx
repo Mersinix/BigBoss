@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Menu, Info, MessageCircle, Package2, MapPin, Navigation } from "lucide-react";
+import { Menu, Info, MessageCircle, Package2, MapPin, Navigation, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import DeliveryDetails, { DELIVERY_STATUS_META } from "@/components/delivery/delivery-details";
 import DeliveryRouteMap from "@/components/delivery/delivery-route-map";
@@ -208,7 +208,10 @@ export default function DriverDeliveriesPage() {
             overflow-x-hidden alongside overflow-y-auto: the card layout below is now safe at
             any width (flex-col on mobile, flex-row from sm: up), but this is a last-resort
             guard against horizontal scroll, not a substitute for that fix. */}
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setListOpen(false)} aria-label="Close" data-testid="button-close-deliveries-list">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>Mes livraisons</DialogTitle></DialogHeader>
           <Tabs value={listTab} onValueChange={(v) => { setListTab(v as "active" | "completed"); setListStatusFilter("ALL"); }}>
             <TabsList>
@@ -279,7 +282,10 @@ export default function DriverDeliveriesPage() {
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
             scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setDetailsOpen(false)} aria-label="Close" data-testid="button-close-delivery-details">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>
           {current && (
             <DeliveryDetails
@@ -302,7 +308,10 @@ export default function DriverDeliveriesPage() {
           code). The driver types in what was told to them — this component never displays
           the code itself, it only submits an attempt for the backend to validate. */}
       <Dialog open={!!codePrompt} onOpenChange={(v) => { if (!v) { setCodePrompt(null); setCodeInput(""); } }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent hideClose className="max-w-sm">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setCodePrompt(null); setCodeInput(""); }} aria-label="Close" data-testid="button-close-code-prompt">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>{codePrompt?.label}</DialogTitle></DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="delivery-confirmation-code">

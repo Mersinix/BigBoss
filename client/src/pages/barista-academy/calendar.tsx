@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, Plus, Users, Trash2 } from "lucide-react";
+import { CalendarDays, Plus, Users, Trash2, X } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 const STATUS_LABELS: Record<AcademySessionStatus, string> = { UPCOMING: "À venir", ACTIVE: "En cours", COMPLETED: "Terminée", CANCELLED: "Annulée" };
@@ -44,7 +44,10 @@ function NewSessionDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent hideClose className="max-w-md">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-new-session">
+          <X className="w-4 h-4" />
+        </button>
         <DialogHeader><DialogTitle>Nouvelle session</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>

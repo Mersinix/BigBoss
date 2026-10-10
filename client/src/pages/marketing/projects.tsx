@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, DashboardHero } from "@/components/dashboard/dashboard-kit";
-import { Briefcase, Calendar, Phone, DollarSign } from "lucide-react";
+import { Briefcase, Calendar, Phone, DollarSign, X } from "lucide-react";
 import { useMarketingProjects, useUpdateMarketingProjectStatus, type MarketingProjectWithParties } from "@/hooks/use-marketing";
 import { MARKETING_PROJECT_STATUS_META, MARKETING_PROJECT_NEXT_ACTIONS } from "@/lib/marketing-project-status";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
@@ -173,7 +173,10 @@ export default function MarketingProjects() {
       )}
 
       <Dialog open={quoteTarget !== null} onOpenChange={(open) => { if (!open) setQuoteTarget(null); }}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent hideClose className="sm:max-w-sm">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setQuoteTarget(null)} aria-label="Close" data-testid="button-close-send-quote">
+            <X className="w-4 h-4" />
+          </button>
           <DialogHeader><DialogTitle>Envoyer un devis</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             Proposez un montant à {quoteTarget?.cafeOwner} pour "{quoteTarget?.service}".

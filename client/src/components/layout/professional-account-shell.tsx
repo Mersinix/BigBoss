@@ -48,6 +48,7 @@ export function ProfessionalAccountShell({
   testIdPrefix,
   accountKey,
   useServiceIconAsBrandLogo = false,
+  contentMaxWidthClass = "max-w-5xl",
 }: {
   children: React.ReactNode;
   title: string;
@@ -76,6 +77,13 @@ export function ProfessionalAccountShell({
   // two different icons (a generic cup + its own truck) in the same block.
   // Every other account leaves this false and keeps the generic cup icon.
   useServiceIconAsBrandLogo?: boolean;
+  // Omitted by every existing caller (so they keep today's max-w-5xl content
+  // width exactly as before); one route can opt into a wider content area
+  // (e.g. "max-w-7xl", matching Coffee Owner /academy's own container) without
+  // affecting this shell's header/tab-switcher chrome or any other route under
+  // the same shell (task: "Academy Card Width, Formation Count, and Sticky
+  // Filters").
+  contentMaxWidthClass?: string;
 }) {
   const { user, logout, isLoggingOut } = useAuth();
   const [location] = useLocation();
@@ -280,7 +288,7 @@ export function ProfessionalAccountShell({
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">{children}</div>
+      <div className={`${contentMaxWidthClass} mx-auto px-4 py-6`}>{children}</div>
     </div>
   );
 }

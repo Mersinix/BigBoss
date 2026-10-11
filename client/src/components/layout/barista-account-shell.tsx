@@ -29,7 +29,7 @@ const TABS: ProfessionalAccountTab[] = [
 // every professional account (Marketing is the design reference). Every
 // /barista-marketplace/* page keeps its own data-fetching/business logic
 // completely unchanged; this shell only supplies the surrounding chrome.
-export function BaristaAccountShell({ children }: { children: React.ReactNode }) {
+export function BaristaAccountShell({ children, contentMaxWidthClass }: { children: React.ReactNode; contentMaxWidthClass?: string }) {
   return (
     <ProfessionalAccountShell
       title="Espace Barista Marketplace"
@@ -47,6 +47,7 @@ export function BaristaAccountShell({ children }: { children: React.ReactNode })
       communicationPath="/barista-marketplace/communication"
       testIdPrefix="barista"
       accountKey="BARISTA_MARKETPLACE"
+      contentMaxWidthClass={contentMaxWidthClass}
     >
       {children}
     </ProfessionalAccountShell>

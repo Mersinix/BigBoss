@@ -183,6 +183,16 @@ function FormationsTab({ myRegistrations, onGoToMyFormations, isDark }: { myRegi
         isDark={isDark}
       />
 
+      {/* Same heading/subtitle convention as Coffee Owner /academy's own Formations
+          section — count is the full matching catalogue (courses.length), before
+          pagination, same as the reference's filteredTraining.length. */}
+      <div className="mb-1">
+        <h2 className="font-bold text-lg">Formations</h2>
+        <p className="text-sm mt-0.5 text-muted-foreground">
+          {courses.length} formation{courses.length !== 1 ? "s" : ""} disponible{courses.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-72 w-full rounded-2xl" />)}</div>
       ) : courses.length === 0 ? (

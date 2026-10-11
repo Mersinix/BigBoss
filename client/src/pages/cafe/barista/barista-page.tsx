@@ -604,8 +604,10 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
 
        <div className="max-w-7xl mx-auto px-4 py-8">
         <section>
-          {/* Hiring Filters */}
-           <div className={`border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}>
+          {/* Hiring Filters — sticky below the persistent navbar (header is
+              h-14 z-50, see components/cafe/marketplace-layout.tsx) so filters
+              stay reachable while scrolling the baristas grid. */}
+           <div className={`sticky top-14 z-30 border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}>
             <div
               className="flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}

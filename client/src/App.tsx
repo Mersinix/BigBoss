@@ -586,7 +586,10 @@ function Router() {
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceReviewsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/academy">
-        {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceAcademyPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
+        {/* Widened to match Coffee Owner /academy's own container (max-w-7xl) so the
+            shared academy-discovery cards render at the same width — every other tab
+            under this shell keeps the default max-w-5xl. */}
+        {() => (<BaristaAccountShell contentMaxWidthClass="max-w-7xl"><ProtectedRoute component={BaristaMarketplaceAcademyPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}
       </Route>
       <Route path="/barista-marketplace/settings">
         {() => (<BaristaAccountShell><ProtectedRoute component={BaristaMarketplaceSettingsPage} allowedRoles={["BARISTA_MARKETPLACE"]} requireApproved /></BaristaAccountShell>)}

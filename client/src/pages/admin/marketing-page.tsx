@@ -515,7 +515,7 @@ export default function MarketingAdminPage() {
   useRealtime();
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
-  const [section, setSection] = useState("taxonomy");
+  const [section, setSection] = useState("accounts");
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);

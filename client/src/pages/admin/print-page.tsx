@@ -459,7 +459,7 @@ export default function AdminPrintPage() {
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
-  const [section, setSection] = useState("categories");
+  const [section, setSection] = useState("printers");
   const [selectedPrinterId, setSelectedPrinterId] = useState<number | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
   const [selectedPrinterAccount, setSelectedPrinterAccount] = useState<any | null>(null);
@@ -718,11 +718,11 @@ export default function AdminPrintPage() {
             bg-background/shadow-sm chip. */}
         <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
           <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
-            <TabsTrigger value="categories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Catégories</TabsTrigger>
             <TabsTrigger value="printers" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Imprimeurs</TabsTrigger>
             <TabsTrigger value="services" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Services</TabsTrigger>
             <TabsTrigger value="orders" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Commandes</TabsTrigger>
             <TabsTrigger value="customers" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Clients</TabsTrigger>
+            <TabsTrigger value="categories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Catégories</TabsTrigger>
             <TabsTrigger value="finance" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Finance</TabsTrigger>
             <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Analytics</TabsTrigger>
           </TabsList>

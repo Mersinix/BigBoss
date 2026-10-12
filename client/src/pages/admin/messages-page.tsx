@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Download, Eye, EyeOff, Megaphone, MessageSquare, Trash2, Users, X } from "lucide-react";
 import { MessagesPanel } from "@/components/messages/messages-panel";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { AdminCommunicationSwitcher } from "@/components/admin/admin-communication-switcher";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { ConversationSummary, EligibleContact } from "@shared/schema";
 
@@ -344,6 +345,8 @@ export default function AdminMessagesPage() {
           </Button>
         }
       />
+
+      <AdminCommunicationSwitcher />
 
       <Tabs defaultValue="chat">
         <TabsList>

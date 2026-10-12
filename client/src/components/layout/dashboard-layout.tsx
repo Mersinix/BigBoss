@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { useAuth } from "@/hooks/use-auth";
-import { ShoppingBag, Sun, Moon } from "lucide-react";
+import { ShoppingBag, Sun, Moon, MessageCircle, Star, Settings, LogOut } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { Link } from "wouter";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -10,12 +10,30 @@ import { NotificationBellDropdown } from "@/components/notifications/notificatio
 import { useThemeStore } from "@/store/theme-store";
 import { useAccountDarkModeSettings, type DarkModeAccount } from "@/hooks/use-account-dark-mode";
 import { useSidebarOpenStore } from "@/store/sidebar-store";
+import { useMessagingSettings } from "@/hooks/use-messaging-settings";
 
 const NOTIFICATIONS_PAGE_BY_ROLE: Record<string, string> = {
   ADMIN: "/admin/notifications",
   SUPER_ADMIN: "/admin/notifications",
   SUPPLIER: "/supplier/notifications",
 };
+
+// Keyed by accountKey ("ADMIN" covers both ADMIN and SUPER_ADMIN, same as that
+// variable below) — the other existing Communication/Settings destinations
+// reused by the header icons added to match Espace Barista Marketplace's
+// navbar (see analyse.md). No new routes; all three already exist and are
+// already role-protected via ProtectedRoute.
+const COMMUNICATION_PATHS_BY_ACCOUNT: Partial<Record<DarkModeAccount, { messages: string; reviews: string; settings: string }>> = {
+  ADMIN: { messages: "/admin/messages", reviews: "/admin/reviews", settings: "/admin/settings" },
+  SUPPLIER: { messages: "/supplier/messages", reviews: "/supplier/reviews", settings: "/supplier/settings" },
+};
+
+// Same icon-button chrome as this header's existing Mode clair/sombre toggle
+// below — reused so the 4 new icons match the current Admin/Supplier visual
+// convention instead of the white-on-gradient style used by the professional
+// account shells' AccountHeaderActions (built for a colored header background,
+// not this layout's light/neutral one).
+const HEADER_ICON_BUTTON_CLASS = "w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0";
 
 // Admin/Supplier's desktop sidebar now controls itself entirely through its own logo (see
 // app-sidebar.tsx) — one control instead of two — so this header trigger is hidden for them
@@ -31,8 +49,9 @@ function HeaderSidebarTrigger({ showAlways }: { showAlways: boolean }) {
 }
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, logout, isLoggingOut } = useAuth();
   const { items } = useCart();
+  const { settings: messagingSettings } = useMessagingSettings();
   useRealtime(user?.id);
   // Desktop open/collapsed state, lifted out of SidebarProvider's own internal state — every
   // route wraps itself in its own <DashboardLayout> (see App.tsx), so this component (and the
@@ -91,6 +110,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (!user) return <>{children}</>;
 
   const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const commPaths = accountKey ? COMMUNICATION_PATHS_BY_ACCOUNT[accountKey] : undefined;
+  // Mirrors the same visibility rule that previously hid Supplier's standalone
+  // "Messages" sidebar entry (now the Communication switcher's Messages tab) —
+  // Admin stays exempt, same as before.
+  const showMessagesIcon = !!commPaths && (accountKey === "ADMIN" || messagingSettings.globalVisible);
 
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -109,17 +133,70 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <HeaderSidebarTrigger showAlways={!accountKey} />
             </div>
             
-            <div className="flex items-center gap-4">
+            {/* Icon order mirrors Espace Barista Marketplace's desktop header exactly:
+                Messages → Notifications → Avis → Mode clair → Paramètres → Déconnexion
+                (see analyse.md). The 4 new icons only render when accountKey is set
+                (ADMIN/SUPER_ADMIN/SUPPLIER), so Coffee Owner and any other role
+                passing through this same layout keep their current header unchanged.
+                overflow-x-auto + hidden scrollbar is a safety net against overlap now
+                that this row can hold up to 6 icons instead of 2 (same hidden-scrollbar
+                convention already used by the Performance/Communication switchers). */}
+            <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+              {showMessagesIcon && commPaths && (
+                <Link
+                  href={commPaths.messages}
+                  aria-label="Messages"
+                  title="Messagerie"
+                  className={HEADER_ICON_BUTTON_CLASS}
+                  data-testid={`button-${accountKey?.toLowerCase()}-header-messages`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </Link>
+              )}
               <NotificationBellDropdown notificationsHref={NOTIFICATIONS_PAGE_BY_ROLE[user.role]} />
+              {commPaths && (
+                <Link
+                  href={commPaths.reviews}
+                  aria-label="Avis"
+                  title="Avis"
+                  className={HEADER_ICON_BUTTON_CLASS}
+                  data-testid={`button-${accountKey?.toLowerCase()}-header-reviews`}
+                >
+                  <Star className="w-4 h-4" />
+                </Link>
+              )}
               {accountKey && toggleAllowed && (
                 <button
                   onClick={() => toggleDark()}
                   aria-label="Changer de thème"
                   title={effectiveDark ? "Mode clair" : "Mode sombre"}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
+                  className={HEADER_ICON_BUTTON_CLASS}
                   data-testid={`button-${accountKey.toLowerCase()}-theme-toggle`}
                 >
                   {effectiveDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
+              )}
+              {commPaths && (
+                <Link
+                  href={commPaths.settings}
+                  aria-label="Paramètres"
+                  title="Paramètres"
+                  className={HEADER_ICON_BUTTON_CLASS}
+                  data-testid={`button-${accountKey?.toLowerCase()}-header-settings`}
+                >
+                  <Settings className="w-4 h-4" />
+                </Link>
+              )}
+              {accountKey && (
+                <button
+                  onClick={() => logout()}
+                  disabled={isLoggingOut}
+                  aria-label="Se déconnecter"
+                  title="Se déconnecter"
+                  className={`${HEADER_ICON_BUTTON_CLASS} disabled:opacity-60`}
+                  data-testid={`button-${accountKey.toLowerCase()}-header-logout`}
+                >
+                  <LogOut className="w-4 h-4" />
                 </button>
               )}
               {user.role === 'CAFE_OWNER' && (

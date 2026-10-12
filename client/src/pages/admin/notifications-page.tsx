@@ -14,6 +14,7 @@ import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEffect, useState } from "react";
+import { AdminCommunicationSwitcher } from "@/components/admin/admin-communication-switcher";
 
 export default function NotificationsPage() {
   const { data: orders = [] } = useQuery<any[]>({ queryKey: ["/api/orders"] });
@@ -65,6 +66,8 @@ export default function NotificationsPage() {
           </>
         }
       />
+
+      <AdminCommunicationSwitcher />
 
       {!isMobile && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

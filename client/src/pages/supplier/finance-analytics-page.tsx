@@ -12,6 +12,7 @@ import {
 import { PLATFORM_COMMISSION_RATE } from "@/lib/financial-rows";
 import { DashboardHero, StatCard, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SupplierPerformanceSwitcher } from "@/components/supplier/supplier-performance-switcher";
 
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
 
@@ -49,6 +50,8 @@ export default function FinanceAnalyticsPage() {
           </>
         }
       />
+
+      <SupplierPerformanceSwitcher />
 
       {!isMobile && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

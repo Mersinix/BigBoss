@@ -12,6 +12,7 @@ import {
 } from "@/lib/marketplace-analytics";
 import { buildFinancialRows, PLATFORM_COMMISSION_RATE } from "@/lib/financial-rows";
 import { DashboardHero, StatCard, SectionCard, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { AdminPerformanceSwitcher } from "@/components/admin/admin-performance-switcher";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // Reuses the exact same commission/net formula as Admin Payouts/Invoices (lib/financial-rows.ts)
@@ -67,6 +68,8 @@ export default function EarningsPage() {
           </>
         }
       />
+
+      <AdminPerformanceSwitcher />
 
       <DashboardHero
         title="Chiffre d'affaires livré"

@@ -14,6 +14,7 @@ import {
 } from "@/lib/financial-rows";
 import { DashboardHero, StatCard, SectionCard, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SupplierPerformanceSwitcher } from "@/components/supplier/supplier-performance-switcher";
 
 // Supplier "Revenus" tab — no separate payout/invoice system exists (see lib/financial-rows.ts);
 // this reuses that exact same derivation so numbers here always agree with Supplier Payouts/
@@ -73,6 +74,8 @@ export default function SupplierEarningsPage() {
           </>
         }
       />
+
+      <SupplierPerformanceSwitcher />
 
       <DashboardHero
         title="Gains nets"

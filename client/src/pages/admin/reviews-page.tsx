@@ -12,6 +12,7 @@ import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { AdminCommunicationSwitcher } from "@/components/admin/admin-communication-switcher";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -114,6 +115,8 @@ export default function AdminReviewsPage() {
         subtitle="Manage all reviews across the platform from one place."
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
+
+      <AdminCommunicationSwitcher />
 
       {/* Stats */}
       {!isMobile && (

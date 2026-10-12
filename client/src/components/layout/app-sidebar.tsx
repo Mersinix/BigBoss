@@ -7,11 +7,11 @@ import {
   Store, Package, ShoppingCart, LayoutDashboard,
   ClipboardList, Truck, Users, LogOut, Coffee,
   ShieldCheck, DollarSign, FileText, BarChart2,
-  Bell, TrendingUp, Star, MessageCircle, Settings,
+  MessageCircle, Settings,
   Folder, Warehouse, ClipboardCheck, RotateCcw,
   MapPin, Wallet, Tag, Ticket, HelpCircle,
   Printer, Megaphone, GraduationCap, Image, Briefcase,
-   BookOpen, UserCheck, Sliders, Target, Wrench, PanelLeftIcon
+   BookOpen, UserCheck, Sliders, Target, Wrench, PanelLeftIcon, Activity
 } from "lucide-react";
 import {
   Sidebar,
@@ -29,7 +29,16 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 
-type NavItem = { title: string; url: string; icon: ComponentType<{ className?: string }> };
+type NavItem = {
+  title: string;
+  url: string;
+  icon: ComponentType<{ className?: string }>;
+  // Omitted by every existing item (so their active-check is unchanged) — when present,
+  // the item is highlighted when the current route is ANY of these URLs, not just `url`
+  // itself. Used by Admin's consolidated "Performance" entry (Dashboard/Analytics/
+  // Earnings are three real routes, not one).
+  activeUrls?: string[];
+};
 type NavGroup = {
   label: string;
   items: NavItem[];
@@ -39,7 +48,9 @@ function NavLink({ item, badge }: { item: NavItem; badge?: number }) {
   const [location] = useLocation();
   const search = useSearch();
   const fullPath = `${location}${search}`;
-  const isActive = item.url.includes("?")
+  const isActive = item.activeUrls
+    ? item.activeUrls.includes(location)
+    : item.url.includes("?")
     ? fullPath === item.url
     : location === item.url && !search.includes("section=category-requests") && !search.includes("section=supplier-cats");
   return (
@@ -107,19 +118,9 @@ export function AppSidebar() {
           items: [
             { title: "Prospecting ⭐", url: "/admin/prospecting", icon: Target },
             { title: "System Management", url: "/admin/system-management", icon: Sliders },
-            { title: "Dashboard", url: "/", icon: LayoutDashboard },
-             { title: "Analytics", url: "/admin/analytics", icon: BarChart2 },
-             { title: "Earnings", url: "/admin/earnings", icon: TrendingUp },
-             
-          ],
-        },
-        {
-          label: "MARKETING",
-          items: [
-           
-            { title: "Notifications", url: "/admin/notifications", icon: Bell },
-            { title: "Messages", url: "/admin/messages", icon: MessageCircle },
-            { title: "Reviews", url: "/admin/reviews", icon: Star },            
+            { title: "Performance", url: "/", icon: Activity, activeUrls: ["/", "/admin/analytics", "/admin/earnings"] },
+            { title: "Communication", url: "/admin/messages", icon: MessageCircle, activeUrls: ["/admin/messages", "/admin/notifications",  "/admin/reviews"] },
+
           ],
         },
         {
@@ -169,9 +170,7 @@ export function AppSidebar() {
         {
           label: "MAIN",
           items: [
-            { title: "Dashboard", url: "/", icon: LayoutDashboard },
-            { title: "Analytics", url: "/supplier/analytics", icon: BarChart2 },
-            { title: "Earnings", url: "/supplier/earnings", icon: TrendingUp },
+            { title: "Performance", url: "/", icon: Activity, activeUrls: ["/", "/supplier/analytics", "/supplier/earnings"] },
             { title: "Cafes", url: "/supplier/cafes", icon: Coffee },
             { title: "Store", url: "/supplier/store", icon: Store },
             { title: "Categories", url: "/supplier/categories", icon: Folder },
@@ -193,13 +192,11 @@ export function AppSidebar() {
          {
           label: "MARKETING",
           items: [
-            { title: "Messages", url: "/supplier/messages", icon: MessageCircle },
-            { title: "Notifications", url: "/supplier/notifications", icon: Bell },
-            { title: "Reviews", url: "/supplier/reviews", icon: Star },
+            { title: "Communication", url: "/supplier/messages", icon: MessageCircle, activeUrls: ["/supplier/messages", "/supplier/notifications", "/supplier/reviews"] },
             { title: "Promotions", url: "/supplier/promotions", icon: Tag },
             { title: "Discount Codes", url: "/supplier/discount-codes", icon: Ticket },
           ],
-        },        
+        },
         {
           label: "ACCOUNT",
           items: [
@@ -311,11 +308,11 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="space-y-0.5">
-                {group.items.filter((item) => item.title !== "Messages" || isAdmin || messagingSettings.globalVisible).map((item) => (
+                {group.items.map((item) => (
                   <NavLink
                     key={item.title}
                     item={item}
-                    badge={item.title === "Messages" ? unreadCount : undefined}
+                    badge={item.title === "Communication" ? unreadCount : undefined}
                   />
                 ))}
               </SidebarMenu>

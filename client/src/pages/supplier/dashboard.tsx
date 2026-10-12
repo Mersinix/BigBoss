@@ -18,6 +18,7 @@ import {
 } from "@/components/dashboard/dashboard-kit";
 import { useMyFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Banknote } from "lucide-react";
+import { SupplierPerformanceSwitcher } from "@/components/supplier/supplier-performance-switcher";
 
 const STATUS_BADGE: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
@@ -92,6 +93,8 @@ export default function SupplierDashboard() {
         icon={DollarSign}
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
+
+      <SupplierPerformanceSwitcher />
 
       {!isMobile && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">

@@ -15,6 +15,7 @@ import type { SupplierProductReview } from "@shared/schema";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SupplierCommunicationSwitcher } from "@/components/supplier/supplier-communication-switcher";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -230,6 +231,8 @@ export default function ReviewsPage() {
         subtitle="Customer feedback on your products and service."
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
+
+      <SupplierCommunicationSwitcher />
 
       {/* Stats */}
       {!isMobile && (

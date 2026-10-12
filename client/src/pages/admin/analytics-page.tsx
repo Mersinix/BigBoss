@@ -11,6 +11,7 @@ import {
   type DateRangePreset,
 } from "@/lib/marketplace-analytics";
 import { DashboardHero, StatCard, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
+import { AdminPerformanceSwitcher } from "@/components/admin/admin-performance-switcher";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 } };
@@ -52,6 +53,8 @@ export default function AnalyticsPage() {
           </>
         }
       />
+
+      <AdminPerformanceSwitcher />
 
       {!isMobile && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

@@ -17,6 +17,7 @@ import {
   DashboardHero, StatCard, SectionCard, RankRow, AlertRow, EmptyState,
   KpiOverviewButton, KpiOverviewModal,
 } from "@/components/dashboard/dashboard-kit";
+import { AdminPerformanceSwitcher } from "@/components/admin/admin-performance-switcher";
 
 const STATUS_BADGE: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
@@ -89,6 +90,8 @@ export default function Dashboard() {
         icon={DollarSign}
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
+
+      <AdminPerformanceSwitcher />
 
       {/* KPI overview — desktop/tablet only; moves into a modal on mobile (see action above) */}
       {!isMobile && (

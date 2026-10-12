@@ -331,3 +331,318 @@ deux composants partagés.
 - Relecture manuelle de chaque fichier modifié pour confirmer que le comportement Coffee
   Owner (page/modales/navigation) reste identique.
 - Aucun navigateur disponible dans cet environnement — pas de test de clic réel.
+
+---
+
+# Analyse — Consolider Dashboard, Analytics et Earnings sous "Performance" (sidebar Admin)
+
+Tâche distincte, scope séparé des précédentes.
+
+## 1. État actuel
+
+- **Sidebar** : `client/src/components/layout/app-sidebar.tsx`. Le groupe Admin "MANAGEMENT"
+  (lignes ~105-115) contient trois entrées distinctes :
+  `{ title: "Dashboard", url: "/", icon: LayoutDashboard }`,
+  `{ title: "Analytics", url: "/admin/analytics", icon: BarChart2 }`,
+  `{ title: "Earnings", url: "/admin/earnings", icon: TrendingUp }`.
+  `NavItem` est typé `{ title; url: string; icon }` — une seule URL par item ; `NavLink`
+  calcule `isActive` par simple égalité `location === item.url`.
+- **Important** : le groupe Supplier (plus bas dans le même fichier) a un trio visuellement
+  identique ("Dashboard"/"Analytics"/"Earnings") mais pointant vers des composants
+  **différents** (`SupplierDashboard`, `/supplier/analytics`, `/supplier/earnings`) — confirmé
+  via `App.tsx`'s `SmartDashboard()` : `user.role === "SUPPLIER"` retourne `<SupplierDashboard/>`
+  avant même d'atteindre le `<Dashboard/>` générique. Cette tâche ne touche donc **que** le
+  groupe Admin ; le trio Supplier reste intact à l'identique.
+- **Routes** (`App.tsx`) :
+  - `/` → `HomeRoute` → `SmartDashboard()` → branche par rôle (Supplier/Printer/Marketing/
+    Academy/Barista/Maintenance/Delivery/Driver ont chacun leur propre redirection ou
+    composant) → seul le cas par défaut (`ADMIN`/`SUPER_ADMIN`) retourne
+    `<Dashboard/>` (`pages/dashboard.tsx`) — confirmé par le commentaire du fichier lui-même
+    ("Admin-only landing dashboard... reached only by ADMIN/SUPER_ADMIN") et par la lecture
+    directe de `SmartDashboard()`.
+  - `/admin/analytics` → `AnalyticsPage` (`pages/admin/analytics-page.tsx`), déjà protégée par
+    `ProtectedRoute allowedRoles={ADMIN_ROLES}` — fichier distinct de Supplier's.
+  - `/admin/earnings` → `EarningsPage` (`pages/admin/earnings-page.tsx`), même protection,
+    fichier distinct de Supplier's.
+  - Conclusion : les trois destinations sont déjà, structurellement, 100% exclusives à
+    Admin/SuperAdmin — aucune garde de rôle supplémentaire n'est nécessaire dans les pages
+    elles-mêmes.
+- **Switcher existant comme référence visuelle** : System Management
+  (`pages/admin/system-management-page.tsx` ~ligne 2024) a déjà un switcher à onglets
+  (`bg-secondary/40 rounded-xl p-1`, actif = `bg-background shadow-sm text-foreground`) —
+  mais c'est un switcher **à état local** (une seule page, plusieurs sections). Le switcher
+  Performance doit être **piloté par l'URL** (trois vraies pages/routes distinctes), donc je
+  réutilise le même habillage visuel mais avec `<Link>`/`useLocation()` (wouter) au lieu d'un
+  `useState`, pour que rafraîchissement, navigation directe, et Précédent/Suivant du navigateur
+  fonctionnent nativement.
+
+## 2. Stratégie d'implémentation minimale
+
+1. **Créer** `client/src/components/admin/admin-performance-switcher.tsx` — petit composant
+   de présentation pur, trois `<Link>` (Dashboard `/`, Analytics `/admin/analytics`, Earnings
+   `/admin/earnings`), actif déterminé par `useLocation()`, même habillage que le switcher de
+   System Management.
+2. **Modifier** `client/src/components/layout/app-sidebar.tsx` :
+   - Étendre `NavItem` avec un champ optionnel `activeUrls?: string[]` (omis partout ailleurs
+     → zéro changement pour les ~40 autres items existants) ; `NavLink` l'utilise pour decider
+     `isActive` quand présent (actif si `location` est dans `activeUrls`), sinon garde son
+     comportement actuel inchangé.
+   - Remplacer les 3 items Admin par un seul : `{ title: "Performance", url: "/", icon: Activity,
+     activeUrls: ["/", "/admin/analytics", "/admin/earnings"] }`.
+3. **Insérer** `<AdminPerformanceSwitcher />` juste après le premier `<DashboardHero>` de
+   chacune des trois pages (`dashboard.tsx`, `admin/analytics-page.tsx`,
+   `admin/earnings-page.tsx`) — aucune autre modification de ces fichiers.
+
+## 3. Garde-fous
+
+- Aucune route supprimée/renommée, aucun composant de page dupliqué ou copié.
+- Aucun nouvel état global ; le "state" du switcher est la route elle-même (wouter
+  `useLocation`), déjà la source de vérité pour toute navigation existante dans l'app.
+- Le groupe Supplier et toute autre entrée de sidebar ne sont pas touchés.
+- Aucun changement API, calcul financier, permission, ou schéma de base de données.
+
+## 4. Tests prévus
+
+- `npx tsc --noEmit`, `npm run build`.
+- Relecture manuelle confirmant que les trois pages gardent leur contenu/données/comportement
+  exacts, seul le switcher est ajouté.
+- Aucun navigateur disponible dans cet environnement — pas de test de clic/navigation réel.
+
+---
+
+# Analyse — Consolider Dashboard, Analytics et Earnings sous "Performance" (sidebar Supplier)
+
+Tâche distincte, même principe que la consolidation Admin ci-dessus, appliquée au Supplier.
+**Important** : vérifié directement dans le code que les routes/composants Supplier sont
+réellement distincts de ceux d'Admin (pas une supposition) — voir §1.
+
+## 1. État actuel (vérifié, pas supposé)
+
+- **Sidebar** : `client/src/components/layout/app-sidebar.tsx`, groupe Supplier "MAIN"
+  (`user.role === "SUPPLIER"`) : `{ title: "Dashboard", url: "/", icon: LayoutDashboard }`,
+  `{ title: "Analytics", url: "/supplier/analytics", icon: BarChart2 }`,
+  `{ title: "Earnings", url: "/supplier/earnings", icon: TrendingUp }`.
+- **Routes/composants réels** (`App.tsx`) :
+  - `/` → `HomeRoute` → `<DashboardLayout><SmartDashboard/></DashboardLayout>` →
+    `SmartDashboard()` : `user.role === "SUPPLIER"` retourne `<SupplierDashboard/>`
+    (`pages/supplier/dashboard.tsx`) — **un composant différent de l'Admin `<Dashboard/>`**,
+    confirmé par lecture directe de `SmartDashboard()`, pas supposé identique à Admin.
+  - `/supplier/analytics` → `FinanceAnalyticsPage` (`pages/supplier/finance-analytics-page.tsx`,
+    PAS un fichier nommé "analytics-page.tsx" — nom réel différent de l'équivalent Admin),
+    déjà protégée par `ProtectedRoute allowedRoles={["SUPPLIER"]} requireApproved` dans
+    `<DashboardLayout>`.
+  - `/supplier/earnings` → `SupplierEarningsPage` (`pages/supplier/earnings-page.tsx`), même
+    protection, même wrapper `<DashboardLayout>`.
+  - Les trois sont donc déjà, structurellement, 100% exclusives à `SUPPLIER` — aucune garde de
+    rôle supplémentaire nécessaire dans les pages elles-mêmes (même conclusion que pour Admin,
+    revérifiée indépendamment ici pour Supplier).
+- **Données/calculs** : `SupplierDashboard`/`FinanceAnalyticsPage`/`SupplierEarningsPage`
+  utilisent tous `GET /api/orders` (déjà scope-é côté serveur aux propres sous-commandes du
+  Supplier, voir `storage.getOrders`) et `lib/financial-rows.ts`/`lib/marketplace-analytics.ts`
+  — complètement indépendants des données Admin ; aucune donnée Admin n'est réutilisée.
+
+## 2. Stratégie d'implémentation minimale
+
+1. **Créer** `client/src/components/supplier/supplier-performance-switcher.tsx` — composant
+   séparé de celui d'Admin (pas de réutilisation cross-rôle), même chrome visuel, même
+   mécanique `<Link>`/`useLocation()`, pointant vers `/`, `/supplier/analytics`,
+   `/supplier/earnings`.
+2. **Modifier** `client/src/components/layout/app-sidebar.tsx` — remplacer les 3 items
+   Supplier par un seul `{ title: "Performance", url: "/", icon: Activity, activeUrls: ["/",
+   "/supplier/analytics", "/supplier/earnings"] }`, réutilisant le champ `activeUrls` déjà
+   ajouté au type `NavItem` pour la tâche Admin (aucun changement supplémentaire à `NavLink`).
+   Groupe Admin non touché.
+3. **Insérer** `<SupplierPerformanceSwitcher />` juste après le premier `<DashboardHero>` de
+   chacune des trois pages Supplier — aucune autre modification de ces fichiers.
+
+## 3. Garde-fous
+
+- Aucune route supprimée/renommée, aucun composant de page Supplier dupliqué.
+- Le groupe Admin et tout autre groupe de sidebar (Barista Academy, etc.) ne sont pas touchés.
+- Aucun changement API, calcul financier (commission, gains nets, ledger), permission, ou
+  schéma de base de données.
+- Aucune donnée/composant Admin réutilisé pour Supplier.
+
+## 4. Tests prévus
+
+- `npx tsc --noEmit`, `npm run build`.
+- Relecture manuelle confirmant que les trois pages Supplier gardent leur contenu/données/
+  comportement exacts, seul le switcher est ajouté.
+- Aucun navigateur disponible dans cet environnement — pas de test de clic/navigation réel.
+
+---
+
+# Analyse — Consolider Notifications, Messages et Reviews sous "Communication" (sidebar Admin + Supplier)
+
+## 1. Routes et composants réels (audit, pas d'hypothèse)
+
+**Admin** (`client/src/App.tsx`) :
+- `/admin/notifications` → `NotificationsPage` (`pages/admin/notifications-page.tsx`), `ADMIN_ROLES`.
+- `/admin/messages` → `AdminMessagesPage` (`pages/admin/messages-page.tsx`), `ADMIN_ROLES`.
+- `/admin/reviews` → `AdminReviewsPage` (`pages/admin/reviews-page.tsx`), `ADMIN_ROLES`.
+
+**Supplier** (`client/src/App.tsx`) :
+- `/supplier/messages` → `SupplierMessagesPage` (`pages/supplier/messages-page.tsx`), `allowedRoles=["SUPPLIER"]`.
+- `/supplier/notifications` → `SupplierNotificationsPage` (`pages/supplier/notifications-page.tsx`), `allowedRoles=["SUPPLIER"]`.
+- `/supplier/reviews` → `ReviewsPage` (`pages/supplier/reviews-page.tsx`), `allowedRoles=["SUPPLIER"]`.
+
+Les trois pages de chaque rôle sont des implémentations **distinctes** (pas de partage Admin/
+Supplier) : Admin Notifications lit `useNotifications("ADMIN", …)`, Supplier Notifications lit
+`useNotifications("SHOP", …)` — données/scopes différents. Admin Messages a un onglet
+"All Conversations" (modération inter-rôles) absent de la page Supplier. Admin Reviews modère
+9 domaines (`TABS` avec Product/Pack/Supplier/Maintenance/Barista/Academy/Driver/Print/
+Marketing) via `/api/admin/reviews`; Supplier Reviews n'affiche/gère que les avis sur ses
+propres produits (`SupplierProductReview`). Toutes les six pages partagent néanmoins le même
+point d'insertion structurel : un unique `<DashboardHero title=… />` en première position dans
+le JSX retourné.
+
+Toutes les six routes restent déjà correctement cloisonnées par rôle via `ProtectedRoute
+allowedRoles=[…]` — aucune nouvelle règle de permission n'est nécessaire.
+
+## 2. Compteur non lu existant (sidebar)
+
+Dans `app-sidebar.tsx`, seul l'item **Messages** porte un badge de compteur non lu
+(`unreadCount`, requête `/api/messages/unread-count`, affiché via
+`badge={item.title === "Messages" ? unreadCount : undefined}`). Notifications et Reviews n'ont
+jamais eu de badge sidebar. Donc : on ne fabrique pas de nouveau total agrégé (ce qui créerait
+un chiffre jamais montré auparavant) — on reporte simplement ce même compteur existant sur le
+nouvel item "Communication".
+
+Un flag existant, `useMessagingSettings().globalVisible` (toggle Admin dans System Management →
+"Messages visibility"), masquait l'item sidebar "Messages" pour les non-admins quand désactivé
+(Admin en est toujours exempté). Comme Notifications/Reviews n'ont jamais été soumis à ce flag,
+masquer tout l'item "Communication" quand `globalVisible` est false aurait supprimé l'accès à
+Notifications/Reviews aussi — une régression. Solution : l'item sidebar "Communication" reste
+toujours visible (comme Notifications/Reviews l'étaient) ; c'est l'onglet "Messages" **à
+l'intérieur** du switcher Supplier qui est filtré selon ce même flag (Admin n'a pas ce filtre,
+comme avant).
+
+## 3. Implémentation minimale
+
+1. **Sidebar** (`app-sidebar.tsx`) : remplacer les 3 items Admin/Supplier (MARKETING group)
+   par un seul item "Communication" avec `activeUrls` listant les 3 routes réelles, icône
+   `MessageCircle` (déjà importée, réutilisée — `Bell`/`Star` retirés car plus utilisés nulle
+   part ailleurs dans ce fichier). Le filtre `.filter(item.title !== "Messages" || …)` devient
+   inutile (plus aucun item littéralement nommé "Messages" dans ce fichier) et est supprimé ;
+   le badge cible désormais `item.title === "Communication"`.
+2. **Deux nouveaux composants switcher** (séparés, comme pour Performance — pas de composant
+   partagé cross-rôle) : `components/admin/admin-communication-switcher.tsx` et
+   `components/supplier/supplier-communication-switcher.tsx`. Même chrome visuel que les
+   switchers Performance (`bg-secondary/40 rounded-xl p-1`, actif =
+   `bg-background shadow-sm text-foreground`), navigation via `<Link>`/`useLocation()` (donc
+   piloté par l'URL réelle — survit à navigation directe/refresh/Back/Forward). Le switcher
+   Supplier filtre l'onglet "Messages" selon `messagingSettings.globalVisible` (§2).
+3. **Insérer** le switcher correspondant juste après le premier `<DashboardHero>` de chacune
+   des six pages (3 Admin + 3 Supplier) — aucune autre modification de ces fichiers.
+
+## 4. Garde-fous
+
+- Aucune route supprimée/renommée, aucun composant de page dupliqué ou réécrit.
+- Aucun changement aux requêtes API, calculs, modèles de données, règles de modération/
+  permission, ou schéma de base de données.
+- Aucune donnée/composant Admin réutilisé pour Supplier (switchers séparés, pages inchangées).
+- Compteur non lu existant reporté tel quel, aucun total fabriqué.
+- Ouvrir Communication ne déclenche aucune action (pas de mark-as-read automatique) : la page
+  cible (ex. Notifications) ne monte que lorsqu'on navigue réellement sur sa route.
+
+## 5. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (2818 modules).
+- Relecture manuelle du diff `app-sidebar.tsx` + des 6 pages.
+- Aucun navigateur disponible dans cet environnement — pas de test de clic/navigation réel.
+
+---
+
+# Analyse — Synchroniser les icônes du navbar Admin/Supplier avec Espace Barista Marketplace
+
+## 1. Référence réelle : Espace Barista Marketplace
+
+`BaristaAccountShell` (`components/layout/barista-account-shell.tsx`) est une fine coquille
+autour de `ProfessionalAccountShell` (`components/layout/professional-account-shell.tsx`), qui
+contient le vrai header. Icônes du bloc desktop (`sm:grid sm:grid-cols-6`, ligne ~214), gauche
+à droite :
+
+1. **Messages** — `MessageCircle` (lucide), `<Link href={messagesPath}>`, bouton
+   `w-9 h-9 rounded-xl text-white hover:bg-white/15`, icône `w-4 h-4`. Composant :
+   `AccountHeaderActions` (`components/account/account-header-actions.tsx`).
+2. **Notifications** — `Bell` (lucide) dans un `Popover` (`NotificationBellPopover`,
+   `components/account/notification-bell-popover.tsx`), badge rouge si non lues, liste des 5
+   dernières notifications réelles (`useNotifications`/`useUnreadNotificationCount`), lien
+   "Voir toutes" vers `communicationPath?tab=notifications`.
+3. **Avis** — `Star` (lucide), même composant `AccountHeaderActions`, `<Link href={reviewsPath}>`.
+4. **Mode clair/sombre** — `Sun`/`Moon` (lucide) selon l'état, bouton dédié dans
+   `ProfessionalAccountShell`, piloté par `useAccountThemeStore` + politique admin
+   `useAccountDarkModeSettings` (visible seulement si `toggleAllowed`).
+5. **Paramètres** — `Settings` (lucide), `AccountHeaderActions`, `<Link href={settingsPath}>`.
+6. **Déconnexion** — `LogOut` (lucide), bouton dédié `onClick={() => logout()}`, le plus à
+   droite.
+
+Mobile (<sm) réordonne en grille 2×3 : Paramètres/Mode clair/Déconnexion puis
+Messages/Notifications/Avis — comportement existant, non modifié ici.
+
+## 2. Navbar Admin/Supplier actuel
+
+`DashboardLayout` (`components/layout/dashboard-layout.tsx`) — header unique partagé par
+Admin, Supplier, Coffee Owner (et quelques routes legacy Driver/Delivery via
+`DeliveryCompanyOrDashboardLayout`). Contenu actuel du header, de gauche à droite :
+- `HeaderSidebarTrigger` (visible seulement sur mobile pour Admin/Supplier).
+- `NotificationBellDropdown` (`components/notifications/notification-bell-dropdown.tsx`) — bell
+  avec badge, filtre par date, "tout marquer comme lu", lien "Voir toutes" vers
+  `/admin/notifications` ou `/supplier/notifications` (`NOTIFICATIONS_PAGE_BY_ROLE`). Déjà plus
+  riche que la référence (filtre de date, mark-all) — comportement **préservé intégralement**,
+  aucune modification de ce composant.
+- Toggle Mode clair/sombre (`Sun`/`Moon`), visible seulement si `accountKey` (ADMIN/
+  SUPER_ADMIN/SUPPLIER) et `toggleAllowed` — même politique admin que la référence
+  (`useAccountDarkModeSettings`), déjà correct.
+- Panier (Cafe Owner uniquement, hors scope).
+
+Manquent, par rapport à la référence : icônes Messages, Avis, Paramètres, Déconnexion.
+Routes réelles déjà existantes (aucune nouvelle à créer) : Admin → `/admin/messages`,
+`/admin/reviews`, `/admin/settings` ; Supplier → `/supplier/messages`, `/supplier/reviews`,
+`/supplier/settings`. Déconnexion : `logout()` de `useAuth()` (déjà utilisé par le bouton
+"Sign Out" du pied de sidebar — même action, pas de doublon de logique).
+
+## 3. Implémentation minimale
+
+1. Dans `dashboard-layout.tsx`, ajouter 4 boutons/liens (Messages, Avis, Paramètres,
+   Déconnexion) **uniquement quand `accountKey` est défini** (donc jamais pour Coffee Owner/
+   Driver/autres rôles traversant ce même layout) et réordonner le bloc existant pour obtenir
+   exactement l'ordre de référence : Messages → Notifications (inchangé) → Avis → Mode clair
+   (inchangé) → Paramètres → Déconnexion.
+2. Style des 4 nouveaux boutons : repris de la convention **déjà existante** du bouton Mode
+   clair de ce même header (`w-9 h-9 rounded-full ... text-muted-foreground hover:text-foreground
+   hover:bg-secondary`, icône `w-4 h-4`) plutôt que du style `text-white` de
+   `AccountHeaderActions` (pensé pour l'en-tête à fond dégradé coloré de
+   `ProfessionalAccountShell` — y recourir tel quel rendrait les icônes blanches invisibles sur
+   le fond clair/neutre du header Admin/Supplier). Les icônes elles-mêmes (`MessageCircle`,
+   `Star`, `Settings`, `LogOut`) sont reprises de lucide-react, identiques à la référence.
+3. Chemins par rôle (ADMIN/SUPER_ADMIN → `/admin/...`, SUPPLIER → `/supplier/...`) via une
+   petite table locale, aucune nouvelle route/API.
+4. Messages (Supplier) respecte le même flag `useMessagingSettings().globalVisible` qui
+   masquait déjà l'icône Messages pour un Supplier non-admin quand désactivé (même logique que
+   celle déplacée dans `SupplierCommunicationSwitcher` lors de la tâche précédente) — Admin en
+   reste exempté, comme avant.
+5. Bouton Déconnexion : réutilise `logout()`/`isLoggingOut` de `useAuth()` (ajoutés à la
+   déstructuration existante), même action que le bouton "Sign Out" du sidebar — pas de
+   nouvelle logique de session.
+6. Row d'icônes passe en `overflow-x-auto` avec scrollbar masquée (motif déjà utilisé par les
+   switchers Performance/Communication) pour éviter tout chevauchement/débordement sur mobile
+   maintenant que la rangée compte jusqu'à 6 icônes au lieu de 2.
+
+## 4. Garde-fous
+
+- Coffee Owner et toute autre route traversant `DashboardLayout` restent strictement
+  inchangés (nouveaux boutons gated par `accountKey`, jamais rendus pour eux).
+- `ProfessionalAccountShell`/`BaristaAccountShell` (la référence) ne sont pas touchés.
+- Aucune nouvelle route, endpoint API, table, ou système de notification/thème parallèle —
+  uniquement des liens vers des pages déjà existantes et des actions déjà existantes
+  (`logout()`).
+- Permissions/scoping des données Admin vs Supplier inchangés (chaque lien pointe vers la
+  route déjà protégée par `ProtectedRoute allowedRoles=[...]` de son propre rôle).
+
+## 5. Tests prévus
+
+- `npx tsc --noEmit`, `npm run build`.
+- Relecture manuelle du diff.
+- Aucun navigateur disponible — pas de test de clic/responsive réel.

@@ -12,6 +12,7 @@ import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEffect, useState } from "react";
+import { SupplierCommunicationSwitcher } from "@/components/supplier/supplier-communication-switcher";
 
 export default function SupplierNotificationsPage() {
   const { user } = useAuth();
@@ -53,6 +54,8 @@ export default function SupplierNotificationsPage() {
           </>
         }
       />
+
+      <SupplierCommunicationSwitcher />
 
       {!isMobile && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

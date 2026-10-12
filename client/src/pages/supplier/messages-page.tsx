@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { MessagesPanel } from "@/components/messages/messages-panel";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { SupplierCommunicationSwitcher } from "@/components/supplier/supplier-communication-switcher";
 
 export default function SupplierMessagesPage() {
   const { user } = useAuth();
@@ -10,6 +11,7 @@ export default function SupplierMessagesPage() {
         title="Messages"
         subtitle="Chat with your café customers and support."
       />
+      <SupplierCommunicationSwitcher />
       {user && <MessagesPanel currentUserId={user.id} showRoleIndicator standardizedCloseButton />}
     </div>
   );
